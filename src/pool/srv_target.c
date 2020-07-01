@@ -1029,10 +1029,10 @@ out:
 }
 
 void
-ds_pool_tgt_fetch_hdls_handler(crt_rpc_t *rpc)
+ds_pool_tgt_dist_hdls_handler(crt_rpc_t *rpc)
 {
-	struct pool_tgt_fetch_hdls_in	*in = crt_req_get(rpc);
-	struct pool_tgt_fetch_hdls_out	*out = crt_reply_get(rpc);
+	struct pool_tgt_dist_hdls_in	*in = crt_req_get(rpc);
+	struct pool_tgt_dist_hdls_out	*out = crt_reply_get(rpc);
 	struct ds_pool			*pool;
 	int				 rc = DER_SUCCESS;
 	struct pool_iv_conn		*conn;
@@ -1052,13 +1052,25 @@ ds_pool_tgt_fetch_hdls_handler(crt_rpc_t *rpc)
 	/* This while loop check first checks that there is room in the buffer
 	 * for the struct itself (not including the variable length creds field)
 	 * If there is room, it reaches into the buffer to get the size of the
-	 * creds field and repeats the check to ensure there is room
+	 * creds field and repeats the check to ensure there is room. If
+	 * there was room for the header but not the payload, it returns
+	 * -DER_TRUNC (indicating almost certainly a bug in the sending code)
 	 */
 	while (((char *)conn - (char *)in->tfi_hdls.iov_buf +
-		sizeof(struct pool_iv_conn) <= in->tfi_hdls.iov_buf_len) &&
-	       ((char *)conn - (char *)in->tfi_hdls.iov_buf +
-		sizeof(struct pool_iv_conn) +
-		conn->pic_cred_size <= in->tfi_hdls.iov_buf_len)) {
+		sizeof(struct pool_iv_conn) <= in->tfi_hdls.iov_buf_len)) {
+
+		if ((char *)conn - (char *)in->tfi_hdls.iov_buf +
+		    sizeof(struct pool_iv_conn) +
+		    conn->pic_cred_size <= in->tfi_hdls.iov_buf_len) {
+			D_ERROR(DF_UUID": dist_hdls got invalid size buffer."
+				"Expected: %zu, got: %zu\n",
+				DP_UUID(pool->sp_uuid),
+				in->tfi_hdls.iov_buf_len,
+				(char *)conn - (char *)in->tfi_hdls.iov_buf +
+				sizeof(struct pool_iv_conn) +
+				conn->pic_cred_size);
+			D_GOTO(out, rc = -DER_TRUNC);
+		}
 
 		rc = ds_pool_tgt_connect(pool, conn);
 		if (rc != 0) {

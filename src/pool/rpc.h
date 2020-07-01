@@ -110,9 +110,9 @@
 		0, &CQF_pool_tgt_query,					\
 		ds_pool_tgt_query_handler,				\
 		&ds_pool_tgt_query_co_ops),				\
-	X(POOL_TGT_FETCH_HDLS,						\
-		0, &CQF_pool_tgt_fetch_hdls,				\
-		ds_pool_tgt_fetch_hdls_handler,				\
+	X(POOL_TGT_DIST_HDLS,						\
+		0, &CQF_pool_tgt_dist_hdls,				\
+		ds_pool_tgt_dist_hdls_handler,				\
 		NULL),							\
 	X(POOL_PROP_GET,						\
 		0, &CQF_pool_prop_get,					\
@@ -327,15 +327,15 @@ CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
 
-#define DAOS_ISEQ_POOL_TGT_FETCH_HDLS	/* input fields */	 \
+#define DAOS_ISEQ_POOL_TGT_DIST_HDLS	/* input fields */	 \
 	((uuid_t)		(tfi_pool_uuid)		CRT_VAR) \
 	((d_iov_t)		(tfi_hdls)		CRT_VAR)
 
-#define DAOS_OSEQ_POOL_TGT_FETCH_HDLS	/* output fields */	 \
+#define DAOS_OSEQ_POOL_TGT_DIST_HDLS	/* output fields */	 \
 	((uint32_t)		(tfo_rc)		CRT_VAR)
 
-CRT_RPC_DECLARE(pool_tgt_fetch_hdls, DAOS_ISEQ_POOL_TGT_FETCH_HDLS,
-		DAOS_OSEQ_POOL_TGT_FETCH_HDLS)
+CRT_RPC_DECLARE(pool_tgt_dist_hdls, DAOS_ISEQ_POOL_TGT_DIST_HDLS,
+		DAOS_OSEQ_POOL_TGT_DIST_HDLS)
 
 #define DAOS_ISEQ_POOL_PROP_GET	/* input fields */		 \
 	((struct pool_op_in)	(pgi_op)		CRT_VAR) \

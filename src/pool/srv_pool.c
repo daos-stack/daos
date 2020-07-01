@@ -3775,13 +3775,22 @@ out:
 	return rc;
 }
 
+/* TODO: This entire RPC mechanism should eventually be replaced by IV fetch
+ * retrieving the handles instead. Tracked by DAOS-5232
+ *
+ * This code is a bridge that allows a reintegrating node to be told about the
+ * needed handles until that IV retrieval mechanism is built.
+ *
+ * In particular, this code is likely to break as the number of open handles
+ * exceeds the maximum size of in-band RPC data.
+ */
 static int
 redist_open_hdls_send_rpcs(uuid_t pool_uuid, d_iov_t *handles,
 			   d_rank_list_t *ranks)
 {
 	crt_rpc_t			*tf_req;
-	struct pool_tgt_fetch_hdls_in	*tf_in;
-	struct pool_tgt_fetch_hdls_out	*tf_out;
+	struct pool_tgt_dist_hdls_in	*tf_in;
+	struct pool_tgt_dist_hdls_out	*tf_out;
 	crt_opcode_t			opc;
 	int				rc = DER_SUCCESS;
 	int				i;
@@ -3793,7 +3802,7 @@ redist_open_hdls_send_rpcs(uuid_t pool_uuid, d_iov_t *handles,
 		svr_ep.ep_grp = NULL;
 		svr_ep.ep_rank = ranks->rl_ranks[i];
 		svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_POOL, 0);
-		opc = DAOS_RPC_OPCODE(POOL_TGT_FETCH_HDLS, DAOS_POOL_MODULE, 1);
+		opc = DAOS_RPC_OPCODE(POOL_TGT_DIST_HDLS, DAOS_POOL_MODULE, 1);
 		rc = crt_req_create(dss_get_module_info()->dmi_ctx, &svr_ep,
 				    opc, &tf_req);
 		if (rc != 0) {
@@ -3875,6 +3884,7 @@ get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		sizeof(struct pool_iv_conn);
 	if (size_needed > arg->hdls_size) {
 		void *newbuf = NULL;
+
 		D_REALLOC(newbuf, *arg->hdls, size_needed);
 		if (newbuf == NULL)
 			D_GOTO(out_hdl, rc = -DER_NOMEM);
@@ -3975,7 +3985,7 @@ ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls)
 	 */
 	D_ALLOC(hdls->iov_buf, nhandles * (sizeof(struct pool_iv_conn) + 160));
 	if (hdls->iov_buf == NULL)
-		D_GOTO(out_lock, rc=-DER_NOMEM);
+		D_GOTO(out_lock, rc = -DER_NOMEM);
 
 	/* Pass in the preallocated array and handles as pointers
 	 * This allows the iterator to reallocate the array if an element
@@ -4116,6 +4126,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	 */
 	if (opc == POOL_ADD) {
 		d_rank_list_t *ranks;
+
 		addr_list_to_rank_list(list, &ranks);
 		if (ranks == NULL)
 			D_GOTO(out, rc);
