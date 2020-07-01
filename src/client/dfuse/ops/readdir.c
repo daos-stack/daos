@@ -36,10 +36,10 @@ struct iterate_data {
 	uint8_t				stop;
 };
 
-int
-filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
+static int
+filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 {
-	struct iterate_data	*udata = (struct iterate_data *)_udata;
+	struct iterate_data	*udata = arg;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(udata->req);
 	struct dfuse_obj_hdl	*oh = udata->oh;
 	dfs_obj_t		*obj;
@@ -125,10 +125,13 @@ insert:
 	 * entries that were already enumerated and insert again.
 	 */
 	if (ns > udata->size - oh->doh_cur_off) {
+		void *new_buff;
+
 		udata->size = udata->size * 2;
-		oh->doh_buf = realloc(oh->doh_buf, udata->size);
-		if (oh->doh_buf == NULL)
-			D_GOTO(out, rc = -ENOMEM);
+		D_REALLOC(new_buff, oh->doh_buf, udata->size);
+		if (new_buff == NULL)
+			D_GOTO(out, rc = ENOMEM);
+		oh->doh_buf = new_buff;
 		goto insert;
 	}
 
@@ -207,8 +210,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 			if (rc)
 				D_GOTO(err, rc);
 
-			if (daos_anchor_is_eof(&oh->doh_anchor))
+			if (daos_anchor_is_eof(&oh->doh_anchor)) {
+				/* TODO: Test this somehow */
+				DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
 				return;
+			}
 
 			keys += num;
 			num = offset - keys;
@@ -227,26 +233,28 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	 * consume a 4k block or whatever remains.
 	 */
 	if (offset && oh->doh_cur_off) {
+		DFUSE_TRA_INFO(oh, "Continuing where we left off offset %li",
+			offset);
 		/*
 		 * if remaining does not fit in the fuse buf, return a 4k (or
 		 * less block) and advance the idx tracking number of blocks
 		 * consumed.
 		 */
 		if (size < oh->doh_cur_off - oh->doh_start_off[oh->doh_idx]) {
-			fuse_reply_buf(req, oh->doh_buf +
-				       oh->doh_start_off[oh->doh_idx],
-				       oh->doh_start_off[oh->doh_idx + 1] -
-				       oh->doh_start_off[oh->doh_idx]);
+			DFUSE_REPLY_BUF(oh, req, oh->doh_buf +
+					oh->doh_start_off[oh->doh_idx],
+					oh->doh_start_off[oh->doh_idx + 1] -
+					oh->doh_start_off[oh->doh_idx]);
 			oh->doh_fuse_off = oh->doh_dir_off[oh->doh_idx];
 			oh->doh_idx++;
 			return;
 		}
 
 		/** otherwise return everything left since it should fit. */
-		fuse_reply_buf(req,
-			       oh->doh_buf + oh->doh_start_off[oh->doh_idx],
-			       oh->doh_cur_off -
-			       oh->doh_start_off[oh->doh_idx]);
+		DFUSE_REPLY_BUF(oh, req,
+				oh->doh_buf + oh->doh_start_off[oh->doh_idx],
+				oh->doh_cur_off -
+				oh->doh_start_off[oh->doh_idx]);
 
 		oh->doh_fuse_off = oh->doh_dir_off[oh->doh_idx];
 
@@ -279,6 +287,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 		rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &nr,
 				 buf_size - udata.b_off, filler_cb, &udata);
 
+		DFUSE_TRA_DEBUG(oh, "Post iterate, nr %d rc %d", nr, rc);
+
 		/** if entry does not fit in buffer, just return */
 		if (rc == E2BIG)
 			break;
@@ -292,7 +302,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	}
 
 	oh->doh_idx = 0;
-	fuse_reply_buf(req, oh->doh_buf, udata.b_off);
+	DFUSE_REPLY_BUF(oh, req, oh->doh_buf, udata.b_off);
 	return;
 
 err:

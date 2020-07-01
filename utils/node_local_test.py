@@ -370,7 +370,7 @@ class ValgrindHelper():
     def __init__(self, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
-        self.use_valgrind = True
+        self.use_valgrind = False
         self.full_check = True
         self._xml_file = None
         self._logid = logid
@@ -645,18 +645,34 @@ def run_daos_cmd(conf, cmd, fi_file=None, fi_valgrind=False):
     valgrind.convert_xml()
     return rc
 
-def show_cont(conf, pool):
+def create_cont(conf, pool, ctype=None):
     """Create a container and return a container list"""
     cmd = ['container', 'create', '--svc', '0', '--pool', pool]
+    if ctype:
+        cmd.extend(['--type', ctype])
     rc = run_daos_cmd(conf, cmd)
-    assert rc.returncode == 0
     print('rc is {}'.format(rc))
+    assert rc.returncode == 0
+    new_container = rc.stdout.decode().split(' ')[-1].rstrip()
+
 
     cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
     rc = run_daos_cmd(conf, cmd)
     print('rc is {}'.format(rc))
     assert rc.returncode == 0
-    return rc.stdout.strip()
+
+    containers = rc.stdout.decode().split()
+    containers.remove(new_container)
+    containers.insert(0, new_container)
+    return containers
+
+def destroy_container(conf, pool, container):
+    """Destroy a container"""
+    cmd = ['container', 'destroy', '--svc', '0',
+           '--pool', pool, '--cont', container]
+    rc = run_daos_cmd(conf, cmd)
+    print('rc is {}'.format(rc))
+    assert rc.returncode == 0
 
 def make_pool(daos, conf):
     """Create a DAOS pool"""
@@ -701,6 +717,43 @@ def run_tests(dfuse):
     print(os.fstat(ofd.fileno()))
     ofd.close()
     il_cmd(dfuse, ['cat', fname])
+    readdir_test(dfuse, 10)
+
+def dfuse_wrapper(server, conf):
+    """Start a dfuse instance, do something then tear it down"""
+    daos = import_daos(server, conf)
+
+    pools = get_pool_list()
+    while len(pools) < 1:
+        pools = make_pool(daos, conf)
+
+    pool = pools[0]
+
+    container = create_cont(conf, pool, ctype='POSIX')[0]
+    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse.start()
+    readdir_test(dfuse, 1000)
+    dfuse.stop()
+    destroy_container(conf, pool, container)
+
+def readdir_test(dfuse, count):
+    """Run a rudimentry readdir test"""
+
+    path = dfuse.dir
+
+    wide_dir = os.path.join(path, 'new_dir')
+    os.mkdir(wide_dir)
+    start = time.time()
+    for idx in range(count):
+        print('Creating file {}'.format(os.path.join(wide_dir, str(idx))))
+        fd = open(os.path.join(wide_dir, str(idx)), 'w')
+        fd.close()
+    duration = time.time() - start
+    print('Created {} files in {:.1f} seconds {:.1f}'.format(count,
+                                                             duration,
+                                                             count / duration))
+    print('Listing dir contents')
+    print(os.listdir(wide_dir))
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
@@ -1082,10 +1135,8 @@ def test_pydaos_kv(server, conf):
 
     pool = pools[0]
 
-    container = show_cont(conf, pool)
+    c_uuid = create_cont(conf, pool)[0]
 
-    print(container)
-    c_uuid = container.decode().split()[-1]
     kvg = dbm.daos_named_kv(pool, c_uuid)
 
     kv = kvg.get_kv_by_name('Dave')
@@ -1211,6 +1262,8 @@ def main():
         test_pydaos_kv(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'overlay':
         run_duns_overlay_test(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'readdir':
+        dfuse_wrapper(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
         fatal_errors = test_alloc_fail(conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'all':
