@@ -4,10 +4,18 @@ hosts:
 timeout: 200
 server_config:
    name: daos_server
+   transport_config:
+     allow_insecure: False
+agent_config:
+   transport_config:
+     allow_insecure: False
+dmg:
+   transport_config:
+     allow_insecure: False
 pool:
   mode: 511
   name: daos_server
-  scm_size: 136777216
+  scm_size: 16777216
   control_method: dmg
   tests: !mux
       user_root:
@@ -25,5 +33,3 @@ pool:
            - 0
            - 0
            - FAIL
-transport_config:
-  allow_insecure: False

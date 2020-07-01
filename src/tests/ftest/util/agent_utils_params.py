@@ -30,15 +30,13 @@ from command_utils_base import \
 class DaosAgentTransportCredentials(TransportCredentials):
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self):
+    def __init__(self, log_dir):
         """Initialize a TransportConfig object."""
         super(DaosAgentTransportCredentials, self).__init__(
-            "/run/transport_config/*", "transport_config")
+            "/run/agent_config/transport_config/*", "transport_config", log_dir)
+        self.cert = LogParameter(log_dir, None, "agent.crt")
+        self.key = LogParameter(log_dir, None, "agent.key")
 
-        self.allow_insecure = BasicParameter(True, True)
-        self.ca_cert = BasicParameter(None, "./daosCA/certs/daosCA.crt")
-        self.cert = BasicParameter(None, "./daosCA/certs/agent.crt")
-        self.key = BasicParameter(None, "./daosCA/certs/agent.key")
 
 class DaosAgentYamlParameters(YamlParameters):
     """Defines the daos_agent configuration yaml parameters."""

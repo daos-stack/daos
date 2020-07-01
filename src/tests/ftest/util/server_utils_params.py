@@ -32,16 +32,36 @@ class DaosServerTransportCredentials(TransportCredentials):
     # pylint: disable=too-few-public-methods
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self):
+    def __init__(self, log_dir):
         """Initialize a TransportConfig object."""
         super(DaosServerTransportCredentials, self).__init__(
-            "/run/transport_config/*", "transport_config")
+            "/run/server_config/transport_config/*", "transport_config", log_dir)
+        self.client_cert_dir = LogParameter(log_dir, None, "clients")
+        self.cert = LogParameter(log_dir, None, "server.crt")
+        self.key = LogParameter(log_dir, None, "server.key")
 
-        self.allow_insecure = BasicParameter(True, True)
-        self.client_cert_dir = BasicParameter(None, "./daosCA/certs")
-        self.ca_cert = BasicParameter(None, "./daosCA/certs/daosCA.crt")
-        self.cert = BasicParameter(None, "./daosCA/certs/server.crt")
-        self.key = BasicParameter(None, "./daosCA/certs/server.key")
+    def _get_certificate_data(self, name_list):
+        """Get certificate data.
+
+           Args:
+               name_list (list): name list.
+
+           Returns:
+               data (dict): a dictionary of parameter directory name keys and
+               value.
+        """
+
+        name_list.remove("client_cert_dir")
+        data = super(
+            DaosServerTransportCredentials, self)._get_certificate_data(
+                name_list)
+        if self.client_cert_dir.value:
+            if self.client_cert_dir.value not in data:
+                data[self.client_cert_dir.value] = ["agent.crt"]
+            else:
+                data[self.client_cert_dir.value].append("agent.crt")
+        return data
+
 
 class DaosServerYamlParameters(YamlParameters):
     """Defines the daos_server configuration yaml parameters."""

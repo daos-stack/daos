@@ -614,20 +614,6 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             key: getattr(args, value).split(",") if getattr(args, value) else []
             for key, value in YAML_KEYS.items()}
 
-        #Check for transport_config and allow_insecure from the test yaml
-        trans_conf_defined_in_yaml = False
-        if "transport_config" in yaml_data.keys():
-            trans_conf = yaml_data["transport_config"]
-            if "allow_insecure" in trans_conf.keys():
-                allow_insec_yaml = trans_conf["allow_insecure"]
-                trans_conf_defined_in_yaml = True
-            else:
-                # Report an error for the missing allow_insecure under
-                # transport_config
-                print("Error: allow_insecure missing on transport_config in "
-                      "the test yaml file.")
-                exit(1)
-
         # Assign replacement values for the test yaml entries to be replaced
         display(args, "Detecting replacements for {} in {}".format(
             yaml_keys, yaml_file))
@@ -707,17 +693,6 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     yaml_file, ", ".join(missing_replacements)))
             return None
 
-        if trans_conf_defined_in_yaml:
-            if not bool(allow_insec_yaml):
-                generate_certs()
-        else:
-            yaml_data += "transport_config:\n"
-            if args.secure_mode:
-                yaml_data += "  allow_insecure: False"
-                generate_certs()
-            else:
-                yaml_data += "  allow_insecure: True"
-
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
         orig_yaml_file = yaml_file
@@ -732,24 +707,23 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             cmd = ["diff", "-y", orig_yaml_file, yaml_file]
             print(get_output(cmd, False))
 
-
     # Return the untouched or modified yaml file
     return yaml_file
 
-
-def generate_certs():
-    """function to generate the certificates for the test.
-
-    Args: none
-    Returns: none
-
-    """
-    # Generate certificates if not exist
-    print(" ")
-    if not os.path.exists("./daosCA"):
-        subprocess.call(["../../../../../utils/certs/gen_certificates.sh"])
-    print(" ")
-
+def generate_certs(args):
+    """Generate the certificates for the test."""
+    subprocess.call(
+        ["/usr/bin/rm", "-rf",
+         "{}/certs".format(os.environ["DAOS_TEST_LOG_DIR"])])
+    subprocess.call(["../../../../lib64/daos/certgen/gen_certificates.sh"])
+    subprocess.call(
+        ["/usr/bin/mv", "daosCA/certs",
+         "{}/".format(os.environ["DAOS_TEST_LOG_DIR"])])
+    spawn_commands(args.test_servers.split(","), "ls -la {}".format(
+        os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "certs")))
+    subprocess.call(
+        ["/usr/bin/ls", "-la", os.path.join(
+            os.environ["DAOS_TEST_LOG_DIR"], "certs")])
 
 def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
@@ -1321,10 +1295,6 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
-        "-sec", "--secure_mode",
-        action="store_true",
-        help="launch test with secure-mode")
-    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -1350,6 +1320,9 @@ def main():
 
     # Setup the user environment
     set_test_environment(args)
+
+    # Gen cert files
+    generate_certs(args)
 
     # Auto-detect nvme test yaml replacement values if requested
     if args.nvme and args.nvme.startswith("auto"):

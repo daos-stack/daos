@@ -26,7 +26,7 @@ import getpass
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd
+from general_utils import pcmd, get_log_file
 from dmg_utils import DmgCommand
 
 
@@ -354,6 +354,11 @@ class DaosServerManager(SubprocessManager):
 
         # Create the daos_server yaml file
         self.manager.job.create_yaml_file()
+
+        # Copy certificates
+        self.manager.job.yaml.copy_certificates(
+            get_log_file("certs"), self._hosts)
+        self.dmg.set_certificates(["localhost"])
 
         # Prepare dmg for running storage format on all server hosts
         self.dmg.hostlist = self._hosts

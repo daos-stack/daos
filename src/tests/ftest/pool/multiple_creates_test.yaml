@@ -6,10 +6,17 @@ hosts:
     - server-B
 server_config:
    name: daos_server
+server_config:
+  transport_config:
+    allow_insecure: False
+agent_config:
+  transport_config:
+    allow_insecure: False
+dmg:
+  transport_config:
+    allow_insecure: False
 timeout: 240
 pool:
     name: daos_server
     scm_size: 1073741824
     control_method: dmg
-transport_config:
-  allow_insecure: False

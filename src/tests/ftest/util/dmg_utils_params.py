@@ -21,23 +21,24 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+import os
 
+#from command_utils_base import \
+#    BasicParameter, YamlParameters, TransportCredentials
 from command_utils_base import \
-    BasicParameter, YamlParameters, TransportCredentials
+    BasicParameter, LogParameter, YamlParameters, TransportCredentials, \
+    EnvironmentVariables
 
 
 class DmgTransportCredentials(TransportCredentials):
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self):
+    def __init__(self, log_dir):
         """Initialize a TransportConfig object."""
         super(DmgTransportCredentials, self).__init__(
-            "/run/transport_config/*", "transport_config")
-
-        self.allow_insecure = BasicParameter(True, True)
-        self.ca_cert = BasicParameter(None, "./daosCA/certs/daosCA.crt")
-        self.cert = BasicParameter(None, "./daosCA/certs/admin.crt")
-        self.key = BasicParameter(None, "./daosCA/certs/admin.key")
+            "/run/dmg/transport_config/*", "transport_config", log_dir)
+        self.cert = LogParameter(log_dir, None, "admin.crt")
+        self.key = LogParameter(log_dir, None, "admin.key")
 
 
 class DmgYamlParameters(YamlParameters):

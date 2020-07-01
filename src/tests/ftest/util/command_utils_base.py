@@ -24,7 +24,7 @@
 from logging import getLogger
 import os
 import yaml
-
+from general_utils import run_command
 
 class CommandFailure(Exception):
     """Base exception for this module."""
@@ -463,11 +463,22 @@ class YamlParameters(ObjectWithParameters):
             value = None
         return value
 
+    def copy_certificates(self, source, hosts):
+        """Copy the certificates to the destination hosts.
+
+        Args:
+            source (str): source of the certificates.
+            hosts (list): list of the destination hosts.
+
+        """
+        if self.other_params is not None:
+            self.other_params.copy_certificates(source, hosts)
+
 
 class TransportCredentials(YamlParameters):
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, namespace, title):
+    def __init__(self, namespace, title, log_dir):
         """Initialize a TransportConfig object.
 
         Args:
@@ -476,11 +487,8 @@ class TransportCredentials(YamlParameters):
                 parameters when creating the yaml file. Defaults to None.
         """
         super(TransportCredentials, self).__init__(namespace, None, title)
-
+        self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
         self.allow_insecure = BasicParameter(True, True)
-        self.ca_cert = BasicParameter(None)
-        self.cert = BasicParameter(None)
-        self.key = BasicParameter(None)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -498,6 +506,56 @@ class TransportCredentials(YamlParameters):
             yaml_data["allow_insecure"] = self.allow_insecure.value
 
         return yaml_data
+
+    def _get_certificate_data(self, name_list):
+        """Get certificate data by name_list.
+
+        Args:
+            name_list (list): name list.
+
+        Returns:
+            data (dict): a dictionary of parameter directory name keys and
+            value.
+
+        """
+        data = {}
+        for name in name_list:
+            value = getattr(self, name).value
+            if value is not None:
+                dir_name, file_name = os.path.split(value)
+                if dir_name not in data:
+                    data[dir_name] = [file_name]
+                else:
+                    data[dir_name].append(file_name)
+        return data
+
+    def copy_certificates(self, source, hosts):
+        """ copy certificates file to the dest hosts
+
+        Args:
+            source (str): source of the certificate files.
+            hosts (list of string): list of the destination hosts.
+
+        """
+        data = self._get_certificate_data(
+            self.get_attribute_names(LogParameter))
+        for name in data:
+            run_command(
+                "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
+                    ",".join(hosts), name))
+            for file_name in data[name]:
+                src_file = os.path.join(source, file_name)
+                dst_file = os.path.join(name, file_name)
+                run_command(
+                    "clush -S -v -w {} --copy {} --dest {}".format(
+                        ",".join(hosts), src_file, dst_file))
+            # debug to list copy of cert files
+            print(
+                "[DEBUG] listing of certificate files in {} on {}".format(
+                    name, hosts))
+            run_command(
+                "clush -S -v -w {} /usr/bin/ls -la {}".format(
+                    ",".join(hosts), name))
 
 
 class CommonConfig(YamlParameters):

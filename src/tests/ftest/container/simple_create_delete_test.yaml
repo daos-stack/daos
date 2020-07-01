@@ -4,11 +4,17 @@ hosts:
   test_servers:
     - server-A
 server_config:
-   name: daos_server
+  name: daos_server
+  transport_config:
+    allow_insecure: False
+agent_config:
+  transport_config:
+    allow_insecure: False
+dmg:
+  transport_config:
+    allow_insecure: False
 pool:
   mode: 511
   name: daos_server
   scm_size: 1073741824
   control_method: dmg
-transport_config:
-  allow_insecure: False

@@ -8,7 +8,14 @@ server_manager:
 timeout: 120
 server_config:
   name: daos_server
-
+  transport_config:
+    allow_insecure: False
+agent_config:
+  transport_config:
+    allow_insecure: False
+dmg:
+  transport_config:
+    allow_insecure: False
 # The 'config_val' list is composed of the following values:
 # - name of the config attribute, used to look for the attribute object
 # - test value that will be inserted into the server config for the attribute
@@ -166,5 +173,3 @@ server_config_val: !mux
       - "targets"
       - "ABDCD"
       - "FAIL"
-transport_config:
-  allow_insecure: False

@@ -7,6 +7,14 @@ hosts:
 timeout: 120
 server_config:
   name: daos_server
+  transport_config:
+    allow_insecure: False
+agent_config:
+  transport_config:
+    allow_insecure: False
+dmg:
+  transport_config:
+    allow_insecure: False
 pool:
     scm_size: 1073741824
 tests:
@@ -19,5 +27,3 @@ tests:
       setname:
         - complete_rubbish
         - FAIL
-transport_config:
-  allow_insecure: False

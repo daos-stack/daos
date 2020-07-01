@@ -345,7 +345,7 @@ class TestWithServers(TestWithoutServers):
             hosts.extend(self.hostlist_clients)
         self.stop_leftover_processes(["orterun"], hosts)
         self.insecure_mode = self.params.get("allow_insecure",
-                                             "/run/transport_config/*")
+                                             "/run/server_config/transport_config/*")
         self.log.info("transport_mode, insecure_mode:  %s", self.insecure_mode)
 
         # Start the clients (agents)
@@ -396,7 +396,7 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(agent_groups, dict):
             for group, hosts in agent_groups.items():
-                transport = DaosAgentTransportCredentials()
+                transport = DaosAgentTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "agent")
                 transport.allow_insecure.value = self.insecure_mode
@@ -434,7 +434,7 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, hosts in server_groups.items():
-                transport = DaosServerTransportCredentials()
+                transport = DaosServerTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "server")
                 dmg_config_file = self.get_config_file(group, "dmg")
@@ -483,7 +483,7 @@ class TestWithServers(TestWithoutServers):
         if config_file is None:
             config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
-            agent_transport = DaosAgentTransportCredentials()
+            agent_transport = DaosAgentTransportCredentials(self.workdir)
             agent_transport.allow_insecure.value = self.insecure_mode
             common_cfg = CommonConfig(self.server_group, agent_transport)
         # Create an AgentCommand to manage with a new AgentManager object
@@ -517,12 +517,13 @@ class TestWithServers(TestWithoutServers):
             config_file = self.get_config_file("daos", "server")
         if common_cfg is None:
             common_cfg = CommonConfig(
-                self.server_group, DaosServerTransportCredentials())
+                self.server_group, DaosServerTransportCredentials(self.workdir))
 
         if dmg_config_file is None:
             dmg_config_file = self.get_config_file("daos", "dmg")
-        transport_dmg = DmgTransportCredentials()
-        transport_dmg.allow_insecure.value = self.insecure_mode
+        transport_dmg = DmgTransportCredentials(self.workdir)
+        if self.insecure_mode is not None:
+            transport_dmg.allow_insecure.value = self.insecure_mode
         dmg_cfg = DmgYamlParameters(dmg_config_file, self.server_group,
                                     transport_dmg)
         # Create a ServerCommand to manage with a new ServerManager object
@@ -783,7 +784,7 @@ class TestWithServers(TestWithoutServers):
 
         dmg_config_file = self.get_config_file("daos", "dmg")
         dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
+            dmg_config_file, self.server_group, DmgTransportCredentials(self.workdir))
         dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
 
