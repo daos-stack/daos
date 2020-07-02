@@ -3263,20 +3263,22 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	if (ent_array.ea_ent_nr == 0)
 		return 0;
 
+	evt_ent_array_for_each(entry, &ent_array) {
+		if (entry->en_visibility & EVT_PARTIAL) {
+			D_ERROR("Removing partial extents not allowed:"
+				" Specified rect "DF_RECT" overlaps "DF_EXT"\n",
+				DP_RECT(&rect), DP_EXT(&entry->en_ext));
+			rc = -DER_NO_PERM;
+			goto done;
+		}
+	}
+
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
 
 	evt_ent_array_for_each(entry, &ent_array) {
 		struct evt_rect	to_delete;
-
-		if (entry->en_visibility & EVT_PARTIAL) {
-			rc = -DER_NO_PERM;
-			D_ERROR("Removing partial extents not allowed:"
-				" Specified rect "DF_RECT" overlaps "DF_EXT"\n",
-				DP_RECT(&rect), DP_EXT(&entry->en_ext));
-			break;
-		}
 
 		to_delete.rc_ex = entry->en_ext;
 		to_delete.rc_epc = entry->en_epoch;
@@ -3289,9 +3291,12 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 		}
 	}
 
+	rc = evt_tx_end(tcx, rc);
+
+done:
 	evt_ent_array_fini(&ent_array);
 
-	return evt_tx_end(tcx, rc);
+	return rc;
 }
 
 daos_size_t
