@@ -243,6 +243,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 		D_ASSERTF(target->ta_comp.co_status == PO_COMP_ST_UP ||
 			target->ta_comp.co_status == PO_COMP_ST_UPIN ||
 			target->ta_comp.co_status == PO_COMP_ST_DOWN ||
+			target->ta_comp.co_status == PO_COMP_ST_DRAIN ||
 			target->ta_comp.co_status == PO_COMP_ST_DOWNOUT,
 			"%u\n", target->ta_comp.co_status);
 		if (opc == POOL_EXCLUDE &&
@@ -264,6 +265,17 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				dom->do_comp.co_status = PO_COMP_ST_DOWN;
 				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
 			}
+		} else if (opc == POOL_DRAIN &&
+		    target->ta_comp.co_status == PO_COMP_ST_UPIN) {
+			D_DEBUG(DF_DSMS, "change target %u/%u to DRAIN %p\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index, map);
+			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
+			target->ta_comp.co_fseq = ++version;
+
+			D_PRINT("Target (rank %u idx %u) is draining.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
 		} else if (opc == POOL_ADD &&
 			 target->ta_comp.co_status != PO_COMP_ST_UP &&
 			 target->ta_comp.co_status != PO_COMP_ST_UPIN) {
