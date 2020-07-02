@@ -779,7 +779,7 @@ next:
  * used for the csum structures.
  */
 static int
-obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl, struct obj_rw_in *orw,
+obj_fetch_csum_init(struct ds_cont_child *cont, struct obj_rw_in *orw,
 		    struct obj_rw_out *orwo)
 {
 	int rc;
@@ -791,7 +791,7 @@ obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl, struct obj_rw_in *orw,
 	 *
 	 * The memory will be freed in obj_rw_reply
 	 */
-	rc = daos_csummer_alloc_iods_csums(cont_hdl->sch_csummer,
+	rc = daos_csummer_alloc_iods_csums(cont->sc_csummer,
 					   orw->orw_iod_array.oia_iods,
 					   orw->orw_iod_array.oia_iod_nr,
 					   false, NULL,
@@ -1302,7 +1302,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	}
 
 	if (obj_rpc_is_fetch(rpc) && !spec_fetch) {
-		rc = obj_fetch_csum_init(ioc->ioc_coh, orw, orwo);
+		rc = obj_fetch_csum_init(ioc->ioc_coc, orw, orwo);
 		if (rc) {
 			D_ERROR(DF_UOID" fetch csum init failed: %d.\n",
 				DP_UOID(orw->orw_oid), rc);
