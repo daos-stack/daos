@@ -834,13 +834,18 @@ configure `DAOS_AGENT_DRPC_DIR` in the client environment to point to this new
 location.
 
 DAOS automatically configures a client with a compatible fabric provider,
-network interface and network domain that will allow it to connect to the DAOS
-system.  A client application may override one or more of these settings by
-configuring environment variables in the client's shell prior to launch.
+network interface, network domain, CaRT timeout, and CaRT context share address,
+that will allow it to connect to the DAOS system.
 
-To manually configure the fabric provider, set `CRT_PHY_ADDR_STR` such as:
+The client may not override the fabric provider or the CaRT context share
+address.
+
+A client application may override the three remaining settings by configuring
+environment variables in the client's shell prior to launch.
+
+To manually configure the CaRT timeout, set `CRT_TIMEOUT` such as:
 ```
-export CRT_PHY_ADDR_STR="ofi+sockets"
+export CRT_TIMEOUT=5
 ```
 To manually configure the network interface, set `OFI_INTERFACE` such as:
 ```
