@@ -436,7 +436,7 @@ dtx_resync_one(void *data)
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 container_scan_cb, NULL, &cb_arg);
+			 container_scan_cb, NULL, &cb_arg, NULL);
 
 	ds_pool_child_put(child);
 out:

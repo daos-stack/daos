@@ -53,10 +53,7 @@ A-key: "DFS_CHUNK_SIZE"
 single-value (uint64_t): Default chunk size for files in this container
 
 A-key: "DFS_OBJ_CLASS"
-single-value (uint64_t): Default object class for files in this container
-
-D-key: "/"
-// rest of akey entries for root are same as in directory entry described next.
+single-value (uint16_t): Default object class for files in this container
 
 D-key: "/"
 // rest of akey entries for root are same as in directory entry described below.
