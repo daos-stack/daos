@@ -173,10 +173,9 @@ drpc_init(void)
 	}
 
 	D_ASSERT(dss_drpc_ctx == NULL);
-	dss_drpc_ctx = drpc_connect(path);
-	if (dss_drpc_ctx == NULL) {
-		D_GOTO(out_path, rc = -DER_NOMEM);
-	}
+	rc = drpc_connect(path, &dss_drpc_ctx);
+	if (dss_drpc_ctx == NULL)
+		D_GOTO(out_path, 0);
 
 	rc = notify_ready();
 	if (rc != 0) {

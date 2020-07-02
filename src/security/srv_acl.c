@@ -223,10 +223,10 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 	Drpc__Call	*request;
 	int		rc;
 
-	server_socket = drpc_connect(ds_sec_server_socket_path);
-	if (server_socket == NULL) {
+	rc = drpc_connect(ds_sec_server_socket_path, &server_socket);
+	if (rc != -DER_SUCCESS) {
 		D_ERROR("Couldn't connect to daos_server socket\n");
-		return -DER_BADPATH;
+		return rc;
 	}
 
 	request = new_validation_request(server_socket, creds);
