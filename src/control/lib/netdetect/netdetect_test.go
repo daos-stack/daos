@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 package netdetect
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
@@ -151,9 +150,6 @@ func TestScanFabricNoDevices(t *testing.T) {
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
 			results, err := ScanFabric("", tc.excludes)
-			for i, res := range results {
-				fmt.Printf("Result %d\n\n%v\n\n", i, res)
-			}
 			AssertEqual(t, err, nil, "ScanFabric failure")
 			AssertEqual(t, len(results), tc.results, "ScanFabric had unexpected number of results")
 		})
@@ -161,7 +157,7 @@ func TestScanFabricNoDevices(t *testing.T) {
 }
 
 // TestScanFabric scans the fabric on the test system.  Even though we don't know how the test system is configured,
-// we do expect that libfabric is installed and will report at least one provider,device,numa record.
+// we do expect that libfabric is installed and will report at least one record.
 // If we get at least one record and no errors, the test is successful.
 func TestScanFabric(t *testing.T) {
 	results, err := ScanFabric("")
@@ -172,7 +168,7 @@ func TestScanFabric(t *testing.T) {
 // TestValidateNetworkConfig runs in a basic loopback mode with ScanFabric.  ScanFabric
 // is used to generate data found on the actual test system, which is then fed back to the
 // ValidateProviderConfig and  ValidateNUMAConfig functions to make sure it matches.  Each record from ScanFabric is
-// examined.  We expect that libfabric is installed and will report at least one provider, device, numa record.
+// examined.  We expect that libfabric is installed and will report at least one record.
 func TestValidateNetworkConfig(t *testing.T) {
 
 	provider := "" // an empty provider string is a search for 'all'
@@ -283,7 +279,7 @@ func TestNumaAware(t *testing.T) {
 	}
 }
 
-// TestInitDeviceScan verifies that the initialization succeeds on numa and non NUMA topology
+// TestInitDeviceScan verifies that the initialization succeeds on NUMA and non NUMA topology
 func TestInitDeviceScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		topology string
