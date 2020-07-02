@@ -216,6 +216,9 @@ def set_test_environment(args):
         os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
+    # Parse daos insecure mode
+    os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
+
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
     if python_path is None or python_path == "":
@@ -231,7 +234,6 @@ def set_test_environment(args):
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
-
 
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
@@ -1295,6 +1297,10 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
+        "-ins", "--insecure_mode",
+        action="store_true",
+        help="Launch test with insecure-mode")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -1321,9 +1327,6 @@ def main():
     # Setup the user environment
     set_test_environment(args)
 
-    # Gen cert files
-    generate_certs(args)
-
     # Auto-detect nvme test yaml replacement values if requested
     if args.nvme and args.nvme.startswith("auto"):
         args.nvme = get_nvme_replacement(args)
@@ -1348,6 +1351,9 @@ def main():
     test_files = get_test_files(test_list, args, tmp_dir)
     if args.modify:
         exit(0)
+
+    # Generate certificate files
+    generate_certs(args)
 
     # Run all the tests
     status = run_tests(test_files, tag_filter, args)

@@ -327,6 +327,19 @@ class DaosServerManager(SubprocessManager):
         # to access the doas_servers when they are started
         self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Use the yaml file parameter values to assign the server command and
+        orterun command parameters.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosServerManager, self).get_params(test)
+        # Get the values for the dmg parameters
+        self.dmg.get_params(test)
+
     def get_interface_envs(self, index=0):
         """Get the environment variable names and values for the interfaces.
 

@@ -274,7 +274,6 @@ class TestWithServers(TestWithoutServers):
             os.path.split(self.filename)[1], self.name.str_uid)
         # self.debug = False
         # self.config = None
-        self.insecure_mode = True
 
     def setUp(self):
         """Set up each test case."""
@@ -344,9 +343,6 @@ class TestWithServers(TestWithoutServers):
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
         self.stop_leftover_processes(["orterun"], hosts)
-        self.insecure_mode = self.params.get(
-            "allow_insecure", "/run/server_config/transport_config/*")
-        self.log.info("transport_mode, insecure_mode:  %s", self.insecure_mode)
 
         # Start the clients (agents)
         if self.setup_start_agents:
@@ -399,8 +395,6 @@ class TestWithServers(TestWithoutServers):
                 transport = DaosAgentTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "agent")
-                transport.allow_insecure.value = self.insecure_mode
-
                 # Setup the access points with the server hosts
                 common_cfg = CommonConfig(group, transport)
                 self.add_agent_manager(config_file, common_cfg)
@@ -440,7 +434,6 @@ class TestWithServers(TestWithoutServers):
                 dmg_config_file = self.get_config_file(group, "dmg")
                 # Setup the access points with the server hosts
                 common_cfg = CommonConfig(group, transport)
-                transport.allow_insecure.value = self.insecure_mode
 
                 self.add_server_manager(
                     config_file, dmg_config_file, common_cfg)
@@ -484,7 +477,7 @@ class TestWithServers(TestWithoutServers):
             config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
             agent_transport = DaosAgentTransportCredentials(self.workdir)
-            agent_transport.allow_insecure.value = self.insecure_mode
+            agent_transport.allow_insecure.value = self.agent_insecure_mode
             common_cfg = CommonConfig(self.server_group, agent_transport)
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
@@ -522,8 +515,6 @@ class TestWithServers(TestWithoutServers):
         if dmg_config_file is None:
             dmg_config_file = self.get_config_file("daos", "dmg")
         transport_dmg = DmgTransportCredentials(self.workdir)
-        if self.insecure_mode is not None:
-            transport_dmg.allow_insecure.value = self.insecure_mode
         dmg_cfg = DmgYamlParameters(dmg_config_file, self.server_group,
                                     transport_dmg)
         # Create a ServerCommand to manage with a new ServerManager object

@@ -487,8 +487,11 @@ class TransportCredentials(YamlParameters):
                 parameters when creating the yaml file. Defaults to None.
         """
         super(TransportCredentials, self).__init__(namespace, None, title)
+        default_insecure = str(os.environ.get("DAOS_INSECURE_MODE", True))
+        default_insecure = default_insecure.lower() == "true"
         self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
-        self.allow_insecure = BasicParameter(False, False)
+        self.allow_insecure = BasicParameter(None, default_insecure)
+        print("[DEBUG] default_insecure= ", default_insecure)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
