@@ -1013,6 +1013,8 @@ def install_debuginfos():
     install_pkgs = [{'name': 'gdb'},
                     {'name': 'python-magic'}]
 
+    cmds = []
+
     # -debuginfo packages that don't get installed with debuginfo-install
     for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
         debug_pkg = resolve_debuginfo(pkg)
@@ -1023,7 +1025,7 @@ def install_debuginfos():
     # installation
     path = os.path.sep + os.path.join('usr', 'share', 'spdk', 'include')
     if os.path.islink(path):
-        cmds = [["sudo", "rm", "-f", path]]
+        cmds.append(["sudo", "rm", "-f", path])
 
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
