@@ -41,7 +41,8 @@ map_ranks_include(enum map_ranks_class class, int status)
 		return status == PO_COMP_ST_UP || status == PO_COMP_ST_UPIN;
 	case MAP_RANKS_DOWN:
 		return status == PO_COMP_ST_DOWN ||
-		       status == PO_COMP_ST_DOWNOUT;
+		       status == PO_COMP_ST_DOWNOUT ||
+		       status == PO_COMP_ST_DRAIN;
 	default:
 		D_ASSERTF(0, "%d\n", class);
 	}
