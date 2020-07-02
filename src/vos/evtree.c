@@ -3168,17 +3168,13 @@ fix_trace:
 	return evt_tcx_fix_trace(tcx, changed_level);
 }
 
-int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
-	       struct evt_entry *ent)
+int
+evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
+		    struct evt_entry *ent, bool in_tx)
 {
-	struct evt_context	*tcx;
 	struct evt_entry_array	 ent_array;
 	struct evt_filter	 filter;
 	int			 rc;
-
-	tcx = evt_hdl2tcx(toh);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
 
 	/* NB: This function presently only supports exact match on extent. */
 	evt_ent_array_init_internal(&ent_array, 1);
@@ -3199,9 +3195,11 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	if (ent != NULL)
 		*ent = *evt_ent_array_get(&ent_array, 0);
 
-	rc = evt_tx_begin(tcx);
-	if (rc != 0)
-		return rc;
+	if (!in_tx) {
+		rc = evt_tx_begin(tcx);
+		if (rc != 0)
+			return rc;
+	}
 
 	rc = evt_node_delete(tcx);
 
@@ -3215,6 +3213,85 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	/* No need for evt_ent_array_fill as there will be no allocations
 	 * with 1 entry in the list
 	 */
+	return in_tx ? rc : evt_tx_end(tcx, rc);
+}
+
+int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
+	       struct evt_entry *ent)
+{
+	struct evt_context	*tcx;
+
+	tcx = evt_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	return evt_delete_internal(tcx, rect, ent, false);
+}
+
+int
+evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
+	       daos_epoch_t epoch)
+{
+	struct evt_context	*tcx;
+	struct evt_entry	*entry;
+	struct evt_entry_array	 ent_array;
+	struct evt_filter	 filter;
+	int			 rc;
+	struct evt_rect		 rect;
+
+	tcx = evt_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	rect.rc_ex = *ext;
+	rect.rc_epc = epoch;
+	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+
+	evt_ent_array_init(&ent_array);
+
+	filter.fr_ex = rect.rc_ex;
+	filter.fr_epr.epr_lo = 0;
+	filter.fr_epr.epr_hi = rect.rc_epc;
+	filter.fr_punch = 0;
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
+				&filter, &rect, &ent_array);
+	if (rc != 0) {
+		D_ERROR("ent_array_fill failed: "DF_RC"\n", DP_RC(rc));
+		evt_ent_array_fini(&ent_array);
+		return rc;
+	}
+
+	if (ent_array.ea_ent_nr == 0)
+		return 0;
+
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
+	evt_ent_array_for_each(entry, &ent_array) {
+		struct evt_rect	to_delete;
+
+		if (entry->en_visibility & EVT_PARTIAL) {
+			rc = -DER_NO_PERM;
+			D_ERROR("Removing partial extents not allowed:"
+				" Specified rect "DF_RECT" overlaps "DF_EXT"\n",
+				DP_RECT(&rect), DP_EXT(&entry->en_ext));
+			break;
+		}
+
+		to_delete.rc_ex = entry->en_ext;
+		to_delete.rc_epc = entry->en_epoch;
+		to_delete.rc_minor_epc = entry->en_minor_epc;
+		rc = evt_delete_internal(tcx, &to_delete, NULL, true);
+		if (rc != 0) {
+			D_ERROR("Failed to delete "DF_RECT"\n",
+				DP_RECT(&to_delete));
+			break;
+		}
+	}
+
+	evt_ent_array_fini(&ent_array);
+
 	return evt_tx_end(tcx, rc);
 }
 
