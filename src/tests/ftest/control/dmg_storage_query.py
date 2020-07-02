@@ -173,7 +173,7 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query device-state' command.
         In addition this test also does a basic test of nvme-faulty cmd:
-        'dmg storage query nvme-faulty'
+        'dmg storage set nvme-faulty'
 
         :avocado: tags=all,pr,hw,small,storage_query_faulty,basic
         """
