@@ -46,8 +46,14 @@ ObjClassID = enum.Enum(
 
 class KvNotFound(Exception):
     """Raised by get_kv_by_name if KV does not exist"""
-    pass
 
+    def __init__(self, name):
+        self.name = name
+        super().__init__(self)
+
+    def __str__(self):
+        return "Failed to create '{}'".format(self.name)
+        
 class ObjID(object):
     """
     Class representing of DAOS 128-bit object identifier
@@ -172,11 +178,11 @@ class Cont(object):
             return self.kv(object_data['oid'])
 
         if not create:
-            raise KvNotFound
+            raise KvNotFound(name)
 
         new_kv = self.newkv()
         # Create a new entry in the root kv, where the entry
-        # itself is a dick, and the 'oid' entry is the object
+        # itself is a dict, and the 'oid' entry is the object
         # of the new, referenced kv.  This allows for future
         # expansion of the definition without changing
         # existing containers.
