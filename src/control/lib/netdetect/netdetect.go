@@ -289,13 +289,7 @@ func initDeviceScan() (DeviceScan, error) {
 			errors.New("hwloc_get_type_depth returned invalid value")
 	}
 	deviceScanCfg.depth = int(depth)
-
 	deviceScanCfg.numObj = uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	if deviceScanCfg.numObj == 0 {
-		defer cleanUp(deviceScanCfg.topology)
-		return deviceScanCfg,
-			errors.New("hwloc_get_nbobjs_by_depth returned invalid value: no OS devices found")
-	}
 
 	// Create the list of all the valid network device names
 	systemDeviceNames, err := GetDeviceNames()
@@ -506,10 +500,14 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 
 // NumaAware verifies that NUMA data is available to process
 func NumaAware() (bool, error) {
-	deviceScanCfg, err := initDeviceScan()
+	var deviceScanCfg DeviceScan
+
+	topology, err := initLib()
 	if err != nil {
-		return false, err
+		log.Debugf("Error from initLib %v", err)
+		return false, errors.New("unable to initialize hwloc library")
 	}
+	deviceScanCfg.topology = topology
 	defer cleanUp(deviceScanCfg.topology)
 
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
@@ -733,6 +731,18 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	if deviceScanCfg.targetDevice == "lo" {
 		return DeviceAffinity{
 			DeviceName: "lo",
+			CPUSet:     "0x0",
+			NodeSet:    "0x1",
+			NUMANode:   0,
+		}, nil
+	}
+
+	// If the system isn't NUMA aware, use numa 0
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
+	if numObj == 0 {
+		return DeviceAffinity{
+			DeviceName: deviceScanCfg.targetDevice,
 			CPUSet:     "0x0",
 			NodeSet:    "0x1",
 			NUMANode:   0,
@@ -1075,6 +1085,14 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	}
 	defer cleanUp(deviceScanCfg.topology)
 
+	// If the system isn't NUMA aware, skip validation
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
+	if numObj == 0 {
+		log.Debugf("The system is not NUMA aware.  Device/NUMA validation skipped.\n")
+		return nil
+	}
+
 	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
 		return errors.Errorf("device: %s is an invalid device name", device)
 	}
@@ -1084,6 +1102,7 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	if err != nil {
 		return err
 	}
+
 	if deviceAffinity.NUMANode != numaNode {
 		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
 	}
