@@ -230,7 +230,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, daos_epoch_t *high,
 		*should_pass = false;
 	}
 parse_rect:
-	rect->rc_ex.ex_lo = atoll(str);
+	rect->rc_ex.ex_lo = strtoull(str, NULL, 10);
 
 	tmp = strchr(str, EVT_SEP_EXT);
 	if (tmp == NULL) {
@@ -239,7 +239,7 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_ex.ex_hi = atoll(str);
+	rect->rc_ex.ex_hi = strtoull(str, NULL, 10);
 	tmp = strchr(str, EVT_SEP_EPC);
 	if (tmp == NULL) {
 		D_PRINT("Invalid input string %s\n", str);
@@ -247,13 +247,13 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_epc = atoll(str);
+	rect->rc_epc = strtoull(str, NULL, 10);
 	tmp = strchr(str, EVT_SEP_MNR);
 	if (tmp == NULL) {
 		rect->rc_minor_epc = 1;
 	} else {
 		str = tmp + 1;
-		rect->rc_minor_epc = atoll(str);
+		rect->rc_minor_epc = atoi(str);
 	}
 
 	if (high) {
@@ -262,7 +262,7 @@ parse_rect:
 		if (tmp == NULL)
 			goto parse_value;
 		str = tmp + 1;
-		*high = atoll(str);
+		*high = strtoull(str, NULL, 10);
 	}
 
 parse_value:
@@ -435,6 +435,40 @@ ts_delete_rect(void **state)
 	}
 
 }
+
+static void
+ts_remove_rect(void **state)
+{
+	struct evt_rect		 rect;
+	int			 rc;
+	bool			 should_pass;
+	char			*arg;
+
+	arg = tst_fn_val.optval;
+	if (arg == NULL)
+		fail();
+
+	rc = ts_parse_rect(arg, &rect, NULL, NULL, &should_pass);
+	if (rc != 0)
+		fail();
+
+	D_PRINT("Remove all "DF_RECT" expect_pass=%s\n", DP_RECT(&rect),
+		should_pass ? "true" : "false");
+
+	rc = evt_remove_all(ts_toh, &rect.rc_ex, rect.rc_epc);
+
+	if (should_pass) {
+		if (rc != 0)
+			D_FATAL("Remove rect failed "DF_RC"\n", DP_RC(rc));
+	} else {
+		if (rc == 0) {
+			D_FATAL("Remove rect should have failed\n");
+			fail();
+		}
+		rc = 0;
+	}
+}
+
 
 static void
 ts_find_rect(void **state)
@@ -2219,6 +2253,7 @@ static struct option ts_ops[] = {
 	{ "add",	required_argument,	NULL,	'a'	},
 	{ "many_add",	required_argument,	NULL,	'm'	},
 	{ "find",	required_argument,	NULL,	'f'	},
+	{ "remove_all",	required_argument,	NULL,	'r'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "list",	optional_argument,	NULL,	'l'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
@@ -2270,6 +2305,9 @@ ts_cmd_run(char opc, char *args)
 	case 'd':
 		ts_delete_rect(st);
 		break;
+	case 'r':
+		ts_remove_rect(st);
+		break;
 	case 'b':
 		ts_tree_debug(st);
 		break;
@@ -2300,7 +2338,7 @@ ts_group(void **state)
 
 	while ((opc = getopt_long(test_group_argc,
 				 test_group_args,
-				 "C:a:m:e:f:g:d:b:Docl::ts",
+				 "C:a:m:e:f:g:d:b:Docl::tsr:",
 				 ts_ops, NULL)) != -1){
 		ts_cmd_run(opc, optarg);
 	}

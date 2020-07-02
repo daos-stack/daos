@@ -224,7 +224,6 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_abort_aggregation:1,
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
 };
@@ -244,7 +243,6 @@ struct vos_dtx_act_ent {
 
 extern struct vos_tls	*standalone_tls;
 #ifdef VOS_STANDALONE
-unsigned int tmp_count;
 #define VOS_TIME_START(start, op)		\
 do {						\
 	if (standalone_tls->vtl_dp == NULL)	\
@@ -277,11 +275,19 @@ do {						\
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
-#define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
 #define DAE_REC_OFF(dae)	((dae)->dae_base.dae_rec_off)
+#define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
+#define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
+#define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
+#define DAE_OID_CNT(dae)	((dae)->dae_base.dae_oid_cnt)
+#define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
+#define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
+#define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
+#define DAE_OID_INLINE(dae)	((dae)->dae_base.dae_oid_inline)
+#define DAE_OID_OFF(dae)	((dae)->dae_base.dae_oid_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
@@ -295,9 +301,11 @@ struct vos_dtx_cmt_ent {
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
+#define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
+#define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
 /* in-memory structures standalone instance */
-struct bio_xs_context		*vsa_xsctxt_inst;
+extern struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
 
 static inline struct bio_xs_context *
@@ -427,12 +435,6 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, uint32_t *tx_id);
-
-/**
- * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
- */
-void
-vos_dtx_cleanup_dth(struct dtx_handle *dth);
 
 /** Return the already active dtx id, if any */
 uint32_t
@@ -921,12 +923,19 @@ enum {
 	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
 };
 
+/* vos_common.c */
 int
 vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob);
 
 void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh);
+
+int
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
+
+int
+vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err);
 
 /* vos_obj.c */
 int
@@ -961,9 +970,9 @@ vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 
 /* Reserve SCM through umem_reserve() for a PMDK transaction */
 struct vos_rsrvd_scm {
-	unsigned int		 rs_actv_cnt;
-	unsigned int		 rs_actv_at;
-	struct pobj_action	*rs_actv;
+	unsigned int		rs_actv_cnt;
+	unsigned int		rs_actv_at;
+	struct pobj_action	rs_actv[0];
 };
 
 umem_off_t
@@ -1068,7 +1077,8 @@ enum {
 	VOS_SLAB_EVT_NODE	= 3,
 	VOS_SLAB_EVT_DESC	= 4,
 	VOS_SLAB_OBJ_DF		= 5,
-	VOS_SLAB_MAX		= 6
+	VOS_SLAB_EVT_NODE_SM	= 6,
+	VOS_SLAB_MAX		= 7
 };
 D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
@@ -1094,9 +1104,9 @@ vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys);
 int
 vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow);
 int
-vos_space_hold(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-	       daos_size_t *space_hld);
+vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
 
