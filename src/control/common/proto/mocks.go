@@ -178,6 +178,10 @@ func (m *MockMgmtSvcClient) PoolExclude(ctx context.Context, req *mgmtpb.PoolExc
 	return &mgmtpb.PoolExcludeResp{}, nil
 }
 
+func (m *MockMgmtSvcClient) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq, o ...grpc.CallOption) (*mgmtpb.PoolDrainResp, error) {
+	return &mgmtpb.PoolDrainResp{}, nil
+}
+
 func (m *MockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
 	if m.Cfg.PoolQueryErr != nil {
 		return nil, m.Cfg.PoolQueryErr

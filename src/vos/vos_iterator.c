@@ -535,7 +535,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
-	vos_iter_entry_t	iter_ent;
+	vos_iter_entry_t	iter_ent = {0};
 	daos_handle_t		ih;
 	unsigned int		acts = 0;
 	bool			skipped;
