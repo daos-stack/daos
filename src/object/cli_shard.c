@@ -336,6 +336,15 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		bool	is_ec_obj = false;
 
+		rc = obj_ec_recov_add(rw_args->shard_args->reasb_req,
+				      orwo->orw_rels.ca_arrays,
+				      orwo->orw_rels.ca_count);
+		if (rc) {
+			D_ERROR("fail to add recov list for "DF_UOID",rc %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto out;
+		}
+
 		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 
@@ -588,7 +597,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
-	rw_args.maps = args->api_args->maps;
+	rw_args.maps = args->api_args->ioms;
 	if (opc == DAOS_OBJ_RPC_FETCH &&
 	    (rw_args.maps != NULL || args->iod_csums != NULL))
 		orw->orw_flags |= ORF_CREATE_MAP;
@@ -985,8 +994,15 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
 	oei->oei_map_ver	= args->la_auxi.map_ver;
+	if (args->la_auxi.epoch.oe_uncertain)
+		oei->oei_flags |= ORF_EPOCH_UNCERTAIN;
 	if (obj_args->eprs != NULL && opc == DAOS_OBJ_RPC_ENUMERATE) {
 		oei->oei_epr = *obj_args->eprs;
+		/*
+		 * If an epoch range is specified, we shall not assume any
+		 * epoch uncertainty.
+		 */
+		oei->oei_flags &= ~ORF_EPOCH_UNCERTAIN;
 	} else {
 		oei->oei_epr.epr_lo = 0;
 		oei->oei_epr.epr_hi = args->la_auxi.epoch.oe_value;
@@ -997,6 +1013,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
 	uuid_copy(oei->oei_co_uuid, cont_uuid);
+	daos_dti_copy(&oei->oei_dti, &args->la_dti);
 
 	if (obj_args->anchor != NULL)
 		enum_anchor_copy(&oei->oei_anchor, obj_args->anchor);
@@ -1081,7 +1098,6 @@ struct obj_query_key_cb_args {
 	crt_rpc_t		*rpc;
 	unsigned int		*map_ver;
 	daos_unit_oid_t		oid;
-	uint32_t		flags;
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
@@ -1106,7 +1122,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	okqi = crt_req_get(cb_args->rpc);
 	D_ASSERT(okqi != NULL);
 
-	flags = okqi->okqi_flags;
+	flags = okqi->okqi_api_flags;
 	opc = opc_get(cb_args->rpc->cr_opc);
 
 	if (ret != 0) {
@@ -1203,11 +1219,12 @@ out:
 }
 
 int
-dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
+dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dc_obj_epoch *epoch,
 		       uint32_t flags, struct dc_object *obj, daos_key_t *dkey,
 		       daos_key_t *akey, daos_recx_t *recx,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       unsigned int *map_ver, tse_task_t *task)
+		       struct dtx_id *dti, unsigned int *map_ver,
+		       tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
 	struct obj_query_key_in		*okqi;
@@ -1243,7 +1260,6 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 	cb_args.rpc	= req;
 	cb_args.map_ver = map_ver;
 	cb_args.oid	= shard->do_id;
-	cb_args.flags	= flags;
 	cb_args.dkey	= dkey;
 	cb_args.akey	= akey;
 	cb_args.recx	= recx;
@@ -1258,16 +1274,19 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 	D_ASSERT(okqi != NULL);
 
 	okqi->okqi_map_ver		= *map_ver;
-	okqi->okqi_epoch		= epoch;
-	okqi->okqi_flags		= flags;
+	okqi->okqi_epoch		= epoch->oe_value;
+	okqi->okqi_api_flags		= flags;
 	okqi->okqi_oid			= oid;
 	if (dkey != NULL)
 		okqi->okqi_dkey		= *dkey;
 	if (akey != NULL)
 		okqi->okqi_akey		= *akey;
+	if (epoch->oe_uncertain)
+		okqi->okqi_flags	= ORF_EPOCH_UNCERTAIN;
 	uuid_copy(okqi->okqi_pool_uuid, pool->dp_pool);
 	uuid_copy(okqi->okqi_co_hdl, coh_uuid);
 	uuid_copy(okqi->okqi_co_uuid, cont_uuid);
+	daos_dti_copy(&okqi->okqi_dti, dti);
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {

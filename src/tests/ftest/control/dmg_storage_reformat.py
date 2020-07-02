@@ -44,7 +44,7 @@ class DmgStorageReformatTest(ControlTestBase):
 
         Test Description: Test dmg storage reformat functionality.
 
-        :avocado: tags=all,small,full_regression,hw,control,reformat,dmg,basic
+        :avocado: tags=all,small,pr,hw,control,reformat,dmg,basic
         """
 
         # At this point the server has been started, storage has been formatted

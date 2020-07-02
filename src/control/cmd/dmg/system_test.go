@@ -43,7 +43,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with no arguments",
 			"system query",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemQueryReq{}),
 			}, " "),
 			nil,
@@ -52,7 +51,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				"ConnectClients",
 				`*control.SystemQueryReq-{"RankList":"0","HostList":""}`,
 			}, " "),
 			nil,
@@ -61,7 +59,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				"ConnectClients",
 				`*control.SystemQueryReq-{"RankList":"0,2,4-8","HostList":""}`,
 			}, " "),
 			nil,
@@ -76,7 +73,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single host",
 			"system query --rank-hosts foo-0",
 			strings.Join([]string{
-				"ConnectClients",
 				`*control.SystemQueryReq-{"RankList":"","HostList":"foo-0"}`,
 			}, " "),
 			nil,
@@ -85,7 +81,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple hosts",
 			"system query --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				"ConnectClients",
 				`*control.SystemQueryReq-{"RankList":"","HostList":"bar9,foo-[0-100]"}`,
 			}, " "),
 			nil,
@@ -106,7 +101,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query verbose",
 			"system query --verbose",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemQueryReq{}),
 			}, " "),
 			nil,
@@ -201,7 +195,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.LeaderQueryReq{
 					System: build.DefaultSystemName,
 				}),
@@ -212,7 +205,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools with default config",
 			"system list-pools",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.ListPoolsReq{
 					System: build.DefaultSystemName,
 				}),

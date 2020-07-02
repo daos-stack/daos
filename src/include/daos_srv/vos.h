@@ -165,6 +165,14 @@ int
 vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
 
 /**
+ * Cleanup local DTX when local modification failed.
+ *
+ * \param dth	[IN]	The DTX handle.
+ */
+void
+vos_dtx_cleanup(struct dtx_handle *dth);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
@@ -267,6 +275,19 @@ int
 vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo);
 
 /**
+ * Query pool space by pool UUID
+ *
+ * \param pool_id [IN]	Pool UUID
+ * \param vps     [OUT]	Returned pool space info
+ *
+ * \return		Zero		: success
+ *			-DER_NONEXIST	: pool isn't opened
+ *			-ve		: error
+ */
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps);
+
+/**
  * Create a container within a VOSP
  *
  * \param poh	[IN]	Pool open handle
@@ -333,12 +354,16 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
- * \param func	  [IN]		Pointer to csum recalculation function
+ * \param csum_func  [IN]	Pointer to csum recalculation function
+ * \param yield_func [IN]	Pointer to customized yield function
+ * \param yield_arg  [IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
+	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
+	      void *yield_arg);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -357,11 +382,14 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
  * \param coh		[IN]	Container open handle
  * \param epr		[IN]	The epoch range to discard
  *				keys to discard
+ * \param yield_func	[IN]	Pointer to customized yield function
+ * \param yield_arg	[IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**
  * VOS object API
@@ -470,13 +498,16 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * I/O APIs
  */
 
-/**
- * VOS fetch flags
- * VOS_FETCH_SIZE_ONLY - only query iod_size
- * VOS_FETCH_RECX_LIST - query recx list
- */
-#define VOS_FETCH_SIZE_ONLY	(0x1UL << 0)
-#define VOS_FETCH_RECX_LIST	(0x1UL << 1)
+enum vos_fetch_flags {
+	/* only query iod_size */
+	VOS_FETCH_SIZE_ONLY		= (1 << 0),
+	/* query recx list */
+	VOS_FETCH_RECX_LIST		= (1 << 1),
+	/* only set read TS */
+	VOS_FETCH_SET_TS_ONLY		= (1 << 2),
+	/* check the target (obj/dkey/akey) existence */
+	VOS_FETCH_CHECK_EXISTENCE	= (1 << 3),
+};
 
 /**
  *
@@ -661,12 +692,13 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
  *			is inherited from that entry.
  *
  * \param ih	[OUT]	Returned iterator handle
+ * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
-		 daos_handle_t *ih);
+		 daos_handle_t *ih, struct dtx_handle *dth);
 
 /**
  * Release a iterator
@@ -785,6 +817,7 @@ vos_iter_empty(daos_handle_t ih);
  * \param[in]		pre_cb		pre subtree iteration callback
  * \param[in]		post_cb		post subtree iteration callback
  * \param[in]		arg		callback argument
+ * \param[in]		dth		DTX handle
  *
  * \retval		0	iteration complete
  * \retval		> 0	callback return value
@@ -793,7 +826,7 @@ vos_iter_empty(daos_handle_t ih);
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg);
+	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
@@ -833,6 +866,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx	max or min offset in dkey/akey, and the size of the
  *			extent at the offset. If there are no visible array
  *			records, the size in the recx returned will be 0.
+ * \param[in]	dth	Pointer to the DTX handle.
  *
  * \return
  *			0		Success
@@ -843,7 +877,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx);
+		  daos_recx_t *recx, struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.
@@ -895,8 +929,7 @@ int
 vos_gc_pool(daos_handle_t poh, int *credits);
 
 enum vos_cont_opc {
-	/** abort VOS aggregation **/
-	VOS_CO_CTL_ABORT_AGG,
+	VOS_CO_CTL_DUMMY,
 };
 
 /**

@@ -35,27 +35,13 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type (
-	// this interface decorates a command which
-	// requires a connection to the control
-	// plane and therefore must have an
-	// implementation of client.Connect
-	connector interface {
-		setConns(client.Connect)
-	}
-
-	connectedCmd struct {
-		conns client.Connect
-	}
-
 	hostListSetter interface {
 		setHostList([]string)
 	}
@@ -107,11 +93,6 @@ func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
 
 	_, err = out.Write(append(data, []byte("\n")...))
 	return err
-}
-
-// implement the interface
-func (cmd *connectedCmd) setConns(conns client.Connect) {
-	cmd.conns = conns
 }
 
 type cmdLogger interface {
@@ -188,7 +169,7 @@ and access control settings, along with system wide operations.`
 	p.WriteManPage(wr)
 }
 
-func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, conns client.Connect, log *logging.LeveledLogger) error {
+func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
@@ -252,47 +233,6 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, conns c
 			cfgCmd.setConfig(ctlCfg)
 		}
 
-		// BEGIN DEPRECATED CLIENT SETUP (DAOS-4632)
-		//
-		// Temporarily set up an old-style client config based on the control
-		// config.
-		config := new(client.Configuration)
-		if err := convert.Types(ctlCfg, config); err != nil {
-			return err
-		}
-
-		if opts.HostList != "" {
-			hostlist, err := flattenHostAddrs(opts.HostList, config.ControlPort)
-			if err != nil {
-				return err
-			}
-			config.HostList = hostlist
-		}
-
-		if opts.Insecure {
-			config.TransportConfig.AllowInsecure = true
-		}
-		err = config.TransportConfig.PreLoadCertData()
-		if err != nil {
-			return errors.Wrap(err, "Unable to load Certificate Data")
-		}
-		conns.SetTransportConfig(config.TransportConfig)
-
-		if wantsConn, ok := cmd.(connector); ok {
-			connStates, err := checkConns(conns.ConnectClients(config.HostList))
-			if err != nil {
-				return err
-			}
-			if _, exists := connStates["connected"]; !exists {
-				log.Error(connStates.String())
-				return errors.New("no active connections")
-			}
-
-			log.Info(connStates.String())
-			wantsConn.setConns(conns)
-		}
-		// END DEPRECATED CLIENT SETUP (DAOS-4632)
-
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}
@@ -308,12 +248,11 @@ func main() {
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
 
-	conns := client.NewConnect(log)
 	ctlInvoker := control.NewClient(
 		control.WithClientLogger(log),
 	)
 
-	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, conns, log); err != nil {
+	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {
 		exitWithError(log, err)
 	}
 }

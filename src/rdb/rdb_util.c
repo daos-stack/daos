@@ -395,7 +395,7 @@ rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	param.ip_dkey = rdb_dkey;
 	param.ip_epr.epr_lo = epoch;
 	param.ip_epr.epr_hi = epoch;
-	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter);
+	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter, NULL);
 	if (rc != 0)
 		goto out;
 	rc = vos_iter_probe(iter, NULL /* anchor */);
@@ -450,7 +450,7 @@ rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	param.ip_dkey = rdb_dkey;
 	param.ip_epr.epr_lo = epoch;
 	param.ip_epr.epr_hi = epoch;
-	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter);
+	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			/* No a-keys. */
@@ -542,7 +542,7 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 	range.epr_lo = low;
 	range.epr_hi = high;
 
-	return vos_discard(cont, &range);
+	return vos_discard(cont, &range, NULL, NULL);
 }
 
 int
@@ -554,5 +554,5 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr, NULL);
+	return vos_aggregate(cont, &epr, NULL, NULL, NULL);
 }

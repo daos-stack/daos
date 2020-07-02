@@ -203,7 +203,7 @@ dtx_iter_delete(struct vos_iterator *iter, void *args)
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
 	umm = &oiter->oit_cont->vc_pool->vp_umm;
-	rc = umem_tx_begin(umm, vos_txd_get());
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		return rc;
 

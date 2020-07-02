@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -509,7 +509,7 @@ set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
 		goto done;
 	}
 
-	size = &ovhd.to_node_overhead.no_size;
+	size = &ovhd.to_leaf_overhead.no_size;
 
 	switch (id) {
 	case VOS_SLAB_OBJ_NODE:
@@ -523,6 +523,10 @@ set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
 		break;
 	case VOS_SLAB_EVT_NODE:
 		tclass = VOS_TC_ARRAY;
+		break;
+	case VOS_SLAB_EVT_NODE_SM:
+		tclass = VOS_TC_ARRAY;
+		size = &ovhd.to_int_node_size;
 		break;
 	case VOS_SLAB_EVT_DESC:
 		tclass = VOS_TC_ARRAY;
@@ -772,6 +776,23 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	if (rc)
 		D_ERROR("Query pool "DF_UUID" failed. "DF_RC"\n",
 			DP_UUID(pool->vp_id), DP_RC(rc));
+	return rc;
+}
+
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
+{
+	struct vos_pool	*pool;
+	struct d_uuid	 ukey;
+	int		 rc;
+
+	uuid_copy(ukey.uuid, pool_id);
+	rc = pool_lookup(&ukey, &pool);
+	if (rc)
+		return rc;
+
+	rc = vos_space_query(pool, vps, false);
+	vos_pool_decref(pool);
 	return rc;
 }
 

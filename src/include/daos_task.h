@@ -709,7 +709,9 @@ typedef struct {
 	/** Scatter / gather list for a memory descriptor. */
 	d_sg_list_t		*sgls;
 	/** IO Map - only valid for fetch. */
-	daos_iom_t		*maps;
+	daos_iom_t		*ioms;
+	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
+	void			*extra_arg;
 } daos_obj_rw_t;
 
 /** fetch args struct */
