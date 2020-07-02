@@ -180,8 +180,10 @@ type (
 )
 
 const (
+	// DeviceTypeUnknown represents an unspecified device type.
+	DeviceTypeUnknown DeviceType = iota
 	// DeviceTypeSCM represents SCM modules.
-	DeviceTypeSCM DeviceType = iota
+	DeviceTypeSCM
 	// DeviceTypeNVMe represents NVMe SSDs.
 	DeviceTypeNVMe
 )

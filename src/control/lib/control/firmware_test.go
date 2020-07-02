@@ -218,6 +218,11 @@ func TestControl_DeviceType_toCtlPBType(t *testing.T) {
 			originalType: DeviceTypeNVMe,
 			expPBType:    ctlpb.FirmwareUpdateReq_NVMe,
 		},
+		"unknown": {
+			originalType: DeviceTypeUnknown,
+			expPBType:    ctlpb.FirmwareUpdateReq_DeviceType(-1),
+			expErr:       errors.New("invalid device type 0"),
+		},
 		"unrecognized": {
 			originalType: DeviceType(12345),
 			expPBType:    ctlpb.FirmwareUpdateReq_DeviceType(-1),
@@ -280,12 +285,12 @@ func TestControl_FirmwareUpdate(t *testing.T) {
 		expResp *FirmwareUpdateResp
 		expErr  error
 	}{
-		"invalid type": {
+		"unknown type": {
 			req: &FirmwareUpdateReq{
-				Type:         DeviceType(5678),
+				Type:         DeviceTypeUnknown,
 				FirmwarePath: "/my/path",
 			},
-			expErr: errors.New("invalid device type 5678"),
+			expErr: errors.New("invalid device type 0"),
 		},
 		"no path": {
 			req: &FirmwareUpdateReq{
