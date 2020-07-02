@@ -275,10 +275,10 @@ The pool target exclude command accepts 3 parameters:
 Alternatively when an operator would like to remove one or more pool targets
 without the system operating in degraded mode Drain can be used. A pool drain operation will
 initiate rebuild without excluding the designated target until after the rebuild is complete.
-This allows the target(s) drained to continue to perform I/O while the rebuild operation is ongoing
-(This includes both reading and writing from these targets). This also allows non-replicated data
-to be rebuilt onto another target where as if a conventional failure occurred that data would
-be unable to be rebuilt and subsequently lost.
+This allows the target(s) drained to continue to perform I/O while the rebuild
+operation is ongoing. Drain additionally enables non-replicated data to be
+rebuilt onto another target whereas in a conventional failure scenario non-replicated
+data would not be integrated into a rebuild and would be lost.
 
 **To drain a target from a pool:**
 

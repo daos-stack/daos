@@ -366,7 +366,7 @@ next_fail:
 	if (spare_avail) {
 		/* The selected spare target is up and ready */
 		l_shard->po_target = spare_tgt->ta_comp.co_id;
-		l_shard->po_fseq = spare_tgt->ta_comp.co_fseq;
+		l_shard->po_fseq = f_shard->fs_fseq;
 
 		/*
 		 * Mark the shard as 'rebuilding' so that read will
