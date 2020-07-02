@@ -87,8 +87,7 @@ class MacsioTestBase(TestWithServers):
         self.macsio.daos_svcl = pool_svcl
         self.macsio.daos_cont = cont_uuid
         self.manager.job = self.macsio
-        self.manager.assign_hosts(
-            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        self.manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.manager.assign_processes(len(self.hostlist_clients))
         self.manager.assign_environment(
             self.macsio.get_environment(
