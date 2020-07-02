@@ -86,10 +86,36 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 			     cont_aggregate_yield, (void *)cont->sc_agg_req);
 }
 
-static int
-cont_csummer_init(struct ds_cont_child *cont)
+int
+ds_get_csum_cont_props(struct cont_props* cont_props,
+		       struct ds_iv_ns *pool_ns, uuid_t cont_uuid)
 {
-	daos_prop_t		*props;
+	daos_prop_t	*props;
+	int		 rc;
+
+	props = daos_prop_alloc(5);
+	if (props == NULL)
+		return -DER_NOMEM;
+
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_DEDUP;
+	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+
+	rc = cont_iv_prop_fetch(pool_ns, cont_uuid, props);
+
+	if (rc == DER_SUCCESS)
+		daos_props_2cont_props(props, cont_props);
+
+	daos_prop_free(props);
+
+	return rc;
+}
+
+int
+ds_cont_csummer_init(struct ds_cont_child *cont)
+{
 	uint32_t		csum_val;
 	int			rc;
 	struct cont_props	*cont_props;
@@ -104,17 +130,9 @@ cont_csummer_init(struct ds_cont_child *cont)
 	 * Need the pool for the IV namespace
 	 */
 	D_ASSERT(cont->sc_csummer == NULL);
-	props = daos_prop_alloc(5);
-	if (props == NULL) {
-		return -DER_NOMEM;
-	}
-	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
-	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
-	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_DEDUP;
-	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
-	rc = cont_iv_prop_fetch(cont->sc_pool->spc_pool->sp_iv_ns,
-				cont->sc_uuid, props);
+	rc = ds_get_csum_cont_props(cont_props,
+		cont->sc_pool->spc_pool->sp_iv_ns,
+		cont->sc_uuid);
 	if (rc != 0)
 		goto done;
 
@@ -122,8 +140,6 @@ cont_csummer_init(struct ds_cont_child *cont)
 	if (cont->sc_props_fetched)
 		goto done;
 	cont->sc_props_fetched = 1;
-
-	daos_props_2cont_props(props, cont_props);
 
 	csum_val = cont_props->dcp_csum_type;
 	bool dedup_only = false;
@@ -134,7 +150,7 @@ cont_csummer_init(struct ds_cont_child *cont)
 
 	/** If enabled, initialize the csummer for the container */
 	if (daos_cont_csum_prop_is_enabled(csum_val)) {
-		rc = daos_csummer_type_init(&cont->sc_csummer,
+		rc = daos_csummer_init_with_type(&cont->sc_csummer,
 					    daos_contprop2csumtype(csum_val),
 					    cont_props->dcp_chunksize,
 					    cont_props->dcp_srv_verify);
@@ -142,8 +158,6 @@ cont_csummer_init(struct ds_cont_child *cont)
 			dedup_configure_csummer(cont->sc_csummer, cont_props);
 	}
 done:
-	daos_prop_free(props);
-
 	return rc;
 }
 
@@ -155,7 +169,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	struct sched_request	*req = cont->sc_agg_req;
 
 	if (!cont->sc_props_fetched)
-		cont_csummer_init(cont);
+		ds_cont_csummer_init(cont);
 
 	if (cont->sc_props.dcp_dedup) {
 		D_DEBUG(DB_EPC, DF_CONT": skip aggregation for deduped "
@@ -1327,7 +1341,10 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_register, rc);
 		}
 
-		rc = cont_csummer_init(hdl->sch_cont);
+		D_ASSERT(hdl->sch_cont != NULL);
+		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
+		rc = ds_cont_csummer_init(hdl->sch_cont);
+
 		if (rc != 0)
 			D_GOTO(err_register, rc);
 	}

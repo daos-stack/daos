@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,55 +20,45 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+/**
+ * This is an extension of the DAOS File System API
+ *
+ * src/client/dfs/dfs_internal.h
+ */
+#ifndef __DFS_INTERNAL_H__
+#define __DFS_INTERNAL_H__
 
-#ifndef __DAOS_M_CONT_PROPS_H
-#define __DAOS_M_CONT_PROPS_H
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
+#include <sys/stat.h>
+#include <daos.h>
+#include <daos_fs.h>
 
-#include <daos_prop.h>
+/**
+ * Get the DFS superblock D-Key and A-Keys
+ *
+ * \param[out] dkey DFS superblock D-Key
+ * \param[out] iods DFS superblock A-keys
+ * \param[out] akey_count number of superblock A-keys
+ * \param[out] dfs_entry_size size of the dfs entry
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
+		int *dfs_entry_size);
 
-struct cont_props {
-	uint64_t	 dcp_chunksize;
-	uint32_t	 dcp_dedup_size;
-	uint32_t	 dcp_csum_type;
-	bool		 dcp_csum_enabled;
-	bool		 dcp_srv_verify;
-	bool		 dcp_dedup;
-	bool		 dcp_dedup_verify;
-};
-
+/**
+ * Releases the memory allocated by the dfs_get_sb_layout() function.
+ *
+ * \param[in] iods DFS superblock A-keys
+*/
 void
-daos_props_2cont_props(daos_prop_t *props,
-		       struct cont_props* cont_prop);
+dfs_free_sb_layout(daos_iod_t *iods[]);
 
-/**
- * Checksum Properties
- */
-uint32_t
-daos_cont_prop2csum(daos_prop_t *props);
-
-uint64_t
-daos_cont_prop2chunksize(daos_prop_t *props);
-
-bool
-daos_cont_prop2serververify(daos_prop_t *props);
-
-bool
-daos_cont_csum_prop_is_valid(uint16_t val);
-
-bool
-daos_cont_csum_prop_is_enabled(uint16_t val);
-
-/**
- * Dedup Properties
- */
-bool
-daos_cont_prop2dedup(daos_prop_t *props);
-
-bool
-daos_cont_prop2dedupverify(daos_prop_t *props);
-
-uint64_t
-daos_cont_prop2dedupsize(daos_prop_t *props);
-
-#endif //__DAOS_M_CONT_PROPS_H__
+#if defined(__cplusplus)
+}
+#endif
+#endif /* __DFS_INTERNAL_H__ */

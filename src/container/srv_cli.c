@@ -35,6 +35,7 @@
 #include <daos_event.h>
 #include <daos_task.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/container.h>
 #include "cli_internal.h"
 
 int
@@ -59,11 +60,38 @@ dsc_cont_close(daos_handle_t poh, daos_handle_t coh)
 	d_list_del_init(&cont->dc_po_list);
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
+	daos_csummer_destroy(&cont->dc_csummer);
+
 out:
 	if (cont != NULL)
 		dc_cont_put(cont);
 	if (pool != NULL)
 		dc_pool_put(pool);
+
+	return rc;
+}
+
+static int
+dsc_cont_csummer_init(struct daos_csummer **csummer,
+		      uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct ds_pool	*pool;
+	int		 rc;
+	struct cont_props cont_props;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL)
+		return -DER_NONEXIST;
+	rc = ds_get_csum_cont_props(&cont_props, pool->sp_iv_ns, cont_uuid);
+
+	if (rc == 0 &&
+	    daos_cont_csum_prop_is_enabled(cont_props.dcp_csum_type))
+		rc = daos_csummer_init_with_type(csummer,
+			 daos_contprop2csumtype(cont_props.dcp_csum_type),
+			 cont_props.dcp_chunksize,
+			 cont_props.dcp_srv_verify);
+
+	ds_pool_put(pool);
 
 	return rc;
 }
@@ -98,6 +126,12 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
+	/** destroyed in dsc_cont_close */
+	rc = dsc_cont_csummer_init(&cont->dc_csummer, pool->dp_pool,
+				   cont_uuid);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);

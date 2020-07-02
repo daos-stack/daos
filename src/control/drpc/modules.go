@@ -185,6 +185,8 @@ const (
 	MethodPoolEvict mgmtMethod = C.DRPC_METHOD_MGMT_POOL_EVICT
 	// MethodPoolExclude is a ModuleMgmt method
 	MethodPoolExclude mgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
+	// MethodPoolDrain is a ModuleMgmt method
+	MethodPoolDrain mgmtMethod = C.DRPC_METHOD_MGMT_DRAIN
 	// MethodPoolExtend is a ModuleMgmt method
 	MethodPoolExtend mgmtMethod = C.DRPC_METHOD_MGMT_EXTEND
 	// MethodPoolReintegrate is a ModuleMgmt method

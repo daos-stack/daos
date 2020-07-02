@@ -398,7 +398,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 
 	uuid_copy(ukey.uuid, uuid);
 	while (1) {
-		struct vos_pool	*pool;
+		struct vos_pool	*pool = NULL;
 
 		rc = pool_lookup(&ukey, &pool);
 		if (rc) {
@@ -407,6 +407,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 			break;
 		}
 
+		D_ASSERT(pool != NULL);
 		pool->vp_dying = 1;
 		if (gc_have_pool(pool)) {
 			/* still pinned by GC, un-pin it because there is no
@@ -595,7 +596,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool_df	*pool_df;
-	struct vos_pool		*pool;
+	struct vos_pool		*pool = NULL;
 	struct umem_attr	*uma;
 	struct d_uuid		 ukey;
 	int			 rc, enabled = 1;
@@ -611,6 +612,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
+		D_ASSERT(pool != NULL);
 		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
 		pool->vp_opened++;
@@ -788,7 +790,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 int
 vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 {
-	struct vos_pool	*pool;
+	struct vos_pool	*pool = NULL;
 	struct d_uuid	 ukey;
 	int		 rc;
 
@@ -797,6 +799,7 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 	if (rc)
 		return rc;
 
+	D_ASSERT(pool != NULL);
 	rc = vos_space_query(pool, vps, false);
 	vos_pool_decref(pool);
 	return rc;

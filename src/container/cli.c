@@ -465,7 +465,7 @@ dc_cont_csum_init(struct dc_cont *cont, struct cont_props cont_props)
 	if (!daos_cont_csum_prop_is_enabled(csum_type))
 		return;
 
-	daos_csummer_type_init(&cont->dc_csummer,
+	daos_csummer_init_with_type(&cont->dc_csummer,
 			       csum_type,
 			       cont_props.dcp_chunksize, 0);
 
@@ -529,8 +529,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	cont->dc_pool_hdl = arg->hdl;
 
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
-
-	dc_cont_csum_init(cont, cont->dc_props);
+	rc = daos_csummer_init_with_props(&cont->dc_csummer, out->coo_prop);
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 

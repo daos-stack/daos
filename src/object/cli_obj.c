@@ -2756,16 +2756,21 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	       struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
-	struct cont_props	cont_props = dc_cont_hdl2props(obj->cob_coh);
 	struct dcs_csum_info	*dkey_csum = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
-	if (!daos_csummer_initialized(csummer) || !cont_props.dcp_csum_enabled)
+	if (!daos_csummer_initialized(csummer) ||
+	    csummer->dcs_skip_data_verify)
 		/** csummer might be initialized by dedup, but checksum
 		 * feature is turned off ...
 		 */
 		return 0;
+
+	if (obj_auxi->rw_args.dkey_csum != NULL) {
+		/** already calculated - don't need to do it again */
+		return 0;
+	}
 
 	/** dkey */
 	rc = daos_csummer_calc_key(csummer, args->dkey, &dkey_csum);
@@ -2925,16 +2930,17 @@ dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args, uint32_t flags,
 	if (obj_auxi->csum_report)
 		obj_auxi->spec_shard = 0;
 
+	rc = obj_csum_fetch(obj, args, obj_auxi);
+	if (rc != 0) {
+		D_ERROR("obj_csum_fetch error: %d", rc);
+		D_GOTO(out_task, rc);
+	}
+
 	if (!obj_auxi->io_retry) {
 		if (!obj_auxi->is_ec_obj)
 			obj_auxi->initial_shard =
 				obj_auxi->req_tgts.ort_shard_tgts[0].st_shard;
 
-		rc = obj_csum_fetch(obj, args, obj_auxi);
-		if (rc != 0) {
-			D_ERROR("obj_csum_fetch error: %d", rc);
-			D_GOTO(out_task, rc);
-		}
 	}
 
 	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,
