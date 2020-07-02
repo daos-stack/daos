@@ -121,17 +121,21 @@ class DmgCommand(DmgCommandBase):
         self.sub_command_class.sub_command_class.force.value = force
         return self._get_result()
 
-    def storage_set_faulty(self, uuid):
+    def storage_set_faulty(self, uuid, force=True):
         """Get the result of the 'dmg storage set nvme-faulty' command.
 
         Args:
             uuid (str): Device UUID to query.
+            force (bool, optional): Force setting device state to FAULTY.
+                Defaults to True.
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("set")
         self.sub_command_class.sub_command_class.set_sub_command("nvme-faulty")
         self.sub_command_class. \
             sub_command_class.sub_command_class.uuid.value = uuid
+        self.sub_command_class. \
+            sub_command_class.sub_command_class.force.value = force
         return self._get_result()
 
     def storage_query_list_devices(self, rank=None, health=False):

@@ -11,7 +11,8 @@ server_config:
   port: 10001
   servers:
     bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    # bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    bdev_list: ["aaaa:aa:aa.a"]
 pool:
     mode: 511
     name: daos_server

@@ -45,9 +45,9 @@ class ControlTestBase(TestWithServers):
         self.dmg = self.get_dmg_command()
 
     @fail_on(CommandFailure)
-    def get_dmg_output(self, method_name, **kwargs):
+    def get_dmg_output(self, method_name, regex_method=None, **kwargs):
         """Run the dmg command."""
-        return self.dmg.get_output(method_name, **kwargs)
+        return self.dmg.get_output(method_name, regex_method, **kwargs)
 
     def get_superblock_info(self, sp_file, sp_value):
         """Get the superblock information for each host.
@@ -68,6 +68,28 @@ class ControlTestBase(TestWithServers):
 
         return get_host_data(self.dmg.hostlist, cmd, text, error, 20)
 
+    def cleanup_output(self, output):
+        """Cleanup output that is of this form:
+            [(host, "", ""), ("", "data1", "data2"), ("", "data1", "data2")]
+
+        Args:
+            output (list): output to be parsed.
+
+        Returns:
+            dict: integrated dictionary containing information for each host.
+
+        """
+        host = None
+        info = {}
+        for item in output:
+            if item[0]:
+                host = item[0]
+                continue
+            if host not in info:
+                info[host] = []
+            info[host].append(item[1:])
+        return info
+
     def get_device_info(self, rank=None, health=None):
         """Query storage device information.
 
@@ -81,12 +103,17 @@ class ControlTestBase(TestWithServers):
             list: device info containing lists with queried device information.
 
         """
+        info = None
         kwargs = {"rank": rank, "health": health}
         if health:
-            method_regex = "storage_query_device_health"
+            info = self.get_dmg_output(
+                "storage_query_list_devices",
+                "storage_query_device_health",
+                **kwargs)
         else:
-            method_regex = "storage_query_list_devices"
-        return self.get_dmg_output(method_regex, **kwargs)
+            info = self.cleanup_output(
+                self.get_dmg_output("storage_query_list_devices", **kwargs))
+        return info
 
     def get_pool_info(self, uuid=None, rank=None, verbose=False):
         """Query pool information.
@@ -98,4 +125,5 @@ class ControlTestBase(TestWithServers):
             verbose (bool, optional): create verbose output. Defaults to False.
         """
         kwargs = {"uuid": uuid, "rank": rank, "verbose": verbose}
-        return self.get_dmg_output("storage_query_list_pools", **kwargs)
+        return self.cleanup_output(
+            self.get_dmg_output("storage_query_list_pools", **kwargs))

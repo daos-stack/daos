@@ -49,16 +49,16 @@ class DmgCommandBase(YamlCommand):
             r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
             r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
         "storage_query_list_pools":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Rank:"
-            r"([0-9]+)\s+Targets:\[([0-9 ]+)\](?:\s+Blobs:\[([0-9 ]+)\])?$",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
+            r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
         "storage_query_list_devices":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Targets:"
-            r"\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:([A-Z]+)",
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|(?:UUID:([a-z0-9-]+)\s+"
+            r"Targets:\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:([A-Z]+))",
         "storage_query_device_health":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
-            r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)\s+.*\s+|"
-            r"(?:Temp.*|Cont.*Busy Time|Pow.*Cycles|Pow.*Duration|Unsafe.*|"
-            r"Media.*|Read.*|Write.*|Unmap.*|Checksum.*|Err.*Entries|Avail.*|"
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Targets:"
+            r"\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:(\w+)\s+.*\s+|(?:Temp.*|"
+            r"Cont.*Busy Time|Pow.*Cycles|Pow.*Duration|Unsafe.*|Media.*|"
+            r"Read.*|Write.*|Unmap.*|Checksum.*|Err.*Entries|Avail.*|"
             r"Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9]+)",
         "storage_query_target_health":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
@@ -492,6 +492,7 @@ class DmgCommandBase(YamlCommand):
                             "list-pools")
                     self.rank = FormattedParameter("-r {}", None)
                     self.uuid = FormattedParameter("-u {}", None)
+                    self.verbose = FormattedParameter("--verbose", False)
 
         class ScanSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage scan command."""
@@ -535,6 +536,7 @@ class DmgCommandBase(YamlCommand):
                             "/run/dmg/storage/query/device-state/*",
                             "nvme-faulty")
                     self.uuid = FormattedParameter("-u {}", None)
+                    self.force = FormattedParameter("--force", False)
 
     class SystemSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg system sub command."""

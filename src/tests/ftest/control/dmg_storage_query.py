@@ -49,8 +49,8 @@ class DmgStorageQuery(ControlTestBase):
     def check_dev_state(self, devs_info, state):
         """Check the state of the device."""
         err = []
-        for dev in devs_info:
-            if dev[4] != state:
+        for dev in devs_info.values()[0]:
+            if dev[3] != state:
                 err.append(dev)
         if err:
             self.fail("Found device(s) in bad state: {}".format(err))
@@ -68,14 +68,14 @@ class DmgStorageQuery(ControlTestBase):
 
         # Check if the number of devices match the config
         msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
-        self.assertEqual(len(self.bdev_list), len(devs_info), msg)
+        self.assertEqual(len(self.bdev_list), len(devs_info.values()[0]), msg)
 
         # Check that number of targets match the config
         errors = []
-        for devs in devs_info:
-            devs[2] = devs[2].split()
-            if self.targets != len(devs[2]):
-                errors.append(devs[1])
+        for devs in devs_info.values()[0]:
+            targets = devs[1].split(" ")
+            if self.targets != len(targets):
+                errors.append(devs[0])
 
         if errors:
             self.fail("Wrong number of targets in device info for: {}".format(
@@ -95,24 +95,24 @@ class DmgStorageQuery(ControlTestBase):
         pools_info = self.get_pool_info(verbose=True)
 
         # Check pool uuid
-        for pool in pools_info:
-            self.assertEqual(self.pool.pool.get_uuid_str(), pool[1])
+        for pool in pools_info.values()[0]:
+            self.assertEqual(self.pool.pool.get_uuid_str(), pool[0].upper())
 
         # Destroy pool and get pool information and check there is no pool
         self.pool.destroy()
         no_pool_info = self.get_pool_info()
-        self.assertFalse(no_pool_info)
+        self.assertFalse(no_pool_info, "No pools should be detected.")
 
         # Check that number of pool blobs match the number of targets
         t_err = []
         b_err = []
-        for pool in pools_info:
-            vos_targets = pool[3].split()
-            blobs = pool[4].split()
+        for pool in pools_info.values()[0]:
+            vos_targets = pool[2].split()
+            blobs = pool[3].split()
             if self.targets != len(vos_targets):
-                t_err.append(pool[1])
+                t_err.append(pool[0])
             if self.targets != len(blobs):
-                b_err.append(pool[1])
+                b_err.append(pool[0])
 
         self.assertEqual(len(t_err), 0, "Wrong number of targets in pool info")
         self.assertEqual(len(b_err), 0, "Wrong number of blobs in pool info")
@@ -151,8 +151,8 @@ class DmgStorageQuery(ControlTestBase):
         # Verify temperature, convert from Kelvins to Celsius
         temp_err = []
         for info in health_info:
-            cels_temp = int(re.findall(r"\d+", info[1])) - 273.15
-            if cels_temp not in range(0, 71):
+            cels_temp = int("".join(re.findall(r"\d+", info[1]))) - 273.15
+            if not (0.00 <= cels_temp <= 71.00):
                 temp_err.append("{}: {}".format(info[0][1], cels_temp))
         if temp_err:
             self.fail("Bad temperature on SSDs: {}".format(",".join(temp_err)))
@@ -175,15 +175,15 @@ class DmgStorageQuery(ControlTestBase):
         In addition this test also does a basic test of nvme-faulty cmd:
         'dmg storage query nvme-faulty'
 
-        :avocado: tags=all,pr,hw,small,storage_query,device_state,basic
+        :avocado: tags=all,pr,hw,small,storage_query_faulty,basic
         """
         # Get device info and check state is NORMAL
         devs_info = self.get_device_info()
         self.check_dev_state(devs_info, "NORMAL")
 
         # Set device to faulty state and check that it's in FAULTY state
-        for dev in devs_info:
-            self.get_dmg_output("storage_set_faulty", devuuid=dev[1])
+        for dev in devs_info.values()[0]:
+            self.get_dmg_output("storage_set_faulty", uuid=dev[0])
 
         # Check that devices are in FAULTY state
         self.check_dev_state(self.get_device_info(), "FAULTY")

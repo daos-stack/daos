@@ -266,7 +266,7 @@ class ExecutableCommand(CommandWithParameters):
                 r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
         return state
 
-    def get_output(self, method_name, **kwargs):
+    def get_output(self, method_name, regex_method=None, **kwargs):
         """Get output from the command issued by the specified method.
 
         Issue the specified method and return a list of strings that result from
@@ -291,18 +291,23 @@ class ExecutableCommand(CommandWithParameters):
             raise CommandFailure(
                 "No '{}()' method defined for this class".format(method_name))
 
-        # Get the regex pattern to filter the CmdResult.stdout
-        if method_name not in self.METHOD_REGEX:
-            raise CommandFailure(
-                "No pattern regex defined for '{}()'".format(method_name))
-        pattern = self.METHOD_REGEX[method_name]
-
-        # Run the command and parse the output using the regex
+        # Run the command
         result = method(**kwargs)
         if not isinstance(result, process.CmdResult):
             raise CommandFailure(
                 "{}() did not return a CmdResult".format(method_name))
-        return re.findall(pattern, result.stdout)
+
+        # Parse the output and return
+        if not regex_method:
+            regex_method = method_name
+        return self.parse_output(result.stdout, regex_method)
+
+    def parse_output(self, stdout, regex_method):
+        # Get the regex pattern to filter the CmdResult.stdout
+        if regex_method not in self.METHOD_REGEX:
+            raise CommandFailure(
+                "No pattern regex defined for '{}()'".format(regex_method))
+        return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
     def get_environment(self, manager, log_file=None):
         """Get the environment variables to export for the command.
