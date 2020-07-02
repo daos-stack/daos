@@ -3230,7 +3230,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 
 int
 evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
-	       daos_epoch_t epoch)
+	       const daos_epoch_range_t *epr)
 {
 	struct evt_context	*tcx;
 	struct evt_entry	*entry;
@@ -3244,14 +3244,13 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 		return -DER_NO_HDL;
 
 	rect.rc_ex = *ext;
-	rect.rc_epc = epoch;
+	rect.rc_epc = epr->epr_hi;
 	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
 	evt_ent_array_init(&ent_array);
 
 	filter.fr_ex = rect.rc_ex;
-	filter.fr_epr.epr_lo = 0;
-	filter.fr_epr.epr_hi = rect.rc_epc;
+	filter.fr_epr = *epr;
 	filter.fr_punch = 0;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
 				&filter, &rect, &ent_array);
