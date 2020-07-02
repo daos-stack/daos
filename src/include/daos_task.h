@@ -709,7 +709,7 @@ typedef struct {
 	/** Scatter / gather list for a memory descriptor. */
 	d_sg_list_t		*sgls;
 	/** IO Map - only valid for fetch. */
-	daos_iom_t		*maps;
+	daos_iom_t		*ioms;
 	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
 	void			*extra_arg;
 } daos_obj_rw_t;
@@ -778,6 +778,10 @@ typedef struct {
 	daos_anchor_t		*akey_anchor;
 	/** versions. */
 	uint32_t		*versions;
+	/** Serialized checksum info for enumerated keys and data in sgl.
+	 * (for internal use only)
+	 */
+	d_iov_t			*csum;
 	/** order. */
 	bool			incr_order;
 } daos_obj_list_t;
