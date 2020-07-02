@@ -435,23 +435,22 @@ func (m *Membership) Hosts(rankList ...Rank) []string {
 //
 // Empty rank list implies no filtering/include all and ignore ranks that are
 // not in the membership.
-func (m *Membership) Members(rankList ...Rank) (ms Members) {
+func (m *Membership) Members(rankList ...Rank) (members Members) {
 	m.RLock()
 	defer m.RUnlock()
 
 	if len(rankList) == 0 {
 		for _, member := range m.members {
-			ms = append(ms, member)
+			members = append(members, member)
 		}
-
-		return
-	}
-
-	for _, rank := range rankList {
-		if member, exists := m.members[rank]; exists {
-			ms = append(ms, member)
+	} else {
+		for _, rank := range rankList {
+			if member, exists := m.members[rank]; exists {
+				members = append(members, member)
+			}
 		}
 	}
+	sort.Slice(members, func(i, j int) bool { return members[i].Rank < members[j].Rank })
 
 	return
 }

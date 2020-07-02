@@ -38,7 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestMember_Stringify(t *testing.T) {
+func TestSystem_Member_Stringify(t *testing.T) {
 	states := []MemberState{
 		MemberStateUnknown,
 		MemberStateAwaitFormat,
@@ -70,7 +70,7 @@ func TestMember_Stringify(t *testing.T) {
 	}
 }
 
-func TestMember_AddRemove(t *testing.T) {
+func TestSystem_Membership_AddRemove(t *testing.T) {
 	for name, tc := range map[string]struct {
 		membersToAdd  Members
 		ranksToRemove []Rank
@@ -141,7 +141,7 @@ func assertMembersEqual(t *testing.T, a Member, b Member, msg string) {
 		fmt.Sprintf("%s: want %#v, got %#v", msg, a, b))
 }
 
-func TestMember_AddOrReplace(t *testing.T) {
+func TestSystem_Membership_AddOrReplace(t *testing.T) {
 	m0a := *MockMember(t, 0, MemberStateStopped)
 	m1a := *MockMember(t, 1, MemberStateStopped)
 	m2a := *MockMember(t, 2, MemberStateStopped)
@@ -207,7 +207,7 @@ func TestMember_AddOrReplace(t *testing.T) {
 	}
 }
 
-func TestMember_HostRanks(t *testing.T) {
+func TestSystem_Membership_HostRanks(t *testing.T) {
 	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
 	if err != nil {
 		t.Fatal(err)
@@ -292,7 +292,80 @@ func TestMember_HostRanks(t *testing.T) {
 	}
 }
 
-func TestMember_Convert(t *testing.T) {
+func TestSystem_Membership_CheckRanklist(t *testing.T) {
+	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := Members{
+		MockMember(t, 0, MemberStateJoined),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateEvicted),
+		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
+	}
+
+	for name, tc := range map[string]struct {
+		members    Members
+		inRanklist string
+		expRanks   []Rank
+		expMissing []Rank
+		expErr     error
+	}{
+		"no rank list": {
+			members: members,
+		},
+		"bad rank list": {
+			members:    members,
+			inRanklist: "foobar",
+			expErr:     errors.New("unexpected alphabetic character(s)"),
+		},
+		"no members": {
+			inRanklist: "0-4",
+			expMissing: []Rank{0, 1, 2, 3, 4},
+		},
+		"full ranklist": {
+			members:    members,
+			inRanklist: "0-4",
+			expRanks:   []Rank{0, 1, 2, 3, 4},
+		},
+		"partial ranklist": {
+			members:    members,
+			inRanklist: "3-4",
+			expRanks:   []Rank{3, 4},
+		},
+		"oversubscribed ranklist": {
+			members:    members[3:],
+			inRanklist: "0-4",
+			expRanks:   []Rank{3, 4},
+			expMissing: []Rank{0, 1, 2},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			ms := NewMembership(log)
+
+			for _, m := range tc.members {
+				if _, err := ms.Add(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			hit, miss, err := ms.CheckRanklist(tc.inRanklist)
+			CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expRanks, hit, "extant ranks")
+			AssertEqual(t, tc.expMissing, miss, "missing ranks")
+		})
+	}
+}
+
+func TestSystem_Member_Convert(t *testing.T) {
 	membersIn := Members{MockMember(t, 1, MemberStateJoined)}
 	membersOut := Members{}
 	if err := convert.Types(membersIn, &membersOut); err != nil {
@@ -301,10 +374,11 @@ func TestMember_Convert(t *testing.T) {
 	AssertEqual(t, membersIn, membersOut, "")
 }
 
-func TestMemberResult_Convert(t *testing.T) {
+func TestSystem_MemberResult_Convert(t *testing.T) {
 	mrsIn := MemberResults{
 		NewMemberResult(1, nil, MemberStateStopped),
 		NewMemberResult(2, errors.New("can't stop"), MemberStateUnknown),
+		MockMemberResult(1, "ping", errors.New("foobar"), MemberStateErrored),
 	}
 	mrsOut := MemberResults{}
 
@@ -317,7 +391,7 @@ func TestMemberResult_Convert(t *testing.T) {
 	AssertEqual(t, mrsIn, mrsOut, "")
 }
 
-func TestMember_UpdateMemberStates(t *testing.T) {
+func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 	// blank host address should get updated to that of member
 	mrDiffAddr1 := NewMemberResult(1, nil, MemberStateReady)
 	mrDiffAddr1.Addr = ""
@@ -432,8 +506,9 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 			}
 
 			// members should be updated with result state
-			if err := ms.UpdateMemberStates(tc.results, tc.ignoreErrs); err != nil {
-				ExpectError(t, err, tc.expErrMsg, name)
+			err := ms.UpdateMemberStates(tc.results, tc.ignoreErrs)
+			ExpectError(t, err, tc.expErrMsg, name)
+			if err != nil {
 				return
 			}
 
