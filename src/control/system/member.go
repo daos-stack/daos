@@ -28,10 +28,12 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -333,17 +335,20 @@ func (m *Membership) Remove(rank Rank) {
 	delete(m.members, rank)
 }
 
+func (m *Membership) getMember(rank Rank) (*Member, error) {
+	if member, found := m.members[rank]; found {
+		return member, nil
+	}
+
+	return nil, FaultMemberMissing(rank)
+}
+
 // Get retrieves member reference from membership based on Rank.
 func (m *Membership) Get(rank Rank) (*Member, error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	member, found := m.members[rank]
-	if !found {
-		return nil, FaultMemberMissing(rank)
-	}
-
-	return member, nil
+	return m.getMember(rank)
 }
 
 // Ranks returns slice of all ordered member ranks.
@@ -360,40 +365,7 @@ func (m *Membership) Ranks() (ranks []Rank) {
 	return
 }
 
-// CheckRanklist returns ordered slices of existing and missing membership ranks
-// from provided ranklist string.
-func (m *Membership) CheckRanklist(rankList string) (hit []Rank, miss []Rank, err error) {
-	m.RLock()
-	defer m.RUnlock()
-
-	var ranks []Rank
-	ranks, err = ParseRanks(rankList)
-	if err != nil {
-		return
-	}
-
-	for _, rank := range ranks {
-		if _, found := m.members[rank]; !found {
-			miss = append(miss, rank)
-			continue
-		}
-		hit = append(hit, rank)
-	}
-
-	sort.Slice(hit, func(i, j int) bool { return hit[i] < hit[j] })
-	sort.Slice(miss, func(i, j int) bool { return miss[i] < miss[j] })
-
-	return
-}
-
-// HostRanks returns mapping of control addresses to ranks managed by harness at
-// that address.
-//
-// Filter to include only host keys with any of the provided ranks, if supplied.
-func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
-	m.RLock()
-	defer m.RUnlock()
-
+func (m *Membership) getHostRanks(rankList ...Rank) map[string][]Rank {
 	hostRanks := make(map[string][]Rank)
 	for _, member := range m.members {
 		addr := member.Addr.String()
@@ -414,13 +386,27 @@ func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
 	return hostRanks
 }
 
+// HostRanks returns mapping of control addresses to ranks managed by harness at
+// that address.
+//
+// Filter to include only host keys with any of the provided ranks, if supplied.
+func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
+	m.RLock()
+	defer m.RUnlock()
+
+	return m.getHostRanks(rankList...)
+}
+
 // Hosts returns slice of control addresses that contain any of the ranks
 // in the input rank list.
 //
 // If input rank list is empty, return all hosts in membership and ignore ranks
 // that are not in the membership.
 func (m *Membership) Hosts(rankList ...Rank) []string {
-	hostRanks := m.HostRanks(rankList...)
+	m.RLock()
+	defer m.RUnlock()
+
+	hostRanks := m.getHostRanks(rankList...)
 	hosts := make([]string, 0, len(hostRanks))
 
 	for host := range hostRanks {
@@ -464,9 +450,9 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 	defer m.Unlock()
 
 	for _, result := range results {
-		member, found := m.members[result.Rank]
-		if !found {
-			return FaultMemberMissing(result.Rank)
+		member, err := m.getMember(result.Rank)
+		if err != nil {
+			return err
 		}
 
 		// use opportunity to update host address in result
@@ -495,6 +481,75 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 	}
 
 	return nil
+}
+
+// CheckRanklist returns ordered slices of existing and missing membership ranks
+// from provided ranklist string.
+func (m *Membership) CheckRanklist(rankList string) (hit, miss *RankSet, err error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	var ranks []Rank
+	hit, err = CreateRankSet("")
+	if err != nil {
+		return
+	}
+	miss, err = CreateRankSet("")
+	if err != nil {
+		return
+	}
+
+	ranks, err = ParseRanks(rankList)
+	if err != nil {
+		return
+	}
+
+	for _, rank := range ranks {
+		if _, found := m.members[rank]; !found {
+			if err = miss.Add(rank); err != nil {
+				return
+			}
+			continue
+		}
+		if err = hit.Add(rank); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// CheckHostlist returns ordered slice of all ranks on any of the hosts in
+// provided hostlist and another slice of all hosts from input hostlist that are
+// missing from the membership.
+func (m *Membership) CheckHostlist(hostList string) (rs *RankSet, hs *hostlist.HostSet, err error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	hostRanks := m.getHostRanks()
+	rs, err = CreateRankSet("")
+	if err != nil {
+		return
+	}
+
+	hs, err = hostlist.CreateSet(hostList)
+	if err != nil {
+		return
+	}
+	for _, host := range strings.Split(hs.DerangedString(), ",") {
+		if ranks, exists := hostRanks[host]; exists {
+			for _, rank := range ranks {
+				if err = rs.Add(rank); err != nil {
+					return
+				}
+			}
+			if _, err = hs.Delete(host); err != nil {
+				return
+			}
+		}
+	}
+
+	return
 }
 
 // NewMembership returns a reference to a new DAOS system membership.

@@ -51,9 +51,9 @@ type (
 	}
 
 	fanoutResponse struct {
-		Results      system.MemberResults
-		MissingRanks []system.Rank
-		MissingHosts []string
+		Results     system.MemberResults
+		AbsentRanks *system.RankSet
+		AbsentHosts *hostlist.HostSet
 	}
 )
 
@@ -61,48 +61,45 @@ type (
 
 // resolveRanks derives ranks to be used for fanout by comparing requested host
 // and rank lists with the contents of the membership.
-func (svc *ControlService) resolveRanks(req *fanoutRequest) (*control.RanksReq, []system.Rank, []string, error) {
-	var missingRanks []system.Rank
-	var missingHosts []string
-	ranksReq := new(control.RanksReq)
-	ranksReq.Force = req.Force
+func (svc *ControlService) resolveRanks(req *fanoutRequest) (ranksReq *control.RanksReq, missRS *system.RankSet, missHS *hostlist.HostSet, err error) {
 	hasRanks := len(req.RankList) > 0
 	hasHosts := len(req.HostList) > 0
+	ranksReq = new(control.RanksReq)
+	ranksReq.Force = req.Force
 
 	if svc.membership == nil {
-		return nil, nil, nil, errors.New("nil system membership")
+		err = errors.New("nil system membership")
+		return
 	}
 
+	var hitRS *system.RankSet
 	switch {
 	case hasRanks && hasHosts:
-		return nil, nil, nil, errors.New("ranklist and hostlist cannot both be set in request")
-	case hasRanks:
-		hit, miss, err := svc.membership.CheckRanklist(req.RankList)
-		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "ranks list")
-		}
-		ranksReq.Ranks = hit
-		missingRanks = miss
-	case hasHosts:
-		// TODO: turn below logic into membership.CheckHostlist
-		hostRanks := svc.membership.HostRanks()
-		hs, err := hostlist.CreateSet(req.HostList)
-		if err != nil {
-			return nil, nil, nil, errors.Wrap(err, "rank-hosts list")
-		}
-		for _, host := range strings.Split(hs.DerangedString(), ",") {
-			if ranks, exists := hostRanks[host]; exists {
-				ranksReq.Ranks = append(ranksReq.Ranks, ranks...)
-				continue
-			}
-			missingHosts = append(missingHosts, host)
-		}
-	default:
+		err = errors.New("ranklist and hostlist cannot both be set in request")
+		return
+	case !hasRanks && !hasHosts:
 		// empty rank/host lists implies include all ranks
 		ranksReq.Ranks = svc.membership.Ranks()
+		return
+	case hasRanks:
+		hitRS, missRS, err = svc.membership.CheckRanklist(req.RankList)
+		if err != nil {
+			return
+		}
+	case hasHosts:
+		hitRS, missHS, err = svc.membership.CheckHostlist(req.HostList)
+		if err != nil {
+			return
+		}
 	}
 
-	return ranksReq, missingRanks, missingHosts, nil
+	ranks, err := hitRS.Ranks()
+	if err != nil {
+		return
+	}
+	ranksReq.Ranks = ranks
+
+	return
 }
 
 // processSysReq takes the protobuf request, selects on its type and returns to
@@ -151,8 +148,6 @@ func (svc *ControlService) rpcFanout(parent context.Context, pbReq interface{}, 
 	var (
 		resolveReq *fanoutRequest
 		method     systemRanksFunc
-		missRanks  []system.Rank
-		missHosts  []string
 		fanReq     *control.RanksReq
 		methResp   *control.RanksResp
 	)
@@ -162,14 +157,11 @@ func (svc *ControlService) rpcFanout(parent context.Context, pbReq interface{}, 
 		return
 	}
 
-	fanReq, missRanks, missHosts, err = svc.resolveRanks(resolveReq)
+	resp = new(fanoutResponse)
+	fanReq, resp.AbsentRanks, resp.AbsentHosts, err = svc.resolveRanks(resolveReq)
 	if err != nil {
 		return
 	}
-
-	resp = new(fanoutResponse)
-	resp.MissingRanks = missRanks
-	resp.MissingHosts = missHosts
 
 	if len(fanReq.Ranks) == 0 {
 		return
@@ -228,21 +220,19 @@ func (svc *ControlService) rpcFanout(parent context.Context, pbReq interface{}, 
 func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	svc.log.Debug("Received SystemQuery RPC")
 
-	_, ranks, err := svc.rpcFanout(ctx, pbReq, true)
+	fanResp, ranks, err := svc.rpcFanout(ctx, pbReq, true)
 	if err != nil {
 		return nil, err
 	}
 
 	members := svc.membership.Members(ranks...)
 
-	// TODO: add missing ranks to response
-	// for _, rank := range fanoutResp.MissingRanks {
-	// for _, rank := range fanoutResp.MissingHosts {
-
 	pbResp := &ctlpb.SystemQueryResp{}
 	if err := convert.Types(members, &pbResp.Members); err != nil {
 		return nil, err
 	}
+	pbResp.AbsentRanks = fanResp.AbsentRanks.String()
+	pbResp.AbsentHosts = fanResp.AbsentHosts.String()
 
 	svc.log.Debug("Responding to SystemQuery RPC")
 

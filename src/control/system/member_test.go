@@ -70,6 +70,47 @@ func TestSystem_Member_Stringify(t *testing.T) {
 	}
 }
 
+func TestSystem_Membership_Get(t *testing.T) {
+	for name, tc := range map[string]struct {
+		memberToAdd *Member
+		rankToGet   Rank
+		expMember   *Member
+		expErr      error
+	}{
+		"exists": {
+			MockMember(t, 1, MemberStateUnknown),
+			Rank(1),
+			MockMember(t, 1, MemberStateUnknown),
+			nil,
+		},
+		"absent": {
+			MockMember(t, 1, MemberStateUnknown),
+			Rank(2),
+			MockMember(t, 1, MemberStateUnknown),
+			FaultMemberMissing(Rank(2)),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			ms := NewMembership(log)
+
+			if _, err := ms.Add(tc.memberToAdd); err != nil {
+				t.Fatal(err)
+			}
+
+			m, err := ms.Get(tc.rankToGet)
+			CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expMember, m, name)
+		})
+	}
+}
+
 func TestSystem_Membership_AddRemove(t *testing.T) {
 	for name, tc := range map[string]struct {
 		membersToAdd  Members
@@ -308,8 +349,8 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 	for name, tc := range map[string]struct {
 		members    Members
 		inRanklist string
-		expRanks   []Rank
-		expMissing []Rank
+		expRanks   string
+		expMissing string
 		expErr     error
 	}{
 		"no rank list": {
@@ -322,23 +363,23 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 		},
 		"no members": {
 			inRanklist: "0-4",
-			expMissing: []Rank{0, 1, 2, 3, 4},
+			expMissing: "0-4",
 		},
 		"full ranklist": {
 			members:    members,
 			inRanklist: "0-4",
-			expRanks:   []Rank{0, 1, 2, 3, 4},
+			expRanks:   "0-4",
 		},
 		"partial ranklist": {
 			members:    members,
 			inRanklist: "3-4",
-			expRanks:   []Rank{3, 4},
+			expRanks:   "3-4",
 		},
 		"oversubscribed ranklist": {
-			members:    members[3:],
+			members:    members[:3],
 			inRanklist: "0-4",
-			expRanks:   []Rank{3, 4},
-			expMissing: []Rank{0, 1, 2},
+			expMissing: "3-4",
+			expRanks:   "0-2",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -359,8 +400,81 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 				return
 			}
 
-			AssertEqual(t, tc.expRanks, hit, "extant ranks")
-			AssertEqual(t, tc.expMissing, miss, "missing ranks")
+			AssertEqual(t, tc.expRanks, hit.String(), "extant ranks")
+			AssertEqual(t, tc.expMissing, miss.String(), "missing ranks")
+		})
+	}
+}
+
+func TestSystem_Membership_CheckHostlist(t *testing.T) {
+	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := Members{
+		MockMember(t, 0, MemberStateJoined),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateEvicted),
+		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
+	}
+
+	for name, tc := range map[string]struct {
+		members         Members
+		inHostlist      string
+		expRanks        string
+		expMissingHosts string
+		expErr          error
+	}{
+		"no host list": {
+			members: members,
+		},
+		"bad host list": {
+			members:    members,
+			inHostlist: "123,foobar",
+			expErr:     errors.New("invalid hostname"),
+		},
+		"no members": {
+			inHostlist:      "127.0.0.[0-3]:10001",
+			expMissingHosts: "127.0.0.[0-3]:10001",
+		},
+		"full hostlist": {
+			members:    members,
+			inHostlist: "127.0.0.[0-3]:10001",
+			expRanks:   "0-4",
+		},
+		"partial ranklist": {
+			members:    members,
+			inHostlist: "127.0.0.[1-3]:10001",
+			expRanks:   "1-4",
+		},
+		"oversubscribed ranklist": {
+			members:         members,
+			inHostlist:      "127.0.0.[0-4]:10001",
+			expRanks:        "0-4",
+			expMissingHosts: "127.0.0.4:10001",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			ms := NewMembership(log)
+
+			for _, m := range tc.members {
+				if _, err := ms.Add(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			rankSet, missingHostSet, err := ms.CheckHostlist(tc.inHostlist)
+			CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expRanks, rankSet.String(), "extant ranks")
+			AssertEqual(t, tc.expMissingHosts, missingHostSet.String(), "missing hosts")
 		})
 	}
 }
