@@ -488,6 +488,12 @@ pipeline {
                     }
                 }
                 stage('Build on CentOS 7 debug') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('build-centos7-gcc-debug') }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
@@ -504,7 +510,8 @@ pipeline {
                         sconsBuild clean: "_build.external${arch}",
                                    BUILD_TYPE: 'debug',
                                    parallel_build: parallel_build(),
-                                   failure_artifacts: 'config.log-centos7-gcc'
+                                   log_to_file: 'centos7-gcc-debug-build.log',
+                                   failure_artifacts: 'config.log-centos7-gcc-debug'
                     }
                     post {
                         always {
@@ -512,7 +519,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-gcc-centos7",
-                                             tools: [ gcc4(), cppCheck() ],
+                                             tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log'),
+                                                      cppCheck(pattern: 'centos7-gcc-debug-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -522,14 +530,20 @@ pipeline {
                         }
                         unsuccessful {
                             sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-gcc
+                                      mv config${arch}.log config.log-centos7-gcc-debug
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
                                              allowEmptyArchive: true
                         }
                     }
                 }
                 stage('Build on CentOS 7 release') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('build-centos7-gcc-release') }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
@@ -546,7 +560,8 @@ pipeline {
                         sconsBuild clean: "_build.external${arch}",
                                    BUILD_TYPE: 'release',
                                    parallel_build: parallel_build(),
-                                   failure_artifacts: 'config.log-centos7-gcc'
+                                   log_to_file: 'centos7-gcc-release-build.log',
+                                   failure_artifacts: 'config.log-centos7-gcc-release'
                     }
                     post {
                         always {
@@ -554,7 +569,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-gcc-centos7",
-                                             tools: [ gcc4(), cppCheck() ],
+                                             tools: [ gcc4(pattern: 'centos7-gcc-release-build.log'),
+                                                      cppCheck(pattern: 'centos7-gcc-release-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -564,9 +580,9 @@ pipeline {
                         }
                         unsuccessful {
                             sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-gcc
+                                      mv config${arch}.log config.log-centos7-gcc-release
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
                                              allowEmptyArchive: true
                         }
                     }
