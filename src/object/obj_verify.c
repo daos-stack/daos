@@ -65,7 +65,7 @@ again:
 					 &dova->size, &dova->num, dova->kds,
 					 &dova->list_sgl, &dova->anchor,
 					 &dova->dkey_anchor, &dova->akey_anchor,
-					 true, NULL, NULL, &task);
+					 true, NULL, NULL, NULL, &task);
 	if (rc != 0)
 		return rc;
 

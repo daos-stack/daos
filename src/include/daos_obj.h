@@ -308,10 +308,6 @@ typedef struct {
 	 * It is ignored for dkey enumeration.
 	 */
 	uint32_t	kd_val_type;
-	/** Checksum type */
-	uint16_t	kd_csum_type;
-	/** Checksum length */
-	uint16_t	kd_csum_len;
 } daos_key_desc_t;
 
 /**

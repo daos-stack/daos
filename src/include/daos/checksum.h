@@ -184,8 +184,19 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
  * @return		0 for success, or an error code
  */
 int
-daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
-		       size_t chunk_bytes, bool srv_verify);
+daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
+			    size_t chunk_bytes, bool srv_verify);
+
+/**
+ * Initialize the daos_csummer using container properties
+ * @param obj		daos_csummer to be initialized. Memory will be allocated
+ *			for it.
+ * @param props		Container properties used to configure the daos_csummer.
+ *
+ * @return		0 for success, or an error code
+ */
+int
+daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props);
 
 /** Destroy the daos_csummer */
 void
@@ -335,10 +346,10 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 			daos_iom_t *map);
 
 /**
- * Verify a single buffer to a checksum
+ * Verify a key to a checksum
  *
- * @param obj		the daos_csummer obj
- * @param key		I/O vector of the key
+ * @param obj		The daos_csummer obj
+ * @param key		The key to verify
  * @param dcb		The dcs_csum_info that describes the checksum
  *
  * @return		0 for success, -DER_CSUM if corruption is detected
@@ -410,6 +421,7 @@ daos_csummer_free_ci(struct daos_csummer *obj,
  * struct dcs_iod_csums Functions
  * -----------------------------------------------------------------------------
  */
+ /** return a specific csum buffer from a specific iod csum info */
 uint8_t *
 ic_idx2csum(struct dcs_iod_csums *iod_csum, uint32_t iod_idx,
 	    uint32_t csum_idx);
@@ -467,6 +479,32 @@ ci2csum(struct dcs_csum_info ci);
 #define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
 #define	DF_CI "{nr: %d, len: %d, first_csum: %lu}"
 #define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci)
+
+/**
+ * return the number of bytes needed to serialize a dcs_csum_info into a
+ * buffer
+ */
+#define	ci_size(obj) (sizeof(obj) + (obj).cs_nr * (obj).cs_len)
+
+/** return the actual length for the csums stored in obj. Note that the buffer
+ * (cs_buf_len) might be larger than the actual csums len
+ */
+#define	ci_csums_len(obj) ((obj).cs_nr * (obj).cs_len)
+
+/** Serialze a \dcs_csum_info structure to an I/O vector. First the structure
+* fields are added to the memory buf, then the actual csum.
+*/
+int
+ci_serialize(struct dcs_csum_info *obj, d_iov_t *iov);
+void
+ci_cast(struct dcs_csum_info **obj, const d_iov_t *iov);
+
+/**
+ * change the iov so that buf points to the next csum_info, assuming the
+ * current csum info's csum buf is right after it in the buffer.
+ */
+void
+ci_move_next_iov(struct dcs_csum_info *obj, d_iov_t *iov);
 
 /**
  * -----------------------------------------------------------------------------
