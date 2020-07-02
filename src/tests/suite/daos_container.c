@@ -356,7 +356,7 @@ co_properties(void **state)
 	}
 	/* not set properties should get default value */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
-	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_OFF) {
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_CRC32) {
 		print_message("csum verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
@@ -367,7 +367,7 @@ co_properties(void **state)
 	}
 	entry = daos_prop_entry_get(prop_query,
 				    DAOS_PROP_CO_CSUM_SERVER_VERIFY);
-	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_SV_OFF) {
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_SV_ON) {
 		print_message("csum server verify verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
