@@ -21,40 +21,50 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <string.h>
-#include <daos.h>
-#include <daos_fs.h>
-#include <daos_uns.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <gurt/common.h>
+package io.daos.dfs;
 
-#if (__STDC_VERSION__ >= 199901L)
-#include <stdint.h>
-#endif
+/**
+ * DAOS UNS information to be accessed outside of this module.
+ */
+public class DunsInfo {
 
-#ifndef _INCLUDED_DAOS_JNI_COMMON
-#define _INCLUDED_DAOS_JNI_COMMON
+  private String poolId;
+  private String contId;
+  private String layout;
+  private String appInfo;
 
-static jint JNI_VERSION = JNI_VERSION_1_8;
+  /**
+   * constructor with pool UUID, container UUID, layout and more application specific info.
+   *
+   * @param poolId
+   * pool UUID
+   * @param contId
+   * container UUID
+   * @param layout
+   * layout
+   * @param appInfo
+   * application specific info.
+   */
+  public DunsInfo(String poolId, String contId, String layout, String appInfo) {
+    this.poolId = poolId;
+    this.contId = contId;
+    this.layout = layout;
+    this.appInfo = appInfo;
+  }
 
-static const int READ_DIR_BATCH_SIZE = 10;
-static const int READ_DIR_INITIAL_BUFFER_SIZE = 1024;
-static const int CUSTOM_ERROR_CODE_BASE = -1000000;
+  public String getAppInfo() {
+    return appInfo;
+  }
 
-/* scm size and nvme size no greater than 0 */
-static const int CUSTOM_ERR1 = -1000001;
-/* failed to parse service replics string */
-static const int CUSTOM_ERR2 = -1000002;
-/* malloc or realloc buffer failed */
-static const int CUSTOM_ERR3 = -1000003;
-/* value length greater than expected */
-static const int CUSTOM_ERR4 = -1000004;
-/* invalid argument in UNS */
-static const int CUSTOM_ERR5 = -1000005;
+  public String getContId() {
+    return contId;
+  }
 
-#endif
+  public String getLayout() {
+    return layout;
+  }
+
+  public String getPoolId() {
+    return poolId;
+  }
+}

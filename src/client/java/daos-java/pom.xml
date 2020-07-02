@@ -17,6 +17,7 @@
   <properties>
     <native.build.path>${project.basedir}/build</native.build.path>
     <daos.install.path>/usr/local/daos</daos.install.path>
+    <compile.proto>false</compile.proto>
   </properties>
 
   <dependencies>
@@ -35,6 +36,11 @@
     <dependency>
       <groupId>commons-lang</groupId>
       <artifactId>commons-lang</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>3.11.4</version>
     </dependency>
     <dependency>
       <groupId>com.google.code.findbugs</groupId>
@@ -75,6 +81,31 @@
         <version>1.8</version>
         <executions>
           <execution>
+            <id>compile-proto</id>
+            <phase>generate-sources</phase>
+            <configuration>
+              <target name="compile-proto" if="${compile.proto}">
+                <mkdir dir="${native.build.path}"/>
+                <exec dir="${native.build.path}"
+                      failonerror="true"
+                      executable="protoc">
+                  <arg value="-I=${project.basedir}/src/main/resources/"/>
+                  <arg value="--c_out=."/>
+                  <arg value="--java_out=."/>
+                  <arg value="DunsAttribute.proto"/>
+                </exec>
+                <copy todir="${project.basedir}/src/main/java/io">
+                  <fileset dir="${native.build.path}/io"/>
+                </copy>
+                <copy file="${native.build.path}/DunsAttribute.pb-c.h" todir="${project.basedir}/src/main/native/include"/>
+                <copy file="${native.build.path}/DunsAttribute.pb-c.c" todir="${project.basedir}/src/main/native"/>
+              </target>
+            </configuration>
+            <goals>
+              <goal>run</goal>
+            </goals>
+          </execution>
+          <execution>
             <id>build-so</id>
             <phase>compile</phase>
             <configuration>
@@ -93,6 +124,7 @@
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
                   <arg value="-I${daos.install.path}/include/"/>
+                  <arg value="-I${daos.install.path}/include/protobuf-c"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/io_daos_dfs_DaosFsClient.c"/>
                   <arg value="-o${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
@@ -103,9 +135,26 @@
                 <exec dir="${native.build.path}"
                       failonerror="true"
                       executable="gcc">
+                  <arg value="-v"/>
+                  <arg value="-I/usr/local/"/>
+                  <arg value="-I${java-home}/include/"/>
+                  <arg value="-I${java-home}/include/linux/"/>
+                  <arg value="-I${daos.install.path}/include/"/>
+                  <arg value="-I${daos.install.path}/include/protobuf-c"/>
+                  <arg value="-I${project.basedir}/src/main/native/include/"/>
+                  <arg value="${project.basedir}/src/main/native/DunsAttribute.pb-c.c"/>
+                  <arg value="-o${native.build.path}/DunsAttribute.pb-c.o"/>
+                  <arg value="-c"/>
+                  <arg value="-fPIC"/>
+                  <arg value="--std=gnu99"/>
+                </exec>
+                <exec dir="${native.build.path}"
+                      failonerror="true"
+                      executable="gcc">
                   <arg value="-shared"/>
                   <arg value="-o${native.build.path}/libdaos-jni.so"/>
                   <arg value="${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
+                  <arg value="${native.build.path}/DunsAttribute.pb-c.o"/>
                   <arg value="-L${daos.install.path}/lib"/>
                   <arg value="-L${daos.install.path}/lib64"/>
                   <arg value="-L/usr/lib"/>
@@ -116,7 +165,9 @@
                   <arg value="-luuid"/>
                   <arg value="-ldaos_common"/>
                   <arg value="-ldfs"/>
+                  <arg value="-lduns"/>
                   <arg value="-lcart"/>
+                  <arg value="-lprotobuf-c"/>
                 </exec>
                 <copy file="${native.build.path}/libdaos-jni.so" todir="${project.basedir}/target/classes"/>
               </tasks>
@@ -146,6 +197,53 @@
             <goals>
               <goal>verify</goal>
             </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>shade-protobuf3</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <relocations>
+                <relocation>
+                  <pattern>com.google.protobuf</pattern>
+                  <shadedPattern>com.google.protoshadebuf3</shadedPattern>
+                </relocation>
+              </relocations>
+              <artifactSet>
+                <excludes>
+                  <exclude>org.slf4j:slf4j-api</exclude>
+                  <exclude>org.apache.logging.log4j:log4j-slf4j-impl</exclude>
+                  <exclude>org.apache.logging.log4j:log4j-core</exclude>
+                  <exclude>commons-lang:commons-lang</exclude>
+                  <exclude>com.google.code.findbugs:jsr305</exclude>
+                </excludes>
+              </artifactSet>
+              <finalName>${artifactId}-${version}-protobuf3-shaded</finalName>
+            </configuration>
+          </execution>
+          <execution>
+            <id>shade</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <relocations>
+                <relocation>
+                  <pattern>com.google.protobuf</pattern>
+                  <shadedPattern>com.google.protoshadebuf3</shadedPattern>
+                </relocation>
+              </relocations>
+            </configuration>
           </execution>
         </executions>
       </plugin>
