@@ -124,7 +124,6 @@
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
                   <arg value="-I${daos.install.path}/include/"/>
-                  <arg value="-I${daos.install.path}/include/protobuf-c"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/io_daos_dfs_DaosFsClient.c"/>
                   <arg value="-o${native.build.path}/io_daos_dfs_DaosFsClient.o"/>
@@ -140,7 +139,6 @@
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
                   <arg value="-I${daos.install.path}/include/"/>
-                  <arg value="-I${daos.install.path}/include/protobuf-c"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/DunsAttribute.pb-c.c"/>
                   <arg value="-o${native.build.path}/DunsAttribute.pb-c.o"/>
