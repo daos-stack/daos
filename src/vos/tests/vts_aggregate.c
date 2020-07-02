@@ -196,7 +196,7 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 		VOS_ITER_SINGLE : VOS_ITER_RECX;
 
 	rc = vos_iterate(&iter_param, iter_type, false, &anchors,
-			 counting_cb, NULL, &nr);
+			 counting_cb, NULL, &nr, NULL);
 	assert_int_equal(rc, 0);
 
 	return nr;
