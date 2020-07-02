@@ -854,10 +854,8 @@ class SoakTestBase(TestWithServers):
         cmdlist = []
         # unique numbers per pass
         self.used = []
-        # Create the remote log directories from new loop/pass
-        self.sharedsoakdir = os.getenv(
-            "DAOS_TEST_SHARED_DIR", os.path.expanduser(
-                "~/daos_test")) + "/soak" + "/pass" + str(self.loop)
+        # Update the remote log directories from new loop/pass
+        self.sharedsoakdir = self.sharedlog_dir  + "/pass" + str(self.loop)
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
         local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
