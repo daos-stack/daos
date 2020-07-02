@@ -1,4 +1,4 @@
-.TH dmg 1 "23 June 2020"
+.TH dmg 1 "24 June 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -139,6 +139,23 @@ UUID of DAOS pool to destroy
 .TP
 \fB\fB\-f\fR, \fB\-\-force\fR\fP
 Force removal of DAOS pool
+.SS pool drain
+Drain targets from a rank
+
+\fBUsage\fP: pool drain [drain-OPTIONS]
+.TP
+
+\fBAliases\fP: d
+
+.TP
+\fB\fB\-\-pool\fR (\fIrequired\fR)\fP
+UUID of the DAOS pool to drain a target in
+.TP
+\fB\fB\-\-rank\fR (\fIrequired\fR)\fP
+Rank of the targets to be drained
+.TP
+\fB\fB\-\-target-idx\fR\fP
+Comma-separated list of target idx(s) to be drained on the rank
 .SS pool evict
 Evict all pool connections to a DAOS pool
 

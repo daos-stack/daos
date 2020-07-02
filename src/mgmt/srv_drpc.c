@@ -702,6 +702,44 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 }
 
 void
+ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolDrainReq	*req = NULL;
+	Mgmt__PoolDrainResp	resp;
+	uint8_t			*body;
+	size_t			len;
+	int			rc;
+
+	mgmt__pool_drain_resp__init(&resp);
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_drain_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (Drain target)\n");
+		return;
+	}
+
+	rc = pool_change_target_state(req->uuid, req->n_targetidx,
+			req->targetidx, req->rank, PO_COMP_ST_DRAIN);
+
+	resp.status = rc;
+	len = mgmt__pool_drain_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_drain_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_drain_req__free_unpacked(req, NULL);
+}
+void
 ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PoolExtendReq	*req = NULL;

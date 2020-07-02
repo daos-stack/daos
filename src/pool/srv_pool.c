@@ -3017,6 +3017,9 @@ rechoose:
 	case PO_COMP_ST_UP:
 		opcode = POOL_ADD;
 		break;
+	case PO_COMP_ST_DRAIN:
+		opcode = POOL_DRAIN;
+		break;
 	default:
 		D_GOTO(out_client, rc = -DER_INVAL);
 	}
@@ -3827,8 +3830,22 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	if (rc)
 		D_GOTO(out, rc);
 
-	if (!updated || !(opc == POOL_EXCLUDE || opc == POOL_ADD))
+	if (!updated)
 		D_GOTO(out, rc);
+
+	switch (opc) {
+	case POOL_EXCLUDE:
+		op = RB_OP_FAIL;
+		break;
+	case POOL_ADD:
+		op = RB_OP_ADD;
+		break;
+	case POOL_DRAIN:
+		op = RB_OP_DRAIN;
+		break;
+	default:
+		D_GOTO(out, rc);
+	}
 
 	env = getenv(REBUILD_ENV);
 	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
@@ -3849,8 +3866,6 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		D_DEBUG(DB_MGMT, "self healing is disabled\n");
 		D_GOTO(out, rc);
 	}
-
-	op = (opc == POOL_EXCLUDE ? RB_OP_FAIL : RB_OP_ADD);
 
 	rc = ds_rebuild_schedule(pool_uuid, *map_version, &target_list, op);
 	if (rc != 0) {

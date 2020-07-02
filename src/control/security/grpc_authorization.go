@@ -58,6 +58,7 @@ var methodAuthorizations = map[string]Component{
 	"/mgmt.MgmtSvc/PoolUpdateACL":     ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolDeleteACL":     ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolExclude":       ComponentAdmin,
+	"/mgmt.MgmtSvc/PoolDrain":         ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolReintegrate":   ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolEvict":         ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolExtend":        ComponentAdmin,
