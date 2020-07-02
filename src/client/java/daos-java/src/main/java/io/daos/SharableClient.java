@@ -31,7 +31,7 @@ import java.io.IOException;
  * It also maintains state of client, like initialized and reference count, so that client can be
  * correctly shared and closed.
  */
-public abstract class SharableClient implements ForceCloseable{
+public abstract class SharableClient implements ForceCloseable {
 
   private String poolId;
 
