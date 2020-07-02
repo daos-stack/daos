@@ -340,19 +340,17 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm unstable: true
+                        buildRpm()
                     }
                     post {
                         success {
                             buildRpmPost condition: 'success'
                         }
                         unstable {
-                            buildRpmPost condition: 'unstable',
-                                         ignore_failure: true
+                            buildRpmPost condition: 'unstable'
                         }
                         failure {
-                            buildRpmPost condition: 'failure',
-                                         ignore_failure: true
+                            buildRpmPost condition: 'failure'
                         }
                         unsuccessful {
                             buildRpmPost condition: 'unsuccessful'
@@ -1117,12 +1115,8 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        testRpm node_count: 1,
-                                profile: 'daos_ci',
-                                distro: 'centos7',
-                                inst_repos: el7_daos_repos(),
-                                daos_pkg_version: daos_packages_version("centos7"),
-                                ignore_failure: true
+                        testRpm inst_repos: el7_daos_repos(),
+                                daos_pkg_version: daos_packages_version("centos7")
                    }
                 } // stage('Test CentOS 7 RPMs')
                 stage('Scan CentOS 7 RPMs') {
@@ -1139,12 +1133,8 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        testRpm node_count: 1,
-                                profile: 'daos_ci',
-                                distro: 'centos7',
-                                inst_repos: el7_daos_repos(),
+                        testRpm inst_repos: el7_daos_repos(),
                                 daos_pkg_version: daos_packages_version("centos7"),
-                                ignore_failure: true,
                                 inst_rpms: 'clamav clamav-devel',
                                 test_script: 'ci/rpm/scan_daos.sh',
                                 junit_files: 'maldetect.xml'
