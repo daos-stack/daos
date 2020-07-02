@@ -504,8 +504,7 @@ func NumaAware() (bool, error) {
 
 	topology, err := initLib()
 	if err != nil {
-		log.Debugf("Error from initLib %v", err)
-		return false, errors.New("unable to initialize hwloc library")
+		return false, errors.Errorf("unable to initialize hwloc library: %v", err)
 	}
 	deviceScanCfg.topology = topology
 	defer cleanUp(deviceScanCfg.topology)
@@ -526,8 +525,7 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 
 	topology, err := initLib()
 	if err != nil {
-		log.Debugf("Error from initLib %v", err)
-		return 0, errors.New("unable to initialize hwloc library")
+		return 0, errors.Errorf("unable to initialize hwloc library: %v", err)
 	}
 	deviceScanCfg.topology = topology
 
@@ -760,8 +758,10 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		node = getNodeBestFit(deviceScanCfg)
 	}
 
+	// At this point, we know the topology is NUMA aware.
+	// Returning a default device affinity of NUMA 0 would no longer be reasonable.
 	if node == nil {
-		return DeviceAffinity{}, errors.Errorf("unable to find a system device matching: %s", deviceScanCfg.targetDevice)
+		return DeviceAffinity{}, errors.Errorf("cannot determine device affinity because the device was not found in the topology: %s", deviceScanCfg.targetDevice)
 	}
 
 	ancestorNode := C.hwloc_get_non_io_ancestor_obj(deviceScanCfg.topology, node)

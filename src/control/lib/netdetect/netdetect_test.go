@@ -304,8 +304,53 @@ func TestInitDeviceScan(t *testing.T) {
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
-			_, err = initDeviceScan()
+			deviceScanCfg, err := initDeviceScan()
+			defer cleanUp(deviceScanCfg.topology)
 			AssertEqual(t, err, nil, "Error on initDeviceScan")
+		})
+	}
+}
+
+// TestGetAffinityForDeviceEdgeCases verifies that determining device affinity
+// gives expected output and generates no errors on non NUMA topologies.
+func TestGetAffinityForDeviceEdgeCases(t *testing.T) {
+	for name, tc := range map[string]struct {
+		topology string
+		device   string
+	}{
+		"non-numa topology, with OS devices, no network devices, known input device": {
+			device:   "lo",
+			topology: "testdata/no-numa-nodes.xml",
+		},
+		"non-numa topology, with OS devices, no network devices, unknown input device": {
+			device:   "bar",
+			topology: "testdata/no-numa-nodes.xml",
+		},
+		"non-numa topology, with no OS devices, known input device": {
+			device:   "lo",
+			topology: "testdata/no-numa-no-devices.xml",
+		},
+		"non-numa topology, with no OS devices, unknown input device": {
+			device:   "bazz",
+			topology: "testdata/no-numa-no-devices.xml",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+
+			deviceScanCfg, err := initDeviceScan()
+			AssertEqual(t, err, nil, "Error on initDeviceScan")
+			defer cleanUp(deviceScanCfg.topology)
+
+			deviceScanCfg.targetDevice = tc.device
+			deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+
+			AssertEqual(t, err, nil, "Unexpected error on GetAffinityForDevice")
+			AssertEqual(t, deviceAffinity.NUMANode, uint(0), "deviceAffinity mismatch on NUMA node")
+			AssertEqual(t, deviceAffinity.DeviceName, tc.device, "deviceAffinity mismatch on device name")
 		})
 	}
 }
