@@ -98,7 +98,7 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 	return 0;
 }
 
-static int
+int
 proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info *csum)
 {
 	crt_proc_op_t		proc_op;

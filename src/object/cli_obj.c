@@ -3969,3 +3969,11 @@ out:
 
 	return rc;
 }
+
+void
+daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
+{
+	struct dc_object *obj = ptr;
+
+	*id = obj->cob_md.omd_id;
+}
