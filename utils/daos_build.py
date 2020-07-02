@@ -37,14 +37,14 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
                                   (install_off, relpath), sep=" ")
             else:
                 env.AppendUnique(RPATH=[DaosLiteral(path)])
-        if "prereq" in relpath or relpath == rpath:
-            path = os.path.join(prefix, rpath)
-            if is_bin:
-                # NB: Also use full path so intermediate linking works
-                env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
-            else:
-                # NB: Also use full path so intermediate linking works
-                env.AppendUnique(RPATH=[path])
+    for rpath in rpaths:
+        path = os.path.join(prefix, rpath)
+        if is_bin:
+            # NB: Also use full path so intermediate linking works
+            env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
+        else:
+            # NB: Also use full path so intermediate linking works
+            env.AppendUnique(RPATH=[path])
 
     if set_cgo_ld:
         env.AppendENVPath("CGO_LDFLAGS",
