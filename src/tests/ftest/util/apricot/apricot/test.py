@@ -477,7 +477,6 @@ class TestWithServers(TestWithoutServers):
             config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
             agent_transport = DaosAgentTransportCredentials(self.workdir)
-            agent_transport.allow_insecure.value = self.agent_insecure_mode
             common_cfg = CommonConfig(self.server_group, agent_transport)
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
