@@ -737,7 +737,7 @@ def dfuse_wrapper(server, conf):
     destroy_container(conf, pool, container)
 
 def readdir_test(dfuse, count):
-    """Run a rudimentry readdir test"""
+    """Run a rudimentary readdir test"""
 
     path = dfuse.dir
 
