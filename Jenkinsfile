@@ -518,7 +518,7 @@ pipeline {
                             node('lightweight') {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
-                                             id: "analysis-gcc-centos7",
+                                             id: "analysis-gcc-centos7-debug",
                                              tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log'),
                                                       cppCheck(pattern: 'centos7-gcc-debug-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
@@ -568,7 +568,7 @@ pipeline {
                             node('lightweight') {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
-                                             id: "analysis-gcc-centos7",
+                                             id: "analysis-gcc-centos7-release",
                                              tools: [ gcc4(pattern: 'centos7-gcc-release-build.log'),
                                                       cppCheck(pattern: 'centos7-gcc-release-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
