@@ -88,8 +88,6 @@ post_provision_config_nodes() {
             zypper --non-interactive rr openSUSE-Leap-15.1-Non-Oss
         fi
     done
-    curl -v -L 'https://mirrors.kernel.org/opensuse/update/leap/15.1/non-oss/repodata/repomd.xml' || true
-    
     #if [ -n "$INST_RPMS" ]; then
         #yum -y erase $INST_RPMS
     #fi
