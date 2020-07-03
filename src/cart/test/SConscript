@@ -41,6 +41,9 @@ def scons():
 
     Import('env')
 
+    # Build the unit tests
+    SConscript('utest/SConscript') #DM
+
     env.Replace(CRT_TSTDIR="$PREFIX/lib/cart/TESTING")
 
     # move the test files (.py) to the TESTING scrpits directory

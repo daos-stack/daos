@@ -579,9 +579,9 @@ pipeline {
                         stash name: 'centos7-gcc-build-vars',
                               includes: ".build_vars${arch}.*"
                         stash name: 'centos7-gcc-tests',
-                              includes: '''build/*/*/src/cart/src/utest/test_linkage,
-                                           build/*/*/src/cart/src/utest/utest_hlc,
-                                           build/*/*/src/cart/src/utest/utest_swim,
+                              includes: '''build/*/*/src/cart/test/utest/test_linkage,
+                                           build/*/*/src/cart/test/utest/utest_hlc,
+                                           build/*/*/src/cart/test/utest/utest_swim,
                                            build/*/*/src/gurt/tests/test_gurt,
                                            build/*/*/src/rdb/raft/src/tests_main,
                                            build/*/*/src/common/tests/btree_direct,

@@ -7,6 +7,16 @@ def scons():
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
     denv = env.Clone()
+
+    # Build self test
+    SConscript('self_test/SConscript') #DM
+
+    # Build crt_launch
+    SConscript('crt_launch/SConscript') #DM
+
+    # Build cart_ctl
+    SConscript('ctl/SConscript') #DM
+
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
