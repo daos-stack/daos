@@ -79,6 +79,7 @@ func TestHasAccess(t *testing.T) {
 		{"PoolUpdateACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolUpdateACL"},
 		{"PoolDeleteACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolDeleteACL"},
 		{"PoolExclude", ComponentAdmin, "/mgmt.MgmtSvc/PoolExclude"},
+		{"PoolDrain", ComponentAdmin, "/mgmt.MgmtSvc/PoolDrain"},
 		{"PoolReintegrate", ComponentAdmin, "/mgmt.MgmtSvc/PoolReintegrate"},
 		{"PoolEvict", ComponentAdmin, "/mgmt.MgmtSvc/PoolEvict"},
 		{"PoolExtend", ComponentAdmin, "/mgmt.MgmtSvc/PoolExtend"},
