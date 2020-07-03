@@ -41,6 +41,8 @@ SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_swim.c', 'crt_tree.c', 'crt_tree_flat.c', 'crt_tree_kary.c',
        'crt_tree_knomial.c', 'crt_hlc.c']
 
+Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
+
 # pylint: disable=unused-argument
 def macro_expand(target, source, env):
     """Function for PostAction"""
@@ -71,8 +73,6 @@ def macro_expand(target, source, env):
         os.system("cat %s | grep -v %s | sort -u | sed %s >> %s"
                   % (tgts, grepv, sed_d, h_file))
 # pylint: enable=unused-argument
-
-Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
 
 def scons():
     """Scons function"""
@@ -118,7 +118,7 @@ def scons():
     denv.Requires(cart_lib, [swim_targets, gurt_lib])
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
-    
+
     if not env.GetOption('clean') and not env.GetOption('help'):
 
         print("Checking local headers can be included")

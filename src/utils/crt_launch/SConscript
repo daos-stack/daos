@@ -23,7 +23,6 @@
 """Build crt_launch"""
 import os
 import sys
-from distutils.spawn import find_executable
 import daos_build
 
 CRT_LAUNCH = 'crt_launch.c'

@@ -37,8 +37,7 @@
 #include <errno.h>
 #include <time.h>
 
-#include <cart/swim.h> //DM
-//#include "../cart/src/include/cart/swim.h" //DM
+#include <cart/swim.h>
 #include <gurt/debug.h>
 #include <gurt/common.h>
 
