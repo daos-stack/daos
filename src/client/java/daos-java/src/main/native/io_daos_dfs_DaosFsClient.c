@@ -1549,57 +1549,58 @@ set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 		acl->dal_ver = a->ver;
 		acl->dal_reserv = a->reserv;
 		acl->dal_len = total_ace_size;
-		if (a->n_aces > 0) {
-			for (i = 0; i < a->n_aces; i++) {
-				Uns__DaosAce *ace = a->aces[i];
+		if (a->n_aces <= 0) {
+			return 0;
+		}
+		for (i = 0; i < a->n_aces; i++) {
+			Uns__DaosAce *ace = a->aces[i];
 
-				ace_size = sizeof(struct daos_ace) +
-				make_8_multiples(ace->principal_len);
-				struct daos_ace *d_ace =
-				(struct daos_ace *)calloc(1, ace_size);
+			ace_size = sizeof(struct daos_ace) +
+			make_8_multiples(ace->principal_len);
+			struct daos_ace *d_ace =
+			(struct daos_ace *)calloc(1, ace_size);
 
-				d_ace->dae_access_types = ace->access_types;
-				if ((int)ace->principal_type <= last_type) {
-					rc = 10;
-					goto out;
+			d_ace->dae_access_types = ace->access_types;
+			if ((int)ace->principal_type <= last_type) {
+				rc = 10;
+				goto out;
+			}
+			last_type = ace->principal_type;
+			d_ace->dae_principal_type = ace->principal_type;
+			d_ace->dae_principal_len =
+			make_8_multiples(ace->principal_len);
+			d_ace->dae_access_flags = ace->access_flags;
+			d_ace->dae_reserv = ace->reserved;
+			d_ace->dae_allow_perms = ace->allow_perms;
+			d_ace->dae_audit_perms = ace->audit_perms;
+			d_ace->dae_alarm_perms = ace->alarm_perms;
+
+			if (ace->principal_len > 0) {
+				memcpy(d_ace->dae_principal, ace->principal,
+				ace->principal_len + 1);
+				if (d_ace->dae_principal_len > (ace->principal_len + 1)) {
+					memset(d_ace->dae_principal + ace->principal_len + 1,
+					0,
+					d_ace->dae_principal_len - ace->principal_len - 1
+					);
 				}
-				last_type = ace->principal_type;
-				d_ace->dae_principal_type = ace->principal_type;
-				d_ace->dae_principal_len =
-				make_8_multiples(ace->principal_len);
-				d_ace->dae_access_flags = ace->access_flags;
-				d_ace->dae_reserv = ace->reserved;
-				d_ace->dae_allow_perms = ace->allow_perms;
-				d_ace->dae_audit_perms = ace->audit_perms;
-				d_ace->dae_alarm_perms = ace->alarm_perms;
+			}
 
-				if (ace->principal_len > 0) {
-					memcpy(d_ace->dae_principal, ace->principal,
-					ace->principal_len + 1);
-					if (d_ace->dae_principal_len > (ace->principal_len + 1)) {
-						memset(d_ace->dae_principal + ace->principal_len + 1,
-						0,
-						d_ace->dae_principal_len - ace->principal_len - 1
-						);
-					}
-				}
-
-				memcpy(acl->dal_ace + index, d_ace, ace_size);
-				index += ace_size;
-				if (!daos_ace_is_valid(d_ace)) {
-					rc = 9;
-					goto out;
-				}
+			memcpy(acl->dal_ace + index, d_ace, ace_size);
+			index += ace_size;
+			if (!daos_ace_is_valid(d_ace)) {
+				rc = 9;
+				goto out;
+			}
 out:
-				free(d_ace);
-				if (rc) {
-					return rc;
-				}
+			free(d_ace);
+			if (rc) {
+				return rc;
 			}
-			entry->dpe_val_ptr = acl;
-			if (daos_acl_validate(acl)) {
-				return 8;
-			}
+		}
+		entry->dpe_val_ptr = acl;
+		if (daos_acl_validate(acl)) {
+			return 8;
 		}
 		return 0;
 	default: return 7;
@@ -1618,9 +1619,9 @@ set_attr_properties(Uns__Properties *properties, daos_prop_t *da_props)
 	da_props->dpp_reserv = properties->reserved;
 	if (da_props->dpp_nr > 0) {
 		da_props->dpp_entries = (struct daos_prop_entry *)calloc(
-        da_props->dpp_nr,
-        sizeof(struct daos_prop_entry)
-        );
+		da_props->dpp_nr,
+		sizeof(struct daos_prop_entry)
+		);
 		for (i = 0; i < da_props->dpp_nr; i++) {
 			entry = properties->entries[i];
 			da_entry = &da_props->dpp_entries[i];
@@ -1730,28 +1731,38 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
 		char *msg;
 
 		switch (rc) {
-			case 1:	 msg = "need pool id";
+		case 1:
+			msg = "need pool id";
 			break;
-			case 2:	 msg = "need layout (POSIX | HDF5)";
+		case 2:
+			msg = "need layout (POSIX | HDF5)";
 			break;
-			case 3:	 msg = "need object type";
+		case 3:
+			msg = "need object type";
 			break;
-			case 4:	 msg = "unknown layout";
+		case 4:
+			msg = "unknown layout";
 			break;
-			case 5:	 msg = "missing entry value";
+		case 5:
+			msg = "missing entry value";
 			break;
-			case 6:	 msg = "bad entry type";
+		case 6:
+			msg = "bad entry type";
 			break;
-			case 7:	 msg = "unknown entry type other than ACLs";
+		case 7:
+			msg = "unknown entry type other than ACLs";
 			break;
-			case 8:	 msg = "invalid ACL parameters";
+		case 8:
+			msg = "invalid ACL parameters";
 			break;
-			case 9:	 msg = "invalid ACE parameters";
+		case 9:
+			msg = "invalid ACE parameters";
 			break;
-			case 10:
+		case 10:
 			msg = "duplicate ACEs or ACEs out of order";
 			break;
-			default:	msg = "unknown error";
+		default:
+			msg = "unknown error";
 		}
 		throw_exception_const_msg(env, msg, CUSTOM_ERR5);
 		goto out;
@@ -1771,28 +1782,29 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
 			uuid_unparse(attr.da_cuuid, cont_str);
 		}
 		msg = (char *)malloc(strlen(tmp) + strlen(path)
-            + strlen(cont_str) + strlen(pool_str));
+			+ strlen(cont_str) + strlen(pool_str));
 		sprintf(msg, tmp, path, cont_str, pool_str);
 		throw_exception_base(env, msg, rc, 1, 0);
 		goto out;
 	}
 	char cont_str[37] = "";
+
 	uuid_unparse(attr.da_cuuid, cont_str);
 
 out:
 	(*env)->ReleaseStringUTFChars(env, pathStr, path);
-	if (attr.da_props) {
-		if ((attr.da_props)->dpp_entries) {
-			for (i = 0; i < (attr.da_props)->dpp_nr; i++) {
-				switch (((attr.da_props)->dpp_entries[i]).dpe_type) {
-				case UNS__PROP_TYPE__DAOS_PROP_PO_ACL:
-				case UNS__PROP_TYPE__DAOS_PROP_CO_ACL:
-					free(((attr.da_props)->dpp_entries[i]).dpe_val_ptr);
-					break;
-				}
+	if (attr.da_props && (attr.da_props)->dpp_entries) {
+		for (i = 0; i < (attr.da_props)->dpp_nr; i++) {
+			switch (((attr.da_props)->dpp_entries[i]).dpe_type) {
+			case UNS__PROP_TYPE__DAOS_PROP_PO_ACL:
+			case UNS__PROP_TYPE__DAOS_PROP_CO_ACL:
+				free(((attr.da_props)->dpp_entries[i]).dpe_val_ptr);
+				break;
 			}
-			free((attr.da_props)->dpp_entries);
 		}
+		free((attr.da_props)->dpp_entries);
+	}
+	if (attr.da_props) {
 		free(attr.da_props);
 	}
 	if (attribute) {
@@ -1895,9 +1907,10 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 		jstring pathStr, jstring attrNameStr, jstring valueStr)
 {
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
-	const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr, NULL);
+	const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr,
+							NULL);
 	const char *value = valueStr == NULL ? NULL :
-            (*env)->GetStringUTFChars(env, valueStr, NULL);
+			(*env)->GetStringUTFChars(env, valueStr, NULL);
 	int rc;
 
 	if (!(value == NULL || strlen(value) == 0)) {
@@ -1905,8 +1918,8 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 		if (rc) {
 			char *tmp =
 			"failed to set app attribute (%s) = (%s) on path (%s)";
-			char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
-            strlen(value) + strlen(path));
+			char *msg = (char *)malloc(strlen(tmp) +
+			strlen(attrName) + strlen(value) + strlen(path));
 
 			sprintf(msg, tmp, attrName, value, path);
 			rc = errno;
@@ -1917,8 +1930,8 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 		if (rc) {
 			char *tmp =
 			"failed to remove app attribute (%s) from path (%s)";
-			char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
-                strlen(path));
+			char *msg = (char *)malloc(strlen(tmp) +
+			strlen(attrName) + strlen(path));
 
 			sprintf(msg, tmp, attrName, path);
 			rc = errno;
