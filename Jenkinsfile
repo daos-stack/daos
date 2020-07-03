@@ -178,8 +178,8 @@ def functional_rpms = "openmpi3 hwloc ndctl " +
                       "testmpio-cart-4-daos-0 fio " +
                       "mpi4py-tests-cart-4-daos-0"
 // need to exclude openmpi until we remove it from the repo
-def el7_functional_rpms  = "--exclude openmpi " + functional_rpms
-def leap15_functional_rpms  = functional_rpms + ' lua-lmod'
+def el7_functional_rpms = "--exclude openmpi " + functional_rpms
+def leap15_functional_rpms = functional_rpms
 
 
 // bail out of branch builds that are not on a whitelist
