@@ -53,7 +53,7 @@ class KvNotFound(Exception):
 
     def __str__(self):
         return "Failed to create '{}'".format(self.name)
-        
+
 class ObjID(object):
     """
     Class representing of DAOS 128-bit object identifier
