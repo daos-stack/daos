@@ -280,8 +280,8 @@ Java_io_daos_dfs_DaosFsClient_daosClosePool(JNIEnv *env,
 }
 
 JNIEXPORT void JNICALL
-Java_io_daos_dfs_DaosFsClient_dfsSetPrefix(JNIEnv *env, jobject clientObj,
-		jlong dfsPtr, jstring prefixStr)
+Java_io_daos_dfs_DaosFsClient_dfsSetPrefix(JNIEnv *env,
+		jobject clientObj, jlong dfsPtr, jstring prefixStr)
 {
 	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	const char *prefix = (*env)->GetStringUTFChars(env, prefixStr, NULL);
@@ -936,7 +936,7 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JJLjava_lang_String_2IJ(
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	path		path of file
  * \param[in]	flags		file flags
  * \param[in]	bufferAddress	buffer to hold stat attributes, not implemented
@@ -972,7 +972,7 @@ Java_io_daos_dfs_DaosFsClient_dfsLookup__JLjava_lang_String_2IJ(
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  *
  * \return	size of file
@@ -1000,7 +1000,7 @@ Java_io_daos_dfs_DaosFsClient_dfsGetSize(JNIEnv *env, jobject client,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	flags		flags of new file
  *
@@ -1051,7 +1051,7 @@ Java_io_daos_dfs_DaosFsClient_dfsRelease(JNIEnv *env,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	bufferAddress	buffer address
  * \param[in]	fileOffset	file offset
@@ -1414,7 +1414,7 @@ out:
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \parem[in]	dfsPtr		pointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	name		attribute name
  */
@@ -1541,7 +1541,7 @@ set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 
 		for (i = 0; i < a->n_aces; i++) {
 			total_ace_size += (ace_struct_size +
-						(make_8_multiples(a->aces[i]->principal_len)));
+					(make_8_multiples(a->aces[i]->principal_len)));
 		}
 		struct daos_acl *acl = (struct daos_acl *)calloc(1,
 				sizeof(struct daos_acl) + total_ace_size);
@@ -1554,9 +1554,9 @@ set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 				Uns__DaosAce *ace = a->aces[i];
 
 				ace_size = sizeof(struct daos_ace) +
-						make_8_multiples(ace->principal_len);
-				struct daos_ace *d_ace = (struct daos_ace *)calloc(1,
-											ace_size);
+				make_8_multiples(ace->principal_len);
+				struct daos_ace *d_ace =
+				(struct daos_ace *)calloc(1, ace_size);
 
 				d_ace->dae_access_types = ace->access_types;
 				if ((int)ace->principal_type <= last_type) {
@@ -1566,7 +1566,7 @@ set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 				last_type = ace->principal_type;
 				d_ace->dae_principal_type = ace->principal_type;
 				d_ace->dae_principal_len =
-						make_8_multiples(ace->principal_len);
+				make_8_multiples(ace->principal_len);
 				d_ace->dae_access_flags = ace->access_flags;
 				d_ace->dae_reserv = ace->reserved;
 				d_ace->dae_allow_perms = ace->allow_perms;
@@ -1575,12 +1575,12 @@ set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 
 				if (ace->principal_len > 0) {
 					memcpy(d_ace->dae_principal, ace->principal,
-						ace->principal_len + 1);
+					ace->principal_len + 1);
 					if (d_ace->dae_principal_len > (ace->principal_len + 1)) {
 						memset(d_ace->dae_principal + ace->principal_len + 1,
-							 0,
-							 d_ace->dae_principal_len - ace->principal_len - 1
-							 );
+						0,
+						d_ace->dae_principal_len - ace->principal_len - 1
+						);
 					}
 				}
 
@@ -1590,7 +1590,7 @@ set_entry_value(Uns__Entry *e, struct daos_prop_entry *entry)
 					rc = 9;
 					goto out;
 				}
-			out:
+out:
 				free(d_ace);
 				if (rc) {
 					return rc;
@@ -1618,8 +1618,9 @@ set_attr_properties(Uns__Properties *properties, daos_prop_t *da_props)
 	da_props->dpp_reserv = properties->reserved;
 	if (da_props->dpp_nr > 0) {
 		da_props->dpp_entries = (struct daos_prop_entry *)calloc(
-									da_props->dpp_nr,
-									sizeof(struct daos_prop_entry));
+        da_props->dpp_nr,
+        sizeof(struct daos_prop_entry)
+        );
 		for (i = 0; i < da_props->dpp_nr; i++) {
 			entry = properties->entries[i];
 			da_entry = &da_props->dpp_entries[i];
@@ -1654,6 +1655,7 @@ static int
 set_duns_attr(Uns__DunsAttribute *attribute, struct duns_attr_t *attr)
 {
 	int rc = 0;
+
 	if (attribute->puuid == NULL || strlen(attribute->puuid) == 0) {
 		return 1;
 	}
@@ -1704,7 +1706,7 @@ out:
  * \param[in]	poolHandle		pool handle
  * \param[in]   pathStr		 file path to be created
  * \param[in]   bufferAddress   memory address of serialized duns_attribute_t
- * \param[in]   bufferLen	   lenght of buffer
+ * \param[in]   bufferLen	   length of buffer
  *
  * \return	container UUID
  */
@@ -1727,18 +1729,28 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
 	if (rc) {
 		char *msg;
 
-		switch (rc)
-		{
-			case 1:	 msg = "need pool id"; break;
-			case 2:	 msg = "need layout (POSIX | HDF5)";  break;
-			case 3:	 msg = "need object type"; break;
-			case 4:	 msg = "unknown layout"; break;
-			case 5:	 msg = "missing entry value"; break;
-			case 6:	 msg = "bad entry type"; break;
-			case 7:	 msg = "unknown entry type other than ACLs"; break;
-			case 8:	 msg = "invalid ACL parameters"; break;
-			case 9:	 msg = "invalid ACE parameters"; break;
-			case 10:	msg = "duplicate ACEs or ACEs out of order"; break;
+		switch (rc) {
+			case 1:	 msg = "need pool id";
+			break;
+			case 2:	 msg = "need layout (POSIX | HDF5)";
+			break;
+			case 3:	 msg = "need object type";
+			break;
+			case 4:	 msg = "unknown layout";
+			break;
+			case 5:	 msg = "missing entry value";
+			break;
+			case 6:	 msg = "bad entry type";
+			break;
+			case 7:	 msg = "unknown entry type other than ACLs";
+			break;
+			case 8:	 msg = "invalid ACL parameters";
+			break;
+			case 9:	 msg = "invalid ACE parameters";
+			break;
+			case 10:
+			msg = "duplicate ACEs or ACEs out of order";
+			break;
 			default:	msg = "unknown error";
 		}
 		throw_exception_const_msg(env, msg, CUSTOM_ERR5);
@@ -1746,8 +1758,8 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
 	}
 	rc = duns_create_path(poh, path, &attr);
 	if (rc) {
-		char *tmp = "Failed to create UNS path, %s, in container %s and " \
-					"pool %s";
+		char *tmp =
+		"Failed to create UNS path, %s, in container %s and pool %s";
 		char pool_str[37] = "";
 		char cont_str[37] = "";
 		char *msg;
@@ -1759,7 +1771,7 @@ Java_io_daos_dfs_DaosFsClient_dunsCreatePath(JNIEnv *env,
 			uuid_unparse(attr.da_cuuid, cont_str);
 		}
 		msg = (char *)malloc(strlen(tmp) + strlen(path)
-							+ strlen(cont_str) + strlen(pool_str));
+            + strlen(cont_str) + strlen(pool_str));
 		sprintf(msg, tmp, path, cont_str, pool_str);
 		throw_exception_base(env, msg, rc, 1, 0);
 		goto out;
@@ -1772,7 +1784,7 @@ out:
 	if (attr.da_props) {
 		if ((attr.da_props)->dpp_entries) {
 			for (i = 0; i < (attr.da_props)->dpp_nr; i++) {
-				switch(((attr.da_props)->dpp_entries[i]).dpe_type) {
+				switch (((attr.da_props)->dpp_entries[i]).dpe_type) {
 				case UNS__PROP_TYPE__DAOS_PROP_PO_ACL:
 				case UNS__PROP_TYPE__DAOS_PROP_CO_ACL:
 					free(((attr.da_props)->dpp_entries[i]).dpe_val_ptr);
@@ -1885,16 +1897,16 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
 	const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr, NULL);
 	const char *value = valueStr == NULL ? NULL :
-						(*env)->GetStringUTFChars(env, valueStr, NULL);
+            (*env)->GetStringUTFChars(env, valueStr, NULL);
 	int rc;
 
 	if (!(value == NULL || strlen(value) == 0)) {
 		rc = lsetxattr(path, attrName, value, strlen(value) + 1, 0);
 		if (rc) {
-			char *tmp = "failed to set app attribute (%s) = (%s) on path" \
-						" (%s)";
+			char *tmp =
+			"failed to set app attribute (%s) = (%s) on path (%s)";
 			char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
-							strlen(value) + strlen(path));
+            strlen(value) + strlen(path));
 
 			sprintf(msg, tmp, attrName, value, path);
 			rc = errno;
@@ -1903,9 +1915,10 @@ Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo(JNIEnv *env, jclass clientClass,
 	} else { /* remove attribute */
 		rc = lremovexattr(path, attrName);
 		if (rc) {
-			char *tmp = "failed to remove app attribute (%s) from path (%s)";
+			char *tmp =
+			"failed to remove app attribute (%s) from path (%s)";
 			char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
-							strlen(path));
+                strlen(path));
 
 			sprintf(msg, tmp, attrName, path);
 			rc = errno;
@@ -1935,14 +1948,15 @@ Java_io_daos_dfs_DaosFsClient_dunsGetAppInfo(JNIEnv *env, jclass clientClass,
 		jstring pathStr, jstring attrNameStr, jint maxLen)
 {
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
-	const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr, NULL);
+	const char *attrName = (*env)->GetStringUTFChars(env, attrNameStr,
+		NULL);
 	void *value = malloc(maxLen);
 	int len = lgetxattr(path, attrName, value, maxLen);
 	jstring ret = NULL;
 
 	if (len < 0 || len > maxLen) {
-		char *tmp = "failed to get app attribute (%s) from path" \
-											" (%s)";
+		char *tmp =
+		"failed to get app attribute (%s) from path (%s)";
 		char *msg = (char *)malloc(strlen(tmp) + strlen(attrName) +
 							strlen(path));
 
@@ -2007,7 +2021,7 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 	const char *input = (*env)->GetStringUTFChars(env, inputStr, NULL);
 	int len = strlen(input);
 	struct duns_attr_t attr = {0};
-	Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;;
+	Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;
 	char pool_str[37] = "";
 	char cont_str[37] = "";
 	char object_type[40] = "";
