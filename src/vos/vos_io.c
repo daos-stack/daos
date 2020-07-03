@@ -1800,9 +1800,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (dth != NULL) {
 		struct dtx_rsrvd_uint	*dru;
 
-		D_ASSERT(dth->dth_op_seq >= 1);
-
-		dru = &dth->dth_rsrvds[dth->dth_op_seq - 1];
+		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
 		dru->dru_scm = ioc->ic_rsrvd_scm;
 		ioc->ic_rsrvd_scm = NULL;
 
