@@ -42,10 +42,10 @@ def scons():
             print("Install and load mpich or openmpi\n")
             return
 
-    tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart'])
+    tenv.AppendUnique(CPPPATH=['#/src/cart'])
     tenv.AppendUnique(LIBS=libs)
     prereqs.require(tenv, 'mercury')
-    tenv.AppendUnique(LIBPATH=['#/src/cart/src/cart'])
+    tenv.AppendUnique(LIBPATH=['#/src/cart'])
     tenv.AppendUnique(FLAGS='-pthread')
 
     crt_launch = daos_build.program(tenv, CRT_LAUNCH)

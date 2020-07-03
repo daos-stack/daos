@@ -33,8 +33,7 @@ def scons():
 
     denv = env.Clone()
 
-    #denv.AppendUnique(CPPPATH=['#/src/cart/src/swim']) #DM
-    denv.AppendUnique(CPPPATH=['#/src/swim']) #DM
+    denv.AppendUnique(CPPPATH=['#/src/swim'])
     denv.AppendUnique(LIBS=['gurt'])
     denv.Append(CCFLAGS=['-D_USE_CART_'])
 

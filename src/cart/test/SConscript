@@ -42,7 +42,7 @@ def scons():
     Import('env')
 
     # Build the unit tests
-    SConscript('utest/SConscript') #DM
+    SConscript('utest/SConscript')
 
     env.Replace(CRT_TSTDIR="$PREFIX/lib/cart/TESTING")
 

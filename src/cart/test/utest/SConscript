@@ -26,8 +26,7 @@ import os
 import daos_build
 
 TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c']
-#LIBPATH = [Dir('../cart'), Dir('../../../gurt')] #DM
-LIBPATH = [Dir('../../src/cart'), Dir('../../../gurt')] #DM
+LIBPATH = [Dir('../../include/cart'), Dir('../../../gurt')]
 
 def scons():
     """Scons function"""
@@ -56,8 +55,7 @@ def scons():
     test_env = env.Clone()
     prereqs.require(test_env, "mercury", "uuid", "cmocka")
     test_env.AppendUnique(LIBS=['pthread'])
-    #test_env.AppendUnique(CPPPATH=['../include']) #DM
-    test_env.AppendUnique(CPPPATH=['../../../include']) #DM
+    test_env.AppendUnique(CPPPATH=['../../include'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)
     test_env.AppendUnique(RPATH_FULL=LIBPATH)

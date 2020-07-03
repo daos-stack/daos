@@ -18,7 +18,7 @@ def scons():
                     Glob("%s/*.*" % sub_dir))
 
     # Builders
-    SConscript('cart/SConscript') #DM
+    SConscript('cart/SConscript')
 
     # util
     SConscript('util/SConscript')

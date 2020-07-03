@@ -9,13 +9,13 @@ def scons():
     denv = env.Clone()
 
     # Build self test
-    SConscript('self_test/SConscript') #DM
+    SConscript('self_test/SConscript')
 
     # Build crt_launch
-    SConscript('crt_launch/SConscript') #DM
+    SConscript('crt_launch/SConscript')
 
     # Build cart_ctl
-    SConscript('ctl/SConscript') #DM
+    SConscript('ctl/SConscript')
 
     # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
