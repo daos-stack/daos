@@ -136,19 +136,11 @@ dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
 			tse_sched_t *tse, tse_task_t **task);
 int
-dc_obj_fetch_shard_task_create(daos_handle_t oh, daos_handle_t th,
-			       unsigned int flags, unsigned int shard,
-			       daos_key_t *dkey, unsigned int nr,
-			       daos_iod_t *iods, d_sg_list_t *sgls,
-			       daos_iom_t *maps, daos_event_t *ev,
-			       tse_sched_t *tse, tse_task_t **task);
-
-int
-dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-			 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-			 d_sg_list_t *sgls, void *extra_args,
-			 daos_iom_t *maps, daos_event_t *ev,
-			 tse_sched_t *tse, tse_task_t **task);
+dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t api_flags,
+			 daos_key_t *dkey, uint32_t nr, uint32_t extra_flags,
+			 daos_iod_t *iods, d_sg_list_t *sgls, daos_iom_t *ioms,
+			 void *extra_arg, daos_event_t *ev, tse_sched_t *tse,
+			 tse_task_t **task);
 int
 dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 			  daos_key_t *dkey, unsigned int nr,
