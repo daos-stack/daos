@@ -117,6 +117,7 @@ pool_hop_free(struct d_ulink *hlink)
 	int		 rc;
 
 	D_ASSERT(pool->vp_opened == 0);
+	D_ASSERT(!gc_have_pool(pool));
 
 	if (pool->vp_io_ctxt != NULL) {
 		rc = bio_ioctxt_close(pool->vp_io_ctxt);
@@ -740,7 +741,11 @@ vos_pool_close(daos_handle_t poh)
 
 	D_ASSERT(pool->vp_opened > 0);
 	pool->vp_opened--;
-	if (pool->vp_opened == 0)
+
+	/* If the last reference is holding by GC */
+	if (pool->vp_opened == 1 && gc_have_pool(pool))
+		gc_del_pool(pool);
+	else if (pool->vp_opened == 0)
 		vos_pool_hash_del(pool);
 
 	vos_pool_decref(pool); /* -1 for myself */

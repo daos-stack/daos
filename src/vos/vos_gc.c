@@ -883,7 +883,12 @@ vos_gc_pool(daos_handle_t poh, int *credits)
 	if (empty) {
 		if (total != 0) /* did something */
 			gc_log_pool(pool);
-		gc_del_pool(pool);
+		/*
+		 * Recheck since vea_free() called when drain sv/ev record may
+		 * result in yield on transaction end callback.
+		 */
+		if (gc_have_pool(pool))
+			gc_del_pool(pool);
 	}
 
 	return 0;
