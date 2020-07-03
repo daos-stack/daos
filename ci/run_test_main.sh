@@ -5,7 +5,6 @@
 set -ex
 
 # shellcheck disable=SC1091
-# shellcheck disable=SC2029
 
 # JENKINS-52781 tar function is breaking symlinks
 source ./.build_vars.sh
@@ -17,21 +16,26 @@ DAOS_BASE=${SL_PREFIX%/install*}
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-if [ "$1" == "memcheck" ]; then
-    echo "memcheck"
-    rm -rf valgrind_memcheck_results
-    WITH_VALGRIND=memcheck
-    ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
-                                         HOSTNAME=$HOSTNAME        \
-                                         HOSTPWD=$PWD              \
-                                         SL_PREFIX=$SL_PREFIX      \
-                                         WITH_VALGRIND=$WITH_VALGRIND \
-                                         $(cat "$mydir/run_test_main_node.sh")"
+if [ $# -ge 1 ] && [ -n "$1" ]; then
+    if [ "$1" == "memcheck" ]; then
+        echo "memcheck"
+        rm -rf valgrind_memcheck_results
+        WITH_VALGRIND=memcheck
+        # shellcheck disable=SC2029
+        ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
+                 "DAOS_BASE=$DAOS_BASE      \
+                  HOSTNAME=$HOSTNAME        \
+                  HOSTPWD=$PWD              \
+                  SL_PREFIX=$SL_PREFIX      \
+                  WITH_VALGRIND=$WITH_VALGRIND \
+                  $(cat "$mydir/run_test_main_node.sh")"
+    fi
 else
     echo "normal"
     rm -rf test_results
     mkdir test_results
     rm -f dnt.*.memcheck.xml nlt-errors.json
+    # shellcheck disable=SC2029
     ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                          HOSTNAME=$HOSTNAME        \
                                          HOSTPWD=$PWD              \

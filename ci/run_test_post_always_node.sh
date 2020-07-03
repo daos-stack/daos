@@ -4,13 +4,15 @@ set -uex
 
 cd "$DAOS_BASE"
 
-if [ $WITH_VALGRIND = "memcheck" ]; then
-    mkdir run_test_memcheck.sh
-    if ls /tmp/daos*.log > /dev/null; then
-      mv /tmp/daos*.log run_test_memcheck.sh/
-    fi
-    if ls valgrind_memcheck_results/*.xml > /dev/null; then
-      mv valgrind_memcheck_results/*.xml run_test_memcheck.sh/
+if [ -n "$WITH_VALGRIND" ]; then
+    if [ "$WITH_VALGRIND" = "memcheck" ]; then
+        mkdir run_test_memcheck.sh
+        if ls /tmp/daos*.log > /dev/null; then
+          mv /tmp/daos*.log run_test_memcheck.sh/
+        fi
+        if ls valgrind_memcheck_results/*.xml > /dev/null; then
+          mv valgrind_memcheck_results/*.xml run_test_memcheck.sh/
+        fi
     fi
 else
     mkdir run_test.sh

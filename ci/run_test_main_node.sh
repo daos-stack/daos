@@ -23,12 +23,14 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 cd "$DAOS_BASE"
-if [ "$WITH_VALGRIND" == "memcheck" ]; then
-    echo "run_test_main_node.sh with memcheck"
-    # run_test.sh with valgrind memcheck
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
-    mkdir -p valgrind_memcheck_results
-    mv results-*-memcheck.xml valgrind_memcheck_results
+if [ -n "$WITH_VALGRIND" ]; then
+    if [ "$WITH_VALGRIND" == "memcheck" ]; then
+        echo "run_test_main_node.sh with memcheck"
+        # run_test.sh with valgrind memcheck
+        IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
+        mkdir -p valgrind_memcheck_results
+        mv results-*-memcheck.xml valgrind_memcheck_results
+    fi
 else
     echo "run_test_main_node.sh unit test"
     # set CMOCKA envs here
