@@ -1018,7 +1018,7 @@ pipeline {
                         }
                     }
                 } // End run_test.sh stage
-                stage('run_test_memcheck.sh') {
+                stage('run_test.sh with memcheck') {
                     when {
                       beforeAgent true
                       expression { ! skip_stage('run_test') }
@@ -1055,7 +1055,7 @@ pipeline {
                                            'centos7-gcc-build-vars' ],
                                 script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
                                         "NODELIST=${env.NODELIST} " +
-                                        'ci/run_test_memcheck.sh'
+                                        'ci/run_test_main.sh memcheck'
                         }
                     }
                     post {
@@ -1064,7 +1064,7 @@ pipeline {
                             // label is at the end
                             // sh label: "Collect artifacts and tear down",
                             //   script '''set -ex
-                            sh script: 'ci/run_test_post_memcheck.sh',
+                            sh script: 'ci/run_test_post_always.sh memcheck',
                                label: "Collect artifacts and tear down"
                             archiveArtifacts artifacts: 'run_test_memcheck.sh/**'
                             publishValgrind (
@@ -1083,7 +1083,7 @@ pipeline {
                             )
                         }
                     }
-                } // End run_test_memcheck.sh stage
+                } // End run_test.sh with memcheck stage
             } // End parallel
         } // End stage Unit test
         stage('Test') {

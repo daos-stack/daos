@@ -1,26 +1,40 @@
 #!/bin/bash
 
-# This is the script used for the run_tests.sh stage in CI
-# for doing unit testing.
+# This is the script used for running unit testing
+# run_tests.sh and run_tests.sh with memcheck stages on the CI
 set -ex
 
-# JENKINS-52781 tar function is breaking symlinks
-rm -rf test_results
-mkdir test_results
 # shellcheck disable=SC1091
+# shellcheck disable=SC2029
+
+# JENKINS-52781 tar function is breaking symlinks
 source ./.build_vars.sh
 rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
 mkdir -p "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/"
 ln -s ../../../../../../../../src/control \
   "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
 DAOS_BASE=${SL_PREFIX%/install*}
-rm -f dnt.*.memcheck.xml nlt-errors.json
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-# shellcheck disable=SC2029
-ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
-                                     HOSTNAME=$HOSTNAME        \
-                                     HOSTPWD=$PWD              \
-                                     SL_PREFIX=$SL_PREFIX      \
-                                     $(cat "$mydir/run_test_main_node.sh")"
+if [ "$1" == "memcheck" ]; then
+    echo "memcheck"
+    rm -rf valgrind_memcheck_results
+    WITH_VALGRIND=memcheck
+    ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
+                                         HOSTNAME=$HOSTNAME        \
+                                         HOSTPWD=$PWD              \
+                                         SL_PREFIX=$SL_PREFIX      \
+                                         WITH_VALGRIND=$WITH_VALGRIND \
+                                         $(cat "$mydir/run_test_main_node.sh")"
+else
+    echo "normal"
+    rm -rf test_results
+    mkdir test_results
+    rm -f dnt.*.memcheck.xml nlt-errors.json
+    ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
+                                         HOSTNAME=$HOSTNAME        \
+                                         HOSTPWD=$PWD              \
+                                         SL_PREFIX=$SL_PREFIX      \
+                                         $(cat "$mydir/run_test_main_node.sh")"
+fi

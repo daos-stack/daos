@@ -22,9 +22,18 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts
 sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
-# set CMOCKA envs here
-export CMOCKA_MESSAGE_OUTPUT=xml
-export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
 cd "$DAOS_BASE"
-IS_CI=true OLD_CI=false utils/run_test.sh
-./utils/node_local_test.py all
+if [ "$WITH_VALGRIND" == "memcheck" ]; then
+    echo "run_test_main_node.sh with memcheck"
+    # run_test.sh with valgrind memcheck
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
+    mkdir -p valgrind_memcheck_results
+    mv results-*-memcheck.xml valgrind_memcheck_results
+else
+    echo "run_test_main_node.sh unit test"
+    # set CMOCKA envs here
+    export CMOCKA_MESSAGE_OUTPUT=xml
+    export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
+    IS_CI=true OLD_CI=false utils/run_test.sh
+    ./utils/node_local_test.py all
+fi
