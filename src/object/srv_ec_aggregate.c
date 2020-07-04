@@ -73,10 +73,8 @@ struct ec_agg_entry {
 	d_sg_list_t		*ae_sgl;
 	daos_handle_t		 ae_chdl;
 	daos_handle_t		 ae_thdl;
-	/* upper extent threshold */
-	daos_epoch_t		 ae_epoch;
-	/* lower extent threshold - thresholds not currently used */
-	daos_epoch_t		 ae_epoch_lo;
+	/* upper and lower extent threshold */
+	daos_epoch_range_t	 ae_epoch_range;
 	daos_key_t		 ae_dkey;
 	daos_key_t		 ae_akey;
 	daos_size_t		 ae_rsize;
@@ -123,9 +121,11 @@ op_cmp(void *array, int a, int b)
 	if (agg_entry_array[a]->ae_oid.id_pub.hi <
 				 agg_entry_array[b]->ae_oid.id_pub.hi)
 		return -1;
-	if (agg_entry_array[a]->ae_epoch > agg_entry_array[b]->ae_epoch)
+	if (agg_entry_array[a]->ae_epoch_range.epr_hi >
+				 agg_entry_array[b]->ae_epoch_range.epr_hi)
 		return 1;
-	if (agg_entry_array[a]->ae_epoch < agg_entry_array[b]->ae_epoch)
+	if (agg_entry_array[a]->ae_epoch_range.epr_hi <
+				 agg_entry_array[b]->ae_epoch_range.epr_hi)
 		return -1;
 	return 0;
 }
@@ -171,7 +171,7 @@ committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *value, void *arg)
 		} else {
 			entry->ae_oid = oid;
 			entry->ae_oca = oca;
-			entry->ae_epoch = epoch;
+			entry->ae_epoch_range.epr_hi = epoch;
 			entry->ae_cur_stripe.as_stripenum = ~0UL;
 			d_list_add_tail(&entry->ae_link, &agg_set->as_entries);
 			agg_set->as_count++;
@@ -474,13 +474,14 @@ agg_stripe_is_filled(struct ec_agg_entry *entry, bool has_parity)
 static int
 agg_update_vos(struct ec_agg_entry *entry)
 {
-	d_sg_list_t	sgl = { 0 };
-	daos_iod_t	iod = { 0 };
-	d_iov_t		iov;
-	daos_recx_t	recx;
-	unsigned int	len = entry->ae_oca->u.ec.e_len;
-	unsigned int	k = entry->ae_oca->u.ec.e_k;
-	int		rc = 0;
+	d_sg_list_t		sgl = { 0 };
+	daos_iod_t		iod = { 0 };
+	daos_epoch_range_t	epoch_range = { 0 };
+	d_iov_t			iov = { 0 };
+	daos_recx_t		recx = { 0 };
+	unsigned int		len = entry->ae_oca->u.ec.e_len;
+	unsigned int		k = entry->ae_oca->u.ec.e_k;
+	int			rc = 0;
 
 	iov.iov_buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
 	iov.iov_buf_len =
@@ -492,22 +493,22 @@ agg_update_vos(struct ec_agg_entry *entry)
 
 	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len;
 	recx.rx_nr = k * len;
+	epoch_range.epr_lo = 0ULL;
+	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+	rc = vos_obj_array_remove(entry->ae_chdl, entry->ae_oid,
+				  &epoch_range, &entry->ae_dkey,
+				  &entry->ae_akey, &recx);
+
+	D_PRINT("Replica delete returned: %d\n", rc);
+	iod.iod_nr = 1;
+	iod.iod_size = entry->ae_rsize;
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = 0;
-	iod.iod_nr = 1;
 	iod.iod_recxs = &recx;
-	rc = vos_obj_update(entry->ae_chdl, entry->ae_oid,
-			    entry->ae_cur_stripe.as_hi_epoch,
-			    0, 0, &entry->ae_dkey, 1, &iod, NULL, NULL);
-
-	D_PRINT("Update for delete returned: %d\n", rc);
-	iod.iod_size = entry->ae_rsize;
 	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * len;
 	recx.rx_nr = len;
 	rc = vos_obj_update(entry->ae_chdl, entry->ae_oid,
 			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
-			    //VOS_OF_OVERWRITE,
 			    &entry->ae_dkey, 1, &iod, NULL,
 			    &sgl);
 	D_PRINT("Update parity returned: %d\n", rc);
@@ -749,23 +750,23 @@ agg_iterate_committed(struct ds_cont_child *cont, daos_epoch_t start_epoch)
 
 		daos_array_sort(agg_entry_array, agg_set.as_count, false,
 				&sort_ops);
-		daos_epoch_t lo = agg_entry_array[0]->ae_epoch;
+		daos_epoch_t lo = agg_entry_array[0]->ae_epoch_range.epr_hi;
 		for (i = 0; i < agg_set.as_count; i++) {
 			agg_entry = agg_entry_array[i];
-			if (agg_entry->ae_epoch > start_epoch)
-				start_epoch = agg_entry->ae_epoch;
+			if (agg_entry->ae_epoch_range.epr_hi > start_epoch)
+				start_epoch = agg_entry->ae_epoch_range.epr_hi;
 			if (prev_agg_entry && !agg_ent_oid_equal(prev_agg_entry,
 								 agg_entry)) {
-				prev_agg_entry->ae_epoch_lo = lo;
+				prev_agg_entry->ae_epoch_range.epr_lo = lo;
 			} else if (prev_agg_entry) {
-				lo = prev_agg_entry->ae_epoch_lo;
+				lo = prev_agg_entry->ae_epoch_range.epr_lo;
 				d_list_del(&prev_agg_entry->ae_link);
 				D_FREE_PTR(prev_agg_entry);
 			}
 			prev_agg_entry = agg_entry;
-			prev_agg_entry->ae_epoch_lo = lo;
+			prev_agg_entry->ae_epoch_range.epr_lo = lo;
 		}
-		prev_agg_entry->ae_epoch_lo = lo;
+		prev_agg_entry->ae_epoch_range.epr_lo = lo;
 		D_FREE(agg_entry_array);
 		d_list_for_each_entry(agg_entry, &agg_set.as_entries, ae_link) {
 			D_INIT_LIST_HEAD(&agg_entry->
