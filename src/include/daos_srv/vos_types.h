@@ -220,7 +220,7 @@ enum {
 	/* critical update - skip checks on SCM system/held space */
 	VOS_OF_CRIT		= (1 << 9),
 	/** Instead of update or punch of extents, remove all extents
-	 * under the specified range
+	 * under the specified range. Intended for internal use only.
 	 */
 	VOS_OF_REMOVE		= (1 << 10),
 };
