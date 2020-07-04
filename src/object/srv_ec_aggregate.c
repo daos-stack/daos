@@ -35,12 +35,22 @@
 #include "obj_ec.h"
 #include "obj_internal.h"
 
+struct ec_agg_pool_info {
+	uuid_t		api_pool_uuid;
+	uint32_t	api_pool_version;
+};
+
+struct ec_agg_param {
+	struct ec_agg_entry	*ap_agg_entry;
+	d_sg_list_t		 ap_sgl;
+	struct ec_agg_pool_info	 ap_pool_info;
+};
+
 struct ec_agg_set {
-	d_list_t	as_entries;
-	uuid_t		as_pool_uuid;
-	daos_epoch_t	as_start_epoch;
-	uint32_t	as_pool_version;
-	unsigned int	as_count;
+	d_list_t		as_entries;
+	struct ec_agg_pool_info	as_pool_info;
+	daos_epoch_t		as_start_epoch;
+	unsigned int		as_count;
 };
 
 struct ec_agg_par_extent {
@@ -150,8 +160,8 @@ committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *value, void *arg)
 	if ( epoch <= agg_set->as_start_epoch ||
 				 !daos_oclass_is_ec(oid.id_pub, &oca))
 		return rc;
-	rc = ds_pool_check_leader(agg_set->as_pool_uuid, &oid,
-				  agg_set->as_pool_version);
+	rc = ds_pool_check_leader(agg_set->as_pool_info.api_pool_uuid, &oid,
+				  agg_set->as_pool_info.api_pool_version);
 	if (rc == 1) {
 		struct ec_agg_entry *entry;
 
@@ -716,8 +726,9 @@ agg_iterate_committed(struct ds_cont_child *cont, daos_epoch_t start_epoch)
 	struct ec_agg_entry	**agg_entry_array = NULL;
 	int			  rc = 0;
 
-	uuid_copy(agg_set.as_pool_uuid, cont->sc_pool->spc_uuid);
-	agg_set.as_pool_version = cont->sc_pool->spc_pool->sp_map_version;
+	uuid_copy(agg_set.as_pool_info.api_pool_uuid, cont->sc_pool->spc_uuid);
+	agg_set.as_pool_info.api_pool_version =
+		cont->sc_pool->spc_pool->sp_map_version;
 	agg_set.as_start_epoch = start_epoch;
 	D_INIT_LIST_HEAD(&agg_set.as_entries);
 	rc = vos_agg_iterate(cont->sc_hdl, committed_dtx_cb, &agg_set);
@@ -776,9 +787,81 @@ out:
 }
 
 static int
-agg_iterate_all(daos_handle_t coh)
+agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
+		    struct ec_agg_param *agg_param)
 {
-	return 0;
+	vos_iter_param_t	 iter_param = { 0 };
+	struct vos_iter_anchors  anchors = { 0 };
+	int			 rc = 0;
+
+	iter_param.ip_hdl		= DAOS_HDL_INVAL;
+	iter_param.ip_ih		= ih;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	iter_param.ip_oid		= *oid;
+	iter_param.ip_epr.epr_lo	= 0ULL;
+	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
+	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	iter_param.ip_recx.rx_idx	= 0ULL;
+	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
+
+	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
+			 agg_iterate_pre_cb, agg_iterate_post_cb,
+			 agg_param->ap_agg_entry);
+	return rc;
+}
+
+static int
+agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+	vos_iter_type_t type, vos_iter_param_t *param,
+	void *cb_arg, unsigned int *acts)
+{
+	struct ec_agg_param	*agg_param = (struct ec_agg_param *) cb_arg;
+	struct daos_oclass_attr *oca;
+	int			 rc = 0;
+
+	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca))
+		return rc;
+	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
+				  &entry->ie_oid,
+				  agg_param->ap_pool_info.api_pool_version);
+	if (rc == 1) {
+		if ( agg_param->ap_agg_entry == NULL) {
+			D_ALLOC_PTR(agg_param->ap_agg_entry);
+			if (entry == NULL) {
+				rc = -DER_NOMEM;
+				goto out;
+			}
+			D_INIT_LIST_HEAD(&agg_param->ap_agg_entry->
+					 ae_cur_stripe.as_dextents);
+
+		}
+		rc = agg_subtree_iterate(ih, &entry->ie_oid, agg_param);
+	}
+out:
+	return rc;
+}
+
+static int
+agg_iterate_all(struct ds_cont_child *cont)
+{
+	vos_iter_param_t	 iter_param = { 0 };
+	struct vos_iter_anchors  anchors = { 0 };
+	struct ec_agg_param	 agg_param = { 0 };
+	int			 rc = 0;
+	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
+		  cont->sc_pool->spc_uuid);
+	agg_param.ap_pool_info.api_pool_version =
+		cont->sc_pool->spc_pool->sp_map_version;
+
+	iter_param.ip_hdl		= cont->sc_hdl;
+	iter_param.ip_epr.epr_lo	= 0ULL;
+	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
+
+	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
+			 agg_iter_obj_pre_cb, NULL, &agg_param);
+	return rc;
+
 }
 
 int
@@ -788,7 +871,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch,
 	int			  rc = 0;
 
 	if (!process_committed)
-		rc = agg_iterate_all(cont->sc_hdl);
+		rc = agg_iterate_all(cont);
 	else
 		rc = agg_iterate_committed(cont, start_epoch);
 
