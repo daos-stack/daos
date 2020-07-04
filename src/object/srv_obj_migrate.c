@@ -512,9 +512,9 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_epoch, fetch ? "yes":"no");
 
 	if (fetch) {
-		rc = dsc_obj_fetch(oh, mrone->mo_epoch, DIOF_TO_LEADER, 0,
-				   &mrone->mo_dkey, mrone->mo_iod_num,
-				   mrone->mo_iods, sgls, NULL);
+		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+				   mrone->mo_iod_num, mrone->mo_iods, sgls,
+				   NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch %d\n", rc);
 			return rc;
@@ -612,9 +612,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 		mrone->mo_iod_num, mrone->mo_epoch);
 
-	rc = dsc_obj_fetch(oh, mrone->mo_epoch, DIOF_TO_LEADER, 0,
-			   &mrone->mo_dkey, mrone->mo_iod_num, mrone->mo_iods,
-			   sgls, NULL);
+	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
 	if (rc)
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);

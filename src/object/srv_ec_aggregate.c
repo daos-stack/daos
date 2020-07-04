@@ -537,7 +537,7 @@ agg_process_stripe(struct ec_agg_entry *entry, bool *mark_yield)
 		iter_param.ip_recx.rx_idx);
 
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
-			 agg_recx_iter_pre_cb, NULL, entry);
+			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	if (rc != 0)
 		goto out;
 
@@ -711,7 +711,7 @@ agg_iterate(struct ec_agg_entry *agg_entry, daos_handle_t coh)
 
 	D_PRINT("VOS Iterate!\n");
 	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb, agg_entry);
+			 agg_iterate_pre_cb, agg_iterate_post_cb, agg_entry, NULL);
 	D_PRINT("VOS Iterate complete\n");
 	return rc;
 
@@ -807,7 +807,7 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 
 	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
-			 agg_param->ap_agg_entry);
+			 agg_param->ap_agg_entry, NULL);
 	return rc;
 }
 
@@ -859,7 +859,7 @@ agg_iterate_all(struct ds_cont_child *cont)
 	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
 
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
-			 agg_iter_obj_pre_cb, NULL, &agg_param);
+			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
 	return rc;
 
 }
