@@ -10,6 +10,9 @@ post_provision_config_nodes() {
                      libpmemblk munge-libs munge slurm             \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
+    # YUM database on snapshots can be quite old, refresh it before
+    # doing anything more
+    yum -y makecache
     yum -y install yum-utils ed nfs-utils
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
