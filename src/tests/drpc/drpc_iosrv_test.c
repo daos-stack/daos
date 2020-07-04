@@ -115,8 +115,8 @@ main(int argc, char **argv)
 		goto syntax_err;
 	}
 
-	ctx = drpc_connect(socket_path);
-	if (ctx == NULL) {
+	rc = drpc_connect(socket_path, &ctx);
+	if (rc != -DER_SUCCESS) {
 		fprintf(stderr, "Bad socket path: %s\n", socket_path);
 		goto syntax_err;
 	}

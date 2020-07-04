@@ -98,6 +98,76 @@ func TestControl_PoolDestroy(t *testing.T) {
 	}
 }
 
+func TestControl_PoolDrain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolDrainReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"invalid UUID": {
+			req: &PoolDrainReq{
+				UUID:      "bad",
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			expErr: errors.New("invalid UUID"),
+		},
+		"success": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolDrainResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolDrain(ctx, mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
 func TestControl_PoolEvict(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic    *MockInvokerConfig

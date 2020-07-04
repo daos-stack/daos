@@ -718,7 +718,7 @@ ds_cont_child_start_all(struct ds_pool_child *pool_child)
 	iter_param.ip_hdl = pool_child->spc_hdl;
 	/* The quantity of container is small, no need to yield */
 	rc = vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
-			 cont_child_start_cb, NULL, (void *)pool_child);
+			 cont_child_start_cb, NULL, (void *)pool_child, NULL);
 	return rc;
 }
 
@@ -865,43 +865,6 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 	struct d_hash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	cont_hdl_put_internal(hash, hdl);
-}
-
-static int
-cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
-{
-	daos_prop_t	*props;
-	uint32_t	 csum_val;
-	int		 rc;
-
-	D_ASSERT(hdl->sch_cont != NULL);
-	/** Get the container csum related properties
-	 * Need the pool for the IV namespace
-	 */
-	hdl->sch_csummer = NULL;
-	props = daos_prop_alloc(3);
-	if (props == NULL) {
-		return -DER_NOMEM;
-	}
-	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
-	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
-	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	rc = cont_iv_prop_fetch(hdl->sch_cont->sc_pool->spc_pool->sp_iv_ns,
-				hdl->sch_cont->sc_uuid, props);
-	if (rc != 0)
-		goto done;
-	csum_val = daos_cont_prop2csum(props);
-
-	/** If enabled, initialize the csummer for the container */
-	if (daos_cont_csum_prop_is_enabled(csum_val))
-		rc = daos_csummer_type_init(&hdl->sch_csummer,
-					    daos_contprop2csumtype(csum_val),
-					    daos_cont_prop2chunksize(props),
-					    daos_cont_prop2serververify(props));
-done:
-	daos_prop_free(props);
-
-	return rc;
 }
 
 /**
@@ -1058,6 +1021,35 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	return cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
 				 ds_cont);
+}
+
+/** initialize a csummer based on container properties */
+int ds_cont_csummer_init(struct daos_csummer **csummer,
+			 uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	daos_prop_t	*props;
+	struct ds_pool	*pool;
+	int		 rc;
+
+	props = daos_prop_alloc(3);
+	if (props == NULL)
+		return -DER_NOMEM;
+
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL)
+		return -DER_NONEXIST;
+	rc = ds_cont_fetch_prop(pool->sp_iv_ns, cont_uuid, props);
+	if (rc == 0)
+		rc = daos_csummer_init_with_props(csummer, props);
+
+	daos_prop_free(props);
+	ds_pool_put(pool);
+
+	return rc;
 }
 
 /**
@@ -1299,7 +1291,12 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		}
 
 csummer:
-		rc = cont_hdl_csummer_init(hdl);
+		D_ASSERT(hdl->sch_cont != NULL);
+		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
+		rc = ds_cont_csummer_init(&hdl->sch_csummer,
+					  hdl->sch_cont->sc_pool->spc_uuid,
+					  hdl->sch_cont->sc_uuid);
+
 		if (rc != 0)
 			D_GOTO(err_register, rc);
 	}
@@ -1880,7 +1877,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 
-	rc = vos_iter_prepare(type, &param, &iter_h);
+	rc = vos_iter_prepare(type, &param, &iter_h, NULL);
 	if (rc != 0) {
 		D_ERROR("prepare obj iterator failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(close, rc);
