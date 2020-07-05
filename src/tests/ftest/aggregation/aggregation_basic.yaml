@@ -45,6 +45,8 @@ ior:
             1M:
               transfer_size: '1M'
               block_size: '16G'
-          objectclass:
+          objectclass: !mux
             oclass_SX:
               daos_oclass: "SX"
+            oclass_RP_GPX:
+              daos_oclass: "RP_GPX"
