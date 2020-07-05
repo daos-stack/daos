@@ -433,7 +433,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 }
 
 void
-mock_ds_mgmt_exclude_setup(void)
+mock_ds_mgmt_tgt_update_setup(void)
 {
 	ds_mgmt_target_update_return = 0;
 	uuid_clear(ds_mgmt_target_update_uuid);

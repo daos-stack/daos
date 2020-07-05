@@ -498,13 +498,16 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * I/O APIs
  */
 
-/**
- * VOS fetch flags
- * VOS_FETCH_SIZE_ONLY - only query iod_size
- * VOS_FETCH_RECX_LIST - query recx list
- */
-#define VOS_FETCH_SIZE_ONLY	(0x1U << 0)
-#define VOS_FETCH_RECX_LIST	(0x1U << 1)
+enum vos_fetch_flags {
+	/* only query iod_size */
+	VOS_FETCH_SIZE_ONLY		= (1 << 0),
+	/* query recx list */
+	VOS_FETCH_RECX_LIST		= (1 << 1),
+	/* only set read TS */
+	VOS_FETCH_SET_TS_ONLY		= (1 << 2),
+	/* check the target (obj/dkey/akey) existence */
+	VOS_FETCH_CHECK_EXISTENCE	= (1 << 3),
+};
 
 /**
  *
@@ -689,12 +692,13 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
  *			is inherited from that entry.
  *
  * \param ih	[OUT]	Returned iterator handle
+ * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
-		 daos_handle_t *ih);
+		 daos_handle_t *ih, struct dtx_handle *dth);
 
 /**
  * Release a iterator
@@ -813,6 +817,7 @@ vos_iter_empty(daos_handle_t ih);
  * \param[in]		pre_cb		pre subtree iteration callback
  * \param[in]		post_cb		post subtree iteration callback
  * \param[in]		arg		callback argument
+ * \param[in]		dth		DTX handle
  *
  * \retval		0	iteration complete
  * \retval		> 0	callback return value
@@ -821,7 +826,7 @@ vos_iter_empty(daos_handle_t ih);
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg);
+	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
@@ -861,6 +866,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx	max or min offset in dkey/akey, and the size of the
  *			extent at the offset. If there are no visible array
  *			records, the size in the recx returned will be 0.
+ * \param[in]	dth	Pointer to the DTX handle.
  *
  * \return
  *			0		Success
@@ -871,7 +877,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx);
+		  daos_recx_t *recx, struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.

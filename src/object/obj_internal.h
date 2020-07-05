@@ -297,6 +297,7 @@ struct shard_punch_args {
 struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
+	struct dtx_id		 la_dti;
 };
 
 struct ec_bulk_spec {
@@ -387,11 +388,12 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
-			   uint32_t flags, struct dc_object *obj,
-			   daos_key_t *dkey, daos_key_t *akey,
-			   daos_recx_t *recx, const uuid_t coh_uuid,
-			   const uuid_t cont_uuid, unsigned int *map_ver,
+int dc_obj_shard_query_key(struct dc_obj_shard *shard,
+			   struct dc_obj_epoch *epoch, uint32_t flags,
+			   struct dc_object *obj, daos_key_t *dkey,
+			   daos_key_t *akey, daos_recx_t *recx,
+			   const uuid_t coh_uuid, const uuid_t cont_uuid,
+			   struct dtx_id *dti, unsigned int *map_ver,
 			   tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
