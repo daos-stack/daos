@@ -262,7 +262,7 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		members      Members
-		rankList     []Rank
+		ranks        string
 		expRanks     []Rank
 		expHostRanks map[string][]Rank
 		expHosts     []string
@@ -281,7 +281,7 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 		},
 		"subset rank list": {
 			members:  members,
-			rankList: []Rank{1, 2},
+			ranks:    "1-2",
 			expRanks: []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{
 				"127.0.0.1:10001": {Rank(1)},
@@ -295,14 +295,14 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 		},
 		"distinct rank list": {
 			members:      members,
-			rankList:     []Rank{0, 5},
+			ranks:        "0,5",
 			expRanks:     []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{},
 			expHosts:     []string{},
 		},
 		"superset rank list": {
 			members:  members,
-			rankList: []Rank{0, 1, 2, 3, 4, 5},
+			ranks:    "0-5",
 			expRanks: []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{
 				"127.0.0.1:10001": {Rank(1), Rank(4)},
@@ -325,10 +325,15 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 				}
 			}
 
-			AssertEqual(t, tc.expRanks, ms.Ranks(), "ranks")
-			AssertEqual(t, tc.expHostRanks, ms.HostRanks(tc.rankList...), "host ranks")
-			AssertEqual(t, tc.expHosts, ms.Hosts(tc.rankList...), "hosts")
-			AssertEqual(t, tc.expMembers, ms.Members(tc.rankList...), "members")
+			rankSet, err := CreateRankSet(tc.ranks)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			AssertEqual(t, tc.expRanks, ms.RankList(), "ranks")
+			AssertEqual(t, tc.expHostRanks, ms.HostRanks(rankSet), "host ranks")
+			AssertEqual(t, tc.expHosts, ms.HostList(rankSet), "hosts")
+			AssertEqual(t, tc.expMembers, ms.Members(rankSet), "members")
 		})
 	}
 }
@@ -354,7 +359,8 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 		expErr     error
 	}{
 		"no rank list": {
-			members: members,
+			members:  members,
+			expRanks: "0-4",
 		},
 		"bad rank list": {
 			members:    members,
@@ -394,7 +400,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 				}
 			}
 
-			hit, miss, err := ms.CheckRanklist(tc.inRanklist)
+			hit, miss, err := ms.CheckRanks(tc.inRanklist)
 			CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
@@ -406,22 +412,43 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 	}
 }
 
+func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
+	if netString != "tcp" {
+		return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'", netString)
+	}
+
+	return map[string]*net.TCPAddr{
+			"127.0.0.1:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"127.0.0.2:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"127.0.0.3:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-1:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"foo-2:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"foo-3:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-4:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.4"), Port: 10001},
+			"foo-5:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.5"), Port: 10001},
+		}[address], map[string]error{
+			"127.0.0.4:10001": errors.New("bad lookup"),
+			"127.0.0.5:10001": errors.New("bad lookup"),
+		}[address]
+}
+
 func TestSystem_Membership_CheckHostlist(t *testing.T) {
 	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
 	if err != nil {
 		t.Fatal(err)
 	}
 	members := Members{
-		MockMember(t, 0, MemberStateJoined),
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateEvicted),
-		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
+		MockMember(t, 4, MemberStateJoined),
+		MockMember(t, 5, MemberStateJoined),
+		NewMember(Rank(6), "", addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
 		members         Members
-		inHostlist      string
+		inHosts         string
 		expRanks        string
 		expMissingHosts string
 		expErr          error
@@ -430,29 +457,77 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 			members: members,
 		},
 		"bad host list": {
-			members:    members,
-			inHostlist: "123,foobar",
-			expErr:     errors.New("invalid hostname"),
+			members: members,
+			inHosts: "123,foobar",
+			expErr:  errors.New("invalid hostname"),
 		},
-		"no members": {
-			inHostlist:      "127.0.0.[0-3]:10001",
-			expMissingHosts: "127.0.0.[0-3]:10001",
+		"no members with ip & port": {
+			inHosts:         "127.0.0.[1-3]:10001",
+			expMissingHosts: "127.0.0.[1-3]:10001",
 		},
-		"full hostlist": {
-			members:    members,
-			inHostlist: "127.0.0.[0-3]:10001",
-			expRanks:   "0-4",
+		"no members with ip": {
+			inHosts:         "127.0.0.[1-3]",
+			expMissingHosts: "127.0.0.[1-3]",
 		},
-		"partial ranklist": {
-			members:    members,
-			inHostlist: "127.0.0.[1-3]:10001",
-			expRanks:   "1-4",
+		"no members with hostname": {
+			inHosts:         "foo-[1-3]",
+			expMissingHosts: "foo-[1-3]",
 		},
-		"oversubscribed ranklist": {
+		"ips cant resolve": {
 			members:         members,
-			inHostlist:      "127.0.0.[0-4]:10001",
-			expRanks:        "0-4",
-			expMissingHosts: "127.0.0.4:10001",
+			inHosts:         "127.0.0.[1-5]",
+			expRanks:        "1-3,6",
+			expMissingHosts: "127.0.0.[4-5]",
+		},
+		"ips cant resolve with port": {
+			members:         members,
+			inHosts:         "127.0.0.[1-5]:10001",
+			expRanks:        "1-3,6",
+			expMissingHosts: "127.0.0.[4-5]:10001",
+		},
+		"ips cant resolve bad port": {
+			members:         members,
+			inHosts:         "127.0.0.[1-2]:10000,127.0.0.3:10001",
+			expRanks:        "3",
+			expMissingHosts: "127.0.0.[1-2]:10000",
+		},
+		"ips partial ranklist": {
+			members:  members,
+			inHosts:  "127.0.0.[1-2]:10001",
+			expRanks: "1-2,6",
+		},
+		"ips oversubscribed ranklist": {
+			members:         members,
+			inHosts:         "127.0.0.[0-9]:10001",
+			expRanks:        "1-3,6",
+			expMissingHosts: "127.0.0.[0,4-9]:10001",
+		},
+		"hostnames can resolve": {
+			members:  members,
+			inHosts:  "foo-[1-5]",
+			expRanks: "1-6",
+		},
+		"hostnames cant resolve with port": {
+			members:  members,
+			inHosts:  "foo-[1-5]:10001",
+			expRanks: "1-6",
+		},
+		"hostnames cant resolve bad port": {
+			members:         members,
+			inHosts:         "foo-[1-2]:10000,foo-3:10001",
+			expRanks:        "3",
+			expMissingHosts: "foo-[1-2]:10000",
+		},
+		"hostnames partial ranklist": {
+			members:  members,
+			inHosts:  "foo-[1-3]:10001",
+			expRanks: "1-3,6",
+		},
+		"hostnames oversubscribed ranklist": {
+			members:         members,
+			inHosts:         "foo-[0-9]:10001",
+			expRanks:        "1-6",
+			expMissingHosts: "foo-[0,6-9]:10001",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -467,7 +542,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 				}
 			}
 
-			rankSet, missingHostSet, err := ms.CheckHostlist(tc.inHostlist)
+			rankSet, missingHostSet, err := ms.CheckHosts(tc.inHosts, 10001, mockResolveFn)
 			CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
@@ -620,14 +695,14 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			}
 
 			// members should be updated with result state
-			err := ms.UpdateMemberStates(tc.results, tc.ignoreErrs)
+			err := ms.UpdateMemberStates(tc.results, !tc.ignoreErrs)
 			ExpectError(t, err, tc.expErrMsg, name)
 			if err != nil {
 				return
 			}
 
 			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(MemberResult{}, Member{})}
-			for i, m := range ms.Members() {
+			for i, m := range ms.Members(nil) {
 				if diff := cmp.Diff(tc.expMembers[i], m, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 				}

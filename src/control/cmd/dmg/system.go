@@ -32,7 +32,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -166,26 +165,32 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 // rankListCmd enables rank or host list to be supplied with command to filter
 // which ranks are operated upon.
 type rankListCmd struct {
-	RankList string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
-	HostList string `long:"rank-hosts" short:"h" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
+	Ranks string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
+	Hosts string `long:"rank-hosts" short:"h" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
 }
 
 // validateRanksHosts validates rank and host lists have correct format.
-func (cmd *rankListCmd) validateRanksHosts() error {
-	hasRanks := len(cmd.RankList) > 0
-	hasHosts := len(cmd.HostList) > 0
+//
+// Populate request with valid list strings.
+func (cmd *rankListCmd) validateRanksHosts(reqToPopulate *control.SystemQueryReq) error {
+	hasRanks := cmd.Ranks != ""
+	hasHosts := cmd.Hosts != ""
 
 	switch {
 	case hasRanks && hasHosts:
 		return errors.New("--ranks and --rank-hosts options cannot be set together")
 	case hasRanks:
-		if _, err := system.ParseRanks(cmd.RankList); err != nil {
-			return errors.Wrap(err, "ranks list")
+		rankSet, err := system.CreateRankSet(cmd.Ranks)
+		if err != nil {
+			return err
 		}
+		reqToPopulate.Ranks = rankSet.String()
 	case hasHosts:
-		if _, err := hostlist.CreateSet(cmd.HostList); err != nil {
-			return errors.Wrap(err, "rank-hosts list")
+		hostSet, err := hostlist.CreateSet(cmd.Hosts)
+		if err != nil {
+			return err
 		}
+		reqToPopulate.Hosts = hostSet.String()
 	}
 
 	return nil
@@ -201,15 +206,12 @@ type systemQueryCmd struct {
 }
 
 // Execute is run when systemQueryCmd activates
-func (cmd *systemQueryCmd) Execute(_ []string) error {
-	if err := cmd.validateRanksHosts(); err != nil {
+func (cmd *systemQueryCmd) Execute(_ []string) (err error) {
+	req := new(control.SystemQueryReq)
+	if err = cmd.validateRanksHosts(req); err != nil {
 		return err
 	}
 
-	req := new(control.SystemQueryReq)
-	if err := convert.Types(cmd, req); err != nil {
-		return errors.Wrapf(err, "convert cmd to request type %T->%T", cmd, req)
-	}
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -226,7 +228,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	if len(cmd.RankList) == 1 {
+	if len(cmd.Ranks) == 1 {
 		return displaySystemQuerySingle(cmd.log, resp.Members)
 	}
 
@@ -307,9 +309,9 @@ type systemStopCmd struct {
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	if err := cmd.validateRanksHosts(); err != nil {
-		return err
-	}
+	//	if err := cmd.validateRanksHosts(); err != nil {
+	//		return err
+	//	}
 
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker,
@@ -317,8 +319,8 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 			Prep:  true,
 			Kill:  true,
 			Force: cmd.Force,
-			//RankList: cmd.RankList,
-			//HostList: cmd.HostList,
+			//Ranks: cmd.Ranks,
+			//Hosts: cmd.Hosts,
 		})
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")
@@ -347,12 +349,12 @@ type systemStartCmd struct {
 
 // Execute is run when systemStartCmd activates
 func (cmd *systemStartCmd) Execute(_ []string) error {
-	if err := cmd.validateRanksHosts(); err != nil {
-		return err
-	}
+	//	if err := cmd.validateRanksHosts(); err != nil {
+	//		return err
+	//	}
 
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker,
-		&control.SystemStartReq{}) //RankList: cmd.RankList, HostList: cmd.HostList})
+		&control.SystemStartReq{}) //Ranks: cmd.Ranks, Hosts: cmd.Hosts})
 	if err != nil {
 		return errors.Wrap(err, "System-Start command failed")
 	}

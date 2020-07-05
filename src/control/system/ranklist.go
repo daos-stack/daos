@@ -104,16 +104,15 @@ func (rs *RankSet) String() string {
 }
 
 // Ranks returns a slice of Rank from a RankSet.
-func (rs *RankSet) Ranks() ([]Rank, error) {
+func (rs *RankSet) Ranks() []Rank {
 	var ranks []uint32
-	err := common.ParseNumberList(
+	// error can be safely ignored because DerangedString format is
+	// deterministic
+	common.ParseNumberList(
 		fixBrackets(rs.HostSet.DerangedString(), true),
 		&ranks)
-	if err != nil {
-		return nil, err
-	}
 
-	return RanksFromUint32(ranks), nil
+	return RanksFromUint32(ranks)
 }
 
 // ParseRanks takes a string representation of a list of ranks e.g. 1-4,6 and
@@ -124,7 +123,7 @@ func ParseRanks(stringRanks string) ([]Rank, error) {
 		return nil, errors.Wrapf(err, "creating rank set from '%s'", stringRanks)
 	}
 
-	return rs.Ranks()
+	return rs.Ranks(), nil
 }
 
 // RankGroups maps a set of ranks to string value (group).

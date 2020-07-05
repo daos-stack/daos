@@ -51,7 +51,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"RankList":"0","HostList":""}`,
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"0","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -59,7 +59,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"RankList":"0,2,4-8","HostList":""}`,
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"0,2,4-8","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -67,13 +67,13 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with bad ranklist",
 			"system query --ranks 0,2,fo,,4-8",
 			"",
-			errors.New("ranks list: creating rank set from '0,2,fo,,4-8'"),
+			errors.Errorf("creating numeric set from "),
 		},
 		{
 			"system query with single host",
 			"system query --rank-hosts foo-0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"RankList":"","HostList":"foo-0"}`,
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"","Hosts":"foo-0"}`,
 			}, " "),
 			nil,
 		},
@@ -81,7 +81,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple hosts",
 			"system query --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"RankList":"","HostList":"bar9,foo-[0-100]"}`,
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
 			}, " "),
 			nil,
 		},
@@ -89,7 +89,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with bad hostlist",
 			"system query --rank-hosts bar9,foo-[0-100],123",
 			"",
-			errors.New(`rank-hosts list: invalid hostname "123"`),
+			errors.New(`invalid hostname "123"`),
 		},
 		{
 			"system query with both hosts and ranks specified",

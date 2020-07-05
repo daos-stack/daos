@@ -1,5 +1,4 @@
 //
-
 // (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,8 +39,13 @@ import (
 )
 
 type sysRequest struct {
-	RankList string
-	HostList string
+	Ranks string
+	Hosts string
+}
+
+type sysResponse struct {
+	AbsentRanks string
+	AbsentHosts string
 }
 
 // SystemJoinReq contains the inputs for the system join request.
@@ -85,6 +89,7 @@ type SystemStopReq struct {
 
 // SystemStopResp contains the request response.
 type SystemStopResp struct {
+	sysResponse
 	Results system.MemberResults
 }
 
@@ -151,6 +156,7 @@ type SystemResetFormatReq struct {
 
 // SystemResetFormatResp contains the request response.
 type SystemResetFormatResp struct {
+	sysResponse
 	Results system.MemberResults
 }
 
@@ -240,6 +246,7 @@ type SystemStartReq struct {
 
 // SystemStartResp contains the request response.
 type SystemStartResp struct {
+	sysResponse
 	Results system.MemberResults // resulting from harness starts
 }
 
@@ -277,6 +284,7 @@ type SystemQueryReq struct {
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
+	sysResponse
 	Members system.Members
 }
 
@@ -374,7 +382,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 // RanksReq contains the parameters for a system ranks request.
 type RanksReq struct {
 	unaryRequest
-	Ranks []system.Rank
+	Ranks string
 	Force bool
 }
 
@@ -440,10 +448,12 @@ func invokeRPCFanout(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq)
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PrepShutdownRanks(ctx, &mgmtpb.RanksReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PrepShutdownRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %+v", req)
 
@@ -459,11 +469,12 @@ func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksRe
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).StopRanks(ctx, &mgmtpb.RanksReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-			Force: req.Force,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).StopRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
 
@@ -479,10 +490,12 @@ func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ResetFormatRanks(ctx, &mgmtpb.RanksReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).ResetFormatRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system reset-format-ranks request: %+v", req)
 
@@ -498,10 +511,12 @@ func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).StartRanks(ctx, &mgmtpb.RanksReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).StartRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system start-ranks request: %+v", req)
 
@@ -517,10 +532,12 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 // Returns a single response structure containing results generated with
 // request responses from each selected rank.
 func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PingRanks(ctx, &mgmtpb.RanksReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PingRanks(ctx, pbReq)
 	})
 	rpcClient.Debugf("DAOS system ping-ranks request: %+v", req)
 

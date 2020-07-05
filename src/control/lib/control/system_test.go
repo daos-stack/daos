@@ -127,7 +127,7 @@ func TestControl_StartRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := StartRanks(context.TODO(), mi, &RanksReq{Ranks: []system.Rank{0, 1, 2, 3}})
+			gotResp, gotErr := StartRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -229,7 +229,7 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := PrepShutdownRanks(context.TODO(), mi, &RanksReq{Ranks: []system.Rank{0, 1, 2, 3}})
+			gotResp, gotErr := PrepShutdownRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -331,7 +331,7 @@ func TestControl_StopRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := StopRanks(context.TODO(), mi, &RanksReq{Ranks: []system.Rank{0, 1, 2, 3}, Force: true})
+			gotResp, gotErr := StopRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3", Force: true})
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -433,7 +433,7 @@ func TestControl_PingRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := PingRanks(context.TODO(), mi, &RanksReq{Ranks: []system.Rank{0, 1, 2, 3}})
+			gotResp, gotErr := PingRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

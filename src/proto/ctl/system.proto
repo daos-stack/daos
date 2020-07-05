@@ -54,46 +54,66 @@ message SystemStopReq {
 	bool prep = 1; // indicates that the prep stage should be performed
 	bool kill = 2; // indicates that the kill stage should be performed
 	bool force = 3;
-	repeated uint32 ranks = 4; // system ranks to stop
+	// repeated uint32 ranks = 4; // system ranks to stop
+	string ranks = 4; // rankset to query
+	string hosts = 5; // hostset to query
+}
+
+// SystemPrepShutdownReq supplies system shutdown parameters.
+message SystemPrepShutdownReq {
+	string ranks = 1; // rankset to query
+	string hosts = 2; // hostset to query
 }
 
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.
 message SystemStopResp {
 	repeated RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
 }
 
 // SystemResetFormatReq supplies system reset format parameters.
 message SystemResetFormatReq {
-	repeated uint32 ranks = 1; // system ranks to reset format
+	// repeated uint32 ranks = 1; // system ranks to reset format
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
 }
 
 // SystemResetFormatResp returns status of reset format attempt and results
 // of attempts to reset format of system members.
 message SystemResetFormatResp {
 	repeated RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
 }
 
 // SystemStartReq supplies system restart parameters.
 message SystemStartReq {
-	repeated uint32 ranks = 1; // system ranks to start
+	// repeated uint32 ranks = 1; // system ranks to start
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
 }
 
 // SystemStartResp returns status of restart attempt and results
 // of attempts to start system members.
 message SystemStartResp {
 	repeated RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
 }
 
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
 	// repeated uint32 ranks = 1; // system ranks to query
-	string ranklist = 2;
-	string hostlist = 3;
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
 }
 
 // SystemQueryResp returns active system members.
 message SystemQueryResp {
 	repeated SystemMember members = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
 }
 

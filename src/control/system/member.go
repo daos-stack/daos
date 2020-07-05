@@ -28,11 +28,13 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -189,6 +191,12 @@ func (sm *Member) String() string {
 // State retrieves member state.
 func (sm *Member) State() MemberState {
 	return sm.state
+}
+
+// WithInfo adds info field and returns updated member.
+func (sm *Member) WithInfo(msg string) *Member {
+	sm.Info = msg
+	return sm
 }
 
 // NewMember returns a reference to a new member struct.
@@ -351,8 +359,8 @@ func (m *Membership) Get(rank Rank) (*Member, error) {
 	return m.getMember(rank)
 }
 
-// Ranks returns slice of all ordered member ranks.
-func (m *Membership) Ranks() (ranks []Rank) {
+// RankList returns slice of all ordered member ranks.
+func (m *Membership) RankList() (ranks []Rank) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -365,8 +373,14 @@ func (m *Membership) Ranks() (ranks []Rank) {
 	return
 }
 
-func (m *Membership) getHostRanks(rankList ...Rank) map[string][]Rank {
+func (m *Membership) getHostRanks(rankSet *RankSet) map[string][]Rank {
+	var rankList []Rank
 	hostRanks := make(map[string][]Rank)
+
+	if rankSet != nil {
+		rankList = rankSet.Ranks()
+	}
+
 	for _, member := range m.members {
 		addr := member.Addr.String()
 
@@ -390,23 +404,23 @@ func (m *Membership) getHostRanks(rankList ...Rank) map[string][]Rank {
 // that address.
 //
 // Filter to include only host keys with any of the provided ranks, if supplied.
-func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
+func (m *Membership) HostRanks(rankSet *RankSet) map[string][]Rank {
 	m.RLock()
 	defer m.RUnlock()
 
-	return m.getHostRanks(rankList...)
+	return m.getHostRanks(rankSet)
 }
 
-// Hosts returns slice of control addresses that contain any of the ranks
+// HostList returns slice of control addresses that contain any of the ranks
 // in the input rank list.
 //
 // If input rank list is empty, return all hosts in membership and ignore ranks
 // that are not in the membership.
-func (m *Membership) Hosts(rankList ...Rank) []string {
+func (m *Membership) HostList(rankSet *RankSet) []string {
 	m.RLock()
 	defer m.RUnlock()
 
-	hostRanks := m.getHostRanks(rankList...)
+	hostRanks := m.getHostRanks(rankSet)
 	hosts := make([]string, 0, len(hostRanks))
 
 	for host := range hostRanks {
@@ -421,16 +435,16 @@ func (m *Membership) Hosts(rankList ...Rank) []string {
 //
 // Empty rank list implies no filtering/include all and ignore ranks that are
 // not in the membership.
-func (m *Membership) Members(rankList ...Rank) (members Members) {
+func (m *Membership) Members(rankSet *RankSet) (members Members) {
 	m.RLock()
 	defer m.RUnlock()
 
-	if len(rankList) == 0 {
+	if rankSet == nil || rankSet.Count() == 0 {
 		for _, member := range m.members {
 			members = append(members, member)
 		}
 	} else {
-		for _, rank := range rankList {
+		for _, rank := range rankSet.Ranks() {
 			if member, exists := m.members[rank]; exists {
 				members = append(members, member)
 			}
@@ -443,9 +457,9 @@ func (m *Membership) Members(rankList ...Rank) (members Members) {
 
 // UpdateMemberStates updates member's state according to result state.
 //
-// If ignoreErrored is set, only update member state and info if result is a
-// success (subsequent ping will update member state).
-func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored bool) error {
+// If updateOnFail is false, only update member state and info if result is a
+// success, if true then update state even if result is errored.
+func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -461,10 +475,10 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 		}
 
 		// don't update members if:
-		// - result reports an error and ignoreErrored is set or
+		// - result reports an error and updateOnFail is false or
 		// - if transition from current to result state is illegal
 		if result.Errored {
-			if ignoreErrored {
+			if !updateOnFail {
 				continue
 			}
 			if result.State != MemberStateErrored {
@@ -483,13 +497,13 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 	return nil
 }
 
-// CheckRanklist returns ordered slices of existing and missing membership ranks
-// from provided ranklist string.
-func (m *Membership) CheckRanklist(rankList string) (hit, miss *RankSet, err error) {
+// CheckRanks returns rank sets of existing and missing membership ranks from
+// provided rank set string, if empty string is given then return hit rank set
+// containing all ranks in the membership.
+func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	var ranks []Rank
 	hit, err = CreateRankSet("")
 	if err != nil {
 		return
@@ -499,12 +513,17 @@ func (m *Membership) CheckRanklist(rankList string) (hit, miss *RankSet, err err
 		return
 	}
 
-	ranks, err = ParseRanks(rankList)
-	if err != nil {
-		return
+	var rankList []Rank
+	if ranks == "" {
+		rankList = m.RankList()
+	} else {
+		rankList, err = ParseRanks(ranks)
+		if err != nil {
+			return
+		}
 	}
 
-	for _, rank := range ranks {
+	for _, rank := range rankList {
 		if _, found := m.members[rank]; !found {
 			if err = miss.Add(rank); err != nil {
 				return
@@ -519,31 +538,44 @@ func (m *Membership) CheckRanklist(rankList string) (hit, miss *RankSet, err err
 	return
 }
 
-// CheckHostlist returns ordered slice of all ranks on any of the hosts in
-// provided hostlist and another slice of all hosts from input hostlist that are
+type resolveFnSig func(string, string) (*net.TCPAddr, error)
+
+// CheckHosts returns set of all ranks on any of the hosts in provided host set
+// string and another slice of all hosts from input hostset string that are
 // missing from the membership.
-func (m *Membership) CheckHostlist(hostList string) (rs *RankSet, hs *hostlist.HostSet, err error) {
+func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSig) (rs *RankSet, hs *hostlist.HostSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	hostRanks := m.getHostRanks()
+	hostRanks := m.getHostRanks(nil)
 	rs, err = CreateRankSet("")
 	if err != nil {
 		return
 	}
 
-	hs, err = hostlist.CreateSet(hostList)
+	hs, err = hostlist.CreateSet(hosts)
 	if err != nil {
 		return
 	}
 	for _, host := range strings.Split(hs.DerangedString(), ",") {
-		if ranks, exists := hostRanks[host]; exists {
-			for _, rank := range ranks {
+		origHostString := host
+		if !common.HasPort(host) {
+			host = net.JoinHostPort(host, strconv.Itoa(ctlPort))
+		}
+
+		tcpAddr, resolveErr := resolveFn("tcp", host)
+		if resolveErr != nil {
+			m.log.Errorf("resolving host %q: %s", host, resolveErr)
+			continue
+		}
+
+		if rankList, exists := hostRanks[tcpAddr.String()]; exists {
+			for _, rank := range rankList {
 				if err = rs.Add(rank); err != nil {
 					return
 				}
 			}
-			if _, err = hs.Delete(host); err != nil {
+			if _, err = hs.Delete(origHostString); err != nil {
 				return
 			}
 		}
