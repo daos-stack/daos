@@ -6,6 +6,7 @@ cd "$DAOS_BASE"
 
 if [ -n "$WITH_VALGRIND" ]; then
     if [ "$WITH_VALGRIND" = "memcheck" ]; then
+        echo "run test post always node with memcheck"
         mkdir run_test_memcheck.sh
         if ls /tmp/daos*.log > /dev/null; then
           mv /tmp/daos*.log run_test_memcheck.sh/
@@ -15,6 +16,7 @@ if [ -n "$WITH_VALGRIND" ]; then
         fi
     fi
 else
+    echo "run test post always node"
     mkdir run_test.sh
     mkdir vm_test
     mv nlt-errors.json vm_test/
@@ -26,7 +28,6 @@ else
     fi
 
 fi
-
 
 # servers can sometimes take a while to stop when the test is done
 x=0

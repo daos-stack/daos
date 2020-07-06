@@ -20,12 +20,11 @@ if [ $# -ge 1 ] && [ -n "$1" ]; then
         ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
           "DAOS_BASE=$DAOS_BASE             \
           WITH_VALGRIND=$WITH_VALGRIND      \
-          $(cat "$mydir/run_test_post_memcheck_node.sh")"
+          $(cat "$mydir/run_test_post_always_node.sh")"
     fi
 else
     echo "run test post always"
     rm -rf run_test.sh vm_test
-
     # shellcheck disable=SC2029
     ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
       "DAOS_BASE=$DAOS_BASE             \
@@ -36,4 +35,3 @@ else
     python utils/fix_cmocka_xml.py
 
 fi
-
