@@ -25,5 +25,5 @@ script:
  - if [ $? == "0" ]; then
         docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "cd src/client/java && mvn clean install -DskipITs -Ddaos.install.path=/home/daos/daos/install";
    else
-        echo "ignore Java build due to DAOS build exit code, $?"
+        echo "ignore Java build due to DAOS build exit code, $?";
    fi
