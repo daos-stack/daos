@@ -57,6 +57,8 @@ dfuse_send_to_fg(int rc)
 	if (bg_fd == 0)
 		return -DER_SUCCESS;
 
+	DFUSE_LOG_INFO("Sending %d to fg", rc);
+
 	ret = write(bg_fd, &rc, sizeof(rc));
 
 	close(bg_fd);
@@ -65,7 +67,10 @@ dfuse_send_to_fg(int rc)
 	if (ret != sizeof(rc))
 		return -DER_MISC;
 
-	if (rc == 0)
+	/* If the return code is non-zero then that means there's an issue so
+	 * do not perform the rest of the operations in this function.
+	 */
+	if (rc != 0)
 		return -DER_SUCCESS;
 
 	ret = chdir("/");
@@ -81,6 +86,9 @@ dfuse_send_to_fg(int rc)
 
 	if (ret != 0)
 		return -DER_MISC;
+
+	DFUSE_LOG_INFO("Success");
+
 	return -DER_SUCCESS;
 }
 
@@ -565,12 +573,12 @@ out_debug:
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();
 out:
+	dfuse_send_to_fg(ret);
+
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.
 	 */
-
-	dfuse_send_to_fg(ret);
 
 	if (ret)
 		return -(ret + DER_ERR_GURT_BASE);
