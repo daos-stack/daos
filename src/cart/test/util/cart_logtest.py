@@ -482,7 +482,7 @@ def trace_one_file(filename):
     """Trace a single file"""
     log_iter = cart_logparse.LogIter(filename)
     test_iter = LogTest(log_iter)
-    test_iter.check_log_file(True)
+    test_iter.check_log_file(False)
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:

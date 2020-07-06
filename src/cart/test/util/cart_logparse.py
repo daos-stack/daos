@@ -42,6 +42,7 @@ LogLine class definition.
 This provides a way of querying CaRT logfiles for processing.
 """
 
+from collections import OrderedDict
 import os
 import re
 
@@ -88,10 +89,8 @@ class LogLine():
 
     It allows for queries such as 'string in line' which will match against
     the message only, and != which will match the entire line.
-
-    index is the line in the file, starting at 1.
     """
-    def __init__(self, line, index):
+    def __init__(self, line):
         fields = line.split()
         # Work out the end of the fixed-width portion, and the beginning of the
         # message.  The hostname and pid fields are both variable width
@@ -100,7 +99,6 @@ class LogLine():
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
-        self.index = index
         self.mask = fields[3]
         try:
             self.level = LOG_LEVELS[fields[4]]
@@ -377,7 +375,6 @@ class StateIter():
                 line.pdesc = line.descriptor
                 line.rpc = False
 
-
             if (line.is_dereg() or line.is_dereg_rpc()) and \
                line.descriptor in self.active_desc:
                 del self.active_desc[line.descriptor]
@@ -426,28 +423,36 @@ class LogIter():
         self.fname = fname
         self._data = []
         index = 0
-        pids = set()
+        pids = OrderedDict()
 
         i = os.fstat(self._fd.fileno())
         self.__from_file = bool(i.st_size > (1024*1024*20))
-        self.__index = 0
 
+        position = 0
         for line in self._fd:
- #           fields = line.split(maxsplit=8)
             fields = line.split(' ', 8)
             index += 1
+            l_obj = None
             if self.__from_file:
                 if len(fields) < 6 or len(fields[0]) != 17:
+                    position += len(line)
                     continue
-                l_obj = LogLine(line, index)
-                pids.add(l_obj.pid)
+                l_obj = LogLine(line)
             else:
                 if len(fields) < 6 or len(fields[0]) != 17:
                     self._data.append(LogRaw(line))
                 else:
-                    l_obj = LogLine(line, index)
-                    pids.add(l_obj.pid)
+                    l_obj = LogLine(line)
                     self._data.append(l_obj)
+            if l_obj:
+                try:
+                    pids[l_obj.pid]['line_count'] += 1
+                except KeyError:
+                    pids[l_obj.pid] = {'line_count': 1,
+                                       'file_pos': position,
+                                       'first_index': index}
+                pids[l_obj.pid]['last_index'] = index
+            position += len(line)
 
         # Offset into the file when iterating.  This is an array index, and is
         # based from zero, as opposed to line index which is based from 1.
@@ -456,11 +461,11 @@ class LogIter():
         self._pid = None
         self._trace_only = False
         self._raw = False
-        self._pids = sorted(pids)
-
-    def __del__(self):
-        if self._fd:
-            self._fd.close()
+        self._pids = pids
+        self._iter_index = 0
+        self._iter_count = 0
+        self._iter_pid = None
+        self._iter_last_index = 0
 
     def new_iter(self,
                  pid=None,
@@ -476,11 +481,17 @@ class LogIter():
         """
 
         if pid is not None:
-            if pid not in self._pids:
+            try:
+                self._iter_pid = self._pids[pid]
+            except KeyError:
                 raise InvalidPid
+            self._iter_last_index = self._iter_pid['last_index'] - \
+                                    self._iter_pid['first_index'] + 1
             self._pid = pid
         else:
             self._pid = None
+            self._iter_pid = None
+            self._iter_last_index = 0
         self._trace_only = trace_only
         self._raw = raw
 
@@ -491,10 +502,14 @@ class LogIter():
 
         return self
 
-    def __iter__(self, pid=None):
+    def __iter__(self):
+        self._iter_index = 0
+        self._iter_count = 0
         if self.__from_file:
-            self._fd.seek(0)
-            self.__index = 0
+            if self._pid:
+                self._fd.seek(self._iter_pid['file_pos'])
+            else:
+                self._fd.seek(0)
         else:
             self._offset = 0
         return self
@@ -506,12 +521,10 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            self.__index += 1
- #           fields = line.split(maxsplit=8)
             fields = line.split(' ', 8)
             if len(fields) < 6 or len(fields[0]) != 17:
                 return LogRaw(line)
-            return LogLine(line, self.__index)
+            return LogLine(line)
 
         try:
             line = self._data[self._offset]
@@ -523,6 +536,12 @@ class LogIter():
     def __next__(self):
 
         while True:
+            self._iter_index += 1
+
+            if self._pid and self._iter_index > self._iter_last_index:
+                assert self._iter_count == self._iter_pid['line_count']
+                raise StopIteration
+
             line = self.__lnext()
 
             if not self._raw and isinstance(line, LogRaw):
@@ -531,12 +550,14 @@ class LogIter():
             if self._trace_only and not line.trace:
                 continue
 
-            if isinstance(line, LogRaw) and self._pid:
-                continue
+            if self._pid:
+                if line.pid != self._pid:
+                    continue
 
-            if self._pid and line.pid != self._pid:
-                continue
+                if isinstance(line, LogRaw):
+                    continue
 
+            self._iter_count += 1
             return line
 
     def next(self):
@@ -545,5 +566,5 @@ class LogIter():
 
     def get_pids(self):
         """Return an array of pids appearing in the file"""
-        return self._pids
+        return self._pids.keys()
 # pylint: enable=too-many-instance-attributes
