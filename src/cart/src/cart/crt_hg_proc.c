@@ -44,6 +44,28 @@
 #include "crt_internal.h"
 
 #define CRT_PROC_NULL (NULL)
+#define CRT_PROC_TYPE_FUNC(type) \
+	int crt_proc_##type(crt_proc_t proc, type *data) \
+	{ \
+		crt_proc_op_t	 proc_op; \
+		type		*buf; \
+		int		 rc = 0; \
+		rc = crt_proc_get_op(proc, &proc_op); \
+		if (unlikely(rc)) \
+			return -DER_HG; \
+		buf = hg_proc_save_ptr(proc, sizeof(*buf)); \
+		switch (proc_op) { \
+		case CRT_PROC_ENCODE: \
+			*buf = *data; \
+			break; \
+		case CRT_PROC_DECODE: \
+			*data = *buf; \
+			break; \
+		case CRT_PROC_FREE: \
+			break; \
+		} \
+		return rc; \
+	}
 
 int
 crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
@@ -51,11 +73,11 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 	hg_proc_op_t	hg_proc_op;
 	int		rc = 0;
 
-	if (proc == NULL) {
+	if (unlikely(proc == NULL)) {
 		D_ERROR("Proc is not initilalized.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (proc_op == NULL) {
+	if (unlikely(proc_op == NULL)) {
 		D_ERROR("invalid parameter - NULL proc_op.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -83,115 +105,38 @@ out:
 int
 crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size)
 {
-	hg_return_t	hg_ret;
+	crt_proc_op_t	 proc_op;
+	void		*buf;
+	int		 rc = 0;
 
-	hg_ret = hg_proc_memcpy(proc, data, data_size);
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (unlikely(rc))
+		return -DER_HG;
 
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+	buf = hg_proc_save_ptr(proc, data_size);
+	switch (proc_op) {
+	case CRT_PROC_ENCODE:
+		memcpy(buf, data, data_size);
+		break;
+	case CRT_PROC_DECODE:
+		memcpy(data, buf, data_size);
+		break;
+	case CRT_PROC_FREE:
+		break;
+	}
+
+	return rc;
 }
 
-int
-crt_proc_int8_t(crt_proc_t proc, int8_t *data)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_int8_t(proc, data);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_uint8_t(crt_proc_t proc, uint8_t *data)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_uint8_t(proc, data);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_int16_t(crt_proc_t proc, int16_t *data)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_int16_t(proc, data);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_uint16_t(crt_proc_t proc, uint16_t *data)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_uint16_t(proc, data);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_int32_t(crt_proc_t proc, int32_t *data)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_int32_t(proc, data);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_uint32_t(crt_proc_t proc, uint32_t *data)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_uint32_t(proc, data);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_int64_t(crt_proc_t proc, int64_t *data)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_int64_t(proc, data);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_uint64_t(crt_proc_t proc, uint64_t *data)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_uint64_t(proc, data);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_bool(crt_proc_t proc, bool *data)
-{
-	hg_bool_t	hg_bool;
-	hg_return_t	hg_ret;
-
-	hg_bool = (*data == false) ? 0 : 1;
-	hg_ret = hg_proc_hg_bool_t(proc, &hg_bool);
-	*data = (hg_bool == 0) ? false : true;
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
-
-int
-crt_proc_raw(crt_proc_t proc, void *buf, size_t buf_size)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = hg_proc_raw(proc, buf, buf_size);
-
-	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-}
+CRT_PROC_TYPE_FUNC(int8_t)
+CRT_PROC_TYPE_FUNC(uint8_t)
+CRT_PROC_TYPE_FUNC(int16_t)
+CRT_PROC_TYPE_FUNC(uint16_t)
+CRT_PROC_TYPE_FUNC(int32_t)
+CRT_PROC_TYPE_FUNC(uint32_t)
+CRT_PROC_TYPE_FUNC(int64_t)
+CRT_PROC_TYPE_FUNC(uint64_t)
+CRT_PROC_TYPE_FUNC(bool)
 
 int
 crt_proc_crt_bulk_t(crt_proc_t proc, crt_bulk_t *bulk_hdl)
@@ -232,84 +177,62 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data)
 int
 crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 {
-	d_rank_list_t		*rank_list;
-	hg_proc_op_t		 proc_op;
-	uint32_t		 rank_num;
-	int			 i, rc = 0;
+	d_rank_list_t	*rank_list;
+	crt_proc_op_t	 proc_op;
+	uint32_t	*buf;
+	uint32_t	 nr;
+	int		 rc = 0;
 
-	if (proc == NULL || data == NULL) {
-		D_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, data);
+	if (unlikely(data == NULL)) {
+		D_ERROR("Invalid parameter data: %p.\n", data);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	proc_op = hg_proc_get_op(proc);
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (unlikely(rc))
+		D_GOTO(out, rc = -DER_HG);
+
 	switch (proc_op) {
-	case HG_ENCODE:
+	case CRT_PROC_ENCODE:
+		buf = hg_proc_save_ptr(proc, sizeof(*buf));
+
 		rank_list = *data;
 		if (rank_list == NULL) {
-			rank_num = 0;
-			rc = crt_proc_uint32_t(proc, &rank_num);
-			if (rc != 0)
-				D_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
-					rc);
-			D_GOTO(out, rc);
+			*buf = 0;
+			D_GOTO(out, rc = 0);
 		}
 
-		rank_num = rank_list->rl_nr;
-		rc = crt_proc_uint32_t(proc, &rank_num);
-		if (rc != 0) {
-			D_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
-				rc);
-			D_GOTO(out, rc = -DER_HG);
-		}
-		for (i = 0; i < rank_num; i++) {
-			rc = crt_proc_d_rank_t(proc, &rank_list->rl_ranks[i]);
-			if (rc != 0) {
-				D_ERROR("crt_proc_d_rank_t failed,rc: %d.\n",
-					rc);
-				D_GOTO(out, rc = -DER_HG);
-			}
-		}
+		nr = rank_list->rl_nr;
+		*buf = nr;
+		buf = hg_proc_save_ptr(proc, nr * sizeof(*buf));
+		memcpy(buf, rank_list->rl_ranks, nr * sizeof(*buf));
 		break;
-	case HG_DECODE:
-		rc = crt_proc_uint32_t(proc, &rank_num);
-		if (rc != 0) {
-			D_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
-				rc);
-			D_GOTO(out, rc = -DER_HG);
-		}
-		if (rank_num == 0) {
+	case CRT_PROC_DECODE:
+		buf = hg_proc_save_ptr(proc, sizeof(*buf));
+
+		nr = *buf;
+		if (nr == 0) {
 			*data = NULL;
-			D_GOTO(out, rc);
+			D_GOTO(out, rc = 0);
 		}
+
 		D_ALLOC_PTR(rank_list);
 		if (rank_list == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		rank_list->rl_nr = rank_num;
-		D_ALLOC_ARRAY(rank_list->rl_ranks, rank_num);
+		D_ALLOC_ARRAY(rank_list->rl_ranks, nr);
 		if (rank_list->rl_ranks == NULL) {
 			D_FREE(rank_list);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
-		for (i = 0; i < rank_num; i++) {
-			rc = crt_proc_d_rank_t(proc, &rank_list->rl_ranks[i]);
-			if (rc != 0) {
-				D_ERROR("crt_proc_d_rank_t failed,rc: %d.\n",
-					rc);
-				d_rank_list_free(rank_list);
-				D_GOTO(out, rc = -DER_HG);
-			}
-		}
+		buf = hg_proc_save_ptr(proc, nr * sizeof(*buf));
+		memcpy(rank_list->rl_ranks, buf, nr * sizeof(*buf));
+		rank_list->rl_nr = nr;
 		*data = rank_list;
 		break;
-	case HG_FREE:
-		rank_list = *data;
-		d_rank_list_free(rank_list);
+	case CRT_PROC_FREE:
+		d_rank_list_free(*data);
 		*data = NULL;
 		break;
-	default:
-		D_ERROR("Bad proc op: %d.\n", proc_op);
-		D_GOTO(out, rc = -DER_HG);
 	}
 
 out:
@@ -320,111 +243,103 @@ int
 crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *div)
 {
 	crt_proc_op_t	proc_op;
-	int		rc;
+	int		rc = 0;
 
-	if (div == NULL) {
+	if (unlikely(div == NULL)) {
 		D_ERROR("invalid parameter, NULL div.\n");
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		D_GOTO(out, rc = -DER_HG);
 
 	if (proc_op == CRT_PROC_FREE) {
-		if (div->iov_buf_len > 0)
-			D_FREE(div->iov_buf);
+		div->iov_buf = NULL;
 		div->iov_buf_len = 0;
 		div->iov_len = 0;
-		return 0;
+		D_GOTO(out, rc = 0);
 	}
 
-	rc = crt_proc_uint64_t(proc, &div->iov_len);
-	if (rc != 0)
-		return -DER_HG;
-
 	rc = crt_proc_uint64_t(proc, &div->iov_buf_len);
-	if (rc != 0)
-		return -DER_HG;
+	if (unlikely(rc))
+		D_GOTO(out, rc);
+
+	rc = crt_proc_uint64_t(proc, &div->iov_len);
+	if (unlikely(rc))
+		D_GOTO(out, rc);
 
 	if (div->iov_buf_len < div->iov_len) {
 		D_ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
 			div->iov_buf_len, div->iov_len);
-		return -DER_HG;
+		D_GOTO(out, rc = -DER_HG);
 	}
+
 	if (proc_op == CRT_PROC_DECODE) {
-		if (div->iov_buf_len > 0) {
-			D_ALLOC(div->iov_buf, div->iov_buf_len);
-			if (div->iov_buf == NULL)
-				return -DER_NOMEM;
-		} else {
+		if (div->iov_buf_len == 0) {
 			div->iov_buf = NULL;
+		} else {
+			/**
+			 * Don't allocate/memcpy like we do for others.
+			 * Just point at memory in request buffer instead.
+			 */
+			div->iov_buf = hg_proc_save_ptr(proc, div->iov_len);
 		}
+	} else { /* proc_op == CRT_PROC_ENCODE */
+		rc = crt_proc_memcpy(proc, div->iov_buf, div->iov_len);
 	}
 
-	rc = crt_proc_memcpy(proc, div->iov_buf, div->iov_len);
-	if (rc != 0) {
-		if (proc_op == CRT_PROC_DECODE) {
-			D_FREE(div->iov_buf);
-			div->iov_buf_len = 0;
-			div->iov_len = 0;
-		}
-		return -DER_HG;
-	}
-
-	return 0;
+out:
+	return rc;
 }
 
 static inline int
 crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 {
-	hg_proc_t     hg_proc;
-	hg_return_t   hg_ret = HG_SUCCESS;
-	int           rc = 0;
+	crt_proc_op_t	 proc_op;
+	uint32_t	*buf;
+	int		 rc = 0;
 
-	if (proc == CRT_PROC_NULL || hdr == NULL)
+	if (unlikely(proc == CRT_PROC_NULL || hdr == NULL))
 		D_GOTO(out, rc = -DER_INVAL);
 
-	hg_proc = proc;
-	rc = crt_proc_crt_group_id_t(hg_proc, &hdr->coh_grpid);
-	if (rc != 0) {
-		D_ERROR("crt proc error, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
-	rc = crt_proc_crt_bulk_t(hg_proc, &hdr->coh_bulk_hdl);
-	if (rc != 0) {
-		D_ERROR("crt proc error, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
-	rc = crt_proc_d_rank_list_t(hg_proc, &hdr->coh_filter_ranks);
-	if (rc != 0) {
-		D_ERROR("crt proc error, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
-	rc = crt_proc_d_rank_list_t(hg_proc, &hdr->coh_inline_ranks);
-	if (rc != 0) {
-		D_ERROR("crt proc error, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_grp_ver);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (unlikely(rc))
 		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_tree_topo);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_root);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_padding);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		rc = -DER_HG;
+
+	rc = crt_proc_crt_group_id_t(proc, &hdr->coh_grpid);
+	if (unlikely(rc))
+		D_GOTO(out, rc);
+
+	rc = crt_proc_crt_bulk_t(proc, &hdr->coh_bulk_hdl);
+	if (unlikely(rc))
+		D_GOTO(out, rc);
+
+	rc = crt_proc_d_rank_list_t(proc, &hdr->coh_filter_ranks);
+	if (unlikely(rc))
+		D_GOTO(out, rc);
+
+	rc = crt_proc_d_rank_list_t(proc, &hdr->coh_inline_ranks);
+	if (unlikely(rc))
+		D_GOTO(out, rc);
+
+	switch (proc_op) {
+	case CRT_PROC_ENCODE:
+		buf = hg_proc_save_ptr(proc, 4 * sizeof(*buf));
+		buf[0] = hdr->coh_grp_ver;
+		buf[1] = hdr->coh_tree_topo;
+		buf[2] = hdr->coh_root;
+		buf[3] = hdr->coh_padding;
+		break;
+	case CRT_PROC_DECODE:
+		buf = hg_proc_save_ptr(proc, 4 * sizeof(*buf));
+		hdr->coh_grp_ver   = buf[0];
+		hdr->coh_tree_topo = buf[1];
+		hdr->coh_root      = buf[2];
+		hdr->coh_padding   = buf[3];
+		break;
+	case CRT_PROC_FREE:
+		break;
 	}
 
 out:
@@ -434,23 +349,16 @@ out:
 static inline int
 crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 {
-	hg_proc_t     hg_proc;
-	hg_return_t   hg_ret = HG_SUCCESS;
-	int           rc = 0;
+	int rc;
 
 	/*
 	 * D_DEBUG("in crt_proc_common_hdr, opc: %#x.\n", hdr->cch_opc);
 	 */
 
-	if (proc == CRT_PROC_NULL || hdr == NULL)
+	if (unlikely(proc == CRT_PROC_NULL || hdr == NULL))
 		D_GOTO(out, rc = -DER_INVAL);
 
-	hg_proc = proc;
-	hg_ret = hg_proc_memcpy(hg_proc, hdr, sizeof(*hdr));
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
+	rc = crt_proc_memcpy(proc, hdr, sizeof(*hdr));
 
 out:
 	return rc;
