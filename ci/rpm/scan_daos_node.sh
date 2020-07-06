@@ -2,7 +2,8 @@
 
 set -uex
 
-sudo yum -y install daos{,-{client,server,tests}}-"${DAOS_PKG_VERSION}"
+sudo yum -y install \
+  daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
 
 lmd_src="maldet-current"
 lmd_tarball="maldetect-current.tar.gz"

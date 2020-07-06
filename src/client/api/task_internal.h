@@ -92,7 +92,6 @@ struct daos_task_args {
 		daos_obj_query_t	obj_query;
 		daos_obj_query_key_t	obj_query_key;
 		struct daos_obj_sync_args obj_sync;
-		struct daos_obj_fetch_shard obj_fetch_shard;
 		daos_obj_fetch_t	obj_fetch;
 		daos_obj_update_t	obj_update;
 		daos_obj_list_dkey_t	obj_list_dkey;
