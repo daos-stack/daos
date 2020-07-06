@@ -1457,9 +1457,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	if (rc)
 		D_GOTO(failed, rc);
 
-	/* load csummer on demand for rebuild - will be destroyed in
-	 * obj_ioc_fini if rebuild container
- 	 */
+	/* load csummer on demand for rebuild if not already loaded */
 	rc = ds_cont_csummer_init(coc);
 	if (rc)
 		D_GOTO(failed, rc);
@@ -1476,24 +1474,9 @@ failed:
 	return rc;
 }
 
-static bool
-obj_ioc_is_rebuild_container(struct obj_io_context *ioc)
-{
-	if (ioc->ioc_coh == NULL ||
-	    ioc->ioc_coc == NULL ||
-	    ioc->ioc_coc->sc_pool == NULL)
-		return false;
-
-	return is_rebuild_container(ioc->ioc_coc->sc_pool->spc_uuid,
-				    ioc->ioc_coh->sch_uuid);
-}
-
 static void
 obj_ioc_fini(struct obj_io_context *ioc)
 {
-	if (obj_ioc_is_rebuild_container(ioc))
-		daos_csummer_destroy(&ioc->ioc_coc->sc_csummer);
-
 	if (ioc->ioc_coh != NULL) {
 		ds_cont_hdl_put(ioc->ioc_coh);
 		ioc->ioc_coh = NULL;
