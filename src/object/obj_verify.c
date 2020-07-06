@@ -106,6 +106,7 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 	struct dc_obj_verify_cursor	*cursor = &dova->cursor;
 	daos_iod_t			*iod = &cursor->iod;
 	tse_task_t			*task;
+	uint32_t			 shard;
 	size_t				 size;
 	int				 rc;
 
@@ -134,10 +135,10 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 	dova->fetch_sgl.sg_nr_out = 1;
 	dova->fetch_sgl.sg_iovs = &dova->fetch_iov;
 
-	rc = dc_obj_fetch_shard_task_create(dova->oh, dova->th,
-		DIOF_TO_SPEC_SHARD, dc_obj_anchor2shard(&dova->dkey_anchor),
-		&cursor->dkey, 1, iod, &dova->fetch_sgl, NULL, NULL, NULL,
-		&task);
+	shard = dc_obj_anchor2shard(&dova->dkey_anchor);
+	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &cursor->dkey, 1,
+				      DIOF_TO_SPEC_SHARD, iod, &dova->fetch_sgl,
+				      NULL, &shard, NULL, NULL, &task);
 	if (rc == 0)
 		rc = dc_task_schedule(task, true);
 

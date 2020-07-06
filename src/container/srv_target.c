@@ -51,12 +51,13 @@
 /* Per VOS container aggregation ULT ***************************************/
 
 /*
- * DTX batched commit may delay the commit for at most 60 seconds,
- * so we have to use a larger threshold to ensure that all transactions
- * within the aggregation epoch range are either committed or to be
- * aborted.
+ * VOS aggregation should try to avoid aggregating in the epoch range where
+ * lots of data records are pending to commit, so the highest aggregate epoch
+ * will be:
+ *
+ * current HLC - (DTX batched commit threshold + buffer period)
  */
-#define DAOS_AGG_THRESHOLD	90 /* seconds */
+#define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
 static inline bool
 cont_aggregate_yield(void *arg)
