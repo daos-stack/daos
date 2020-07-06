@@ -21,8 +21,8 @@ server_config:
 pool:
     mode: 146 # 146 is RW
     name: daos_server
-    scm_size: 30000000000
-    nvme_size: 300000000000
+    scm_size: 40000000000
+    nvme_size: 400000000000
     svcn: 1
     control_method: dmg
 container:
@@ -44,9 +44,9 @@ ior:
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
-              block_size: '16G'
+              block_size: '8G'
           objectclass: !mux
             oclass_SX:
               daos_oclass: "SX"
-            oclass_RP_GPX:
-              daos_oclass: "RP_GPX"
+            oclass_RP_2GX:
+              daos_oclass: "RP_2GX"
