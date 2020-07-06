@@ -34,7 +34,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXVizADKCoROdrFNv"
+#define TESTS "mpceXVizADKCoROdrFNvb"
 /**
  * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
@@ -336,7 +336,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNv",
+				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvb",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
