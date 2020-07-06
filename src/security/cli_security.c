@@ -77,13 +77,14 @@ request_credentials_via_drpc(Drpc__Response **response)
 		return rc;
 	}
 
-	request = drpc_call_create(agent_socket,
-			DRPC_MODULE_SEC_AGENT,
-			DRPC_METHOD_SEC_AGENT_REQUEST_CREDS);
-	if (request == NULL) {
-		D_ERROR("Couldn't allocate dRPC call\n");
+	rc = drpc_call_create(agent_socket,
+			      DRPC_MODULE_SEC_AGENT,
+			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
+			      &request);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Couldn't allocate dRPC call " DF_RC " \n", DP_RC(rc));
 		drpc_close(agent_socket);
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	rc = drpc_call(agent_socket, R_SYNC, request, response);

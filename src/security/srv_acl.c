@@ -186,10 +186,12 @@ new_validation_request(struct drpc *ctx, d_iov_t *creds)
 	Drpc__Call		*request;
 	Auth__ValidateCredReq	req = AUTH__VALIDATE_CRED_REQ__INIT;
 	Auth__Credential	*cred;
+	int			rc;
 
-	request = drpc_call_create(ctx,
-			DRPC_MODULE_SEC,
-			DRPC_METHOD_SEC_VALIDATE_CREDS);
+	rc = drpc_call_create(ctx,
+			      DRPC_MODULE_SEC,
+			      DRPC_METHOD_SEC_VALIDATE_CREDS,
+			      &request);
 	if (request == NULL)
 		return NULL;
 

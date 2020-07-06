@@ -64,29 +64,35 @@ daos_drpc_free(void *allocater_data, void *pointer)
  * \param	ctx	Active dRPC context
  * \param	module	Module ID for the new call
  * \param	method	Method ID for the new call
+ * \param	callp  	Newly allocated Drpc__Call
  *
- * \return	Newly allocated Drpc__Call, or NULL if it couldn't be allocated
+ * \returns	On success returns 0 otherwise returns negative error condition.
  */
-Drpc__Call *
-drpc_call_create(struct drpc *ctx, int32_t module, int32_t method)
+int
+drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
+		 Drpc__Call **callp)
 {
 	Drpc__Call *call;
 
-	if (ctx == NULL) {
+	if (ctx == NULL || callp == NULL) {
 		D_ERROR("Can't build a call from NULL context\n");
-		return NULL;
+		return -DER_INVAL;
 	}
+
+	*callp = NULL;
 
 	D_ALLOC_PTR(call);
 	if (call == NULL)
-		return NULL;
+		return -DER_NOMEM;
 
 	drpc__call__init(call);
 	call->sequence = ctx->sequence;
 	call->module = module;
 	call->method = method;
 
-	return call;
+	*callp = call;
+
+	return 0;
 }
 
 /**

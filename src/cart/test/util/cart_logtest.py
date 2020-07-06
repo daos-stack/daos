@@ -146,12 +146,6 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'notify_ready': ('req.uri'),
                     'get_tgt_rank': ('tgts')}
 
-EFILES = ['src/common/misc.c',
-          'src/common/prop.c',
-          'src/cart/crt_hg_proc.c',
-          'src/security/cli_security.c',
-          'src/client/dfuse/dfuse_core.c']
-
 mismatch_alloc_seen = {}
 mismatch_free_seen = {}
 
@@ -235,6 +229,8 @@ class LogTest():
         """Check a single log file for consistency"""
 
         for pid in self._li.get_pids():
+            if wf:
+                wf.reset_pending()
             self._check_pid_from_log_file(pid, abort_on_warning,
                                           show_memleaks=show_memleaks)
 
@@ -336,12 +332,9 @@ class LogTest():
                         show_line(line, 'NORMAL', 'invalid rpc remove')
                         err_count += 1
                 else:
-                    if desc not in active_desc and \
-                       desc not in active_rpcs and \
-                       have_debug and line.filename not in EFILES:
+                    if have_debug and desc not in active_desc and \
+                       desc not in active_rpcs:
 
-                        # There's something about this particular function
-                        # that makes it very slow at logging output.
                         show_line(line, 'NORMAL', 'inactive desc')
                         if line.descriptor in regions:
                             show_line(regions[line.descriptor], 'NORMAL',

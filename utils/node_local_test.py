@@ -152,8 +152,18 @@ class WarningsFactory():
            entry['severity'] != 'ERROR':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
+        if self.pending and self.pending[0][0].pid != line.pid:
+            self.reset_pending()
         self.pending.append((line, message))
         self._flush()
+
+    def reset_pending(self):
+        """Reset the pending list
+
+        Should be called before iterating on each new file, so erros
+        from previous files aren't attribured to new files.
+        """
+        self.pending = []
 
     def _flush(self):
         """Write the current list to the json file
