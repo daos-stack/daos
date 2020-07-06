@@ -28,7 +28,7 @@ if [ $# -ge 1 ] && [ -n "$1" ]; then
                   HOSTPWD=$PWD              \
                   SL_PREFIX=$SL_PREFIX      \
                   WITH_VALGRIND=$WITH_VALGRIND \
-                  $(cat "$mydir/run_test_main_node.sh")"
+                  $(cat "$mydir/test_main_node.sh")"
     fi
 else
     echo "normal"
@@ -40,5 +40,5 @@ else
                                          HOSTNAME=$HOSTNAME        \
                                          HOSTPWD=$PWD              \
                                          SL_PREFIX=$SL_PREFIX      \
-                                         $(cat "$mydir/run_test_main_node.sh")"
+                                         $(cat "$mydir/test_main_node.sh")"
 fi
