@@ -35,7 +35,7 @@
 int
 daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
 	    daos_size_t buf_size, const void *buf, daos_event_t *ev)
-
+{
 	daos_kv_put_t	*args;
 	tse_task_t	*task;
 	int		 rc;
