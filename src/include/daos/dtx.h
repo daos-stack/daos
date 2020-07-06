@@ -34,8 +34,8 @@
  */
 #define DTX_THRESHOLD_COUNT		(1 << 9)
 
-/* The time (in second) threshould for batched DTX commit. */
-#define DTX_COMMIT_THRESHOLD_AGE	60
+/* The time (in second) threshold for batched DTX commit. */
+#define DTX_COMMIT_THRESHOLD_AGE	10
 
 enum dtx_target_flags {
 	DTF_RDONLY			= (1 << 0),
