@@ -82,7 +82,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
 			      &request);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Couldn't allocate dRPC call " DF_RC " \n", DP_RC(rc));
+		D_ERROR("Couldn't allocate dRPC call " DF_RC "\n", DP_RC(rc));
 		drpc_close(agent_socket);
 		return rc;
 	}

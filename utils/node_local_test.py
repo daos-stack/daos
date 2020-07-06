@@ -160,7 +160,7 @@ class WarningsFactory():
     def reset_pending(self):
         """Reset the pending list
 
-        Should be called before iterating on each new file, so erros
+        Should be called before iterating on each new file, so errors
         from previous files aren't attribured to new files.
         """
         self.pending = []

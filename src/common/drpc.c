@@ -64,7 +64,7 @@ daos_drpc_free(void *allocater_data, void *pointer)
  * \param	ctx	Active dRPC context
  * \param	module	Module ID for the new call
  * \param	method	Method ID for the new call
- * \param	callp  	Newly allocated Drpc__Call
+ * \param	callp	Newly allocated Drpc__Call
  *
  * \returns	On success returns 0 otherwise returns negative error condition.
  */

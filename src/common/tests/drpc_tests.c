@@ -714,6 +714,7 @@ static void
 test_drpc_call_create_null_ctx(void **state)
 {
 	Drpc__Call	*call;
+
 	assert_int_equal(drpc_call_create(NULL, 1, 2, &call), -DER_INVAL);
 	assert_null(call);
 }
