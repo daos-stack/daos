@@ -435,7 +435,7 @@ umem_tx_abort(struct umem_instance *umm, int err)
 	if (umm->umm_ops->mo_tx_abort)
 		return umm->umm_ops->mo_tx_abort(umm, err);
 	else
-		return 0;
+		return err;
 }
 
 static inline int

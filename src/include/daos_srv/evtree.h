@@ -559,15 +559,15 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
  * specified epoch. The range must only cover whole extents.   If any
  * partial extents are in the range, the function fails.
  *
- * \param toh		[IN]	The tree open handle
- * \param ext		[IN]	The extent range
- * \param epoch		[IN]	High epoch
+ * \param[in] toh	The tree open handle
+ * \param[in] ext	The extent range
+ * \param[in] epr	Epoch range
  *
  * \return	0		Success
  *		-DER_NOPERM	Partial overlaps found
  */
 int evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
-		   daos_epoch_t epoch);
+		   const daos_epoch_range_t *epr);
 
 /**
  * Search the tree and return all visible versioned extents which overlap with

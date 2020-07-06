@@ -439,10 +439,11 @@ ts_delete_rect(void **state)
 static void
 ts_remove_rect(void **state)
 {
+	char			*arg;
 	struct evt_rect		 rect;
+	daos_epoch_range_t	 epr;
 	int			 rc;
 	bool			 should_pass;
-	char			*arg;
 
 	arg = tst_fn_val.optval;
 	if (arg == NULL)
@@ -455,7 +456,9 @@ ts_remove_rect(void **state)
 	D_PRINT("Remove all "DF_RECT" expect_pass=%s\n", DP_RECT(&rect),
 		should_pass ? "true" : "false");
 
-	rc = evt_remove_all(ts_toh, &rect.rc_ex, rect.rc_epc);
+	epr.epr_lo = 0;
+	epr.epr_hi = rect.rc_epc;
+	rc = evt_remove_all(ts_toh, &rect.rc_ex, &epr);
 
 	if (should_pass) {
 		if (rc != 0)
