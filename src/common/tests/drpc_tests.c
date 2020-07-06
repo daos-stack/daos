@@ -82,16 +82,20 @@ static void
 test_drpc_connect_returns_null_if_socket_fails(void **state)
 {
 	socket_return = -1; /* < 0 indicates failure */
+	struct drpc *drpc;
 
-	assert_null(drpc_connect(TEST_SOCK_ADDR));
+	assert_int_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
+	assert_null(drpc);
 }
 
 static void
 test_drpc_connect_returns_null_if_connect_fails(void **state)
 {
 	connect_return = -1; /* < 0 indicates failure */
+	struct drpc *drpc;
 
-	assert_null(drpc_connect(TEST_SOCK_ADDR));
+	assert_int_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
+	assert_null(drpc);
 
 	/* Closed the socket */
 	assert_int_equal(close_fd, socket_return);
@@ -100,7 +104,12 @@ test_drpc_connect_returns_null_if_connect_fails(void **state)
 static void
 test_drpc_connect_success(void **state)
 {
-	struct drpc *ctx = drpc_connect(TEST_SOCK_ADDR);
+	int rc;
+	struct drpc *ctx;
+
+	rc = drpc_connect(TEST_SOCK_ADDR, &ctx);
+	assert_int_equal(rc, 0);
+	assert_non_null(ctx);
 
 	/* created socket with correct input params */
 	assert_int_equal(socket_family, AF_UNIX);
