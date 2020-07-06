@@ -270,7 +270,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	int			rc = 0;
 
 	opc = opc_get(rw_args->rpc->cr_opc);
-	D_DEBUG(DB_TRACE, "rpc %p opc:%d completed, dt_result %d.\n",
+	D_DEBUG(DB_IO, "rpc %p opc:%d completed, dt_result %d.\n",
 		rw_args->rpc, opc, ret);
 	if (opc == DAOS_OBJ_RPC_FETCH &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) {
@@ -303,7 +303,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	rc = obj_reply_get_status(rw_args->rpc);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS) {
-			D_DEBUG(DB_TRACE, "rpc %p opc %d to rank %d tag %d may "
+			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may "
 				"need retry: "DF_RC"\n", rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
@@ -570,7 +570,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					 0 : nr;
 	orw->orw_iod_array.oia_offs = args->offs;
 
-	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
+	D_DEBUG(DB_IO, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
 		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
 		tgt_ep.ep_tag, auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
