@@ -22,11 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-#from command_utils_base import \
-#    BasicParameter, YamlParameters, TransportCredentials
 from command_utils_base import \
-    BasicParameter, LogParameter, YamlParameters, TransportCredentials, \
-    EnvironmentVariables
+    BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
 
 class DmgTransportCredentials(TransportCredentials):

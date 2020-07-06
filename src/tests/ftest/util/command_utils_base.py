@@ -491,7 +491,6 @@ class TransportCredentials(YamlParameters):
         default_insecure = default_insecure.lower() == "true"
         self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
         self.allow_insecure = BasicParameter(None, default_insecure)
-        print("[DEBUG] default_insecure= ", default_insecure)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -514,11 +513,11 @@ class TransportCredentials(YamlParameters):
         """Get certificate data by name_list.
 
         Args:
-            name_list (list): name list.
+            name_list (list): list of certificate attribute names.
 
         Returns:
             data (dict): a dictionary of parameter directory name keys and
-            value.
+                value.
 
         """
         data = {}
@@ -533,11 +532,10 @@ class TransportCredentials(YamlParameters):
         return data
 
     def copy_certificates(self, source, hosts):
-        """ copy certificates file to the dest hosts
-
+        """Copy certificates files from the source to the destination hosts.
         Args:
             source (str): source of the certificate files.
-            hosts (list of string): list of the destination hosts.
+            hosts (list): list of the destination hosts.
 
         """
         data = self._get_certificate_data(
@@ -553,9 +551,6 @@ class TransportCredentials(YamlParameters):
                     "clush -S -v -w {} --copy {} --dest {}".format(
                         ",".join(hosts), src_file, dst_file))
             # debug to list copy of cert files
-            print(
-                "[DEBUG] listing of certificate files in {} on {}".format(
-                    name, hosts))
             run_command(
                 "clush -S -v -w {} /usr/bin/ls -la {}".format(
                     ",".join(hosts), name))

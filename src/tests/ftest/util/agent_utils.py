@@ -171,7 +171,6 @@ class DaosAgentManager(SubprocessManager):
         # daos_agent processes that will be started by the command
         self.manager.job.pattern_count = len(self._hosts)
 
-
     def start(self):
         """Start the agent through the job manager."""
         self.log.info(

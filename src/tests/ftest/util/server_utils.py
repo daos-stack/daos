@@ -158,20 +158,6 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
-
-        Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
-        """
-        return self.yaml.get_interface_envs(index)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
@@ -339,21 +325,6 @@ class DaosServerManager(SubprocessManager):
         super(DaosServerManager, self).get_params(test)
         # Get the values for the dmg parameters
         self.dmg.get_params(test)
-
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
-
-        Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
-        """
-        return self.manager.job.get_interface_envs(index)
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.

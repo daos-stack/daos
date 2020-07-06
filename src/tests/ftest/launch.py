@@ -216,7 +216,7 @@ def set_test_environment(args):
         os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
-    # Parse daos insecure mode
+    # Assign the default value for transport configuration insecure mode
     os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
 
     # Check the PYTHONPATH env definition
@@ -714,18 +714,11 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
 def generate_certs(args):
     """Generate the certificates for the test."""
-    subprocess.call(
-        ["/usr/bin/rm", "-rf",
-         "{}/certs".format(os.environ["DAOS_TEST_LOG_DIR"])])
+    daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
+    certs_dir = os.path.join(daos_test_log_dir, "certs")
+    subprocess.call(["/usr/bin/rm", "-rf", certs_dir])
     subprocess.call(["../../../../lib64/daos/certgen/gen_certificates.sh"])
-    subprocess.call(
-        ["/usr/bin/mv", "daosCA/certs",
-         "{}/".format(os.environ["DAOS_TEST_LOG_DIR"])])
-    spawn_commands(args.test_servers.split(","), "ls -la {}".format(
-        os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "certs")))
-    subprocess.call(
-        ["/usr/bin/ls", "-la", os.path.join(
-            os.environ["DAOS_TEST_LOG_DIR"], "certs")])
+    subprocess.call(["/usr/bin/mv", "daosCA/certs", daos_test_log_dir])
 
 def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
@@ -1028,8 +1021,6 @@ def install_debuginfos():
     install_pkgs = [{'name': 'gdb'},
                     {'name': 'python-magic'}]
 
-    cmds = []
-
     # -debuginfo packages that don't get installed with debuginfo-install
     for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
         debug_pkg = resolve_debuginfo(pkg)
@@ -1040,7 +1031,7 @@ def install_debuginfos():
     # installation
     path = os.path.sep + os.path.join('usr', 'share', 'spdk', 'include')
     if os.path.islink(path):
-        cmds.append(["sudo", "rm", "-f", path])
+        cmds = [["sudo", "rm", "-f", path]]
 
     if USE_DEBUGINFO_INSTALL:
         yum_args = [
