@@ -32,6 +32,7 @@
 #include <daos/common.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/srv_obj_ec.h>
 #include "obj_ec.h"
 #include "obj_internal.h"
 
@@ -53,11 +54,15 @@ struct ec_agg_set {
 	unsigned int		as_count;
 };
 
+/* Parity extent for the stripe undergoing aggregation.
+ */
 struct ec_agg_par_extent {
 	daos_recx_t	ape_recx;
 	daos_epoch_t	ape_epoch;
 };
 
+/* Represents the current stripe undergoing aggregation.
+ */
 struct ec_agg_stripe {
 	daos_off_t	as_stripenum;
 	daos_epoch_t	as_hi_epoch;
@@ -66,6 +71,9 @@ struct ec_agg_stripe {
 	unsigned int	as_extent_cnt;
 };
 
+/* Aggregation state for an object. (may need to restructure if
+ * list of these is built from committed DTX table)
+ */
 struct ec_agg_entry {
 	d_list_t		 ae_link;
 	daos_unit_oid_t		 ae_oid;
@@ -80,8 +88,8 @@ struct ec_agg_entry {
 	daos_size_t		 ae_rsize;
 	struct ec_agg_stripe	 ae_cur_stripe;
 	struct ec_agg_par_extent ae_par_extent;
-//	ABT_eventual		 ae_eventual;
-//	int			 ae_offload_rc;
+	ABT_eventual		 ae_eventual;
+	int			 ae_offload_rc;
 };
 
 struct ec_agg_extent {
@@ -323,6 +331,9 @@ out:
 	return rc;
 }
 
+/* Prepares the SGL used for VOS I/O (update needed to use library functions
+ * (e.g., d_iov_set).
+ */
 static int
 agg_prep_sgl(struct ec_agg_entry *entry)
 {
@@ -368,6 +379,8 @@ out:
 
 }
 
+/* Fetches the full data stripe (called when replicas form a full stripe).
+ */
 static int
 agg_fetch_data_stripe(struct ec_agg_entry *entry)
 {
@@ -401,6 +414,8 @@ out:
 
 }
 
+/* Encodes a full stripe. Called when replicas form a full stripe.
+ */
 static void
 agg_encode_full_stripe(void *arg)
 {
@@ -427,6 +442,9 @@ agg_encode_full_stripe(void *arg)
 	ec_encode_data(cell_bytes, k, p, codec->ec_gftbls, data, parity_bufs);
 }
 
+/* Driver function for full_stripe encode. Fetches the data and then invokes
+ * second function to encode the parity.
+ */
 static int
 agg_encode_local_parity(struct ec_agg_entry *entry)
 {
@@ -441,6 +459,9 @@ out:
 	return rc;
 }
 
+/* True if all extents within the stripe are at a higher epoch than
+ * the parity for the stripe.
+ */
 static bool
 agg_data_is_newer(struct ec_agg_entry *entry)
 {
@@ -454,6 +475,10 @@ agg_data_is_newer(struct ec_agg_entry *entry)
 	return true;
 }
 
+/* Determines if the replicas present for the current stripe of object entry
+ * constitute a full stripe. If parity exists for the the stripe, the replicas
+ * making up the full stripe must be a later epoch that the parity.
+ */
 static bool
 agg_stripe_is_filled(struct ec_agg_entry *entry, bool has_parity)
 {
@@ -471,6 +496,9 @@ agg_stripe_is_filled(struct ec_agg_entry *entry, bool has_parity)
 	return rc;
 }
 
+/* Writes updated parity to VOS, and removes replicas fully contained
+ * in the processed stripe.
+ */
 static int
 agg_update_vos(struct ec_agg_entry *entry)
 {
@@ -516,7 +544,19 @@ agg_update_vos(struct ec_agg_entry *entry)
 }
 
 static int
-agg_process_stripe(struct ec_agg_entry *entry, bool *mark_yield)
+agg_process_partial_stripe(struct ec_agg_entry *entry)
+{
+	//unsigned int		len = entry->ae_oca->u.ec.e_len;
+	//unsigned int		k = entry->ae_oca->u.ec.e_k;
+
+	return 0;
+}
+
+/* Process the prior stripe. Invoked when the iterator has moved to the first
+ * extent in the subsequent.
+ */
+static int
+agg_process_stripe(struct ec_agg_entry *entry)
 {
 	vos_iter_param_t	iter_param = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
@@ -549,20 +589,22 @@ agg_process_stripe(struct ec_agg_entry *entry, bool *mark_yield)
 
 	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch &&
 			entry->ae_par_extent.ape_epoch != ~(0ULL)) {
-		D_PRINT("parity newer than data; nothing to do\n");
+		/* Parity newer than data; nothing to do. */
 		goto out;
 	}
 
 	if ((entry->ae_par_extent.ape_epoch == ~(0ULL)
 				 && agg_stripe_is_filled(entry, false)) ||
 					agg_stripe_is_filled(entry, true)) {
+		/* Replicas constitute a full stripe. */
 		rc = agg_encode_local_parity(entry);
-		//*mark_yield = true;
 		goto out;
 	if (entry->ae_par_extent.ape_epoch == ~(0ULL))
 		update_vos = false;
 		goto out;
 	}
+	/* Parity, some later replicas, not full stripe. */
+	rc = agg_process_partial_stripe(entry);
 out:
 	if (update_vos)
 		rc = agg_update_vos(entry);
@@ -591,13 +633,12 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		daos_handle_t ih, unsigned int *acts)
 {
 	struct ec_agg_extent	*extent = NULL;
-	bool			 mark_yield = false;
 	int			 rc = 0;
 
 	if (agg_stripenum(agg_entry, entry->ie_recx.rx_idx) !=
 			agg_entry->ae_cur_stripe.as_stripenum) {
 		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL)
-			agg_process_stripe(agg_entry, &mark_yield);
+			agg_process_stripe(agg_entry);
 		agg_entry->ae_cur_stripe.as_stripenum =
 			agg_stripenum(agg_entry,entry->ie_recx.rx_idx);
 		D_PRINT("stripenum: %lu\n",
@@ -626,8 +667,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		agg_entry->ae_oid.id_shard);
 out:
-	if (mark_yield)
-		*acts |= VOS_ITER_CB_YIELD;
 	return rc;
 }
 
@@ -645,6 +684,8 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
+/* Pre-subtree iteration call back for per-object iterator
+ */
 static int
 agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_type_t type, vos_iter_param_t *param,
@@ -670,6 +711,8 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
+/* Post iteration call back for per-object iterator
+ */
 static int
 agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_type_t type, vos_iter_param_t *param,
@@ -687,13 +730,14 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	case VOS_ITER_RECX:
 		break;
 	default:
-		D_PRINT("post type: %u\n", type);
 		break;
 	}
 
 	return rc;
 }
 
+/* Configures and invokes the per object iterator.
+ */
 static int
 agg_iterate(struct ec_agg_entry *agg_entry, daos_handle_t coh)
 {
@@ -718,6 +762,9 @@ agg_iterate(struct ec_agg_entry *agg_entry, daos_handle_t coh)
 
 }
 
+/* Processes commited transaction table and invokes per-object iterator on
+ * objects meeting the criteria: object is EC and this target is leader.
+ */
 static int
 agg_iterate_committed(struct ds_cont_child *cont, daos_epoch_t start_epoch)
 {
@@ -787,6 +834,9 @@ out:
 		return start_epoch;
 }
 
+/* Configures and invokes nested iterator. Called from full-VOS object
+ * iteration.
+ */
 static int
 agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 		    struct ec_agg_param *agg_param)
@@ -812,6 +862,8 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 	return rc;
 }
 
+/* Call-back function for full VOS iteration outer iterator.
+ */
 static int
 agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_type_t type, vos_iter_param_t *param,
@@ -843,6 +895,10 @@ out:
 	return rc;
 }
 
+/* Iterates entire VOS. Invokes nested iterator to recurse through trees
+ * for all objects meeting the criteria: object is EC, and this target is
+ * leader.
+ */
 static int
 agg_iterate_all(struct ds_cont_child *cont)
 {
@@ -865,6 +921,9 @@ agg_iterate_all(struct ds_cont_child *cont)
 
 }
 
+/* Public API call. Currently invoked from aggregation ULT
+ * (container/srv_target.c).
+ */
 int
 ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_t start_epoch,
 		    bool process_committed)
