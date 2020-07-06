@@ -178,8 +178,8 @@ out:
 	return rc;
 }
 
-static Drpc__Call *
-new_validation_request(struct drpc *ctx, d_iov_t *creds)
+static int
+new_validation_request(struct drpc *ctx, d_iov_t *creds, Drpc__Call **callp)
 {
 	uint8_t			*body;
 	size_t			len;
@@ -188,18 +188,20 @@ new_validation_request(struct drpc *ctx, d_iov_t *creds)
 	Auth__Credential	*cred;
 	int			rc;
 
+	*callp = NULL;
+
 	rc = drpc_call_create(ctx,
 			      DRPC_MODULE_SEC,
 			      DRPC_METHOD_SEC_VALIDATE_CREDS,
 			      &request);
-	if (request == NULL)
-		return NULL;
+	if (rc != DER_SUCCESS)
+		return rc;
 
 	cred = auth__credential__unpack(NULL, creds->iov_buf_len,
 					creds->iov_buf);
 	if (cred == NULL) {
 		drpc_call_free(request);
-		return NULL;
+		return -DER_NOMEM;
 	}
 	req.cred = cred;
 
@@ -208,14 +210,16 @@ new_validation_request(struct drpc *ctx, d_iov_t *creds)
 	if (body == NULL) {
 		drpc_call_free(request);
 		auth__credential__free_unpacked(cred, NULL);
-		return NULL;
+		return -DER_NOMEM;
 	}
 	auth__validate_cred_req__pack(&req, body);
 	request->body.len = len;
 	request->body.data = body;
 
 	auth__credential__free_unpacked(cred, NULL);
-	return request;
+
+	*callp = request;
+	return DER_SUCCESS;
 }
 
 static int
@@ -231,10 +235,10 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 		return rc;
 	}
 
-	request = new_validation_request(server_socket, creds);
-	if (request == NULL) {
+	rc  = new_validation_request(server_socket, creds, &request);
+	if (rc != DER_SUCCESS) {
 		drpc_close(server_socket);
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	rc = drpc_call(server_socket, R_SYNC, request, response);
