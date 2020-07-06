@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/* This generates a summary of struct sizes to be used by vos_estimate.py
+/* This generates a summary of struct sizes to be used by vos_size.py
  * to generate metadata overhead estimates
  */
 #define D_LOGFAC	DD_FAC(tests)

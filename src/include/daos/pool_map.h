@@ -58,6 +58,8 @@ typedef enum pool_comp_state {
 	PO_COMP_ST_DOWN		= 1 << 3,
 	/** component is dead, its data has already been rebuilt */
 	PO_COMP_ST_DOWNOUT	= 1 << 4,
+	/** component is currently being drained and rebuilt elsewhere */
+	PO_COMP_ST_DRAIN	= 1 << 5,
 } pool_comp_state_t;
 
 /** parent class of all all pool components: target, domain */
@@ -267,6 +269,10 @@ pool_component_unavail(struct pool_component *comp, bool for_reint)
 
 	/* If it's down or down-out it is definitely unavailable */
 	if ((status == PO_COMP_ST_DOWN) || (status == PO_COMP_ST_DOWNOUT))
+		return true;
+
+	/* Targets being drained should not be used */
+	if (status == PO_COMP_ST_DRAIN)
 		return true;
 
 	/*
