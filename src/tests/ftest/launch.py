@@ -712,7 +712,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     # Return the untouched or modified yaml file
     return yaml_file
 
-def generate_certs(args):
+def generate_certs():
     """Generate the certificates for the test."""
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
     certs_dir = os.path.join(daos_test_log_dir, "certs")
@@ -1134,7 +1134,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             pattern (str): the fnmatch/glob pattern of core files to
                            run gdb on
         """
-        import magic # pylint: disable=import-outside-toplevel
+        import magic # pylint: disable=import-error
 
         for corefile in cores:
             if not fnmatch.fnmatch(corefile, pattern):
@@ -1346,7 +1346,7 @@ def main():
         exit(0)
 
     # Generate certificate files
-    generate_certs(args)
+    generate_certs()
 
     # Run all the tests
     status = run_tests(test_files, tag_filter, args)

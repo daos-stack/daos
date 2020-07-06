@@ -900,4 +900,3 @@ class TestWithServers(TestWithoutServers):
             self.server_managers[-1].get_config_value("filename"))
         self.server_managers[-1].verify_socket_directory(getuser())
         self.server_managers[-1].start()
-

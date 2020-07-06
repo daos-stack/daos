@@ -24,8 +24,7 @@
 import os
 
 from command_utils_base import \
-    BasicParameter, LogParameter, YamlParameters, TransportCredentials, \
-    EnvironmentVariables
+    BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
 
 class DaosServerTransportCredentials(TransportCredentials):
