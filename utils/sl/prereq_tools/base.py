@@ -38,7 +38,6 @@ from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
 from SCons.Variables import ListVariable
 from SCons.Variables import BoolVariable
-from SCons.Subst import Literal
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import SetOption
@@ -597,9 +596,9 @@ class PreReqComponent():
         if config_file is None:
             config_file = GetOption('build_config')
 
-        self.__env["LDFLAGS"] = "-Wl,-rpath=XORIGIN"
-        self.__env["ORIGIN"] = Literal(r"\$$ORIGIN")
         RUNNER.initialize(self.__env)
+
+        self._setup_user_prefix()
 
         self._setup_compiler(warning_level)
         self.__top_dir = Dir('#').abspath
@@ -710,6 +709,11 @@ class PreReqComponent():
         return True
 
 # pylint: enable=too-many-branches
+    def _setup_user_prefix(self):
+        """setup ALT_PREFIX option"""
+        self.add_opts(('ALT_PREFIX',
+                       'Specifies %s separated list of alternative paths to add'
+                       % os.pathsep, None))
 
     def _setup_build_type(self):
         """set build type"""
@@ -1063,18 +1067,40 @@ class PreReqComponent():
         """Get the build directory for external components"""
         return self.__build_dir
 
-    def get_prebuilt_path(self, name):
+    def get_prebuilt_path(self, comp, name):
         """Get the path for a prebuilt component"""
         if name in self.__prebuilt_path:
             return self.__prebuilt_path[name]
 
-        # check the global prebuilt area
-        prebuilt = os.path.join(self.prereq_prefix, name)
-        if not os.path.exists(prebuilt):
-            prebuilt = None
+        prebuilt_paths = self.__env.get("ALT_PREFIX")
+        if prebuilt_paths is None:
+            paths = []
+        else:
+            paths = prebuilt_paths.split(os.pathsep)
 
-        self.__prebuilt_path[name] = prebuilt
-        return prebuilt
+        for path in paths:
+            ipath = os.path.join(path, "include")
+            if not os.path.exists(ipath):
+                ipath = None
+            lpath = None
+            for lib in ['lib64', 'lib']:
+                lpath = os.path.join(path, lib)
+                if not os.path.exists(lpath):
+                    lpath = None
+            if ipath is None and lpath is None:
+                continue
+            env = self.__env.Clone()
+            if ipath:
+                env.AppendUnique(CPPPATH=[ipath])
+            if lpath:
+                env.AppendUnique(LIBPATH=[lpath])
+            if not comp.has_missing_targets(env):
+                self.__prebuilt_path[name] = path
+                return path
+
+        self.__prebuilt_path[name] = None
+
+        return None
 
     def get_defined_components(self):
         """Get a list of all defined component names"""
@@ -1083,6 +1109,10 @@ class PreReqComponent():
     def get_defined(self):
         """Get a dictionary of defined components"""
         return copy.copy(self.__defined)
+
+    def get_component(self, name):
+        """Get a component definition"""
+        return self.__defined[name]
 
     def save_component_prefix(self, var, value):
         """Save the component prefix in the environment and
@@ -1407,7 +1437,7 @@ class _Component():
         if not self.retriever:
             self.prebuilt_path = "/usr"
         else:
-            self.prebuilt_path = self.prereqs.get_prebuilt_path(self.name)
+            self.prebuilt_path = self.prereqs.get_prebuilt_path(self, self.name)
 
         (self.component_prefix, self.prefix) = \
             self.prereqs.get_prefixes(self.name, self.prebuilt_path)
@@ -1514,6 +1544,8 @@ class _Component():
             has_changes = False
         if self.name in self.prereqs.installed:
             has_changes = False
+        if self.component_prefix and os.path.exists(self.component_prefix):
+            has_changes = False
 
         return has_changes
 
@@ -1544,7 +1576,16 @@ class _Component():
         for prereq in self.requires:
             rootpath = os.path.join(comp_path, '..', prereq)
             if not os.path.exists(rootpath):
+                comp = self.prereqs.get_component(prereq)
+                subpath = comp.component_prefix
+                if subpath and not subpath.startswith("/usr"):
+                    for libdir in ['lib64', 'lib']:
+                        lpath = os.path.join(subpath, libdir)
+                        if not os.path.exists(lpath):
+                            continue
+                        rpath.append(lpath)
                 continue
+
             for libdir in ['lib64', 'lib']:
                 path = os.path.join(rootpath, libdir)
                 if not os.path.exists(path):
@@ -1607,7 +1648,7 @@ class _Component():
                 raise MissingSystemLibs(self.name)
 
             changes = True
-            if has_changes and self.out_of_src_build:
+            if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)
             if not RUNNER.run_commands(self.build_commands,
                                        subdir=self.build_path):
