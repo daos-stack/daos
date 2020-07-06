@@ -123,110 +123,6 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
 
-def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
-                          exit 0
-                      fi
-                      nodelist=(${NODELIST//,/ })
-                      src/tests/ftest/config_file_gen.py -n ${nodelist[0]} -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
-                      src/tests/ftest/config_file_gen.py -n $nodelist -d /tmp/dmg.yml
-                      scp -i ci_key /tmp/daos_agent.yml jenkins@${nodelist[0]}:/tmp
-                      scp -i ci_key /tmp/dmg.yml jenkins@${nodelist[0]}:/tmp
-                      scp -i ci_key /tmp/daos_server.yml jenkins@${nodelist[0]}:/tmp
-                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
-
-def rpm_test_daos_test = '''me=\\\$(whoami)
-                            for dir in server agent; do
-                                sudo mkdir /var/run/daos_\\\$dir
-                                sudo chmod 0755 /var/run/daos_\\\$dir
-                                sudo chown \\\$me:\\\$me /var/run/daos_\\\$dir
-                            done
-                            sudo mkdir /tmp/daos_sockets
-                            sudo chmod 0755 /tmp/daos_sockets
-                            sudo chown \\\$me:\\\$me /tmp/daos_sockets
-                            sudo mkdir -p /mnt/daos
-                            sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
-                            sudo cp /tmp/daos_server.yml /etc/daos/daos_server.yml
-                            sudo cp /tmp/daos_agent.yml /etc/daos/daos_agent.yml
-                            sudo cp /tmp/dmg.yml /etc/daos/daos.yml
-                            cat /etc/daos/daos_server.yml
-                            cat /etc/daos/daos_agent.yml
-                            cat /etc/daos/daos.yml
-                            module load mpi/openmpi3-x86_64
-                            coproc daos_server --debug start -t 1 --recreate-superblocks
-                            trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
-                            line=\"\"
-                            while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
-                                read line <&\\\${COPROC[0]}
-                                echo \"Server stdout: \\\$line\"
-                            done
-                            echo \"Server started!\"
-                            daos_agent &
-                            AGENT_PID=\\\$!
-                            trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
-                            OFI_INTERFACE=eth0 daos_test -m'''
-
-def rpm_scan_pre = '''set -ex
-                      lmd_tarball='maldetect-current.tar.gz'
-                      if test -e "${lmd_tarball}"; then
-                        zflag="-z ${lmd_tarball}"
-                      else
-                        zflag=
-                      fi
-                      curl http://rfxn.com/downloads/${lmd_tarball} \
-                        ${zflag} --silent --show-error --fail -o ${lmd_tarball}
-                      nodelist=(${NODELIST//,/ })
-                      scp -i ci_key ${lmd_tarball} \
-                        jenkins@${nodelist[0]}:/var/tmp
-                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
-
-def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
-                       lmd_tarball=\\\"maldetect-current.tar.gz\\\"
-                       rm -rf /var/tmp/\\\${lmd_src}
-                       mkdir -p /var/tmp/\\\${lmd_src}
-                       tar -C /var/tmp/\\\${lmd_src} --strip-components=1 \
-                         -xf /var/tmp/\\\${lmd_tarball}
-                       pushd /var/tmp/\\\${lmd_src}
-                         sudo ./install.sh
-                         sudo ln -s /usr/local/maldetect/ /bin/maldet
-                       popd
-                       sudo freshclam
-                       rm -f /var/tmp/clamscan.out
-                       rm /var/tmp/\\\${lmd_tarball}
-                       rm -rf /var/tmp/\\\${lmd_src}
-                       sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
-                                -d /usr/local/maldetect/sigs/rfxn.hdb -r \
-                                --exclude-dir=/usr/local/maldetect \
-                                --exclude-dir=/usr/share/clamav \
-                                --exclude-dir=/var/lib/clamav \
-                                --exclude-dir=/sys \
-                                --exclude-dir=/proc \
-                                --exclude-dir=/dev \
-                                --infected / | tee /var/tmp/clamscan.out
-                       rm -f /var/tmp/maldetect.xml
-                       if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
-                         cat << EOF_GOOD > /var/tmp/maldetect.xml
-<testsuite skip=\\\"0\\\" failures=\\\"0\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
-  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\"/>
-</testsuite>
-EOF_GOOD
-                       else
-                         cat << EOF_BAD > /var/tmp/maldetect.xml
-<testsuite skip=\\\"0\\\" failures=\\\"1\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
-  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\">
-    <failure message=\\\"Malware Detected\\\" type=\\\"error\\\">
-      <![CDATA[ \\\"\\\$(cat /var/tmp/clamscan.out)\\\" ]]>
-    </failure>
-  </testcase>
-</testsuite>
-EOF_BAD
-                       fi'''
-
-def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
-                       scp -i ci_key \
-                         jenkins@${nodelist[0]}:/var/tmp/maldetect.xml \
-                         ${WORKSPACE}/maldetect.xml'''
-
-
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (!env.BRANCH_NAME.startsWith("weekly-testing") &&
@@ -297,7 +193,6 @@ pipeline {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
-        UID = getuid()
         BUILDARGS = docker_build_args()
         BUILDARGS_QB_CHECK = docker_build_args(qb: quickbuild())
         BUILDARGS_QB_TRUE = docker_build_args(qb: true)
@@ -389,7 +284,7 @@ pipeline {
                       beforeAgent true
                       expression {
                           cachedCommitPragma(pragma: 'Skip-python-bandit',
-                                       def_val: 'true') != 'true'
+                                             def_val: 'true') != 'true'
                       }
                     }
                     agent {
@@ -401,22 +296,14 @@ pipeline {
                         }
                     }
                     steps {
-                        githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                     description: env.STAGE_NAME,
-                                     context: "build" + "/" + env.STAGE_NAME,
-                                     status: "PENDING"
-                        checkoutScm withSubmodules: true
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: '''bandit --format xml -o bandit.xml \
-                                                      -r $(git ls-tree --name-only HEAD) \
-                                                      -c src/tests/ftest/security/bandit.config''',
-                                    junit_files: "bandit.xml",
-                                    ignore_failure: true
-                        }
+                        pythonBanditCheck()
                     }
                     post {
                         always {
-                            junit 'bandit.xml'
+                            // Bandit will have empty results if it does not
+                            // find any issues.
+                            junit testResults: 'bandit.xml',
+                                  allowEmptyResults: true
                         }
                     }
                 } // stage('Python Bandit check')
@@ -453,45 +340,23 @@ pipeline {
                         }
                     }
                     steps {
-                        githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                      description: env.STAGE_NAME,
-                                      context: "build" + "/" + env.STAGE_NAME,
-                                      status: "PENDING"
-                        checkoutScm withSubmodules: true
-                        catchError(stageResult: 'UNSTABLE',
-                                   buildResult: 'SUCCESS') {
-                            sh label: env.STAGE_NAME,
-                               script: 'ci/rpm_build.sh'
-                        }
+                        buildRpm()
                     }
                     post {
                         success {
-                            sh label: "Build Log",
-                               script: 'ci/rpm_build_success.sh'
-                            stash name: 'centos7-rpm-version',
-                                  includes: 'centos7-rpm-version'
-                            publishToRepository product: 'daos',
-                                                format: 'yum',
-                                                maturity: 'stable',
-                                                tech: 'el-7',
-                                                repo_dir: 'artifacts/centos7/'
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "SUCCESS"
+                            buildRpmPost condition: 'success'
                         }
                         unstable {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE", ignore_failure: true
+                            buildRpmPost condition: 'unstable'
                         }
                         failure {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE", ignore_failure: true
+                            buildRpmPost condition: 'failure'
                         }
                         unsuccessful {
-                            sh label: "Build Log",
-                               script: 'ci/rpm_build_unsuccessful.sh'
+                            buildRpmPost condition: 'unsuccessful'
                         }
                         cleanup {
-                            archiveArtifacts artifacts: 'artifacts/centos7/**'
+                            buildRpmPost condition: 'cleanup'
                         }
                     }
                 }
@@ -502,6 +367,7 @@ pipeline {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET',
                                               value: 'weekly-testing' }
+                            expression { ! skip_stage('build-leap15-rpm') }
                         }
                     }
                     agent {
@@ -515,49 +381,33 @@ pipeline {
                         }
                     }
                     steps {
-                        githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                      description: env.STAGE_NAME,
-                                      context: "build" + "/" + env.STAGE_NAME,
-                                      status: "PENDING"
-                        checkoutScm withSubmodules: true
-                        catchError(stageResult: 'UNSTABLE',
-                                   buildResult: 'SUCCESS') {
-                            sh label: env.STAGE_NAME,
-                               script: 'ci/rpm_build.sh'
-                        }
+                        buildRpm unstable: true
                     }
                     post {
                         success {
-                            sh label: "Build Log",
-                               script: 'ci/rpm_build_success.sh'
-                            stash name: 'leap15-rpm-version',
-                              includes: 'leap15-rpm-version'
-                            publishToRepository product: 'daos',
-                                                format: 'yum',
-                                                maturity: 'stable',
-                                                tech: 'leap-15',
-                                                repo_dir: 'artifacts/leap15/'
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "SUCCESS"
+                            buildRpmPost condition: 'success'
                         }
                         unstable {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
+                            buildRpmPost condition: 'unstable'
                         }
                         failure {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                            buildRpmPost condition: 'failure'
                         }
                         unsuccessful {
-                            sh label: "Build Log",
-                               script: 'ci/rpm_build_unsuccessful.sh'
+                            buildRpmPost condition: 'unsuccessful'
                         }
                         cleanup {
-                            archiveArtifacts artifacts: 'artifacts/leap15/**'
+                            buildRpmPost condition: 'cleanup'
                         }
                     }
                 }
                 stage('Build on CentOS 7') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('build-centos7-gcc') }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
@@ -573,6 +423,7 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'centos7-gcc-build.log',
                                    failure_artifacts: 'config.log-centos7-gcc'
                         stash name: 'centos7-gcc-install',
                               includes: 'install/**'
@@ -618,7 +469,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-gcc-centos7",
-                                             tools: [ gcc4(), cppCheck() ],
+                                             tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
+                                                      cppCheck(pattern: 'centos7-gcc-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -655,8 +507,11 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                        sconsBuild clean: "_build.external${arch}",
+                                   prebuild: 'rm -rf bandit.xml',
+                                   COMPILER: "clang",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'centos7-clang-build.log',
                                    failure_artifacts: 'config.log-centos7-clang'
                     }
                     post {
@@ -665,7 +520,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-centos7-clang",
-                                             tools: [ clang(), cppCheck() ],
+                                             tools: [ clang(pattern: 'centos7-clang-build.log'),
+                                                      cppCheck(pattern: 'centos7-clang-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -701,7 +557,9 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   prebuild: 'rm -rf bandit.xml',
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'ubuntu20.04-gcc-build.log',
                                    failure_artifacts: 'config.log-ubuntu20.04-gcc'
                     }
                     post {
@@ -710,7 +568,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-ubuntu20",
-                                             tools: [ gcc4(), cppCheck() ],
+                                             tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
+                                                      cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -734,6 +593,7 @@ pipeline {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
                             expression { ! quickbuild() }
+                            expression { ! skip_stage('build-ubuntu-clang') }
                         }
                     }
                     agent {
@@ -746,8 +606,11 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                        sconsBuild clean: "_build.external${arch}",
+                                   prebuild: 'rm -rf bandit.xml',
+                                   COMPILER: "clang",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'ubuntu20.04-clang-build.log',
                                    failure_artifacts: 'config.log-ubuntu20.04-clag'
                     }
                     post {
@@ -756,7 +619,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-ubuntu20-clang",
-                                             tools: [ clang(), cppCheck() ],
+                                             tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
+                                                      cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -792,7 +656,9 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}",
+                                   prebuild: 'rm -rf bandit.xml',
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'leap15-gcc-build.log',
                                    failure_artifacts: 'config.log-leap15-gcc'
                     }
                     post {
@@ -801,7 +667,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-gcc-leap15",
-                                             tools: [ gcc4(), cppCheck() ],
+                                             tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
+                                                      cppCheck(pattern: 'leap15-gcc-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -836,8 +703,10 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
+                        sconsBuild clean: "_build.external${arch}",
+                                   COMPILER: "clang",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'leap15-clang-build.log',
                                    failure_artifacts: 'config.log-leap15-clang'
                     }
                     post {
@@ -846,7 +715,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-leap15-clang",
-                                             tools: [ clang(), cppCheck() ],
+                                             tools: [ clang(pattern: 'leap15-clang-build.log'),
+                                                      cppCheck(pattern: 'leap15-clang-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -870,6 +740,7 @@ pipeline {
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
                             expression { ! quickbuild() }
+                            expression { ! skip_stage('build-leap15-icc') }
                         }
                     }
                     agent {
@@ -887,6 +758,7 @@ pipeline {
                                    prebuild: 'rm -rf src/rdb/raft/CLinkedListQueue',
                                    COMPILER: "icc",
                                    parallel_build: parallel_build(),
+                                   log_to_file: 'leap15-icc-build.log',
                                    TARGET_PREFIX: 'install/opt',
                                    failure_artifacts: 'config.log-leap15-icc'
                     }
@@ -896,7 +768,8 @@ pipeline {
                                 recordIssues enabledForFailure: true,
                                              aggregatingResults: true,
                                              id: "analysis-leap15-intelc",
-                                             tools: [ intel(), cppCheck() ],
+                                             tools: [ intel(pattern: 'leap15-icc-build.log'),
+                                                      cppCheck(pattern: 'leap15-icc-build.log') ],
                                              filters: [excludeFile('.*\\/_build\\.external\\/.*'),
                                                        excludeFile('_build\\.external\\/.*')]
                             }
@@ -968,7 +841,7 @@ pipeline {
                                            'centos7-gcc-build-vars' ],
                                 script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
                                         "NODELIST=${env.NODELIST} " +
-                                        'ci/run_test_main.sh',
+                                        'ci/unit/test_main.sh',
                                 junit_files: 'test_results/*.xml'
                         }
                     }
@@ -978,7 +851,7 @@ pipeline {
                             // label is at the end
                             // sh label: "Collect artifacts and tear down",
                             //   script '''set -ex
-                            sh script: 'ci/run_test_post_always.sh',
+                            sh script: 'ci/unit/test_post_always.sh',
                                label: "Collect artifacts and tear down"
                             junit 'test_results/*.xml'
                             archiveArtifacts artifacts: 'run_test.sh/**'
@@ -1233,7 +1106,9 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            not { environment name: 'CHANGE_TARGET',
+                                              value: 'weekly-testing' }
+                            expression { ! skip_stage('test') }
                             expression { ! skip_stage('test-centos-rpms') }
                         }
                     }
@@ -1241,29 +1116,17 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       profile: 'daos_ci',
-                                       distro: 'el7',
-                                       snapshot: true,
-                                       inst_repos: el7_daos_repos(),
-                                       inst_rpms: 'environment-modules'
-                        runTest script: "${rpm_test_pre}" +
-                                        "sudo yum -y install daos{,-client}-${daos_packages_version("centos7")}\n" +
-                                        "sudo yum -y history rollback last-1\n" +
-                                        "sudo yum -y install daos{,-{server,client}}-${daos_packages_version('centos7')}\n" +
-                                        "sudo yum -y install daos{,-tests}-${daos_packages_version("centos7")}\n" +
-                                        "${rpm_test_daos_test}" + '"',
-                                junit_files: null,
-                                failure_artifacts: env.STAGE_NAME, ignore_failure: true
-                    }
+                        testRpm inst_repos: el7_daos_repos(),
+                                daos_pkg_version: daos_packages_version("centos7")
+                   }
                 } // stage('Test CentOS 7 RPMs')
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            not { environment name: 'CHANGE_TARGET',
+                                              value: 'weekly-testing' }
                             expression { ! skip_stage('scan-centos-rpms') }
                         }
                     }
@@ -1271,22 +1134,11 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       profile: 'daos_ci',
-                                       distro: 'el7',
-                                       snapshot: true,
-                                       inst_repos: el7_daos_repos(),
-                                       inst_rpms: 'environment-modules ' +
-                                                  'clamav clamav-devel'
-                        runTest script: rpm_scan_pre +
-                                        "sudo yum -y install " +
-                                        "daos{,-{client,server,tests}}-" +
-                                        "${daos_packages_version("centos7")}\n" +
-                                        rpm_scan_test + '"\n' +
-                                        rpm_scan_post,
-                                junit_files: 'maldetect.xml',
-                                failure_artifacts: env.STAGE_NAME, ignore_failure: true
+                        testRpm inst_repos: el7_daos_repos(),
+                                daos_pkg_version: daos_packages_version("centos7"),
+                                inst_rpms: 'clamav clamav-devel',
+                                test_script: 'ci/rpm/scan_daos.sh',
+                                junit_files: 'maldetect.xml'
                     }
                     post {
                         always {

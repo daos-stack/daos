@@ -140,7 +140,7 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'ds_mgmt_svc_start': ('uri'),
                     'ds_rsvc_lookup': ('path'),
                     'daos_acl_free': ('acl'),
-                    'drpc_free': ('pointer'),
+                    'daos_drpc_free': ('pointer'),
                     'pool_child_add_one': ('path'),
                     'bio_sgl_fini': ('sgl->bs_iovs'),
                     'daos_iov_free': ('iov->iov_buf'),
@@ -152,14 +152,6 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'ie_sclose': ('ie', 'dfs', 'dfp'),
                     'notify_ready': ('req.uri'),
                     'get_tgt_rank': ('tgts')}
-
-memleak_ok = ['dfuse_start',
-              'expand_vector',
-              'd_rank_list_alloc',
-              'get_tpv',
-              'get_new_entry',
-              'get_attach_info',
-              'drpc_call_create']
 
 EFILES = ['src/common/misc.c',
           'src/common/prop.c',
@@ -466,8 +458,6 @@ class LogTest():
         lost_memory = False
         if show_memleaks:
             for (_, line) in regions.items():
-                if line.function in memleak_ok:
-                    continue
                 pointer = line.get_field(-1).rstrip('.')
                 if pointer in active_desc:
                     show_line(line, 'NORMAL', 'descriptor not freed')
@@ -609,7 +599,7 @@ def trace_one_file(filename):
     """Trace a single file"""
     log_iter = cart_logparse.LogIter(filename)
     test_iter = LogTest(log_iter)
-    test_iter.check_log_file(True)
+    test_iter.check_log_file(False)
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
