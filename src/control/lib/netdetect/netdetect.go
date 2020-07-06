@@ -446,8 +446,6 @@ func getNodeBestFit(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // In some configurations, the number of NUMA nodes found is 0.  In that case,
 // the NUMA ID will be considered 0.
 func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, error) {
-	var i uint
-
 	if node == nil {
 		return 0, errors.New("invalid node provided")
 	}
@@ -470,16 +468,16 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 		return 0, errors.New("unable to find non-io ancestor node for device")
 	}
 
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	if numObj == 0 {
+	numNuma := numNUMANodes(topology)
+	if numNuma == 0 {
 		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 		return 0, nil
 	}
 
-	log.Debugf("There are %d NUMA nodes.", numObj)
+	log.Debugf("There are %d NUMA nodes.", numNuma)
 
-	for i = 0; i < numObj; i++ {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
+	for i := 0; i < numNuma; i++ {
 		numanode := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			// We don't want the lack of NUMA information to be an error.
@@ -498,6 +496,12 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	return 0, nil
 }
 
+func numNUMANodes(topology C.hwloc_topology_t) int {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := int(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
+	return numObj
+}
+
 // NumaAware verifies that NUMA data is available to process
 func NumaAware() (bool, error) {
 	var deviceScanCfg DeviceScan
@@ -509,18 +513,13 @@ func NumaAware() (bool, error) {
 	deviceScanCfg.topology = topology
 	defer cleanUp(deviceScanCfg.topology)
 
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-
-	return numObj > 0, nil
+	return numNUMANodes(topology) > 0, nil
 }
 
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
 // It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
 func GetNUMASocketIDForPid(pid int32) (int, error) {
-	var i uint
-
 	var deviceScanCfg DeviceScan
 
 	topology, err := initLib()
@@ -531,9 +530,8 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 
 	defer cleanUp(deviceScanCfg.topology)
 
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-	if numObj == 0 {
+	numNodes := numNUMANodes(deviceScanCfg.topology)
+	if numNodes == 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
@@ -548,7 +546,8 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 	defer C.hwloc_bitmap_free(nodeset)
 	C.hwloc_cpuset_to_nodeset(deviceScanCfg.topology, cpuset, nodeset)
 
-	for i = 0; i < numObj; i++ {
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	for i := 0; i < numNodes; i++ {
 		numanode := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			return 0, errors.Errorf("NUMA Node data is unavailable.")
@@ -736,9 +735,7 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	}
 
 	// If the system isn't NUMA aware, use numa 0
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-	if numObj == 0 {
+	if numNUMANodes(deviceScanCfg.topology) == 0 {
 		return DeviceAffinity{
 			DeviceName: deviceScanCfg.targetDevice,
 			CPUSet:     "0x0",
@@ -1086,9 +1083,7 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	defer cleanUp(deviceScanCfg.topology)
 
 	// If the system isn't NUMA aware, skip validation
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-	if numObj == 0 {
+	if numNUMANodes(deviceScanCfg.topology) == 0 {
 		log.Debugf("The system is not NUMA aware.  Device/NUMA validation skipped.\n")
 		return nil
 	}
