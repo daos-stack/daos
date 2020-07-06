@@ -321,7 +321,7 @@ set_value_buffer(char *buffer, int idx)
 static int
 akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 		     char *dkey, char *akey, daos_epoch_t *epoch,
-		     int *indices, int idx, char *verify_buff,
+		     uint64_t *indices, int idx, char *verify_buff,
 		     double *duration)
 {
 	struct dts_io_credit *cred;
@@ -409,13 +409,13 @@ static int
 dkey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type, char *dkey,
 		     daos_epoch_t *epoch, double *duration)
 {
-	int		*indices;
+	uint64_t	*indices;
 	char		 akey[DTS_KEY_LEN];
 	int		 i;
 	int		 j;
 	int		 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
+	indices = dts_rand_iarr_alloc_set(ts_recx_p_akey, 0, ts_shuffle);
 	D_ASSERT(indices != NULL);
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
@@ -489,14 +489,14 @@ objects_update(double *duration, d_rank_t rank)
 static int
 dkey_verify(daos_handle_t oh, char *dkey, daos_epoch_t *epoch)
 {
-	int	 i;
-	int	*indices;
-	char	 ground_truth[TEST_VAL_SIZE];
-	char	 test_string[TEST_VAL_SIZE];
-	char	 akey[DTS_KEY_LEN];
-	int	 rc = 0;
+	int		 i;
+	uint64_t	*indices;
+	char		 ground_truth[TEST_VAL_SIZE];
+	char		 test_string[TEST_VAL_SIZE];
+	char		 akey[DTS_KEY_LEN];
+	int		 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
+	indices = dts_rand_iarr_alloc_set(ts_recx_p_akey, 0, ts_shuffle);
 	D_ASSERT(indices != NULL);
 	dts_key_gen(akey, DTS_KEY_LEN, "walker");
 
@@ -1143,6 +1143,8 @@ main(int argc, char **argv)
 	int		ec_vsize = 0;
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	int		i;
+	daos_obj_id_t	tmp_oid;
+	struct daos_oclass_attr	*oca;
 	double		duration = 0;
 	bool		pause = false;
 	unsigned	seed = 0;
@@ -1400,13 +1402,11 @@ main(int argc, char **argv)
 		ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
 	}
 
-	if (ts_class == OC_EC_2P2G1)
-		ec_vsize = (1 << 15) * 2;
-	else if (ts_class == OC_EC_4P2G1)
-		ec_vsize = (1 << 15) * 4;
-	else if (ts_class == OC_EC_8P2G1)
-		ec_vsize = (1 << 15) * 8;
-
+	tmp_oid = dts_oid_gen(ts_class, 0, 0);
+	oca = daos_oclass_attr_find(tmp_oid);
+	D_ASSERT(oca != NULL);
+	if (DAOS_OC_IS_EC(oca))
+		ec_vsize = oca->u.ec.e_len * oca->u.ec.e_k;
 	if (ec_vsize != 0 && vsize % ec_vsize != 0)
 		fprintf(stdout, "for EC obj perf test, vsize (-s) %d should be "
 			"multiple of %d (full-stripe size) to get better "
