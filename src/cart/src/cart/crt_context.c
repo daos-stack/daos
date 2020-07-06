@@ -294,6 +294,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			  cbinfo.cci_rc);
 
 		rpc_priv->crp_complete_cb(&cbinfo);
+		rpc_priv->crp_complete_cb = NULL;
 	}
 }
 
