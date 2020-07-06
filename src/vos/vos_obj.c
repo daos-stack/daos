@@ -1010,6 +1010,18 @@ done:
 	return options;
 }
 
+static inline void
+recx2filter(struct evt_filter *filter, daos_recx_t *recx)
+{
+	if (recx->rx_nr == 0) {
+		filter->fr_ex.ex_lo = 0ULL;
+		filter->fr_ex.ex_hi = ~(0ULL);
+	} else {
+		filter->fr_ex.ex_lo = recx->rx_idx;
+		filter->fr_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
+	}
+}
+
 /**
  * Prepare the iterator for the recx tree.
  */
@@ -1036,10 +1048,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	filter.fr_ex.ex_lo = oiter->it_recx.rx_idx;
-	filter.fr_ex.ex_hi = oiter->it_recx.rx_nr == 0 ? ~(0ULL) :
-			oiter->it_recx.rx_idx + oiter->it_recx.rx_nr - 1;
-
+	recx2filter(&filter, &oiter->it_recx);
 	filter.fr_epr = oiter->it_epr;
 	filter.fr_punch = oiter->it_punched;
 	options = recx_get_flags(oiter);
@@ -1373,9 +1382,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 				" rc = "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
-		filter.fr_ex.ex_lo = info->ii_recx.rx_idx;
-		filter.fr_ex.ex_hi = info->ii_recx.rx_nr == 0 ? ~(0ULL) :
-				info->ii_recx.rx_idx + info->ii_recx.rx_nr - 1;
+		recx2filter(&filter, &info->ii_recx);
 		filter.fr_epr = oiter->it_epr;
 		filter.fr_punch = oiter->it_punched;
 		options = recx_get_flags(oiter);
