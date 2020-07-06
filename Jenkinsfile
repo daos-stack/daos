@@ -815,7 +815,7 @@ pipeline {
                         script {
                             if (quickbuild()) {
                                 // TODO: these should be gotten from the Requires: of RPMs
-                                qb_inst_rpms = " spdk-tools mercury boost-devel"
+                                qb_inst_rpms = " spdk-tools mercury boost-devel libisa-l_crypto"
                             }
                         }
                         provisionNodes NODELIST: env.NODELIST,
