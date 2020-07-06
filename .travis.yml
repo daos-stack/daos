@@ -22,8 +22,8 @@ before_install:
 script:
  - docker build -f utils/docker/Dockerfile.$DOCKER_IMAGE -t daos/$DOCKER_IMAGE --build-arg NOBUILD=1 --build-arg UID=$UID .
  - docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install"
- - if [ $? == "0" ]; then
+ - if [ $TRAVIS_TEST_RESULT == "0" ]; then
         docker run -v $PWD:/home/daos/daos:z daos/$DOCKER_IMAGE /bin/bash -c "cd src/client/java && mvn clean install -DskipITs -Ddaos.install.path=/home/daos/daos/install";
    else
-        echo "ignore Java build due to DAOS build exit code, $?";
+        echo "ignore Java build due to DAOS build exit code, $TRAVIS_TEST_RESULT";
    fi
