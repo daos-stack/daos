@@ -966,6 +966,12 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools"
+                            }
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        profile: 'daos_ci',
@@ -973,7 +979,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
+                                                  functional_rpms + ' ' + qb_inst_rpms 
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1004,13 +1010,19 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools"
+                            }
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 3,
                                        profile: 'daos_ci',
                                        distro: 'el7',
                                        inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') +
-                                                   ' ' + functional_rpms
+                                       inst_rpms: get_daos_packages('centos7') + ' ' +
+                                                  functional_rpms + ' ' + qb_inst_rpms 
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1041,13 +1053,19 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools"
+                            }
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 5,
                                        profile: 'daos_ci',
                                        distro: 'el7',
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
+                                                  functional_rpms + ' ' + qb_inst_rpms 
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1078,13 +1096,19 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools"
+                            }
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        profile: 'daos_ci',
                                        distro: 'el7',
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
+                                                  functional_rpms + ' ' + qb_inst_rpms 
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
