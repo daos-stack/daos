@@ -23,12 +23,16 @@
 """
 from __future__ import print_function
 from logging import getLogger
+from getpass import getuser
 
 import os
 import re
 import json
 import random
 import string
+import paramiko
+import socket
+from ssh2.session import Session
 from pathlib import Path
 from errno import ENOENT
 from avocado.utils import process
@@ -551,60 +555,3 @@ def check_uuid_format(uuid):
     """
     pattern = re.compile("([0-9a-fA-F-]+)")
     return bool(len(uuid) == 36 and pattern.match(uuid))
-
-
-def parse_log_file(path, pattern, pattern_count=1, from_line=None,
-                   display_info=True):
-    """Check for Aggregation start/finish
-
-    Args:
-        path (str): Path to file.
-        pattern (str): Pattern to look for in the file.
-        pattern_count (int): Number of patterns to look for.
-        from_line (int, optional): Start parsing from line number provided,
-            else it will parse from first line of the file.
-        display_info (bool, optional): Display information.
-
-    Returns:
-        tuple(line_num, status)
-            line_num (int): line number where the last pattern was found
-            status (bool): boolean value if the pattern was found or not
-    """
-
-    # define local variables
-    log_file_path = path
-    regex = pattern
-    line_num = None
-    status = False
-
-    # open the file as read only and iterate over each line
-    # until the desired pattern is found desired number of
-    # times.
-    with open(log_file_path, "r") as file_obj:
-        if from_line:
-            for _ in range(from_line):
-                next(file_obj)
-        match_list = []
-        lines_found = []
-        match_count = 0
-        for line_num, line in enumerate(file_obj, 1):
-            if match_count == pattern_count:
-                status = True
-                break
-            for match in re.finditer(regex, line, re.DOTALL):
-                match_text = match.group()
-                match_list.append(match_text)
-                lines_found.append(line)
-                match_count += 1
-
-    # close the file object
-    file_obj.close()
-
-    if display_info:
-        print("Match count: {}\nMatch_list: {}\n".\
-              format(match_count, match_list))
-        print("Line Number: {}\nLines Found: {}\n".\
-              format(line_num, lines_found))
-
-    # return line number where the patter was found and the status.
-    return line_num, status

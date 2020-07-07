@@ -26,7 +26,7 @@ import time
 
 from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
-from general_utils import parse_log_file
+from daos_utils import DaosCommand
 
 
 class IoAggregation(IorTestBase):
@@ -47,6 +47,22 @@ class IoAggregation(IorTestBase):
 
         return free_space
 
+    def highest_epoch(self, kwargs):
+        """Returns Highest Epoch for the container
+
+        Args:
+          kwargs (dict): Dictionary of arguments to be passed to
+                         container_query method.
+
+        Returns:
+          Highest epoch value for a given container.
+        """
+        daos_cmd = DaosCommand(self.bin)
+        highest_epoch = daos_cmd.get_output(
+            "container_query", **kwargs)[0][4]
+
+        return highest_epoch
+
     def test_ioaggregation(self):
         """Jira ID: DAOS-4332.
         Test Description:
@@ -60,16 +76,16 @@ class IoAggregation(IorTestBase):
             Write to the same ior file and same amount of data,
             without overwriting the previous data.
             Capture free space again, after second ior write.
+            Capture Highest epoch ID before snapshot destroy.
             Destroy the snapshot which was created.
-            Check for Aggregation to start in server logs after
-            snapshot destroy.
-            Once established that aggregation has started, shut down
-            the servers and restart them again.
+            Shut down the servers and restart them again.
             After servers have successfully restarted, Look for
-            aggregation to finish and check the free space available
-            now after aggregation has finished.
+            aggregation to finish by checking the free space available
+            and value of highest epoch which should be higher than
+            the value of highest epoch before snapshot destroy.
             If current free space is equal to free space after first
-            ior write, then pass otherwise fail the test.
+            ior write, then pass otherwise fail the test after waiting
+            for 4 attempts.
         :avocado: tags=all,daosio,hw,small,full_regression,ioaggregation
         """
 
@@ -91,31 +107,18 @@ class IoAggregation(IorTestBase):
         # capture free space after second ior write
         free_space_after_second_write = self.display_free_space()
 
+        # obtain highest epoch before snapshot destroy via container query
+        kwargs = {
+            "pool": self.pool.uuid,
+            "svc": self.pool.svc_ranks[0],
+            "cont": self.container.uuid
+        }
+        highest_epc_before_snap_destroy = self.highest_epoch(kwargs)
+
         # delete snapshot
         self.container.destroy_snap(epoch=self.container.epoch)
 
-        # Check for aggregation to begin after snapshot destroy.
-        # For that, first identify the line in logs where snapshot is deleted.
-        server_log_path = self.log_dir + "/" + self.server_log
-        line_num_snap_destroy = parse_log_file(server_log_path,
-                                               "deleted snapshot", 1)[0]
-        # Then, look for a specific pattern in log file after snapshot
-        # deletion line.
-        regex = (r"cont_child_aggregate\(\)\s+[0-9a-z\/]+\[\d\]:\s+"
-                 + r"[A-Za-z]+\s+{\d+\s+\->\s+\d+}")
-        counter = 1
-        attempts = 3
-        while not (parse_log_file(server_log_path, regex, 1,
-                                  from_line=line_num_snap_destroy))[1]:
-            if counter > attempts:
-                self.fail("Either aggregation did not start in timely manner "
-                          "or regex pattern to check aggregation in logs has "
-                          "changed")
-                break
-            time.sleep(10)
-            counter += 1
-
-        # Once aggregation has started, shutdown the servers and restart
+        # Shutdown the servers and restart
         self.get_dmg_command().system_stop(True)
         time.sleep(5)
         self.get_dmg_command().system_start()
@@ -125,21 +128,22 @@ class IoAggregation(IorTestBase):
         if not check_system_query_status(scan_info):
             self.fail("One or more servers crashed")
 
-        # check if aggregation finished successfully and expected space is
-        # returned back.
-        # For that, capture the line in logs where servers were restarted
-        # successfully.
-        line_num = parse_log_file(server_log_path, "start MS", 2)[0]
-        # Now look for the pattern and check space returned match until both
-        # conditions are satisfied.
+        # Now check if the space is returned back and Highest epoch value
+        # is higher than the the value just before snapshot destroy.
         counter = 1
         while free_space_before_snap != self.display_free_space() or \
-            not (parse_log_file(server_log_path, "Aggregating finished",
-                                counter, from_line=line_num))[1]:
-            if counter > attempts:
+            highest_epc_before_snap_destroy >= self.highest_epoch(kwargs):
+            # try to wait for 4 x 60 secs for aggregation to be completed or
+            # else exit the test with a failure.
+            if counter > 4:
                 self.log.info("Free space after Second write: %s",
                               free_space_after_second_write)
-                self.log.info("Final Free space: %s", self.display_free_space())
-                self.fail("Aggregation not completing as expected")
+                self.log.info("Free space when test terminated: %s",
+                              self.display_free_space())
+                self.log.info("Highest Epoch before IO Aggregation: %s",
+                              highest_epc_before_snap_destroy)
+                self.log.info("Highest Epoch when test terminated: %s",
+                              self.highest_epoch(kwargs))
+                self.fail("Aggregation did not complete as expected")
             time.sleep(60)
             counter += 1
