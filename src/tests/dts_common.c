@@ -333,6 +333,12 @@ cont_fini(struct dts_context *tsc)
 	 */
 }
 
+bool
+dts_is_async(struct dts_context *tsc)
+{
+	return !daos_handle_is_inval(tsc->tsc_eqh);
+}
+
 /* see comments in dts_common.h */
 int
 dts_ctx_init(struct dts_context *tsc)

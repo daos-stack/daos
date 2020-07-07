@@ -291,7 +291,8 @@ daos_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 	int	rc;
 	uint64_t start = 0;
 
-	TS_TIME_START(duration, start);
+	if (!dts_is_async(&ts_ctx))
+		TS_TIME_START(duration, start);
 	if (op_type == TS_DO_UPDATE) {
 		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl,
@@ -301,7 +302,9 @@ daos_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 				    &cred->tc_iod, &cred->tc_sgl, NULL,
 				    cred->tc_evp);
 	}
-	TS_TIME_END(duration, start);
+
+	if (!dts_is_async(&ts_ctx))
+		TS_TIME_END(duration, start);
 
 	return rc;
 }
@@ -437,12 +440,16 @@ objects_update(double *duration, d_rank_t rank)
 	int		i;
 	int		j;
 	int		rc;
+	uint64_t	start = 0;
 	daos_epoch_t	epoch = 1;
 
 	dts_reset_key();
 
 	if (!ts_overwrite)
 		++epoch;
+
+	if (dts_is_async(&ts_ctx))
+		TS_TIME_START(duration, start);
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		ts_oid = dts_oid_gen(ts_class, 0, ts_ctx.tsc_mpi_rank);
@@ -472,6 +479,9 @@ objects_update(double *duration, d_rank_t rank)
 		}
 	}
 	rc = dts_credit_drain(&ts_ctx);
+
+	if (dts_is_async(&ts_ctx))
+		TS_TIME_END(duration, start);
 
 	return rc;
 }
@@ -564,11 +574,15 @@ objects_fetch(double *duration, d_rank_t rank)
 	int		i;
 	int		j;
 	int		rc = 0;
+	uint64_t	start = 0;
 	daos_epoch_t	epoch = crt_hlc_get();
 
 	dts_reset_key();
 	if (!ts_overwrite)
 		epoch = crt_hlc_get();
+
+	if (dts_is_async(&ts_ctx))
+		TS_TIME_START(duration, start);
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		for (j = 0; j < ts_dkey_p_obj; j++) {
@@ -582,6 +596,9 @@ objects_fetch(double *duration, d_rank_t rank)
 		}
 	}
 	rc = dts_credit_drain(&ts_ctx);
+
+	if (dts_is_async(&ts_ctx))
+		TS_TIME_END(duration, start);
 	return rc;
 }
 
