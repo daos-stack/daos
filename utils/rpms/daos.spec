@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0~rc1-1.%{?dist}
+%global mercury_version 2.0.0~rc1-1%{?dist}
 
 Name:          daos
 Version:       1.1.0
