@@ -39,6 +39,8 @@ const (
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
 	pciWhiteListEnv    = "_PCI_WHITELIST"
+	driverOverrideEnv  = "_DRIVER_OVERRIDE"
+	vfioDisabledDriver = "uio_pci_generic"
 )
 
 type runCmdFn func(logging.Logger, []string, string, ...string) (string, error)
@@ -118,7 +120,8 @@ func (s *spdkSetupScript) Reset() error {
 // whitelist of PCI addresses.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
-func (s *spdkSetupScript) Prepare(nrHugepages int, targetUser, pciWhiteList string) error {
+func (s *spdkSetupScript) Prepare(req PrepareRequest) error {
+	nrHugepages := req.HugePageCount
 	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
 	}
@@ -126,10 +129,13 @@ func (s *spdkSetupScript) Prepare(nrHugepages int, targetUser, pciWhiteList stri
 	env := []string{
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
-		fmt.Sprintf("%s=%s", targetUserEnv, targetUser),
+		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
 	}
-	if pciWhiteList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciWhiteListEnv, pciWhiteList))
+	if req.PCIWhitelist != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciWhiteListEnv, req.PCIWhitelist))
+	}
+	if req.DisableVFIO {
+		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))
 	}
 
 	s.log.Debugf("spdk setup env: %v", env)

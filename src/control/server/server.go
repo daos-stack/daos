@@ -132,12 +132,27 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
 		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
+		DisableVFIO:   cfg.DisableVFIO,
 	}
 
 	if cfgHasBdev(cfg) {
 		// The config value is intended to be per-ioserver, so we need to adjust
 		// based on the number of ioservers.
 		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
+	}
+
+	// Perform these checks to avoid even trying a prepare if the system
+	// isn't configured properly.
+	if cfgHasBdev(cfg) {
+		if runningUser.Uid != "0" {
+			if cfg.DisableVFIO {
+				return FaultVfioDisabled
+			}
+
+			if !iommuDetected() {
+				return FaultIommuDisabled
+			}
+		}
 	}
 
 	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
@@ -150,14 +165,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	// Don't bother with these checks if there aren't any block devices configured.
 	if cfgHasBdev(cfg) {
+		// Double-check that we got the requested number of huge pages after prepare.
 		if hugePages.Free < prepReq.HugePageCount {
 			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-		}
-
-		if runningUser.Uid != "0" && !iommuDetected() {
-			return FaultIommuDisabled
 		}
 	}
 

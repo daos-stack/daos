@@ -74,12 +74,14 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				HugePageCount: testNrHugePages,
 				TargetUser:    testTargetUser,
 				PCIWhitelist:  testPciWhitelist,
+				DisableVFIO:   true,
 			},
 			expEnv: []string{
 				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
 				fmt.Sprintf("%s=%s", pciWhiteListEnv, testPciWhitelist),
+				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
 		},
 	} {

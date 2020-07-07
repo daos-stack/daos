@@ -74,6 +74,11 @@ var (
 		"no IOMMU detected while running as non-root user with NVMe devices",
 		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
 	)
+	FaultVfioDisabled = serverFault(
+		code.ServerVfioDisabled,
+		"disable_vfio: true in config while running as non-root user with NVMe devices",
+		"set disable_vfio: false or run daos_server as root",
+	)
 	FaultHarnessNotStarted = serverFault(
 		code.ServerHarnessNotStarted,
 		fmt.Sprintf("%s harness not started", DataPlaneName),
