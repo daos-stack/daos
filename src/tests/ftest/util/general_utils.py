@@ -23,16 +23,12 @@
 """
 from __future__ import print_function
 from logging import getLogger
-from getpass import getuser
 
 import os
 import re
 import json
 import random
 import string
-import paramiko
-import socket
-from ssh2.session import Session
 from pathlib import Path
 from errno import ENOENT
 from avocado.utils import process
@@ -124,8 +120,6 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         "shell": False,
         "env": env,
     }
-    if verbose:
-        print("Command environment vars:\n  {}".format(env))
     try:
         # Block until the command is complete or times out
         return process.run(**kwargs)
