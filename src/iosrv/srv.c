@@ -491,8 +491,7 @@ dss_srv_handler(void *arg)
 	/* main service progress loop */
 	for (;;) {
 		if (dx->dx_comm) {
-			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */, NULL,
-					  NULL);
+			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("failed to progress CART context: %d\n",
 					rc);
