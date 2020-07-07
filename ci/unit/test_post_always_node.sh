@@ -4,18 +4,16 @@ set -uex
 
 cd "$DAOS_BASE"
 
-if [ -n "$WITH_VALGRIND" ]; then
-    if [ "$WITH_VALGRIND" = "memcheck" ]; then
-        echo "run test post always node with memcheck"
-        mkdir run_test_memcheck.sh
-        if ls /tmp/daos*.log > /dev/null; then
-          mv /tmp/daos*.log run_test_memcheck.sh/
-        fi
-        if ls valgrind_memcheck_results/*.xml > /dev/null; then
-          mv valgrind_memcheck_results/*.xml run_test_memcheck.sh/
-        fi
+if [ "$WITH_VALGRIND" = "memcheck" ]; then
+    echo "run test post always node with memcheck"
+    mkdir run_test_memcheck.sh
+    if ls /tmp/daos*.log > /dev/null; then
+      mv /tmp/daos*.log run_test_memcheck.sh/
     fi
-else
+    if ls valgrind_memcheck_results/*.xml > /dev/null; then
+      mv valgrind_memcheck_results/*.xml run_test_memcheck.sh/
+    fi
+elif [ "$WITH_VALGRIND" = "disabled" ]; then
     echo "run test post always node"
     mkdir run_test.sh
     mkdir vm_test

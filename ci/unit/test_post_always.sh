@@ -25,9 +25,11 @@ if [ $# -ge 1 ] && [ -n "$1" ]; then
 else
     echo "run test post always"
     rm -rf run_test.sh vm_test
+    WITH_VALGRIND=disabled
     # shellcheck disable=SC2029
     ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
       "DAOS_BASE=$DAOS_BASE             \
+      WITH_VALGRIND=$WITH_VALGRIND      \
       $(cat "$mydir/test_post_always_node.sh")"
 
     # Note that we are taking advantage of the NFS mount here and if that
