@@ -29,7 +29,7 @@ if [ "$WITH_VALGRIND" = "memcheck" ]; then
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
     mkdir -p valgrind_memcheck_results
     mv results-*-memcheck.xml valgrind_memcheck_results
-elif [ "$WITH_VALGRIND" = "disabled" ]
+elif [ "$WITH_VALGRIND" = "disabled" ]; then
     echo "run_test_main_node.sh unit test"
     # set CMOCKA envs here
     export CMOCKA_MESSAGE_OUTPUT=xml

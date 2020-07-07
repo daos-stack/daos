@@ -24,7 +24,6 @@ elif [ "$WITH_VALGRIND" = "disabled" ]; then
     if ls /tmp/dnt*.log > /dev/null; then
       mv /tmp/dnt*.log vm_test/
     fi
-
 fi
 
 # servers can sometimes take a while to stop when the test is done
