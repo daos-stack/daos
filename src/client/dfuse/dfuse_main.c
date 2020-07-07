@@ -150,7 +150,7 @@ main(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

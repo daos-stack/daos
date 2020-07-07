@@ -340,7 +340,7 @@ dts_ctx_init(struct dts_context *tsc)
 	int	rc;
 
 	tsc->tsc_init = DTS_INIT_NONE;
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
