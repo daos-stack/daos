@@ -47,7 +47,7 @@ type mgmtModule struct {
 	sys        string
 	ctlInvoker control.Invoker
 	aiCache    *attachInfoCache
-	numaAware  bool
+	ndc        *netdetect.NetDetectContext
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -94,8 +94,8 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	var err error
 	numaNode := mod.aiCache.defaultNumaNode
 
-	if mod.numaAware {
-		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
+	if mod.ndc.NumaAware {
+		numaNode, err = mod.ndc.GetNUMASocketIDForPid(pid)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +129,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
-	scanResults, err := netdetect.ScanFabric(resp.Provider)
+	scanResults, err := mod.ndc.ScanFabric(resp.Provider)
 	if err != nil {
 		return nil, err
 	}

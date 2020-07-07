@@ -50,13 +50,16 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 }
 
 func (cmd *netScanCmd) Execute(_ []string) error {
-	numaAware, err := netdetect.NumaAware()
+
+	ndc := netdetect.NetDetectContext{}
+	err := ndc.Init()
+	defer ndc.CleanUp()
 	if err != nil {
 		exitWithError(cmd.log, err)
 		return nil
 	}
 
-	if !numaAware {
+	if !ndc.NumaAware {
 		cmd.printUnlessJson("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
@@ -65,7 +68,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		provider = ""
 	}
 
-	results, err := netdetect.ScanFabric(provider, defaultExcludeInterfaces)
+	results, err := ndc.ScanFabric(provider, defaultExcludeInterfaces)
 	if err != nil {
 		exitWithError(cmd.log, err)
 		return nil

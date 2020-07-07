@@ -208,6 +208,27 @@ func (da *DeviceAffinity) String() string {
 	return fmt.Sprintf("%s:%s:%s:%d", da.DeviceName, da.CPUSet, da.NodeSet, da.NUMANode)
 }
 
+type NetDetectContext struct {
+	topology     C.hwloc_topology_t
+	NumaAware    bool
+	numNUMANodes int
+}
+
+func (ndc *NetDetectContext) Init() error {
+	var err error
+	ndc.topology, err = initLib()
+	if err != nil {
+		return err
+	}
+	ndc.numNUMANodes = numNUMANodes(ndc.topology)
+	ndc.NumaAware = ndc.numNUMANodes > 0
+	return nil
+}
+
+func (ndc *NetDetectContext) CleanUp() {
+	cleanUp(ndc.topology)
+}
+
 // initLib initializes the hwloc library.
 func initLib() (C.hwloc_topology_t, error) {
 	var topology C.hwloc_topology_t
@@ -271,36 +292,38 @@ func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
 
 // initDeviceScan initializes the hwloc library and initializes DeviceScan entries
 // that are frequently used for hwloc queries
-func initDeviceScan() (DeviceScan, error) {
+func initDeviceScan(ndc *NetDetectContext) (DeviceScan, error) {
 	var deviceScanCfg DeviceScan
+	var err error
 
-	topology, err := initLib()
-	if err != nil {
-		log.Debugf("Error from initLib %v", err)
-		return deviceScanCfg,
-			errors.New("unable to initialize hwloc library")
+	if ndc == nil {
+		deviceScanCfg.topology, err = initLib()
+		if err != nil {
+			log.Debugf("Error from initLib %v", err)
+			return deviceScanCfg,
+				errors.New("unable to initialize hwloc library")
+		}
+	} else {
+		deviceScanCfg.topology = ndc.topology
 	}
-	deviceScanCfg.topology = topology
 
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_OS_DEVICE)
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_OS_DEVICE)
 	if depth != C.HWLOC_TYPE_DEPTH_OS_DEVICE {
-		defer cleanUp(deviceScanCfg.topology)
+		if ndc == nil {
+			defer cleanUp(deviceScanCfg.topology)
+		}
 		return deviceScanCfg,
 			errors.New("hwloc_get_type_depth returned invalid value")
 	}
 	deviceScanCfg.depth = int(depth)
-
-	deviceScanCfg.numObj = uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	if deviceScanCfg.numObj == 0 {
-		defer cleanUp(deviceScanCfg.topology)
-		return deviceScanCfg,
-			errors.New("hwloc_get_nbobjs_by_depth returned invalid value: no OS devices found")
-	}
+	deviceScanCfg.numObj = uint(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
 
 	// Create the list of all the valid network device names
 	systemDeviceNames, err := GetDeviceNames()
 	if err != nil {
-		defer cleanUp(deviceScanCfg.topology)
+		if ndc == nil {
+			defer cleanUp(deviceScanCfg.topology)
+		}
 		return deviceScanCfg, err
 	}
 	deviceScanCfg.systemDeviceNames = systemDeviceNames
@@ -312,7 +335,9 @@ func initDeviceScan() (DeviceScan, error) {
 
 	deviceScanCfg.hwlocDeviceNames, err = getHwlocDeviceNames(deviceScanCfg)
 	if err != nil {
-		defer cleanUp(deviceScanCfg.topology)
+		if ndc == nil {
+			defer cleanUp(deviceScanCfg.topology)
+		}
 		return deviceScanCfg, errors.New("unable to obtain hwloc I/O device names")
 	}
 
@@ -452,8 +477,6 @@ func getNodeBestFit(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // In some configurations, the number of NUMA nodes found is 0.  In that case,
 // the NUMA ID will be considered 0.
 func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, error) {
-	var i uint
-
 	if node == nil {
 		return 0, errors.New("invalid node provided")
 	}
@@ -476,16 +499,16 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 		return 0, errors.New("unable to find non-io ancestor node for device")
 	}
 
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	if numObj == 0 {
+	numNuma := numNUMANodes(topology)
+	if numNuma == 0 {
 		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 		return 0, nil
 	}
 
-	log.Debugf("There are %d NUMA nodes.", numObj)
+	log.Debugf("There are %d NUMA nodes.", numNuma)
 
-	for i = 0; i < numObj; i++ {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
+	for i := 0; i < numNuma; i++ {
 		numanode := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			// We don't want the lack of NUMA information to be an error.
@@ -504,56 +527,38 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	return 0, nil
 }
 
-// NumaAware verifies that NUMA data is available to process
-func NumaAware() (bool, error) {
-	deviceScanCfg, err := initDeviceScan()
-	if err != nil {
-		return false, err
-	}
-	defer cleanUp(deviceScanCfg.topology)
-
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-
-	return numObj > 0, nil
+func numNUMANodes(topology C.hwloc_topology_t) int {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := int(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
+	return numObj
 }
 
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
 // It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
-func GetNUMASocketIDForPid(pid int32) (int, error) {
-	var i uint
-
-	var deviceScanCfg DeviceScan
-
-	topology, err := initLib()
-	if err != nil {
-		log.Debugf("Error from initLib %v", err)
-		return 0, errors.New("unable to initialize hwloc library")
+func (ndc *NetDetectContext) GetNUMASocketIDForPid(pid int32) (int, error) {
+	if ndc.topology == nil {
+		return 0, errors.Errorf("netdetect context was not initialized")
 	}
-	deviceScanCfg.topology = topology
 
-	defer cleanUp(deviceScanCfg.topology)
-
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-	if numObj == 0 {
+	if !ndc.NumaAware {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
 	cpuset := C.hwloc_bitmap_alloc()
 	defer C.hwloc_bitmap_free(cpuset)
-	status := C.hwloc_get_proc_cpubind(deviceScanCfg.topology, C.int(pid), cpuset, 0)
+	status := C.hwloc_get_proc_cpubind(ndc.topology, C.int(pid), cpuset, 0)
 	if status != 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
 	nodeset := C.hwloc_bitmap_alloc()
 	defer C.hwloc_bitmap_free(nodeset)
-	C.hwloc_cpuset_to_nodeset(deviceScanCfg.topology, cpuset, nodeset)
+	C.hwloc_cpuset_to_nodeset(ndc.topology, cpuset, nodeset)
 
-	for i = 0; i < numObj; i++ {
-		numanode := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(depth), C.uint(i))
+	depth := C.hwloc_get_type_depth(ndc.topology, C.HWLOC_OBJ_NUMANODE)
+	for i := 0; i < ndc.numNUMANodes; i++ {
+		numanode := C.cmpt_get_obj_by_depth(ndc.topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			return 0, errors.Errorf("NUMA Node data is unavailable.")
 		}
@@ -568,87 +573,6 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 	}
 
 	return 0, errors.Errorf("NUMA Node data is unavailable.")
-}
-
-// GetAffinityForNetworkDevices searches the system topology reported by hwloc
-// for the devices specified by deviceNames and returns the corresponding
-// name, cpuset, nodeset and NUMA node information for each device it finds.
-//
-// The input deviceNames []string specifies names of each network device to
-// search for. Typical network device names are "eth0", "eth1", "ib0", etc.
-//
-// The DeviceAffinity DeviceName matches the deviceNames strings and should be
-// used to help match an input device with the output.
-//
-// Network device names that are not found in the topology are ignored.
-// The order of network devices in the return string depends on the natural
-// order in the system topology and does not depend on the order specified
-// by the input string.
-func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error) {
-	var affinity []DeviceAffinity
-	var cpuset *C.char
-	var nodeset *C.char
-	var i uint
-
-	topology, err := initLib()
-	if err != nil {
-		log.Debugf("Error from initLib %v", err)
-		return nil,
-			errors.New("unable to initialize hwloc library")
-	}
-	defer cleanUp(topology)
-
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_OS_DEVICE)
-	if depth != C.HWLOC_TYPE_DEPTH_OS_DEVICE {
-		return nil,
-			errors.New("hwloc_get_type_depth returned invalid value")
-	}
-
-	netNames := make(map[string]struct{})
-	for _, deviceName := range deviceNames {
-		netNames[deviceName] = struct{}{}
-	}
-
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	// for any OS object found in the network device list,
-	// detect and store the cpuset and nodeset of the ancestor node
-	// containing this object
-	for i = 0; i < numObj; i++ {
-		node := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
-		if node == nil {
-			continue
-		}
-		log.Debugf("Found: %s", C.GoString(node.name))
-		if _, found := netNames[C.GoString(node.name)]; !found {
-			continue
-		}
-		ancestorNode := C.hwloc_get_non_io_ancestor_obj(topology, node)
-		if ancestorNode == nil {
-			continue
-		}
-		cpusetLen := C.hwloc_bitmap_asprintf(&cpuset,
-			ancestorNode.cpuset)
-		nodesetLen := C.hwloc_bitmap_asprintf(&nodeset,
-			ancestorNode.nodeset)
-
-		numaSocket, err := getNUMASocketID(topology, node)
-		if err != nil {
-			numaSocket = 0
-		}
-
-		if cpusetLen > 0 && nodesetLen > 0 {
-			deviceNode := DeviceAffinity{
-				DeviceName: C.GoString(node.name),
-				CPUSet:     C.GoString(cpuset),
-				NodeSet:    C.GoString(nodeset),
-				NUMANode:   numaSocket,
-			}
-			affinity = append(affinity, deviceNode)
-		}
-		C.free(unsafe.Pointer(cpuset))
-		C.free(unsafe.Pointer(nodeset))
-	}
-	return affinity, nil
 }
 
 // GetDeviceAlias is a wrapper for getDeviceAliasWithSystemList.  This interface
@@ -669,7 +593,7 @@ func getDeviceAliasWithSystemList(device string, additionalSystemDevices []strin
 
 	log.Debugf("Searching for a device alias for: %s", device)
 
-	deviceScanCfg, err := initDeviceScan()
+	deviceScanCfg, err := initDeviceScan(nil)
 	if err != nil {
 		return "", errors.Errorf("unable to initialize device scan:  Error: %v", err)
 	}
@@ -739,6 +663,16 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		}, nil
 	}
 
+	// If the system isn't NUMA aware, use numa 0
+	if numNUMANodes(deviceScanCfg.topology) == 0 {
+		return DeviceAffinity{
+			DeviceName: deviceScanCfg.targetDevice,
+			CPUSet:     "0x0",
+			NodeSet:    "0x1",
+			NUMANode:   0,
+		}, nil
+	}
+
 	switch getLookupMethod(deviceScanCfg) {
 	case direct:
 		node = getNodeDirect(deviceScanCfg)
@@ -750,8 +684,10 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		node = getNodeBestFit(deviceScanCfg)
 	}
 
+	// At this point, we know the topology is NUMA aware.
+	// Returning a default device affinity of NUMA 0 would no longer be reasonable.
 	if node == nil {
-		return DeviceAffinity{}, errors.Errorf("unable to find a system device matching: %s", deviceScanCfg.targetDevice)
+		return DeviceAffinity{}, errors.Errorf("cannot determine device affinity because the device was not found in the topology: %s", deviceScanCfg.targetDevice)
 	}
 
 	ancestorNode := C.hwloc_get_non_io_ancestor_obj(deviceScanCfg.topology, node)
@@ -977,7 +913,7 @@ func ValidateProviderConfig(device string, provider string) error {
 	}
 	defer C.fi_freeinfo(fi)
 
-	deviceScanCfg, err := initDeviceScan()
+	deviceScanCfg, err := initDeviceScan(nil)
 	if err != nil {
 		return errors.Errorf("unable to initialize device scan:  Error: %v", err)
 	}
@@ -1064,16 +1000,22 @@ func ValidateNUMAStub(device string, numaNode uint) error {
 
 // ValidateNUMAConfig confirms that the given network device matches the NUMA ID given.
 func ValidateNUMAConfig(device string, numaNode uint) error {
-	log.Debugf("Validate network config -- given numaNode: %d", numaNode)
+	log.Debugf("Validate network config for numaNode: %d", numaNode)
 	if device == "" {
 		return errors.New("device required")
 	}
 
-	deviceScanCfg, err := initDeviceScan()
+	deviceScanCfg, err := initDeviceScan(nil)
 	if err != nil {
 		return errors.Errorf("unable to initialize device scan:  Error: %v", err)
 	}
 	defer cleanUp(deviceScanCfg.topology)
+
+	// If the system isn't NUMA aware, skip validation
+	if numNUMANodes(deviceScanCfg.topology) == 0 {
+		log.Debugf("The system is not NUMA aware.  Device/NUMA validation skipped.\n")
+		return nil
+	}
 
 	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
 		return errors.Errorf("device: %s is an invalid device name", device)
@@ -1084,6 +1026,7 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	if err != nil {
 		return err
 	}
+
 	if deviceAffinity.NUMANode != numaNode {
 		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
 	}
@@ -1142,7 +1085,7 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
-func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
+func (ndc *NetDetectContext) ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 	var ScanResults []FabricScan
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
@@ -1175,12 +1118,11 @@ func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 	}
 	defer C.fi_freeinfo(fi)
 
-	// We have some data from libfabric scan.  Let's initialize hwloc and get the device scan started
-	deviceScanCfg, err := initDeviceScan()
+	// We have some data from libfabric scan.  Let's initialize the remaining device scan elements
+	deviceScanCfg, err := initDeviceScan(ndc)
 	if err != nil {
 		return ScanResults, err
 	}
-	defer cleanUp(deviceScanCfg.topology)
 
 	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
 		deviceScanCfg.depth, deviceScanCfg.numObj, deviceScanCfg.systemDeviceNames, deviceScanCfg.hwlocDeviceNames)

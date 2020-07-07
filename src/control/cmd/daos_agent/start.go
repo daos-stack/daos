@@ -65,12 +65,15 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	numaAware, err := netdetect.NumaAware()
+	ndc := netdetect.NetDetectContext{}
+	err = ndc.Init()
+	defer ndc.CleanUp()
 	if err != nil {
+		cmd.log.Errorf("Unable to initialize netdetect services")
 		return err
 	}
 
-	if !numaAware {
+	if !ndc.NumaAware {
 		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
@@ -80,7 +83,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		sys:        cmd.cfg.SystemName,
 		ctlInvoker: cmd.ctlInvoker,
 		aiCache:    &attachInfoCache{log: cmd.log, enabled: enabled},
-		numaAware:  numaAware,
+		ndc:        &ndc,
 	})
 
 	err = drpcServer.Start()
