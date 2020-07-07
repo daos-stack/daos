@@ -20,3 +20,6 @@ then
         $CP --quiet --no-tree -file --show-types --no-summary --ignore $def_ignore --strict $FILE --fix-inplace
     done
 fi
+
+
+exit 0
