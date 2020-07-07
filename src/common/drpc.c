@@ -74,12 +74,13 @@ drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
 {
 	Drpc__Call *call;
 
+	if (callp)
+		*callp = NULL;
+
 	if (ctx == NULL || callp == NULL) {
 		D_ERROR("Can't build a call from NULL context\n");
 		return -DER_INVAL;
 	}
-
-	*callp = NULL;
 
 	D_ALLOC_PTR(call);
 	if (call == NULL)
