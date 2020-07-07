@@ -1279,6 +1279,114 @@ cond_test(void **state)
 			"temp");
 }
 
+#define REM_VAL1 "xyz"
+#define REM_VAL2 "zyx"
+#define REM_VAL3 "abcd"
+
+static void
+remove_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	daos_epoch_range_t	 epr;
+	daos_key_t		 dkey;
+	daos_iod_t		 iod = {0};
+	d_iov_t			 sg_iov[SM_BUF_LEN] = {0};
+	d_sg_list_t		 sgl;
+	daos_recx_t		 recx[SM_BUF_LEN];
+	char			 rbuf[SM_BUF_LEN];
+	daos_unit_oid_t		 oid;
+	daos_epoch_t		 epoch = 1000;
+	int			 rc = 0;
+	char			 key1 = 'a';
+	char			 key2 = 'b';
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	oid = gen_oid(0);
+
+	d_iov_set(&dkey, &key1, sizeof(key1));
+	d_iov_set(&iod.iod_name, &key2, sizeof(key2));
+	sgl.sg_nr = 3;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = sg_iov;
+
+	d_iov_set(&sg_iov[0], REM_VAL1, sizeof(REM_VAL1) - 1);
+	d_iov_set(&sg_iov[1], REM_VAL2, sizeof(REM_VAL2) - 1);
+	d_iov_set(&sg_iov[2], REM_VAL3, sizeof(REM_VAL3) - 1);
+	iod.iod_nr = 3;
+	iod.iod_size = 1;
+	recx[0].rx_idx = 0;
+	recx[0].rx_nr = sizeof(REM_VAL1) - 1;
+	recx[1].rx_idx = recx[0].rx_idx + recx[0].rx_nr;
+	recx[1].rx_nr = sizeof(REM_VAL2) - 1;
+	recx[2].rx_idx = recx[1].rx_idx + recx[1].rx_nr;
+	recx[2].rx_nr = sizeof(REM_VAL3) - 1;
+	iod.iod_recxs = recx;
+	iod.iod_type = DAOS_IOD_ARRAY;
+
+	/* Write the records */
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0,
+			    VOS_OF_USE_TIMESTAMPS, &dkey, 1, &iod, NULL, &sgl);
+	assert_int_equal(rc, 0);
+
+	/* Try removing partial entries */
+	recx[3].rx_idx = 1;
+	recx[3].rx_nr = 10;
+	epr.epr_lo = 0;
+	epr.epr_hi = epoch;
+	rc = vos_obj_array_remove(arg->ctx.tc_co_hdl, oid, &epr, &dkey,
+				  &iod.iod_name, &recx[3]);
+	assert_int_equal(rc, -DER_NO_PERM);
+
+	/* Swap 1 and 2 and write again */
+	d_iov_set(&sg_iov[1], REM_VAL1, sizeof(REM_VAL1) - 1);
+	d_iov_set(&sg_iov[0], REM_VAL2, sizeof(REM_VAL2) - 1);
+	iod.iod_nr = 2;
+	iod.iod_size = 1;
+	recx[0].rx_idx = 0;
+	recx[0].rx_nr = sizeof(REM_VAL2) - 1;
+	recx[1].rx_idx = recx[0].rx_idx + recx[0].rx_nr;
+	recx[0].rx_nr = sizeof(REM_VAL1) - 1;
+
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0,
+			    VOS_OF_USE_TIMESTAMPS, &dkey, 1, &iod, NULL, &sgl);
+	assert_int_equal(rc, 0);
+
+	recx[0].rx_idx = 0;
+	recx[0].rx_nr = sizeof(REM_VAL1) + sizeof(REM_VAL2) +
+		sizeof(REM_VAL3) - 3;
+	iod.iod_nr = 1;
+	d_iov_set(&sg_iov[0], rbuf, sizeof(rbuf));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey, 1, &iod,
+			   &sgl);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(rbuf, REM_VAL2, sizeof(REM_VAL2) - 1);
+	assert_memory_equal(rbuf + sizeof(REM_VAL2) - 1, REM_VAL1,
+			    sizeof(REM_VAL1) - 1);
+	assert_memory_equal(rbuf + sizeof(REM_VAL2) + sizeof(REM_VAL1) - 2,
+			    REM_VAL3, sizeof(REM_VAL3) - 1);
+
+	/* Now remove the last update only */
+	recx[3].rx_idx = 0;
+	recx[3].rx_nr = recx[2].rx_idx;
+	epr.epr_hi = epoch;
+	epr.epr_lo = epoch - 1;
+	rc = vos_obj_array_remove(arg->ctx.tc_co_hdl, oid, &epr, &dkey,
+				  &iod.iod_name, &recx[3]);
+	assert_int_equal(rc, 0);
+
+	/* Now fetch again, should see old value */
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey, 1, &iod,
+			   &sgl);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(rbuf, REM_VAL1, sizeof(REM_VAL1) - 1);
+	assert_memory_equal(rbuf + sizeof(REM_VAL1) - 1, REM_VAL2,
+			    sizeof(REM_VAL2) - 1);
+	assert_memory_equal(rbuf + sizeof(REM_VAL2) + sizeof(REM_VAL1) - 2,
+			    REM_VAL3, sizeof(REM_VAL3) - 1);
+
+}
+
 static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS800: VOS punch model array set/get size",
 	  array_set_get_size, pm_setup, pm_teardown },
@@ -1298,6 +1406,7 @@ static const struct CMUnitTest punch_model_tests[] = {
 	  object_punch_and_fetch, NULL, NULL },
 	{ "VOS809: SGL test", sgl_test, NULL, NULL },
 	{ "VOS810: Conditionals test", cond_test, NULL, NULL },
+	{ "VOS811: Test vos_obj_array_remove", remove_test, NULL, NULL },
 };
 
 int

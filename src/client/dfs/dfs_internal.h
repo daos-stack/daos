@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,44 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * Internal task function pointers
+ * This is an extension of the DAOS File System API
+ *
+ * src/client/dfs/dfs_internal.h
  */
+#ifndef __DFS_INTERNAL_H__
+#define __DFS_INTERNAL_H__
 
-#ifndef __DAOS_TASK_INTERNAL_H__
-#define  __DAOS_TASK_INTERNAL_H__
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
-#include <daos_task.h>
-#include <daos/task.h>
+#include <sys/stat.h>
+#include <daos.h>
+#include <daos_fs.h>
 
-#define DAOS_TASK_MAGIC			0xbabeface
+/**
+ * Get the DFS superblock D-Key and A-Keys
+ *
+ * \param[out] dkey DFS superblock D-Key
+ * \param[out] iods DFS superblock A-keys
+ * \param[out] akey_count number of superblock A-keys
+ * \param[out] dfs_entry_size size of the dfs entry
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
+		int *dfs_entry_size);
 
-#endif /* __DAOS_TASK_INTERNAL_H__ */
+/**
+ * Releases the memory allocated by the dfs_get_sb_layout() function.
+ *
+ * \param[in] iods DFS superblock A-keys
+*/
+void
+dfs_free_sb_layout(daos_iod_t *iods[]);
+
+#if defined(__cplusplus)
+}
+#endif
+#endif /* __DFS_INTERNAL_H__ */

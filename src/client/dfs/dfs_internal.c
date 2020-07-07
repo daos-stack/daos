@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,12 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * Internal task function pointers
- */
 
-#ifndef __DAOS_TASK_INTERNAL_H__
-#define  __DAOS_TASK_INTERNAL_H__
+#include <daos/common.h>
+#include "dfs_internal.h"
 
-#include <daos_task.h>
-#include <daos/task.h>
-
-#define DAOS_TASK_MAGIC			0xbabeface
-
-#endif /* __DAOS_TASK_INTERNAL_H__ */
+void
+dfs_free_sb_layout(daos_iod_t *iods[])
+{
+	D_FREE(*iods);
+}
