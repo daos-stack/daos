@@ -543,7 +543,8 @@ int bio_iod_post(struct bio_desc *biod);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
+int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl,
+		 bool bypass_copy);
 
 /*
  * Helper function to get the specified SG list of an io descriptor

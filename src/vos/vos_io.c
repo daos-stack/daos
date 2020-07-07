@@ -1513,7 +1513,7 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	if (rc)
 		return rc;
 
-	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr, false);
 	rc = bio_iod_post(ioc->ic_biod);
 
 	return err ? err : rc;

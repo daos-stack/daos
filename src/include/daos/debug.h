@@ -119,6 +119,8 @@ enum {
 	IOBP_PM_SNAP		= (1 << 5),
 	/** no PMDK transaction */
 	IOBP_PM_TX		= (1 << 6),
+	/** ignore inline data copy */
+	IOBP_INLINE_COPY	= (1 << 7),
 };
 
 /**
@@ -134,7 +136,7 @@ enum {
 #define IOBP_ENV_PM		"pm"
 #define IOBP_ENV_PM_SNAP	"pm_snap"
 #define IOBP_ENV_PM_TX		"pm_tx"
-
+#define IOBP_ENV_INLINE_COPY	"inline_copy"
 extern unsigned int daos_io_bypass;
 
 #endif /* __DAOS_DEBUG_H__ */

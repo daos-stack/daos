@@ -981,7 +981,11 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				       orw->orw_bulks.ca_arrays, offs,
 				       ioh, NULL, orw->orw_nr);
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
-		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
+		int feats = daos_obj_id2feat(orw->orw_oid.id_pub);
+
+		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr,
+				  (feats & DAOS_OF_NO_INL_COPY) &&
+				  (daos_io_bypass & IOBP_INLINE_COPY));
 	}
 
 	if (rc) {

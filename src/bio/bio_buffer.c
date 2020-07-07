@@ -264,7 +264,7 @@ iod_release_buffer(struct bio_desc *biod)
 			chunk->bdc_pg_idx = 0;
 			if (chunk == bdb->bdb_cur_chk)
 				bdb->bdb_cur_chk = NULL;
-			d_list_move_tail(&chunk->bdc_link, &bdb->bdb_idle_list);
+			d_list_move(&chunk->bdc_link, &bdb->bdb_idle_list);
 		}
 		rsrvd_dma->brd_dma_chks[i] = NULL;
 	}
@@ -286,6 +286,7 @@ struct bio_copy_args {
 	int		 ca_iov_idx;
 	/* Current offset inside of current IOV */
 	ssize_t		 ca_iov_off;
+	bool		 ca_bypass_copy;
 };
 
 static int
@@ -822,7 +823,8 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 		if (addr != NULL) {
 			D_DEBUG(DB_IO, "bio copy %p size %zd\n",
 				addr, nob);
-			bio_memcpy(biod, media, addr, iov->iov_buf +
+			if (!arg->ca_bypass_copy)
+				bio_memcpy(biod, media, addr, iov->iov_buf +
 					arg->ca_iov_off, nob);
 			addr += nob;
 		} else {
@@ -966,7 +968,7 @@ bio_iod_post(struct bio_desc *biod)
 }
 
 int
-bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
+bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl, bool bypass_copy)
 {
 	struct bio_copy_args arg = { 0 };
 
@@ -978,6 +980,7 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 
 	arg.ca_sgls = sgls;
 	arg.ca_sgl_cnt = nr_sgl;
+	arg.ca_bypass_copy = bypass_copy;
 
 	return iterate_biov(biod, copy_one, &arg);
 }
@@ -1020,7 +1023,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	for (i = 0; i < bsgl->bs_nr; i++)
 		D_ASSERT(bio_iov2raw_buf(&bsgl->bs_iovs[i]) != NULL);
 
-	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */);
+	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */, false);
 	if (rc)
 		D_ERROR("Copy biod failed, "DF_RC"\n", DP_RC(rc));
 
