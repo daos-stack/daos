@@ -364,7 +364,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 
 %changelog
 * Tue Jul 7 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-27
-- Update to mercury 2.0.0~rc1-1
+- Update to mercury release 2.0.0~rc1-1
 
 * Tue Jun 28 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-26
 - Add the vos_size_dfs_sample.py tool. It is used to generate dynamically
