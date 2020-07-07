@@ -124,6 +124,8 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         "shell": False,
         "env": env,
     }
+    if verbose:
+        print("Command environment vars:\n  {}".format(env))
     try:
         # Block until the command is complete or times out
         return process.run(**kwargs)

@@ -449,26 +449,6 @@ dc_cont_alloc(const uuid_t uuid)
 	return dc;
 }
 
-static void
-dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
-{
-	uint32_t		csum_type_prop;
-	enum DAOS_CSUM_TYPE	csum_type;
-	uint64_t		chunksize;
-
-	csum_type_prop = daos_cont_prop2csum(props);
-	if (csum_type_prop == DAOS_PROP_CO_CSUM_OFF) {
-		cont->dc_csummer = NULL;
-		return;
-	}
-
-	csum_type = daos_contprop2csumtype(csum_type_prop);
-	chunksize = daos_cont_prop2chunksize(props);
-	daos_csummer_init(&cont->dc_csummer,
-			  daos_csum_type2algo(csum_type),
-			  chunksize, 0);
-}
-
 struct cont_open_args {
 	struct dc_pool		*coa_pool;
 	daos_cont_info_t	*coa_info;
@@ -524,7 +504,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = arg->hdl;
 
-	dc_cont_csum_init(cont, out->coo_prop);
+	rc = daos_csummer_init_with_props(&cont->dc_csummer, out->coo_prop);
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
