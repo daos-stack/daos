@@ -928,7 +928,7 @@ pipeline {
                                            'centos7-gcc-build-vars' ],
                                 script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
                                         "NODELIST=${env.NODELIST} " +
-                                        'ci/run_test_main.sh memcheck'
+                                        'ci/unit/test_main.sh memcheck'
                         }
                     }
                     post {
@@ -937,7 +937,7 @@ pipeline {
                             // label is at the end
                             // sh label: "Collect artifacts and tear down",
                             //   script '''set -ex
-                            sh script: 'ci/run_test_post_always.sh memcheck',
+                            sh script: 'ci/unit/test_post_always.sh memcheck',
                                label: "Collect artifacts and tear down"
                             archiveArtifacts artifacts: 'run_test_memcheck.sh/**'
                             publishValgrind (
