@@ -130,14 +130,15 @@ type cliOptions struct {
 	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs   bool   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	// TODO: implement host file parsing
-	HostFile   string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
-	ConfigPath string     `short:"o" long:"config-path" description:"Client config file path"`
-	Storage    storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
-	System     SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
-	Network    NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
-	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
-	Cont       ContCmd    `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
-	Version    versionCmd `command:"version" description:"Print dmg version"`
+	HostFile       string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
+	ConfigPath     string     `short:"o" long:"config-path" description:"Client config file path"`
+	Storage        storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
+	System         SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
+	Network        NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
+	Pool           PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
+	Cont           ContCmd    `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
+	Version        versionCmd `command:"version" description:"Print dmg version"`
+	firmwareOption            // build with tag "firmware" to enable
 }
 
 type versionCmd struct{}
