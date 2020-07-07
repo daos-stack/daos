@@ -154,6 +154,19 @@ const (
 	ScmUpdateStatusFailed
 )
 
+// String translates the update status to a string
+func (s ScmFirmwareUpdateStatus) String() string {
+	switch s {
+	case ScmUpdateStatusStaged:
+		return "Staged"
+	case ScmUpdateStatusSuccess:
+		return "Success"
+	case ScmUpdateStatusFailed:
+		return "Failed"
+	}
+	return "Unknown"
+}
+
 func (ndh *NvmeDeviceHealth) TempK() uint32 {
 	return uint32(ndh.Temperature)
 }
@@ -168,8 +181,8 @@ func (ndh *NvmeDeviceHealth) TempF() float32 {
 
 func (sm *ScmModule) String() string {
 	// capacity given in IEC standard units.
-	return fmt.Sprintf("PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", sm.PhysicalID, humanize.IBytes(sm.Capacity),
+	return fmt.Sprintf("UID:%s PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
+		"chan:%d pos:%d)", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
 		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition)
 }
 

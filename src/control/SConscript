@@ -225,7 +225,8 @@ def scons():
     AlwaysBuild([serverbin, adminbin])
 
     if is_firmware_mgmt_build(denv):
-        fwbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_firmware",
+        print("(EXPERIMENTAL) Building DAOS firmware tools")
+        fwbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_firmware",
                                "daos_firmware")
         AlwaysBuild([fwbin])
 

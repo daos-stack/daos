@@ -492,11 +492,19 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 	testActiveVersion := "1.0.0.1"
 	testStagedVersion := "2.0.0.2"
 	fwInfo := ipmctl.DeviceFirmwareInfo{
-		FWImageMaxSize: 1024,
+		FWImageMaxSize: 65,
 		FWUpdateStatus: ipmctl.FWUpdateStatusStaged,
 	}
 	_ = copy(fwInfo.ActiveFWVersion[:], testActiveVersion)
 	_ = copy(fwInfo.StagedFWVersion[:], testStagedVersion)
+
+	// Representing a DIMM without a staged FW version
+	fwInfoUnstaged := ipmctl.DeviceFirmwareInfo{
+		FWImageMaxSize: 1,
+		FWUpdateStatus: ipmctl.FWUpdateStatusSuccess,
+	}
+	_ = copy(fwInfoUnstaged.ActiveFWVersion[:], testActiveVersion)
+	_ = copy(fwInfoUnstaged.StagedFWVersion[:], noFirmwareVersion)
 
 	for name, tc := range map[string]struct {
 		inputUID  string
@@ -522,8 +530,19 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 			expResult: &storage.ScmFirmwareInfo{
 				ActiveVersion:     testActiveVersion,
 				StagedVersion:     testStagedVersion,
-				ImageMaxSizeBytes: fwInfo.FWImageMaxSize,
+				ImageMaxSizeBytes: fwInfo.FWImageMaxSize * 4096,
 				UpdateStatus:      storage.ScmUpdateStatusStaged,
+			},
+		},
+		"nothing staged": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				fwInfo: fwInfoUnstaged,
+			},
+			expResult: &storage.ScmFirmwareInfo{
+				ActiveVersion:     testActiveVersion,
+				ImageMaxSizeBytes: 4096,
+				UpdateStatus:      storage.ScmUpdateStatusSuccess,
 			},
 		},
 	} {

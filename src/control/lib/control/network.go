@@ -34,6 +34,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -63,7 +64,7 @@ func (hf *HostFabric) HashKey() (uint64, error) {
 func (hf *HostFabric) AddInterface(hfi *HostFabricInterface) {
 	hf.Interfaces = append(hf.Interfaces, hfi)
 	hf.Providers = append(hf.Providers, hfi.Provider)
-	hf.Providers = dedupeStringSlice(hf.Providers)
+	hf.Providers = common.DedupeStringSlice(hf.Providers)
 }
 
 // HostFabricSet contains a HostFabric configuration and the
@@ -121,23 +122,6 @@ func (hfm HostFabricMap) Keys() []uint64 {
 	return keys
 }
 
-// dedupeStringSlice is responsible for returning a slice based on
-// the input with any duplicates removed.
-func dedupeStringSlice(in []string) []string {
-	keys := make(map[string]struct{})
-
-	for _, el := range in {
-		keys[el] = struct{}{}
-	}
-
-	out := make([]string, 0, len(keys))
-	for key := range keys {
-		out = append(out, key)
-	}
-
-	return out
-}
-
 // addHostResponse is responsible for validating the given HostResponse
 // and adding it to the NetworkScanResp.
 func (nsr *NetworkScanResp) addHostResponse(hr *HostResponse) (err error) {
@@ -155,7 +139,7 @@ func (nsr *NetworkScanResp) addHostResponse(hr *HostResponse) (err error) {
 	for _, hfi := range hf.Interfaces {
 		hf.Providers = append(hf.Providers, hfi.Provider)
 	}
-	hf.Providers = dedupeStringSlice(hf.Providers)
+	hf.Providers = common.DedupeStringSlice(hf.Providers)
 
 	if nsr.HostFabrics == nil {
 		nsr.HostFabrics = make(HostFabricMap)

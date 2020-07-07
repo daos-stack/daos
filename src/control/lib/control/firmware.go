@@ -1,0 +1,280 @@
+//
+// (C) Copyright 2020 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+// +build firmware
+
+package control
+
+import (
+	"context"
+	"fmt"
+	"sort"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+type (
+	// FirmwareQueryReq is a request for firmware information for storage
+	// devices.
+	FirmwareQueryReq struct {
+		unaryRequest
+		SCM  bool // Query SCM devices
+		NVMe bool // Query NVMe devices
+	}
+
+	// HostSCMQueryMap maps a host name to a slice of query results.
+	HostSCMQueryMap map[string][]*SCMQueryResult
+
+	// FirmwareQueryResp returns storage device firmware information.
+	FirmwareQueryResp struct {
+		HostErrorsResp
+		HostSCMFirmware HostSCMQueryMap
+	}
+
+	// SCMFirmwareResult represents the results of a firmware query
+	// for a single SCM device.
+	SCMQueryResult struct {
+		Module storage.ScmModule
+		Info   *storage.ScmFirmwareInfo
+		Error  error
+	}
+)
+
+// Keys returns the sorted list of keys from the map.
+func (m HostSCMQueryMap) Keys() []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// addHostResponse is responsible for validating the given HostResponse
+// and adding it to the FirmwareQueryResp.
+func (qr *FirmwareQueryResp) addHostResponse(hr *HostResponse) error {
+	if qr.HostSCMFirmware == nil {
+		qr.HostSCMFirmware = make(HostSCMQueryMap)
+	}
+
+	pbResp, ok := hr.Message.(*ctlpb.FirmwareQueryResp)
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
+	}
+
+	scmResults := make([]*SCMQueryResult, 0, len(pbResp.ScmResults))
+
+	for _, pbScmRes := range pbResp.ScmResults {
+		devResult := &SCMQueryResult{
+			Info: &storage.ScmFirmwareInfo{
+				ActiveVersion:     pbScmRes.ActiveVersion,
+				StagedVersion:     pbScmRes.StagedVersion,
+				ImageMaxSizeBytes: pbScmRes.ImageMaxSizeBytes,
+				UpdateStatus:      storage.ScmFirmwareUpdateStatus(pbScmRes.UpdateStatus),
+			},
+		}
+		if err := convert.Types(pbScmRes.Module, &devResult.Module); err != nil {
+			return errors.Wrapf(err, "unable to convert module")
+		}
+		if pbScmRes.Error != "" {
+			devResult.Error = errors.New(pbScmRes.Error)
+		}
+		scmResults = append(scmResults, devResult)
+	}
+
+	qr.HostSCMFirmware[hr.Addr] = scmResults
+	return nil
+}
+
+// FirmwareQuery concurrently requests device firmware information from
+// all hosts supplied in the request's hostlist, or all configured hosts
+// if not explicitly specified. The function blocks until all results
+// (successful or otherwise) are received, and returns a single response
+// structure containing results for all host firmware query operations.
+func FirmwareQuery(ctx context.Context, rpcClient UnaryInvoker, req *FirmwareQueryReq) (*FirmwareQueryResp, error) {
+	if !req.SCM && !req.NVMe {
+		return nil, errors.New("no device types requested")
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).FirmwareQuery(ctx, &ctlpb.FirmwareQueryReq{
+			QueryScm:  req.SCM,
+			QueryNvme: req.NVMe,
+		})
+	})
+
+	unaryResp, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(FirmwareQueryResp)
+	for _, hostResp := range unaryResp.Responses {
+		if hostResp.Error != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := resp.addHostResponse(hostResp); err != nil {
+			return nil, err
+		}
+	}
+
+	return resp, nil
+}
+
+type (
+	// DeviceType is an enum representing the storage device type.
+	DeviceType uint32
+
+	// FirmwareUpdateReq is a request to update firmware for a specific type
+	// of storage device.
+	FirmwareUpdateReq struct {
+		unaryRequest
+		FirmwarePath string
+		Type         DeviceType
+	}
+
+	// HostSCMUpdateMap maps a host name to a slice of SCM update results.
+	HostSCMUpdateMap map[string][]*SCMUpdateResult
+
+	// SCMUpdateResult represents the results of a firmware update
+	// for a single SCM device.
+	SCMUpdateResult struct {
+		Module storage.ScmModule
+		Error  error
+	}
+
+	// FirmwareUpdateResp returns the results of firmware update operations.
+	FirmwareUpdateResp struct {
+		HostErrorsResp
+		HostSCMResult HostSCMUpdateMap
+	}
+)
+
+const (
+	// DeviceTypeUnknown represents an unspecified device type.
+	DeviceTypeUnknown DeviceType = iota
+	// DeviceTypeSCM represents SCM modules.
+	DeviceTypeSCM
+	// DeviceTypeNVMe represents NVMe SSDs.
+	DeviceTypeNVMe
+)
+
+func (t DeviceType) toCtlPBType() (ctlpb.FirmwareUpdateReq_DeviceType, error) {
+	switch t {
+	case DeviceTypeSCM:
+		return ctlpb.FirmwareUpdateReq_SCM, nil
+	case DeviceTypeNVMe:
+		return ctlpb.FirmwareUpdateReq_NVMe, nil
+	}
+
+	return ctlpb.FirmwareUpdateReq_DeviceType(-1),
+		fmt.Errorf("invalid device type %d", uint32(t))
+}
+
+func (ur *FirmwareUpdateResp) addHostResponse(hr *HostResponse) error {
+	if ur.HostSCMResult == nil {
+		ur.HostSCMResult = make(HostSCMUpdateMap)
+	}
+
+	pbResp, ok := hr.Message.(*ctlpb.FirmwareUpdateResp)
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
+	}
+
+	scmResults := make([]*SCMUpdateResult, 0, len(pbResp.ScmResults))
+
+	for _, pbScmRes := range pbResp.ScmResults {
+		devResult := &SCMUpdateResult{}
+		if err := convert.Types(pbScmRes.Module, &devResult.Module); err != nil {
+			return errors.Wrapf(err, "unable to convert module")
+		}
+		if pbScmRes.Error != "" {
+			devResult.Error = errors.New(pbScmRes.Error)
+		}
+		scmResults = append(scmResults, devResult)
+	}
+
+	ur.HostSCMResult[hr.Addr] = scmResults
+	return nil
+}
+
+// Keys returns the sorted list of keys from the map.
+func (m HostSCMUpdateMap) Keys() []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// FirmwareUpdate concurrently updates device firmware for a given device type
+// for all hosts supplied in the request's hostlist, or all configured hosts
+// if not explicitly specified. The function blocks until all results
+// (successful or otherwise) are received, and returns a single response
+// structure containing results for all host firmware update operations.
+func FirmwareUpdate(ctx context.Context, rpcClient UnaryInvoker, req *FirmwareUpdateReq) (*FirmwareUpdateResp, error) {
+	if req.FirmwarePath == "" {
+		return nil, errors.New("firmware file path missing")
+	}
+	pbType, err := req.Type.toCtlPBType()
+	if err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).FirmwareUpdate(ctx, &ctlpb.FirmwareUpdateReq{
+			FirmwarePath: req.FirmwarePath,
+			Type:         pbType,
+		})
+	})
+
+	unaryResp, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(FirmwareUpdateResp)
+	for _, hostResp := range unaryResp.Responses {
+		if hostResp.Error != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := resp.addHostResponse(hostResp); err != nil {
+			return nil, err
+		}
+	}
+
+	return resp, nil
+}
