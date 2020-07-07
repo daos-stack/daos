@@ -13,38 +13,45 @@ post_provision_config_nodes() {
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi
     
+    source /etc/os-release
     # Temp fix for broken mirror until snapshot is rebuilt to not use it.
-    zypper --non-interactive mr -d openSUSE-Leap-15.1-1 || true 
-    zypper --non-interactive mr -d openSUSE-Leap-15.1-Non-Oss || true
-    zypper --non-interactive mr -d openSUSE-Leap-15.1-Oss || true
-    zypper --non-interactive mr -d openSUSE-Leap-15.1-Update || true
-    zypper --non-interactive mr -d openSUSE-Leap-15.1-Update-Non-Oss || true
-    zypper --non-interactive rm fuse
 
-    echo 'solver.allowVendorChange = true' >> /etc/zypp/zypp.conf
-    # because our Nexus is broken
-    zypper --non-interactive ar \
+    if [ $VERSION_ID == '1.5' ]; then
+      zypper --non-interactive mr -d openSUSE-Leap-15.1-1 || true
+      zypper --non-interactive mr -d openSUSE-Leap-15.1-Non-Oss || true
+      zypper --non-interactive mr -d openSUSE-Leap-15.1-Oss || true
+      zypper --non-interactive mr -d openSUSE-Leap-15.1-Update || true
+      zypper --non-interactive mr -d openSUSE-Leap-15.1-Update-Non-Oss || true
+      zypper --non-interactive rm fuse || true
+
+      echo 'solver.allowVendorChange = true' >> /etc/zypp/zypp.conf
+      # because our Nexus is broken
+      zypper --non-interactive ar \
            'https://download.opensuse.org/repositories/science:/HPC/openSUSE_Leap_15.1/science:HPC.repo'
-    zypper --non-interactive ar --gpgcheck-allow-unsigned \
+      zypper --non-interactive ar --gpgcheck-allow-unsigned \
            'https://build.hpdd.intel.com/job/daos-stack/job/python-avocado/job/PR-1/lastSuccessfulBuild/artifact/artifacts/leap15/' avocado
-    # disable troublesome repos
-    # Repository 'openSUSE-Leap-15.1-Update' is invalid.
-    # [openSUSE-Leap-15.1-Update|https://mirrors.kernel.org/opensuse/update/leap/15.1/oss/] Valid metadata not found at specified URL
-    # History:
-    #  - File './repodata/a1ec055b3dd037afa3008dc30eb9e63834cd9602d25de8cfc1b3446ae6639973-deltainfo.xml.gz' not found on medium 'https://mirrors.kernel.org/opensuse/update/leap/15.1/oss/'
-    #  - Can't provide ./repodata/a1ec055b3dd037afa3008dc30eb9e63834cd9602d25de8cfc1b3446ae6639973-deltainfo.xml.gz
-    zypper --non-interactive mr -d 'openSUSE-Leap-15.1-Update'
-    # to get a python2-lzma that isn't broken
-    zypper --non-interactive ar http://download.opensuse.org/distribution/leap/15.2/repo/oss/ 15.2_oss
-    zypper --non-interactive --gpg-auto-import-keys ref avocado 15.2_oss 'All packages used mainly in HPC (openSUSE_Leap_15.1)'
+      # disable troublesome repos
+      # Repository 'openSUSE-Leap-15.1-Update' is invalid.
+      # [openSUSE-Leap-15.1-Update|https://mirrors.kernel.org/opensuse/update/leap/15.1/oss/] Valid metadata not found at specified URL
+      # History:
+      #  - File './repodata/a1ec055b3dd037afa3008dc30eb9e63834cd9602d25de8cfc1b3446ae6639973-deltainfo.xml.gz' not found on medium 'https://mirrors.kernel.org/opensuse/update/leap/15.1/oss/'
+      #  - Can't provide ./repodata/a1ec055b3dd037afa3008dc30eb9e63834cd9602d25de8cfc1b3446ae6639973-deltainfo.xml.gz
+      zypper --non-interactive mr -d 'openSUSE-Leap-15.1-Update'
+      # to get a python2-lzma that isn't broken
+      zypper --non-interactive ar http://download.opensuse.org/distribution/leap/15.2/repo/oss/ 15.2_oss || true
+      zypper --non-interactive --gpg-auto-import-keys ref avocado 15.2_oss 'All packages used mainly in HPC (openSUSE_Leap_15.1)' || true
+    fi
     # remove to avoid conflicts
-    zypper --non-interactive rm python2-Fabric Modules
-    zypper --non-interactive in python2-avocado-plugins-varianter-yaml-to-mux \
-                                python2-avocado-plugins-output-html           \
-                                patch python2-Jinja2 pciutils lua-lmod
-    zypper --non-interactive rr 15.2_oss
-    rpm -qa | grep kernel
-    
+    zypper --non-interactive rm python2-Fabric Modules || true
+    if [ $VERSION_ID == '1.5' ]; then
+      zypper --non-interactive in python2-avocado-plugins-varianter-yaml-to-mux \
+                                  python2-avocado-plugins-output-html           \
+                                  patch python2-Jinja2 pciutils lua-lmod
+      zypper --non-interactive rr 15.2_oss || true
+      rpm -qa | grep kernel
+    else
+      zypper --non-interactive in avocado patch python2-Jinja2 pciutils lua-lmod
+    fi
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
          # rm -f /etc/yum.repos.d/*"$DAOS_STACK_GROUP_REPO"
         zypper --non-interactive ar "$REPOSITORY_URL"/"$DAOS_STACK_GROUP_REPO" daos-stack-group-repo
@@ -75,8 +82,9 @@ post_provision_config_nodes() {
         done
     fi
     # some hackery due to broken repos
-    x=0
-    while [ $x -lt 5 ]; do
+    if [ $VERSION_ID == '1.5' ]; then
+      x=0
+      while [ $x -lt 5 ]; do
         if time zypper --non-interactive         \
                        --gpg-auto-import-keys    \
                        --no-gpg-checks ref; then
@@ -84,10 +92,11 @@ post_provision_config_nodes() {
         fi
         ((x++)) || true
         if [ $x -eq 3 ]; then
-            zypper --non-interactive rr openSUSE-Leap-15.1-Update-Non-Oss
-            zypper --non-interactive rr openSUSE-Leap-15.1-Non-Oss
+            zypper --non-interactive rr openSUSE-Leap-15.1-Update-Non-Oss || true
+            zypper --non-interactive rr openSUSE-Leap-15.1-Non-Oss || true
         fi
-    done
+      done
+    fi
     #if [ -n "$INST_RPMS" ]; then
         #yum -y erase $INST_RPMS
     #fi

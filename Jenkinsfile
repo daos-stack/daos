@@ -563,7 +563,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"'
+                                  env.QUICKBUILD_DEPS_EL7 + '"'
                         }
                     }
                     steps {
@@ -905,7 +905,7 @@ pipeline {
                       expression { ! skip_stage('run_test') }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
@@ -913,7 +913,7 @@ pipeline {
                                        profile: 'daos_ci',
                                        distro: 'el7',
                                        snapshot: true,
-                                       inst_repos: el7_component_repos + ' ' +
+                                       inst_repos: el7_component_repos() + ' ' +
                                                    component_repos(),
                                        inst_rpms: 'gotestsum openmpi3 ' +
                                                   'hwloc-devel argobots ' +
@@ -1010,7 +1010,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + component_repos() + '"'
                         }
                     }
@@ -1053,7 +1053,7 @@ pipeline {
                         expression { ! skip_stage('func-test') }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
@@ -1099,7 +1099,7 @@ pipeline {
                                        inst_rpms: get_daos_packages('leap15') + ' ' +
                                                   leap15_functional_rpms + ' ' +
                                                   qb_inst_rpms_functional()
-                        update_kernel(9)
+                        // update_kernel(9)
                         runTestFunctional stashes: [ 'leap15-gcc-install',
                                                      'leap15-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1244,7 +1244,7 @@ pipeline {
                         }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         testRpm inst_repos: el7_daos_repos(),
@@ -1262,7 +1262,7 @@ pipeline {
                         }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label 'stage_vm1'
                     }
                     steps {
                         testRpm inst_repos: el7_daos_repos(),
