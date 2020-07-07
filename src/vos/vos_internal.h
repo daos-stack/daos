@@ -243,7 +243,6 @@ struct vos_dtx_act_ent {
 
 extern struct vos_tls	*standalone_tls;
 #ifdef VOS_STANDALONE
-unsigned int tmp_count;
 #define VOS_TIME_START(start, op)		\
 do {						\
 	if (standalone_tls->vtl_dp == NULL)	\

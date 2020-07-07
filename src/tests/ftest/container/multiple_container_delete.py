@@ -62,40 +62,31 @@ class MultipleContainerDelete(IorTestBase):
 
         # Since the transfer size is 1M, the objects will be inserted
         # directly into NVMe and hence storage_index = 1
-        storage_index = 0
+        storage_index = 1
         out = []
 
         initial_free_space = self.get_pool_space(storage_index)
 
-        for i in range(20):
+        for i in range(1000):
             self.create_cont()
             self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
             self.run_ior_with_pool()
-            new_free_space = self.get_pool_space(storage_index)
-            print("Free Space after ior = {}".format(new_free_space))
             self.container.destroy()
+            free_space = self.get_pool_space(storage_index)
             out.append("iter = {}, free_space = {}".format(
-                       i+1, new_free_space))
+                       i+1, free_space))
 
         # Wait for all clean ups
         self.log.info("Waiting for the clean up of containers...")
         time.sleep(10)
-        new_free_space = self.get_pool_space(storage_index)
-        print("\n")
-        print("Initial Free Space = {}".format(initial_free_space))
-        for el in out:
-            print(el)
-        print("\n")
-        print("Free Space after cont destroy = {}".format(new_free_space))
-        self.stop_servers()
-        time.sleep(20)
-        self.start_servers()
-        time.sleep(20)
-        free_space = self.get_pool_space(storage_index)
-        print("Free space after server restart = {}".format(free_space))
-        
-        #self.assertTrue(new_free_space  == initial_free_space)
+        free_space_after_cont_del = self.get_pool_space(storage_index)
+        self.log.info("Initial Free Space = {}".format(initial_free_space))
+        self.log.info("Free space after each cont create/del iteration")
+        self.log.info("\n".join(out))
+        self.log.info("Final free Space after all iters = {}".format(
+            free_space_after_cont_del))
+        self.assertTrue(free_space_after_cont_del  == initial_free_space)
 
 
     def get_pool_space(self, storage_index):
