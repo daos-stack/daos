@@ -1088,6 +1088,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version;
+	uuid_t			pool_hdl_uuid;
+	uuid_t			cont_hdl_uuid;
 	daos_prop_t	       *prop = NULL;
 	uint64_t		prop_bits;
 	bool			cont_svc_up = false;
@@ -1149,6 +1151,19 @@ unlock:
 		D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
 		D_GOTO(out, rc);
 	}
+
+	uuid_generate(pool_hdl_uuid);
+	uuid_generate(cont_hdl_uuid);
+	rc = ds_pool_iv_srv_hdl_update(svc->ps_pool, pool_hdl_uuid,
+				       cont_hdl_uuid);
+	if (rc) {
+		D_ERROR("ds_pool_iv_srv_hdl_update failed %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+	
+	D_PRINT(DF_UUID": pool/cont hdl uuid "DF_UUID"/"DF_UUID"\n",
+		DP_UUID(svc->ps_uuid), DP_UUID(pool_hdl_uuid),
+		DP_UUID(cont_hdl_uuid));
 
 	rc = ds_rebuild_regenerate_task(svc->ps_pool);
 	if (rc != 0)
@@ -1735,8 +1750,8 @@ pool_connect_iv_dist(struct pool_svc *svc, uuid_t pool_hdl,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = ds_pool_iv_hdl_update(svc->ps_pool, pool_hdl, flags,
-				   sec_capas, cred);
+	rc = ds_pool_iv_conn_hdl_update(svc->ps_pool, pool_hdl, flags,
+					sec_capas, cred);
 	if (rc)
 		D_GOTO(out, rc);
 out:
@@ -2490,7 +2505,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 		 * connect the pool, so we only verify the non-rebuild
 		 * pool.
 		 */
-		if (!is_rebuild_pool(in->plci_op.pi_uuid, in->plci_op.pi_hdl)) {
+		if (!is_pool_from_srv(in->plci_op.pi_uuid, in->plci_op.pi_hdl)) {
 			d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
 			d_iov_set(&value, &hdl, sizeof(hdl));
 			rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
@@ -2587,7 +2602,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	 * handle.
 	 */
 	if (daos_rpc_from_client(rpc) &&
-	    !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
+	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
 		d_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
 		d_iov_set(&value, &hdl, sizeof(hdl));
 		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
@@ -2705,7 +2720,7 @@ out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
 	/* See comment above, rebuild doesn't connect the pool */
 	if (rc == 0 && (in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
-	    !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
+	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
 					    &out->pqo_space);
 	pool_svc_put_leader(svc);
@@ -4559,5 +4574,51 @@ out_tx:
 out_svc:
 	pool_svc_put_leader(svc);
 	return rc;
+}
+
+bool
+is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid)
+{
+	struct ds_pool	*pool;
+	uuid_t		hdl_uuid;
+	int		rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		D_ERROR(DF_UUID": failed to get ds_pool\n",
+			DP_UUID(pool_uuid));
+		return false;
+	}
+
+	rc = ds_pool_iv_srv_hdl_fetch(pool, NULL, &hdl_uuid);
+	if (rc) {
+		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
+		return false;
+	}
+
+	return !uuid_compare(coh_uuid, hdl_uuid);
+}
+
+bool
+is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
+{
+	struct ds_pool	*pool;
+	uuid_t		hdl_uuid;
+	int		rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		D_ERROR(DF_UUID": failed to get ds_pool\n",
+			DP_UUID(pool_uuid));
+		return false;
+	}
+
+	rc = ds_pool_iv_srv_hdl_fetch(pool, &hdl_uuid, NULL);
+	if (rc) {
+		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
+		return false;
+	}
+
+	return !uuid_compare(poh_uuid, hdl_uuid);
 }
 
