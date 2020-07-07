@@ -650,10 +650,10 @@ int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		daos_iod_t *iods, d_sg_list_t *sgls,
 		daos_iom_t *maps);
 int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
-		daos_key_t *dkey, daos_key_t *akey, daos_size_t *size,
-		uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
-		daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
-		daos_anchor_t *akey_anchor);
+		     daos_key_t *dkey, daos_key_t *akey, daos_size_t *size,
+		     uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
+		     daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
+		     daos_anchor_t *akey_anchor, d_iov_t *csum);
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 
@@ -693,9 +693,10 @@ struct dss_enum_arg {
 	daos_unit_oid_t		oid;		/* for unpack */
 };
 
-int
-dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg);
+struct dtx_handle;
+int dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
+		  struct vos_iter_anchors *anchors, struct dss_enum_arg *arg,
+		  struct dtx_handle *dth);
 
 /** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
 #define DSS_ENUM_UNPACK_MAX_IODS 16
@@ -719,6 +720,7 @@ struct dss_enum_unpack_io {
 	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
 	daos_key_t		 ui_dkey;	/**< type <= DKEY */
 	daos_iod_t		*ui_iods;
+	struct dcs_iod_csums	*ui_iods_csums;
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	daos_epoch_t		*ui_rec_punch_ephs;
