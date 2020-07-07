@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import getpass
+import socket
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
@@ -343,7 +344,8 @@ class DaosServerManager(SubprocessManager):
         # Copy certificates
         self.manager.job.yaml.copy_certificates(
             get_log_file("certs"), self._hosts)
-        self.dmg.set_certificates(["localhost"])
+        local_host = socket.gethostname().split('.', 1)[0]
+        self.dmg.set_certificates(local_host.split())
 
         # Prepare dmg for running storage format on all server hosts
         self.dmg.hostlist = self._hosts
