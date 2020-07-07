@@ -251,7 +251,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
  */
 int
 dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
+	 int flags, unsigned int cid, daos_size_t chunk_size,
 	 const char *value, dfs_obj_t **obj);
 
 /**

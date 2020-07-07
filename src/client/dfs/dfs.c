@@ -31,6 +31,7 @@
 #include <daos/event.h>
 #include <daos/container.h>
 #include <daos/array.h>
+#include <daos/object.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -226,7 +227,7 @@ oid_cp(daos_obj_id_t *dst, daos_obj_id_t src)
 	dst->lo = src.lo;
 }
 
-#define MAX_OID_HI ((1UL << 32) - 1)
+#define MAX_OID_HI ((1UL << 20) - 1)
 
 /*
  * OID generation for the dfs objects.
@@ -238,17 +239,24 @@ oid_cp(daos_obj_id_t *dst, daos_obj_id_t src)
  * hence discarded when the dfs is unmounted.
  */
 static int
-oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
+oid_gen(dfs_t *dfs, unsigned int oclass, bool file, daos_obj_id_t *oid)
 {
 	daos_ofeat_t	feat = 0;
+	int		rank = 0;
+	int		target = 0;
 	int		rc;
 
-	if (oclass == 0)
+	if (oclass == 0) {
 		oclass = dfs->attr.da_oclass_id;
+	} else {
+		rank	= (oclass >> 28);
+		target	= (oclass >> 20) & 0xFF;
+		oclass	&= MAX_OID_HI;
+	}
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
-	if (dfs->oid.hi >= MAX_OID_HI) {
+	if ((dfs->oid.hi & MAX_OID_HI) == MAX_OID_HI) {
 		/** Allocate an OID for the namespace */
 		rc = daos_cont_alloc_oids(dfs->coh, 1, &dfs->oid.lo, NULL);
 		if (rc) {
@@ -271,6 +279,12 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** generate the daos object ID (set the DAOS owned bits) */
 	daos_obj_generate_id(oid, feat, oclass, 0);
+	if (oclass == DAOS_OC_R1S_SPEC_RANK ||
+	    oclass == DAOS_OC_R2S_SPEC_RANK ||
+	    oclass == DAOS_OC_R3S_SPEC_RANK) {
+		*oid = daos_oclass_sr_set_rank(*oid, rank);
+		*oid = daos_oclass_st_set_tgt(*oid, target);
+	}
 
 	return 0;
 }
@@ -615,7 +629,7 @@ check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
 
 static int
 open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
-	  daos_oclass_id_t cid, daos_size_t chunk_size, dfs_obj_t *file)
+	  unsigned int cid, daos_size_t chunk_size, dfs_obj_t *file)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -720,7 +734,7 @@ open_file:
  */
 static int
 create_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
-	   daos_oclass_id_t cid, dfs_obj_t *dir)
+	   unsigned int cid, dfs_obj_t *dir)
 {
 	int			rc;
 
@@ -752,7 +766,7 @@ create_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 
 static int
 open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
-	 daos_oclass_id_t cid, dfs_obj_t *dir)
+	 unsigned int cid, dfs_obj_t *dir)
 {
 	struct dfs_entry	entry = {0};
 	bool			exists;
@@ -2196,7 +2210,7 @@ err_obj:
 
 int
 dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	 int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
+	 int flags, unsigned int cid, daos_size_t chunk_size,
 	 const char *value, dfs_obj_t **_obj)
 {
 	dfs_obj_t	*obj;

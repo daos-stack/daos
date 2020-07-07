@@ -221,8 +221,8 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
 
 /** bits for the specified rank */
-#define DAOS_OC_SR_SHIFT	24
-#define DAOS_OC_SR_BITS		8
+#define DAOS_OC_SR_SHIFT	28
+#define DAOS_OC_SR_BITS		4
 #define DAOS_OC_SR_MASK		\
 	(((1ULL << DAOS_OC_SR_BITS) - 1) << DAOS_OC_SR_SHIFT)
 
@@ -231,7 +231,7 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
  * target maximum.
  */
 #define DAOS_OC_ST_SHIFT	20
-#define DAOS_OC_ST_BITS		4
+#define DAOS_OC_ST_BITS		8
 #define DAOS_OC_ST_MASK		\
 	(((1ULL << DAOS_OC_ST_BITS) - 1) << DAOS_OC_ST_SHIFT)
 
@@ -265,7 +265,7 @@ static inline daos_obj_id_t
 daos_oclass_st_set_tgt(daos_obj_id_t oid, int tgt)
 {
 	D_ASSERT(daos_obj_is_srank(oid));
-	D_ASSERT(tgt < (1 << DAOS_OC_ST_SHIFT));
+	D_ASSERT(tgt < (1 << DAOS_OC_ST_BITS));
 	D_ASSERT((oid.hi & DAOS_OC_ST_MASK) == 0);
 
 	oid.hi |= (uint64_t)tgt << DAOS_OC_ST_SHIFT;
