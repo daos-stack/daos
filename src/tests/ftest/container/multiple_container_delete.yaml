@@ -6,7 +6,7 @@ hosts:
         - server-D
     test_clients:
         - client-A
-timeout: 6000
+timeout: 7200
 server_config:
     name: daos_server
     servers:
@@ -37,5 +37,5 @@ ior:
         flags: "-v -w -k"
     api: DFS
     transfer_size: '1M'
-    block_size: '8G'
+    block_size: '1G'
     daos_oclass: "SX"

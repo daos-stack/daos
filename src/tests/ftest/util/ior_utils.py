@@ -281,7 +281,7 @@ class IorCommand(ExecutableCommand):
         env["MPI_LIB"] = "\"\""
         env["FI_PSM2_DISCONNECT"] = "1"
 
-        # ior POSIX api doesn't require the below options.
+        # ior POSIX api does not require the below options.
         if "POSIX" in manager_cmd:
             return env
 
@@ -289,14 +289,15 @@ class IorCommand(ExecutableCommand):
             if self.daos_pool.value is not None:
                 env["DAOS_POOL"] = self.daos_pool.value
                 env["DAOS_SVCL"] = self.daos_svcl.value
-                env["DAOS_CONT"] = self.daos_cont.value 
-                env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
+                env["DAOS_CONT"] = self.daos_cont.value
+                env["IOR_HINT__MPI__romio_daos_obj_class"] = \
+                    self.daos_oclass.value
             elif self.dfs_pool.value is not None:
                 env["DAOS_POOL"] = self.dfs_pool.value
                 env["DAOS_SVCL"] = self.dfs_svcl.value
-                env["DAOS_CONT"] = self.dfs_cont.value 
-                env["IOR_HINT__MPI__romio_dfs_obj_class"] = self.dfs_oclass.value
-
+                env["DAOS_CONT"] = self.dfs_cont.value
+                env["IOR_HINT__MPI__romio_dfs_obj_class"] = \
+                    self.dfs_oclass.value
         return env
 
     @staticmethod
@@ -336,8 +337,8 @@ class IorCommand(ExecutableCommand):
         """
         logger.info("\n")
         logger.info(message)
-        for m in metrics:
-            logger.info(m)
+        for message in metrics:
+            logger.info(message)
         logger.info("\n")
 
 
