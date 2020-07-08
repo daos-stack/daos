@@ -1073,7 +1073,6 @@ class PreReqComponent():
             return self.__prebuilt_path[name]
 
         prebuilt_paths = self.__env.get("ALT_PREFIX")
-        print("prebuilt_paths is %s" % prebuilt_paths)
         if prebuilt_paths is None:
             paths = []
         else:
@@ -1095,7 +1094,6 @@ class PreReqComponent():
                 env.AppendUnique(CPPPATH=[ipath])
             if lpath:
                 env.AppendUnique(LIBPATH=[lpath])
-            print("Checking %s in %s" % (name, path))
             if not comp.has_missing_targets(env):
                 self.__prebuilt_path[name] = path
                 return path
