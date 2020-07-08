@@ -1395,7 +1395,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	ent.ei_addr.ba_dedup = false;	/* Don't make this flag persistent */
 
 	if (ioc->ic_remove)
-		return evt_remove_all(toh, &ent.ei_rect.rc_ex, epoch);
+		return evt_remove_all(toh, &ent.ei_rect.rc_ex, &ioc->ic_epr);
 
 	rc = evt_insert(toh, &ent, NULL);
 
@@ -2361,6 +2361,39 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	rc = vos_update_end(ioh, pm_ver, dkey, rc, NULL);
+	return rc;
+}
+
+int
+vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
+		     const daos_epoch_range_t *epr, const daos_key_t *dkey,
+		     const daos_key_t *akey, const daos_recx_t *recx)
+{
+	struct vos_io_context	*ioc;
+	daos_iod_t		 iod;
+	daos_handle_t		 ioh;
+	int			 rc;
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_recxs = (daos_recx_t *)recx;
+	iod.iod_nr = 1;
+	iod.iod_name = *akey;
+	iod.iod_size = 0;
+
+	rc = vos_update_begin(coh, oid, epr->epr_hi, VOS_OF_REMOVE,
+			      (daos_key_t *)dkey, 1, &iod, NULL, &ioh, NULL);
+	if (rc) {
+		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+			DP_RC(rc));
+		return rc;
+	}
+
+	ioc = vos_ioh2ioc(ioh);
+	/** Set lower bound of epoch range */
+	ioc->ic_epr.epr_lo = epr->epr_lo;
+
+	rc = vos_update_end(ioh, 0 /* don't care */, (daos_key_t *)dkey, rc,
+			    NULL);
 	return rc;
 }
 

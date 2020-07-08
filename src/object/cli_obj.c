@@ -41,7 +41,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(23)
+#define OBJ_TGT_INLINE_NR	(22)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -112,6 +112,17 @@ struct obj_auxi_args {
 		struct shard_sync_args	 s_args;
 	};
 };
+
+/**
+ * task memory space should enough to use -
+ * obj API task with daos_task_args + obj_auxi_args,
+ * shard sub-task with shard_auxi_args + obj_auxi_args.
+ * When it exceed the limit, can reduce OBJ_TGT_INLINE_NR or enlarge tse_task.
+ */
+D_CASSERT(sizeof(struct obj_auxi_args) + sizeof(struct shard_auxi_args) <=
+	  TSE_TASK_ARG_LEN);
+D_CASSERT(sizeof(struct obj_auxi_args) + sizeof(struct daos_task_args) <=
+	  TSE_TASK_ARG_LEN);
 
 /**
  * Open an object shard (shard object), cache the open handle.

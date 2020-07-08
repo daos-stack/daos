@@ -460,6 +460,25 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls);
 
 /**
+ * Remove all array values within the specified range.  If the specified
+ * extent and epoch range includes partial extents, the function will
+ * fail and no changes will be made.
+ *
+ * \param[in]	coh	Container open handle
+ * \param[in]	oid	object ID
+ * \param[in]	epr	Epoch range
+ * \param[in]	dkey	Distribution key
+ * \param[in]	akey	Attribute key
+ * \param[in]	recx	Extent range to remove
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
+		     const daos_epoch_range_t *epr, const daos_key_t *dkey,
+		     const daos_key_t *akey, const daos_recx_t *recx);
+
+/**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
  *
  * \param coh	[IN]	Container open handle
@@ -927,9 +946,11 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
-vos_gc_run(int *credits);
-int
-vos_gc_pool(daos_handle_t poh, int *credits);
+vos_gc_pool_run(daos_handle_t poh, int credits,
+		bool (*yield_func)(void *arg), void *yield_arg);
+bool
+vos_gc_pool_idle(daos_handle_t poh);
+
 
 enum vos_cont_opc {
 	VOS_CO_CTL_DUMMY,
