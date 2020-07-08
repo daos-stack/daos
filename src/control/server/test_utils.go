@@ -191,7 +191,7 @@ func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil)
+	return newMgmtSvc(harness, nil, nil, nil)
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -210,5 +210,5 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil)
+	return newMgmtSvc(harness, nil, nil, nil)
 }

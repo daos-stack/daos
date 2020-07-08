@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -85,6 +86,13 @@ func iommuDetected() bool {
 	}
 
 	return len(dmars) > 0
+}
+
+func raftDir(cfg *Configuration) string {
+	if len(cfg.Servers) == 0 {
+		return "" // can't save to SCM
+	}
+	return filepath.Join(cfg.Servers[0].Storage.SCM.MountPoint, "control_raft")
 }
 
 // Start is the entry point for a daos_server instance.
@@ -174,13 +182,17 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	membership := system.NewMembership(log)
+	sysdb := system.NewDatabase(log, &system.DatabaseConfig{
+		Replicas: cfg.AccessPoints,
+		RaftDir:  raftDir(cfg),
+	})
+	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
 	var netDevClass uint32
 
-	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIOServers {
+	for idx, srvCfg := range cfg.Servers {
+		if idx+1 > maxIOServers {
 			break
 		}
 
@@ -210,7 +222,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// Each instance must have a unique shmid in order to run as SPDK primary.
 		// Use a stable identifier that's easy to construct elsewhere if we don't
 		// have access to the instance configuration.
-		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
+		srvCfg.Storage.Bdev.ShmID = instanceShmID(idx)
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
@@ -228,11 +240,17 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			return err
 		}
 
-		if i == 0 {
+		if idx == 0 {
 			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
 			if err != nil {
 				return err
 			}
+
+			// Start the system db after instance 0's SCM is
+			// ready.
+			srv.OnStorageReady(func() error {
+				return errors.Wrap(sysdb.Start(controlAddr), "failed to start system db")
+			})
 		}
 	}
 
@@ -301,7 +319,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		CrtTimeout:      cfg.Fabric.CrtTimeout,
 		NetDevClass:     netDevClass,
 	}
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &clientNetworkCfg))
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb, &clientNetworkCfg)
+	mgmtSvc.startUpdateLoop(ctx)
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
 
 	go func() {
 		_ = grpcServer.Serve(lis)

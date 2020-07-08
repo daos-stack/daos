@@ -35,6 +35,10 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+var (
+	dRPCNotReady = errors.New("no dRPC client set (data plane not started?)")
+)
+
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
 	srv.Lock()
 	defer srv.Unlock()
@@ -45,7 +49,7 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	srv.RLock()
 	defer srv.RUnlock()
 	if srv._drpcClient == nil {
-		return nil, errors.New("no dRPC client set (data plane not started?)")
+		return nil, dRPCNotReady
 	}
 	return srv._drpcClient, nil
 }
@@ -77,7 +81,12 @@ func (srv *IOServerInstance) CallDrpc(method drpc.Method, body proto.Message) (*
 		return nil, err
 	}
 
-	return makeDrpcCall(dc, method, body)
+	srv.log.Debugf("instance %d: dRPC call %d begin", srv.Index(), method)
+	res, err := makeDrpcCall(dc, method, body)
+	srv.log.Debugf("instance %d: dRPC call %d/%d end: %d",
+		srv.Index(), method, res.GetSequence(), res.GetStatus())
+
+	return res, err
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.
