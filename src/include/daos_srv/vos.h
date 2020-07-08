@@ -943,9 +943,11 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
-vos_gc_run(int *credits);
-int
-vos_gc_pool(daos_handle_t poh, int *credits);
+vos_gc_pool_run(daos_handle_t poh, int credits,
+		bool (*yield_func)(void *arg), void *yield_arg);
+bool
+vos_gc_pool_idle(daos_handle_t poh);
+
 
 enum vos_cont_opc {
 	VOS_CO_CTL_DUMMY,

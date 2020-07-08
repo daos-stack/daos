@@ -308,7 +308,7 @@ sched_info_init(struct dss_xstream *dx)
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 
-	info->si_cur_ts = daos_getntime_coarse() / 1000000;
+	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
 	D_INIT_LIST_HEAD(&info->si_idle_list);
 	D_INIT_LIST_HEAD(&info->si_sleep_list);
 	D_INIT_LIST_HEAD(&info->si_fifo_list);
@@ -881,7 +881,7 @@ wakeup_all(struct dss_xstream *dx)
 	struct sched_request	*req, *tmp;
 
 	/* Update current ts stored in sched_info */
-	info->si_cur_ts = daos_getntime_coarse() / 1000000;
+	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
 
 	d_list_for_each_entry_safe(req, tmp, &info->si_sleep_list, sr_link) {
 		D_ASSERT(req->sr_wakeup_time > 0);
