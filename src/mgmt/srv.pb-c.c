@@ -52,6 +52,102 @@ void   mgmt__daos_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__group_update_req__server__init
+                     (Mgmt__GroupUpdateReq__Server         *message)
+{
+  static const Mgmt__GroupUpdateReq__Server init_value = MGMT__GROUP_UPDATE_REQ__SERVER__INIT;
+  *message = init_value;
+}
+void   mgmt__group_update_req__init
+                     (Mgmt__GroupUpdateReq         *message)
+{
+  static const Mgmt__GroupUpdateReq init_value = MGMT__GROUP_UPDATE_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__group_update_req__get_packed_size
+                     (const Mgmt__GroupUpdateReq *message)
+{
+  assert(message->base.descriptor == &mgmt__group_update_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__group_update_req__pack
+                     (const Mgmt__GroupUpdateReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__group_update_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__group_update_req__pack_to_buffer
+                     (const Mgmt__GroupUpdateReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__group_update_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__GroupUpdateReq *
+       mgmt__group_update_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__GroupUpdateReq *)
+     protobuf_c_message_unpack (&mgmt__group_update_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__group_update_req__free_unpacked
+                     (Mgmt__GroupUpdateReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__group_update_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__group_update_resp__init
+                     (Mgmt__GroupUpdateResp         *message)
+{
+  static const Mgmt__GroupUpdateResp init_value = MGMT__GROUP_UPDATE_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__group_update_resp__get_packed_size
+                     (const Mgmt__GroupUpdateResp *message)
+{
+  assert(message->base.descriptor == &mgmt__group_update_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__group_update_resp__pack
+                     (const Mgmt__GroupUpdateResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__group_update_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__group_update_resp__pack_to_buffer
+                     (const Mgmt__GroupUpdateResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__group_update_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__GroupUpdateResp *
+       mgmt__group_update_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__GroupUpdateResp *)
+     protobuf_c_message_unpack (&mgmt__group_update_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__group_update_resp__free_unpacked
+                     (Mgmt__GroupUpdateResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__group_update_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__join_req__init
                      (Mgmt__JoinReq         *message)
 {
@@ -546,7 +642,147 @@ const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor =
   (ProtobufCMessageInit) mgmt__daos_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__group_update_req__server__field_descriptors[2] =
+{
+  {
+    "rank",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GroupUpdateReq__Server, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "uri",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GroupUpdateReq__Server, uri),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__group_update_req__server__field_indices_by_name[] = {
+  0,   /* field[0] = rank */
+  1,   /* field[1] = uri */
+};
+static const ProtobufCIntRange mgmt__group_update_req__server__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__group_update_req__server__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.GroupUpdateReq.Server",
+  "Server",
+  "Mgmt__GroupUpdateReq__Server",
+  "mgmt",
+  sizeof(Mgmt__GroupUpdateReq__Server),
+  2,
+  mgmt__group_update_req__server__field_descriptors,
+  mgmt__group_update_req__server__field_indices_by_name,
+  1,  mgmt__group_update_req__server__number_ranges,
+  (ProtobufCMessageInit) mgmt__group_update_req__server__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__group_update_req__field_descriptors[2] =
+{
+  {
+    "map_version",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GroupUpdateReq, map_version),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "servers",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__GroupUpdateReq, n_servers),
+    offsetof(Mgmt__GroupUpdateReq, servers),
+    &mgmt__group_update_req__server__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__group_update_req__field_indices_by_name[] = {
+  0,   /* field[0] = map_version */
+  1,   /* field[1] = servers */
+};
+static const ProtobufCIntRange mgmt__group_update_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__group_update_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.GroupUpdateReq",
+  "GroupUpdateReq",
+  "Mgmt__GroupUpdateReq",
+  "mgmt",
+  sizeof(Mgmt__GroupUpdateReq),
+  2,
+  mgmt__group_update_req__field_descriptors,
+  mgmt__group_update_req__field_indices_by_name,
+  1,  mgmt__group_update_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__group_update_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__group_update_resp__field_descriptors[1] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GroupUpdateResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__group_update_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__group_update_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.GroupUpdateResp",
+  "GroupUpdateResp",
+  "Mgmt__GroupUpdateResp",
+  "mgmt",
+  sizeof(Mgmt__GroupUpdateResp),
+  1,
+  mgmt__group_update_resp__field_descriptors,
+  mgmt__group_update_resp__field_indices_by_name,
+  1,  mgmt__group_update_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__group_update_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[6] =
 {
   {
     "uuid",
@@ -608,9 +844,22 @@ static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[5] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "map_version",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, map_version),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__join_req__field_indices_by_name[] = {
   4,   /* field[4] = addr */
+  5,   /* field[5] = map_version */
   3,   /* field[3] = nctxs */
   1,   /* field[1] = rank */
   2,   /* field[2] = uri */
@@ -619,7 +868,7 @@ static const unsigned mgmt__join_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__join_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
 {
@@ -629,7 +878,7 @@ const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
   "Mgmt__JoinReq",
   "mgmt",
   sizeof(Mgmt__JoinReq),
-  5,
+  6,
   mgmt__join_req__field_descriptors,
   mgmt__join_req__field_indices_by_name,
   1,  mgmt__join_req__number_ranges,
