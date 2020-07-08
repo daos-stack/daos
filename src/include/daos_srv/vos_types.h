@@ -32,6 +32,11 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
+struct dtx_rsrvd_uint {
+	void			*dru_scm;
+	d_list_t		dru_nvme;
+};
+
 enum dtx_cos_flags {
 	DCF_SHARED	= (1 << 0),
 };
@@ -214,6 +219,10 @@ enum {
 	VOS_OF_REPLAY_PC	= (1 << 8),
 	/* critical update - skip checks on SCM system/held space */
 	VOS_OF_CRIT		= (1 << 9),
+	/** Instead of update or punch of extents, remove all extents
+	 * under the specified range. Intended for internal use only.
+	 */
+	VOS_OF_REMOVE		= (1 << 10),
 };
 
 /** Mask for any conditionals passed to to the fetch */
