@@ -32,6 +32,7 @@ class NvmeHealth(ServerFillUp):
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
     def test_monitor_for_large_pools(self):
         """
         Test Description: Test Health monitor for large number of pools.
@@ -73,7 +74,8 @@ class NvmeHealth(ServerFillUp):
         #Get Pool query for SMD
         self.dmg.set_sub_command("storage")
         self.dmg.sub_command_class.set_sub_command("query")
-        self.dmg.sub_command_class.sub_command_class.set_sub_command("list-pools")
+        self.dmg.sub_command_class.sub_command_class.\
+        set_sub_command("list-pools")
         for host in self.hostlist_servers:
             self.dmg.hostlist = host
             try:
