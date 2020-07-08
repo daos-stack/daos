@@ -217,8 +217,8 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 	return ctrlr, nil
 }
 
-func (b *spdkBackend) Prepare(nrHugePages int, targetUser, pciWhiteList string) error {
-	return b.script.Prepare(nrHugePages, targetUser, pciWhiteList)
+func (b *spdkBackend) Prepare(req PrepareRequest) error {
+	return b.script.Prepare(req)
 }
 
 func (b *spdkBackend) Reset() error {

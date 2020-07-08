@@ -111,7 +111,6 @@ typedef enum {
 	DAOS_OPC_OBJ_QUERY,
 	DAOS_OPC_OBJ_QUERY_KEY,
 	DAOS_OPC_OBJ_SYNC,
-	DAOS_OPC_OBJ_FETCH_SHARD,
 	DAOS_OPC_OBJ_FETCH,
 	DAOS_OPC_OBJ_UPDATE,
 	DAOS_OPC_OBJ_LIST_DKEY,
@@ -698,18 +697,20 @@ typedef struct {
 	daos_handle_t		th;
 	/** Object open handle */
 	daos_handle_t		oh;
-	/** Operation flags. */
+	/** API flags. */
 	uint64_t		flags;
 	/** Distribution Key. */
 	daos_key_t		*dkey;
 	/** Number of elements in \a iods and \a sgls. */
-	unsigned int		nr;
+	uint32_t		nr;
+	/** Internal flags. */
+	uint32_t		extra_flags;
 	/** IO descriptor describing IO layout in the object. */
 	daos_iod_t		*iods;
 	/** Scatter / gather list for a memory descriptor. */
 	d_sg_list_t		*sgls;
 	/** IO Map - only valid for fetch. */
-	daos_iom_t		*maps;
+	daos_iom_t		*ioms;
 	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
 	void			*extra_arg;
 } daos_obj_rw_t;
@@ -718,16 +719,6 @@ typedef struct {
 typedef daos_obj_rw_t		daos_obj_fetch_t;
 /** update args struct */
 typedef daos_obj_rw_t		daos_obj_update_t;
-
-/** Object shard fetch args */
-struct daos_obj_fetch_shard {
-	/** base. */
-	daos_obj_fetch_t	base;
-	/** Operation flags. */
-	unsigned int		flags;
-	/** shard. */
-	unsigned int		shard;
-};
 
 /** Object sync args */
 struct daos_obj_sync_args {
@@ -778,6 +769,10 @@ typedef struct {
 	daos_anchor_t		*akey_anchor;
 	/** versions. */
 	uint32_t		*versions;
+	/** Serialized checksum info for enumerated keys and data in sgl.
+	 * (for internal use only)
+	 */
+	d_iov_t			*csum;
 	/** order. */
 	bool			incr_order;
 } daos_obj_list_t;

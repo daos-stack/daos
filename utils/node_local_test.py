@@ -233,14 +233,9 @@ class DaosServer():
         if os.path.exists(self._log_file):
             os.unlink(self._log_file)
 
-        # self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        # Disable this for now, as the filename is logged without a error in
-        # the fault injection testing so it's causing inconsisency in the
-        # errors generated.
-        # self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        # self.agent_dir = self._agent_dir.name
+        self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
+        self.agent_dir = self._agent_dir.name
 
-        self.agent_dir = '/tmp/dnt_agent_changeme'
         if not os.path.exists(self.agent_dir):
             os.mkdir(self.agent_dir)
 
@@ -267,10 +262,6 @@ class DaosServer():
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
-        agent_env = os.environ.copy()
-        # DAOS-??? Need to set this for agent
-        agent_env['LD_LIBRARY_PATH'] = os.path.join(self.conf['PREFIX'],
-                                                    'lib64')
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
         self._agent = subprocess.Popen([agent_bin,
@@ -279,7 +270,7 @@ class DaosServer():
                                         '--debug',
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
-                                       env=agent_env)
+                                       env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
         time.sleep(2)
         self.running = True
@@ -355,6 +346,7 @@ def il_cmd(dfuse, cmd):
     print('Logged il to {}'.format(log_file.name))
     print(ret)
     log_test(dfuse.conf, log_file.name)
+    assert ret.returncode == 0
     return ret
 
 class ValgrindHelper():
@@ -1015,7 +1007,8 @@ def run_il_test(server, conf):
     fd.write('Hello')
     fd.close()
     # Copy it across containers.
-    il_cmd(dfuse, ['cp', f, dirs[-1]])
+    ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
+    assert ret.returncode == 0
 
     # Copy it within the container.
     child_dir = os.path.join(dirs[0], 'new_dir')
@@ -1023,9 +1016,11 @@ def run_il_test(server, conf):
     il_cmd(dfuse, ['cp', f, child_dir])
 
     # Copy something into a container
-    il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]])
+    ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]])
+    assert ret.returncode == 0
     # Read it from within a container
-    il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
+    ret = il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
+    assert ret.returncode == 0
     dfuse.stop()
 
 def run_in_fg(server, conf):
@@ -1201,6 +1196,8 @@ def main():
 
     if len(sys.argv) == 2 and sys.argv[1] == 'launch':
         run_in_fg(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'il':
+        run_il_test(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
         test_pydaos_kv(server, conf)
     elif len(sys.argv) == 2 and sys.argv[1] == 'overlay':
