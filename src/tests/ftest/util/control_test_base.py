@@ -23,6 +23,7 @@
 """
 
 from avocado import fail_on
+from collections import defaultdict
 from apricot import TestWithServers
 from general_utils import get_host_data
 from command_utils import CommandFailure
@@ -40,13 +41,11 @@ def cleanup_output(output):
 
     """
     host = None
-    info = {}
+    info = defaultdict(list)
     for item in output:
         if item[0]:
             host = item[0]
             continue
-        if host not in info:
-            info[host] = []
         info[host].append(item[1:])
     return info
 
