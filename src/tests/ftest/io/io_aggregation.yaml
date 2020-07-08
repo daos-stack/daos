@@ -38,12 +38,11 @@ ior:
   daos_destroy: False
   iorflags:
       flags: "-w -E -k"
-  test_file: /testFile
   repetitions: 1
   transfersize_blocksize:
     4K:
       transfer_size: '4K'
-      block_size: '100M'
+      block_size: '104857600'  # 100M
   objectclass:
     SX:
       daos_oclass: "SX"
