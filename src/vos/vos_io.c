@@ -2381,7 +2381,8 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 	iod.iod_size = 0;
 
 	rc = vos_update_begin(coh, oid, epr->epr_hi, VOS_OF_REMOVE,
-			      (daos_key_t *)dkey, 1, &iod, NULL, &ioh, NULL);
+			      (daos_key_t *)dkey, 1, &iod, NULL, false, 0,
+			      &ioh, NULL);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
 			DP_RC(rc));
