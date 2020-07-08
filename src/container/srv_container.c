@@ -1779,6 +1779,8 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_SNAPSHOT_MAX:
 			case DAOS_PROP_CO_COMPRESS:
 			case DAOS_PROP_CO_ENCRYPT:
+			case DAOS_PROP_CO_DEDUP:
+			case DAOS_PROP_CO_DEDUP_THRESHOLD:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
