@@ -24,29 +24,8 @@
 package server
 
 import (
-	"context"
-	"fmt"
-	"net"
-	"os"
-	"path/filepath"
-	"strconv"
-	"sync/atomic"
-	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
-
-	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
+	//. "github.com/daos-stack/daos/src/control/common"
 )
 
 const (
@@ -56,7 +35,7 @@ const (
 	maxIOServers       = 2
 )
 
-func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
+/*func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 	defaultApList := []string{"1.2.3.4:5", "6.7.8.9:10"}
 	defaultCtrlList := []string{"6.3.1.2:5", "1.2.3.4:5"}
 	for name, tc := range map[string]struct {
@@ -156,9 +135,9 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 			CmpErr(t, tc.expError, err)
 		})
 	}
-}
+}*/
 
-func TestServer_Harness_Start(t *testing.T) {
+/*func TestServer_Harness_Start(t *testing.T) {
 	defaultAddrStr := "127.0.0.1:10001"
 	defaultAddr, err := net.ResolveTCPAddr("tcp", defaultAddrStr)
 	if err != nil {
@@ -273,7 +252,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				1: system.Rank(1),
 			},
 			expMembers: system.Members{ // bootstrap member is added on start
-				system.NewMember(system.Rank(0), "", defaultAddr, system.MemberStateJoined),
+				system.NewMember(system.Rank(0), MockUUID(), defaultAddr, system.MemberStateJoined),
 			},
 		},
 		"fails to start": {
@@ -447,7 +426,7 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// start harness async and signal completion
 			var gotErr error
-			membership := system.NewMembership(log)
+			membership := system.MockMembership(t, log)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
 				gotErr = harness.Start(ctxIn, membership, config)
@@ -582,4 +561,4 @@ func TestServer_Harness_Start(t *testing.T) {
 			}
 		})
 	}
-}
+}*/

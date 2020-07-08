@@ -364,7 +364,8 @@ daos_pool_info_t	ds_mgmt_pool_query_info_out;
 daos_pool_info_t	ds_mgmt_pool_query_info_in;
 void			*ds_mgmt_pool_query_info_ptr;
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		   daos_pool_info_t *pool_info)
 {
 	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
 	ds_mgmt_pool_query_info_ptr = (void *)pool_info;
@@ -507,6 +508,12 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 }
 
 int
+ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
+{
+	return 0;
+}
+
+int
 ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 {
 	return 0;
@@ -522,7 +529,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		     const char *group, uint32_t force)
 {
 	return 0;
 }
