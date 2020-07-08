@@ -1,0 +1,33 @@
+"""Install DAOS SCM Estimador"""
+
+def install_scm_estimator_module(env, lib_prefix, version):
+    """Install SCM estimador module for the specified python version"""
+
+    if GetOption("help"):
+        return
+
+    denv = env.Clone()
+
+    install_path = lib_prefix + "/python"
+    install_path += version + "/site-packages/scm_estimator"
+
+    denv.Install(install_path, "common/vos_structures.py")
+    denv.Install(install_path, "common/__init__.py")
+    denv.Install(install_path, "common/dfs_sb.py")
+    denv.Install(install_path, "common/vos_size.py")
+    denv.Install(install_path, "common/explorer.py")
+    denv.Install(install_path, "common/parse_csv.py")
+    denv.Install(install_path, "common/util.py")
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    denv = env.Clone()
+    denv.Install("$PREFIX/bin/", "vos_scm_estimator.py")
+
+    install_scm_estimator_module(env, '$PREFIX/lib64/', "3")
+    install_scm_estimator_module(env, '$PREFIX/lib64/', "2.7")
+
+if __name__ == "SCons.Script":
+    scons()
