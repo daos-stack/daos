@@ -3,10 +3,9 @@ package io.daos.obj;
 import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.daos.DaosObjectType;
+import io.netty.buffer.ByteBuf;
 import org.junit.Assert;
 import org.junit.Test;
-
-import java.nio.ByteBuffer;
 
 public class DaosObjectIdTest {
 
@@ -36,11 +35,10 @@ public class DaosObjectIdTest {
 
   @Test
   public void TestEncodeInteger() throws Exception {
-    ByteBuffer buffer = BufferAllocator.directBuffer(1);
+    ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(1);
     int value = 100;
-    buffer.put((byte)value);
-    buffer.flip();
-    byte b = buffer.get();
+    buffer.writeByte(value);
+    byte b = buffer.readByte();
     Assert.assertEquals((int)b, value);
   }
 }

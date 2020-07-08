@@ -1,5 +1,6 @@
 package io.daos.obj;
 
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -10,7 +11,6 @@ import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.core.classloader.annotations.SuppressStaticInitializationFor;
 import org.powermock.modules.junit4.PowerMockRunner;
-import sun.nio.ch.DirectBuffer;
 
 import java.util.Collections;
 
@@ -20,7 +20,7 @@ import java.util.Collections;
 @SuppressStaticInitializationFor("io.daos.DaosClient")
 public class DaosObjectTest {
 
-  private  DaosObject object;
+  private DaosObject object;
 
   @Before
   public void setup() throws Exception {
@@ -29,11 +29,18 @@ public class DaosObjectTest {
     oid.encode();
     DaosObjClient client = Mockito.mock(DaosObjClient.class);
     long contPtr = 12345;
-    long address = ((DirectBuffer) oid.getBuffer()).address();
+    long address = oid.getBuffer().memoryAddress();
     long objPtr = 6789;
     Mockito.when(client.getContPtr()).thenReturn(contPtr);
     Mockito.when(client.openObject(contPtr, address, OpenMode.UNKNOWN.getValue())).thenReturn(objPtr);
     object = new DaosObject(client, oid);
+  }
+
+  @After
+  public void teardown() throws Exception {
+    if (object != null) {
+      object.close();
+    }
   }
 
   @Test
@@ -85,7 +92,11 @@ public class DaosObjectTest {
     try {
       object.open();
       IOKeyDesc desc = object.createKD(null);
-      object.listAkeys(desc);
+      try {
+        object.listAkeys(desc);
+      } finally {
+        desc.release();
+      }
     } catch (Exception e) {
       ee = e;
     }

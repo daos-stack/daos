@@ -28,16 +28,15 @@ import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.daos.DaosIOException;
 import io.daos.obj.attr.DaosObjectAttribute;
+import io.netty.buffer.ByteBuf;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -113,9 +112,9 @@ public class DaosObject {
    */
   public void open(OpenMode mode) throws DaosObjectException {
     if (objectPtr == -1) {
-      DirectBuffer buffer = (DirectBuffer) oid.getBuffer();
+      ByteBuf buffer = oid.getBuffer();
       try {
-        objectPtr = client.openObject(contPtr, buffer.address(), mode.getValue());
+        objectPtr = client.openObject(contPtr, buffer.memoryAddress(), mode.getValue());
       } catch (DaosIOException e) {
         throw new DaosObjectException(oid, "failed to open object with mode " + mode, e);
       }
@@ -139,7 +138,7 @@ public class DaosObject {
     }
   }
 
-  private ByteBuffer encodeKeys(List<String> keys) throws DaosObjectException {
+  private ByteBuf encodeKeys(List<String> keys) throws DaosObjectException {
     int bufferLen = 0;
     List<byte[]> keyBytesList = new ArrayList<>(keys.size());
     for (String key : keys) {
@@ -163,12 +162,10 @@ public class DaosObject {
       return null;
     }
     // encode keys to buffer
-    ByteBuffer buffer = BufferAllocator.directBuffer(bufferLen);
-    buffer.order(Constants.DEFAULT_ORDER);
+    ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(bufferLen);
     for (byte[] bytes : keyBytesList) {
-      buffer.putShort((short)bytes.length).put(bytes);
+      buffer.writeShort(bytes.length).writeBytes(bytes);
     }
-    buffer.flip();
     return buffer;
   }
 
@@ -199,7 +196,7 @@ public class DaosObject {
    */
   public void punchDkeys(List<String> dkeys) throws DaosObjectException {
     checkOpen();
-    ByteBuffer buffer = encodeKeys(dkeys);
+    ByteBuf buffer = encodeKeys(dkeys);
     if (buffer == null) {
       throw new DaosObjectException(oid, "no dkeys specified when punch dkeys");
     }
@@ -207,10 +204,12 @@ public class DaosObject {
       log.debug("punching dkeys: " + enumKeys(dkeys, MAX_DEBUG_SIZE) + oid);
     }
     try {
-      client.punchObjectDkeys(objectPtr, 0, dkeys.size(), ((DirectBuffer) buffer).address(), buffer.limit());
+      client.punchObjectDkeys(objectPtr, 0, dkeys.size(), buffer.memoryAddress(), buffer.readableBytes());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to punch " + dkeys.size() + " dkeys: " +
         enumKeys(dkeys, MAX_EXCEPTION_SIZE), e);
+    } finally {
+      buffer.release();
     }
   }
 
@@ -232,15 +231,17 @@ public class DaosObject {
     List<String> allKeys = new ArrayList<>(nbrOfAkyes + 1);
     allKeys.add(dkey);
     allKeys.addAll(akeys);
-    ByteBuffer buffer = encodeKeys(allKeys);
+    ByteBuf buffer = encodeKeys(allKeys);
     if (log.isDebugEnabled()) {
       log.debug("punching akeys: " + enumKeys(akeys, MAX_DEBUG_SIZE) + oid);
     }
     try {
-      client.punchObjectAkeys(objectPtr, 0, nbrOfAkyes, ((DirectBuffer) buffer).address(), buffer.limit());
+      client.punchObjectAkeys(objectPtr, 0, nbrOfAkyes, buffer.memoryAddress(), buffer.readableBytes());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to punch " + akeys.size() + " akeys: " +
         enumKeys(akeys, MAX_EXCEPTION_SIZE) + " under dkey " + dkey, e);
+    } finally {
+      buffer.release();
     }
   }
 
@@ -285,7 +286,8 @@ public class DaosObject {
    * @param desc
    * {@link IODataDesc} describes list of {@link io.daos.obj.IODataDesc.Entry} to fetch akeyes' data under dkey.
    * Check {@link #createDataDescForFetch(String, List)} and
-   * {@link IODataDesc#createEntryForFetch(String, IODataDesc.IodType, int, int, int)}
+   * {@link IODataDesc#createEntryForFetch(String, IODataDesc.IodType, int, int, int)}.
+   * User should release internal buffer of <code>desc</code> by himself.
    * @throws DaosObjectException
    */
   public void fetch(IODataDesc desc) throws DaosObjectException {
@@ -295,10 +297,10 @@ public class DaosObject {
     if (log.isDebugEnabled()) {
       log.debug(oid + " fetch object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
-    ByteBuffer descBuffer = desc.getDescBuffer();
+    ByteBuf descBuffer = desc.getDescBuffer();
     try {
-      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), ((DirectBuffer) descBuffer).address(),
-        ((DirectBuffer) desc.getDataBuffer()).address());
+      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress(),
+        desc.getDataBuffer().memoryAddress());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to fetch object with description " +
         desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -311,6 +313,7 @@ public class DaosObject {
    *
    * @param desc
    * {@link IODataDesc} describes list of {@link io.daos.obj.IODataDesc.Entry} to update on dkey.
+   * User should release internal buffer of <code>desc</code> by himself.
    * @throws DaosObjectException
    */
   public void update(IODataDesc desc) throws DaosObjectException {
@@ -321,8 +324,8 @@ public class DaosObject {
       log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), ((DirectBuffer) desc.getDescBuffer()).address(),
-        ((DirectBuffer) desc.getDataBuffer()).address());
+      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
+        desc.getDataBuffer().memoryAddress());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to update object with description " +
         desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -349,9 +352,9 @@ public class DaosObject {
       log.debug(oid + " list dkeys with description: " + desc.toString());
     }
     try {
-      client.listObjectDkeys(objectPtr, ((DirectBuffer) desc.getDescBuffer()).address(),
-        ((DirectBuffer) desc.getKeyBuffer()).address(), desc.getKeyBuffer().capacity(),
-        ((DirectBuffer) desc.getAnchorBuffer()).address(),
+      client.listObjectDkeys(objectPtr, desc.getDescBuffer().memoryAddress(),
+        desc.getKeyBuffer().memoryAddress(), desc.getKeyBuffer().capacity(),
+        desc.getAnchorBuffer().memoryAddress(),
         desc.getBatchSize());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to list dkeys with description: " +desc, e);
@@ -385,9 +388,9 @@ public class DaosObject {
       log.debug(oid + " list akeys with description: " + desc.toString());
     }
     try {
-      client.listObjectAkeys(objectPtr, ((DirectBuffer) desc.getDescBuffer()).address(),
-        ((DirectBuffer) desc.getKeyBuffer()).address(), desc.getKeyBuffer().capacity(),
-        ((DirectBuffer) desc.getAnchorBuffer()).address(), desc.getBatchSize());
+      client.listObjectAkeys(objectPtr, desc.getDescBuffer().memoryAddress(),
+        desc.getKeyBuffer().memoryAddress(), desc.getKeyBuffer().capacity(),
+        desc.getAnchorBuffer().memoryAddress(), desc.getBatchSize());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to list akeys with description: " +desc, e);
     }
@@ -436,19 +439,20 @@ public class DaosObject {
     } catch (UnsupportedEncodingException e) {
       throw new DaosObjectException(oid, "failed to encode akey " + akey + " in " + Constants.KEY_CHARSET, e);
     }
-    ByteBuffer buffer = BufferAllocator.directBuffer(dkeyBytes.length + akeyBytes.length + 4);
-    buffer.order(Constants.DEFAULT_ORDER);
-    buffer.putShort((short)dkeyBytes.length);
-    buffer.put(dkeyBytes);
-    buffer.putShort((short)akeyBytes.length);
-    buffer.put(akeyBytes);
+    ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(dkeyBytes.length + akeyBytes.length + 4);
+    buffer.writeShort(dkeyBytes.length);
+    buffer.writeBytes(dkeyBytes);
+    buffer.writeShort(akeyBytes.length);
+    buffer.writeBytes(akeyBytes);
     if (log.isDebugEnabled()) {
       log.debug("get record size for " + dkey + ", akey " + akey);
     }
     try {
-      return client.getRecordSize(objectPtr, ((DirectBuffer)buffer).address());
+      return client.getRecordSize(objectPtr, buffer.memoryAddress());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to get record size for " + dkey + ", akey " + akey, e);
+    } finally {
+      buffer.release();
     }
   }
 
@@ -469,6 +473,14 @@ public class DaosObject {
         client.closeObject(objectPtr);
       } catch (DaosIOException e) {
         throw new DaosObjectException(oid, "failed to close object", e);
+      } finally {
+        if (oid != null) {
+          oid.release();
+        }
+      }
+    } else {
+      if (oid != null) {
+        oid.release();
       }
     }
   }

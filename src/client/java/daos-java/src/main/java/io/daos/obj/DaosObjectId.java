@@ -24,19 +24,19 @@
 package io.daos.obj;
 
 import io.daos.BufferAllocator;
-import io.daos.Constants;
-import io.daos.DaosClient;
 import io.daos.DaosObjectType;
-import sun.nio.ch.DirectBuffer;
+import io.netty.buffer.ByteBuf;
 
 import javax.annotation.concurrent.NotThreadSafe;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 /**
  * DAOS Object ID corresponding to a specific container.
  * It contains 64-bit high and 64-bit low. Both will be encoded with feature bits and object type to get
  * final object ID.
+ *
+ * <p>
+ *   You should call {@link #release()} after using it.
+ * </p>
  */
 @NotThreadSafe
 public class DaosObjectId {
@@ -47,7 +47,7 @@ public class DaosObjectId {
 
   private boolean encoded;
 
-  private ByteBuffer buffer;
+  private ByteBuf buffer;
 
   public DaosObjectId() {
   }
@@ -68,14 +68,17 @@ public class DaosObjectId {
     if (encoded) {
       throw new IllegalStateException("already encoded");
     }
-    // TODO: memory management for small buffer
-    buffer = BufferAllocator.directBuffer(16);
-    buffer.order(Constants.DEFAULT_ORDER);
-    buffer.putLong(high).putLong(low);
-    DaosObjClient.encodeObjectId(((DirectBuffer) buffer).address(), feats, objectType.nameWithoutOc(), args);
-    buffer.flip();
-    high = buffer.getLong();
-    low = buffer.getLong();
+    buffer = BufferAllocator.objBufWithNativeOrder(16);
+    buffer.writeLong(high).writeLong(low);
+    try {
+      DaosObjClient.encodeObjectId(buffer.memoryAddress(), feats, objectType.nameWithoutOc(), args);
+    } catch (RuntimeException e) {
+      buffer.release();
+      buffer = null;
+      throw e;
+    }
+    high = buffer.readLong();
+    low = buffer.readLong();
     encoded = true;
   }
 
@@ -104,7 +107,7 @@ public class DaosObjectId {
     return encoded;
   }
 
-  public ByteBuffer getBuffer() {
+  public ByteBuf getBuffer() {
     if (buffer == null) {
       throw new IllegalStateException("DAOS object ID not encoded yet");
     }
@@ -114,5 +117,14 @@ public class DaosObjectId {
   @Override
   public String toString() {
     return "object ID, high: " + high + ", low: " + low + ", encoded: " + encoded;
+  }
+
+  /**
+   * release buffer
+   */
+  public void release() {
+    if (buffer != null) {
+      buffer.release();
+    }
   }
 }

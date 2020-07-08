@@ -25,17 +25,18 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A class to describe key listing, including approximate key length, number of keys to retrieve and batch size
+ * A class to describe key listing, including approximate key length, number of keys to retrieve and batch size.
+ * User should call
  */
 public class IOKeyDesc {
 
@@ -49,11 +50,11 @@ public class IOKeyDesc {
 
   private final int akeyLen;
 
-  private final ByteBuffer anchorBuffer;
+  private final ByteBuf anchorBuffer;
 
-  private final ByteBuffer descBuffer;
+  private final ByteBuf descBuffer;
 
-  private ByteBuffer keyBuffer;
+  private ByteBuf keyBuffer;
 
   private List<String> resultKeys;
 
@@ -101,16 +102,15 @@ public class IOKeyDesc {
       this.batchSize = batchSize;
     }
     // 1 byte for anchor status
-    anchorBuffer = BufferAllocator.directBuffer(1 + IOKeyDesc.getAnchorTypeLen());
-    anchorBuffer.order(Constants.DEFAULT_ORDER);
-    anchorBuffer.put((byte) 0);
+    anchorBuffer = BufferAllocator.objBufWithNativeOrder(1 + IOKeyDesc.getAnchorTypeLen());
+    anchorBuffer.writeByte((byte) 0);
+    anchorBuffer.writerIndex(anchorBuffer.capacity());
     // 4 for actual number of keys returned, (2 + dkeyBytes.length) for dkeys
     int descLen = 4 + ((dkeyBytes == null) ? 0 : (Constants.ENCODED_LENGTH_KEY + dkeyBytes.length))
                   + IOKeyDesc.getKeyDescLen() * this.batchSize;
-    descBuffer = BufferAllocator.directBuffer(descLen);
-    keyBuffer = BufferAllocator.directBuffer(akeyLen * this.batchSize);
-    descBuffer.order(Constants.DEFAULT_ORDER);
-    keyBuffer.order(Constants.DEFAULT_ORDER);
+    descBuffer = BufferAllocator.objBufWithNativeOrder(descLen);
+    keyBuffer = BufferAllocator.objBufWithNativeOrder(akeyLen * this.batchSize);
+    keyBuffer.writerIndex(keyBuffer.capacity());
   }
 
   /**
@@ -155,21 +155,39 @@ public class IOKeyDesc {
     return batchSize;
   }
 
-  public ByteBuffer getDescBuffer() {
+  /**
+   * get description buffer. The buffer's reader index and write index should be restored if user
+   * changed them.
+   *
+   * @return bytebuf
+   */
+  protected ByteBuf getDescBuffer() {
     if (!encoded) {
       throw new IllegalStateException("not encoded yet");
     }
     return descBuffer;
   }
 
-  public ByteBuffer getAnchorBuffer() {
+  /**
+   * get anchor buffer. The buffer's reader index and write index should be restored if user
+   * changed them.
+   *
+   * @return bytebuf
+   */
+  protected ByteBuf getAnchorBuffer() {
     if (!encoded) {
       throw new IllegalStateException("not encoded yet");
     }
     return anchorBuffer;
   }
 
-  public ByteBuffer getKeyBuffer() {
+  /**
+   * get key buffer. The buffer's reader index and write index should be restored if user
+   * changed them.
+   *
+   * @return
+   */
+  protected ByteBuf getKeyBuffer() {
     if (!encoded) {
       throw new IllegalStateException("not encoded yet");
     }
@@ -205,11 +223,11 @@ public class IOKeyDesc {
       throw new IllegalStateException("result is parsed. cannot encode again");
     }
     if (!encoded) {
-      descBuffer.position(0);
-      descBuffer.putInt(0); // reserve for actual number of keys returned
+      descBuffer.clear();
+      descBuffer.writeInt(0); // reserve for actual number of keys returned
       if ((!continued) && dkeyBytes != null) {
-        descBuffer.putShort((short) dkeyBytes.length);
-        descBuffer.put(dkeyBytes);
+        descBuffer.writeShort(dkeyBytes.length);
+        descBuffer.writeBytes(dkeyBytes);
       }
       encoded = true;
     }
@@ -219,7 +237,9 @@ public class IOKeyDesc {
     if (log.isDebugEnabled()) {
       log.debug("resize key buffer size to " + getSuggestedKeyLen() * batchSize);
     }
-    keyBuffer = BufferAllocator.directBuffer(getSuggestedKeyLen() * batchSize);
+    keyBuffer.release();
+    keyBuffer = BufferAllocator.objBufWithNativeOrder(getSuggestedKeyLen() * batchSize);
+    keyBuffer.writerIndex(keyBuffer.capacity());
   }
 
   /**
@@ -227,8 +247,8 @@ public class IOKeyDesc {
    * user should call this method before reusing this object to query more keys.
    */
   public void continueList() {
-    anchorBuffer.position(0);
-    byte stat = anchorBuffer.get();
+    anchorBuffer.readerIndex(0);
+    byte stat = anchorBuffer.readByte();
     if (log.isDebugEnabled()) {
       log.debug("continue listing. state of anchor: " + stat);
     }
@@ -252,8 +272,8 @@ public class IOKeyDesc {
    * @return true for end. no otherwise.
    */
   public boolean reachEnd() {
-    anchorBuffer.position(0);
-    return anchorBuffer.get() == Constants.KEY_LIST_CODE_ANCHOR_END;
+    anchorBuffer.readerIndex(0);
+    return anchorBuffer.readByte() == Constants.KEY_LIST_CODE_ANCHOR_END;
   }
 
   /**
@@ -270,20 +290,21 @@ public class IOKeyDesc {
     if (!resultParsed) {
       resultKeys = new ArrayList<>();
       // parse desc buffer and key buffer
-      descBuffer.position(0);
-      int retNbr = descBuffer.getInt();
+      descBuffer.readerIndex(0);
+      descBuffer.writerIndex(descBuffer.capacity());
+      int retNbr = descBuffer.readInt();
       if (retNbr == 0) { // check no result
         resultParsed = true;
         return resultKeys;
       }
 
       if (dkeyBytes != null) {
-        descBuffer.position(descBuffer.position() + Constants.ENCODED_LENGTH_KEY + dkeyBytes.length);
+        descBuffer.readerIndex(descBuffer.readerIndex() + Constants.ENCODED_LENGTH_KEY + dkeyBytes.length);
       }
-      anchorBuffer.position(0);
-      if (anchorBuffer.get() == Constants.KEY_LIST_CODE_KEY2BIG) { // check key2big
+      anchorBuffer.readerIndex(0);
+      if (anchorBuffer.readByte() == Constants.KEY_LIST_CODE_KEY2BIG) { // check key2big
         resultParsed = true;
-        suggestedKeyLen = (int)descBuffer.getLong() + 1;
+        suggestedKeyLen = (int)descBuffer.readLong() + 1;
         if (log.isDebugEnabled()) {
           log.debug("key2big. suggested length is " + suggestedKeyLen);
         }
@@ -294,19 +315,31 @@ public class IOKeyDesc {
       short csumLen;
       int idx = 0;
       for (int i = 0; i < retNbr; i++) {
-        keyBuffer.position(idx);
-        keyLen = descBuffer.getLong();
+        keyBuffer.readerIndex(idx);
+        keyLen = descBuffer.readLong();
         byte bytes[] = new byte[(int)keyLen];
-        keyBuffer.get(bytes);
+        keyBuffer.readBytes(bytes);
         resultKeys.add(new String(bytes, Constants.KEY_CHARSET));
-        descBuffer.position(descBuffer.position() + 6); // uint32_t kd_val_type(4) + uint16_t kd_csum_type(2)
-        csumLen = descBuffer.getShort();
+        descBuffer.readerIndex(descBuffer.readerIndex() + 6); // uint32_t kd_val_type(4) + uint16_t kd_csum_type(2)
+        csumLen = descBuffer.readShort();
         idx += keyLen + csumLen;
       }
       resultParsed = true;
       return resultKeys;
     }
     return resultKeys;
+  }
+
+  public void release() {
+    if (this.descBuffer != null) {
+      this.descBuffer.release();
+    }
+    if (this.anchorBuffer != null) {
+      this.anchorBuffer.release();
+    }
+    if (this.keyBuffer != null) {
+      this.keyBuffer.release();
+    }
   }
 
   @Override
