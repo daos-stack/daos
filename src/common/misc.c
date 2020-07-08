@@ -223,6 +223,28 @@ daos_sgls_buf_size(d_sg_list_t *sgls, int nr)
 	return size;
 }
 
+int
+daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size)
+{
+	char	*new_buf;
+
+	if (sgl == NULL || sgl->sg_iovs == NULL)
+		return 0;
+
+	D_ASSERT(sgl->sg_nr > idx);
+	if (sgl->sg_iovs[idx].iov_buf_len >= new_size)
+		return 0;
+
+	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf, new_size);
+	if (new_buf == NULL)
+		return -DER_NOMEM;
+
+	sgl->sg_iovs[idx].iov_buf = new_buf;
+	sgl->sg_iovs[idx].iov_buf_len = new_size;
+
+	return 0;
+}
+
 /**
  * Query the size of packed sgls, if the \a buf_size != NULL then will set its
  * value as buffer size as well.
@@ -386,6 +408,14 @@ daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2)
 		return false;
 
 	return !memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len);
+}
+
+void
+daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len)
+{
+	D_ASSERT(iov->iov_len + buf_len <= iov->iov_buf_len);
+	memcpy(iov->iov_buf + iov->iov_len, buf, buf_len);
+	iov->iov_len += buf_len;
 }
 
 d_rank_list_t *

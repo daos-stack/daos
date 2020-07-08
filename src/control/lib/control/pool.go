@@ -494,6 +494,48 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 	return nil
 }
 
+// PoolDrainReq struct contains request
+type PoolDrainReq struct {
+	unaryRequest
+	msRequest
+	UUID      string
+	Rank      system.Rank
+	Targetidx []uint32
+}
+
+// DrainResp has no other parameters other than success/failure for now.
+
+// PoolDrain will set a pool target for a specific rank to the drain status.
+// This should automatically start the rebuildiing process.
+// Returns an error (including any DER code from DAOS).
+func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) error {
+	if err := checkUUID(req.UUID); err != nil {
+		return err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, &mgmtpb.PoolDrainReq{
+			Uuid:      req.UUID,
+			Rank:      req.Rank.Uint32(),
+			Targetidx: req.Targetidx,
+		})
+	})
+
+	rpcClient.Debugf("Drain DAOS pool target request: %v\n", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool Drain failed")
+	}
+	rpcClient.Debugf("Drain DAOS pool target response: %s\n", msResp)
+
+	return nil
+}
+
 func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
 	out = new(mgmtpb.PoolExtendReq)
 	if err = convert.Types(in, out); err != nil {
