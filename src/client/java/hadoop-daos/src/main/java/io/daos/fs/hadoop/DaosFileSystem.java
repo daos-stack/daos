@@ -33,6 +33,7 @@ import java.util.Set;
 
 import com.google.common.collect.Lists;
 
+import io.daos.*;
 import io.daos.dfs.*;
 
 import org.apache.commons.lang.StringEscapeUtils;
@@ -169,8 +170,8 @@ public class DaosFileSystem extends FileSystem {
   private String workPath;
 
   static {
-    if (ShutdownHookManager.removeHook(DaosFsClient.FINALIZER)) {
-      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosFsClient.FINALIZER, 0);
+    if (ShutdownHookManager.removeHook(DaosClient.FINALIZER)) {
+      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosClient.FINALIZER, 0);
       if (LOG.isDebugEnabled()) {
         LOG.debug("daos finalizer relocated to hadoop ShutdownHookManager");
       }
@@ -927,7 +928,7 @@ public class DaosFileSystem extends FileSystem {
     }
     super.close();
     if (daos != null) {
-      daos.disconnect();
+      daos.close();
     }
   }
 
