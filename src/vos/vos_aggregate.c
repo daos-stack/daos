@@ -1944,7 +1944,7 @@ vos_cmt_get_oid(d_iov_t *value)
 }
 
 int
-vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t commited_dtx_cb,
+vos_cmt_iterate(daos_handle_t coh, dbtree_iterate_cb_t commited_dtx_cb,
 		void *arg)
 {
 	struct vos_container    *cont = vos_hdl2cont(coh);

@@ -972,7 +972,7 @@ daos_epoch_t
 vos_cmt_get_epoch(d_iov_t *value);
 
 int
-vos_agg_iterate(daos_handle_t coh, dbtree_iterate_cb_t cb, void *arg);
+vos_cmt_iterate(daos_handle_t coh, dbtree_iterate_cb_t cb, void *arg);
 
 #endif /* __VOS_API_H */
 

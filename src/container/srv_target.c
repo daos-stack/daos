@@ -86,7 +86,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 		return 1;
 //	if (!run_ec)
 //	D_PRINT("starting ec_agg\n");
-	ec_agg_epoch = ds_obj_ec_aggregate(cont, ec_agg_epoch, true);
+	ec_agg_epoch = ds_obj_ec_aggregate(cont, ec_agg_epoch, false);
 	D_PRINT("completed ec_agg: %lu\n", ec_agg_epoch);
 
 
