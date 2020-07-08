@@ -24,13 +24,12 @@
 package system
 
 import (
-	"fmt"
 	"net"
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
@@ -114,7 +113,7 @@ func TestMember_AddRemove(t *testing.T) {
 
 			var count int
 			var err error
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for i, m := range tc.membersToAdd {
 				count, err = ms.Add(m)
@@ -130,15 +129,9 @@ func TestMember_AddRemove(t *testing.T) {
 				ms.Remove(r)
 			}
 
-			AssertEqual(t, len(tc.expMembers), len(ms.members), name)
+			AssertEqual(t, len(tc.expMembers), ms.Count(), name)
 		})
 	}
-}
-
-func assertMembersEqual(t *testing.T, a Member, b Member, msg string) {
-	t.Helper()
-	AssertTrue(t, reflect.DeepEqual(a, b),
-		fmt.Sprintf("%s: want %#v, got %#v", msg, a, b))
 }
 
 func TestMember_AddOrReplace(t *testing.T) {
@@ -146,16 +139,16 @@ func TestMember_AddOrReplace(t *testing.T) {
 	m1a := *MockMember(t, 1, MemberStateStopped)
 	m2a := *MockMember(t, 2, MemberStateStopped)
 	m0b := m0a
-	m0b.UUID = "m0b" // uuid changes after reformat
+	m0b.UUID = uuid.MustParse(MockUUID(4)) // uuid changes after reformat
 	m0b.state = MemberStateJoined
 	m1b := m1a
 	m1b.Addr = m0a.Addr // rank allocated differently between hosts after reformat
-	m1b.UUID = "m1b"
+	m1b.UUID = uuid.MustParse(MockUUID(5))
 	m1b.state = MemberStateJoined
 	m2b := m2a
 	m2a.Addr = m0a.Addr // ranks 0,2 on same host before reformat
 	m2b.Addr = m1a.Addr // ranks 0,1 on same host after reformat
-	m2b.UUID = "m2b"
+	m2b.UUID = uuid.MustParse(MockUUID(6))
 	m2b.state = MemberStateJoined
 
 	for name, tc := range map[string]struct {
@@ -181,27 +174,34 @@ func TestMember_AddOrReplace(t *testing.T) {
 		},
 		"rank uuid and address changed after reformat": {
 			Members{&m0a, &m1a, &m2a, &m0b, &m2b, &m1b},
-			Members{&m0b, &m1b, &m2b},
+			Members{&m0b, &m2b, &m1b},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.membersToAddOrReplace {
-				ms.AddOrReplace(m)
+				if err := ms.AddOrReplace(m); err != nil {
+					t.Fatal(err)
+				}
 			}
 
-			AssertEqual(t, len(tc.expMembers), len(ms.members), name)
+			AssertEqual(t, len(tc.expMembers), ms.Count(), name)
 
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(Member{}),
+			}
 			for _, em := range tc.expMembers {
 				m, err := ms.Get(em.Rank)
 				if err != nil {
 					t.Fatal(err)
 				}
-				assertMembersEqual(t, *em, *m, name)
+				if diff := cmp.Diff(em, m, cmpOpts...); diff != "" {
+					t.Fatalf("unexpected member (-want, +got):\n%s\n", diff)
+				}
 			}
 		})
 	}
@@ -216,7 +216,7 @@ func TestMember_HostRanks(t *testing.T) {
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateEvicted),
-		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(4), MockUUID(4), addr1.String(), addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -276,7 +276,7 @@ func TestMember_HostRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {
@@ -423,7 +423,7 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {
