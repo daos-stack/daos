@@ -4,8 +4,8 @@
 %global cart_version 4.7.0
 
 Name:          daos
-Version:       1.0.0
-Release:       2%{?relval}%{?dist}
+Version:       1.0.1
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -317,6 +317,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Wed Jul 08 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.1-1
+- Version bump up to 1.0.1-rc1
+
 * Thu Jun 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.0-2
 - Version bump to 1.0.0-rc2
 
