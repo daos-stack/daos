@@ -368,4 +368,4 @@ class ServerFillUp(IorTestBase):
             self.dmg.hostlist = self.hostlist_servers
             self.dmg.storage_query_nvme_health()
         except CommandFailure as error:
-            self.fail("dmg nvme-health failed {}".format(details))
+            self.fail("dmg nvme-health failed {}".format(error))
