@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -165,6 +165,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_CONT_SET_OWNER:
 		ds_mgmt_drpc_cont_set_owner(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_GROUP_UPDATE:
+		ds_mgmt_drpc_group_update(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
