@@ -7,6 +7,8 @@ require (
 	github.com/golang/protobuf v1.3.5
 	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.1.1
+	github.com/hashicorp/raft v1.1.2
+	github.com/hashicorp/raft-boltdb v0.0.0-20191021154308-4207f1bf0617
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mitchellh/hashstructure v1.0.0
