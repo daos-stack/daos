@@ -93,7 +93,9 @@ class ZeroConfigTest(TestWithServers):
 
         # Let's run daos_racer as a client
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
+        print("--------GETTING PARAMS--------")
         daos_racer.get_params(self)
+        print("--------DONE GETTING PARAMS--------")
 
         # Update env_name list to add OFI_INTERFACE if needed.
         if env:

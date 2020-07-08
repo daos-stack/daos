@@ -5,14 +5,19 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 300
+timeout: 1800
 server_config:
-    name: daos_server
-    servers:
-        bdev_class: nvme
-        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    # bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    bdev_list: ["aaaa:aa:aa.a"]
+    # scm_class: dcpm
+    # scm_list: ["/dev/pmem0"]
+daos_racer:
+  runtime: 600
+  clush_timeout: 1500
+
 zero_config: !mux
   set:
     env_state: True
