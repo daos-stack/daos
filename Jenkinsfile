@@ -490,6 +490,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             expression { ! skip_stage('build-centos7-gcc-debug') }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -538,6 +539,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             expression { ! skip_stage('build-centos7-gcc-release') }
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
