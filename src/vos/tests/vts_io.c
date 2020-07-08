@@ -497,7 +497,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 {
 	struct bio_sglist	*bsgl;
 	struct bio_iov		*biov;
-	d_iov_t		*srv_iov;
+	d_iov_t			*srv_iov;
 	daos_handle_t		ioh;
 	unsigned int		off;
 	int			i;
