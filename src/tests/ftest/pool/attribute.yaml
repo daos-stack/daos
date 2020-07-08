@@ -6,14 +6,6 @@ hosts:
 timeout: 120
 server_config:
   name: daos_server
-  transport_config:
-    allow_insecure: False
-agent_config:
-  transport_config:
-    allow_insecure: False
-dmg:
-  transport_config:
-    allow_insecure: False
 pool:
   control_method: dmg
   mode: 511
