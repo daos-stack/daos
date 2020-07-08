@@ -39,6 +39,7 @@ class IoAggregation(IorTestBase):
         """Set up test before executing"""
         super(IoAggregation, self).setUp()
         self.dmg = self.get_dmg_command()
+        self.daos_cmd = DaosCommand(self.bin)
 
     def display_free_space(self):
         """ Display pool free space """
@@ -57,8 +58,7 @@ class IoAggregation(IorTestBase):
         Returns:
           Highest epoch value for a given container.
         """
-        daos_cmd = DaosCommand(self.bin)
-        highest_epoch = daos_cmd.get_output(
+        highest_epoch = self.daos_cmd.get_output(
             "container_query", **kwargs)[0][4]
 
         return highest_epoch
@@ -95,7 +95,7 @@ class IoAggregation(IorTestBase):
         self.run_ior_with_pool()
 
         # capture free space before taking the snapshot
-        free_space_before_snap = self.display_free_space()
+        self.display_free_space()
 
         # create snapshot
         self.container.create_snap()
@@ -105,7 +105,7 @@ class IoAggregation(IorTestBase):
         self.run_ior_with_pool(create_cont=False)
 
         # capture free space after second ior write
-        free_space_after_second_write = self.display_free_space()
+        free_space_before_snap_destroy = self.display_free_space()
 
         # obtain highest epoch before snapshot destroy via container query
         kwargs = {
@@ -131,13 +131,15 @@ class IoAggregation(IorTestBase):
         # Now check if the space is returned back and Highest epoch value
         # is higher than the the value just before snapshot destroy.
         counter = 1
-        while free_space_before_snap != self.display_free_space() or \
+        returned_space = (self.display_free_space() -
+                          free_space_before_snap_destroy)
+        while returned_space < int(self.ior_cmd.block_size.value) or \
             highest_epc_before_snap_destroy >= self.highest_epoch(kwargs):
             # try to wait for 4 x 60 secs for aggregation to be completed or
             # else exit the test with a failure.
             if counter > 4:
-                self.log.info("Free space after Second write: %s",
-                              free_space_after_second_write)
+                self.log.info("Free space before snapshot destroy: %s",
+                              free_space_before_snap_destroy)
                 self.log.info("Free space when test terminated: %s",
                               self.display_free_space())
                 self.log.info("Highest Epoch before IO Aggregation: %s",
@@ -146,4 +148,6 @@ class IoAggregation(IorTestBase):
                               self.highest_epoch(kwargs))
                 self.fail("Aggregation did not complete as expected")
             time.sleep(60)
+            returned_space = (self.display_free_space() -
+                              free_space_before_snap_destroy)
             counter += 1
