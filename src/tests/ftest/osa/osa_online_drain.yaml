@@ -35,12 +35,15 @@ ior:
     repetitions: 1
     daos_destroy: False
     iorflags:
-          ior_flags:
-            - "-w -r -R -k -G 1"
-          ior_api:
-            - DAOS
-          obj_class: !mux
-            - "RP_2GX"
+      ior_flags:
+        - "-w -r -R -k -G 1"
+      ior_api:
+        - DAOS
+      obj_class: !mux
+        object_SX:
+          - "SX"
+        object_RP_GPX:
+          - "RP_2GX"
     ior_test_sequence:
     #   - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
     #    The values are set to be in the multiples of 10.

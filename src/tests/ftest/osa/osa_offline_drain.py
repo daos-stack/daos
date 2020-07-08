@@ -157,17 +157,18 @@ class OSAOfflineDrain(TestWithServers):
             self.assertTrue(pver_drain > pver_begin,
                             "Pool Version Error:  After drain")
 
-        for val in range(0, num_pool):
-            display_string = "Pool{} space at the End".format(val)
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
         # Run daos_racer and verify object integrity
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
         daos_racer.get_params(self)
         daos_racer.set_environment(daos_racer.get_environment(
                                    self.server_managers[0]))
         daos_racer.run()
+
+        for val in range(0, num_pool):
+            display_string = "Pool{} space at the End".format(val)
+            self.pool = pool[val]
+            self.pool.display_pool_daos_space(display_string)
+            pool[val].destroy()
 
     def test_osa_offline_drain(self):
         """Test ID: DAOS-4750
