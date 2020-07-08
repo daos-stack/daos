@@ -89,11 +89,12 @@ void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
  * object I/Os do not need to access global, parent ds_pool objects.
  */
 struct ds_pool_child {
-	d_list_t	spc_list;
-	daos_handle_t	spc_hdl;	/* vos_pool handle */
-	struct ds_pool	*spc_pool;
-	uuid_t		spc_uuid;	/* pool UUID */
-	d_list_t	spc_cont_list;
+	d_list_t		spc_list;
+	daos_handle_t		spc_hdl;	/* vos_pool handle */
+	struct ds_pool		*spc_pool;
+	uuid_t			spc_uuid;	/* pool UUID */
+	struct sched_request	*spc_gc_req;	/* Track GC ULT */
+	d_list_t		spc_cont_list;
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
 	 * vos aggregation can not cross this epoch during rebuild to avoid

@@ -5,7 +5,7 @@ import org.junit.Test;
 public class zCleanerIT {
 
   @Test
-  public void clean() throws Exception{
+  public void clean() throws Exception {
     DaosFsClient.closeAll();
     DaosFsClient.daosFinalize();
   }
