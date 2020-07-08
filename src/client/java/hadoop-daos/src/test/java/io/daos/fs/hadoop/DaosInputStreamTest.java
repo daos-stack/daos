@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -35,19 +35,19 @@ import static org.mockito.Mockito.*;
 public class DaosInputStreamTest {
 
   @Test(expected = IllegalArgumentException.class)
-  public void testNewDaosInputStreamNonDirectBuffer() throws Exception{
+  public void testNewDaosInputStreamNonDirectBuffer() throws Exception {
     DaosFile file = mock(DaosFile.class);
     new DaosInputStream(file, null, ByteBuffer.allocate(10), 10);
   }
 
   @Test(expected = IllegalArgumentException.class)
-  public void testNewDaosInputStreamIllegalSize() throws Exception{
+  public void testNewDaosInputStreamIllegalSize() throws Exception {
     DaosFile file = mock(DaosFile.class);
     new DaosInputStream(file, null, ByteBuffer.allocateDirect(10), 20);
   }
 
   @Test(expected = IllegalArgumentException.class)
-  public void testReadLenIllegal()throws Exception{
+  public void testReadLenIllegal() throws Exception {
     DaosFile file = mock(DaosFile.class);
     DaosInputStream is = new DaosInputStream(file, null, 10, 10);
     byte[] buf = new byte[10];
@@ -55,7 +55,7 @@ public class DaosInputStreamTest {
   }
 
   @Test(expected = IllegalArgumentException.class)
-  public void testReadOffsetIllegal()throws Exception{
+  public void testReadOffsetIllegal() throws Exception {
     DaosFile file = mock(DaosFile.class);
     DaosInputStream is = new DaosInputStream(file, null, 10, 10);
     byte[] buf = new byte[10];
@@ -63,7 +63,7 @@ public class DaosInputStreamTest {
   }
 
   @Test
-  public void testRead0Len()throws Exception{
+  public void testRead0Len() throws Exception {
     DaosFile file = mock(DaosFile.class);
     DaosInputStream is = new DaosInputStream(file, null, 10, 10);
     byte[] buf = new byte[10];
@@ -71,10 +71,10 @@ public class DaosInputStreamTest {
     Assert.assertEquals(0, len);
   }
 
-  private void readFromDaosOnce(int bufferCap, int preloadSize, int requestLen, long readLen)throws Exception{
+  private void readFromDaosOnce(int bufferCap, int preloadSize, int requestLen, long readLen) throws Exception {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
-    long actualReadLen = requestLen<preloadSize ? preloadSize:requestLen;
+    long actualReadLen = requestLen < preloadSize ? preloadSize : requestLen;
     when(file.read(any(ByteBuffer.class), anyLong(), anyLong(), eq(actualReadLen))).thenReturn(actualReadLen);
     when(file.length()).thenReturn(200L);
 
@@ -91,33 +91,33 @@ public class DaosInputStreamTest {
 
     Assert.assertEquals(0, offSetCap.getValue().intValue());
 
-    Assert.assertEquals(requestLen<preloadSize ? preloadSize:requestLen, is.getBuffer().limit());
+    Assert.assertEquals(requestLen < preloadSize ? preloadSize : requestLen, is.getBuffer().limit());
     Assert.assertEquals(requestLen, len);
     Assert.assertEquals(requestLen, is.getBuffer().position());
     Assert.assertEquals(requestLen, is.getPos());
   }
 
   @Test
-  public void testReadFromDaosLessThanPreload() throws Exception{
+  public void testReadFromDaosLessThanPreload() throws Exception {
     readFromDaosOnce(100, 50, 20, 20);
   }
 
   @Test
-  public void testReadFromDaosEqualToPreload() throws Exception{
+  public void testReadFromDaosEqualToPreload() throws Exception {
     readFromDaosOnce(100, 50, 50, 50);
   }
 
   @Test
-  public void testReadFromDaosGreaterThanPreload() throws Exception{
+  public void testReadFromDaosGreaterThanPreload() throws Exception {
     readFromDaosOnce(100, 50, 80, 80);
   }
 
   @Test
-  public void testReadFromDaosEqualToBufferCap() throws Exception{
+  public void testReadFromDaosEqualToBufferCap() throws Exception {
     readFromDaosOnce(100, 50, 100, 100);
   }
 
-  private void readFromDaosMultipleTimes(int requestLen, long actualRemainingLen, int readTimes)throws Exception{
+  private void readFromDaosMultipleTimes(int requestLen, long actualRemainingLen, int readTimes) throws Exception {
     int bufferCap = 100;
     int preloadSize = 50;
     DaosFile file = mock(DaosFile.class);
@@ -132,7 +132,7 @@ public class DaosInputStreamTest {
     long actualReadLen1 = 100;
     when(file.read(any(ByteBuffer.class), anyLong(), anyLong(), eq(actualReadLen1))).thenReturn(actualReadLen1);
 
-    long actualReadLen2 = actualRemainingLen<preloadSize ? preloadSize:actualRemainingLen;
+    long actualReadLen2 = actualRemainingLen < preloadSize ? preloadSize : actualRemainingLen;
     when(file.read(any(ByteBuffer.class), anyLong(), anyLong(), eq(actualReadLen2))).thenReturn(actualReadLen2);
 
     int len = is.read(buf, 0, requestLen);
@@ -143,41 +143,41 @@ public class DaosInputStreamTest {
     ArgumentCaptor<Integer> offSetCap = ArgumentCaptor.forClass(Integer.class);
     verify(sbuffer, times((readTimes + 1))).get(eq(buf), offSetCap.capture(), anyInt());
 
-    int mod = requestLen%bufferCap;
-    int remain = mod>preloadSize ? mod:preloadSize;
+    int mod = requestLen % bufferCap;
+    int remain = mod > preloadSize ? mod : preloadSize;
     Assert.assertEquals(remain, is.getBuffer().limit());
     Assert.assertEquals(requestLen, len);
     Assert.assertEquals(mod, is.getBuffer().position());
 
-    Integer expect[] = new Integer[readTimes+1];
-    for(int i=0; i<expect.length; i++){
-      expect[i] = i*100;
+    Integer expect[] = new Integer[readTimes + 1];
+    for (int i = 0; i < expect.length; i++) {
+      expect[i] = i * 100;
     }
     Assert.assertTrue(Arrays.equals(expect, offSetCap.getAllValues().toArray()));
     Assert.assertEquals(requestLen, is.getPos());
   }
 
   @Test
-  public void testReadFromDaosGreaterThanBufferCapAndRemainingLessThanPreload()throws Exception{
+  public void testReadFromDaosGreaterThanBufferCapAndRemainingLessThanPreload() throws Exception {
     readFromDaosMultipleTimes(249, 49, 2);
   }
 
   @Test
-  public void testReadFromDaosGreaterThanBufferCapAndRemainingEqualToPreload()throws Exception{
+  public void testReadFromDaosGreaterThanBufferCapAndRemainingEqualToPreload() throws Exception {
     readFromDaosMultipleTimes(350, 50, 3);
   }
 
   @Test
-  public void testReadFromDaosGreaterThanBufferCapAndRemainingGreaterThanPreload()throws Exception{
+  public void testReadFromDaosGreaterThanBufferCapAndRemainingGreaterThanPreload() throws Exception {
     readFromDaosMultipleTimes(463, 63, 4);
   }
 
   @Test
-  public void testSeekAndSkip() throws Exception{
+  public void testSeekAndSkip() throws Exception {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
 
-    when(file.length()).thenReturn((long)500);
+    when(file.length()).thenReturn((long) 500);
     DaosInputStream is = new DaosInputStream(file, stats, 100, 50);
     Assert.assertEquals(0, is.getPos());
 
@@ -189,7 +189,7 @@ public class DaosInputStreamTest {
   }
 
   @Test
-  public void testReadAllFromCache()throws Exception{
+  public void testReadAllFromCache() throws Exception {
     int bufferCap = 100;
     int preloadSize = 100;
     int requestLen = 50;
@@ -197,7 +197,7 @@ public class DaosInputStreamTest {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
 
-    when(file.length()).thenReturn((long)500);
+    when(file.length()).thenReturn((long) 500);
     ByteBuffer buffer = ByteBuffer.allocateDirect(bufferCap);
     ByteBuffer sbuffer = spy(buffer);
     DaosInputStream is = new DaosInputStream(file, stats, sbuffer, preloadSize);
@@ -234,7 +234,7 @@ public class DaosInputStreamTest {
   }
 
   @Test
-  public void testReadPartialFromCache()throws Exception{
+  public void testReadPartialFromCache() throws Exception {
     int bufferCap = 100;
     int preloadSize = 80;
     int requestLen = 320;
@@ -242,7 +242,7 @@ public class DaosInputStreamTest {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
 
-    when(file.length()).thenReturn((long)500);
+    when(file.length()).thenReturn((long) 500);
     ByteBuffer buffer = ByteBuffer.allocateDirect(bufferCap);
     ByteBuffer sbuffer = spy(buffer);
     DaosInputStream is = new DaosInputStream(file, stats, sbuffer, preloadSize);
@@ -253,15 +253,19 @@ public class DaosInputStreamTest {
 
     int len = is.read(buf, 0, requestLen);
 
-    verify(file, times(3)).read(any(ByteBuffer.class), eq(0L), anyLong(), eq(100L));
-    verify(file, times(1)).read(any(ByteBuffer.class), eq(0L), anyLong(), eq(80L));
+    verify(file, times(3)).read(any(ByteBuffer.class), eq(0L), anyLong(),
+        eq(100L));
+    verify(file, times(1)).read(any(ByteBuffer.class), eq(0L), anyLong(),
+        eq(80L));
     Assert.assertEquals(requestLen, len);
 
     when(file.read(any(ByteBuffer.class), eq(0L), anyLong(), eq(80L))).thenReturn(80L);
     len = is.read(buf, 0, 137);
 
-    verify(file, times(3)).read(any(ByteBuffer.class), eq(0L), anyLong(), eq(100L));
-    verify(file, times(2)).read(any(ByteBuffer.class), eq(0L), anyLong(), eq(80L));
+    verify(file, times(3)).read(any(ByteBuffer.class), eq(0L), anyLong(),
+        eq(100L));
+    verify(file, times(2)).read(any(ByteBuffer.class), eq(0L), anyLong(),
+        eq(80L));
 
     ArgumentCaptor<Integer> offSetCap = ArgumentCaptor.forClass(Integer.class);
     verify(sbuffer, times(3)).get(eq(buf), offSetCap.capture(), eq(100));
@@ -284,14 +288,14 @@ public class DaosInputStreamTest {
   }
 
   @Test
-  public void testReadSingleFromCache() throws Exception{
+  public void testReadSingleFromCache() throws Exception {
     int bufferCap = 100;
     int preloadSize = 80;
 
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
 
-    when(file.length()).thenReturn((long)500);
+    when(file.length()).thenReturn((long) 500);
     ByteBuffer buffer = ByteBuffer.allocateDirect(bufferCap);
     ByteBuffer sbuffer = spy(buffer);
     DaosInputStream is = new DaosInputStream(file, stats, sbuffer, preloadSize);
@@ -301,18 +305,18 @@ public class DaosInputStreamTest {
     is.seek(5);
 
     int b = is.read();
-    Assert.assertEquals('f', (byte)b);
+    Assert.assertEquals('f', (byte) b);
   }
 
   @Test
-  public void testReadSingleFromDaos() throws Exception{
+  public void testReadSingleFromDaos() throws Exception {
     int bufferCap = 100;
     int preloadSize = 80;
 
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
 
-    when(file.length()).thenReturn((long)500);
+    when(file.length()).thenReturn((long) 500);
 
     ByteBuffer buffer = ByteBuffer.allocateDirect(bufferCap);
     ByteBuffer sbuffer = spy(buffer);
@@ -320,7 +324,7 @@ public class DaosInputStreamTest {
 
     Answer<Long> answer = (invocation) -> {
       sbuffer.limit(1);
-      sbuffer.put((byte)'a');
+      sbuffer.put((byte) 'a');
       sbuffer.flip();
       return 80L;
     };
@@ -328,17 +332,17 @@ public class DaosInputStreamTest {
 
     int b = is.read();
 
-    Assert.assertEquals('a', (byte)b);
+    Assert.assertEquals('a', (byte) b);
     verify(file, times(1)).read(any(ByteBuffer.class), anyLong(), anyLong(), eq(80L));
     verify(sbuffer, times(1)).get(any(byte[].class), eq(0), eq(1));
   }
 
   @Test
-  public void testAvailable() throws Exception{
+  public void testAvailable() throws Exception {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
 
-    when(file.length()).thenReturn((long)500);
+    when(file.length()).thenReturn((long) 500);
     ByteBuffer buffer = ByteBuffer.allocateDirect(100);
     ByteBuffer sbuffer = spy(buffer);
     DaosInputStream is = new DaosInputStream(file, stats, sbuffer, 80);
@@ -347,11 +351,11 @@ public class DaosInputStreamTest {
     is.close();
   }
 
-  private DaosInputStream close()throws Exception{
+  private DaosInputStream close() throws Exception {
     DaosFile file = mock(DaosFile.class);
     FileSystem.Statistics stats = mock(FileSystem.Statistics.class);
 
-    when(file.length()).thenReturn((long)500);
+    when(file.length()).thenReturn((long) 500);
     ByteBuffer buffer = ByteBuffer.allocateDirect(100);
     ByteBuffer sbuffer = spy(buffer);
     DaosInputStream is = new DaosInputStream(file, stats, sbuffer, 80);
@@ -362,12 +366,12 @@ public class DaosInputStreamTest {
   }
 
   @Test
-  public void testClose() throws Exception{
+  public void testClose() throws Exception {
     close();
   }
 
   @Test(expected = IOException.class)
-  public void testOperationAfterClose() throws Exception{
+  public void testOperationAfterClose() throws Exception {
     DaosInputStream is = close();
     is.read(null, 0, 0);
   }
@@ -382,24 +386,24 @@ public class DaosInputStreamTest {
     byte[] data = new byte[]{19, 49, 89, 64, 20, 19, 1, 2, 3};
 
     doAnswer(
-      invocationOnMock -> {
-        ByteBuffer buffer = (ByteBuffer) invocationOnMock.getArguments()[0];
-        long bufferOffset = (long) invocationOnMock.getArguments()[1];
-        long len = (long) invocationOnMock.getArguments()[3];
-        long i;
-        for (i = bufferOffset; i < bufferOffset + len; i++) {
-          buffer.put((int) i, data[(int) (i - bufferOffset)]);
-        }
-        buffer.limit((int)i);
-        return len;
-      })
-      .when(file)
-      .read(any(ByteBuffer.class), anyLong(), anyLong(), anyLong());
-    doReturn((long)data.length).when(file).length();
+        invocationOnMock -> {
+          ByteBuffer buffer = (ByteBuffer) invocationOnMock.getArguments()[0];
+          long bufferOffset = (long) invocationOnMock.getArguments()[1];
+          long len = (long) invocationOnMock.getArguments()[3];
+          long i;
+          for (i = bufferOffset; i < bufferOffset + len; i++) {
+            buffer.put((int) i, data[(int) (i - bufferOffset)]);
+          }
+          buffer.limit((int) i);
+          return len;
+        })
+        .when(file)
+        .read(any(ByteBuffer.class), anyLong(), anyLong(), anyLong());
+    doReturn((long) data.length).when(file).length();
 
     boolean[] trueFalse = new boolean[]{true, false};
 
-    for (int j = 0; j < 2; j ++) {
+    for (int j = 0; j < 2; j++) {
       boolean bufferedReadEnabled = trueFalse[j];
       int preloadSize = bufferedReadEnabled ? bufferSize : 0;
       DaosInputStream input = new DaosInputStream(file, stats, internalBuffer, preloadSize);
@@ -431,31 +435,31 @@ public class DaosInputStreamTest {
     byte[] data = new byte[]{19, 49, 89, 64, 20, 19, 1, 2, 3};
 
     doAnswer(
-      invocationOnMock -> {
-        ByteBuffer buffer = (ByteBuffer) invocationOnMock.getArguments()[0];
-        long bufferOffset = (long) invocationOnMock.getArguments()[1];
-        long fileOffset = (long) invocationOnMock.getArguments()[2];
-        long len = (long) invocationOnMock.getArguments()[3];
-        if (len > buffer.capacity() - bufferOffset) {
-          throw new IOException(
-                  String.format("buffer (%d) has no enough space start at %d for reading %d bytes from file",
-                          buffer.capacity(), bufferOffset, len));
-        }
-        long actualRead = 0;
-        for (long i = bufferOffset; i < bufferOffset + len &&
-                (i - bufferOffset + fileOffset) < data.length; i++) {
-          buffer.put((int) i, data[(int) (i - bufferOffset + fileOffset)]);
-          actualRead ++;
-        }
-        return actualRead;
-      })
+        invocationOnMock -> {
+          ByteBuffer buffer = (ByteBuffer) invocationOnMock.getArguments()[0];
+          long bufferOffset = (long) invocationOnMock.getArguments()[1];
+          long fileOffset = (long) invocationOnMock.getArguments()[2];
+          long len = (long) invocationOnMock.getArguments()[3];
+          if (len > buffer.capacity() - bufferOffset) {
+            throw new IOException(
+                String.format("buffer (%d) has no enough space start at %d for reading %d bytes from file",
+                    buffer.capacity(), bufferOffset, len));
+          }
+          long actualRead = 0;
+          for (long i = bufferOffset; i < bufferOffset + len &&
+              (i - bufferOffset + fileOffset) < data.length; i++) {
+            buffer.put((int) i, data[(int) (i - bufferOffset + fileOffset)]);
+            actualRead++;
+          }
+          return actualRead;
+        })
         .when(file)
         .read(any(ByteBuffer.class), anyLong(), anyLong(), anyLong());
-    doReturn((long)data.length).when(file).length();
+    doReturn((long) data.length).when(file).length();
 
     boolean[] trueFalse = new boolean[]{true, false};
 
-    for (int j = 0; j < 2; j ++) {
+    for (int j = 0; j < 2; j++) {
       boolean bufferedReadEnabled = trueFalse[j];
       int preloadSize = bufferedReadEnabled ? bufferSize : 0;
       DaosInputStream input = new DaosInputStream(file, stats, internalBuffer, preloadSize);
@@ -488,35 +492,35 @@ public class DaosInputStreamTest {
     AtomicInteger timesReadFromDaos = new AtomicInteger(0);
 
     doAnswer(
-      invocationOnMock -> {
-        ByteBuffer buffer = (ByteBuffer) invocationOnMock.getArguments()[0];
-        int times = timesReadFromDaos.incrementAndGet();
-        Assert.assertTrue("Read to internal buffer more than once!", times <= 1);
-        long bufferOffset = (long) invocationOnMock.getArguments()[1];
-        long fileOffset = (long) invocationOnMock.getArguments()[2];
-        long len = (long) invocationOnMock.getArguments()[3];
-        if (len > buffer.capacity() - bufferOffset) {
-          throw new IOException(
-            String.format("buffer (%d) has no enough space start at %d for reading %d bytes from file",
-              buffer.capacity(), bufferOffset, len));
-        }
-        long actualRead = 0;
-        for (long i = bufferOffset; i < bufferOffset + len &&
-                (i - bufferOffset + fileOffset) < data.length; i++) {
-          buffer.put((int) i, data[(int) (i - bufferOffset + fileOffset)]);
-          actualRead ++;
-        }
-        return actualRead;
-      })
-      .when(file)
-      .read(any(ByteBuffer.class), anyLong(), anyLong(), anyLong());
-    doReturn((long)data.length).when(file).length();
+        invocationOnMock -> {
+          ByteBuffer buffer = (ByteBuffer) invocationOnMock.getArguments()[0];
+          int times = timesReadFromDaos.incrementAndGet();
+          Assert.assertTrue("Read to internal buffer more than once!", times <= 1);
+          long bufferOffset = (long) invocationOnMock.getArguments()[1];
+          long fileOffset = (long) invocationOnMock.getArguments()[2];
+          long len = (long) invocationOnMock.getArguments()[3];
+          if (len > buffer.capacity() - bufferOffset) {
+            throw new IOException(
+                String.format("buffer (%d) has no enough space start at %d for reading %d bytes from file",
+                    buffer.capacity(), bufferOffset, len));
+          }
+          long actualRead = 0;
+          for (long i = bufferOffset; i < bufferOffset + len &&
+              (i - bufferOffset + fileOffset) < data.length; i++) {
+            buffer.put((int) i, data[(int) (i - bufferOffset + fileOffset)]);
+            actualRead++;
+          }
+          return actualRead;
+        })
+        .when(file)
+        .read(any(ByteBuffer.class), anyLong(), anyLong(), anyLong());
+    doReturn((long) data.length).when(file).length();
 
     DaosInputStream input = new DaosInputStream(file, stats, internalBuffer, bufferSize);
     int readSize = 3;
     byte[] answer = new byte[bufferSize];
     input.read(answer, 0, readSize);
-    input.read(answer, readSize, bufferSize-readSize);
+    input.read(answer, readSize, bufferSize - readSize);
     byte[] expect = data;
     Assert.assertArrayEquals(expect, answer);
   }
