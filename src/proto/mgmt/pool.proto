@@ -51,6 +51,7 @@ message PoolDestroyReq {
 	string uuid = 1; // uuid of pool to destroy
 	string sys = 2; // DAOS system identifier
 	bool force = 3; // destroy regardless of active connections
+	repeated uint32 svcreps = 4; // pool service replica ranks
 }
 
 // PoolDestroyResp returns resultant state of destroy operation.
@@ -62,6 +63,7 @@ message PoolDestroyResp {
 message PoolEvictReq {
 	string uuid = 1; // uuid of pool to evict
 	string sys = 2; // DAOS system identifier
+	repeated uint32 svcreps = 3; // pool service replica ranks
 }
 
 // PoolEvictResp returns resultant state of evict operation.
@@ -74,6 +76,7 @@ message PoolExcludeReq {
 	string uuid = 1; // uuid of pool to add target up to
 	uint32 rank = 2; // target to move to the up state
 	repeated uint32 targetidx = 3; // target ranks
+	repeated uint32 svcreps = 4; // pool service replica ranks
 }
 
 // PoolExcludeResp returns resultant state of Exclude operation.
@@ -86,6 +89,7 @@ message PoolDrainReq {
 	string uuid = 1; // uuid of pool to add target up to
 	uint32 rank = 2; // rank to move to the up state
 	repeated uint32 targetidx = 3; // rank targets
+	repeated uint32 svcreps = 4; // pool service replica ranks
 }
 
 // PoolDrainResp returns resultant state of Drain operation.
@@ -99,6 +103,7 @@ message PoolExtendReq {
 	repeated uint32 ranks = 2; // ranks
 	uint64 scmbytes = 3; // SCM size in bytes
 	uint64 nvmebytes = 4; // NVMe size in bytes
+	repeated uint32 svcreps = 5; // pool service replica ranks
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
@@ -111,6 +116,7 @@ message PoolReintegrateReq {
 	string uuid = 1; // uuid of pool to add target up to
 	uint32 rank = 2; // target to move to the up state
 	repeated uint32 targetidx = 3; // target ranks
+	repeated uint32 svcreps = 4; // pool service replica ranks
 }
 
 // PoolReintegrateResp returns resultant state of Reintegrate operation.
@@ -151,6 +157,7 @@ message ListContResp {
 // PoolQueryReq represents a pool query request.
 message PoolQueryReq {
 	string uuid = 1;
+	repeated uint32 svcreps = 2; // pool service replica ranks
 }
 
 // StorageUsageStats represents usage statistics for a storage subsystem.
@@ -175,32 +182,6 @@ message PoolRebuildStatus {
 	uint64 records = 4;
 }
 
-// PoolSetPropReq represents a request to set a pool property.
-message PoolSetPropReq {
-	string uuid = 1; // uuid of pool to modify
-	oneof property {
-		string name = 2;   // pool property name
-		uint32 number = 3; // pool property enum
-	}
-	oneof value {
-		string strval = 4; // pool property string value
-		uint64 numval = 5; // pool property numeric value
-	}
-}
-
-// PoolSetPropResp represents the result of setting a property.
-message PoolSetPropResp {
-	int32 status = 1; // DAOS error code
-	oneof property {
-		string name = 2;   // pool property name
-		uint32 number = 3; // pool property enum
-	}
-	oneof value {
-		string strval = 4; // pool property string value
-		uint64 numval = 5; // pool property numeric value
-	}
-}
-
 // PoolQueryResp represents a pool query response.
 message PoolQueryResp {
 	int32 status = 1; // DAOS error code
@@ -214,5 +195,32 @@ message PoolQueryResp {
 	uint32 totalnodes = 9; // total nodes in pool
 	uint32 version = 10; // latest pool map version
 	uint32 leader = 11; // current raft leader
+}
+
+// PoolSetPropReq represents a request to set a pool property.
+message PoolSetPropReq {
+	string uuid = 1; // uuid of pool to modify
+	oneof property {
+		string name = 2;   // pool property name
+		uint32 number = 3; // pool property enum
+	}
+	oneof value {
+		string strval = 4; // pool property string value
+		uint64 numval = 5; // pool property numeric value
+	}
+	repeated uint32 svcreps = 6; // pool service replica ranks
+}
+
+// PoolSetPropResp represents the result of setting a property.
+message PoolSetPropResp {
+	int32 status = 1; // DAOS error code
+	oneof property {
+		string name = 2;   // pool property name
+		uint32 number = 3; // pool property enum
+	}
+	oneof value {
+		string strval = 4; // pool property string value
+		uint64 numval = 5; // pool property numeric value
+	}
 }
 
