@@ -34,6 +34,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -88,14 +89,14 @@ func TestSystem_Membership_Get(t *testing.T) {
 			MockMember(t, 1, MemberStateUnknown),
 			Rank(2),
 			MockMember(t, 1, MemberStateUnknown),
-			FaultMemberMissing(Rank(2)),
+			&ErrMemberNotFound{byRank: NewRankPtr(2)},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			if _, err := ms.Add(tc.memberToAdd); err != nil {
 				t.Fatal(err)
@@ -135,7 +136,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 			},
 			nil,
 			nil,
-			[]error{nil, FaultMemberExists(Rank(1))},
+			[]error{nil, &ErrMemberExists{Rank(1)}},
 		},
 		"remove non-existent": {
 			Members{
@@ -172,7 +173,11 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 				ms.Remove(r)
 			}
 
-			AssertEqual(t, len(tc.expMembers), ms.Count(), name)
+			count, err = ms.Count()
+			if err != nil {
+				t.Fatal(err)
+			}
+			AssertEqual(t, len(tc.expMembers), count, name)
 		})
 	}
 }
@@ -238,7 +243,11 @@ func TestSystem_Membership_AddOrReplace(t *testing.T) {
 				}
 			}
 
-			AssertEqual(t, len(tc.expMembers), ms.Count(), name)
+			count, err := ms.Count()
+			if err != nil {
+				t.Fatal(err)
+			}
+			AssertEqual(t, len(tc.expMembers), count, name)
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(Member{}),
@@ -338,7 +347,12 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			AssertEqual(t, tc.expRanks, ms.RankList(), "ranks")
+			rankList, err := ms.RankList()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			AssertEqual(t, tc.expRanks, rankList, "ranks")
 			AssertEqual(t, tc.expHostRanks, ms.HostRanks(rankSet), "host ranks")
 			AssertEqual(t, tc.expHosts, ms.HostList(rankSet), "hosts")
 			AssertEqual(t, tc.expMembers, ms.Members(rankSet), "members")
@@ -356,7 +370,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateEvicted),
-		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(4), common.MockUUID(4), "", addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -400,7 +414,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {
@@ -452,7 +466,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 		MockMember(t, 3, MemberStateEvicted),
 		MockMember(t, 4, MemberStateJoined),
 		MockMember(t, 5, MemberStateJoined),
-		NewMember(Rank(6), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(6), common.MockUUID(6), "", addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -549,7 +563,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			ms := NewMembership(log)
+			ms := NewMembership(log, MockDatabase(t, log))
 
 			for _, m := range tc.members {
 				if _, err := ms.Add(m); err != nil {

@@ -25,11 +25,16 @@ package system
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/build"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
 )
+
+var ErrEmptyGroupMap = errors.New("empty GroupMap")
 
 // ErrNotReplica indicates that a request was made to a control plane
 // instance that is not a designated Management Service replica.
@@ -66,4 +71,54 @@ func (err *ErrNotLeader) Error() string {
 func IsNotLeader(err error) bool {
 	_, ok := errors.Cause(err).(*ErrNotLeader)
 	return ok
+}
+
+// ErrMemberExists indicates the failure of an operation that
+// expected the given member to not exist.
+type ErrMemberExists struct {
+	Rank Rank
+}
+
+func (err *ErrMemberExists) Error() string {
+	return fmt.Sprintf("member with rank %d already exists", err.Rank)
+}
+
+// ErrMemberNotFound indicates a failure to find a member with the
+// given search criterion.
+type ErrMemberNotFound struct {
+	byRank *Rank
+	byUUID *uuid.UUID
+	byAddr net.Addr
+}
+
+func (err *ErrMemberNotFound) Error() string {
+	switch {
+	case err.byRank != nil:
+		return fmt.Sprintf("unable to find member with rank %d", *err.byRank)
+	case err.byUUID != nil:
+		return fmt.Sprintf("unable to find member with uuid %s", *err.byUUID)
+	case err.byAddr != nil:
+		return fmt.Sprintf("unable to find member with addr %s", err.byAddr)
+	default:
+		return "unable to find member"
+	}
+}
+
+// ErrPoolNotFound indicates a failure to find a pool service with the
+// given search criterion.
+type ErrPoolNotFound struct {
+	byRank *Rank
+	byUUID *uuid.UUID
+	byAddr net.Addr
+}
+
+func (err *ErrPoolNotFound) Error() string {
+	switch {
+	case err.byRank != nil:
+		return fmt.Sprintf("unable to find pool service with rank %d", *err.byRank)
+	case err.byUUID != nil:
+		return fmt.Sprintf("unable to find pool service with uuid %s", *err.byUUID)
+	default:
+		return "unable to find pool service"
+	}
 }

@@ -147,3 +147,16 @@ func RanksFromUint32(ranks []uint32) (sysRanks []Rank) {
 
 	return
 }
+
+func DedupeRanks(in []Rank) ([]Rank, error) {
+	set, err := CreateRankSet("")
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range in {
+		if err := set.Add(r); err != nil {
+			return nil, err
+		}
+	}
+	return set.Ranks(), nil
+}

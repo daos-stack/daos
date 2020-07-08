@@ -143,7 +143,7 @@ func TestListCont_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil, nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
 
@@ -851,7 +851,7 @@ func TestContSetOwner_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil, nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
 
