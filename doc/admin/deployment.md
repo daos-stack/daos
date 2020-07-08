@@ -829,23 +829,34 @@ $ sudo journalctl --unit daos_agent.service
 
 To validate that the DAOS system is properly installed, the `daos_test`
 suite can be executed. Ensure the DAOS Agent is configured before running
-`daos_test` and that the following environment variables are properly set:
+`daos_test`.  If the agent is using a non-default path for the socket, then
+configure `DAOS_AGENT_DRPC_DIR` in the client environment to point to this new
+location.
 
-- `CRT_PHY_ADDR_STR` must be set to match the provider specified in the server
-  yaml configuration file (e.g. export `CRT_PHY_ADDR_STR="ofi+sockets"`)
+DAOS automatically configures a client with a compatible fabric provider,
+network interface, network domain, CaRT timeout, and CaRT context share address,
+that will allow it to connect to the DAOS system.
 
-- `OFI_INTERFACE` is set to the network interface you want to user on the client
-  node.
+The client may not override the fabric provider or the CaRT context share
+address.
 
-- `OFI_DOMAIN` must optionally be set for infiniband deployments.
+A client application may override the three remaining settings by configuring
+environment variables in the client's shell prior to launch.
 
-- `DAOS_AGENT_DRPC_DIR` must also optionally be set if the agent is using a
-  non-default path for the socket.
-
-While those environment variables need to be set up for DAOS v1.0, versions 1.2
-and upward automatically set up the environment via the agent and don't require
-any special environment set up to run applications.
-
+To manually configure the CaRT timeout, set `CRT_TIMEOUT` such as:
+```
+export CRT_TIMEOUT=5
+```
+To manually configure the network interface, set `OFI_INTERFACE` such as:
+```
+export OFI_INTERFACE=lo
+```
+When manually configuring an Infiniband device with a verbs provider, the network
+device domain is required.  To manually configure the domain, set `OFI_DOMAIN` such as:
+```
+export OFI_DOMAIN=hfi1_0
+```
+### Launch the client application
 ```bash
 mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
 ```
