@@ -811,7 +811,7 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        runTestSh 'normal'
+                        runTestSh mode: 'normal'
                     }
                     post {
                       always {
@@ -869,7 +869,7 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        runTestSh 'memcheck'
+                        runTestSh mode: 'memcheck'
                     }
                     post {
                       always {
