@@ -68,6 +68,8 @@ func TestHasAccess(t *testing.T) {
 		{"SystemResetFormat", ComponentAdmin, "/ctl.MgmtCtl/SystemResetFormat"},
 		{"SystemStart", ComponentAdmin, "/ctl.MgmtCtl/SystemStart"},
 		{"NetworkScan", ComponentAdmin, "/ctl.MgmtCtl/NetworkScan"},
+		{"FirmwareQuery", ComponentAdmin, "/ctl.MgmtCtl/FirmwareQuery"},
+		{"FirmwareUpdate", ComponentAdmin, "/ctl.MgmtCtl/FirmwareUpdate"},
 		{"Join", ComponentServer, "/mgmt.MgmtSvc/Join"},
 		{"LeaderQuery", ComponentAdmin, "/mgmt.MgmtSvc/LeaderQuery"},
 		{"PoolCreate", ComponentAdmin, "/mgmt.MgmtSvc/PoolCreate"},
