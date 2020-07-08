@@ -247,6 +247,8 @@ daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
+int
+daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 
 /** Move to next iov, it's caller's responsibility to ensure the idx boundary */
 #define daos_sgl_next_iov(iov_idx, iov_off)				\
