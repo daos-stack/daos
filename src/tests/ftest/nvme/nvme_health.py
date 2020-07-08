@@ -97,8 +97,8 @@ class NvmeHealth(ServerFillUp):
             for _dev in device_ids[host]:
                 try:
                     result = self.dmg.storage_query_device_health(_dev)
-                except CommandFailure as details:
-                    self.fail("dmg get device states failed {}".format(details))
+                except CommandFailure as error:
+                    self.fail("dmg get device states failed {}".format(error))
                 if 'State:NORMAL' not in result.stdout:
                     self.fail("device {} on host {} is not NORMAL"
                               .format(_dev, host))
@@ -107,7 +107,7 @@ class NvmeHealth(ServerFillUp):
         try:
             self.dmg.storage_query_nvme_health()
         except CommandFailure as error:
-            self.fail("dmg nvme-health failed {}".format(details))
+            self.fail("dmg nvme-health failed {}".format(error))
 
         print('Pool Destroy')
         for pool in pools:

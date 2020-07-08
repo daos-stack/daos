@@ -362,3 +362,10 @@ class ServerFillUp(IorTestBase):
 
         print("pool_percentage_used -- After -- {}"
               .format(self.pool.pool_percentage_used()))
+
+        #Check nvme-health command works
+        try:
+            self.dmg.hostlist = self.hostlist_servers
+            self.dmg.storage_query_nvme_health()
+        except CommandFailure as error:
+            self.fail("dmg nvme-health failed {}".format(details))
