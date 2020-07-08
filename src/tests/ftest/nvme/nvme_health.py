@@ -28,11 +28,11 @@ from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
 
 class NvmeHealth(ServerFillUp):
+    # pylint: disable=too-many-ancestors  
     """
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
     def test_monitor_for_large_pools(self):
         """
         Test Description: Test Health monitor for large number of pools.
