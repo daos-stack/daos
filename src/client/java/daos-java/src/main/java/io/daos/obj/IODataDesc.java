@@ -25,14 +25,13 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import io.netty.buffer.ByteBuf;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
@@ -43,12 +42,13 @@ import java.util.List;
  * <p>
  *   There are two buffers, Description Buffer and Data Buffer. The Description Buffer holds record description, like
  *   its akey, type, size and index in the Data Buffer. the Data Buffer holds actual data for either update or fetch.
+ *   {@link #release()}
  * </p>
  * <p>
- *   For update entries, user should call {@link #createEntryForUpdate(String, IodType, int, int, ByteBuffer)}.
+ *   For update entries, user should call {@link #createEntryForUpdate(String, IodType, int, int, ByteBuf)}.
  *   And {@link #createEntryForFetch(String, IodType, int, int, int)} for fetch entries. Results of fetch should be get
  *   from each entry by calling one of {@link Entry#get(byte[])}, {@link Entry#get(byte[], int, int)} and
- *   {@link Entry#get(ByteBuffer)}. For each IODataDesc object, there must be only one type of action, either update or
+ *   {@link Entry#get(ByteBuf)}. For each IODataDesc object, there must be only one type of action, either update or
  *   fetch, among all its entries.
  * </p>
  */
@@ -68,9 +68,9 @@ public class IODataDesc {
 
   private boolean updateOrFetch;
 
-  private ByteBuffer descBuffer;
+  private ByteBuf descBuffer;
 
-  private ByteBuffer dataBuffer;
+  private ByteBuf dataBuffer;
 
   private boolean encoded;
 
@@ -161,12 +161,10 @@ public class IODataDesc {
       throw new IllegalStateException("result is parsed. cannot encode again");
     }
     if (!encoded) {
-      this.descBuffer = BufferAllocator.directBuffer(getDescBufferLen());
-      this.dataBuffer = BufferAllocator.directBuffer(getDataBufferLen());
-      descBuffer.order(Constants.DEFAULT_ORDER);
-      dataBuffer.order(Constants.DEFAULT_ORDER);
-      descBuffer.putShort((short)dkeyBytes.length);
-      descBuffer.put(dkeyBytes);
+      this.descBuffer = BufferAllocator.objBufWithNativeOrder(getDescBufferLen());
+      this.dataBuffer = BufferAllocator.objBufWithNativeOrder(getDataBufferLen());
+      descBuffer.writeShort(dkeyBytes.length);
+      descBuffer.writeBytes(dkeyBytes);
       for (Entry entry : akeyEntries) {
         entry.setGlobalDataBuffer(dataBuffer);
         entry.encode(descBuffer);
@@ -182,10 +180,11 @@ public class IODataDesc {
     if (!resultParsed) {
       // update actual size
       int idx = getRequestBufLen();
+      descBuffer.writerIndex(descBuffer.capacity());
       for (IODataDesc.Entry entry : getAkeyEntries()) {
-        descBuffer.position(idx);
-        entry.setActualSize(descBuffer.getInt());
-        entry.setActualRecSize(descBuffer.getInt());
+        descBuffer.readerIndex(idx);
+        entry.setActualSize(descBuffer.readInt());
+        entry.setActualRecSize(descBuffer.readInt());
         idx += 2 * Constants.ENCODED_LENGTH_EXTENT;
       }
       resultParsed = true;
@@ -194,10 +193,12 @@ public class IODataDesc {
 
   /**
    * get reference to the Description Buffer after being encoded.
+   * The buffer's reader index and write index should be restored if user
+   * changed them.
    *
-   * @return ByteBuffer
+   * @return ByteBuf
    */
-  public ByteBuffer getDescBuffer() {
+  protected ByteBuf getDescBuffer() {
     if (!encoded) {
       throw new IllegalStateException("not encoded yet");
     }
@@ -206,10 +207,12 @@ public class IODataDesc {
 
   /**
    * get reference to the Data Buffer after being encoded.
+   * The buffer's reader index and write index should be restored if user
+   * changed them.
    *
-   * @return ByteBuffer
+   * @return ByteBuf
    */
-  public ByteBuffer getDataBuffer() {
+  protected ByteBuf getDataBuffer() {
     if (!encoded) {
       throw new IllegalStateException("not encoded yet");
     }
@@ -265,9 +268,18 @@ public class IODataDesc {
    * @throws IOException
    */
   public static Entry createEntryForUpdate(String key, IODataDesc.IodType type, int recordSize, int offset,
-                                               ByteBuffer dataBuffer) throws IOException {
+                                               ByteBuf dataBuffer) throws IOException {
     IODataDesc.Entry entry = new IODataDesc.Entry(key, type, recordSize, offset, dataBuffer);
     return entry;
+  }
+
+  public void release() {
+    if (descBuffer != null) {
+      this.descBuffer.release();
+    }
+    if (this.dataBuffer != null) {
+      this.dataBuffer.release();
+    }
   }
 
   @Override
@@ -306,10 +318,10 @@ public class IODataDesc {
     private final int recordSize;
     private final int dataSize;
     private int paddedDataSize;
-    private ByteBuffer dataBuffer;
+    private ByteBuf dataBuffer;
     private boolean updateOrFetch;
 
-    private ByteBuffer globalBuffer;
+    private ByteBuf globalBuffer;
     private int globalBufIdx = -1;
     private int actualSize; // to get from value buffer
     private int actualRecSize;
@@ -390,11 +402,11 @@ public class IODataDesc {
      * byte buffer (direct buffer preferred) holding data to update. make sure dataBuffer is ready for being read,
      * for example, buffer position and limit are set correctly for reading.
      * make size a multiple of recordSize as much as possible. zeros are padded to make actual request size a multiple
-     * of recordSize.
+     * of recordSize. user should release the buffer by himself.
      * @throws IOException
      */
-    protected Entry(String key, IodType type, int recordSize, int offset, ByteBuffer dataBuffer) throws IOException {
-      this(key, type, recordSize, offset, dataBuffer.remaining());
+    protected Entry(String key, IodType type, int recordSize, int offset, ByteBuf dataBuffer) throws IOException {
+      this(key, type, recordSize, offset, dataBuffer.readableBytes());
       this.dataBuffer = dataBuffer;
       this.updateOrFetch = true;
     }
@@ -470,9 +482,10 @@ public class IODataDesc {
         throw new BufferUnderflowException();
       }
       globalBuffer.clear();
-      globalBuffer.position(globalBufIdx + Constants.ENCODED_LENGTH_EXTENT);
-      globalBuffer.limit(globalBuffer.position() + actualSize);
-      globalBuffer.get(bytes, offset, length);
+      int readerIdx = globalBufIdx + Constants.ENCODED_LENGTH_EXTENT;
+      globalBuffer.writerIndex(readerIdx + actualSize);
+      globalBuffer.readerIndex(readerIdx);
+      globalBuffer.readBytes(bytes, offset, length);
     }
 
     /**
@@ -486,23 +499,24 @@ public class IODataDesc {
     }
 
     /**
-     * read remaining() size of <code>destBuffer</code> from global buffer to <code>destBuffer</code>
-     * make sure remaining of <code>destBuffer</code> is no more than actualSize.
+     * read writableBytes() size of <code>destBuffer</code> from global buffer to <code>destBuffer</code>
+     * make sure writableBytes of <code>destBuffer</code> is no more than actualSize.
      *
      * @param destBuffer
      * destination buffer
      */
-    public void get(ByteBuffer destBuffer) {
+    public void get(ByteBuf destBuffer) {
       if (updateOrFetch) {
         throw new UnsupportedOperationException("only support for fetch, akey: " + key);
       }
-      int remaining = destBuffer.remaining();
+      int remaining = destBuffer.writableBytes();
       if (remaining > actualSize) {
-        throw new BufferOverflowException();
+        throw new BufferUnderflowException();
       }
-      globalBuffer.position(globalBufIdx + Constants.ENCODED_LENGTH_EXTENT);
-      globalBuffer.limit(globalBuffer.position() + Math.min(actualSize, remaining));
-      destBuffer.put(globalBuffer);
+      int readerIdx = globalBufIdx + Constants.ENCODED_LENGTH_EXTENT;
+      globalBuffer.writerIndex(readerIdx + Math.min(actualSize, remaining));
+      globalBuffer.readerIndex(readerIdx);
+      globalBuffer.readBytes(destBuffer);
     }
 
     /**
@@ -536,28 +550,28 @@ public class IODataDesc {
      * @param globalBuffer
      * global data buffer
      */
-    protected void setGlobalDataBuffer(ByteBuffer globalBuffer) {
+    protected void setGlobalDataBuffer(ByteBuf globalBuffer) {
       if (this.globalBuffer != null) {
         throw new IllegalArgumentException("global buffer is set already. " + ", akey: " + key);
       }
       this.globalBuffer = globalBuffer;
-      this.globalBufIdx = globalBuffer.position();
+      this.globalBufIdx = globalBuffer.writerIndex();
       if (log.isDebugEnabled()) {
         log.debug(key + " buffer index: " + globalBufIdx);
       }
-      globalBuffer.putInt(paddedDataSize);
+      globalBuffer.writeInt(paddedDataSize);
       if (updateOrFetch) { // update
-        globalBuffer.put(dataBuffer); // TODO: tune heap buffer
+        globalBuffer.writeBytes(dataBuffer);
         int padSize = paddedDataSize - dataSize;
         if (padSize > 0) {
-          globalBuffer.position(globalBuffer.position() + padSize);
+          globalBuffer.writerIndex(globalBuffer.writerIndex() + padSize);
         }
-        if ((globalBuffer.position() - globalBufIdx) != getBufferLen()) {
+        if ((globalBuffer.writerIndex() - globalBufIdx) != getBufferLen()) {
           throw new IllegalStateException("global buffer should be filled with data of size " + getBufferLen() +
             "akey: " + key);
         }
       } else { // fetch
-        globalBuffer.position(globalBufIdx + getBufferLen());
+        globalBuffer.writerIndex(globalBufIdx + getBufferLen());
       }
     }
 
@@ -567,19 +581,19 @@ public class IODataDesc {
      * @param descBuffer
      * the description buffer
      */
-    protected void encode(ByteBuffer descBuffer) {
+    protected void encode(ByteBuf descBuffer) {
       if (globalBufIdx == -1) {
         throw new IllegalStateException("value buffer index is not set, akey: " + key);
       }
-      descBuffer.putShort((short)keyBytes.length)
-                .put(keyBytes)
-                .put(type.value)
-                .putInt(recordSize);
+      descBuffer.writeShort(keyBytes.length)
+                .writeBytes(keyBytes)
+                .writeByte(type.value)
+                .writeInt(recordSize);
       if (type == IodType.ARRAY) {
-        descBuffer.putInt(offset/recordSize);
-        descBuffer.putInt(paddedDataSize/recordSize);
+        descBuffer.writeInt(offset/recordSize);
+        descBuffer.writeInt(paddedDataSize/recordSize);
       }
-      descBuffer.putInt(globalBufIdx);
+      descBuffer.writeInt(globalBufIdx);
     }
 
     @Override
