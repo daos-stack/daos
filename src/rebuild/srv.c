@@ -331,46 +331,6 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 	}
 }
 
-bool
-is_rebuild_container(uuid_t pool_uuid, uuid_t coh_uuid)
-{
-	struct rebuild_pool_tls	*tls;
-	bool			is_rebuild = false;
-
-	tls = rebuild_pool_tls_lookup(pool_uuid, -1);
-	if (tls == NULL)
-		return false;
-
-	if (!uuid_is_null(tls->rebuild_coh_uuid)) {
-		D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" cont_hdl_uuid "
-			DF_UUID"\n", DP_UUID(tls->rebuild_coh_uuid),
-			DP_UUID(coh_uuid));
-		is_rebuild = !uuid_compare(tls->rebuild_coh_uuid, coh_uuid);
-	}
-
-	return is_rebuild;
-}
-
-bool
-is_rebuild_pool(uuid_t pool_uuid, uuid_t poh_uuid)
-{
-	struct rebuild_pool_tls	*tls;
-	bool			is_rebuild = false;
-
-	tls = rebuild_pool_tls_lookup(pool_uuid, -1);
-	if (tls == NULL)
-		return false;
-
-	if (!uuid_is_null(tls->rebuild_poh_uuid)) {
-		D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" cont_hdl_uuid "
-			DF_UUID"\n", DP_UUID(tls->rebuild_poh_uuid),
-			DP_UUID(poh_uuid));
-		is_rebuild = !uuid_compare(tls->rebuild_poh_uuid, poh_uuid);
-	}
-
-	return is_rebuild;
-}
-
 static void
 rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
 		 struct dss_module_key *key, void *data)
@@ -774,8 +734,6 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	}
 
 	(*rgt)->rgt_leader_term = leader_term;
-	uuid_generate((*rgt)->rgt_coh_uuid);
-	uuid_generate((*rgt)->rgt_poh_uuid);
 	(*rgt)->rgt_time_start = d_timeus_secdiff(0);
 
 	D_ASSERT(rebuild_op == RB_OP_FAIL ||
@@ -859,8 +817,6 @@ retry:
 		DP_UUID(pool->sp_uuid), RB_OP_STR(rebuild_op));
 
 	uuid_copy(rsi->rsi_pool_uuid, pool->sp_uuid);
-	uuid_copy(rsi->rsi_pool_hdl_uuid, rgt->rgt_poh_uuid);
-	uuid_copy(rsi->rsi_cont_hdl_uuid, rgt->rgt_coh_uuid);
 	rsi->rsi_ns_id = pool->sp_iv_ns->iv_ns_id;
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
 	rsi->rsi_rebuild_ver = rgt->rgt_rebuild_ver;
@@ -1995,8 +1951,10 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	rpt->rt_rebuild_op = rsi->rsi_rebuild_op;
 
-	uuid_copy(rpt->rt_poh_uuid, rsi->rsi_pool_hdl_uuid);
-	uuid_copy(rpt->rt_coh_uuid, rsi->rsi_cont_hdl_uuid);
+	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
+				      &rpt->rt_coh_uuid);
+	if (rc)
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
