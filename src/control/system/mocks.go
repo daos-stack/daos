@@ -27,6 +27,11 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/hashicorp/raft"
 )
 
 // MockMember returns a system member with appropriate values.
@@ -37,8 +42,8 @@ func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Me
 		t.Fatal(err)
 	}
 
-	m := NewMember(Rank(idx), fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
-		addr, state)
+	m := NewMember(Rank(idx), common.MockUUID(int32(idx)),
+		addr.String(), addr, state)
 	if len(info) > 0 {
 		m.Info = info[0]
 	}
@@ -51,4 +56,41 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 	result.Action = action
 
 	return result
+}
+
+func MockMembership(t *testing.T, log logging.Logger) *Membership {
+	return NewMembership(log, MockDatabase(t, log))
+}
+
+func MockDatabase(t *testing.T, log logging.Logger) *Database {
+	db := NewDatabase(log, nil)
+	db.isReplica = true
+	addr, it := raft.NewInmemTransport(raft.NewInmemAddr())
+	rCfg := raft.DefaultConfig()
+	rCfg.LocalID = raft.ServerID(addr)
+	rCfg.HeartbeatTimeout = 10 * time.Millisecond
+	rCfg.ElectionTimeout = 10 * time.Millisecond
+	rCfg.LeaderLeaseTimeout = 5 * time.Millisecond
+	rCfg.LogLevel = "ERROR"
+	dss := raft.NewDiscardSnapshotStore()
+	ra, err := raft.NewRaft(rCfg, (*fsm)(db),
+		raft.NewInmemStore(), raft.NewInmemStore(), dss, it,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.raft = ra
+	if f := db.raft.BootstrapCluster(raft.Configuration{
+		Servers: []raft.Server{
+			{
+				ID:      rCfg.LocalID,
+				Address: it.LocalAddr(),
+			},
+		},
+	}); f.Error() != nil {
+		t.Fatal(f.Error())
+	}
+	time.Sleep(250 * time.Millisecond)
+
+	return db
 }

@@ -104,6 +104,88 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (net.Addr, err
 		net.JoinHostPort(tcpAddr.IP.String(), portStr))
 }
 
+const (
+	updateCheckTimeout = 1 * time.Second
+)
+
+func (svc *mgmtSvc) groupUpdateLoop(ctx context.Context) {
+	var updateRequested bool
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(updateCheckTimeout):
+			if !updateRequested {
+				continue
+			}
+			svc.log.Debug("performing group update")
+			if err := svc.doGroupUpdate(ctx); err != nil {
+				svc.log.Error(errors.Wrap(err, "group update failed").Error())
+				continue
+			}
+			svc.log.Debug("performed group update")
+			updateRequested = false
+		case <-svc.updateReqChan:
+			updateRequested = true
+			svc.log.Debug("received group update request")
+		}
+	}
+}
+
+func (svc *mgmtSvc) startUpdateLoop(ctx context.Context) {
+	go svc.groupUpdateLoop(ctx)
+}
+
+func (svc *mgmtSvc) requestGroupUpdate(ctx context.Context) {
+	svc.log.Debug("requesting group update")
+	go func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+		case svc.updateReqChan <- struct{}{}:
+			svc.log.Debug("sent group update request")
+		}
+	}(ctx)
+}
+
+func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return err
+	}
+
+	gm := svc.sysdb.GroupMap()
+	req := &mgmtpb.GroupUpdateReq{
+		// Ugh, awful hack. For the moment, because we're using two
+		// DBs, we have to make sure that our map version is higher.
+		MapVersion: gm.Version + 1,
+	}
+	for rank, uri := range gm.RankURIs {
+		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
+			Rank: rank.Uint32(),
+			Uri:  uri,
+		})
+	}
+
+	svc.log.Debugf("group update request: %+v", req)
+	dResp, err := mi.CallDrpc(drpc.MethodGroupUpdate, req)
+	if err != nil {
+		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
+		return err
+	}
+
+	resp := new(mgmtpb.GroupUpdateResp)
+	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+		return errors.Wrap(err, "unmarshal GroupUpdate response")
+	}
+
+	svc.log.Debugf("GroupUpdate response: %+v", resp)
+
+	if resp.GetStatus() != 0 {
+		return drpc.DaosStatus(resp.GetStatus())
+	}
+	return nil
+}
+
 // Join management service gRPC handler receives Join requests from
 // control-plane instances attempting to register a managed instance (will be a
 // rank once joined) to the DAOS system.
@@ -124,33 +206,31 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			"combining peer addr with listener port")
 	}
 
-	mi, err := svc.harness.GetMSLeaderInstance()
+	member := system.NewMember(system.Rank(req.GetRank()), req.GetUuid(),
+		req.GetUri(), replyAddr, system.MemberStateEvicted)
+
+	joinResult, err := svc.membership.Join(member)
 	if err != nil {
 		return nil, err
 	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodJoin, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.JoinResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal Join response")
-	}
-
-	// if join response indicates success, update membership
-	if resp.GetStatus() == 0 {
-		newState := system.MemberStateEvicted
-		if resp.GetState() == mgmtpb.JoinResp_IN {
-			newState = system.MemberStateJoined
+	if joinResult.Created {
+		svc.log.Debugf("new system member: rank %d, addr %s",
+			member.Rank, replyAddr)
+	} else {
+		svc.log.Debugf("updated system member: rank %d, addr %s, %s->%s",
+			member.Rank, replyAddr, joinResult.PrevState, member.State())
+		if joinResult.PrevState == member.State() {
+			svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
+				member.Rank, joinResult.PrevState, member.State())
 		}
-
-		svc.membership.AddOrReplace(system.NewMember(
-			system.Rank(resp.GetRank()), req.GetUuid(), replyAddr, newState))
 	}
 
-	return resp, nil
+	svc.requestGroupUpdate(ctx)
+
+	return &mgmtpb.JoinResp{
+		State: mgmtpb.JoinResp_IN,
+		Rank:  member.Rank.Uint32(),
+	}, nil
 }
 
 // drpcOnLocalRanks iterates over local instances issuing dRPC requests in
@@ -419,7 +499,12 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 		if srv.isStarted() {
 			continue
 		}
-		srv.startLoop <- true
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case srv.startLoop <- true:
+			continue
+		}
 	}
 
 	// ignore poll results as we gather state immediately after

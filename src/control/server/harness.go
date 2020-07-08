@@ -126,6 +126,9 @@ func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 		return nil, errors.New("harness has no managed instances")
 	}
 
+	// hack for now
+	return h.instances[0], nil
+
 	var err error
 	for _, mi := range h.instances {
 		// try each instance, returning the first one that is a replica (if any are)

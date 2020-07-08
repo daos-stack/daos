@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -79,6 +80,13 @@ func iommuDetected() bool {
 	}
 
 	return len(dmars) > 0
+}
+
+func raftDir(cfg *Configuration) string {
+	if len(cfg.Servers) == 0 {
+		return "" // can't save to SCM
+	}
+	return filepath.Join(cfg.Servers[0].Storage.SCM.MountPoint, "control_raft")
 }
 
 // Start is the entry point for a daos_server instance.
@@ -170,7 +178,11 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	membership := system.NewMembership(log)
+	sysdb := system.NewDatabase(log, &system.DatabaseConfig{
+		Replicas: cfg.AccessPoints,
+		RaftDir:  raftDir(cfg),
+	})
+	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
 	var netDevClass uint32
@@ -188,7 +200,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
 	}
 
-	for i, srvCfg := range cfg.Servers {
+	for idx, srvCfg := range cfg.Servers {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
@@ -231,11 +243,17 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			return err
 		}
 
-		if i == 0 {
+		if idx == 0 {
 			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
 			if err != nil {
 				return err
 			}
+
+			// Start the system db after instance 0's SCM is
+			// ready.
+			srv.OnStorageReady(func() error {
+				return errors.Wrap(sysdb.Start(controlAddr), "failed to start system db")
+			})
 		}
 	}
 
@@ -301,7 +319,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		CrtTimeout:      cfg.Fabric.CrtTimeout,
 		NetDevClass:     netDevClass,
 	}
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &clientNetworkCfg))
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb, &clientNetworkCfg)
+	mgmtSvc.startUpdateLoop(ctx)
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
 
 	go func() {
 		_ = grpcServer.Serve(lis)

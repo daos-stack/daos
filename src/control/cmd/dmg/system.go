@@ -137,7 +137,7 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 
 	for _, m := range members {
 		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
-		row[uuidTitle] = m.UUID
+		row[uuidTitle] = m.UUID.String()
 		row[addrTitle] = m.Addr.String()
 		row[stateTitle] = m.State().String()
 		row[reasonTitle] = m.Info
@@ -153,7 +153,7 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) {
 
 	table := []txtfmt.TableRow{
 		{"address": m.Addr.String()},
-		{"uuid": m.UUID},
+		{"uuid": m.UUID.String()},
 		{"status": m.State().String()},
 		{"reason": m.Info},
 	}

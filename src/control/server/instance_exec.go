@@ -110,6 +110,11 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 	// number of targets, not number requested when starting
 	srv.setTargetCount(int(ready.GetNtgts()))
 
+	// FIXME: Eventually we want to get rid of the mgmt svc in the data plane,
+	// but for now let's just start it up so that we don't have to change so
+	// much code to test this idea out. The db in the control plane should
+	// be authoritative, and we'll just replace the contents of the data plane's
+	// DB.
 	if srv.isMSReplica() {
 		if err := srv.startMgmtSvc(); err != nil {
 			return errors.Wrap(err, "failed to start management service")
@@ -146,15 +151,23 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 		return
 	}
 
+	// After we know that the instance storage is ready, fire off
+	// any callbacks that were waiting for this state.
+	for _, readyFn := range srv.onStorageReady {
+		if err := readyFn(); err != nil {
+			return err
+		}
+	}
+
 	if err = srv.start(ctx, errChan); err != nil {
 		return
 	}
-	if srv.isMSReplica() {
+	/*if srv.isMSReplica() {
 		// MS bootstrap will not join so register manually
 		if err := srv.registerMember(membership); err != nil {
 			return err
 		}
-	}
+	}*/
 	srv.waitDrpc.SetTrue()
 
 	if err = srv.waitReady(ctx, errChan); err != nil {

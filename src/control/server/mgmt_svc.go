@@ -147,15 +147,19 @@ type mgmtSvc struct {
 	log              logging.Logger
 	harness          *IOServerHarness
 	membership       *system.Membership // if MS leader, system membership list
+	sysdb            *system.Database
 	clientNetworkCfg *ClientNetworkCfg
+	updateReqChan    chan struct{}
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *ClientNetworkCfg) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database, c *ClientNetworkCfg) *mgmtSvc {
 	return &mgmtSvc{
 		log:              h.log,
 		harness:          h,
 		membership:       m,
+		sysdb:            s,
 		clientNetworkCfg: c,
+		updateReqChan:    make(chan struct{}),
 	}
 }
 

@@ -32,6 +32,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -130,8 +131,9 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
 	Rank  Rank
-	UUID  string
+	UUID  uuid.UUID
 	Addr  net.Addr
+	URI   string
 	state MemberState
 	Info  string
 }
@@ -200,8 +202,11 @@ func (sm *Member) WithInfo(msg string) *Member {
 }
 
 // NewMember returns a reference to a new member struct.
-func NewMember(rank Rank, uuid string, addr net.Addr, state MemberState) *Member {
-	return &Member{Rank: rank, UUID: uuid, Addr: addr, state: state}
+func NewMember(rank Rank, uuidStr, uri string, addr net.Addr, state MemberState) *Member {
+	// FIXME: Either require a valid uuid.UUID to be supplied
+	// or else change the return signature to include an error
+	newUUID := uuid.MustParse(uuidStr)
+	return &Member{Rank: rank, UUID: newUUID, URI: uri, Addr: addr, state: state}
 }
 
 // Members is a type alias for a slice of member references
@@ -286,26 +291,28 @@ func (smr MemberResults) HasErrors() bool {
 // Membership tracks details of system members.
 type Membership struct {
 	sync.RWMutex
-	log     logging.Logger
-	members map[Rank]*Member
+	log logging.Logger
+	db  *Database
 }
 
 func (m *Membership) addMember(member *Member) error {
-	if _, found := m.members[member.Rank]; found {
+	_, err := m.db.FindMemberByUUID(member.UUID)
+	if err == nil {
 		return FaultMemberExists(member.Rank)
 	}
 	m.log.Debugf("adding system member: %s", member)
 
-	m.members[member.Rank] = member
-
-	return nil
+	return m.db.AddMember(member)
 }
 
-func (m *Membership) updateMember(member *Member) {
-	old := m.members[member.Rank]
+func (m *Membership) updateMember(member *Member) error {
+	old, err := m.db.FindMemberByUUID(member.UUID)
 	m.log.Debugf("updating system member: %s->%s", old, member)
+	if err != nil {
+		return err
+	}
 
-	m.members[member.Rank] = member
+	return m.db.AddMember(member)
 }
 
 // Add adds member to membership, returns member count.
@@ -317,22 +324,65 @@ func (m *Membership) Add(member *Member) (int, error) {
 		return -1, err
 	}
 
-	return len(m.members), nil
+	return m.db.MemberCount(), nil
+}
+
+// Count returns the number of members.
+func (m *Membership) Count() int {
+	return m.db.MemberCount()
+}
+
+type MemberJoinResult struct {
+	Created    bool
+	PrevState  MemberState
+	MapVersion uint32
+}
+
+func (m *Membership) Join(newMember *Member) (res *MemberJoinResult, err error) {
+	m.Lock()
+	defer m.Unlock()
+
+	defer func() {
+		if err != nil {
+			newMember.state = MemberStateErrored
+		}
+	}()
+
+	newMember.state = MemberStateJoined
+	r := new(MemberJoinResult)
+	curMember, err := m.db.FindMemberByUUID(newMember.UUID)
+	if err == nil {
+		r.PrevState = curMember.state
+		if err := m.db.UpdateMember(newMember); err != nil {
+			return nil, err
+		}
+		r.MapVersion = m.db.CurMapVersion()
+
+		return r, nil
+	}
+
+	r.Created = true
+	if err := m.db.AddMember(newMember); err != nil {
+		return nil, err
+	}
+	r.MapVersion = m.db.CurMapVersion()
+
+	return r, nil
 }
 
 // AddOrReplace adds member to membership or replaces member if it exists.
 //
 // Note: this method updates state without checking if state transition is
 //       legal so use with caution.
-func (m *Membership) AddOrReplace(newMember *Member) {
+func (m *Membership) AddOrReplace(newMember *Member) error {
 	m.Lock()
 	defer m.Unlock()
 
 	if err := m.addMember(newMember); err == nil {
-		return
+		return nil
 	}
 
-	m.updateMember(newMember)
+	return m.updateMember(newMember)
 }
 
 // Remove removes member from membership, idempotent.
@@ -340,15 +390,14 @@ func (m *Membership) Remove(rank Rank) {
 	m.Lock()
 	defer m.Unlock()
 
-	delete(m.members, rank)
-}
-
-func (m *Membership) getMember(rank Rank) (*Member, error) {
-	if member, found := m.members[rank]; found {
-		return member, nil
+	member, err := m.db.FindMemberByRank(rank)
+	if err != nil {
+		m.log.Errorf("remove %d failed: %s", rank, err)
+		return
 	}
-
-	return nil, FaultMemberMissing(rank)
+	if err := m.db.RemoveMember(member); err != nil {
+		m.log.Errorf("remove %d failed: %s", rank, err)
+	}
 }
 
 // Get retrieves member reference from membership based on Rank.
@@ -356,7 +405,7 @@ func (m *Membership) Get(rank Rank) (*Member, error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	return m.getMember(rank)
+	return m.db.FindMemberByRank(rank)
 }
 
 // RankList returns slice of all ordered member ranks.
@@ -364,7 +413,7 @@ func (m *Membership) RankList() (ranks []Rank) {
 	m.RLock()
 	defer m.RUnlock()
 
-	for rank := range m.members {
+	for _, rank := range m.db.MemberRanks() {
 		ranks = append(ranks, rank)
 	}
 
@@ -381,7 +430,7 @@ func (m *Membership) getHostRanks(rankSet *RankSet) map[string][]Rank {
 		rankList = rankSet.Ranks()
 	}
 
-	for _, member := range m.members {
+	for _, member := range m.db.AllMembers() {
 		addr := member.Addr.String()
 
 		if len(rankList) != 0 && !member.Rank.InList(rankList) {
@@ -440,12 +489,12 @@ func (m *Membership) Members(rankSet *RankSet) (members Members) {
 	defer m.RUnlock()
 
 	if rankSet == nil || rankSet.Count() == 0 {
-		for _, member := range m.members {
+		for _, member := range m.db.AllMembers() {
 			members = append(members, member)
 		}
 	} else {
 		for _, rank := range rankSet.Ranks() {
-			if member, exists := m.members[rank]; exists {
+			if member, err := m.db.FindMemberByRank(rank); err == nil {
 				members = append(members, member)
 			}
 		}
@@ -464,7 +513,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 	defer m.Unlock()
 
 	for _, result := range results {
-		member, err := m.getMember(result.Rank)
+		member, err := m.db.FindMemberByRank(result.Rank)
 		if err != nil {
 			return err
 		}
@@ -492,6 +541,10 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		}
 		member.state = result.State
 		member.Info = result.Msg
+
+		if err := m.db.UpdateMember(member); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -524,7 +577,7 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	}
 
 	for _, rank := range rankList {
-		if _, found := m.members[rank]; !found {
+		if _, err = m.db.FindMemberByRank(rank); err != nil {
 			if err = miss.Add(rank); err != nil {
 				return
 			}
@@ -595,6 +648,6 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 }
 
 // NewMembership returns a reference to a new DAOS system membership.
-func NewMembership(log logging.Logger) *Membership {
-	return &Membership{members: make(map[Rank]*Member), log: log}
+func NewMembership(log logging.Logger, db *Database) *Membership {
+	return &Membership{db: db, log: log}
 }
