@@ -985,7 +985,7 @@ out:
 
 /*
  * the case where we have the base URI but don't have the NA address of the tag
- * Note: This function will be gone after hg handle cache revamp
+ * TODO: This function will be gone after hg handle cache revamp
  */
 static int
 crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
