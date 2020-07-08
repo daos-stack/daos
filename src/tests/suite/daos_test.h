@@ -37,7 +37,6 @@
 #include <linux/limits.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include "daos_json.h"
 
 #include <cmocka.h>
 #ifdef OVERRIDE_CMOCKA_SKIP

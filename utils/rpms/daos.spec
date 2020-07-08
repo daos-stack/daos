@@ -142,6 +142,7 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: fio
+Requires: json-c
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
