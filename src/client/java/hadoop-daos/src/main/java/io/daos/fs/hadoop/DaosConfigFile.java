@@ -163,7 +163,7 @@ public class DaosConfigFile {
    * For other configurations, fallback on default DAOS configuration if no specific configurations for
    * <code>authority</code>.
    * Configurations from <code>hadoopConfig</code> have higher priority than ones from daos-site.xml.
-   * 
+   *
    * @param authority
    * A valid URI authority name to denote unique pool and container. The empty value means no authority provided in URI
    *     which is default URI. see {@link #getDaosUriDesc()} for details.
@@ -203,7 +203,7 @@ public class DaosConfigFile {
 
   /**
    * merge default configuration with hadoop configuration. And hadoop configuration has higher priority than default.
-   * 
+   *
    * @param authority
    * URI authority
    * @param hadoopConfig
