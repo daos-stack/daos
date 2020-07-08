@@ -57,11 +57,7 @@ def get_device_ids(dmg, servers):
     devices = {}
     dmg.set_sub_command("storage")
     dmg.sub_command_class.set_sub_command("query")
-    dmg.sub_command_class.sub_command_class.set_sub_command("smd")
-    dmg.sub_command_class. \
-        sub_command_class.sub_command_class.pools.value = False
-    dmg.sub_command_class. \
-        sub_command_class.sub_command_class.devices.value = True
+    dmg.sub_command_class.sub_command_class.set_sub_command("list-devices")
     for host in servers:
         dmg.hostlist = host
         try:
@@ -159,7 +155,7 @@ class ServerFillUp(IorTestBase):
         capacity of servers
         """
         drive_info = {}
-        _spdk_hello_world = "_build.external/dev/spdk/examples/nvme/hello_world"
+        _spdk_hello_world = "build/external/dev/spdk/examples/nvme/hello_world"
         identify_bin = get_file_path("hello_world", _spdk_hello_world)[0]
         task = run_task(self.hostlist_servers, "{}".format(identify_bin))
 
@@ -246,7 +242,6 @@ class ServerFillUp(IorTestBase):
         manager.assign_environment(env, True)
 
         # run IOR Command
-        # Exception does not work so better to verify the proper completion too.
         try:
             result = manager.run()
         except CommandFailure as _error:
@@ -319,6 +314,7 @@ class ServerFillUp(IorTestBase):
         #when it's available. This is time consuming so store the size in
         #file to avoid rerunning the same logic for future test cases.
         #This will be only run for first test case.
+
         avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
         capacity_file = os.path.join(avocao_tmp_dir, 'storage_capacity')
         if not os.path.exists(capacity_file):

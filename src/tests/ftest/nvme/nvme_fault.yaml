@@ -54,7 +54,7 @@ ior:
         transfer_size: 16777216
         objects:
          RP_3G1:
-          obj_class: "RP_3G1"
+          obj_class: "RP_2G1"
 faulttests:
   pool_capacity:
     10_Percent:
@@ -62,9 +62,10 @@ faulttests:
   no_of_servers: !mux
     single:
       count: 1
-    Two:
-      count: 2
-  no_of_drives: !mux
+# Skipped because of DAOS-5281
+#    Two:
+#      count: 2
+  no_of_drives:
     single:
       count: 1
   no_of_pools:

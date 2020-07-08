@@ -73,12 +73,8 @@ class NvmeHealth(ServerFillUp):
         #Get Pool query for SMD
         self.dmg.set_sub_command("storage")
         self.dmg.sub_command_class.set_sub_command("query")
-        self.dmg.sub_command_class.sub_command_class.set_sub_command("smd")
+        self.dmg.sub_command_class.sub_command_class.set_sub_command("list-pools")
         for host in self.hostlist_servers:
-            self.dmg.sub_command_class. \
-                sub_command_class.sub_command_class.devices.value = False
-            self.dmg.sub_command_class. \
-                sub_command_class.sub_command_class.pools.value = True
             self.dmg.hostlist = host
             try:
                 result = self.dmg.run()
@@ -98,22 +94,13 @@ class NvmeHealth(ServerFillUp):
             self.dmg.hostlist = host
             for _dev in device_ids[host]:
                 try:
-                    result = self.dmg.storage_query_device_state(_dev)
+                    result = self.dmg.storage_query_device_health(_dev)
                 except CommandFailure as details:
                     self.fail("dmg get device states failed {}".format(details))
-                if 'State: NORMAL' not in result.stdout:
+                if 'State:NORMAL' not in result.stdout:
                     self.fail("device {} on host {} is not NORMAL"
                               .format(_dev, host))
 
-        #Get the blobstore health data
-        for host in device_ids:
-            self.dmg.hostlist = host
-            for _dev in device_ids[host]:
-                try:
-                    self.dmg.storage_query_blobstore(_dev)
-                except CommandFailure as error:
-                    self.fail("dmg get blobstore health failed {}"
-                              .format(error))
         #Check nvme-health command works
         try:
             self.dmg.storage_query_nvme_health()
