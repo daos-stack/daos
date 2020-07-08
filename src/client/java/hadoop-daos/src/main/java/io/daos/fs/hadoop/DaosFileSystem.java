@@ -29,6 +29,7 @@ import java.net.URI;
 import java.util.List;
 
 import com.google.common.collect.Lists;
+import io.daos.*;
 import io.daos.dfs.*;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -139,8 +140,8 @@ public class DaosFileSystem extends FileSystem {
   private int chunkSize;
 
   static {
-    if (ShutdownHookManager.removeHook(DaosFsClient.FINALIZER)) {
-      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosFsClient.FINALIZER, 0);
+    if (ShutdownHookManager.removeHook(DaosClient.FINALIZER)) {
+      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosClient.FINALIZER, 0);
       if (LOG.isDebugEnabled()) {
         LOG.debug("daos finalizer relocated to hadoop ShutdownHookManager");
       }
@@ -411,7 +412,7 @@ public class DaosFileSystem extends FileSystem {
     } catch (IOException e) {
       if (e instanceof DaosIOException) {
         DaosIOException de = (DaosIOException) e;
-        if (de.getErrorCode() == io.daos.dfs.Constants.ERROR_CODE_NOT_EXIST) {
+        if (de.getErrorCode() == io.daos.Constants.ERROR_CODE_NOT_EXIST) {
           throw new FileNotFoundException(e.getMessage());
         }
       }
@@ -436,7 +437,7 @@ public class DaosFileSystem extends FileSystem {
       LOG.debug("DaosFileSystem mkdirs: Making directory = {} ", f.toUri().getPath());
     }
     String key = f.toUri().getPath();
-    daos.mkdir(key, io.daos.dfs.Constants.FILE_DEFAULT_FILE_MODE, true);
+    daos.mkdir(key, io.daos.Constants.FILE_DEFAULT_FILE_MODE, true);
     return true;
   }
 
@@ -502,7 +503,7 @@ public class DaosFileSystem extends FileSystem {
     }
     super.close();
     if (daos != null) {
-      daos.disconnect();
+      daos.close();
     }
   }
 
