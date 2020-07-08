@@ -118,6 +118,12 @@ func TestParseTopology(t *testing.T) {
 
 			deviceScanCfg, err := initDeviceScan(nil)
 
+			deviceScanCfg.systemDeviceNames = []string{tc.netDev}
+			deviceScanCfg.systemDeviceNamesMap = make(map[string]struct{})
+			for _, deviceName := range deviceScanCfg.systemDeviceNames {
+				deviceScanCfg.systemDeviceNamesMap[deviceName] = struct{}{}
+			}
+
 			deviceScanCfg.targetDevice = tc.netDev
 			AssertEqual(t, err, nil, "Failed to initDeviceScan")
 
