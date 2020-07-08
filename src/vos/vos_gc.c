@@ -171,6 +171,11 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool,
 	int		    creds = *credits;
 	int		    rc;
 
+	if ((key->kr_bmap & KREC_BF_FLAT) && (gc->gc_type == GC_DKEY)) {
+		*empty = true;
+		return 0;
+	}
+
 	if (key->kr_bmap & KREC_BF_BTR) {
 		rc = gc_drain_btr(gc, pool, &key->kr_btr, credits, empty);
 
@@ -197,6 +202,19 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool,
 		pool->vp_gc_stat.gs_singvs += creds;
 	else
 		pool->vp_gc_stat.gs_recxs += creds;
+	return 0;
+}
+
+static int
+gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, struct vos_gc_item *item)
+{
+	struct vos_krec_df *key = umem_off2ptr(&pool->vp_umm, item->it_addr);
+
+	D_ASSERT(key->kr_bmap & KREC_BF_DKEY);
+	if (key->kr_bmap & KREC_BF_FLAT)
+		gc_add_item(pool, GC_AKEY, item->it_addr, item->it_args);
+	else
+		umem_free(&pool->vp_umm, item->it_addr);
 	return 0;
 }
 
@@ -250,7 +268,7 @@ static struct vos_gc	gc_table[] = {
 		.gc_type		= GC_DKEY,
 		.gc_drain_creds		= 32,
 		.gc_drain		= gc_drain_key,
-		.gc_free		= NULL,
+		.gc_free		= gc_free_dkey,
 	},
 	{
 		.gc_name		= "object",

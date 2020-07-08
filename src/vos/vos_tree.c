@@ -51,7 +51,7 @@ struct vos_btr_attr {
 	btr_ops_t	*ta_ops;
 };
 
-static struct vos_btr_attr *obj_tree_find_attr(unsigned tree_class);
+static struct vos_btr_attr *obj_tree_find_attr(unsigned tree_class, bool flat);
 
 static struct vos_key_bundle *
 iov2key_bundle(d_iov_t *key_iov)
@@ -332,8 +332,11 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		return rc;
 	}
 
-	if (rbund->rb_tclass == VOS_BTR_DKEY)
+	if (rbund->rb_tclass == VOS_BTR_DKEY) {
 		krec->kr_bmap |= KREC_BF_DKEY;
+		if (rbund->rb_flat)
+			krec->kr_bmap |= KREC_BF_FLAT;
+	}
 
 	rbund->rb_krec = krec;
 
@@ -840,7 +843,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		uint64_t		 tree_feats = 0;
 
 		/* Step-1: find the btree attributes and create btree */
-		if (tclass == VOS_BTR_DKEY) {
+		if (tclass == VOS_BTR_DKEY && !obj_is_flat(obj)) {
 			uint64_t	obj_feats;
 
 			/* Check and setup the akey key compare bits */
@@ -851,9 +854,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 			else if (obj_feats & DAOS_OF_AKEY_LEXICAL)
 				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 		}
-
-
-		ta = obj_tree_find_attr(tclass);
+		ta = obj_tree_find_attr(tclass, obj_is_flat(obj));
 
 		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
 			ta->ta_name, tree_feats);
@@ -897,13 +898,12 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		*krecp = NULL;
 
 	D_DEBUG(DB_TRACE, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
-	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
-		D_GOTO(out, rc = -DER_INVAL);
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_off	= UMOFF_NULL;
 	rbund.rb_csum	= &csum;
 	rbund.rb_tclass	= tclass;
+	rbund.rb_flat	= obj_is_flat(obj);
 	memset(&csum, 0, sizeof(csum));
 
 	/* NB: In order to avoid complexities of passing parameters to the
@@ -915,8 +915,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	 *   create the root for the subtree, or just return it if it's already
 	 *   there.
 	 */
-	rc = dbtree_fetch(toh, BTR_PROBE_EQ, intent, key,
-			  NULL, &riov);
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, intent, key, NULL, &riov);
 	switch (rc) {
 	default:
 		D_ERROR("fetch failed: "DF_RC"\n", DP_RC(rc));
@@ -1093,7 +1092,7 @@ obj_tree_register(void)
 
 /** find the attributes of the subtree of @tree_class */
 static struct vos_btr_attr *
-obj_tree_find_attr(unsigned tree_class)
+obj_tree_find_attr(unsigned tree_class, bool flat_key)
 {
 	int	i;
 
@@ -1108,7 +1107,7 @@ obj_tree_find_attr(unsigned tree_class)
 
 	case VOS_BTR_DKEY:
 		/* TODO: change it to VOS_BTR_AKEY while adding akey support */
-		tree_class = VOS_BTR_AKEY;
+		tree_class = flat_key ? VOS_BTR_SINGV : VOS_BTR_AKEY;
 		break;
 	}
 
