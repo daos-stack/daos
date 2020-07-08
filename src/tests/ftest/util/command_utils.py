@@ -303,7 +303,22 @@ class ExecutableCommand(CommandWithParameters):
         return self.parse_output(result.stdout, regex_method)
 
     def parse_output(self, stdout, regex_method):
-        # Get the regex pattern to filter the CmdResult.stdout
+        """parse_output [summary]
+
+        [extended_summary]
+
+        Args:
+            stdout (str): output to parse
+            regex_method (str): name of the method regex to use
+
+        Raises:
+            CommandFailure: if there is an error finding the method's regex
+                pattern.
+
+        Returns:
+            list: a list of strings obtained from the method's output parsed
+                through its regex
+        """
         if regex_method not in self.METHOD_REGEX:
             raise CommandFailure(
                 "No pattern regex defined for '{}()'".format(regex_method))

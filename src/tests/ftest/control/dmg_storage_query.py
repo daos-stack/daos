@@ -152,7 +152,7 @@ class DmgStorageQuery(ControlTestBase):
         temp_err = []
         for info in health_info:
             cels_temp = int("".join(re.findall(r"\d+", info[1]))) - 273.15
-            if not (0.00 <= cels_temp <= 71.00):
+            if not 0.00 <= cels_temp <= 71.00:
                 temp_err.append("{}: {}".format(info[0][1], cels_temp))
         if temp_err:
             self.fail("Bad temperature on SSDs: {}".format(",".join(temp_err)))

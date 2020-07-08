@@ -28,6 +28,29 @@ from general_utils import get_host_data
 from command_utils import CommandFailure
 
 
+def cleanup_output(output):
+    """Cleanup output that is of this form:
+        [(host, "", ""), ("", "data1", "data2"), ("", "data1", "data2")]
+
+    Args:
+        output (list): output to be parsed.
+
+    Returns:
+        dict: integrated dictionary containing information for each host.
+
+    """
+    host = None
+    info = {}
+    for item in output:
+        if item[0]:
+            host = item[0]
+            continue
+        if host not in info:
+            info[host] = []
+        info[host].append(item[1:])
+    return info
+
+
 class ControlTestBase(TestWithServers):
     # pylint: disable=too-few-public-methods,too-many-ancestors
     """Defines common methods for control tests.
@@ -68,28 +91,6 @@ class ControlTestBase(TestWithServers):
 
         return get_host_data(self.dmg.hostlist, cmd, text, error, 20)
 
-    def cleanup_output(self, output):
-        """Cleanup output that is of this form:
-            [(host, "", ""), ("", "data1", "data2"), ("", "data1", "data2")]
-
-        Args:
-            output (list): output to be parsed.
-
-        Returns:
-            dict: integrated dictionary containing information for each host.
-
-        """
-        host = None
-        info = {}
-        for item in output:
-            if item[0]:
-                host = item[0]
-                continue
-            if host not in info:
-                info[host] = []
-            info[host].append(item[1:])
-        return info
-
     def get_device_info(self, rank=None, health=None):
         """Query storage device information.
 
@@ -111,7 +112,7 @@ class ControlTestBase(TestWithServers):
                 "storage_query_device_health",
                 **kwargs)
         else:
-            info = self.cleanup_output(
+            info = cleanup_output(
                 self.get_dmg_output("storage_query_list_devices", **kwargs))
         return info
 
@@ -125,5 +126,5 @@ class ControlTestBase(TestWithServers):
             verbose (bool, optional): create verbose output. Defaults to False.
         """
         kwargs = {"uuid": uuid, "rank": rank, "verbose": verbose}
-        return self.cleanup_output(
+        return cleanup_output(
             self.get_dmg_output("storage_query_list_pools", **kwargs))
