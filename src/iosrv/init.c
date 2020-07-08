@@ -290,7 +290,7 @@ dss_topo_init()
 	}
 
 	if (dss_numa_node > numa_node_nr) {
-		D_ERROR("Invalid NUMA node selected. "
+		D_ERROR("CI_test: Invalid NUMA node selected. "
 			"Must be no larger than %d\n",
 			numa_node_nr);
 		return -DER_INVAL;
