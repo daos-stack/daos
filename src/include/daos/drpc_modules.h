@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,6 +80,7 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_EXTEND			= 228,
 	DRPC_METHOD_MGMT_POOL_EVICT		= 229,
 	DRPC_METHOD_MGMT_DRAIN			= 230,
+	DRPC_METHOD_MGMT_GROUP_UPDATE		= 231,
 
 	NUM_DRPC_MGMT_METHODS			/* Must be last */
 };

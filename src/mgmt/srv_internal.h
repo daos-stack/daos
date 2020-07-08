@@ -76,6 +76,7 @@ int ds_mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint);
 void ds_mgmt_svc_put_leader(struct mgmt_svc *svc);
 struct mgmt_join_in {
 	uint32_t		ji_rank;
+	uint32_t		ji_map_version;
 	struct server_rec	ji_server;
 };
 struct mgmt_join_out {
@@ -84,6 +85,12 @@ struct mgmt_join_out {
 	struct rsvc_hint	jo_hint;
 };
 int ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out);
+struct mgmt_grp_up_in {
+	uint32_t		gui_map_version;
+	struct server_entry	*gui_servers;
+	int			gui_n_servers;
+};
+int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp,
 				    bool all_ranks);
 
@@ -92,7 +99,8 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			d_rank_list_t *targets, size_t scm_size,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
 			d_rank_list_t **svcp);
-int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
+int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			 const char *group, uint32_t force);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 				     struct pool_target_id_list *tgt_list,
@@ -119,7 +127,8 @@ int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
 int ds_mgmt_pool_list_cont(uuid_t uuid,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
-int ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info);
+int ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		       daos_pool_info_t *pool_info);
 int ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
 			   const char *group);
 int ds_mgmt_pool_get_svc_ranks(struct mgmt_svc *svc, uuid_t uuid,
