@@ -105,92 +105,69 @@ func TestDmg_SystemCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
-		//		{
-		//			"system stop with no arguments",
-		//			"system stop",
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemStopReq{
-		//					Prep:  true,
-		//					Kill:  true,
-		//					Ranks: []Rank{},
-		//				}),
-		//			}, " "),
-		//			nil,
-		//		},
-		//		{
-		//			"system stop with force",
-		//			"system stop --force",
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemStopReq{
-		//					Prep:  true,
-		//					Kill:  true,
-		//					Force: true,
-		//					Ranks: []Rank{},
-		//				}),
-		//			}, " "),
-		//			nil,
-		//		},
-		//		{
-		//			"system stop with single rank",
-		//			"system stop --ranks 0",
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemStopReq{
-		//					Prep:  true,
-		//					Kill:  true,
-		//					Ranks: []Rank{0},
-		//				}),
-		//			}, " "),
-		//			nil,
-		//		},
-		//		{
-		//			"system stop with multiple ranks",
-		//			"system stop --ranks 0,1,4",
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemStopReq{
-		//					Prep:  true,
-		//					Kill:  true,
-		//					Ranks: []Rank{0, 1, 4},
-		//				}),
-		//			}, " "),
-		//			nil,
-		//		},
-		//		{
-		//			"system start with no arguments",
-		//			"system start",
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemStartReq{
-		//					Ranks: []Rank{},
-		//				}),
-		//			}, " "),
-		//			nil,
-		//		},
-		//		{
-		//			"system start with single rank",
-		//			"system start --ranks 0",
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemStartReq{
-		//					Ranks: []Rank{0},
-		//				}),
-		//			}, " "),
-		//			nil,
-		//		},
-		//		{
-		//			"system start with multiple ranks",
-		//			"system start --ranks 0,1,4",
-		//			strings.Join([]string{
-		//				"ConnectClients",
-		//				printRequest(t, &control.SystemStartReq{
-		//					Ranks: []Rank{0, 1, 4},
-		//				}),
-		//			}, " "),
-		//			nil,
-		//		},
+		{
+			"system stop with no arguments",
+			"system stop",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStopReq{
+					Prep: true,
+					Kill: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system stop with force",
+			"system stop --force",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStopReq{
+					Prep:  true,
+					Kill:  true,
+					Force: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system stop with single rank",
+			"system stop --ranks 0",
+			strings.Join([]string{
+				`*control.SystemStopReq-{"HostList":null,"Ranks":"0","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system stop with multiple ranks",
+			"system stop --ranks 0,1,4",
+			strings.Join([]string{
+				`*control.SystemStopReq-{"HostList":null,"Ranks":"0-1,4","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system start with no arguments",
+			"system start",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStartReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"system start with single rank",
+			"system start --ranks 0",
+			strings.Join([]string{
+				`*control.SystemStartReq-{"HostList":null,"Ranks":"0","Hosts":""}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system start with multiple ranks",
+			"system start --ranks 0,1,4",
+			strings.Join([]string{
+				`*control.SystemStartReq-{"HostList":null,"Ranks":"0-1,4","Hosts":""}`,
+			}, " "),
+			nil,
+		},
 		{
 			"leader query",
 			"system leader-query",
