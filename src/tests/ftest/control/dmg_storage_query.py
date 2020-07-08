@@ -71,15 +71,11 @@ class DmgStorageQuery(ControlTestBase):
         self.assertEqual(len(self.bdev_list), len(devs_info.values()[0]), msg)
 
         # Check that number of targets match the config
-        errors = []
+        targets = 0
         for devs in devs_info.values()[0]:
-            targets = devs[1].split(" ")
-            if self.targets != len(targets):
-                errors.append(devs[0])
-
-        if errors:
-            self.fail("Wrong number of targets in device info for: {}".format(
-                errors))
+            targets = len(devs[1].split(" "))
+        if self.targets != len(targets):
+            self.fail("Wrong number of targets found: {}".format(targets))
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_pools(self):
@@ -141,6 +137,8 @@ class DmgStorageQuery(ControlTestBase):
             h.insert(0, i[0])
             health_info.append(h)
 
+        self.log.info("Found health info: %s", str(health_info))
+
         # Get the health info from yaml
         e_health_info = self.params.get("health_info", "/run/*")
 
@@ -153,7 +151,7 @@ class DmgStorageQuery(ControlTestBase):
         for info in health_info:
             cels_temp = int("".join(re.findall(r"\d+", info[1]))) - 273.15
             if not 0.00 <= cels_temp <= 71.00:
-                temp_err.append("{}: {}".format(info[0][1], cels_temp))
+                temp_err.append("{}: {}".format(info[0], cels_temp))
         if temp_err:
             self.fail("Bad temperature on SSDs: {}".format(",".join(temp_err)))
 
