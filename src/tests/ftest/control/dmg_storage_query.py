@@ -47,7 +47,12 @@ class DmgStorageQuery(ControlTestBase):
         self.targets = self.server_managers[-1].get_config_value("targets")
 
     def check_dev_state(self, devs_info, state):
-        """Check the state of the device."""
+        """Check the state of the device.
+
+        Args:
+            devs_info (list): list of device information.
+            state (str): device state to verify.
+        """
         err = []
         for dev in devs_info.values()[0]:
             if dev[3] != state:
@@ -74,7 +79,7 @@ class DmgStorageQuery(ControlTestBase):
         targets = 0
         for devs in devs_info.values()[0]:
             targets = len(devs[1].split(" "))
-        if self.targets != len(targets):
+        if self.targets != targets:
             self.fail("Wrong number of targets found: {}".format(targets))
 
     @avocado.fail_on(CommandFailure)
@@ -94,11 +99,6 @@ class DmgStorageQuery(ControlTestBase):
         for pool in pools_info.values()[0]:
             self.assertEqual(self.pool.pool.get_uuid_str(), pool[0].upper())
 
-        # Destroy pool and get pool information and check there is no pool
-        self.pool.destroy()
-        no_pool_info = self.get_pool_info()
-        self.assertFalse(no_pool_info, "No pools should be detected.")
-
         # Check that number of pool blobs match the number of targets
         t_err = []
         b_err = []
@@ -112,6 +112,11 @@ class DmgStorageQuery(ControlTestBase):
 
         self.assertEqual(len(t_err), 0, "Wrong number of targets in pool info")
         self.assertEqual(len(b_err), 0, "Wrong number of blobs in pool info")
+
+        # Destroy pool and get pool information and check there is no pool
+        self.pool.destroy()
+        no_pool_info = self.get_pool_info()
+        self.assertFalse(no_pool_info, "No pools should be detected.")
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_health(self):
@@ -129,12 +134,12 @@ class DmgStorageQuery(ControlTestBase):
             for idx, info in enumerate(dmg_info):
                 dmg_info[idx] = [i for i in info if i]
         parsed = [dmg_info[i:(i + 17)] for i in range(0, len(dmg_info), 17)]
+        _ = parsed[0].pop()
 
         # Convert from list of lists to list of strings
         health_info = []
         for i in parsed:
-            h = [elem[0] for elem in i[1:]]
-            h.insert(0, i[0])
+            h = [elem[0] for elem in i]
             health_info.append(h)
 
         self.log.info("Found health info: %s", str(health_info))
@@ -151,18 +156,18 @@ class DmgStorageQuery(ControlTestBase):
         for info in health_info:
             cels_temp = int("".join(re.findall(r"\d+", info[1]))) - 273.15
             if not 0.00 <= cels_temp <= 71.00:
-                temp_err.append("{}: {}".format(info[0], cels_temp))
+                temp_err.append("{}".format(cels_temp))
         if temp_err:
             self.fail("Bad temperature on SSDs: {}".format(",".join(temp_err)))
 
-        # Compare the rest of the values in bhealthlob info
+        # Compare the rest of the values in health info
         err = []
         for dmg_info, exp_info in zip(health_info, e_health_info):
             if dmg_info[2:] != exp_info[2:]:
                 err.append("dmg info :{} != expected info:{}".format(
-                    dmg_info, exp_info))
+                    dmg_info[2:], exp_info[2:]))
         if err:
-            self.fail("Health info not as expected: {}".format(dmg_info))
+            self.fail("Health info not as expected: {}".format(err))
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_state(self):

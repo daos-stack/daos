@@ -124,6 +124,10 @@ class ControlTestBase(TestWithServers):
             rank (int, optional): Limit response to devices on this rank.
                 Defaults to None.
             verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            dict: Dictionary containing pool information for each host.
+
         """
         kwargs = {"uuid": uuid, "rank": rank, "verbose": verbose}
         return cleanup_output(

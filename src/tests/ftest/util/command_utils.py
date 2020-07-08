@@ -303,9 +303,7 @@ class ExecutableCommand(CommandWithParameters):
         return self.parse_output(result.stdout, regex_method)
 
     def parse_output(self, stdout, regex_method):
-        """parse_output [summary]
-
-        [extended_summary]
+        """Parse output using .findall() with suplied 'regex_method' as pattern.
 
         Args:
             stdout (str): output to parse
