@@ -465,15 +465,13 @@ pipeline {
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-gcc-centos7",
-                                             tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
-                                                      cppCheck(pattern: 'centos7-gcc-build.log') ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-gcc-centos7",
+                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
+                                                  cppCheck(pattern: 'centos7-gcc-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -483,6 +481,104 @@ pipeline {
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 debug') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('build-centos7-gcc-debug') }
+                            expression { ! quickbuild() }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS + '"' +
+                                ' --build-arg REPOS="' + component_repos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild clean: "_build.external${arch}",
+                                   BUILD_TYPE: 'debug',
+                                   parallel_build: parallel_build(),
+                                   log_to_file: 'centos7-gcc-debug-build.log',
+                                   failure_artifacts: 'config.log-centos7-gcc-debug'
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-gcc-centos7-debug",
+                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log'),
+                                                  cppCheck(pattern: 'centos7-gcc-debug-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
+                        }
+                        success {
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unsuccessful {
+                            sh """if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log config.log-centos7-gcc-debug
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 release') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('build-centos7-gcc-release') }
+                            expression { ! quickbuild() }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS + '"' +
+                                ' --build-arg REPOS="' + component_repos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild clean: "_build.external${arch}",
+                                   BUILD_TYPE: 'release',
+                                   parallel_build: parallel_build(),
+                                   log_to_file: 'centos7-gcc-release-build.log',
+                                   failure_artifacts: 'config.log-centos7-gcc-release'
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-gcc-centos7-release",
+                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log'),
+                                                  cppCheck(pattern: 'centos7-gcc-release-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
+                        }
+                        success {
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unsuccessful {
+                            sh """if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log config.log-centos7-gcc-release
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
                                              allowEmptyArchive: true
                         }
                     }
@@ -516,15 +612,13 @@ pipeline {
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-centos7-clang",
-                                             tools: [ clang(pattern: 'centos7-clang-build.log'),
-                                                      cppCheck(pattern: 'centos7-clang-build.log') ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-centos7-clang",
+                                         tools: [ clang(pattern: 'centos7-clang-build.log'),
+                                                  cppCheck(pattern: 'centos7-clang-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -564,15 +658,13 @@ pipeline {
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-ubuntu20",
-                                             tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
-                                                      cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-ubuntu20",
+                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
+                                                  cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -615,15 +707,13 @@ pipeline {
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-ubuntu20-clang",
-                                             tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
-                                                      cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-ubuntu20-clang",
+                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
+                                                  cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -663,15 +753,13 @@ pipeline {
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-gcc-leap15",
-                                             tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
-                                                      cppCheck(pattern: 'leap15-gcc-build.log') ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-gcc-leap15",
+                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
+                                                  cppCheck(pattern: 'leap15-gcc-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -711,15 +799,13 @@ pipeline {
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap15-clang",
-                                             tools: [ clang(pattern: 'leap15-clang-build.log'),
-                                                      cppCheck(pattern: 'leap15-clang-build.log') ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-leap15-clang",
+                                         tools: [ clang(pattern: 'leap15-clang-build.log'),
+                                                  cppCheck(pattern: 'leap15-clang-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -764,15 +850,13 @@ pipeline {
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap15-intelc",
-                                             tools: [ intel(pattern: 'leap15-icc-build.log'),
-                                                      cppCheck(pattern: 'leap15-icc-build.log') ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-leap15-intelc",
+                                         tools: [ intel(pattern: 'leap15-icc-build.log'),
+                                                  cppCheck(pattern: 'leap15-icc-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -811,7 +895,39 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        runTestSh mode: 'normal'
+                        script {
+                            if (quickbuild()) {
+                                // TODO: these should be gotten from the Requires: of RPMs
+                                qb_inst_rpms = " spdk-tools mercury boost-devel"
+                            }
+                        }
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
+                                       snapshot: true,
+                                       inst_repos: el7_component_repos + ' ' +
+                                                   component_repos(),
+                                       inst_rpms: 'gotestsum openmpi3 ' +
+                                                  'hwloc-devel argobots ' +
+                                                  'fuse3-libs fuse3 ' +
+                                                  'boost-devel ' +
+                                                  'libisa-l-devel libpmem ' +
+                                                  'libpmemobj protobuf-c ' +
+                                                  'spdk-devel libfabric-devel '+
+                                                  'pmix numactl-devel ' +
+                                                  'libipmctl-devel ' +
+						    'python36-tabulate' +
+                                                  qb_inst_rpms
+                        timeout(time:60, unit:'MINUTES') {
+                          runTest stashes: [ 'centos7-gcc-tests',
+                                           'centos7-gcc-install',
+                                           'centos7-gcc-build-vars' ],
+                                script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
+                                        "NODELIST=${env.NODELIST} " +
+                                        'ci/unit/test_main.sh',
+                                junit_files: 'test_results/*.xml'
+                        }
                     }
                     post {
                       always {
