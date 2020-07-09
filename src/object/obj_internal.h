@@ -549,5 +549,10 @@ int
 dc_tx_non_cpd_cb(daos_handle_t th, int result);
 
 int
-dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc);
+dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
+	     tse_task_t *task);
+
+void
+dc_tx_check_existence_cb(void *data, tse_task_t *task);
+
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
