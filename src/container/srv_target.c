@@ -51,28 +51,19 @@
 /* Per VOS container aggregation ULT ***************************************/
 
 /*
- * DTX batched commit may delay the commit for at most 60 seconds,
- * so we have to use a larger threshold to ensure that all transactions
- * within the aggregation epoch range are either committed or to be
- * aborted.
+ * VOS aggregation should try to avoid aggregating in the epoch range where
+ * lots of data records are pending to commit, so the highest aggregate epoch
+ * will be:
+ *
+ * current HLC - (DTX batched commit threshold + buffer period)
  */
-#define DAOS_AGG_THRESHOLD	90 /* seconds */
-
-static inline bool
-cont_aggregate_yield(void *arg)
-{
-	struct sched_request	*req = (struct sched_request *)arg;
-
-	if (sched_req_is_aborted(req))
-		return true;
-
-	sched_req_yield(req);
-	return false;
-}
+#define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
 static inline int
 cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 {
+	int	rc;
+
 	/*
 	 * Avoid calling into vos_aggregate() when aborting aggregation
 	 * on ds_cont_child purging.
@@ -80,8 +71,12 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	D_ASSERT(cont->sc_agg_req != NULL);
 	if (sched_req_is_aborted(cont->sc_agg_req))
 		return 1;
-	return vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
-			     cont_aggregate_yield, (void *)cont->sc_agg_req);
+
+	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
+			   (void *)cont->sc_agg_req);
+	/* Wake up GC ULT */
+	sched_req_wakeup(cont->sc_pool->spc_gc_req);
+	return rc;
 }
 
 static bool
@@ -166,6 +161,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 
 	if (epoch_min > epoch_max) {
 		/* Nothing can be aggregated */
+		*msecs = max(*msecs, (epoch_min - epoch_max) / NSEC_PER_MSEC);
 		return 0;
 	} else if (epoch_min > epoch_max - interval &&
 		   sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
@@ -285,8 +281,7 @@ cont_aggregate_ult(void *arg)
 		dmi->dmi_tgt_id);
 
 	D_ASSERT(cont->sc_agg_req != NULL);
-	while (!sched_req_is_aborted(cont->sc_agg_req) &&
-	       !dss_xstream_exiting(dmi->dmi_xstream)) {
+	while (!dss_ult_exiting(cont->sc_agg_req)) {
 		uint64_t msecs;	/* milli seconds */
 
 		rc = cont_child_aggregate(cont, &msecs);
@@ -298,7 +293,7 @@ cont_aggregate_ult(void *arg)
 				rc);
 		}
 
-		if (dss_xstream_exiting(dmi->dmi_xstream))
+		if (dss_ult_exiting(cont->sc_agg_req))
 			break;
 
 		sched_req_sleep(cont->sc_agg_req, msecs);
@@ -871,6 +866,39 @@ ds_cont_hdl_get(struct ds_cont_hdl *hdl)
 	cont_hdl_get_internal(hash, hdl);
 }
 
+/* #define CONT_DESTROY_SYNC_WAIT */
+static void
+cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
+{
+#ifdef CONT_DESTROY_SYNC_WAIT
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+	struct sched_request	*req;
+
+	D_DEBUG(DF_DSMS, DF_CONT": wait container destroy\n",
+		DP_CONT(child->spc_uuid, co_uuid));
+
+	D_ASSERT(child != NULL);
+	sched_req_attr_init(&attr, SCHED_REQ_IO, &child->spc_uuid);
+	req = sched_req_get(&attr, ABT_THREAD_NULL);
+	if (req == NULL) {
+		D_CRIT(DF_UUID"[%d]: Failed to get sched req\n",
+		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		return;
+	}
+
+	while (!dss_xstream_exiting(dmi->dmi_xstream)) {
+		if (vos_gc_pool_idle(child->spc_hdl))
+			break;
+		sched_req_sleep(req, 500);
+	}
+	sched_req_put(req);
+
+	D_DEBUG(DF_DSMS, DF_CONT": container destroy done\n",
+		DP_CONT(child->spc_uuid, co_uuid));
+#endif
+}
+
 /*
  * Called via dss_collective() to destroy the ds_cont object as well as the vos
  * container.
@@ -934,26 +962,15 @@ cont_child_destroy_one(void *vin)
 		 * container open time, so it might legitimately not exist if
 		 * the container has never been opened */
 		rc = 0;
-	}
-
-	/*
-	 * Pause flushing free extents in VEA aging buffer, otherwise,
-	 * there'll be way more fragments to be processed.
-	 */
-	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_PLUG);
-
-	/* XXX there might be a race between GC and pool destroy, let's do
-	 * synchronous GC for now.
-	 */
-	dss_gc_run(pool->spc_hdl, -1);
-
-	/* Unplug and make the freed extents available immediately. */
-	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_UNPLUG);
-	if (rc) {
-		D_ERROR(DF_CONT": VEA flush failed. "DF_RC"\n",
+	} else if (rc) {
+		D_ERROR(DF_CONT": destroy vos container failed "DF_RC"\n",
 			DP_CONT(pool->spc_uuid, in->tdi_uuid), DP_RC(rc));
-		goto out_pool;
+	} else {
+		/* Wakeup GC ULT */
+		sched_req_wakeup(pool->spc_gc_req);
+		cont_destroy_wait(pool, in->tdi_uuid);
 	}
+
 out_pool:
 	ds_pool_child_put(pool);
 out:

@@ -110,6 +110,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'mgmt_svc_name_cb': ('s'),
                      'pool_prop_default_copy': ('entry_def->dpe_str'),
                      'pool_iv_prop_g2l': ('prop_entry->dpe_str'),
+                     'pool_iv_value_alloc_internal': ('sgl->sg_iovs[0].iov_buf'),
                      'daos_prop_entry_copy': ('entry_dup->dpe_str'),
                      'daos_prop_dup': ('entry_dup->dpe_str'),
                      'auth_cred_to_iov': ('packed')}
@@ -482,7 +483,7 @@ def trace_one_file(filename):
     """Trace a single file"""
     log_iter = cart_logparse.LogIter(filename)
     test_iter = LogTest(log_iter)
-    test_iter.check_log_file(True)
+    test_iter.check_log_file(False)
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
