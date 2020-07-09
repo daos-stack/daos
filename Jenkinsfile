@@ -869,8 +869,12 @@ pipeline {
                                     unstableThresholdInvalidReadWrite: '0',
                                     unstableThresholdTotal: '0'
                             )
+                            // TODO: Re-enable failOnError once nlt has it's own
+                            // job.  Currently if run_test.sh fails then nlt
+                            // doesn't get run, so there's no results file and
+                            // and the nlt code should not error in this case
                             recordIssues enabledForFailure: true,
-                                         failOnError: true,
+                                         failOnError: false,
                                          referenceJobName: 'daos-stack/daos/master',
                                          ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
@@ -885,7 +889,7 @@ pipeline {
                                                         [threshold: 1, type: 'TOTAL_ERROR', unstable: true],
                                                         [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
                                          name: "Node local testing",
-                                         tool: issues(pattern: 'vm_test/nlt-errors.json',
+                                         tool: issues(pattern: 'nlt-errors.json',
                                                       name: 'NLT results',
                                                       id: 'VM_test')
                         }
