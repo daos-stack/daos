@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -142,6 +142,38 @@ func TestParseTopology(t *testing.T) {
 	}
 }
 
+// TestScanFabricNoDevices uses a topology with no devices reported and scans the fabric against that.
+// The ScanFabric should encounter no errors, and should return an empty scan result.
+func TestScanFabricNoDevices(t *testing.T) {
+	for name, tc := range map[string]struct {
+		results  int
+		topology string
+		excludes string
+	}{
+		"no devices in topology": {
+			results:  0,
+			topology: "testdata/gcp_topology.xml",
+			excludes: "lo",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+
+			ndc := NetDetectContext{}
+			err = ndc.Init()
+			defer ndc.CleanUp()
+			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
+
+			results, err := ndc.ScanFabric("", tc.excludes)
+			AssertEqual(t, err, nil, "ScanFabric failure")
+			AssertEqual(t, len(results), tc.results, "ScanFabric had unexpected number of results")
+		})
+	}
+}
+
 // TestScanFabric scans the fabric on the test system.  Even though we don't know how the test system is configured,
 // we do expect that libfabric is installed and will report at least one provider,device,numa record.
 // If we get at least one record and no errors, the test is successful.
@@ -149,28 +181,25 @@ func TestScanFabric(t *testing.T) {
 	ndc := NetDetectContext{}
 	err := ndc.Init()
 	defer ndc.CleanUp()
-	AssertEqual(t, err, nil, "Failed to initialize NetDetectContenxt")
+	AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
 	provider := "" // an empty provider string is a search for 'all'
 	results, err := ndc.ScanFabric(provider)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if len(results) == 0 {
-		t.Fatal(err)
-	}
+	AssertEqual(t, len(results) > 0, true, "Fabric scan returned no results")
 }
 
 // TestValidateNetworkConfig runs in a basic loopback mode with ScanFabric.  ScanFabric
 // is used to generate data found on the actual test system, which is then fed back to the
 // ValidateProviderConfig and  ValidateNUMAConfig functions to make sure it matches.  Each record from ScanFabric is
-// examined.  We expect that libfabric is installed and will report at least one provider, device, numa record.
+// examined.  We expect that libfabric is installed and will report at least one record.
 func TestValidateNetworkConfig(t *testing.T) {
 	ndc := NetDetectContext{}
 	err := ndc.Init()
 	defer ndc.CleanUp()
-	AssertEqual(t, err, nil, "Failed to initialize NetDetectContenxt")
+	AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
 	provider := "" // an empty provider string is a search for 'all'
 	results, err := ndc.ScanFabric(provider)
@@ -188,6 +217,172 @@ func TestValidateNetworkConfig(t *testing.T) {
 
 		err = ValidateNUMAConfig(sf.DeviceName, sf.NUMANode)
 		AssertEqual(t, err, nil, "Network device configuration is invalid - NUMA node does not match")
+	}
+}
+
+// ValidateNUMAConfigNonNumaAware verifies that the numa detection successfully executes without error
+// with a topology that has no NUMA devices in it.
+func TestValidateNUMAConfigNonNumaAware(t *testing.T) {
+	for name, tc := range map[string]struct {
+		device   string
+		topology string
+	}{
+		"no NUMA nodes in topology - has devices": {
+			device:   "fake device",
+			topology: "testdata/no-numa-nodes.xml",
+		},
+		"no NUMA nodes in topology with eth0 device": {
+			device:   "eth0",
+			topology: "testdata/no-numa-nodes.xml",
+		},
+		"no NUMA nodes in topology with ib1 device": {
+			device:   "ib1",
+			topology: "testdata/no-numa-nodes.xml",
+		},
+		"no NUMA nodes no devices in topology with fake device": {
+			device:   "fake device",
+			topology: "testdata/no-numa-no-devices.xml",
+		},
+		"no NUMA nodes no devices in topology with eth0 device": {
+			device:   "eth0",
+			topology: "testdata/no-numa-no-devices.xml",
+		},
+		"no NUMA nodes no devices in topology with fake device with ib1 device": {
+			device:   "ib1",
+			topology: "testdata/no-numa-no-devices.xml",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+
+			ndc := NetDetectContext{}
+			err = ndc.Init()
+			defer ndc.CleanUp()
+			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
+			AssertEqual(t, ndc.NumaAware, false, "Unexpected detection of NUMA nodes in provided topology")
+
+			err = ValidateNUMAConfig(tc.device, 0)
+			AssertEqual(t, err, nil, "Error on ValidateNUMAConfig")
+		})
+	}
+}
+
+// TestNumaAware verifies that the numa detection successfully executes without error
+// with a standard topology and one without any OS devices in it
+func TestNumaAware(t *testing.T) {
+	for name, tc := range map[string]struct {
+		result   bool
+		topology string
+	}{
+		"no devices in topology": {
+			result:   true,
+			topology: "testdata/gcp_topology.xml",
+		},
+		"devices in topology": {
+			result:   true,
+			topology: "testdata/boro-84.xml",
+		},
+		"devices in topology no NUMA nodes": {
+			result:   false,
+			topology: "testdata/no-numa-nodes.xml",
+		},
+		"no devices in topology no NUMA nodes": {
+			result:   false,
+			topology: "testdata/no-numa-no-devices.xml",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+
+			ndc := NetDetectContext{}
+			err = ndc.Init()
+			defer ndc.CleanUp()
+			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
+
+			if tc.result {
+				AssertEqual(t, ndc.NumaAware, tc.result, "Unable to detect NUMA on provided topology")
+			} else {
+				AssertEqual(t, ndc.NumaAware, tc.result, "Detected NUMA on non-numa topology")
+			}
+		})
+	}
+}
+
+// TestInitDeviceScan verifies that the initialization succeeds on NUMA and non NUMA topology
+func TestInitDeviceScan(t *testing.T) {
+	for name, tc := range map[string]struct {
+		topology string
+	}{
+		"no devices in topology": {
+			topology: "testdata/gcp_topology.xml",
+		},
+		"devices in topology": {
+			topology: "testdata/boro-84.xml",
+		},
+		"devices in topology no NUMA nodes": {
+			topology: "testdata/no-numa-nodes.xml",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+
+			deviceScanCfg, err := initDeviceScan(nil)
+			defer cleanUp(deviceScanCfg.topology)
+			AssertEqual(t, err, nil, "Error on initDeviceScan")
+		})
+	}
+}
+
+// TestGetAffinityForDeviceEdgeCases verifies that determining device affinity
+// gives expected output and generates no errors on non NUMA topologies.
+func TestGetAffinityForDeviceEdgeCases(t *testing.T) {
+	for name, tc := range map[string]struct {
+		topology string
+		device   string
+	}{
+		"non-numa topology, with OS devices, no network devices, known input device": {
+			device:   "lo",
+			topology: "testdata/no-numa-nodes.xml",
+		},
+		"non-numa topology, with OS devices, no network devices, unknown input device": {
+			device:   "bar",
+			topology: "testdata/no-numa-nodes.xml",
+		},
+		"non-numa topology, with no OS devices, known input device": {
+			device:   "lo",
+			topology: "testdata/no-numa-no-devices.xml",
+		},
+		"non-numa topology, with no OS devices, unknown input device": {
+			device:   "bazz",
+			topology: "testdata/no-numa-no-devices.xml",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+
+			deviceScanCfg, err := initDeviceScan(nil)
+			AssertEqual(t, err, nil, "Error on initDeviceScan")
+			defer cleanUp(deviceScanCfg.topology)
+
+			deviceScanCfg.targetDevice = tc.device
+			deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+
+			AssertEqual(t, err, nil, "Unexpected error on GetAffinityForDevice")
+			AssertEqual(t, deviceAffinity.NUMANode, uint(0), "deviceAffinity mismatch on NUMA node")
+			AssertEqual(t, deviceAffinity.DeviceName, tc.device, "deviceAffinity mismatch on device name")
+		})
 	}
 }
 
@@ -330,7 +525,7 @@ func TestValidateProviderSm(t *testing.T) {
 	ndc := NetDetectContext{}
 	err := ndc.Init()
 	defer ndc.CleanUp()
-	AssertEqual(t, err, nil, "Failed to initialize NetDetectContenxt")
+	AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
 	provider := "" // an empty provider string is a search for 'all'
 	results, err := ndc.ScanFabric(provider)
