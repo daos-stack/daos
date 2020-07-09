@@ -93,9 +93,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Let's run daos_racer as a client
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
-        print("--------GETTING PARAMS--------")
         daos_racer.get_params(self)
-        print("--------DONE GETTING PARAMS--------")
 
         # Update env_name list to add OFI_INTERFACE if needed.
         if env:
@@ -106,11 +104,11 @@ class ZeroConfigTest(TestWithServers):
 
         # Verify output and port count to check what iface CaRT init with.
         cnt_after = self.get_port_cnt(
-            self.hostlist_clients[0], hfi_map[exp_iface], "port_rcv_data")
+            self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
-        diff = None
+        diff = 0
         for cnt_b, cnt_a in zip(cnt_before.values(), cnt_after.values()):
-            diff = cnt_a - cnt_b
+            diff = int(cnt_a) - int(cnt_b)
             self.log.info("%s port count difference: %s", exp_iface, diff)
 
         # If we don't see data going through the device, fail
