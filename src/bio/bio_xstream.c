@@ -451,18 +451,10 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 void
 xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
 {
-	int rc;
-
+	D_ASSERT(inflights != NULL);
 	/* Wait for the completion callback done */
-	if (inflights != NULL) {
-		while (*inflights != 0)
-			bio_nvme_poll(ctxt);
-	}
-
-	/* Continue to drain all msgs in the msg ring */
-	do {
-		rc = bio_nvme_poll(ctxt);
-	} while (rc > 0);
+	while (*inflights != 0)
+		bio_nvme_poll(ctxt);
 }
 
 int
@@ -1008,7 +1000,15 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 
 	if (ctxt->bxc_thread != NULL) {
-		xs_poll_completion(ctxt, NULL);
+		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d",
+			ctxt->bxc_tgt_id);
+
+		while (!spdk_thread_is_idle(ctxt->bxc_thread))
+			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
+
+		D_DEBUG(DB_MGMT, "SPDK thread finalized, tgt_id:%d",
+			ctxt->bxc_tgt_id);
+
 		spdk_thread_exit(ctxt->bxc_thread);
 		ctxt->bxc_thread = NULL;
 	}
@@ -1093,6 +1093,11 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 			goto out;
 		}
+
+		/* Continue poll until no more events */
+		while (spdk_thread_poll(ctxt->bxc_thread, 0, 0) > 0)
+			;
+		D_DEBUG(DB_MGMT, "SPDK bdev initialized, tgt_id:%d", tgt_id);
 
 		nvme_glb.bd_init_thread = ctxt->bxc_thread;
 		rc = init_bio_bdevs(ctxt);
