@@ -985,7 +985,23 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        runTestSh mode: 'memcheck'
+                        unitTest timeout_time: 60,
+                                 daos_pkg_version: daos_packages_version("centos7"),
+                                 inst_repos: el7_component_repos + ' ' +
+                                             component_repos(),
+                                 inst_rpms: 'gotestsum openmpi3 ' +
+                                            'hwloc-devel argobots ' +
+                                            'fuse3-libs fuse3 ' +
+                                            'boost-devel ' +
+                                            'libisa-l-devel libpmem ' +
+                                            'libpmemobj protobuf-c ' +
+                                            'spdk-devel libfabric-devel '+
+                                            'pmix numactl-devel ' +
+                                            'libipmctl-devel' +
+                                            'python36-tabulate' +
+                                            qb_inst_rpms
+                                 valgrind: 'memcheck'
+                                 junit_files: ''
                     }
                     post {
                       always {
