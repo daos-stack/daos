@@ -469,10 +469,10 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 
 	if (cpf->cpf_ver > CRT_PROTO_MAX_VER) {
 		D_ERROR("Invalid version number %d, max version number is "
-  		"%lu.\n", cpf->cpf_ver, CRT_PROTO_MAX_VER);
+			"%lu.\n", cpf->cpf_ver, CRT_PROTO_MAX_VER);
 		return -DER_INVAL;
 	}
-  
+
 	if (cpf->cpf_count > CRT_PROTO_MAX_COUNT) {
 		D_ERROR("Invalid member RPC count %d, max count is %lu.\n",
 			cpf->cpf_count, CRT_PROTO_MAX_COUNT);
@@ -492,11 +492,11 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 
 	/* reg L1 */
 	rc = crt_proto_reg_L1(crt_gdata.cg_opc_map, cpf);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("crt_proto_reg_L1() failed, "
 				"protocol: %s, version %u, base_opc %#x.\n",
 				cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base);
-	} else
+	else
 		D_DEBUG(DB_TRACE, "registered protocol: %s, version %u, "
 			"base_opc %#x.\n",
 			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base);
@@ -507,14 +507,14 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 int
 crt_proto_register(struct crt_proto_format *cpf)
 {
-	if (cpf == NULL ) {
+	if (cpf == NULL) {
 		D_ERROR("cpf can't be NULL.\n");
 		return -DER_INVAL;
 	}
 
 	/* validate base_opc is in range */
 	if (!validate_base_opcode(cpf->cpf_base)) {
-		D_ERROR("Invalid base_opc: %#x.\n" ,  cpf->cpf_base);
+		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);
 		return -DER_INVAL;
 	}
 
@@ -530,7 +530,7 @@ crt_proto_register_internal(struct crt_proto_format *cpf)
 	}
 
 	/* validate base_opc is in range */
-	if (cpf->cpf_base^CRT_PROTO_BASEOPC_MASK) {
+	if (cpf->cpf_base ^ CRT_PROTO_BASEOPC_MASK) {
 		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);
 		return -DER_INVAL;
 	}
@@ -551,6 +551,7 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 	struct crt_proto_query_out	*rpc_req_output;
 	struct proto_query_t		*proto_query = cb_info->cci_arg;
 	struct crt_proto_query_cb_info	 user_cb_info;
+
 	if (cb_info->cci_rc != 0) {
 		D_ERROR("rpc (opc: %#x failed, rc: %d.\n", rpc_req->cr_opc,
 			cb_info->cci_rc);
@@ -588,9 +589,8 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		return -DER_INVAL;
 	}
 
-	if (cb == NULL) {
+	if (cb == NULL)
 		D_WARN("crt_proto_query() is not useful when cb is NULL.\n");
-	}
 
 	crt_ctx = crt_context_lookup(0);
 	if (crt_ctx == NULL) {
