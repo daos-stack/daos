@@ -96,7 +96,7 @@ if [ -d "/mnt/daos" ]; then
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
             VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
                           --error-limit=no --suppressions=${VALGRIND_SUPP} \
-                          --xml=yes \
+                          --xml=yes --fair-sched=try \
                           --xml-file=memcheck-results-%p.xml"
         else
             VALGRIND_SUPP=""
