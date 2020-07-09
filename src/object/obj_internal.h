@@ -139,6 +139,8 @@ struct obj_reasb_req {
 	struct obj_ec_recx_array	*orr_recxs;
 	struct obj_ec_seg_sorter	*orr_sorters;
 	struct dcs_layout		*orr_singv_los;
+	/* to record returned data size from each targets */
+	daos_size_t			*orr_data_sizes;
 	uint32_t			 orr_tgt_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
@@ -149,7 +151,14 @@ struct obj_reasb_req {
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
-	uint32_t			 orr_recov:1; /* for recovery flag */
+	/* for data recovery flag */
+	uint32_t			 orr_recov:1,
+	/* for iod_size fetching flag */
+					 orr_size_fetch:1,
+	/* for iod_size fetched flag */
+					 orr_size_fetched:1,
+	/* only with single target flag */
+					 orr_single_tgt:1;
 };
 
 static inline void
@@ -432,6 +441,34 @@ dc_io_epoch_set(struct dc_obj_epoch *epoch)
 	} else {
 		epoch->oe_value = DAOS_EPOCH_MAX;
 		epoch->oe_uncertain = false; /* not applicable */
+	}
+}
+
+static inline void
+dc_sgl_out_set(d_sg_list_t *sgl, daos_size_t data_size)
+{
+	d_iov_t		*iov;
+	daos_size_t	 buf_size;
+	uint32_t	 i;
+
+	if (data_size == 0) {
+		sgl->sg_nr_out = 0;
+		return;
+	}
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++) {
+		iov = &sgl->sg_iovs[i];
+		buf_size += iov->iov_buf_len;
+		if (buf_size < data_size) {
+			iov->iov_len = iov->iov_buf_len;
+			sgl->sg_nr_out = i + 1;
+			continue;
+		}
+
+		iov->iov_len = iov->iov_buf_len -
+			       (buf_size - data_size);
+		sgl->sg_nr_out = i + 1;
+		break;
 	}
 }
 
