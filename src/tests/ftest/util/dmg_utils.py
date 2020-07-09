@@ -21,7 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-# pylint: disable=too-many-lines,too-many-public-methods
+# pylint: disable=too-many-lines, too-many-public-methods
 from __future__ import print_function
 
 from getpass import getuser
@@ -120,7 +120,7 @@ class DmgCommand(YamlCommand):
         """Set the hostlist to be used for dmg invocation.
 
         Args:
-            hostlist (string list): list of host addresses
+            hostlist (list): list of host addresses
         """
         if self.yaml:
             if not isinstance(hostlist, list):
@@ -135,7 +135,7 @@ class DmgCommand(YamlCommand):
         """Set certificates for the hostlist.
 
         Args:
-            hostlist (string list): list of host addresses
+            hostlist (list): list of host addresses
         """
         if self.yaml:
             self.yaml.copy_certificates(get_log_file("certs"), hostlist)
