@@ -1162,7 +1162,7 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 	uint32_t		 iods_csums_nr;
 	uint16_t		 csum_len = daos_csummer_get_csum_len(obj);
 
-	if (!daos_csummer_initialized(obj))
+	if (!daos_csummer_initialized(obj) || nr == 0)
 		return 0;
 
 	*p_iods_csums = NULL;
