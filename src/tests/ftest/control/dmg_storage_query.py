@@ -78,7 +78,7 @@ class DmgStorageQuery(ControlTestBase):
         # Check that number of targets match the config
         targets = 0
         for devs in devs_info.values()[0]:
-            targets = len(devs[1].split(" "))
+            targets += len(devs[1].split(" "))
         if self.targets != targets:
             self.fail("Wrong number of targets found: {}".format(targets))
 
@@ -134,7 +134,7 @@ class DmgStorageQuery(ControlTestBase):
             for idx, info in enumerate(dmg_info):
                 dmg_info[idx] = [i for i in info if i]
         parsed = [dmg_info[i:(i + 17)] for i in range(0, len(dmg_info), 17)]
-        _ = parsed[0].pop()
+        _ = parsed[0].pop(0)
 
         # Convert from list of lists to list of strings
         health_info = []
@@ -154,7 +154,7 @@ class DmgStorageQuery(ControlTestBase):
         # Verify temperature, convert from Kelvins to Celsius
         temp_err = []
         for info in health_info:
-            cels_temp = int("".join(re.findall(r"\d+", info[1]))) - 273.15
+            cels_temp = int("".join(re.findall(r"\d+", info[0]))) - 273.15
             if not 0.00 <= cels_temp <= 71.00:
                 temp_err.append("{}".format(cels_temp))
         if temp_err:
@@ -163,9 +163,9 @@ class DmgStorageQuery(ControlTestBase):
         # Compare the rest of the values in health info
         err = []
         for dmg_info, exp_info in zip(health_info, e_health_info):
-            if dmg_info[2:] != exp_info[2:]:
+            if dmg_info[1:] != exp_info:
                 err.append("dmg info :{} != expected info:{}".format(
-                    dmg_info[2:], exp_info[2:]))
+                    dmg_info[1:], exp_info))
         if err:
             self.fail("Health info not as expected: {}".format(err))
 
