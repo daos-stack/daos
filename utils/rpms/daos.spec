@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       25%{?relval}%{?dist}
+Release:       26%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -363,7 +363,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Tue Jun 28 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-26
+* Sun Jun 28 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-26
 - Add the vos_size_dfs_sample.py tool. It is used to generate dynamically
   the vos_dfs_sample.yaml file using the real DFS super block data.
 
