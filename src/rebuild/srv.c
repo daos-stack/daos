@@ -782,7 +782,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 		 rebuild_op == RB_OP_DRAIN ||
 		 rebuild_op == RB_OP_ADD);
 	match_status = (rebuild_op == RB_OP_FAIL ? PO_COMP_ST_DOWN :
-			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DOWN :
+			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DRAIN :
 			PO_COMP_ST_UP);
 
 	if (tgts != NULL && tgts->pti_number > 0) {
