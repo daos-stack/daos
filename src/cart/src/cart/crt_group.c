@@ -77,22 +77,12 @@ crt_li_link2ptr(d_list_t *rlink)
 	return container_of(rlink, struct crt_lookup_item, li_link);
 }
 
-static int
-li_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
-{
-	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
-
-	*key_pp = (void *)&li->li_rank;
-	return sizeof(li->li_rank);
-}
-
 static uint32_t
 li_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return (unsigned int)(*(const uint32_t *)key %
-		(1U << CRT_LOOKUP_CACHE_BITS));
+	return *(const uint32_t *)key % (1U << CRT_LOOKUP_CACHE_BITS);
 }
 
 static bool
@@ -104,6 +94,14 @@ li_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
 	return li->li_rank == *(d_rank_t *)key;
+}
+
+static uint32_t
+li_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct crt_lookup_item *li = crt_li_link2ptr(link);
+
+	return li->li_rank % (1U << CRT_LOOKUP_CACHE_BITS);
 }
 
 static void
@@ -131,9 +129,9 @@ li_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t lookup_table_ops = {
-	.hop_key_get		= li_op_key_get,
 	.hop_key_hash		= li_op_key_hash,
 	.hop_key_cmp		= li_op_key_cmp,
+	.hop_rec_hash		= li_op_rec_hash,
 	.hop_rec_addref		= li_op_rec_addref,
 	.hop_rec_decref		= li_op_rec_decref,
 	.hop_rec_free		= li_op_rec_free,
@@ -146,22 +144,12 @@ crt_rm_link2ptr(d_list_t *rlink)
 	return container_of(rlink, struct crt_rank_mapping, rm_link);
 }
 
-static int
-rm_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
-{
-	struct crt_rank_mapping *rm = crt_rm_link2ptr(rlink);
-
-	*key_pp = (void *)&rm->rm_key;
-	return sizeof(rm->rm_key);
-}
-
 static uint32_t
 rm_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return (unsigned int)(*(const uint32_t *)key %
-		(1U << CRT_LOOKUP_CACHE_BITS));
+	return *(const uint32_t *)key % (1U << CRT_LOOKUP_CACHE_BITS);
 }
 
 static bool
@@ -173,6 +161,14 @@ rm_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
 	return rm->rm_key == *(d_rank_t *)key;
+}
+
+static uint32_t
+rm_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct crt_rank_mapping *rm = crt_rm_link2ptr(link);
+
+	return rm->rm_key % (1U << CRT_LOOKUP_CACHE_BITS);
 }
 
 static void
@@ -216,22 +212,12 @@ crt_ui_link2ptr(d_list_t *rlink)
 	return container_of(rlink, struct crt_uri_item, ui_link);
 }
 
-static int
-ui_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
-{
-	struct crt_uri_item *ui = crt_ui_link2ptr(rlink);
-
-	*key_pp = (void *)&ui->ui_rank;
-	return sizeof(ui->ui_rank);
-}
-
 static uint32_t
 ui_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return (unsigned int)(*(const uint32_t *)key %
-		(1U << CRT_LOOKUP_CACHE_BITS));
+	return *(const uint32_t *)key % (1U << CRT_LOOKUP_CACHE_BITS);
 }
 
 static bool
@@ -243,6 +229,14 @@ ui_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
 	return ui->ui_rank == *(d_rank_t *)key;
+}
+
+static uint32_t
+ui_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct crt_uri_item *ui = crt_ui_link2ptr(link);
+
+	return ui->ui_rank % (1U << CRT_LOOKUP_CACHE_BITS);
 }
 
 static void
@@ -377,18 +371,18 @@ ui_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t uri_lookup_table_ops = {
-	.hop_key_get		= ui_op_key_get,
 	.hop_key_hash		= ui_op_key_hash,
 	.hop_key_cmp		= ui_op_key_cmp,
+	.hop_rec_hash		= ui_op_rec_hash,
 	.hop_rec_addref		= ui_op_rec_addref,
 	.hop_rec_decref		= ui_op_rec_decref,
 	.hop_rec_free		= ui_op_rec_free,
 };
 
 static d_hash_table_ops_t rank_mapping_ops = {
-	.hop_key_get		= rm_op_key_get,
 	.hop_key_hash		= rm_op_key_hash,
 	.hop_key_cmp		= rm_op_key_cmp,
+	.hop_rec_hash		= rm_op_rec_hash,
 	.hop_rec_addref		= rm_op_rec_addref,
 	.hop_rec_decref		= rm_op_rec_decref,
 	.hop_rec_free		= rm_op_rec_free,

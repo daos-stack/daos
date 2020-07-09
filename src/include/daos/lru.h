@@ -39,6 +39,8 @@ struct daos_llink_ops {
 	/** Mandatory: Compare keys callback for LRU */
 	bool	(*lop_cmp_keys)(const void *key, unsigned int ksize,
 				struct daos_llink *link);
+	/** Mandatory: Get key's hash callback for LRU */
+	uint32_t (*lop_rec_hash)(struct daos_llink *link);
 	/** Optional print_key function for debugging */
 	void	(*lop_print_key)(void *key, unsigned int ksize);
 };

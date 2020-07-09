@@ -173,10 +173,20 @@ rdb_kvs_cmp_keys(const void *key, unsigned int ksize, struct daos_llink *llink)
 	return true;
 }
 
+static uint32_t
+rdb_kvs_rec_hash(struct daos_llink *llink)
+{
+	struct rdb_kvs *kvs = rdb_kvs_obj(llink);
+
+	return d_hash_string_u32((const char *)kvs->de_path.iov_buf,
+				 kvs->de_path.iov_len);
+}
+
 static struct daos_llink_ops rdb_kvs_cache_ops = {
 	.lop_alloc_ref	= rdb_kvs_alloc_ref,
 	.lop_free_ref	= rdb_kvs_free_ref,
-	.lop_cmp_keys	= rdb_kvs_cmp_keys
+	.lop_cmp_keys	= rdb_kvs_cmp_keys,
+	.lop_rec_hash	= rdb_kvs_rec_hash,
 };
 
 int

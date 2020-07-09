@@ -51,24 +51,13 @@ epi_link2ptr(d_list_t *rlink)
 	return container_of(rlink, struct crt_ep_inflight, epi_link);
 }
 
-static int
-epi_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
-{
-	struct crt_ep_inflight *epi = epi_link2ptr(rlink);
-
-	/* TODO: use global rank */
-	*key_pp = (void *)&epi->epi_ep.ep_rank;
-	return sizeof(epi->epi_ep.ep_rank);
-}
-
 static uint32_t
 epi_op_key_hash(struct d_hash_table *hhtab, const void *key,
 		unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return (unsigned int)(*(const uint32_t *)key %
-		(1U << CRT_EPI_TABLE_BITS));
+	return *(const uint32_t *)key % (1U << CRT_EPI_TABLE_BITS);
 }
 
 static bool
@@ -81,6 +70,14 @@ epi_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	/* TODO: use global rank */
 
 	return epi->epi_ep.ep_rank == *(d_rank_t *)key;
+}
+
+static uint32_t
+epi_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct crt_ep_inflight *epi = epi_link2ptr(link);
+
+	return epi->epi_ep.ep_rank % (1U << CRT_EPI_TABLE_BITS);
 }
 
 static void
@@ -105,9 +102,9 @@ epi_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t epi_table_ops = {
-	.hop_key_get		= epi_op_key_get,
 	.hop_key_hash		= epi_op_key_hash,
 	.hop_key_cmp		= epi_op_key_cmp,
+	.hop_rec_hash		= epi_op_rec_hash,
 	.hop_rec_addref		= epi_op_rec_addref,
 	.hop_rec_decref		= epi_op_rec_decref,
 	.hop_rec_free		= epi_op_rec_free,

@@ -71,6 +71,14 @@ lru_hop_key_cmp(struct d_hash_table *lr_htab, d_list_t *rlink,
 		return llink->ll_ops->lop_cmp_keys(key, ksize, llink);
 }
 
+static uint32_t
+lru_hop_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct daos_llink *llink = hash2lru_link(link);
+
+	return llink->ll_ops->lop_rec_hash(llink);
+}
+
 static void
 lru_hop_rec_free(struct d_hash_table *lr_htab, d_list_t *rlink)
 {
@@ -81,6 +89,7 @@ lru_hop_rec_free(struct d_hash_table *lr_htab, d_list_t *rlink)
 
 static d_hash_table_ops_t lru_ops = {
 	.hop_key_cmp		= lru_hop_key_cmp,
+	.hop_rec_hash		= lru_hop_rec_hash,
 	.hop_rec_addref		= lru_hop_rec_addref,
 	.hop_rec_decref		= lru_hop_rec_decref,
 	.hop_rec_free		= lru_hop_rec_free,
@@ -100,6 +109,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 
 	if (ops == NULL ||
 	    ops->lop_cmp_keys == NULL ||
+	    ops->lop_rec_hash  == NULL ||
 	    ops->lop_alloc_ref == NULL ||
 	    ops->lop_free_ref == NULL) {
 		D_ERROR("Error missing ops/mandatory-ops for LRU cache\n");
