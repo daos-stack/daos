@@ -37,6 +37,143 @@
 
 #include <gurt/common.h>
 
+/* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
+ * presence makes pselect() return EINTR in the dfuse_bg() function which
+ * is used to detect abnormal exit.
+ */
+static void
+noop_handler(int arg) {
+}
+
+static int bg_fd;
+
+/* Send a message to the foreground thread */
+static int
+dfuse_send_to_fg(int rc)
+{
+	int nfd;
+	int ret;
+
+	if (bg_fd == 0)
+		return -DER_SUCCESS;
+
+	DFUSE_LOG_INFO("Sending %d to fg", rc);
+
+	ret = write(bg_fd, &rc, sizeof(rc));
+
+	close(bg_fd);
+	bg_fd = 0;
+
+	if (ret != sizeof(rc))
+		return -DER_MISC;
+
+	/* If the return code is non-zero then that means there's an issue so
+	 * do not perform the rest of the operations in this function.
+	 */
+	if (rc != 0)
+		return -DER_SUCCESS;
+
+	ret = chdir("/");
+
+	nfd = open("/dev/null", O_RDWR);
+	if (nfd == -1)
+		return -DER_MISC;
+
+	dup2(nfd, STDIN_FILENO);
+	dup2(nfd, STDOUT_FILENO);
+	dup2(nfd, STDERR_FILENO);
+	close(nfd);
+
+	if (ret != 0)
+		return -DER_MISC;
+
+	DFUSE_LOG_INFO("Success");
+
+	return -DER_SUCCESS;
+}
+
+/* Optionally go into the background
+ *
+ * It's not possible to simply call daemon() here as if we do that after
+ * daos_init() then libfabric doesn't like it, and if we do it before
+ * then there are no reporting of errors.  Instead, roll our own where
+ * we create a socket pair, call fork(), and then communicate on the
+ * socket pair to allow the foreground process to stay around until
+ * the background process has completed.  Add in a check for SIGCHLD
+ * from the background in case of abnormal exit to avoid deadlocking
+ * the parent in this case.
+ */
+static int
+dfuse_bg(struct dfuse_info *dfuse_info)
+{
+	sigset_t pset;
+	fd_set read_set = {};
+	int err;
+	struct sigaction sa = {};
+	pid_t child_pid;
+	sigset_t sset;
+	int rc;
+	int di_spipe[2];
+
+	rc = pipe(&di_spipe[0]);
+	if (rc)
+		return 1;
+
+	sigemptyset(&sset);
+	sigaddset(&sset, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &sset, NULL);
+
+	child_pid = fork();
+	if (child_pid == -1)
+		return 1;
+
+	if (child_pid == 0) {
+		bg_fd = di_spipe[1];
+		return 0;
+
+	}
+
+	sa.sa_handler = noop_handler;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGCHLD, &sa, NULL);
+
+	sigemptyset(&pset);
+
+	FD_ZERO(&read_set);
+	FD_SET(di_spipe[0], &read_set);
+
+	errno = 0;
+	rc = pselect(di_spipe[0] + 1, &read_set, NULL, NULL, NULL, &pset);
+	err = errno;
+
+	if (err == EINTR) {
+		printf("Child process died without reporting failure\n");
+		exit(2);
+	}
+
+	if (FD_ISSET(di_spipe[0], &read_set)) {
+		ssize_t b;
+		int child_ret;
+
+		b = read(di_spipe[0], &child_ret, sizeof(child_ret));
+		if (b != sizeof(child_ret)) {
+			printf("Read incorrect data %zd\n", b);
+			exit(2);
+		}
+		if (child_ret) {
+			printf("Exiting %d %s\n", child_ret,
+				d_errstr(child_ret));
+			exit(-(child_ret + DER_ERR_GURT_BASE));
+		} else {
+			exit(0);
+		}
+	}
+
+	printf("Socket is not set\n");
+	exit(2);
+}
+
 static int
 ll_loop_fn(struct dfuse_info *dfuse_info)
 {
@@ -89,6 +226,9 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 	}
 
 	fuse_opt_free_args(args);
+
+	if (dfuse_send_to_fg(0) != -DER_SUCCESS)
+		goto cleanup;
 
 	rc = ll_loop_fn(dfuse_info);
 	fuse_session_unmount(dfuse_info->di_session);
@@ -250,10 +390,13 @@ main(int argc, char **argv)
 	}
 
 	if (!dfuse_info->di_foreground) {
-		rc = daemon(0, 0);
-		if (rc)
-			return daos_errno2der(rc);
+		rc = dfuse_bg(dfuse_info);
+		if (rc != 0) {
+			printf("Failed to background\n");
+			return 2;
+		}
 	}
+
 
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
@@ -292,11 +435,12 @@ main(int argc, char **argv)
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d", rc);
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() returned %d %s",
+		       rc, strerror(rc));
 	if (rc == 0) {
 		if (dfuse_info->di_pool) {
 			printf("UNS configured on mount point but pool provided\n");
-			exit(1);
+			D_GOTO(out_dfs, ret = -DER_INVAL);
 		}
 		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
 		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
@@ -320,10 +464,10 @@ main(int argc, char **argv)
 		}
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
-		D_GOTO(out_dfs, ret = rc);
+		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	} else {
 		/* Other errors from DUNS, it should have logged them already */
-		D_GOTO(out_dfs, ret = rc);
+		D_GOTO(out_dfs, ret = daos_errno2der(rc));
 	}
 
 	if (uuid_is_null(dfp->dfp_pool) == 0) {
@@ -423,16 +567,19 @@ out_svcl:
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_MUTEX_DESTROY(&dfuse_info->di_lock);
-	D_FREE(dfuse_info);
 	daos_fini();
 out_debug:
+	D_FREE(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();
 out:
+	dfuse_send_to_fg(ret);
+
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.
 	 */
+
 	if (ret)
 		return -(ret + DER_ERR_GURT_BASE);
 	else

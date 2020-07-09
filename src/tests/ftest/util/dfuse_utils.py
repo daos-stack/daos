@@ -236,13 +236,15 @@ class Dfuse(DfuseCommand):
                     error_hosts))
 
         if check:
+            # Dfuse will block in the command for the mount to complete, even
+            # if run in background mode so it should be possible to start using
+            # it immediately after the command returns.
             if not self.check_running(fail_on_error=False):
-                self.log.info('Waiting five seconds for dfuse to start')
-                time.sleep(5)
+                self.log.info('Waiting two seconds for dfuse to start')
+                time.sleep(2)
                 if not self.check_running(fail_on_error=False):
-                    self.log.info('Waiting twenty five seconds for dfuse \
-                        to start')
-                    time.sleep(25)
+                    self.log.info('Waiting five seconds for dfuse to start')
+                    time.sleep(5)
                     self.check_running()
 
     def check_running(self, fail_on_error=True):
