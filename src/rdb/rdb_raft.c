@@ -1854,10 +1854,6 @@ rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 	uint64_t		index;
 	int			rc;
 
-	/*
-	 * Do not yield before calling raft_recv_entry(), so that the index
-	 * assertion below will hold.
-	 */
 	index = raft_get_current_idx(db->d_raft) + 1;
 	if (result != NULL) {
 		rc = rdb_raft_register_result(db, index, result);
