@@ -439,8 +439,14 @@ rdb_campaign(struct rdb *db)
 bool
 rdb_is_leader(struct rdb *db, uint64_t *term)
 {
+	int is_leader;
+
+	ABT_mutex_lock(db->d_raft_mutex);
 	*term = raft_get_current_term(db->d_raft);
-	return raft_is_leader(db->d_raft);
+	is_leader = raft_is_leader(db->d_raft);
+	ABT_mutex_unlock(db->d_raft_mutex);
+
+	return is_leader;
 }
 
 /**
@@ -458,13 +464,18 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 	raft_node_t	       *node;
 	struct rdb_raft_node   *dnode;
 
+	ABT_mutex_lock(db->d_raft_mutex);
 	node = raft_get_current_leader_node(db->d_raft);
-	if (node == NULL)
+	if (node == NULL) {
+		ABT_mutex_unlock(db->d_raft_mutex);
 		return -DER_NONEXIST;
+	}
 	dnode = raft_node_get_udata(node);
 	D_ASSERT(dnode != NULL);
 	*term = raft_get_current_term(db->d_raft);
 	*rank = dnode->dn_rank;
+	ABT_mutex_unlock(db->d_raft_mutex);
+
 	return 0;
 }
 

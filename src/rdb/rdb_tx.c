@@ -39,7 +39,7 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
-/* Check leadership locally. */
+/* Check leadership locally. Caller must hold d_raft_mutex lock. */
 static inline int
 rdb_tx_leader_check(struct rdb_tx *tx)
 {
@@ -71,6 +71,7 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 	struct rdb_tx	t = {};
 	int		rc;
 
+	ABT_mutex_lock(db->d_raft_mutex);
 	if (term == RDB_NIL_TERM)
 		term = raft_get_current_term(db->d_raft);
 	/*
@@ -86,6 +87,7 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 	 * valid results.
 	 */
 	rc = rdb_raft_verify_leadership(db);
+	ABT_mutex_unlock(db->d_raft_mutex);
 	if (rc != 0)
 		return rc;
 	rdb_get(db);
@@ -112,12 +114,15 @@ rdb_tx_commit(struct rdb_tx *tx)
 	/* Don't fail query-only TXs for leader checks. */
 	if (tx->dt_entry == NULL)
 		return 0;
+
+	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
 	rc = rdb_tx_leader_check(tx);
 	if (rc != 0)
 		return rc;
 
 	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
 				   &result);
+	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
 	if (rc != 0)
 		return rc;
 	return result;
@@ -329,7 +334,9 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 			return -DER_INVAL;
 	}
 
+	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
 	rc = rdb_tx_leader_check(tx);
+	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
 	if (rc != 0)
 		return rc;
 
@@ -886,7 +893,9 @@ rdb_tx_query_pre(struct rdb_tx *tx, const rdb_path_t *path,
 {
 	int rc;
 
+	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
 	rc = rdb_tx_leader_check(tx);
+	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
 	if (rc != 0)
 		return rc;
 	return rdb_kvs_lookup(tx->dt_db, path, tx->dt_db->d_applied,
