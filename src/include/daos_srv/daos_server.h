@@ -352,6 +352,34 @@ enum {
  */
 int sched_req_space_check(struct sched_request *req);
 
+static inline bool
+dss_ult_exiting(struct sched_request *req)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+
+	return dss_xstream_exiting(dx) || sched_req_is_aborted(req);
+}
+
+/*
+ * Yield function regularly called by long-run ULTs.
+ *
+ * \param[in] req	Sched request.
+ *
+ * \retval		True:  Abort ULT;
+ *			False: Yield then continue;
+ */
+static inline bool
+dss_ult_yield(void *arg)
+{
+	struct sched_request	*req = (struct sched_request *)arg;
+
+	if (dss_ult_exiting(req))
+		return true;
+
+	sched_req_yield(req);
+	return false;
+}
+
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
@@ -792,14 +820,6 @@ enum dss_media_error_type {
 };
 
 void dss_init_state_set(enum dss_init_state state);
-
-/* default credits */
-#define	DSS_GC_CREDS	256
-
-/**
- * Run GC for an opened pool, it run GC for all pools if @poh is DAOS_HDL_INVAL
- */
-void dss_gc_run(daos_handle_t poh, int credits);
 
 int notify_bio_error(int media_err_type, int tgt_id);
 

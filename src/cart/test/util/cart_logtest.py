@@ -110,6 +110,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'mgmt_svc_name_cb': ('s'),
                      'pool_prop_default_copy': ('entry_def->dpe_str'),
                      'pool_iv_prop_g2l': ('prop_entry->dpe_str'),
+                     'pool_iv_value_alloc_internal': ('sgl->sg_iovs[0].iov_buf'),
                      'daos_prop_entry_copy': ('entry_dup->dpe_str'),
                      'daos_prop_dup': ('entry_dup->dpe_str'),
                      'auth_cred_to_iov': ('packed')}

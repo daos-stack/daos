@@ -135,3 +135,20 @@ func ParseNumberList(stringList string, output interface{}) error {
 	}
 	return nil
 }
+
+// DedupeStringSlice is responsible for returning a slice based on
+// the input with any duplicates removed.
+func DedupeStringSlice(in []string) []string {
+	keys := make(map[string]struct{})
+
+	for _, el := range in {
+		keys[el] = struct{}{}
+	}
+
+	out := make([]string, 0, len(keys))
+	for key := range keys {
+		out = append(out, key)
+	}
+
+	return out
+}
