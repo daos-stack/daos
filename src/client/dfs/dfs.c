@@ -3744,7 +3744,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_PUNCH;
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_EXIST, DLOG_INFO, DLOG_ERR,
 			 "Failed to punch extended attribute '%s' " DF_RC "\n",
 			 name, DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
