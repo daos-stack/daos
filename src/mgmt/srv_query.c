@@ -105,8 +105,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_AGGREGATE, tgt_id, 0,
+	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_MISC, tgt_id, 0,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -440,8 +439,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	/* TODO Add a new DSS_ULT_BIO tag */
-	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_ULT_AGGREGATE,
+	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_ULT_MISC,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);

@@ -141,7 +141,7 @@ dtx_setup(void)
 {
 	int	rc;
 
-	rc = dss_ult_create_all(dtx_batched_commit, NULL, DSS_ULT_GC, true);
+	rc = dss_ult_create_all(dtx_batched_commit, NULL, DSS_ULT_MISC, true);
 	if (rc != 0)
 		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n",
 			DP_RC(rc));
