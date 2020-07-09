@@ -35,4 +35,4 @@ pool:
     mode: 146
     name: daos_server
     control_method: dmg
-    number_of_pools: 100
+    number_of_pools: 40

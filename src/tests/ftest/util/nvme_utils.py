@@ -62,8 +62,8 @@ def get_device_ids(dmg, servers):
         dmg.hostlist = host
         try:
             result = dmg.run()
-        except CommandFailure as error:
-            raise "dmg command failed: {}".format(error)
+        except CommandFailure as _error:
+            raise "dmg command failed for list-devices"
         drive_list = []
         for line in result.stdout.split('\n'):
             if 'UUID' in line:
@@ -348,7 +348,7 @@ class ServerFillUp(IorTestBase):
 
         #Set NVMe device faulty if it's set
         if self.set_faulty_device:
-            time.sleep(20)
+            time.sleep(60)
             #Set the device faulty
             self.set_device_faulty()
 
@@ -367,5 +367,5 @@ class ServerFillUp(IorTestBase):
         try:
             self.dmg.hostlist = self.hostlist_servers
             self.dmg.storage_query_nvme_health()
-        except CommandFailure as error:
-            self.fail("dmg nvme-health failed {}".format(error))
+        except CommandFailure as _error:
+            self.fail("dmg nvme-health failed")
