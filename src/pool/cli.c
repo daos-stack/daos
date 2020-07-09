@@ -1142,6 +1142,16 @@ dc_pool_add(tse_task_t *task)
 }
 
 int
+dc_pool_drain(tse_task_t *task)
+{
+	daos_pool_update_t *args;
+
+	args = dc_task_get_args(task);
+
+	return dc_pool_update_internal(task, args, POOL_DRAIN);
+}
+
+int
 dc_pool_exclude_out(tse_task_t *task)
 {
 	daos_pool_update_t *args;
