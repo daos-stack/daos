@@ -209,7 +209,7 @@ class OSAOnlineReintegration(TestWithServers):
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank, t_string)
             self.log.info(output)
-            time.sleep(60)
+            time.sleep(70)
 
             pver_exclude = self.get_pool_version()
             self.log.info("Pool Version after exclude %s", pver_exclude)
@@ -220,7 +220,7 @@ class OSAOnlineReintegration(TestWithServers):
                                                        rank,
                                                        t_string)
             self.log.info(output)
-            time.sleep(60)
+            time.sleep(70)
 
             pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
