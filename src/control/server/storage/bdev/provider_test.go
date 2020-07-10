@@ -116,7 +116,7 @@ func TestBdevPrepare(t *testing.T) {
 				ResetOnly: true,
 			},
 			mbc: &MockBackendConfig{
-				PrepareErr: errors.New("we shouldnt get this far"),
+				PrepareErr: errors.New("we shouldn't get this far!"),
 			},
 			expRes: &PrepareResponse{},
 		},
