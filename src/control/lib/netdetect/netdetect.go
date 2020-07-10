@@ -289,13 +289,7 @@ func initDeviceScan() (DeviceScan, error) {
 			errors.New("hwloc_get_type_depth returned invalid value")
 	}
 	deviceScanCfg.depth = int(depth)
-
 	deviceScanCfg.numObj = uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	if deviceScanCfg.numObj == 0 {
-		defer cleanUp(deviceScanCfg.topology)
-		return deviceScanCfg,
-			errors.New("hwloc_get_nbobjs_by_depth returned invalid value: no OS devices found")
-	}
 
 	// Create the list of all the valid network device names
 	systemDeviceNames, err := GetDeviceNames()
@@ -452,8 +446,6 @@ func getNodeBestFit(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // In some configurations, the number of NUMA nodes found is 0.  In that case,
 // the NUMA ID will be considered 0.
 func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, error) {
-	var i uint
-
 	if node == nil {
 		return 0, errors.New("invalid node provided")
 	}
@@ -476,16 +468,16 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 		return 0, errors.New("unable to find non-io ancestor node for device")
 	}
 
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	if numObj == 0 {
+	numNuma := numNUMANodes(topology)
+	if numNuma == 0 {
 		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 		return 0, nil
 	}
 
-	log.Debugf("There are %d NUMA nodes.", numObj)
+	log.Debugf("There are %d NUMA nodes.", numNuma)
 
-	for i = 0; i < numObj; i++ {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
+	for i := 0; i < numNuma; i++ {
 		numanode := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			// We don't want the lack of NUMA information to be an error.
@@ -504,40 +496,42 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	return 0, nil
 }
 
+func numNUMANodes(topology C.hwloc_topology_t) int {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := int(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
+	return numObj
+}
+
 // NumaAware verifies that NUMA data is available to process
 func NumaAware() (bool, error) {
-	deviceScanCfg, err := initDeviceScan()
+	var deviceScanCfg DeviceScan
+
+	topology, err := initLib()
 	if err != nil {
-		return false, err
+		return false, errors.Errorf("unable to initialize hwloc library: %v", err)
 	}
+	deviceScanCfg.topology = topology
 	defer cleanUp(deviceScanCfg.topology)
 
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-
-	return numObj > 0, nil
+	return numNUMANodes(topology) > 0, nil
 }
 
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
 // It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
 func GetNUMASocketIDForPid(pid int32) (int, error) {
-	var i uint
-
 	var deviceScanCfg DeviceScan
 
 	topology, err := initLib()
 	if err != nil {
-		log.Debugf("Error from initLib %v", err)
-		return 0, errors.New("unable to initialize hwloc library")
+		return 0, errors.Errorf("unable to initialize hwloc library: %v", err)
 	}
 	deviceScanCfg.topology = topology
 
 	defer cleanUp(deviceScanCfg.topology)
 
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-	if numObj == 0 {
+	numNodes := numNUMANodes(deviceScanCfg.topology)
+	if numNodes == 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
@@ -552,7 +546,8 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 	defer C.hwloc_bitmap_free(nodeset)
 	C.hwloc_cpuset_to_nodeset(deviceScanCfg.topology, cpuset, nodeset)
 
-	for i = 0; i < numObj; i++ {
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	for i := 0; i < numNodes; i++ {
 		numanode := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			return 0, errors.Errorf("NUMA Node data is unavailable.")
@@ -739,6 +734,16 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		}, nil
 	}
 
+	// If the system isn't NUMA aware, use numa 0
+	if numNUMANodes(deviceScanCfg.topology) == 0 {
+		return DeviceAffinity{
+			DeviceName: deviceScanCfg.targetDevice,
+			CPUSet:     "0x0",
+			NodeSet:    "0x1",
+			NUMANode:   0,
+		}, nil
+	}
+
 	switch getLookupMethod(deviceScanCfg) {
 	case direct:
 		node = getNodeDirect(deviceScanCfg)
@@ -750,8 +755,10 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		node = getNodeBestFit(deviceScanCfg)
 	}
 
+	// At this point, we know the topology is NUMA aware.
+	// Returning a default device affinity of NUMA 0 would no longer be reasonable.
 	if node == nil {
-		return DeviceAffinity{}, errors.Errorf("unable to find a system device matching: %s", deviceScanCfg.targetDevice)
+		return DeviceAffinity{}, errors.Errorf("cannot determine device affinity because the device was not found in the topology: %s", deviceScanCfg.targetDevice)
 	}
 
 	ancestorNode := C.hwloc_get_non_io_ancestor_obj(deviceScanCfg.topology, node)
@@ -1075,6 +1082,12 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	}
 	defer cleanUp(deviceScanCfg.topology)
 
+	// If the system isn't NUMA aware, skip validation
+	if numNUMANodes(deviceScanCfg.topology) == 0 {
+		log.Debugf("The system is not NUMA aware.  Device/NUMA validation skipped.\n")
+		return nil
+	}
+
 	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
 		return errors.Errorf("device: %s is an invalid device name", device)
 	}
@@ -1084,6 +1097,7 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	if err != nil {
 		return err
 	}
+
 	if deviceAffinity.NUMANode != numaNode {
 		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
 	}

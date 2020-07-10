@@ -261,11 +261,20 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(CommandFailure)
-    def set_property(self):
+    def set_property(self, prop_name=None, prop_value=None):
         """Set Property.
 
         It sets property for a given pool uuid using
         dmg.
+
+        Args:
+            prop_name (str, optional): pool property name. Defaults to
+                None.
+            prop_value (str, optional): value to be set for the property.
+                Defaults to None.
+
+        Returns:
+            None
 
         """
         if self.pool:
@@ -273,8 +282,12 @@ class TestPool(TestDaosApiBase):
 
             if self.control_method.value == self.USE_DMG and self.dmg:
                 # set-prop for given pool using dmg
-                self.dmg.pool_set_prop(self.uuid, self.prop_name,
-                                       self.prop_value)
+                if prop_name is not None and prop_value is not None:
+                    self.dmg.pool_set_prop(self.uuid, prop_name,
+                                           prop_value)
+                else:
+                    self.dmg.pool_set_prop(self.uuid, self.prop_name,
+                                           self.prop_value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
