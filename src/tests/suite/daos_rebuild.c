@@ -1121,7 +1121,10 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* Continue rebuild */
 	daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
-	sleep(5);
+	/* Sleep long enough to make sure the 2nd rebuild caused by 2nd kill is
+	 * triggered.
+	 */
+	sleep(15);
 	if (arg->myrank == 0)
 		test_rebuild_wait(&arg, 1);
 
@@ -1165,7 +1168,7 @@ rebuild_fail_all_replicas(void **state)
 		}
 	}
 
-	sleep(5);
+	sleep(15);
 	if (arg->myrank == 0)
 		test_rebuild_wait(&arg, 1);
 

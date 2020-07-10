@@ -506,7 +506,7 @@ enum {
 static int
 unpack_csum(d_iov_t *csum_iov, struct dcs_iod_csums *iod_csums)
 {
-	if (csum_iov != NULL) {
+	if (csum_iov != NULL && csum_iov->iov_buf) {
 		/** unpack csums */
 		struct dcs_csum_info *tmp_csum_info;
 
@@ -602,7 +602,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
 			}
 
 			/** will be freed with iod.recxs in clear_top_iod */
-			if (csum_iov != NULL) {
+			if (csum_iov != NULL && csum_iov->iov_buf) {
 				rc = grow_array((void **)&iod_csums->ic_data,
 						sizeof(*iod_csums->ic_data),
 						*recxs_cap, cap);
@@ -877,7 +877,7 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data, d_iov_t *csum_iov,
 	D_ASSERT(kds->kd_val_type == OBJ_ITER_DKEY ||
 		 kds->kd_val_type == OBJ_ITER_AKEY);
 
-	if (csum_iov != NULL) {
+	if (csum_iov != NULL && csum_iov->iov_buf) {
 		struct dcs_csum_info *csum_info;
 
 		/** keys aren't stored or needed by the I/O (they will have
@@ -963,8 +963,7 @@ enum_unpack_punched_ephs(daos_key_desc_t *kds, char *data,
 static int
 enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 		  struct dss_enum_unpack_io *io, d_iov_t *csum_iov,
-		  dss_enum_unpack_cb_t cb,
-		  void *cb_arg)
+		  dss_enum_unpack_cb_t cb, void *cb_arg)
 {
 	daos_iod_t	*iod;
 	daos_key_t	iod_akey;

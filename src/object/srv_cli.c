@@ -59,7 +59,7 @@ dsc_obj_retry_cb(tse_task_t *task, void *arg)
 		return rc;
 	}
 
-	D_DEBUG(DB_TRACE, "retry task %p\n", task);
+	D_DEBUG(DB_REBUILD, "retry task %p\n", task);
 	rc = dc_task_resched(task);
 	if (rc != 0) {
 		D_ERROR("Failed to re-init task (%p)\n", task);
