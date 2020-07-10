@@ -54,9 +54,8 @@ message SystemStopReq {
 	bool prep = 1; // indicates that the prep stage should be performed
 	bool kill = 2; // indicates that the kill stage should be performed
 	bool force = 3;
-	// repeated uint32 ranks = 4; // system ranks to stop
-	string ranks = 4; // rankset to query
-	string hosts = 5; // hostset to query
+	string ranks = 5; // rankset to query
+	string hosts = 6; // hostset to query
 }
 
 // SystemPrepShutdownReq supplies system shutdown parameters.
@@ -75,7 +74,6 @@ message SystemStopResp {
 
 // SystemResetFormatReq supplies system reset format parameters.
 message SystemResetFormatReq {
-	// repeated uint32 ranks = 1; // system ranks to reset format
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }
@@ -90,7 +88,6 @@ message SystemResetFormatResp {
 
 // SystemStartReq supplies system restart parameters.
 message SystemStartReq {
-	// repeated uint32 ranks = 1; // system ranks to start
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }
@@ -105,7 +102,6 @@ message SystemStartResp {
 
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
-	// repeated uint32 ranks = 1; // system ranks to query
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 }

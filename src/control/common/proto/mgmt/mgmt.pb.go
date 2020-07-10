@@ -27,7 +27,6 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 // Generic request indicating which ranks to operate on.
 // Used in gRPC fanout to operate on hosts with multiple ranks.
 type RanksReq struct {
-	// repeated uint32 ranks = 1;
 	Force                bool     `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
 	Ranks                string   `protobuf:"bytes,4,opt,name=ranks,proto3" json:"ranks,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`

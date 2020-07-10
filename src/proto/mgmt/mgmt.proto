@@ -33,7 +33,6 @@ import "acl.proto"; // ACL-related requests
 // Generic request indicating which ranks to operate on.
 // Used in gRPC fanout to operate on hosts with multiple ranks.
 message RanksReq {
-	// repeated uint32 ranks = 1;
 	bool force = 3; // force operation
 	string ranks = 4; // rankset to operate over
 }

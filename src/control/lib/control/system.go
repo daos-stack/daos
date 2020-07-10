@@ -25,6 +25,7 @@ package control
 
 import (
 	"context"
+	"strings"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
@@ -35,6 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -177,10 +179,6 @@ type SystemResetFormatResp struct {
 // mgmt_system.go method of the same name. The triggered method uses the control
 // API to fanout to (selection or all) gRPC servers listening as part of the
 // DAOS system and retrieve results from the selected ranks hosted there.
-//
-// TODO: supply rank list to storage format so we can selectively reformat ranks
-//       on a host, remove any ranks that fail SystemResetFormat() from list before
-//       passing to StorageFormat()
 func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *SystemResetFormatReq) (*StorageFormatResp, error) {
 	pbReq := new(ctlpb.SystemResetFormatReq)
 	if err := convert.Types(resetReq, pbReq); err != nil {
@@ -207,8 +205,30 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 		return nil, err
 	}
 
-	if len(resetRankErrors) > 0 {
+	if len(resetRankErrors) > 0 || resetResp.AbsentHosts != "" || resetResp.AbsentRanks != "" {
 		reformatResp := new(StorageFormatResp)
+
+		if resetResp.AbsentHosts != "" {
+			hostSet, err := hostlist.CreateSet(resetResp.AbsentHosts)
+			if err != nil {
+				return nil, errors.Wrapf(err, "reset format absent hosts")
+			}
+			for _, addr := range strings.Split(hostSet.DerangedString(), ",") {
+				reformatResp.HostErrorsResp.addHostError(addr,
+					errors.New("unknown host"))
+			}
+		}
+
+		if resetResp.AbsentRanks != "" {
+			rankSet, err := system.CreateRankSet(resetResp.AbsentRanks)
+			if err != nil {
+				return nil, errors.Wrapf(err, "reset format absent ranks")
+			}
+			reformatResp.HostErrorsResp.addHostError("0.0.0.0",
+				errors.Errorf("unknown %s: %s",
+					english.Plural(rankSet.Count(), "rank", "ranks"),
+					rankSet))
+		}
 
 		// create "X ranks failed: err..." error entries for each host address
 		// a single host maybe associated with multiple error entries in HEM
@@ -228,7 +248,6 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 	}
 
 	// all requested ranks in AwaitFormat state, trigger format
-	// TODO: remove failed ranks from StorageFormat() rank list
 	formatReq := &StorageFormatReq{Reformat: true}
 	formatReq.SetHostList(hostList)
 

@@ -145,6 +145,26 @@ func TestDmg_SystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"system stop with multiple hosts",
+			"system stop --rank-hosts bar9,foo-[0-100]",
+			strings.Join([]string{
+				`*control.SystemStopReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","Prep":true,"Kill":true,"Force":false}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system stop with bad hostlist",
+			"system stop --rank-hosts bar9,foo-[0-100],123",
+			"",
+			errors.New(`invalid hostname "123"`),
+		},
+		{
+			"system stop with both hosts and ranks specified",
+			"system stop --rank-hosts bar9,foo-[0-100] --ranks 0,2,fo,,4-8",
+			"",
+			errors.New("--ranks and --rank-hosts options cannot be set together"),
+		},
+		{
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
@@ -167,6 +187,26 @@ func TestDmg_SystemCommands(t *testing.T) {
 				`*control.SystemStartReq-{"HostList":null,"Ranks":"0-1,4","Hosts":""}`,
 			}, " "),
 			nil,
+		},
+		{
+			"system start with multiple hosts",
+			"system start --rank-hosts bar9,foo-[0-100]",
+			strings.Join([]string{
+				`*control.SystemStartReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system start with bad hostlist",
+			"system start --rank-hosts bar9,foo-[0-100],123",
+			"",
+			errors.New(`invalid hostname "123"`),
+		},
+		{
+			"system start with both hosts and ranks specified",
+			"system start --rank-hosts bar9,foo-[0-100] --ranks 0,2,fo,,4-8",
+			"",
+			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
 			"leader query",
