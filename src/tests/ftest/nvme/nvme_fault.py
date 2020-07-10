@@ -52,12 +52,13 @@ class NvmeFault(ServerFillUp):
         self.set_faulty_device = True
 
     def test_nvme_fault(self):
-        """
+        """Jira ID: DAOS-4722.
+
         Test Description: Test NVMe disk fault.
         Use Case: Create the large size of pool and start fill up the pool.
                   while IO is in progress remove single/multiple disks from
                   single/multiple servers
 
-        :avocado: tags=all,hw,medium,nvme,ib2,nvme_fault
+        :avocado: tags=all,hw,medium,nvme,ib2,nvme_fault,full_regression
         """
         self.start_ior_load()

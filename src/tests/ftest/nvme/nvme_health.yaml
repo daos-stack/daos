@@ -4,6 +4,8 @@ hosts:
   test_servers:
     - server-A
     - server-B
+  test_clients:
+    - client-C  
 timeout: 900
 server_config:
   servers_per_host: 2

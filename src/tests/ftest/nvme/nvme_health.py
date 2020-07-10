@@ -34,15 +34,15 @@ class NvmeHealth(ServerFillUp):
     :avocado: recursive
     """
     def test_monitor_for_large_pools(self):
-        """
+        """Jira ID: DAOS-4722.
+
         Test Description: Test Health monitor for large number of pools.
-        Use Case: This tests smd's following functions: nvme_list_streams,
-                  nvme_get_pool, nvme_set_pool_info, nvme_add_pool,
-                  nvme_get_device, nvme_set_device_status,
-                  nvme_add_stream_bond, nvme_get_stream_bond
+        Use Case: This tests will create the 40 number of pools and verify the
+                  dmg list-pools, device-health and nvme-health works for all
+                  pools.
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=nvme_health,nvme_health_large_pools
+        :avocado: tags=nvme_health
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches
@@ -71,7 +71,7 @@ class NvmeHealth(ServerFillUp):
             self.server_managers[0].get_config_value("allow_insecure"),
             "dmg.insecure")
 
-        #Get Pool query for SMD
+        #List all pools
         self.dmg.set_sub_command("storage")
         self.dmg.sub_command_class.set_sub_command("query")
         self.dmg.sub_command_class.sub_command_class.\
@@ -91,7 +91,7 @@ class NvmeHealth(ServerFillUp):
         # Get the device ID
         device_ids = get_device_ids(self.dmg, self.hostlist_servers)
 
-        #Get the device states
+        # Get the device health
         for host in device_ids:
             self.dmg.hostlist = host
             for _dev in device_ids[host]:
@@ -103,12 +103,13 @@ class NvmeHealth(ServerFillUp):
                     self.fail("device {} on host {} is not NORMAL"
                               .format(_dev, host))
 
-        #Check nvme-health command works
+        # Get the nvme-health
         try:
             self.dmg.storage_query_nvme_health()
         except CommandFailure as error:
             self.fail("dmg nvme-health failed {}".format(error))
 
+        # Destroy the pools
         print('Pool Destroy')
         for pool in pools:
             pool.destroy()
