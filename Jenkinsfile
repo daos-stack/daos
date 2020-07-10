@@ -1005,27 +1005,12 @@ pipeline {
                     }
                     post {
                       always {
-                            // https://issues.jenkins-ci.org/browse/JENKINS-58952
-                            // label is at the end
-                            // sh label: "Collect artifacts and tear down",
-                            //   script '''set -ex
-                            sh script: 'ci/unit/test_post_always.sh memcheck',
-                               label: "Collect artifacts and tear down"
-                            archiveArtifacts artifacts: 'run_test_memcheck.sh/**'
-                            publishValgrind (
-                                    failBuildOnInvalidReports: true,
-                                    failBuildOnMissingReports: true,
-                                    failThresholdDefinitelyLost: '0',
-                                    failThresholdInvalidReadWrite: '0',
-                                    failThresholdTotal: '0',
-                                    pattern: 'run_test_memcheck.sh/*memcheck.xml',
-                                    publishResultsForAbortedBuilds: false,
-                                    publishResultsForFailedBuilds: true,
-                                    sourceSubstitutionPaths: '',
-                                    unstableThresholdDefinitelyLost: '0',
-                                    unstableThresholdInvalidReadWrite: '0',
-                                    unstableThresholdTotal: '0'
-                            )
+                            unitTestPost
+                                always_script: 'ci/unit/test_post_always.sh',
+                                vlgrind: 'memcheck',
+                                artifacts: ['run_test_memcheck.sh/*',
+                                            'vm_test/**'],
+                                valgrind_pattern: 'run_test_memcheck.sh/*memcheck.xml'
                         }
                     }
                 } // End run_test.sh with memcheck stage
