@@ -34,9 +34,9 @@ import (
 	"sync"
 	"time"
 
+	raftbadger "github.com/bbva/raft-badger"
 	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
-	raftboltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
@@ -353,11 +353,13 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 	}
 
 	sysDBPath := filepath.Join(db.cfg.RaftDir, sysDBFile)
-	boltDB, err := raftboltdb.NewBoltStore(sysDBPath)
+	bdb, err := raftbadger.New(raftbadger.Options{
+		Path: sysDBPath,
+	})
 	if err != nil {
 		return err
 	}
-	ra, err := raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, transport)
+	ra, err := raft.NewRaft(rc, (*fsm)(db), bdb, bdb, snaps, transport)
 	if err != nil {
 		return err
 	}

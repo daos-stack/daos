@@ -1,0 +1,47 @@
+language: go
+
+# Only the last two Go releases are supported by the Go team with security
+# updates. Any versions older than that should be considered deprecated.
+# Don't bother testing with them. tip builds your code with the latest
+# development version of Go. This can warn you that your code will break
+# in the next version of Go. Don't worry! Later we declare that test runs
+# are allowed to fail on Go tip.
+
+# https://github.com/travis-ci/travis-ci/issues/9247
+go:
+  - "1.13"
+  - "1.14"
+env:
+  - GO111MODULE=on
+
+# https://docs.travis-ci.com/user/languages/go/#Go-Import-Path
+go_import_path: github.com/bbva/raft-badger
+
+install: true
+
+matrix:
+  allow_failures:
+    - go: master
+  fast_finish: true
+
+# Don't email me the results of the test runs.
+notifications:
+  email: false
+
+before_script:
+  - go mod download
+
+script:
+  - go test -v -coverprofile=coverage.txt -covermode=atomic ./...
+  - go vet -composites=false ./...
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
+
+deploy:
+  - provider: releases
+    api_key: $GITHUB_TOKEN
+    skip_cleanup: true
+    on:
+      tags: true
+      condition: $TRAVIS_OS_NAME = linux
