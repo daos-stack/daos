@@ -217,3 +217,8 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 
 	return w.Err
 }
+
+func printScmModule(module *storage.ScmModule, out io.Writer, opts ...control.PrintConfigOption) error {
+	_, err := fmt.Fprintf(out, "%s\n", module.String())
+	return err
+}
