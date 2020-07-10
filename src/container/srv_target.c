@@ -59,21 +59,11 @@
  */
 #define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
-static inline bool
-cont_aggregate_yield(void *arg)
-{
-	struct sched_request	*req = (struct sched_request *)arg;
-
-	if (sched_req_is_aborted(req))
-		return true;
-
-	sched_req_yield(req);
-	return false;
-}
-
 static inline int
 cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 {
+	int	rc;
+
 	/*
 	 * Avoid calling into vos_aggregate() when aborting aggregation
 	 * on ds_cont_child purging.
@@ -81,8 +71,12 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	D_ASSERT(cont->sc_agg_req != NULL);
 	if (sched_req_is_aborted(cont->sc_agg_req))
 		return 1;
-	return vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
-			     cont_aggregate_yield, (void *)cont->sc_agg_req);
+
+	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
+			   (void *)cont->sc_agg_req);
+	/* Wake up GC ULT */
+	sched_req_wakeup(cont->sc_pool->spc_gc_req);
+	return rc;
 }
 
 static bool
@@ -167,6 +161,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 
 	if (epoch_min > epoch_max) {
 		/* Nothing can be aggregated */
+		*msecs = max(*msecs, (epoch_min - epoch_max) / NSEC_PER_MSEC);
 		return 0;
 	} else if (epoch_min > epoch_max - interval &&
 		   sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
@@ -286,8 +281,7 @@ cont_aggregate_ult(void *arg)
 		dmi->dmi_tgt_id);
 
 	D_ASSERT(cont->sc_agg_req != NULL);
-	while (!sched_req_is_aborted(cont->sc_agg_req) &&
-	       !dss_xstream_exiting(dmi->dmi_xstream)) {
+	while (!dss_ult_exiting(cont->sc_agg_req)) {
 		uint64_t msecs;	/* milli seconds */
 
 		rc = cont_child_aggregate(cont, &msecs);
@@ -299,7 +293,7 @@ cont_aggregate_ult(void *arg)
 				rc);
 		}
 
-		if (dss_xstream_exiting(dmi->dmi_xstream))
+		if (dss_ult_exiting(cont->sc_agg_req))
 			break;
 
 		sched_req_sleep(cont->sc_agg_req, msecs);
@@ -872,6 +866,39 @@ ds_cont_hdl_get(struct ds_cont_hdl *hdl)
 	cont_hdl_get_internal(hash, hdl);
 }
 
+/* #define CONT_DESTROY_SYNC_WAIT */
+static void
+cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
+{
+#ifdef CONT_DESTROY_SYNC_WAIT
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+	struct sched_request	*req;
+
+	D_DEBUG(DF_DSMS, DF_CONT": wait container destroy\n",
+		DP_CONT(child->spc_uuid, co_uuid));
+
+	D_ASSERT(child != NULL);
+	sched_req_attr_init(&attr, SCHED_REQ_IO, &child->spc_uuid);
+	req = sched_req_get(&attr, ABT_THREAD_NULL);
+	if (req == NULL) {
+		D_CRIT(DF_UUID"[%d]: Failed to get sched req\n",
+		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		return;
+	}
+
+	while (!dss_xstream_exiting(dmi->dmi_xstream)) {
+		if (vos_gc_pool_idle(child->spc_hdl))
+			break;
+		sched_req_sleep(req, 500);
+	}
+	sched_req_put(req);
+
+	D_DEBUG(DF_DSMS, DF_CONT": container destroy done\n",
+		DP_CONT(child->spc_uuid, co_uuid));
+#endif
+}
+
 /*
  * Called via dss_collective() to destroy the ds_cont object as well as the vos
  * container.
@@ -935,26 +962,15 @@ cont_child_destroy_one(void *vin)
 		 * container open time, so it might legitimately not exist if
 		 * the container has never been opened */
 		rc = 0;
-	}
-
-	/*
-	 * Pause flushing free extents in VEA aging buffer, otherwise,
-	 * there'll be way more fragments to be processed.
-	 */
-	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_PLUG);
-
-	/* XXX there might be a race between GC and pool destroy, let's do
-	 * synchronous GC for now.
-	 */
-	dss_gc_run(pool->spc_hdl, -1);
-
-	/* Unplug and make the freed extents available immediately. */
-	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_UNPLUG);
-	if (rc) {
-		D_ERROR(DF_CONT": VEA flush failed. "DF_RC"\n",
+	} else if (rc) {
+		D_ERROR(DF_CONT": destroy vos container failed "DF_RC"\n",
 			DP_CONT(pool->spc_uuid, in->tdi_uuid), DP_RC(rc));
-		goto out_pool;
+	} else {
+		/* Wakeup GC ULT */
+		sched_req_wakeup(pool->spc_gc_req);
+		cont_destroy_wait(pool, in->tdi_uuid);
 	}
+
 out_pool:
 	ds_pool_child_put(pool);
 out:
@@ -1192,7 +1208,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	D_ASSERT(pool_uuid != NULL);
 
 	/* cont_uuid is NULL when open rebuild global cont handle */
-	if (cont_uuid != NULL) {
+	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
 		struct ds_cont_child *cont;
 
 		rc = cont_child_create_start(pool_uuid, cont_uuid, &cont);
@@ -1240,7 +1256,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	 *    yet, then the ready ones may have to wait or failed dtx_resync.
 	 *    Both cases are not expected.
 	 */
-	if (cont_uuid != NULL) {
+	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
 		struct ds_dtx_resync_args	*ddra = NULL;
 
 		/*
@@ -1349,14 +1365,15 @@ int
 ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		 uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas)
 {
-	struct cont_tgt_open_arg arg;
+	struct cont_tgt_open_arg arg = { 0 };
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
 	int			rc;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
-	uuid_copy(arg.cont_uuid, cont_uuid);
+	if (cont_uuid)
+		uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.flags = flags;
 	arg.sec_capas = sec_capas;
 
@@ -1413,26 +1430,65 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		return 0;
 	}
 
-	cont_child = hdl->sch_cont;
-	D_ASSERT(cont_child != NULL);
-
-	D_DEBUG(DF_DSMS, DF_CONT": closing (%d): hdl="DF_UUID"\n",
-		DP_CONT(cont_child->sc_pool->spc_uuid,
-			cont_child->sc_uuid),
-		cont_child->sc_open, DP_UUID(cont_hdl_uuid));
-
 	/* Remove the handle from hash first, following steps may yield */
 	ds_cont_local_close(cont_hdl_uuid);
 
 	daos_csummer_destroy(&hdl->sch_csummer);
 
-	D_ASSERT(cont_child->sc_open > 0);
-	cont_child->sc_open--;
-	if (cont_child->sc_open == 0)
-		dtx_batched_commit_deregister(cont_child);
+	cont_child = hdl->sch_cont;
+	if (cont_child != NULL) {
+		D_DEBUG(DF_DSMS, DF_CONT": closing (%d): hdl="DF_UUID"\n",
+			DP_CONT(cont_child->sc_pool->spc_uuid,
+				cont_child->sc_uuid),
+			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
+
+		D_ASSERT(cont_child->sc_open > 0);
+		cont_child->sc_open--;
+		if (cont_child->sc_open == 0)
+			dtx_batched_commit_deregister(cont_child);
+	}
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return 0;
+}
+
+static int
+cont_close_all_cb(d_list_t *rlink, void *arg)
+{
+	uuid_t *cont_uuid = arg;
+	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
+	int rc;
+
+	if (hdl->sch_cont == NULL)
+		return DER_SUCCESS;
+
+	if (uuid_compare(*cont_uuid, hdl->sch_cont->sc_uuid) == 0) {
+		rc = cont_close_hdl(hdl->sch_uuid);
+		if (rc != 0) {
+			D_ERROR("cont_close_hdl failed: rc="DF_RC, DP_RC(rc));
+			return rc;
+		}
+	}
+
+	return DER_SUCCESS;
+}
+
+/* Called via dss_collective() to close all container handles for this thread */
+static int
+cont_close_all(void *vin)
+{
+	struct dsm_tls *tls = dsm_tls_get();
+	uuid_t *cont_uuid = vin;
+	int rc;
+
+	rc = d_hash_table_traverse(&tls->dt_cont_hdl_hash, cont_close_all_cb,
+				   cont_uuid);
+	if (rc != 0) {
+		D_ERROR("d_hash_table_traverse failed: rc="DF_RC, DP_RC(rc));
+		return rc;
+	}
+
+	return DER_SUCCESS;
 }
 
 /* Called via dss_collective() to close the containers belong to this thread. */
@@ -1453,6 +1509,42 @@ cont_close_one(void *vin)
 	}
 
 	return rc;
+}
+
+int
+ds_cont_tgt_force_close(uuid_t cont_uuid)
+{
+	int rc;
+ 
+	D_DEBUG(DF_DSMS, DF_CONT": Force closing all handles for container "
+		DF_UUID"\n", DP_CONT(NULL, NULL), cont_uuid);
+ 
+	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0, DSS_ULT_IO);
+	if (rc != 0)
+		D_ERROR("dss_thread_collective failed: rc="DF_RC, DP_RC(rc));
+	return rc;
+}
+
+struct coll_close_arg {
+	uuid_t	uuid;
+};
+
+/* Called via dss_collective() to close the containers belong to this thread. */
+static int
+cont_close_one_hdl(void *vin)
+{
+	struct coll_close_arg *arg = vin;
+
+	return cont_close_hdl(arg->uuid);
+}
+
+int
+ds_cont_tgt_close(uuid_t hdl_uuid)
+{
+	struct coll_close_arg arg;
+
+	uuid_copy(arg.uuid, hdl_uuid);
+	return dss_thread_collective(cont_close_one_hdl, &arg, 0, DSS_ULT_IO);
 }
 
 void

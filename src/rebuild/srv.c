@@ -740,7 +740,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 		 rebuild_op == RB_OP_DRAIN ||
 		 rebuild_op == RB_OP_ADD);
 	match_status = (rebuild_op == RB_OP_FAIL ? PO_COMP_ST_DOWN :
-			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DOWN :
+			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DRAIN :
 			PO_COMP_ST_UP);
 
 	if (tgts != NULL && tgts->pti_number > 0) {
@@ -1574,7 +1574,6 @@ rebuild_fini_one(void *arg)
 	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	ds_cont_local_close(rpt->rt_coh_uuid);
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
 	D_ASSERT(dpc != NULL);
@@ -1806,12 +1805,6 @@ rebuild_prepare_one(void *data)
 	D_ASSERT(dpc != NULL);
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	/* Create ds_container locally on main XS */
-	rc = ds_cont_local_open(rpt->rt_pool_uuid, rpt->rt_coh_uuid,
-				NULL, 0, ds_sec_get_rebuild_cont_capabilities(),
-				NULL);
-	if (rc)
-		pool_tls->rebuild_pool_status = rc;
 
 	/* Set the rebuild epoch per VOS container, so VOS aggregation will not
 	 * cross the epoch to cause problem.
