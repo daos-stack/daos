@@ -1006,11 +1006,11 @@ pipeline {
                     post {
                       always {
                             unitTestPost
-                                always_script: 'ci/unit/test_post_always.sh',
-                                vlgrind: 'memcheck',
+                                always_script: "ci/unit/test_post_always.sh",
+                                vlgrind: "memcheck",
                                 artifacts: ['run_test_memcheck.sh/*',
                                             'vm_test/**'],
-                                valgrind_pattern: 'run_test_memcheck.sh/*memcheck.xml'
+                                valgrind_pattern: "run_test_memcheck.sh/*memcheck.xml"
                         }
                     }
                 } // End run_test.sh with memcheck stage
