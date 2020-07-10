@@ -36,7 +36,7 @@ NVME_STATS = ['read_bytes',
 class NvmeIOStates(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with 1 server with basic parameters and
-       verify NVMe IO statistics paramters getting increase.
+       verify NVMe IO statistics parameters getting increase.
 
     :avocado: recursive
     """
