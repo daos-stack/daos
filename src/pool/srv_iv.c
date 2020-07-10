@@ -58,7 +58,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 	uint32_t	buf_size = pool_key->pik_entry_size;
 	int		rc;
 
-	D_ASSERT(buf_size != 0);
+	D_ASSERT(buf_size > 0);
 	rc = daos_sgl_init(sgl, 1);
 	if (rc)
 		return rc;

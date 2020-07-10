@@ -120,6 +120,7 @@ int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 d_rank_list_t *excluded_list);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
+int ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);

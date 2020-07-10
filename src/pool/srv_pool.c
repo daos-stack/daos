@@ -3778,6 +3778,264 @@ out:
 	return rc;
 }
 
+/* TODO: This entire RPC mechanism should eventually be replaced by IV fetch
+ * retrieving the handles instead. Tracked by DAOS-5232
+ *
+ * This code is a bridge that allows a reintegrating node to be told about the
+ * needed handles until that IV retrieval mechanism is built.
+ */
+static int
+redist_open_hdls_send_rpcs(uuid_t pool_uuid, d_iov_t *handles,
+			   d_rank_list_t *ranks)
+{
+	crt_rpc_t			*tf_req;
+	struct pool_tgt_dist_hdls_in	*tf_in;
+	struct pool_tgt_dist_hdls_out	*tf_out;
+	crt_opcode_t			opc;
+	int				rc = DER_SUCCESS;
+	int				i;
+
+	/* Send an RPC to each rank with all of the open handles */
+	for (i = 0; i < ranks->rl_nr; i++) {
+		crt_endpoint_t svr_ep;
+
+		svr_ep.ep_grp = NULL;
+		svr_ep.ep_rank = ranks->rl_ranks[i];
+		svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_POOL, 0);
+		opc = DAOS_RPC_OPCODE(POOL_TGT_DIST_HDLS, DAOS_POOL_MODULE, 1);
+		rc = crt_req_create(dss_get_module_info()->dmi_ctx, &svr_ep,
+				    opc, &tf_req);
+		if (rc != 0) {
+			D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "
+				DF_RC".\n", DP_RC(rc));
+			return rc;
+		}
+
+		tf_in = crt_req_get(tf_req);
+		D_ASSERT(tf_in != NULL);
+		uuid_copy(tf_in->tfi_pool_uuid, pool_uuid);
+		d_iov_set(&tf_in->tfi_hdls, handles->iov_buf,
+			  handles->iov_buf_len);
+
+		rc = dss_rpc_send(tf_req);
+		if (rc != 0) {
+			crt_req_decref(tf_req);
+			return rc;
+		}
+
+		tf_out = crt_reply_get(tf_req);
+		rc = tf_out->tfo_rc;
+		if (rc != 0) {
+			crt_req_decref(tf_req);
+			D_ERROR(DF_UUID": failed to send handle uuids to ranks "
+				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+			return rc;
+		}
+	}
+
+	return rc;
+}
+
+struct redist_open_hdls_arg {
+	/**
+	 * Pointer to pointer containing flattened array of output handles
+	 * Note that these are variable size, so can't be indexed as an array
+	 */
+	struct pool_iv_conn **hdls;
+	/** Pointer to the next write location within hdls */
+	struct pool_iv_conn *next;
+	/** Total current size of the hdls buffer, in bytes */
+	size_t hdls_size;
+	/** Total used space in hdls buffer, in bytes */
+	size_t hdls_used;
+};
+
+static int
+get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct redist_open_hdls_arg *arg = varg;
+	uuid_t *uuid = key->iov_buf;
+	struct pool_hdl *hdl = val->iov_buf;
+	struct ds_pool_hdl *lookup_hdl;
+	size_t size_needed;
+	int rc = DER_SUCCESS;
+
+	if (key->iov_len != sizeof(uuid_t) ||
+	    val->iov_len != sizeof(struct pool_hdl)) {
+		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
+			key->iov_len, val->iov_len);
+		return -DER_IO;
+	}
+
+	/* Look up the handle in the local pool to obtain the creds, which are
+	 * not stored in RDB
+	 */
+	lookup_hdl = ds_pool_hdl_lookup(*uuid);
+	if (lookup_hdl == NULL) {
+		D_ERROR("Pool open handle "DF_UUID" is in RDB but not the pool",
+			DP_UUID(*uuid));
+		return -DER_NONEXIST;
+	}
+
+	/* Check if there's enough room is the preallocated array, and expand
+	 * if not
+	 */
+	size_needed = arg->hdls_used + lookup_hdl->sph_cred.iov_buf_len +
+		sizeof(struct pool_iv_conn);
+	if (size_needed > arg->hdls_size) {
+		void *newbuf = NULL;
+
+		D_REALLOC(newbuf, *arg->hdls, size_needed);
+		if (newbuf == NULL)
+			D_GOTO(out_hdl, rc = -DER_NOMEM);
+
+		/* Since this probably changed the hdls pointer, adjust the
+		 * next pointer correspondingly
+		 */
+		*(arg->hdls) = newbuf;
+		arg->next = (struct pool_iv_conn *)
+			(((char *)*arg->hdls) + arg->hdls_used);
+		arg->hdls_size = size_needed;
+	}
+
+	/* Copy the data */
+	uuid_copy(arg->next->pic_hdl, *uuid);
+	arg->next->pic_flags = hdl->ph_flags;
+	arg->next->pic_capas = hdl->ph_sec_capas;
+	arg->next->pic_cred_size = lookup_hdl->sph_cred.iov_buf_len;
+	memcpy(arg->next->pic_creds, lookup_hdl->sph_cred.iov_buf,
+	       lookup_hdl->sph_cred.iov_buf_len);
+
+	/* Adjust the pointers for the next iteration */
+	arg->hdls_used = size_needed;
+	arg->next = (struct pool_iv_conn *)
+		(((char *)*arg->hdls) + arg->hdls_used);
+
+out_hdl:
+	ds_pool_hdl_put(lookup_hdl);
+
+	return DER_SUCCESS;
+}
+
+/**
+ * Retrieves a flat buffer containing all currently open handles
+ *
+ * \param pool_uuid [IN]  The pool to get handles for
+ * \param hdls      [OUT] A flat-packed buffer of all open handles
+ *                        (struct pool_iv_conn). Caller must free hdls->iov_buf.
+ *                        Note that these are variable size, and can not be
+ *                        indexed like an array
+ * \param out_size  [OUT] The size of the buffer pointed to by hdls
+ *
+ * \return If no handles are currently open this will return DER_SUCCESS with
+ *         hdls = NULL and out_size = 0.
+ *         Otherwise returns DER_SUCCESS or an -error code
+ */
+int
+ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls)
+{
+	struct pool_svc			*svc;
+	struct redist_open_hdls_arg	 arg;
+	uint32_t			 connectable;
+	struct rdb_tx			 tx;
+	d_iov_t				 value;
+	uint32_t			 nhandles;
+	int				 rc;
+
+	d_iov_set(hdls, NULL, 0);
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL /* hint */);
+	if (rc != 0)
+		return rc;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	/* Check if pool is being destroyed and not accepting connections */
+	d_iov_set(&value, &connectable, sizeof(connectable));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root,
+			   &ds_pool_prop_connectable, &value);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+	if (!connectable) {
+		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
+			DP_UUID(pool_uuid));
+		D_GOTO(out_lock, rc = -DER_BUSY);
+	}
+
+	/* Check how many handles are currently open */
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	/* Abort early if there are no open handles */
+	if (nhandles == 0)
+		D_GOTO(out_lock, rc);
+
+	/* Preallocate an approximate amount of space for the handles and the
+	 * variable-size creds field which is not accounted for in the size of
+	 * the base structure. The goal here isn't to be exactly right - can't
+	 * know at this point how much space is actually needed. Ballparking
+	 * close enough just reduces the number of reallocations needed during
+	 * iteration
+	 */
+	D_ALLOC(hdls->iov_buf, nhandles * (sizeof(struct pool_iv_conn) + 160));
+	if (hdls->iov_buf == NULL)
+		D_GOTO(out_lock, rc = -DER_NOMEM);
+
+	/* Pass in the preallocated array and handles as pointers
+	 * This allows the iterator to reallocate the array if an element
+	 * was added between when we retrieved the size and iteration completes
+	 */
+	arg.hdls = (struct pool_iv_conn **)&hdls->iov_buf;
+	arg.next = *arg.hdls;
+	arg.hdls_size = nhandles * (sizeof(struct pool_iv_conn) + 128);
+	arg.hdls_used = 0;
+
+	/* Iterate the open handles and accumulate their UUIDs */
+	rc = rdb_tx_iterate(&tx, &svc->ps_handles, false /* backward */,
+			    get_open_handles_cb, &arg);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	hdls->iov_buf_len = hdls->iov_len = arg.hdls_used;
+
+	D_DEBUG(DF_DSMS, DF_UUID": packed %u handles into %zu bytes\n",
+		DP_UUID(pool_uuid), nhandles, arg.hdls_used);
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+
+out_svc:
+	pool_svc_put_leader(svc);
+	return rc;
+}
+
+static int
+redist_open_hdls(uuid_t pool_uuid, d_rank_list_t *ranks)
+{
+	d_iov_t hdls;
+	int rc;
+
+	rc = ds_pool_get_open_handles(pool_uuid, &hdls);
+	if (rc != 0)
+		return rc;
+
+	rc = redist_open_hdls_send_rpcs(pool_uuid, &hdls, ranks);
+	if (rc != 0)
+		D_GOTO(out_free, rc);
+
+out_free:
+	D_FREE(hdls.iov_buf);
+
+	return rc;
+}
+
 int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
@@ -3797,6 +4055,36 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_ADD_IN,
 				       NULL, NULL, NULL, false);
+}
+
+/**
+ * Allocates and returns a list of unique ranks based on the input target list.
+ *
+ * Caller must free output list
+ *
+ * \param in[IN]   Input list to synthesize
+ * \param out[OUT] Unique output list. Will be set to NULL if allocation failed
+ */
+static void
+addr_list_to_rank_list(struct pool_target_addr_list *in, d_rank_list_t **out)
+{
+	d_rank_list_t *tmplist;
+	int i;
+
+	*out = NULL;
+
+	tmplist = d_rank_list_alloc(in->pta_number);
+	if (tmplist == NULL)
+		return;
+
+	for (i = 0; i < in->pta_number; i++)
+		tmplist->rl_ranks[i] = in->pta_addrs[i].pta_rank;
+
+	/* Make sure the list is unique, some targets might share ranks */
+	d_rank_list_dup_sort_uniq(out, tmplist);
+
+	/* Free the intermediate list */
+	d_rank_list_free(tmplist);
 }
 
 /*
@@ -3832,6 +4120,25 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 
 	if (!updated)
 		D_GOTO(out, rc);
+
+	/* If adding or reintegrating a node, redistribute any existing open
+	 * handles to that node prior to starting the rebuild/migration process
+	 */
+	if (opc == POOL_ADD) {
+		d_rank_list_t *ranks;
+
+		addr_list_to_rank_list(list, &ranks);
+		if (ranks == NULL)
+			D_GOTO(out, rc);
+
+		rc = redist_open_hdls(pool_uuid, ranks);
+		d_rank_list_free(ranks);
+		if (rc) {
+			D_ERROR("redist_open_hdls fails rc: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+	}
 
 	switch (opc) {
 	case POOL_EXCLUDE:
@@ -3869,7 +4176,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 
 	rc = ds_rebuild_schedule(pool_uuid, *map_version, &target_list, op);
 	if (rc != 0) {
-		D_ERROR("rebuild fails rc %d\n", rc);
+		D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

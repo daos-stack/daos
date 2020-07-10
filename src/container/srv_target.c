@@ -1451,6 +1451,45 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 	return 0;
 }
 
+static int
+cont_close_all_cb(d_list_t *rlink, void *arg)
+{
+	uuid_t *cont_uuid = arg;
+	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
+	int rc;
+
+	if (hdl->sch_cont == NULL)
+		return DER_SUCCESS;
+
+	if (uuid_compare(*cont_uuid, hdl->sch_cont->sc_uuid) == 0) {
+		rc = cont_close_hdl(hdl->sch_uuid);
+		if (rc != 0) {
+			D_ERROR("cont_close_hdl failed: rc="DF_RC, DP_RC(rc));
+			return rc;
+		}
+	}
+
+	return DER_SUCCESS;
+}
+
+/* Called via dss_collective() to close all container handles for this thread */
+static int
+cont_close_all(void *vin)
+{
+	struct dsm_tls *tls = dsm_tls_get();
+	uuid_t *cont_uuid = vin;
+	int rc;
+
+	rc = d_hash_table_traverse(&tls->dt_cont_hdl_hash, cont_close_all_cb,
+				   cont_uuid);
+	if (rc != 0) {
+		D_ERROR("d_hash_table_traverse failed: rc="DF_RC, DP_RC(rc));
+		return rc;
+	}
+
+	return DER_SUCCESS;
+}
+
 /* Called via dss_collective() to close the containers belong to this thread. */
 static int
 cont_close_one(void *vin)
@@ -1468,6 +1507,20 @@ cont_close_one(void *vin)
 			rc = rc_tmp;
 	}
 
+	return rc;
+}
+
+int
+ds_cont_tgt_force_close(uuid_t cont_uuid)
+{
+	int rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": Force closing all handles for container "
+		DF_UUID"\n", DP_CONT(NULL, NULL), cont_uuid);
+
+	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0, DSS_ULT_IO);
+	if (rc != 0)
+		D_ERROR("dss_thread_collective failed: rc="DF_RC, DP_RC(rc));
 	return rc;
 }
 
