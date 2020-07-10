@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@corci-918c") _
 
 def doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -902,7 +903,6 @@ pipeline {
                             }
                         }
                         unitTest timeout_time: 60,
-                                 daos_pkg_version: daos_packages_version("centos7"),
                                  inst_repos: el7_component_repos + ' ' +
                                              component_repos(),
                                  inst_rpms: 'gotestsum openmpi3 ' +
@@ -980,8 +980,7 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest daos_pkg_version: daos_packages_version("centos7"),
-                                       inst_repos: el7_daos_repos(),
+                        functionalTest inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
                                                   ' ' + functional_rpms
                     }
@@ -1005,8 +1004,7 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest daos_pkg_version: daos_packages_version("centos7"),
-                                       inst_repos: el7_daos_repos(),
+                        functionalTest inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
                                                   ' ' + functional_rpms
                     }
@@ -1030,8 +1028,7 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        functionalTest daos_pkg_version: daos_packages_version("centos7"),
-                                       inst_repos: el7_daos_repos(),
+                        functionalTest inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
                                                   ' ' + functional_rpms
                    }
@@ -1055,8 +1052,7 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        functionalTest daos_pkg_version: daos_packages_version("centos7"),
-                                       inst_repos: el7_daos_repos(),
+                        functionalTest inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
                                                   ' ' + functional_rpms
                     }
