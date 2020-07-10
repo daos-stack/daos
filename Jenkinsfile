@@ -999,8 +999,8 @@ pipeline {
                                             'pmix numactl-devel ' +
                                             'libipmctl-devel' +
                                             'python36-tabulate' +
-                                            qb_inst_rpms
-                                 valgrind: 'memcheck'
+                                            qb_inst_rpms,
+                                 valgrind: 'memcheck',
                                  junit_files: ''
                     }
                     post {
