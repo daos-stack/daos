@@ -80,8 +80,10 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 	 * transactions.
 	 */
 	rc = rdb_raft_wait_applied(db, db->d_debut, term);
-	if (rc != 0)
+	if (rc != 0) {
+		ABT_mutex_unlock(db->d_raft_mutex);
 		return rc;
+	}
 	/*
 	 * If this verification succeeds, then queries in this TX will return
 	 * valid results.
@@ -117,8 +119,10 @@ rdb_tx_commit(struct rdb_tx *tx)
 
 	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
 	rc = rdb_tx_leader_check(tx);
-	if (rc != 0)
+	if (rc != 0) {
+		ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
 		return rc;
+	}
 
 	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
 				   &result);
