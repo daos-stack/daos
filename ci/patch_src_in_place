@@ -1,6 +1,7 @@
 #!/bin/sh
 
-codespell -w --ignore-words-list nd,uint,ths,ba,creat,te,cas,mapp,pres,crashers,dout,tre,reord,mimick,cloneable,keypair,bject,tread,cancelled --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden `git ls-tree --full-tree --name-only HEAD`
+# shellcheck disable=SC2046,SC2035
+codespell -w --ignore-words-list nd,uint,ths,ba,creat,te,cas,mapp,pres,crashers,dout,tre,reord,mimick,cloneable,keypair,bject,tread,cancelled --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden $(git ls-tree --full-tree --name-only HEAD)
 
 def_ignore="SPLIT_STRING,SSCANF_TO_KSTRTO,PREFER_KERNEL_TYPES"
 def_ignore+=",USE_NEGATIVE_ERRNO,CAMELCASE,STATIC_CONST_CHAR_ARRAY"
@@ -14,10 +15,9 @@ fi
 
 if [ -x $CP ]
 then
-    for FILE in `git ls-tree --full-tree --name-only HEAD -r src | grep -v src/control/vendor | grep -v .go\$ | grep -v pb-c | grep -v debug_setup.h`
+    for FILE in `git ls-tree --full-tree --name-only HEAD -r src | grep -v -e src/control/vendor -e .go\$ -e pb-c -e debug_setup.h`
     do
-
-        $CP --quiet --no-tree -file --show-types --no-summary --ignore $def_ignore --strict $FILE --fix-inplace
+        $CP --quiet --no-tree -file --show-types --no-summary --ignore "$def_ignore" --strict "$FILE" --fix-inplace
     done
 fi
 
