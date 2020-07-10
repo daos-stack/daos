@@ -141,6 +141,7 @@ void ds_pool_child_purge(struct pool_tls *tls);
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
+void ds_pool_tgt_dist_hdls_handler(crt_rpc_t *rpc);
 
 /*
  * srv_util.c

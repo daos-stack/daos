@@ -41,7 +41,8 @@ This provides consistency checking for CaRT log files.
 
 import sys
 import pprint
-from collections import OrderedDict
+import tabulate
+from collections import OrderedDict, Counter
 
 import cart_logparse
 
@@ -64,6 +65,12 @@ class ActiveDescriptors(LogCheckError):
 
 class LogError(LogCheckError):
     """Errors detected in log file"""
+
+# CaRT Error numbers to convert to strings.
+C_ERRNOS = {0: '-DER_SUCCESS',
+            -1006: 'DER_UNREACH',
+            -1011: '-DER_TIMEDOUT',
+            -1032: '-DER_EVICTED'}
 
 # Use a global variable here so show_line can remember previously reported
 # error lines.
@@ -110,6 +117,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'mgmt_svc_name_cb': ('s'),
                      'pool_prop_default_copy': ('entry_def->dpe_str'),
                      'pool_iv_prop_g2l': ('prop_entry->dpe_str'),
+                     'pool_iv_value_alloc_internal': ('sgl->sg_iovs[0].iov_buf'),
                      'daos_prop_entry_copy': ('entry_dup->dpe_str'),
                      'daos_prop_dup': ('entry_dup->dpe_str'),
                      'auth_cred_to_iov': ('packed')}
@@ -133,7 +141,7 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'ds_mgmt_svc_start': ('uri'),
                     'ds_rsvc_lookup': ('path'),
                     'daos_acl_free': ('acl'),
-                    'drpc_free': ('pointer'),
+                    'daos_drpc_free': ('pointer'),
                     'pool_child_add_one': ('path'),
                     'bio_sgl_fini': ('sgl->bs_iovs'),
                     'daos_iov_free': ('iov->iov_buf'),
@@ -145,14 +153,6 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'ie_sclose': ('ie', 'dfs', 'dfp'),
                     'notify_ready': ('req.uri'),
                     'get_tgt_rank': ('tgts')}
-
-memleak_ok = ['dfuse_start',
-              'expand_vector',
-              'd_rank_list_alloc',
-              'get_tpv',
-              'get_new_entry',
-              'get_attach_info',
-              'drpc_call_create']
 
 EFILES = ['src/common/misc.c',
           'src/common/prop.c',
@@ -243,10 +243,11 @@ class LogTest():
         """Check a single log file for consistency"""
 
         for pid in self._li.get_pids():
+            self.rpc_reporting(pid)
             self._check_pid_from_log_file(pid, abort_on_warning,
                                           show_memleaks=show_memleaks)
 
-#pylint: disable=too-many-branches,no-self-use,too-many-nested-blocks
+#pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning,
                                  show_memleaks=True):
         """Check a pid from a single log file for consistency"""
@@ -451,24 +452,20 @@ class LogTest():
                 print('Mismatched allocations were freed here:')
                 print(pp.pformat(mismatch_free_seen))
 
-        if not show_memleaks:
-            return
-
         # Special case the fuse arg values as these are allocated by IOF
         # but freed by fuse itself.
         # Skip over CaRT issues for now to get this landed, we can enable them
         # once this is stable.
         lost_memory = False
-        for (_, line) in regions.items():
-            if line.function in memleak_ok:
-                continue
-            pointer = line.get_field(-1).rstrip('.')
-            if pointer in active_desc:
-                show_line(line, 'NORMAL', 'descriptor not freed')
-                del active_desc[pointer]
-            else:
-                show_line(line, 'NORMAL', 'memory not freed')
-            lost_memory = True
+        if show_memleaks:
+            for (_, line) in regions.items():
+                pointer = line.get_field(-1).rstrip('.')
+                if pointer in active_desc:
+                    show_line(line, 'NORMAL', 'descriptor not freed')
+                    del active_desc[pointer]
+                else:
+                    show_line(line, 'NORMAL', 'memory not freed')
+                lost_memory = True
 
         if active_desc:
             for (_, line) in active_desc.items():
@@ -486,13 +483,124 @@ class LogTest():
             raise WarningStrict()
         if warnings_mode:
             raise WarningMode()
-#pylint: enable=too-many-branches,no-self-use,too-many-nested-blocks
+#pylint: enable=too-many-branches,too-many-nested-blocks
+
+    def rpc_reporting(self, pid):
+        """RPC reporting for RPC state machine, for mutiprocesses"""
+        op_state_counters = {}
+        c_states = {}
+        c_state_names = set()
+
+        # Use to convert from descriptor to opcode.
+        current_opcodes = {}
+
+        for line in self._li.new_iter(pid=pid):
+            rpc_state = None
+            opcode = None
+
+            if line.is_new_rpc():
+                rpc_state = 'ALLOCATED'
+                opcode = line.get_field(-4)
+                if opcode == 'per':
+                    opcode = line.get_field(-8)
+            elif line.is_dereg_rpc():
+                rpc_state = 'DEALLOCATED'
+            elif line.endswith('submitted.'):
+                rpc_state = 'SUBMITTED'
+            elif line.function == 'crt_hg_req_send' and \
+                 line.get_field(-6) == ('sent'):
+                rpc_state = 'SENT'
+
+            elif line.is_callback():
+                rpc = line.descriptor
+                rpc_state = 'COMPLETED'
+                result = line.get_field(-1).rstrip('.')
+                result = C_ERRNOS.get(int(result), result)
+                c_state_names.add(result)
+                opcode = current_opcodes[line.descriptor]
+                try:
+                    c_states[opcode][result] += 1
+                except KeyError:
+
+                    c_states[opcode] = Counter()
+                    c_states[opcode][result] += 1
+            else:
+                continue
+
+            rpc = line.descriptor
+
+            if rpc_state == 'ALLOCATED':
+                current_opcodes[rpc] = opcode
+            else:
+                opcode = current_opcodes[rpc]
+            if rpc_state == 'DEALLOCATED':
+                del current_opcodes[rpc]
+
+            if opcode not in op_state_counters:
+                op_state_counters[opcode] = {'ALLOCATED' :0,
+                                             'DEALLOCATED': 0,
+                                             'SENT':0,
+                                             'COMPLETED':0,
+                                             'SUBMITTED':0}
+            op_state_counters[opcode][rpc_state] += 1
+
+        if not bool(op_state_counters):
+            print('No rpcs in log file')
+            return
+
+        table = []
+        errors = []
+        names = sorted(c_state_names)
+        if names:
+            try:
+                names.remove('-DER_SUCCESS')
+            except ValueError:
+                pass
+            names.insert(0, '-DER_SUCCESS')
+        headers = ['OPCODE',
+                   'ALLOCATED',
+                   'SUBMITTED',
+                   'SENT',
+                   'COMPLETED',
+                   'DEALLOCATED']
+
+        for state in names:
+            headers.append(state)
+        for (op, counts) in sorted(op_state_counters.items()):
+            row = [op,
+                   counts['ALLOCATED'],
+                   counts['SUBMITTED'],
+                   counts['SENT'],
+                   counts['COMPLETED'],
+                   counts['DEALLOCATED']]
+            for state in names:
+                try:
+                    row.append(c_states[op].get(state, ''))
+                except KeyError:
+                    row.append('')
+            table.append(row)
+            if counts['ALLOCATED'] != counts['DEALLOCATED']:
+                errors.append("ERROR: Opcode {}: Alloc'd Total = {}, "
+                              "Dealloc'd Total = {}". \
+                              format(op,
+                                     counts['ALLOCATED'],
+                                     counts['DEALLOCATED']))
+
+        print('Opcode State Transition Tally')
+        print(tabulate.tabulate(table,
+                                headers=headers,
+                                stralign='right'))
+
+        if errors:
+            for error in errors:
+                print(error)
+
 
 def trace_one_file(filename):
     """Trace a single file"""
     log_iter = cart_logparse.LogIter(filename)
     test_iter = LogTest(log_iter)
-    test_iter.check_log_file(True)
+    test_iter.check_log_file(False)
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
