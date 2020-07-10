@@ -109,7 +109,7 @@ class ZeroConfigTest(TestWithServers):
         diff = 0
         for cnt_b, cnt_a in zip(cnt_before.values(), cnt_after.values()):
             diff = int(cnt_a) - int(cnt_b)
-            self.log.info("%s port count difference: %s", exp_iface, diff)
+            self.log.info("Port [%s] count difference: %s", exp_iface, diff)
 
         # If we don't see data going through the device, fail
         status = True
@@ -126,7 +126,8 @@ class ZeroConfigTest(TestWithServers):
         Test Description:
             Test starting a daos_server process on 2 different numa
             nodes and verify that client can start when OFI_INTERFACE is set
-            or unset.
+            or unset. The test expects that the server will have two interfaces
+            available: hfi_0 and hfi_1.
 
         :avocado: tags=all,pr,hw,small,zero_config,env_set
         """
@@ -153,5 +154,8 @@ class ZeroConfigTest(TestWithServers):
             err = []
             if not self.verify_client_run(idx, exp_iface, env_state):
                 err.append("Failed run with expected dev: {}".format(exp_iface))
+
+            # Stop the servers
+            self.stop_servers()
 
         self.assertEqual(len(err), 0, "{}".format("\n".join(err)))

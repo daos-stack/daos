@@ -14,8 +14,8 @@ server_config:
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
 daos_racer:
-  runtime: 600
-  clush_timeout: 1500
+  runtime: 100
+  clush_timeout: 600
 zero_config: !mux
   set:
     env_state: True
