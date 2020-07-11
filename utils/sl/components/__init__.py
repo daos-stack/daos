@@ -217,7 +217,7 @@ def define_common(reqs):
     reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
                 package='openssl-devel')
 
-    reqs.define('json-c', libs=['json-c'], headers=['json.h'],
+    reqs.define('json-c', libs=['json-c'], headers=['json-c/json.h'],
                 package='json-c-devel')
 
     if reqs.get_env('PLATFORM') == 'darwin':

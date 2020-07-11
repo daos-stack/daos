@@ -31,6 +31,7 @@
 #include <daos_prop.h>
 #include <daos_mgmt.h>
 #include "daos_test.h"
+#include <json-c/json.h>
 
 /** Server crt group ID */
 const char *server_group;
@@ -44,8 +45,6 @@ unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
 
-json_value * json_parse (const json_char * json, size_t length);
-void json_value_free (json_value *);
 
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
@@ -1005,85 +1004,12 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 }
 
 /* JSON output handling for dmg command */
-
-static void print_depth_shift(int depth)
-{
-        int j;
-        for (j=0; j < depth; j++) {
-                printf(" ");
-        }
-}
-
-static void process_value(json_value* value, int depth);
-
-static void process_object(json_value* value, int depth)
-{
-        int length, x;
-        if (value == NULL) {
-                return;
-        }
-        length = value->u.object.length;
-        for (x = 0; x < length; x++) {
-                print_depth_shift(depth);
-                printf("object[%d].name = %s\n", x, value->u.object.values[x].name);
-                process_value(value->u.object.values[x].value, depth+1);
-        }
-}
-
-static void process_array(json_value* value, int depth)
-{
-        int length, x;
-        if (value == NULL) {
-                return;
-        }
-        length = value->u.array.length;
-        printf("array\n");
-        for (x = 0; x < length; x++) {
-                process_value(value->u.array.values[x], depth);
-        }
-}
-
-static void process_value(json_value* value, int depth)
-{
-        if (value == NULL) {
-                return;
-        }
-        if (value->type != json_object) {
-                print_depth_shift(depth);
-        }
-        switch (value->type) {
-                case json_none:
-                        printf("none\n");
-                        break;
-                case json_object:
-                        process_object(value, depth+1);
-                        break;
-                case json_array:
-                        process_array(value, depth+1);
-                        break;
-                case json_integer:
-                        printf("int: %10" PRId64 "\n", value->u.integer);
-                        break;
-                case json_double:
-                        printf("double: %f\n", value->u.dbl);
-                        break;
-                case json_string:
-                        printf("string: %s\n", value->u.string.ptr);
-                        break;
-                case json_boolean:
-                        printf("bool: %d\n", value->u.boolean);
-                        break;
-		default:
-			break;
-        }
-}
-
-static json_value *daos_dmg_json_contents(const char *dmg_cmd)
+static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 {
 	long int  size = 0;
 	char *content = NULL;
 	char *filename = "/tmp/daos_dmg.json";
-	json_value *value;
+	struct json_object *parsed_json;
 	int	  rc;
 
 	/* Need to make sure -j is in the dmg cmd? */
@@ -1102,7 +1028,7 @@ static json_value *daos_dmg_json_contents(const char *dmg_cmd)
 	// rewind(fp);
 	fseek(fp, 0, SEEK_SET);
 	D_ALLOC(content, size);
-	print_message("json output size is %ld\n", ftell(fp));
+	print_message("json output size is %ld\n", size);
 
         if ( fread(content, size, 1, fp) != 1 ) {
                 print_message("failed to read content of %s\n", filename);
@@ -1112,32 +1038,51 @@ static json_value *daos_dmg_json_contents(const char *dmg_cmd)
         }
         fclose(fp);
 
-        value = json_parse((json_char *)content, size);
 
-        if (value == NULL) {
-                print_message("Unable to parse data\n");
-                free(content);
-                return NULL;
-        }
+	parsed_json = json_tokener_parse(content);
 
-        process_value(value, 0);
-
-//        json_value_free(value);
-
-	return value;
+	return parsed_json;
 }
 
 void daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 			daos_mgmt_pool_info_t *pools)
 {
-	json_value	*value;
+	struct json_object	*parsed_json;
+	struct json_object	*pool_list;
+	struct json_object	*pool;
+	struct json_object	*uuid;
+	struct json_object	*rep_ranks;
+	struct json_object	*rank;
+	char	uuid_str[DAOS_UUID_STR_SIZE];
+	int i, j;
 
-	value = daos_dmg_json_contents("dmg pool list -i -j > /tmp/daos_dmg.json");
-	if (value == NULL) {
+	parsed_json = daos_dmg_json_contents("dmg pool list -i -j > /tmp/daos_dmg.json");
+	if (parsed_json == NULL) {
 		print_message("daos_dmg_json_contents failed\n");
 		return;
 	}
 
-        json_value_free(value);
-//	print_message("%s\n", json);
+	json_object_object_get_ex(parsed_json, "Pools", &pool_list);
+	*npools = json_object_array_length(pool_list);
+
+	print_message("#pools %lu\n", *npools);
+
+	for (i=0; i<*npools; i++) {
+		pool = json_object_array_get_idx(pool_list, i);
+		json_object_object_get_ex(pool, "UUID", &uuid);
+		strcpy(uuid_str, json_object_get_string(uuid));
+		uuid_parse(uuid_str, pools[i].mgpi_uuid);
+		/* pool service replica ranks */
+		json_object_object_get_ex(pool, "Svcreps", &rep_ranks);
+		pools[i].mgpi_svc->rl_nr = json_object_array_length(rep_ranks);
+		print_message("pool uuid "DF_UUIDF" rl_nr %d\n",
+			pools[i].mgpi_uuid, pools[i].mgpi_svc->rl_nr);
+
+		for (j=0; j<pools[i].mgpi_svc->rl_nr; j++) {
+			rank = json_object_array_get_idx(rep_ranks, j);
+			pools[i].mgpi_svc->rl_ranks[j] = 
+				json_object_get_int(rank);
+		}
+
+	}
 }
