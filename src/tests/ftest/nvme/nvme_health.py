@@ -88,7 +88,7 @@ class NvmeHealth(ServerFillUp):
                     self.fail('Pool uuid {} not found in smd query'
                               .format(pool.uuid.lower()))
 
-        # Get the device ID
+        # Get the device ID from all the servers.
         device_ids = get_device_ids(self.dmg, self.hostlist_servers)
 
         # Get the device health
