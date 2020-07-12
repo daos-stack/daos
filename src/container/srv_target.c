@@ -1208,7 +1208,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	D_ASSERT(pool_uuid != NULL);
 
 	/* cont_uuid is NULL when open rebuild global cont handle */
-	if (cont_uuid != NULL) {
+	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
 		struct ds_cont_child *cont;
 
 		rc = cont_child_create_start(pool_uuid, cont_uuid, &cont);
@@ -1256,7 +1256,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	 *    yet, then the ready ones may have to wait or failed dtx_resync.
 	 *    Both cases are not expected.
 	 */
-	if (cont_uuid != NULL) {
+	if (cont_uuid != NULL && !uuid_is_null(cont_uuid)) {
 		struct ds_dtx_resync_args	*ddra = NULL;
 
 		/*
@@ -1365,14 +1365,15 @@ int
 ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		 uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas)
 {
-	struct cont_tgt_open_arg arg;
+	struct cont_tgt_open_arg arg = { 0 };
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
 	int			rc;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
-	uuid_copy(arg.cont_uuid, cont_uuid);
+	if (cont_uuid)
+		uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.flags = flags;
 	arg.sec_capas = sec_capas;
 
@@ -1429,23 +1430,23 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		return 0;
 	}
 
-	cont_child = hdl->sch_cont;
-	D_ASSERT(cont_child != NULL);
-
-	D_DEBUG(DF_DSMS, DF_CONT": closing (%d): hdl="DF_UUID"\n",
-		DP_CONT(cont_child->sc_pool->spc_uuid,
-			cont_child->sc_uuid),
-		cont_child->sc_open, DP_UUID(cont_hdl_uuid));
-
 	/* Remove the handle from hash first, following steps may yield */
 	ds_cont_local_close(cont_hdl_uuid);
 
 	daos_csummer_destroy(&hdl->sch_csummer);
 
-	D_ASSERT(cont_child->sc_open > 0);
-	cont_child->sc_open--;
-	if (cont_child->sc_open == 0)
-		dtx_batched_commit_deregister(cont_child);
+	cont_child = hdl->sch_cont;
+	if (cont_child != NULL) {
+		D_DEBUG(DF_DSMS, DF_CONT": closing (%d): hdl="DF_UUID"\n",
+			DP_CONT(cont_child->sc_pool->spc_uuid,
+				cont_child->sc_uuid),
+			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
+
+		D_ASSERT(cont_child->sc_open > 0);
+		cont_child->sc_open--;
+		if (cont_child->sc_open == 0)
+			dtx_batched_commit_deregister(cont_child);
+	}
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return 0;
@@ -1517,11 +1518,33 @@ ds_cont_tgt_force_close(uuid_t cont_uuid)
 
 	D_DEBUG(DF_DSMS, DF_CONT": Force closing all handles for container "
 		DF_UUID"\n", DP_CONT(NULL, NULL), cont_uuid);
-
+ 
 	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0, DSS_ULT_IO);
 	if (rc != 0)
 		D_ERROR("dss_thread_collective failed: rc="DF_RC, DP_RC(rc));
 	return rc;
+}
+
+struct coll_close_arg {
+	uuid_t	uuid;
+};
+
+/* Called via dss_collective() to close the containers belong to this thread. */
+static int
+cont_close_one_hdl(void *vin)
+{
+	struct coll_close_arg *arg = vin;
+
+	return cont_close_hdl(arg->uuid);
+}
+
+int
+ds_cont_tgt_close(uuid_t hdl_uuid)
+{
+	struct coll_close_arg arg;
+
+	uuid_copy(arg.uuid, hdl_uuid);
+	return dss_thread_collective(cont_close_one_hdl, &arg, 0, DSS_ULT_IO);
 }
 
 void
