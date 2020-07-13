@@ -65,6 +65,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	fi_out.fh = (uint64_t)oh;
 
+	LOG_FLAGS(ie, fi->flags);
+
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 

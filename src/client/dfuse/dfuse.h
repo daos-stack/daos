@@ -355,15 +355,15 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 #if HAVE_CACHE_READDIR
 
-#define DFUSE_REPLY_OPEN(oh, req, fi)					\
+#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(oh, "Returning open");		\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(fi)->keep_cache = 1;				\
-			(fi)->cache_readdir = 1;			\
+			(_fi)->keep_cache = 1;				\
+			(_fi)->cache_readdir = 1;			\
 		}							\
-		__rc = fuse_reply_open(req, fi);			\
+		__rc = fuse_reply_open(req, _fi);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(oh,				\
 					"fuse_reply_open returned %d:%s", \
@@ -372,14 +372,14 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 #else
 
-#define DFUSE_REPLY_OPEN(oh, req, fi)					\
+#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(oh, "Returning open");		\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(fi)->keep_cache = 1;				\
+			(_fi)->keep_cache = 1;				\
 		}							\
-		__rc = fuse_reply_open(req, fi);			\
+		__rc = fuse_reply_open(req, _fi);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(oh,				\
 					"fuse_reply_open returned %d:%s", \
