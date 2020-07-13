@@ -850,6 +850,23 @@ daos_add_target(const uuid_t pool_uuid, const char *grp,
 }
 
 void
+daos_drain_target(const uuid_t pool_uuid, const char *grp,
+		const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+{
+	struct d_tgt_list	targets;
+	int			rc;
+
+	/** add tgt to the pool */
+	targets.tl_nr = 1;
+	targets.tl_ranks = &rank;
+	targets.tl_tgts = &tgt_idx;
+	rc = daos_pool_drain_tgt(pool_uuid, grp, svc, &targets, NULL);
+	if (rc)
+		print_message("drain pool failed rc %d\n", rc);
+	assert_int_equal(rc, 0);
+}
+
+void
 daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 		    const d_rank_list_t *svc, d_rank_t rank)
 {
