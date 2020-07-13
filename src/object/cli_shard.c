@@ -627,7 +627,26 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if (daos_io_bypass & IOBP_CLI_RPC) {
 		rc = daos_rpc_complete(req, task);
 	} else {
+		struct obj_reasb_req	*reasb_req = args->reasb_req;
+		bool			 is_ec_obj;
+
+		is_ec_obj = (reasb_req != NULL) &&
+			    DAOS_OC_IS_EC(reasb_req->orr_oca);
+
+		//D_ERROR("lxz is_ec_obj %d\n", is_ec_obj);
+		if (opc == DAOS_OBJ_RPC_UPDATE && is_ec_obj) {
+			D_MUTEX_LOCK(&oeh_lock);
+			if (reasb_req->orr_wait_oeh) {
+				reasb_req->orr_oeh_rpc.oeh_rpc = req;
+				reasb_req->orr_oeh_rpc.oeh_task = task;
+				D_MUTEX_UNLOCK(&oeh_lock);
+				return rc;
+			}
+			D_MUTEX_UNLOCK(&oeh_lock);
+		}
+
 		rc = daos_rpc_send(req, task);
+		//D_ERROR("lxz directly send rpc\n");
 		if (rc != 0) {
 			D_ERROR("update/fetch rpc failed rc "DF_RC"\n",
 				DP_RC(rc));

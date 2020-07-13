@@ -252,6 +252,29 @@ struct obj_ec_fail_info {
 
 struct obj_reasb_req;
 
+/* number of Object EC encoding Helper threads */
+#define OEH_NR			(32)
+
+struct oeh_work {
+	struct obj_reasb_req	*oeh_req;
+	d_list_t		 oeh_link;
+};
+
+struct oeh_helper {
+	pthread_t		oeh_tid[OEH_NR];
+	d_list_t		oeh_work_list;
+	uint32_t		oeh_valid:1,
+				oeh_finalizing:1;
+};
+
+struct oeh_rpc {
+	crt_rpc_t		*oeh_rpc;
+	tse_task_t		*oeh_task;
+};
+
+extern struct oeh_helper	 oeh;
+extern pthread_mutex_t		 oeh_lock;
+
 /** Query the number of records in EC full stripe */
 #define obj_ec_stripe_rec_nr(oca)					\
 	((oca)->u.ec.e_k * (oca)->u.ec.e_len)
@@ -598,6 +621,8 @@ int obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		      daos_iod_t *iods, uint32_t iod_nr);
 void obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		       uint32_t iod_nr);
+int oeh_init(void);
+int oeh_insert(struct obj_reasb_req *reasb_req);
 
 /* srv_ec.c */
 struct obj_rw_in;

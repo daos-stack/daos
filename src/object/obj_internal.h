@@ -155,6 +155,10 @@ struct obj_reasb_req {
 	daos_obj_id_t			 orr_oid;
 	/* #iods of IO req */
 	uint32_t			 orr_iod_nr;
+	/* return code from oeh (object EC encoding helper) */
+	int				 orr_oeh_rc;
+	/* EC update RPC wait for EC encoding helper */
+	struct oeh_rpc			 orr_oeh_rpc;
 	/* for data recovery flag */
 	uint32_t			 orr_recov:1,
 	/* for iod_size fetching flag */
@@ -162,7 +166,9 @@ struct obj_reasb_req {
 	/* for iod_size fetched flag */
 					 orr_size_fetched:1,
 	/* only with single target flag */
-					 orr_single_tgt:1;
+					 orr_single_tgt:1,
+	/* wait for oeh (object EC encoding helper) */
+					 orr_wait_oeh:1;
 };
 
 static inline void

@@ -1480,10 +1480,20 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 		}
 	}
 
-	rc = obj_ec_encode(reasb_req);
-	if (rc) {
-		D_ERROR(DF_OID" obj_ec_encode failed %d.\n", DP_OID(oid), rc);
-		goto out;
+	if (update && !oeh.oeh_valid && OEH_NR > 0) {
+		rc = oeh_init();
+		D_ASSERT(rc == 0);
+	}
+	if (oeh.oeh_valid && update) {
+		rc = oeh_insert(reasb_req);
+		D_ASSERT(rc == 0);
+	} else {
+		rc = obj_ec_encode(reasb_req);
+		if (rc) {
+			D_ERROR(DF_OID" obj_ec_encode failed %d.\n",
+				DP_OID(oid), rc);
+			goto out;
+		}
 	}
 
 	for (i = 0; !reasb_req->orr_size_fetched && i < obj_ec_tgt_nr(oca);
@@ -2411,4 +2421,98 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 	}
 
 	return tgt_oiods;
+}
+
+/* Object EC encoding Helper */
+pthread_mutex_t		oeh_lock = PTHREAD_MUTEX_INITIALIZER;
+struct oeh_helper	oeh;
+
+static void *
+oeh_thread(void *arg)
+{
+	struct obj_reasb_req	*reasb_req;
+	struct oeh_work		*work;
+	int			 rc;
+
+	while (1) {
+		D_MUTEX_LOCK(&oeh_lock);
+		if (!d_list_empty(&oeh.oeh_work_list)) {
+			work = d_list_entry(oeh.oeh_work_list.next,
+				struct oeh_work, oeh_link);
+			D_ASSERT(work != NULL);
+			d_list_del_init(&work->oeh_link);
+		} else {
+			work = NULL;
+		}
+		D_MUTEX_UNLOCK(&oeh_lock);
+
+		if (work == NULL)
+			continue;
+
+		reasb_req = work->oeh_req;
+		D_FREE(work);
+		rc = obj_ec_encode(reasb_req);
+
+		//D_ERROR("lxz encode\n");
+		D_MUTEX_LOCK(&oeh_lock);
+		reasb_req->orr_oeh_rc = rc;
+		reasb_req->orr_wait_oeh = 0;
+		D_MUTEX_UNLOCK(&oeh_lock);
+
+		if (reasb_req->orr_oeh_rpc.oeh_rpc != NULL) {
+			D_ASSERT(reasb_req->orr_oeh_rpc.oeh_task != NULL);
+			rc = daos_rpc_send(reasb_req->orr_oeh_rpc.oeh_rpc,
+					   reasb_req->orr_oeh_rpc.oeh_task);
+			D_ASSERT(rc == 0);
+			//D_ERROR("lxz oeh send RPC\n");
+		}
+	}
+
+	pthread_exit(NULL);
+}
+
+int
+oeh_init(void)
+{
+	int	i, rc;
+
+	if (OEH_NR == 0 || oeh.oeh_valid)
+		return 0;
+
+	D_MUTEX_LOCK(&oeh_lock);
+	if (oeh.oeh_valid) {
+		D_MUTEX_UNLOCK(&oeh_lock);
+		return 0;
+	}
+
+	D_INIT_LIST_HEAD(&oeh.oeh_work_list);
+
+	for (i = 0; i < OEH_NR; i++) {
+		rc =  pthread_create(&oeh.oeh_tid[i], NULL, oeh_thread, NULL);
+		D_ASSERT(rc == 0);
+	}
+	oeh.oeh_valid = 1;
+
+	D_MUTEX_UNLOCK(&oeh_lock);
+	return rc;
+}
+
+int
+oeh_insert(struct obj_reasb_req *reasb_req)
+{
+	struct oeh_work	*work;
+
+	D_ALLOC_PTR(work);
+	if (work == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&work->oeh_link);
+	work->oeh_req = reasb_req;
+
+	D_MUTEX_LOCK(&oeh_lock);
+	reasb_req->orr_wait_oeh = 1;
+	d_list_add_tail(&work->oeh_link, &oeh.oeh_work_list);
+	D_MUTEX_UNLOCK(&oeh_lock);
+
+	return 0;
 }
