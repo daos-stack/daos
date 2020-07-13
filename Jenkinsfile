@@ -371,7 +371,7 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm
+                        buildRpm()
                     }
                     post {
                         success {
