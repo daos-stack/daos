@@ -266,7 +266,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
 			}
 		} else if (opc == POOL_DRAIN &&
-		    target->ta_comp.co_status == PO_COMP_ST_UPIN) {
+			   target->ta_comp.co_status == PO_COMP_ST_UPIN) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to DRAIN %p\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);

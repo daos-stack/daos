@@ -93,7 +93,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 		D_GOTO(out, 0);
 	identical_num = 0;
 	rank_tmp = rank_list->rl_ranks[0];
-	for (i = 1; i < rank_num - identical_num; i++) {
+	for (i = 1; i < rank_num; i++) {
 		if (rank_tmp == rank_list->rl_ranks[i]) {
 			identical_num++;
 			for (j = i; j < rank_num; j++)

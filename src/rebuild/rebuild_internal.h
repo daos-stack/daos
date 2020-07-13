@@ -120,10 +120,6 @@ struct rebuild_global_pool_tracker {
 	/* link to rebuild_global.rg_global_tracker_list */
 	d_list_t	rgt_list;
 
-	/* rebuild cont/pool hdl uuid */
-	uuid_t		rgt_poh_uuid;
-	uuid_t		rgt_coh_uuid;
-
 	/* the pool uuid */
 	uuid_t		rgt_pool_uuid;
 

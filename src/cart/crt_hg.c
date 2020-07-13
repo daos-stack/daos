@@ -267,54 +267,6 @@ out:
 	return rc;
 }
 
-static hg_return_t
-crt_hg_addr_lookup_cb(const struct hg_cb_info *hg_cbinfo)
-{
-	struct crt_hg_addr_lookup_cb_args	*cb_args = NULL;
-	crt_hg_addr_lookup_cb_t			 comp_cb;
-	hg_return_t				 rc = HG_SUCCESS;
-
-	cb_args = hg_cbinfo->arg;
-	comp_cb = cb_args->al_cb;
-
-	rc = comp_cb(hg_cbinfo->info.lookup.addr, cb_args->al_arg);
-	if (rc != 0)
-		rc = HG_OTHER_ERROR;
-
-	D_FREE_PTR(cb_args);
-
-	return rc;
-}
-
-/*
- * lookup the NA address of name, fill in the na address in the rpc_priv
- * structure and in the lookup cache of rpc_priv.
- */
-int
-crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
-		   crt_hg_addr_lookup_cb_t complete_cb, void *arg)
-{
-	struct crt_hg_addr_lookup_cb_args	*cb_args;
-	int					 rc = 0;
-
-
-	D_ALLOC_PTR(cb_args);
-	if (cb_args == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	cb_args->al_cb = complete_cb;
-	cb_args->al_arg = arg;
-	rc = HG_Addr_lookup(hg_ctx->chc_hgctx, crt_hg_addr_lookup_cb,
-			    cb_args, name, HG_OP_ID_IGNORE);
-	if (rc != HG_SUCCESS) {
-		D_FREE(cb_args);
-		D_ERROR("HG_Addr_lookup() failed.\n");
-		rc = -DER_HG;
-	}
-
-out:
-	return rc;
-}
 
 int
 crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
