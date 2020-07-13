@@ -15,7 +15,7 @@ fi
 
 if [ -x $CP ]
 then
-    for FILE in `git ls-tree --full-tree --name-only HEAD -r src | grep -v -e src/control/vendor -e .go\$ -e pb-c -e debug_setup.h`
+    for FILE in $(git ls-tree --full-tree --name-only HEAD -r src | grep -v -e src/control/vendor -e .go\$ -e pb-c -e debug_setup.h)
     do
         $CP --quiet --no-tree -file --show-types --no-summary --ignore "$def_ignore" --strict "$FILE" --fix-inplace
     done
