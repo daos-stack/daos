@@ -39,7 +39,7 @@
 #include "rpc.h"
 #include "rebuild_internal.h"
 
-#define RBLD_BCAST_INTV		2	/* seconds interval to retry bcast */
+#define RBLD_CHECK_INTV	 (2 * NSEC_PER_SEC)	/* seconds interval to check*/
 struct rebuild_global	rebuild_gst;
 
 struct pool_map *
@@ -329,46 +329,6 @@ rebuild_status_completed_remove(const uuid_t pool_uuid)
 			D_FREE(rsc);
 		}
 	}
-}
-
-bool
-is_rebuild_container(uuid_t pool_uuid, uuid_t coh_uuid)
-{
-	struct rebuild_pool_tls	*tls;
-	bool			is_rebuild = false;
-
-	tls = rebuild_pool_tls_lookup(pool_uuid, -1);
-	if (tls == NULL)
-		return false;
-
-	if (!uuid_is_null(tls->rebuild_coh_uuid)) {
-		D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" cont_hdl_uuid "
-			DF_UUID"\n", DP_UUID(tls->rebuild_coh_uuid),
-			DP_UUID(coh_uuid));
-		is_rebuild = !uuid_compare(tls->rebuild_coh_uuid, coh_uuid);
-	}
-
-	return is_rebuild;
-}
-
-bool
-is_rebuild_pool(uuid_t pool_uuid, uuid_t poh_uuid)
-{
-	struct rebuild_pool_tls	*tls;
-	bool			is_rebuild = false;
-
-	tls = rebuild_pool_tls_lookup(pool_uuid, -1);
-	if (tls == NULL)
-		return false;
-
-	if (!uuid_is_null(tls->rebuild_poh_uuid)) {
-		D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" cont_hdl_uuid "
-			DF_UUID"\n", DP_UUID(tls->rebuild_poh_uuid),
-			DP_UUID(poh_uuid));
-		is_rebuild = !uuid_compare(tls->rebuild_poh_uuid, poh_uuid);
-	}
-
-	return is_rebuild;
 }
 
 static void
@@ -692,7 +652,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			D_PRINT("%s", sbuf);
 		}
 
-		dss_ult_sleep(rgt->rgt_ult, RBLD_BCAST_INTV);
+		dss_ult_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
 	}
 
 	dss_sleep_ult_destroy(rgt->rgt_ult);
@@ -774,15 +734,13 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	}
 
 	(*rgt)->rgt_leader_term = leader_term;
-	uuid_generate((*rgt)->rgt_coh_uuid);
-	uuid_generate((*rgt)->rgt_poh_uuid);
 	(*rgt)->rgt_time_start = d_timeus_secdiff(0);
 
 	D_ASSERT(rebuild_op == RB_OP_FAIL ||
 		 rebuild_op == RB_OP_DRAIN ||
 		 rebuild_op == RB_OP_ADD);
 	match_status = (rebuild_op == RB_OP_FAIL ? PO_COMP_ST_DOWN :
-			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DOWN :
+			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DRAIN :
 			PO_COMP_ST_UP);
 
 	if (tgts != NULL && tgts->pti_number > 0) {
@@ -808,11 +766,12 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 			dom = pool_map_find_node_by_rank(pool->sp_map,
 						target->ta_comp.co_rank);
 			if (dom && dom->do_comp.co_status == match_status) {
-				D_DEBUG(DB_REBUILD, "rebuild %s rank %u\n",
+				D_DEBUG(DB_REBUILD, "rebuild %s rank %u/%u\n",
 					rebuild_op == RB_OP_FAIL ? "fail" :
 					rebuild_op == RB_OP_DRAIN ? "drain" :
 					rebuild_op == RB_OP_ADD ? "add" : "???",
-					target->ta_comp.co_rank);
+					target->ta_comp.co_rank,
+					target->ta_comp.co_id);
 			}
 		}
 		/* These failed targets do not exist in the pool
@@ -820,7 +779,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 		 */
 		if (!changed) {
 			rc = -DER_CANCELED;
-			D_ERROR("rebuild targets cancelled\n");
+			D_ERROR("rebuild targets canceled\n");
 		}
 	}
 
@@ -859,8 +818,6 @@ retry:
 		DP_UUID(pool->sp_uuid), RB_OP_STR(rebuild_op));
 
 	uuid_copy(rsi->rsi_pool_uuid, pool->sp_uuid);
-	uuid_copy(rsi->rsi_pool_hdl_uuid, rgt->rgt_poh_uuid);
-	uuid_copy(rsi->rsi_cont_hdl_uuid, rgt->rgt_coh_uuid);
 	rsi->rsi_ns_id = pool->sp_iv_ns->iv_ns_id;
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
 	rsi->rsi_rebuild_ver = rgt->rgt_rebuild_ver;
@@ -1618,7 +1575,6 @@ rebuild_fini_one(void *arg)
 	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	ds_cont_local_close(rpt->rt_coh_uuid);
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
 	D_ASSERT(dpc != NULL);
@@ -1694,7 +1650,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	return rc;
 }
 
-#define RBLD_CHECK_INTV		2	/* seconds interval to check*/
 void
 rebuild_tgt_status_check_ult(void *arg)
 {
@@ -1851,12 +1806,6 @@ rebuild_prepare_one(void *data)
 	D_ASSERT(dpc != NULL);
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	/* Create ds_container locally on main XS */
-	rc = ds_cont_local_open(rpt->rt_pool_uuid, rpt->rt_coh_uuid,
-				NULL, 0, ds_sec_get_rebuild_cont_capabilities(),
-				NULL);
-	if (rc)
-		pool_tls->rebuild_pool_status = rc;
 
 	/* Set the rebuild epoch per VOS container, so VOS aggregation will not
 	 * cross the epoch to cause problem.
@@ -1996,8 +1945,10 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	rpt->rt_rebuild_op = rsi->rsi_rebuild_op;
 
-	uuid_copy(rpt->rt_poh_uuid, rsi->rsi_pool_hdl_uuid);
-	uuid_copy(rpt->rt_coh_uuid, rsi->rsi_cont_hdl_uuid);
+	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
+				      &rpt->rt_coh_uuid);
+	if (rc)
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));

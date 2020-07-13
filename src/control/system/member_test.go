@@ -26,6 +26,7 @@ package system
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -36,21 +37,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/logging"
 )
-
-func mockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
-	addr, err := net.ResolveTCPAddr("tcp",
-		fmt.Sprintf("127.0.0.%d:10001", idx))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	m := NewMember(Rank(idx), fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
-		addr, state)
-	if len(info) > 0 {
-		m.Info = info[0]
-	}
-	return m
-}
 
 func TestMember_Stringify(t *testing.T) {
 	states := []MemberState{
@@ -93,8 +79,8 @@ func TestMember_AddRemove(t *testing.T) {
 	}{
 		"add remove success": {
 			Members{
-				mockMember(t, 1, MemberStateUnknown),
-				mockMember(t, 2, MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 			[]Rank{1, 2},
 			Members{},
@@ -102,22 +88,22 @@ func TestMember_AddRemove(t *testing.T) {
 		},
 		"add failure duplicate": {
 			Members{
-				mockMember(t, 1, MemberStateUnknown),
-				mockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
 			},
 			nil,
 			nil,
-			[]error{nil, FaultMemberExists(mockMember(t, 1, MemberStateUnknown))},
+			[]error{nil, FaultMemberExists(Rank(1))},
 		},
 		"remove non-existent": {
 			Members{
-				mockMember(t, 1, MemberStateUnknown),
-				mockMember(t, 2, MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 			[]Rank{3},
 			Members{
-				mockMember(t, 1, MemberStateUnknown),
-				mockMember(t, 2, MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 			[]error{nil, nil},
 		},
@@ -149,44 +135,53 @@ func TestMember_AddRemove(t *testing.T) {
 	}
 }
 
-func TestMember_AddOrUpdate(t *testing.T) {
-	started := MemberStateJoined
+func assertMembersEqual(t *testing.T, a Member, b Member, msg string) {
+	t.Helper()
+	AssertTrue(t, reflect.DeepEqual(a, b),
+		fmt.Sprintf("%s: want %#v, got %#v", msg, a, b))
+}
+
+func TestMember_AddOrReplace(t *testing.T) {
+	m0a := *MockMember(t, 0, MemberStateStopped)
+	m1a := *MockMember(t, 1, MemberStateStopped)
+	m2a := *MockMember(t, 2, MemberStateStopped)
+	m0b := m0a
+	m0b.UUID = "m0b" // uuid changes after reformat
+	m0b.state = MemberStateJoined
+	m1b := m1a
+	m1b.Addr = m0a.Addr // rank allocated differently between hosts after reformat
+	m1b.UUID = "m1b"
+	m1b.state = MemberStateJoined
+	m2b := m2a
+	m2a.Addr = m0a.Addr // ranks 0,2 on same host before reformat
+	m2b.Addr = m1a.Addr // ranks 0,1 on same host after reformat
+	m2b.UUID = "m2b"
+	m2b.state = MemberStateJoined
 
 	for name, tc := range map[string]struct {
-		membersToAddOrUpdate Members
-		expMembers           Members
-		expCreated           []bool
-		expOldState          []*MemberState
+		membersToAddOrReplace Members
+		expMembers            Members
 	}{
 		"add then update": {
 			Members{
-				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 1, MemberStateStopped),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 1, MemberStateStopped),
 			},
-			Members{mockMember(t, 1, MemberStateStopped)},
-			[]bool{true, false},
-			[]*MemberState{nil, &started},
+			Members{MockMember(t, 1, MemberStateStopped)},
 		},
 		"add multiple": {
 			Members{
-				mockMember(t, 1, MemberStateUnknown),
-				mockMember(t, 2, MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 			Members{
-				mockMember(t, 1, MemberStateUnknown),
-				mockMember(t, 2, MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
-			[]bool{true, true},
-			[]*MemberState{nil, nil},
 		},
-		"update same state": {
-			Members{
-				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 1, MemberStateJoined),
-			},
-			Members{mockMember(t, 1, MemberStateJoined)},
-			[]bool{true, false},
-			[]*MemberState{nil, &started},
+		"rank uuid and address changed after reformat": {
+			Members{&m0a, &m1a, &m2a, &m0b, &m2b, &m1b},
+			Members{&m0b, &m1b, &m2b},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -195,11 +190,8 @@ func TestMember_AddOrUpdate(t *testing.T) {
 
 			ms := NewMembership(log)
 
-			for i, m := range tc.membersToAddOrUpdate {
-				created, oldState := ms.AddOrUpdate(m)
-				AssertEqual(t, tc.expCreated[i], created, name)
-				AssertEqual(t, tc.expOldState[i], oldState, name)
-
+			for _, m := range tc.membersToAddOrReplace {
+				ms.AddOrReplace(m)
 			}
 
 			AssertEqual(t, len(tc.expMembers), len(ms.members), name)
@@ -209,16 +201,7 @@ func TestMember_AddOrUpdate(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				AssertEqual(t, em.Rank, m.Rank, name)
-				AssertEqual(t, em.State(), m.State(), name)
-
-				m, err = ms.Get(em.Rank)
-				if err != nil {
-					t.Fatal(err)
-				}
-				m.state = MemberStateEvicted
-				AssertEqual(t, em.Rank, m.Rank, name)
-				AssertEqual(t, MemberStateEvicted, m.State(), name)
+				assertMembersEqual(t, *em, *m, name)
 			}
 		})
 	}
@@ -230,9 +213,9 @@ func TestMember_HostRanks(t *testing.T) {
 		t.Fatal(err)
 	}
 	members := Members{
-		mockMember(t, 1, MemberStateJoined),
-		mockMember(t, 2, MemberStateStopped),
-		mockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateEvicted),
 		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
 	}
 
@@ -265,8 +248,8 @@ func TestMember_HostRanks(t *testing.T) {
 			},
 			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001"},
 			expMembers: Members{
-				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 2, MemberStateStopped),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
 			},
 		},
 		"distinct rank list": {
@@ -310,7 +293,7 @@ func TestMember_HostRanks(t *testing.T) {
 }
 
 func TestMember_Convert(t *testing.T) {
-	membersIn := Members{mockMember(t, 1, MemberStateJoined)}
+	membersIn := Members{MockMember(t, 1, MemberStateJoined)}
 	membersOut := Members{}
 	if err := convert.Types(membersIn, &membersOut); err != nil {
 		t.Fatal(err)
@@ -355,16 +338,16 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 	}{
 		"update result address from member": {
 			members: Members{
-				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 2, MemberStateStopped),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
 			},
 			results: MemberResults{
 				mrDiffAddr1,
 				mrDiffAddr2,
 			},
 			expMembers: Members{
-				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 2, MemberStateErrored, "can't stop"),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateErrored, "can't stop"),
 			},
 			expResults: MemberResults{
 				expMrDiffAddr1,
@@ -374,12 +357,12 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 		"ignore errored results": {
 			ignoreErrs: true,
 			members: Members{
-				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 2, MemberStateStopped),
-				mockMember(t, 3, MemberStateEvicted),
-				mockMember(t, 4, MemberStateStopped),
-				mockMember(t, 5, MemberStateJoined),
-				mockMember(t, 6, MemberStateJoined),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 4, MemberStateStopped),
+				MockMember(t, 5, MemberStateJoined),
+				MockMember(t, 6, MemberStateJoined),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
@@ -389,22 +372,22 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				&MemberResult{Rank: 6, Msg: "exit 1", State: MemberStateStopped},
 			},
 			expMembers: Members{
-				mockMember(t, 1, MemberStateStopped),
-				mockMember(t, 2, MemberStateStopped), // errored results don't change member state
-				mockMember(t, 3, MemberStateEvicted),
-				mockMember(t, 4, MemberStateReady),
-				mockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
-				mockMember(t, 6, MemberStateStopped, "exit 1"),
+				MockMember(t, 1, MemberStateStopped),
+				MockMember(t, 2, MemberStateStopped), // errored results don't change member state
+				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 4, MemberStateReady),
+				MockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
+				MockMember(t, 6, MemberStateStopped, "exit 1"),
 			},
 		},
-		"dont ignore errored results": {
+		"don't ignore errored results": {
 			members: Members{
-				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 2, MemberStateStopped),
-				mockMember(t, 3, MemberStateEvicted),
-				mockMember(t, 4, MemberStateStopped),
-				mockMember(t, 5, MemberStateJoined),
-				mockMember(t, 6, MemberStateStopped),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 4, MemberStateStopped),
+				MockMember(t, 5, MemberStateJoined),
+				MockMember(t, 6, MemberStateStopped),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
@@ -414,19 +397,19 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 				&MemberResult{Rank: 6, Msg: "exit 1", State: MemberStateStopped},
 			},
 			expMembers: Members{
-				mockMember(t, 1, MemberStateStopped),
-				mockMember(t, 2, MemberStateErrored, "can't stop"),
-				mockMember(t, 3, MemberStateEvicted),
-				mockMember(t, 4, MemberStateReady),
-				mockMember(t, 5, MemberStateJoined),
-				mockMember(t, 6, MemberStateStopped),
+				MockMember(t, 1, MemberStateStopped),
+				MockMember(t, 2, MemberStateErrored, "can't stop"),
+				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 4, MemberStateReady),
+				MockMember(t, 5, MemberStateJoined),
+				MockMember(t, 6, MemberStateStopped),
 			},
 		},
 		"errored result with nonerrored state": {
 			members: Members{
-				mockMember(t, 1, MemberStateJoined),
-				mockMember(t, 2, MemberStateStopped),
-				mockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateEvicted),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),

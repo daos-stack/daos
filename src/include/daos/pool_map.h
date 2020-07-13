@@ -58,6 +58,8 @@ typedef enum pool_comp_state {
 	PO_COMP_ST_DOWN		= 1 << 3,
 	/** component is dead, its data has already been rebuilt */
 	PO_COMP_ST_DOWNOUT	= 1 << 4,
+	/** component is currently being drained and rebuilt elsewhere */
+	PO_COMP_ST_DRAIN	= 1 << 5,
 } pool_comp_state_t;
 
 /** parent class of all all pool components: target, domain */
@@ -107,7 +109,7 @@ struct pool_domain {
 	/**
 	 * all targets within this domain
 	 * for the last level domain, it points to the first direct targets
-	 * for the intermediate domain, it ponts to the first indirect targets
+	 * for the intermediate domain, it points to the first indirect targets
 	 */
 	struct pool_target	*do_targets;
 };
@@ -265,9 +267,23 @@ pool_component_unavail(struct pool_component *comp, bool for_reint)
 {
 	uint8_t status = comp->co_status;
 
-	return	(status == PO_COMP_ST_DOWN) ||
-		(status == PO_COMP_ST_DOWNOUT) ||
-		(status == PO_COMP_ST_UP && !(for_reint));
+	/* If it's down or down-out it is definitely unavailable */
+	if ((status == PO_COMP_ST_DOWN) || (status == PO_COMP_ST_DOWNOUT))
+		return true;
+
+	/* Targets being drained should not be used */
+	if (status == PO_COMP_ST_DRAIN)
+		return true;
+
+	/*
+	 * The component is unavailable if it's currently being reintegrated.
+	 * However when calculating the data movement for reintegration
+	 * We treat these nodes as being available for the placement map.
+	 */
+	if ((status == PO_COMP_ST_UP) && (for_reint == false))
+		return true;
+
+	return false;
 }
 
 static inline bool

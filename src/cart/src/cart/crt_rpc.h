@@ -97,8 +97,8 @@ struct crt_common_hdr {
 	d_rank_t	cch_src_rank;
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
-	/* Transfer id */
-	uint32_t	cch_xid;
+	/* RPC id */
+	uint64_t	cch_rpcid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -200,7 +200,7 @@ struct crt_rpc_priv {
 				crp_have_ep:1,
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
-				/* 1 if RPC is succesfully put on the wire */
+				/* 1 if RPC is successfully put on the wire */
 				crp_on_wire:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
@@ -211,6 +211,9 @@ struct crt_rpc_priv {
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
+
+#define CRT_PROTO_INTERNAL_VERSION 1
+#define CRT_PROTO_FI_VERSION 0
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -275,7 +278,9 @@ struct crt_rpc_priv {
 		crt_hdlr_ctl_get_pid, NULL),				\
 	X(CRT_OPC_PROTO_QUERY,						\
 		0, &CQF_crt_proto_query,				\
-		crt_hdlr_proto_query, NULL),				\
+		crt_hdlr_proto_query, NULL)
+
+#define CRT_FI_RPCS_LIST						\
 	X(CRT_OPC_CTL_FI_TOGGLE,					\
 		0, &CQF_crt_ctl_fi_toggle,				\
 		crt_hdlr_ctl_fi_toggle, NULL),				\
@@ -284,15 +289,28 @@ struct crt_rpc_priv {
 		crt_hdlr_ctl_fi_attr_set, NULL),			\
 	X(CRT_OPC_CTL_LOG_SET,						\
 		0, &CQF_crt_ctl_log_set,				\
-		crt_hdlr_ctl_log_set, NULL)
+		crt_hdlr_ctl_log_set, NULL),				\
+	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
+		0, &CQF_crt_ctl_log_add_msg,				\
+		crt_hdlr_ctl_log_add_msg, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
 enum {
-	__FIRST  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE, 0, 0) - 1,
+	__FIRST_INTERNAL  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE,
+					CRT_PROTO_INTERNAL_VERSION, 0) - 1,
 	CRT_INTERNAL_RPCS_LIST,
+};
+
+#define CRT_OPC_FI_BASE		0xF1000000UL
+
+/* CRT internal opcode definitions, must be 0xFF00xxxx.*/
+enum {
+	__FIRST_FI  = CRT_PROTO_OPC(CRT_OPC_FI_BASE,
+				CRT_PROTO_FI_VERSION, 0) - 1,
+	CRT_FI_RPCS_LIST,
 };
 
 #undef X
@@ -525,6 +543,15 @@ CRT_RPC_DECLARE(crt_ctl_fi_toggle,
 	((int32_t)		(rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
+
+#define CRT_ISEQ_CTL_LOG_ADD_MSG	/* input fields */	\
+	((d_string_t)		(log_msg)	CRT_VAR)
+
+#define CRT_OSEQ_CTL_LOG_ADD_MSG	/* output fields */	\
+	((int32_t)		(rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
+		CRT_OSEQ_CTL_LOG_ADD_MSG)
 
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public

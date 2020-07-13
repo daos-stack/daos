@@ -30,7 +30,7 @@
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 
-/** Holds information about checksum and  data to verify when a
+/** Holds information about checksum and data to verify when a
  * new checksum for an extent chunk is needed
  */
 struct to_verify {
@@ -134,8 +134,8 @@ cc_verify_orig_extents(struct csum_context *ctx)
 		struct to_verify	*verify;
 
 		memset(csum, 0, csum_len);
-		daos_csummer_reset(csummer);
 		daos_csummer_set_buffer(csummer, csum, csum_len);
+		daos_csummer_reset(csummer);
 		verify = &to_verify[v];
 		daos_csummer_update(csummer, verify->tv_buf, verify->tv_len);
 		daos_csummer_finish(csummer);
@@ -143,7 +143,11 @@ cc_verify_orig_extents(struct csum_context *ctx)
 		match = daos_csummer_csum_compare(csummer, csum,
 						  verify->tv_csum, csum_len);
 		if (!match) {
-			D_ERROR("Original extent corrupted\n");
+			D_ERROR("[%d] Original extent corrupted. "
+				"Calculated ("DF_CI_BUF") != "
+				"Stored ("DF_CI_BUF")\n",
+				v, DP_CI_BUF(csum, csum_len),
+				DP_CI_BUF(verify->tv_csum, csum_len));
 			return -DER_CSUM;
 		}
 	}
@@ -179,6 +183,9 @@ cc_remember_to_verify(struct csum_context *ctx, uint8_t *biov_csum,
 		      struct bio_iov *biov)
 {
 	struct to_verify	*ver;
+	uint16_t		 csum_len;
+
+	csum_len = daos_csummer_get_csum_len(ctx->cc_csummer);
 
 	cc_verify_resize_if_needed(ctx);
 	ver = &ctx->cc_to_verify[ctx->cc_to_verify_nr];
@@ -191,7 +198,8 @@ cc_remember_to_verify(struct csum_context *ctx, uint8_t *biov_csum,
 
 	D_ASSERT(biov_csum != NULL);
 	ver->tv_csum = biov_csum;
-	C_TRACE("To Verify len: %lu\n", ver->tv_len);
+	C_TRACE("To Verify len: %lu, csum: "DF_CI_BUF"\n", ver->tv_len,
+		DP_CI_BUF(ver->tv_csum, csum_len));
 	ctx->cc_to_verify_nr++;
 }
 
@@ -268,7 +276,8 @@ static void
 cc_remember_to_copy(struct csum_context *ctx, struct dcs_csum_info *info,
 		    uint32_t idx, uint8_t *csum, uint16_t len)
 {
-	C_TRACE("Remember to copy csum (idx=%d, len=%d)\n", idx, len);
+	C_TRACE("Remember to copy csum (idx=%d, len=%d): "DF_CI_BUF"\n", idx,
+		len, DP_CI_BUF(csum, len));
 	if (csum == NULL) {
 		D_ERROR("Expected to have checksums to copy for fetch.\n");
 		return;
@@ -291,13 +300,18 @@ static void
 cc_insert_remembered_csums(struct csum_context *ctx)
 {
 	if (ctx->cc_csums_to_copy_to != NULL) {
-		C_TRACE("Inserting csum (len=%lu)\n",
-			ctx->cc_csum_buf_to_copy_len);
+		C_TRACE("Inserting csum (len=%"PRIu64"): "DF_CI_BUF"\n",
+			ctx->cc_csum_buf_to_copy_len,
+			DP_CI_BUF(ctx->cc_csum_buf_to_copy,
+				  ctx->cc_csum_buf_to_copy_len));
 		ci_insert(ctx->cc_csums_to_copy_to,
 			  ctx->cc_csums_to_copy_to_csum_idx,
 			  ctx->cc_csum_buf_to_copy,
 			  ctx->cc_csum_buf_to_copy_len);
 		ctx->cc_csums_to_copy_to = NULL;
+		ctx->cc_csums_to_copy_to_csum_idx = 0;
+		ctx->cc_csum_buf_to_copy = NULL;
+		ctx->cc_csum_buf_to_copy_len = 0;
 	}
 }
 
@@ -382,6 +396,9 @@ cc_add_csum(struct csum_context *ctx, struct dcs_csum_info *info,
 
 			cc_remember_to_verify(ctx, biov_csum, biov);
 		} else {
+			/** Finish previous checksum calc if started */
+			if (ctx->cc_csum_started)
+				daos_csummer_finish(ctx->cc_csummer);
 			/** just copy the biov_csum */
 			cc_remember_to_copy(ctx, info, chunk_idx, biov_csum,
 					    csum_len);
@@ -410,13 +427,20 @@ cc_add_csum(struct csum_context *ctx, struct dcs_csum_info *info,
 }
 
 static size_t
-cc_biov_bytes_left(const struct csum_context *ctx) {
+cc_biov_bytes_left(const struct csum_context *ctx)
+{
 	struct bio_iov *biov = cc2iov(ctx);
 
 	return bio_iov2req_len(biov) - ctx->cc_bsgl_idx->iov_offset;
 }
 
-/** For a given recx, add checksums to the outupt csum info. Data will come
+static bool
+cc_bsgl_remaining(struct csum_context *ctx)
+{
+	return (*ctx).cc_bsgl_idx->iov_idx >= (*ctx).cc_bsgl->bs_nr_out;
+}
+
+/** For a given recx, add checksums to the output csum info. Data will come
  * from the bsgls in \ctx
  */
 static int
@@ -442,6 +466,8 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 	cc_set_iov2ranges(ctx, cc2iov(ctx));
 
 	sc = (recx->rx_idx * rec_size) / rec_chunksize;
+	C_TRACE("Calculating %d checksum(s) for Array Value "
+			DF_RECX"\n", chunk_nr, DP_RECX(*recx));
 	for (c = 0; c < chunk_nr; c++, sc++) { /** for each chunk/checksum */
 		ctx->cc_recx_chunk = csum_recx_chunkidx2range(recx, rec_size,
 							      rec_chunksize, c);
@@ -460,9 +486,8 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 			/** All out of data. Just return because request may
 			 * be larger than previously written data
 			 */
-			if (ctx->cc_bsgl_idx->iov_idx >=
-			    ctx->cc_bsgl->bs_nr_out)
-				return 0;
+			if (cc_bsgl_remaining(ctx))
+				break;
 
 			rc = cc_add_csum(ctx, info, c);
 			if (rc != 0)
@@ -484,7 +509,7 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 static uint64_t
 cc2biov_csums_nr(struct csum_context *ctx)
 {
-	return ctx->cc_biov_csum_idx;
+	return ctx->cc_biov_csum_idx + 1;
 }
 
 int
@@ -496,6 +521,9 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	struct daos_sgl_idx	bsgl_idx = {0};
 	int			rc = 0;
 	uint32_t		i, j;
+
+	if (biov_csums_used != NULL)
+		*biov_csums_used = 0;
 
 	if (!(daos_csummer_initialized(csummer) && bsgl))
 		return 0;
@@ -546,6 +574,8 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		struct dcs_csum_info	*info = &iod_csums->ic_data[i];
 
 		if (ctx.cc_rec_len > 0 && ci_is_valid(info)) {
+			if (cc_bsgl_remaining(&ctx))
+				break;
 			rc = cc_add_csums_for_recx(&ctx, recx, info);
 			if (rc != 0) {
 				D_ERROR("Failed to add csum for "
@@ -572,6 +602,7 @@ ds_csum_calc_needed(struct daos_csum_range *raw_ext,
 	bool	is_only_extent_in_chunk;
 	bool	biov_extends_past_chunk;
 	bool	using_whole_chunk_of_extent;
+	bool	biov_starts_at_beginning_of_chunk;
 
 	/** in order to use stored csum
 	 * - a new csum must not have already been started (would mean a
@@ -587,12 +618,16 @@ ds_csum_calc_needed(struct daos_csum_range *raw_ext,
 				  (!has_next_biov || /** nothing after */
 				   biov_extends_past_chunk);
 
+	biov_starts_at_beginning_of_chunk = req_ext->dcr_lo <=
+					    max(raw_ext->dcr_lo, chunk->dcr_lo);
 
-	using_whole_chunk_of_extent = biov_extends_past_chunk ||
-				      (req_ext->dcr_hi < chunk->dcr_hi &&
-				       req_ext->dcr_lo == raw_ext->dcr_lo &&
-				       req_ext->dcr_hi == raw_ext->dcr_hi
-				       );
+	using_whole_chunk_of_extent =
+		(biov_extends_past_chunk &&
+		 biov_starts_at_beginning_of_chunk) ||
+		(req_ext->dcr_hi < chunk->dcr_hi &&
+		 req_ext->dcr_lo == raw_ext->dcr_lo &&
+		 req_ext->dcr_hi == raw_ext->dcr_hi
+		);
 
 	return !(is_only_extent_in_chunk && using_whole_chunk_of_extent);
 }

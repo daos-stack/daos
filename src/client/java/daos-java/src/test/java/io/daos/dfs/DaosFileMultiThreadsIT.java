@@ -17,7 +17,7 @@ public class DaosFileMultiThreadsIT {
   private static DaosFsClient client;
 
   @BeforeClass
-  public static void setup()throws Exception{
+  public static void setup() throws Exception {
     poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
     contId = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
 
@@ -27,18 +27,18 @@ public class DaosFileMultiThreadsIT {
   private void operate(String path, Op op, int threadNum) throws Exception {
     List<CreateThread> list = new ArrayList<>();
     int num = threadNum;
-    for(int i=0; i<num; i++) {
+    for (int i = 0; i < num; i++) {
       list.add(new CreateThread(client, path, op));
     }
-    for(int i=0; i<num; i++) {
+    for (int i = 0; i < num; i++) {
       list.get(i).start();
     }
 
-    for(int i=0; i<num; i++) {
+    for (int i = 0; i < num; i++) {
       list.get(i).join();
     }
 
-    for(int i=0; i<num; i++) {
+    for (int i = 0; i < num; i++) {
       Assert.assertFalse(list.get(i).failed);
     }
 
@@ -50,6 +50,7 @@ public class DaosFileMultiThreadsIT {
 
   /**
    * TODO: to be resumed after DAOS team adding "conditional update" to fix concurrency issue
+   *
    * @throws Exception
    */
   public void testCreateNewFile() throws Exception {
@@ -58,6 +59,7 @@ public class DaosFileMultiThreadsIT {
 
   /**
    * TODO: to be resumed after DAOS team adding "conditional update" to fix concurrency issue
+   *
    * @throws Exception
    */
   public void testMkdir() throws Exception {
@@ -73,14 +75,14 @@ public class DaosFileMultiThreadsIT {
     StringBuilder sb = new StringBuilder();
     String str = "abcdeffffffffffffffffffffffffdddddddddddddddddddddddd";
     int size = 0;
-    while (size < 2 * 1024 *1024) {
+    while (size < 2 * 1024 * 1024) {
       sb.append(str);
       size += str.length();
     }
     String data = sb.toString();
     ByteBuffer buffer = ByteBuffer.allocateDirect(size);
 
-    for (int i=0; i< 24; i++) {
+    for (int i = 0; i < 24; i++) {
       buffer.put(data.getBytes());
       file.write(buffer, 0, 0, data.length());
       buffer.clear();
@@ -92,13 +94,13 @@ public class DaosFileMultiThreadsIT {
   }
 
   @AfterClass
-  public static void teardown()throws Exception{
-    if(client != null) {
+  public static void teardown() throws Exception {
+    if (client != null) {
       client.disconnect();
     }
   }
 
-  enum Op{
+  enum Op {
     CREATE, MKDIR, EXISTS
   }
 
@@ -108,22 +110,29 @@ public class DaosFileMultiThreadsIT {
     String path;
     boolean failed;
     Op op;
+
     CreateThread(DaosFsClient client, String path, Op op) throws Exception {
       this.client = client;
       this.path = path;
 //      this.client = DaosFsClientTestBase.prepareFs(poolId, contId);
       this.op = op;
     }
-    CreateThread(DaosFsClient client, String path) throws Exception{
+
+    CreateThread(DaosFsClient client, String path) throws Exception {
       this(client, path, Op.CREATE);
     }
+
     @Override
-    public void run(){
+    public void run() {
       DaosFile file = client.getFile(path);
       try {
         switch (op) {
-          case CREATE: file.createNewFile(true);break;
-          case MKDIR:  file.mkdirs(); break;
+          case CREATE:
+            file.createNewFile(true);
+            break;
+          case MKDIR:
+            file.mkdirs();
+            break;
           case EXISTS:
             Assert.assertTrue(file.exists());
             DaosFile file2 = client.getFile(path);
@@ -132,12 +141,12 @@ public class DaosFileMultiThreadsIT {
             break;
         }
         file.release();
-      }catch (Exception e) {
+      } catch (Exception e) {
         if (!(e instanceof DaosIOException)) {
           e.printStackTrace();
           failed = true;
         } else {
-          DaosIOException de = (DaosIOException)e;
+          DaosIOException de = (DaosIOException) e;
           switch (op) {
             case CREATE:
             case MKDIR:

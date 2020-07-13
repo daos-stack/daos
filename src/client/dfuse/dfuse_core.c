@@ -92,10 +92,10 @@ static void
 ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dfuse_inode_entry	*ie;
-	int				oldref;
+	uint				oldref;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_add(&ie->ie_ref, 1);
+	oldref = atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 	DFUSE_TRA_DEBUG(ie, "addref to %u", oldref + 1);
 }
 
@@ -103,12 +103,43 @@ static bool
 ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dfuse_inode_entry	*ie;
-	int				oldref;
+	uint				oldref;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_sub(&ie->ie_ref, 1);
+	oldref = atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 	DFUSE_TRA_DEBUG(ie, "decref to %u", oldref - 1);
 	return oldref == 1;
+}
+
+static int
+ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
+{
+	struct dfuse_inode_entry	*ie;
+	uint				oldref = 0;
+	uint				newref = 0;
+
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	do {
+		oldref = atomic_load_relaxed(&ie->ie_ref);
+
+		if (oldref < count)
+			break;
+
+		newref = oldref - count;
+
+	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
+
+	if (oldref < count) {
+		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u",
+				count, oldref);
+		return -DER_INVAL;
+	}
+
+	DFUSE_TRA_DEBUG(ie, "decref of %u to %u", count, newref);
+	if (newref == 0)
+		return 1;
+	return 0;
 }
 
 static void
@@ -124,10 +155,11 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t ie_hops = {
-	.hop_key_cmp	= ih_key_cmp,
-	.hop_rec_addref	= ih_addref,
-	.hop_rec_decref	= ih_decref,
-	.hop_rec_free	= ih_free,
+	.hop_key_cmp		= ih_key_cmp,
+	.hop_rec_addref		= ih_addref,
+	.hop_rec_decref		= ih_decref,
+	.hop_rec_ndecref	= ih_ndecref,
+	.hop_rec_free		= ih_free,
 };
 
 static d_hash_table_ops_t ir_hops = {
@@ -182,7 +214,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (rc != 0)
 		D_GOTO(err, 0);
 
-	atomic_fetch_add(&fs_handle->dpi_ino_next, 2);
+	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
 	args.argc = 4;
 
@@ -222,7 +254,7 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_stat.st_ino = 1;
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_root = ie->ie_stat.st_ino;
@@ -331,7 +363,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 
 		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		ref = atomic_load_consume(&ie->ie_ref);
+		ref = atomic_load_relaxed(&ie->ie_ref);
 
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 

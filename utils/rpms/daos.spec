@@ -4,11 +4,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0~a1-1.git.4871023%{?dist}
+%global mercury_version 2.0.0~rc1-1%{?dist}
 
 Name:          daos
 Version:       1.1.0
-Release:       19%{?relval}%{?dist}
+Release:       28%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -36,8 +36,10 @@ BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
+BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
+BuildRequires: libisal_crypto-devel
 %endif
 BuildRequires: raft-devel >= 0.6.0
 BuildRequires: openssl-devel
@@ -178,23 +180,21 @@ This is the package needed to build software with the DAOS library.
 %setup -q
 
 %build
-# remove rpathing from the build
-rpath_files="utils/daos_build.py"
-rpath_files+=" $(find . -name SConscript)"
-sed -i -e '/AppendUnique(RPATH=.*)/d' $rpath_files
+
 %define conf_dir %{_sysconfdir}/daos
 
-
-scons %{?no_smp_mflags}    \
+scons %{?_smp_mflags}      \
       --config=force       \
+      --no-rpath           \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot} \
       %{?_with_fault_injection}
 
 %install
-scons %{?no_smp_mflags}               \
+scons %{?_smp_mflags}                 \
       --config=force                  \
+      --no-rpath                      \
       --install-sandbox=%{?buildroot} \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
@@ -210,9 +210,11 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
+getent passwd daos_server >/dev/null || useradd -M daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -243,13 +245,14 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/ring_pl_map
 %{_bindir}/pl_bench
 %{_bindir}/rdbt
+%{_bindir}/vos_size_dfs_sample.py
 %{_bindir}/vos_size.py
+%{_libdir}/libdfs_internal.so
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
 %{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
-%{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %{_libdir}/libdaos_common.so
 # TODO: this should move from daos_srv to daos
@@ -262,6 +265,11 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
+%dir %{conf_dir}/certs
+%attr(0700,daos_server,daos_server) %{conf_dir}/certs
+%dir %{conf_dir}/certs/clients
+%attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
+%attr(0664,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
@@ -289,8 +297,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
-%{_bindir}/dmg_old
-%{_bindir}/daosctl
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -363,8 +369,38 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Wed May 20 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.0-19
+* Mon Jul 13 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.0-28
 - add fault_status to daos-tests files list
+
+* Tue Jul 7 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-27
+- Update to mercury release 2.0.0~rc1-1
+
+* Sun Jun 28 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-26
+- Add the vos_size_dfs_sample.py tool. It is used to generate dynamically
+  the vos_dfs_sample.yaml file using the real DFS super block data.
+
+* Tue Jun 23 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-25
+- Add -no-rpath option and use it for rpm build rather than modifying
+  SCons files in place
+
+* Tue Jun 16 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-24
+- Modify RPATH removal snippet to replace line with pass as some lines
+  can't be removed without breaking the code
+
+* Fri Jun 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-23
+- Add libisa-l_crypto dependency
+
+* Fri Jun 05 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-22
+- Change server systemd run-as user to daos_server in unit file
+
+* Thu Jun 04 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-21
+- Remove dmg_old from DAOS RPM package
+
+* Thu May 28 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-20
+- Create daos group to run as in systemd unit file
+
+* Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
+- Enable parallel building with _smp_mflags
 
 * Fri May 15 2020 Kenneth Cain <kenneth.c.cain@intel.com> - 1.1.0-18
 - Require raft-devel >= 0.6.0 that adds new API raft_election_start()
@@ -376,10 +412,10 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 * Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-16
 - Fix fuse3-libs -> libfuse3 for SLES/Leap 15
 
-* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
+* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
 - Use new properly pre-release tagged mercury RPM
 
-* Mon Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
+* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
 - Move fuse dependencies to the client subpackage
 
 * Mon Apr 27 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-13
@@ -411,7 +447,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 - Remove cart as an external dependence
 
 * Mon Mar 23 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-4
-- Remove scons_local as depedency
+- Remove scons_local as dependency
 
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
 - bump up go minimum version to 1.12

@@ -75,6 +75,7 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.uuid = None
         self.info = None
+        self.cmd_output = None
         self.svc_ranks = None
         self.connected = False
         self.dmg = dmg_command
@@ -136,6 +137,9 @@ class TestPool(TestDaosApiBase):
             # Create a pool with the dmg command
             self._log_method("dmg.pool_create", kwargs)
             result = self.dmg.pool_create(**kwargs)
+            # self.cmd_output to keep the actual stdout of dmg command for
+            # checking the negative/warning message.
+            self.cmd_output = result.stdout
             uuid, svc = get_pool_uuid_service_replicas_from_stdout(
                 result.stdout)
 
@@ -257,11 +261,20 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(CommandFailure)
-    def set_property(self):
+    def set_property(self, prop_name=None, prop_value=None):
         """Set Property.
 
         It sets property for a given pool uuid using
         dmg.
+
+        Args:
+            prop_name (str, optional): pool property name. Defaults to
+                None.
+            prop_value (str, optional): value to be set for the property.
+                Defaults to None.
+
+        Returns:
+            None
 
         """
         if self.pool:
@@ -269,8 +282,12 @@ class TestPool(TestDaosApiBase):
 
             if self.control_method.value == self.USE_DMG and self.dmg:
                 # set-prop for given pool using dmg
-                self.dmg.pool_set_prop(self.uuid, self.prop_name,
-                                       self.prop_value)
+                if prop_name is not None and prop_value is not None:
+                    self.dmg.pool_set_prop(self.uuid, prop_name,
+                                           prop_value)
+                else:
+                    self.dmg.pool_set_prop(self.uuid, self.prop_name,
+                                           self.prop_value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -298,8 +315,8 @@ class TestPool(TestDaosApiBase):
         """Check the pool info attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -312,8 +329,8 @@ class TestPool(TestDaosApiBase):
             pi_bits (int, optional): pool bits. Defaults to None.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -337,8 +354,8 @@ class TestPool(TestDaosApiBase):
         """Check the pool info space attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -352,8 +369,8 @@ class TestPool(TestDaosApiBase):
             ps_padding (int, optional): space padding. Defaults to None.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -382,8 +399,8 @@ class TestPool(TestDaosApiBase):
         """Check the pool info daos space attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -391,8 +408,8 @@ class TestPool(TestDaosApiBase):
             s_free (list, optional): free space per device. Defaults to None.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -419,8 +436,8 @@ class TestPool(TestDaosApiBase):
         """Check the pool info rebuild attributes.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Args:
@@ -439,8 +456,8 @@ class TestPool(TestDaosApiBase):
             rs_size (int, optional): size of all rebuilt records.
 
         Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
 
         Returns:
@@ -644,7 +661,7 @@ class TestPool(TestDaosApiBase):
             container (TestContainer): container from which to read data
 
         Returns:
-            bool: True if all the data is read sucessfully befoire rebuild
+            bool: True if all the data is read successfully befoire rebuild
                 completes; False otherwise
 
         """

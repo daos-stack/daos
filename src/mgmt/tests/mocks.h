@@ -117,6 +117,13 @@ void mock_ds_mgmt_pool_set_prop_setup(void);
 void mock_ds_mgmt_pool_set_prop_teardown(void);
 
 /*
+ * Mock ds_mgmt_pool_extend
+ */
+extern int		ds_mgmt_pool_extend_return;
+extern uuid_t		ds_mgmt_pool_extend_uuid;
+void mock_ds_mgmt_pool_extend_setup(void);
+
+/*
  * Mock ds_mgmt_pool_query
  */
 extern int		ds_mgmt_pool_query_return;
@@ -127,11 +134,18 @@ extern void		*ds_mgmt_pool_query_info_ptr;
 void mock_ds_mgmt_pool_query_setup(void);
 
 /*
- * Mock ds_mgmt_exclude
+ * Mock ds_mgmt_tgt_state_update
  */
 extern int		ds_mgmt_target_update_return;
 extern uuid_t		ds_mgmt_target_update_uuid;
-void mock_ds_mgmt_exclude_setup(void);
+void mock_ds_mgmt_tgt_update_setup(void);
+
+/*
+ * Mock ds_mgmt_evict
+ */
+extern int		ds_mgmt_pool_evict_return;
+extern uuid_t		ds_mgmt_pool_evict_uuid;
+void mock_ds_mgmt_pool_evict_setup(void);
 
 /*
  * Mock ds_mgmt_cont_set_owner

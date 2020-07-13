@@ -225,7 +225,8 @@ rdb_lc_store_replicas(daos_handle_t lc, uint64_t index,
 	keys[1] = rdb_lc_replicas;
 	d_iov_set(&vals[1], replicas->rl_ranks,
 		     sizeof(*replicas->rl_ranks) * nreplicas);
-	return rdb_lc_update(lc, index, RDB_LC_ATTRS, 2 /* n */, keys, vals);
+	return rdb_lc_update(lc, index, RDB_LC_ATTRS, true /* crit */,
+			     2 /* n */, keys, vals);
 }
 
 static int
@@ -406,7 +407,8 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 	arg.inline_thres = 1 * 1024 * 1024;
 
 	/* Enumerate from the object level. */
-	rc = dss_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg);
+	rc = dss_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg,
+			   NULL /* dth */);
 	if (rc < 0)
 		return rc;
 
@@ -1117,11 +1119,13 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	d_iov_t		values[2];
 	struct rdb_entry	header;
 	int			n = 0;
+	bool			crit;
 	int			rc;
 	int			rc_tmp;
 
 	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n",
 		  index, db->d_lc_record.dlr_tail);
+
 	/*
 	 * If this is an rdb_tx entry, apply it. Note that the updates involved
 	 * won't become visible to queries until entry index is committed.
@@ -1131,13 +1135,14 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	 */
 	if (entry->type == RAFT_LOGTYPE_NORMAL) {
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
-				  rdb_raft_lookup_result(db, index));
+				  rdb_raft_lookup_result(db, index), &crit);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
 				DP_DB(db), index, rc);
 			goto err_discard;
 		}
 	} else if (raft_entry_is_cfg_change(entry)) {
+		crit = true;
 		rc = rdb_raft_update_node(db, index, entry);
 		if (rc != 0)
 			goto err_discard;
@@ -1158,7 +1163,8 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 		d_iov_set(&values[n], entry->data.buf, entry->data.len);
 		n++;
 	}
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, n, keys, values);
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, n,
+			   keys, values);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to persist entry "DF_U64": %d\n",
 			DP_DB(db), index, rc);
@@ -1438,6 +1444,18 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	return 0;
 }
 
+static inline bool
+rdb_gc_yield(void *arg)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+
+	if (dss_xstream_exiting(dx))
+		return true;
+
+	ABT_thread_yield();
+	return false;
+}
+
 /* Daemon ULT for compacting polled entries (i.e., indices <= base). */
 static void
 rdb_compactd(void *arg)
@@ -1469,7 +1487,7 @@ rdb_compactd(void *arg)
 				": %d\n", DP_DB(db), base, rc);
 			break;
 		}
-		dss_gc_run(db->d_pool, -1);
+		vos_gc_pool_run(db->d_pool, -1, rdb_gc_yield, NULL);
 	}
 	D_DEBUG(DB_MD, DF_DB": compactd stopping\n", DP_DB(db));
 }

@@ -304,7 +304,7 @@ static int
 comp_sorter_init(struct pool_comp_sorter *sorter, int nr,
 		 pool_comp_type_t type)
 {
-	D_DEBUG(DB_TRACE, "Initialise sorter for %s, nr %d\n",
+	D_DEBUG(DB_TRACE, "Initialize sorter for %s, nr %d\n",
 		pool_comp_type2str(type), nr);
 
 	D_ALLOC(sorter->cs_comps, nr * sizeof(*sorter->cs_comps));
@@ -933,7 +933,7 @@ pool_map_finalise(struct pool_map *map)
 /**
  * Install a component tree to a pool map.
  *
- * \param map		[IN]	The pool map to be initialised.
+ * \param map		[IN]	The pool map to be initialized.
  * \param activate	[IN]	Activate pool components.
  * \param tree		[IN]	Component tree for the pool map.
  */
@@ -1771,7 +1771,7 @@ matched_criteria(struct find_tgts_param *param,
  * \param sorter  [IN]	Sorter for the output targets array
  * \param tgt_pp  [OUT]	The output target array, if tgt_pp == NULL, it only
  *                      needs to get the tgt count, otherwise it will
- *                      allocate the tgts arrary.
+ *                      allocate the tgts array.
  * \param tgt_cnt [OUT]	The size of target array
  *
  * \return	0 on success, negative values on errors.
@@ -1919,7 +1919,8 @@ pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 
 	memset(&param, 0, sizeof(param));
 	param.ftp_chk_status = 1;
-	param.ftp_status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
+	param.ftp_status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
+		PO_COMP_ST_DRAIN;
 
 	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
 				  tgt_cnt);
@@ -1928,7 +1929,7 @@ pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 
 /**
  * Find all targets with @status in specific rank. Note: &tgt_pp will be
- * allocated and the caller is reponsible to free it.
+ * allocated and the caller is responsible to free it.
  */
 int
 pool_map_find_by_rank_status(struct pool_map *map,
@@ -1967,8 +1968,10 @@ pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  struct pool_target ***tgt_ppp,
 				  unsigned int *tgt_cnt, d_rank_t rank)
 {
-	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt,
-					    PO_COMP_ST_DOWN|PO_COMP_ST_DOWNOUT,
+	unsigned int status;
+
+	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_DRAIN;
+	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt, status,
 					    rank);
 }
 
@@ -2045,7 +2048,7 @@ pool_domain_print(struct pool_domain *domain, int dep)
 }
 
 /**
- * Print all componenets of the pool map, this is a debug function.
+ * Print all components of the pool map, this is a debug function.
  */
 void
 pool_map_print(struct pool_map *map)

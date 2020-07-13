@@ -226,6 +226,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
+	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_ts_entry	*entry;
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
@@ -252,16 +253,21 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
 		read_conflict = true;
 
-	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	rc = vos_tx_begin(dth, vos_cont2umm(cont));
 	if (rc != 0)
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
-	    dth->dth_dti_cos_done == 0) {
-		vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0);
-		dth->dth_dti_cos_done = 1;
+	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
+		if (daes == NULL)
+			D_GOTO(abort, rc = -DER_NOMEM);
+
+		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
+					     dth->dth_dti_cos_count,
+					     0, NULL, daes);
+		if (rc <= 0)
+			D_FREE(daes);
 	}
 
 	/* NB: punch always generate a new incarnation of the object */
@@ -282,19 +288,21 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc == 0 && read_conflict)
 		rc = -DER_TX_RESTART;
 
-	if (dth != NULL && rc == 0)
-		rc = vos_dtx_prepared(dth);
+abort:
+	rc = vos_tx_end(dth, vos_cont2umm(cont), rc);
 
-	rc = umem_tx_end(vos_cont2umm(cont), rc);
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 
 reset:
-	if (rc != 0) {
-		vos_dtx_cleanup_dth(dth);
+	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
-	}
+	else if (daes != NULL)
+		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
+
+	D_FREE(daes);
+
 	vos_dth_set(NULL);
 
 	update_read_timestamps(ts_set, epr.epr_hi, akey_nr, rc);
@@ -542,7 +550,7 @@ key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 /**
  * Check if the current entry can match the iterator condition, this function
- * retuns IT_OPC_NOOP for true, returns IT_OPC_NEXT or IT_OPC_PROBE if further
+ * returns IT_OPC_NOOP for true, returns IT_OPC_NEXT or IT_OPC_PROBE if further
  * operation is required. If IT_OPC_PROBE is returned, then the key to be
  * probed and its epoch range are also returned to @ent.
  */
@@ -765,12 +773,13 @@ static int
 singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		       vos_iter_entry_t *entry)
 {
-	struct vos_key_bundle	kbund;
-	d_iov_t		kiov;
+	struct vos_svt_key	key;
+	d_iov_t			kiov;
 	int			rc;
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch = entry->ie_epoch;
+	d_iov_set(&kiov, &key, sizeof(key));
+	key.sk_epoch = entry->ie_epoch;
+	key.sk_minor_epc = entry->ie_minor_epc;
 
 	rc = dbtree_iter_probe(oiter->it_hdl, opc,
 			       vos_iter_intent(&oiter->it_iter), &kiov, NULL);
@@ -897,14 +906,13 @@ static int
 singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		 daos_anchor_t *anchor)
 {
-	struct vos_key_bundle	kbund;
+	struct vos_svt_key	key;
 	struct vos_rec_bundle	rbund;
 	d_iov_t			kiov;
 	d_iov_t			riov;
 	int			rc;
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch	= it_entry->ie_epoch;
+	d_iov_set(&kiov, &key, sizeof(key));
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_biov	= &it_entry->ie_biov;
@@ -918,7 +926,8 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		D_GOTO(out, rc);
 
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	it_entry->ie_epoch	 = kbund.kb_epoch;
+	it_entry->ie_epoch	 = key.sk_epoch;
+	it_entry->ie_minor_epc	 = key.sk_minor_epc;
 	if (it_entry->ie_epoch <= oiter->it_punched)
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	it_entry->ie_rsize	 = rbund.rb_rsize;
@@ -1068,6 +1077,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	ext = &entry.en_sel_ext;
 	it_entry->ie_epoch	 = entry.en_epoch;
+	it_entry->ie_minor_epc	 = entry.en_minor_epc;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
 	ext = &entry.en_ext;

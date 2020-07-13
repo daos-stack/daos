@@ -32,8 +32,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-// mockControlService takes cfgs for tuneable scm and sys provider behaviour but
-// default nvmeStorage behaviour (cs.nvoe can be subsequently replaced in test).
+// mockControlService takes cfgs for tuneable scm and sys provider behavior but
+// default nvmeStorage behavior (cs.nvoe can be subsequently replaced in test).
 func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
 	t.Helper()
 

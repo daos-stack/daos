@@ -75,7 +75,7 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
-        # Include the daos_io_server command lauched by the daos_server command.
+        # Include the daos_io_server command launched by the daos_server command.
         self._exe_names.append("daos_io_server")
 
     def get_sub_command_class(self):
@@ -157,20 +157,6 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
-
-        Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
-        """
-        return self.yaml.get_interface_envs(index)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
@@ -326,20 +312,6 @@ class DaosServerManager(SubprocessManager):
         # to access the doas_servers when they are started
         self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
-
-        Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
-        """
-        return self.manager.job.get_interface_envs(index)
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.

@@ -67,7 +67,7 @@ func secureTransportConfig(certDir string) *security.TransportConfig {
 	}
 }
 
-func TestSrvSecurityModule_HandleCall_BadMethod(t *testing.T) {
+func TestSrvSecurityModule_BadMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 

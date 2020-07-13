@@ -239,7 +239,7 @@ def get_output(cmd, check=True):
     Args:
         cmd (list): command from which to obtain the output
         check (bool, optional): whether to raise an exception and exit the
-            program if the exit status of the comamnd is non-zero. Defaults
+            program if the exit status of the command is non-zero. Defaults
             to True.
 
     Returns:
@@ -372,7 +372,7 @@ def find_values(obj, keys, key=None, val_type=list):
     """Find dictionary values of a certain type specified with certain keys.
 
     Args:
-        obj (obj): a python object; initailly the dictionary to search
+        obj (obj): a python object; initially the dictionary to search
         keys (list): list of keys to find their matching list values
         key (str, optional): key to check for a match. Defaults to None.
 
@@ -580,11 +580,11 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     Optionally replace the following test yaml file values if specified by the
     user via the command line arguments:
 
-        test_servers:   Use the list sepecified by the --test_servers (-ts)
+        test_servers:   Use the list specified by the --test_servers (-ts)
                         argument to replace any host name placeholders listed
                         under "test_servers:"
 
-        test_clients    Use the list sepecified by the --test_clients (-tc)
+        test_clients    Use the list specified by the --test_clients (-tc)
                         argument (or any remaining names in the --test_servers
                         list argument, if --test_clients is not specified) to
                         replace any host name placeholders listed under
@@ -613,7 +613,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     replacements = {}
 
     if args.test_servers or args.nvme:
-        # Find the test yaml keys and values that match the replacable fields
+        # Find the test yaml keys and values that match the replaceable fields
         yaml_data = get_yaml_data(yaml_file)
         yaml_keys = list(YAML_KEYS.keys())
         yaml_find = find_values(yaml_data, yaml_keys)
@@ -1030,13 +1030,19 @@ def install_debuginfos():
     install_pkgs = [{'name': 'gdb'},
                     {'name': 'python-magic'}]
 
+    cmds = []
+
     # -debuginfo packages that don't get installed with debuginfo-install
     for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:
         debug_pkg = resolve_debuginfo(pkg)
         if debug_pkg and debug_pkg not in install_pkgs:
             install_pkgs.append(debug_pkg)
 
-    cmds = []
+    # remove any "source tree" test hackery that might interfere with RPM
+    # installation
+    path = os.path.sep + os.path.join('usr', 'share', 'spdk', 'include')
+    if os.path.islink(path):
+        cmds.append(["sudo", "rm", "-f", path])
 
     if USE_DEBUGINFO_INSTALL:
         yum_args = [

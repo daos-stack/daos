@@ -39,23 +39,29 @@ package netdetect
 #include <rdma/fi_errno.h>
 
 #if HWLOC_API_VERSION >= 0x00020000
-int cmpt_setFlags(hwloc_topology_t topology) {
+
+int cmpt_setFlags(hwloc_topology_t topology)
+{
 	return hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
 }
 
-hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
+hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx)
+{
 	return hwloc_get_obj_by_depth(topology, depth, idx);
 }
 
-uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
+uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth)
+{
 	return (uint)hwloc_get_nbobjs_by_depth(topology, depth);
 }
 
-int cmpt_get_parent_arity(hwloc_obj_t node) {
+int cmpt_get_parent_arity(hwloc_obj_t node)
+{
 	return node->parent->io_arity;
 }
 
-hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx) {
+hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
+{
 	hwloc_obj_t child;
 	int i;
 
@@ -65,29 +71,31 @@ hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx) {
 	}
 	return child;
 }
-
 #else
-
-int cmpt_setFlags(hwloc_topology_t topology) {
+int cmpt_setFlags(hwloc_topology_t topology)
+{
 	return hwloc_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
 }
 
-hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx) {
+hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx)
+{
 	return hwloc_get_obj_by_depth(topology, (uint)depth, idx);
 }
 
-uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth) {
+uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth)
+{
 	return (uint)hwloc_get_nbobjs_by_depth(topology, (uint)depth);
 }
 
-int cmpt_get_parent_arity(hwloc_obj_t node) {
+int cmpt_get_parent_arity(hwloc_obj_t node)
+{
 	return node->parent->arity;
 }
 
-hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx) {
+hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
+{
 	return node->parent->children[idx];
 }
-
 #endif
 
 #define getHFIUnitError -2
@@ -112,8 +120,11 @@ import "C"
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -129,6 +140,22 @@ const (
 	libFabricMinorVersion = 7
 	allHFIUsed            = -1
 	badAddress            = C.getHFIUnitError
+	// ARP protocol hardware identifiers: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
+	Netrom     = 0
+	Ether      = 1
+	Eether     = 2
+	Ax25       = 3
+	Pronet     = 4
+	Chaos      = 5
+	IEEE802    = 6
+	Arcnet     = 7
+	Appletlk   = 8
+	Dlci       = 15
+	Atm        = 19
+	Metricom   = 23
+	IEEE1394   = 24
+	Eui64      = 27
+	Infiniband = 32
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
@@ -141,10 +168,11 @@ type DeviceAffinity struct {
 
 // FabricScan data encapsulates the results of the fabric scanning
 type FabricScan struct {
-	Provider   string
-	DeviceName string
-	NUMANode   uint
-	Priority   int
+	Provider    string
+	DeviceName  string
+	NUMANode    uint
+	Priority    int
+	NetDevClass uint32
 }
 
 func (fs FabricScan) String() string {
@@ -169,6 +197,7 @@ type logger interface {
 }
 
 var log logger = logging.NewStdoutLogger("netdetect")
+var mutex sync.Mutex
 
 // SetLogger sets the package-level logger
 func SetLogger(l logger) {
@@ -188,6 +217,9 @@ func initLib() (C.hwloc_topology_t, error) {
 	if (version >> 16) != (C.HWLOC_API_VERSION >> 16) {
 		return nil, errors.Errorf("compilation error - compiled for hwloc API 0x%x but using library API 0x%x\n", C.HWLOC_API_VERSION, version)
 	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	status := C.hwloc_topology_init(&topology)
 	if status != 0 {
@@ -257,13 +289,7 @@ func initDeviceScan() (DeviceScan, error) {
 			errors.New("hwloc_get_type_depth returned invalid value")
 	}
 	deviceScanCfg.depth = int(depth)
-
 	deviceScanCfg.numObj = uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	if deviceScanCfg.numObj == 0 {
-		defer cleanUp(deviceScanCfg.topology)
-		return deviceScanCfg,
-			errors.New("hwloc_get_nbobjs_by_depth returned invalid value: no OS devices found")
-	}
 
 	// Create the list of all the valid network device names
 	systemDeviceNames, err := GetDeviceNames()
@@ -420,8 +446,6 @@ func getNodeBestFit(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // In some configurations, the number of NUMA nodes found is 0.  In that case,
 // the NUMA ID will be considered 0.
 func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, error) {
-	var i uint
-
 	if node == nil {
 		return 0, errors.New("invalid node provided")
 	}
@@ -444,16 +468,16 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 		return 0, errors.New("unable to find non-io ancestor node for device")
 	}
 
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	if numObj == 0 {
+	numNuma := numNUMANodes(topology)
+	if numNuma == 0 {
 		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 		return 0, nil
 	}
 
-	log.Debugf("There are %d NUMA nodes.", numObj)
+	log.Debugf("There are %d NUMA nodes.", numNuma)
 
-	for i = 0; i < numObj; i++ {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
+	for i := 0; i < numNuma; i++ {
 		numanode := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			// We don't want the lack of NUMA information to be an error.
@@ -472,35 +496,42 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	return 0, nil
 }
 
+func numNUMANodes(topology C.hwloc_topology_t) int {
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
+	numObj := int(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
+	return numObj
+}
+
 // NumaAware verifies that NUMA data is available to process
 func NumaAware() (bool, error) {
-	deviceScanCfg, err := initDeviceScan()
+	var deviceScanCfg DeviceScan
+
+	topology, err := initLib()
 	if err != nil {
-		return false, err
+		return false, errors.Errorf("unable to initialize hwloc library: %v", err)
 	}
+	deviceScanCfg.topology = topology
 	defer cleanUp(deviceScanCfg.topology)
 
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-
-	return numObj > 0, nil
+	return numNUMANodes(topology) > 0, nil
 }
 
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
 // It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
 func GetNUMASocketIDForPid(pid int32) (int, error) {
-	var i uint
+	var deviceScanCfg DeviceScan
 
-	deviceScanCfg, err := initDeviceScan()
+	topology, err := initLib()
 	if err != nil {
-		return 0, err
+		return 0, errors.Errorf("unable to initialize hwloc library: %v", err)
 	}
+	deviceScanCfg.topology = topology
+
 	defer cleanUp(deviceScanCfg.topology)
 
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
-	if numObj == 0 {
+	numNodes := numNUMANodes(deviceScanCfg.topology)
+	if numNodes == 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
@@ -515,7 +546,8 @@ func GetNUMASocketIDForPid(pid int32) (int, error) {
 	defer C.hwloc_bitmap_free(nodeset)
 	C.hwloc_cpuset_to_nodeset(deviceScanCfg.topology, cpuset, nodeset)
 
-	for i = 0; i < numObj; i++ {
+	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE)
+	for i := 0; i < numNodes; i++ {
 		numanode := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			return 0, errors.Errorf("NUMA Node data is unavailable.")
@@ -684,7 +716,7 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	var nodeset *C.char
 
 	if deviceScanCfg.topology == nil {
-		return DeviceAffinity{}, errors.New("hwloc libary not yet initialized")
+		return DeviceAffinity{}, errors.New("hwloc library not yet initialized")
 	}
 
 	if deviceScanCfg.targetDevice == "" {
@@ -702,6 +734,16 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		}, nil
 	}
 
+	// If the system isn't NUMA aware, use numa 0
+	if numNUMANodes(deviceScanCfg.topology) == 0 {
+		return DeviceAffinity{
+			DeviceName: deviceScanCfg.targetDevice,
+			CPUSet:     "0x0",
+			NodeSet:    "0x1",
+			NUMANode:   0,
+		}, nil
+	}
+
 	switch getLookupMethod(deviceScanCfg) {
 	case direct:
 		node = getNodeDirect(deviceScanCfg)
@@ -713,8 +755,10 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		node = getNodeBestFit(deviceScanCfg)
 	}
 
+	// At this point, we know the topology is NUMA aware.
+	// Returning a default device affinity of NUMA 0 would no longer be reasonable.
 	if node == nil {
-		return DeviceAffinity{}, errors.Errorf("unable to find a system device matching: %s", deviceScanCfg.targetDevice)
+		return DeviceAffinity{}, errors.Errorf("cannot determine device affinity because the device was not found in the topology: %s", deviceScanCfg.targetDevice)
 	}
 
 	ancestorNode := C.hwloc_get_non_io_ancestor_obj(deviceScanCfg.topology, node)
@@ -786,7 +830,7 @@ func mercuryToLibFabric(provider string) (string, error) {
 		return "gni", nil
 	default:
 	}
-	return "", errors.Errorf("fabric provider: %s not known by libfabric.  Use 'daos_server network list' to view supported providers", provider)
+	return "", errors.Errorf("unknown fabric provider %q", provider)
 }
 
 // convertMercuryToLibFabric converts a Mercury provider string containing one or more providers
@@ -803,7 +847,7 @@ func convertMercuryToLibFabric(provider string) (string, error) {
 	for _, subProvider := range tmp {
 		libFabricProvider, err := mercuryToLibFabric(subProvider)
 		if err != nil {
-			return "", errors.Errorf("fabric provider: '%s' is not known by libfabric.  Use 'daos_server network list' to view supported providers", subProvider)
+			return "", errors.Errorf("unknown fabric provider %q", subProvider)
 		}
 		libFabricProviderList += libFabricProvider + ";"
 	}
@@ -828,7 +872,7 @@ func libFabricToMercury(provider string) (string, error) {
 	default:
 	}
 
-	return "", errors.Errorf("fabric provider: %s not known by Mercury", provider)
+	return "", errors.Errorf("unknown fabric provider %q", provider)
 }
 
 // convertLibFabricToMercury converts a libfabric provider string containing one or more providers
@@ -1038,6 +1082,12 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	}
 	defer cleanUp(deviceScanCfg.topology)
 
+	// If the system isn't NUMA aware, skip validation
+	if numNUMANodes(deviceScanCfg.topology) == 0 {
+		log.Debugf("The system is not NUMA aware.  Device/NUMA validation skipped.\n")
+		return nil
+	}
+
 	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
 		return errors.Errorf("device: %s is an invalid device name", device)
 	}
@@ -1047,20 +1097,19 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	if err != nil {
 		return err
 	}
+
 	if deviceAffinity.NUMANode != numaNode {
-		return errors.Errorf("The NUMA node for device %s does not match the provided value %d. "+
-			"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' "+
-			"to see the valid NUMA node associated with the network device", device, numaNode)
+		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
 	}
 	log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 	return nil
 }
 
-func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, ScanResults []FabricScan) (map[string]struct{}, []FabricScan, error) {
+func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, excludeMap map[string]struct{}) (*FabricScan, error) {
 	log.Debugf("Device scan target device name: %s", deviceScanCfg.targetDevice)
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
-		return resultsMap, ScanResults, err
+		return nil, err
 	}
 
 	if deviceScanCfg.targetDevice != deviceAffinity.DeviceName {
@@ -1074,32 +1123,40 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 		// In this case, we want to omit this libfabric record from our results because it has no
 		// mercury equivalent provider.  There are many providers in libfabric that have no mercury
 		// equivalent, and we want to filter those out right here.
-		return resultsMap, ScanResults, err
+		return nil, err
 	}
 	log.Debugf("Mercury provider list: %v", mercuryProviderList)
 
+	devClass, err := GetDeviceClass(deviceAffinity.DeviceName)
+	if err != nil {
+		return nil, err
+	}
+
 	scanResults := FabricScan{
-		Provider:   mercuryProviderList,
-		DeviceName: deviceAffinity.DeviceName,
-		NUMANode:   deviceAffinity.NUMANode,
-		Priority:   devCount,
+		Provider:    mercuryProviderList,
+		DeviceName:  deviceAffinity.DeviceName,
+		NUMANode:    deviceAffinity.NUMANode,
+		Priority:    devCount,
+		NetDevClass: devClass,
+	}
+
+	if _, skip := excludeMap[scanResults.DeviceName]; skip {
+		return nil, errors.New("excluded device entry")
 	}
 
 	results := scanResults.String()
 
-	if _, found := resultsMap[results]; !found {
-		resultsMap[results] = struct{}{}
-		log.Debugf("\n%s", results)
-		ScanResults = append(ScanResults, scanResults)
-		devCount++
-	} else {
-		log.Debugf("Duplicate fabric scan record: \n%s", results)
+	if _, found := resultsMap[results]; found {
+		return nil, errors.New("duplicate entry")
 	}
-	return resultsMap, ScanResults, nil
+
+	resultsMap[results] = struct{}{}
+	log.Debugf("\n%s", results)
+	return &scanResults, nil
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
-func ScanFabric(provider string) ([]FabricScan, error) {
+func ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
 	var ScanResults []FabricScan
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
@@ -1145,6 +1202,11 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 	hfiDeviceCount := getHFIDeviceCount(deviceScanCfg.hwlocDeviceNames)
 	log.Debugf("There are %d hfi1 devices in the system", hfiDeviceCount)
 
+	excludeMap := make(map[string]struct{})
+	for _, iface := range excludes {
+		excludeMap[iface] = struct{}{}
+	}
+
 	for ; fi != nil; fi = fi.next {
 		if fi.domain_attr == nil || fi.domain_attr.name == nil || fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
 			continue
@@ -1177,10 +1239,11 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 				case allHFIUsed:
 					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
 						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults)
+						devScanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
 						if err != nil {
 							continue
 						}
+						ScanResults = append(ScanResults, *devScanResults)
 						devCount++
 					}
 					continue
@@ -1195,10 +1258,11 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 			}
 		}
 
-		resultsMap, ScanResults, err = createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, ScanResults)
+		devScanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
 		if err != nil {
 			continue
 		}
+		ScanResults = append(ScanResults, *devScanResults)
 		devCount++
 	}
 
@@ -1206,4 +1270,55 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
 	}
 	return ScanResults, nil
+}
+
+// GetDeviceClass determines the device type according to what's stored in the filesystem
+// Returns an integer value corresponding to its ARP protocol hardware identifier
+// found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
+func GetDeviceClass(netdev string) (uint32, error) {
+	devClass, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/type", netdev))
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := strconv.Atoi(strings.TrimSpace(string(devClass)))
+	return uint32(res), err
+}
+
+// Convert a network device class ID to a string identifier
+func DevClassName(class uint32) string {
+	switch class {
+	case Netrom:
+		return "NETROM"
+	case Ether:
+		return "ETHER"
+	case Eether:
+		return "EETHER"
+	case Ax25:
+		return "AX25"
+	case Pronet:
+		return "PRONET"
+	case Chaos:
+		return "CHAOS"
+	case IEEE802:
+		return "IEEE802"
+	case Arcnet:
+		return "ARCNET"
+	case Appletlk:
+		return "APPLETLK"
+	case Dlci:
+		return "DLCI"
+	case Atm:
+		return "ATM"
+	case Metricom:
+		return "METRICOM"
+	case IEEE1394:
+		return "IEEE1394"
+	case Eui64:
+		return "EUI64"
+	case Infiniband:
+		return "INFINIBAND"
+	default:
+		return "UNKNOWN"
+	}
 }

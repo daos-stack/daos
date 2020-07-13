@@ -35,157 +35,6 @@ on boot if start-up scripts are registered with systemd.
 
 The following subsections will cover each step in more detail.
 
-Before getting started, please make sure to review and complete the
-[pre-flight checklist](#preflight-checklist) below.
-
-## Preflight Checklist
-
-This section covers the preliminary setup required on the compute and
-storage nodes before deploying DAOS.
-
-### Enable IOMMU (Optional)
-
-In order to run the DAOS server as a non-root user with NVMe devices, the hardware
-must support virtualized device access, and it must be enabled in the system BIOS.
-On Intel® systems, this capability is named Intel® Virtualization Technology for
-Directed I/O (VT-d). Once enabled in BIOS, IOMMU support must also be enabled in
-the Linux kernel. Exact details depend on the distribution, but the following
-example should be illustrative:
-
-```bash
-# Enable IOMMU on CentOS 7
-# All commands must be run as root/sudo!
-
-$ sudo vi /etc/default/grub # add the following line:
-GRUB_CMDLINE_LINUX_DEFAULT="intel_iommu=on"
-
-# after saving the file, run the following to reconfigure
-# the bootloader:
-$ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
-
-# if the command completed with no errors, reboot the system
-# in order to make the changes take effect
-$ sudo reboot
-```
-
-!!! warning
-    VFIO support is a new feature for DAOS 1.2 and has been tested on the
-    following platforms:
-    •	CentOS 7.7
-
-### Time Synchronization
-
-The DAOS transaction model relies on timestamps and requires time to be
-synchronized across all the storage and client nodes. This can be done
-using NTP or any other equivalent protocol.
-
-### Runtime Directory Setup
-
-DAOS uses a series of Unix Domain Sockets to communicate between its
-various components. On modern Linux systems, Unix Domain Sockets are
-typically stored under /run or /var/run (usually a symlink to /run) and
-are a mounted tmpfs file system. There are several methods for ensuring
-the necessary directories are setup.
-
-A sign that this step may have been missed is when starting daos_server
-or daos_agent, you may see the message:
-```bash
-$ mkdir /var/run/daos_server: permission denied
-Unable to create socket directory: /var/run/daos_server
-```
-#### Non-default Directory
-
-By default, daos_server and daos_agent will use the directories
-/var/run/daos_server and /var/run/daos_agent respectively. To change
-the default location that daos_server uses for its runtime directory,
-either uncomment and set the socket_dir configuration value in
-install/etc/daos_server.yml, or pass the location to daos_server on
-the command line using the -d flag. For the daos_agent, an alternate
-location can be passed on the command line using the --runtime_dir flag.
-
-#### Default Directory (non-persistent)
-
-Files and directories created in /run and /var/run only survive until
-the next reboot. However, if reboots are infrequent, an easy solution
-while still utilizing the default locations is to create the
-required directories manually. To do this execute the following commands.
-
-daos_server:
-```bash
-$ mkdir /var/run/daos_server
-$ chmod 0755 /var/run/daos_server
-$ chown user:user /var/run/daos_server (where user is the user you
-    will run daos_server as)
-```
-daos_agent:
-```bash
-$ mkdir /var/run/daos_agent
-$ chmod 0755 /var/run/daos_agent
-$ chown user:user /var/run/daos_agent (where user is the user you
-    will run daos_agent as)
-```
-
-#### Default Directory (persistent)
-
-If the server hosting daos_server or daos_agent will be rebooted often,
-systemd provides a persistent mechanism for creating the required
-directories called tmpfiles.d. This mechanism will be required every
-time the system is provisioned and requires a reboot to take effect.
-
-To tell systemd to create the necessary directories for DAOS:
-
--   Copy the file utils/systemd/daosfiles.conf to /etc/tmpfiles.d\
-    cp utils/systemd/daosfiles.conf /etc/tmpfiles.d
-
--   Modify the copied file to change the user and group fields
-    (currently daos) to the user daos will be run as
-
--   Reboot the system, and the directories will be created automatically
-    on all subsequent reboots.
-
-### Elevated Privileges
-
-DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
-that require elevated privileges on behalf of `daos_server`.
-
-#### Privileged Helper Configuration
-
-When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
-to the correct location with the correct permissions. The RPM creates a "daos_admins"
-system group and configures permissions such that `daos_admin` may only be invoked
-from `daos_server`.
-
-For non-RPM installations, there are two supported scenarios:
-
-1. `daos_server` is run as root, which means that `daos_admin` is also invoked as root,
-and therefore no additional setup is necessary
-2. `daos_server` is run as a non-root user, which means that `daos_admin` must be
-manually installed and configured
-
-The steps to enable the second scenario are as follows (steps are assumed to be
-running out of a DAOS source tree which may be on a NFS share):
-
-```bash
-$ chmod -x $SL_PREFIX/bin/daos_admin # prevent this copy from being executed
-$ sudo cp $SL_PREFIX/bin/daos_admin /usr/bin/daos_admin
-$ sudo chmod 4755 /usr/bin/daos_admin # make this copy setuid root
-$ sudo mkdir -p /usr/share/daos/control # create symlinks to SPDK scripts
-$ sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
-           /usr/share/daos/control
-$ sudo mkdir -p /usr/share/spdk/scripts
-$ sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
-           /usr/share/spdk/scripts
-$ sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
-           /usr/share/spdk/scripts
-$ sudo ln -s $SL_PREFIX/include \
-           /usr/share/spdk/include
-```
-
-!!! note
-    The RPM installation is preferred for production scenarios. Manual
-    installation is most appropriate for development and predeployment
-    proof-of-concept scenarios.
-
 ## DAOS Server Setup
 
 First of all, the DAOS server should be started to allow remote administration
@@ -217,7 +66,7 @@ available at
 <https://github.com/daos-stack/daos/tree/master/utils/config/examples>
 
 The location of this configuration file is determined by first checking
-for the path specified through the -o option of the daos_server command
+for the path specified through the -o option of the `daos_server` command
 line. Otherwise, /etc/daos_server.conf is used.
 
 Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
@@ -232,7 +81,7 @@ The DAOS security framework relies on certificates to authenticate
 components and administrators in addition to encrypting DAOS control plane
 communications. A set of certificates for a given DAOS system may be
 generated by running the `gen_certificates.sh` script provided with the DAOS
-DAOS software if there is not an existing TLS certificate infrastructure.
+software if there is not an existing TLS certificate infrastructure.
 
 When DAOS is installed from RPMs, this script is provided in the base `daos` RPM, and
 may be invoked in the directory to which the certificates will be written. As part
@@ -289,20 +138,20 @@ Server nodes require:
 
 After the certificates have been securely distributed, the DAOS configuration files must be
 updated in order to enable authentication and secure communications. These examples assume
-that the configuration files have been installed under `/etc/daos`:
+that the configuration and certificate files have been installed under `/etc/daos`:
 
 ```yaml
 # /etc/daos/daos_server.yml (servers)
 
 transport_config:
   # Location where daos_server will look for Client certificates
-  client_cert_dir: /etc/daos/clients
+  client_cert_dir: /etc/daos/certs/clients
   # Custom CA Root certificate for generated certs
-  ca_cert: /etc/daos/daosCA.crt
+  ca_cert: /etc/daos/certs/daosCA.crt
   # Server certificate for use in TLS handshakes
-  cert: /etc/daos/server.crt
+  cert: /etc/daos/certs/server.crt
   # Key portion of Server Certificate
-  key: /etc/daos/server.key
+  key: /etc/daos/certs/server.key
 ```
 
 ```yaml
@@ -310,11 +159,11 @@ transport_config:
 
 transport_config:
   # Custom CA Root certificate for generated certs
-  ca_cert: /etc/daos/daosCA.crt
+  ca_cert: /etc/daos/certs/daosCA.crt
   # Agent certificate for use in TLS handshakes
-  cert: /etc/daos/agent.crt
+  cert: /etc/daos/certs/agent.crt
   # Key portion of Agent Certificate
-  key: /etc/daos/agent.key
+  key: /etc/daos/certs/agent.key
 ```
 
 ```yaml
@@ -322,11 +171,11 @@ transport_config:
 
 transport_config:
   # Custom CA Root certificate for generated certs
-  ca_cert: /etc/daos/daosCA.crt
+  ca_cert: /etc/daos/certs/daosCA.crt
   # Admin certificate for use in TLS handshakes
-  cert: /etc/daos/admin.crt
+  cert: /etc/daos/certs/admin.crt
   # Key portion of Admin Certificate
-  key: /etc/daos/admin.key
+  key: /etc/daos/certs/admin.key
 ```
 
 ### Server Startup
@@ -365,7 +214,7 @@ The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
 
 The --allow-run-as-root option can be added to the command line to
-allow the daos_server to run with root privileges on each storage
+allow the `daos_server` to run with root privileges on each storage
 nodes (for example when needing to perform privileged tasks relating
 to storage format). See the orterun(1) man page for additional options.
 
@@ -373,34 +222,64 @@ to storage format). See the orterun(1) man page for additional options.
 
 DAOS Server can be started as a systemd service. The DAOS Server
 unit file is installed in the correct location when installing from RPMs.
-If you wish to use systemd with a development build, you must copy the service
-file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
-modify the ExecStart line to point to your in tree daos_server binary.
+The DAOS Server will be run as `daos-server` user which will be created
+during RPM install.
 
-Once the service file is installed you can start daos_server
+If you wish to use systemd with a development build, you must copy the service
+file from utils/systemd to `/usr/lib/systemd/system`. Once the file is copied
+modify the ExecStart line to point to your in tree `daos_server` binary.
+
+Once the service file is installed you can start `daos_server`
 with the following commands:
 
 ```bash
-$ systemctl enable daos-server
-$ systemctl start daos-server
+$ systemctl enable daos_server.service
+$ systemctl start daos_server.service
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos-server
+$ systemctl status daos_server.service
 ```
 
 If DAOS Server failed to start, check the logs with:
 
 ```bash
-$ journalctl --unit daos-server
+$ journalctl --unit daos_server.service
 ```
+
+After RPM install, `daos_server` service starts automatically running as user
+"daos". Server config is read from `/etc/daos` and certificates from `/etc/daos/certs`.
+With no other admin intervention other than the loading of certificates,
+`daos_server` will enter a listening state enabling discovery of storage and
+network hardware through the `dmg` tool without any I/O Servers specified in the
+configuration file. After device discovery and provisioning, an updated
+configuration with a populated per-server section can be provided and the service
+restarted ready for DAOS servers to be formatted.
 
 #### Kubernetes Pod
 
 DAOS service integration with Kubernetes is planned and will be
 supported in a future DAOS version.
+
+## DAOS Server Remote Access
+
+Remote tasking of the DAOS system and individual DAOS Server processes can be
+performed via the `dmg` utility.
+
+To set the addresses of which DAOS Servers to task, provide either:
+- `-l <hostlist>` on the commandline when invoking, or
+- `hostlist: <hostlist>` in the control configuration file
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+
+Where `<hostlist>` represents a slurm-style hostlist string e.g.
+`foo-1[28-63],bar[256-511]`.
+The first entry in the hostlist (after alphabetic then numeric sorting) will be
+assumed to be the access point as set in the server configuration file.
+
+Local configuration files stored in the user directory will be used in
+preference to the default location e.g. `~/.daos_control.yml`.
 
 ## Hardware Provisioning
 
@@ -596,7 +475,7 @@ host's hostname or IP address (don't need to specify port).
 This will be the host which bootstraps the DAOS management service
 (MS).
 
-To illustrate, assume a cluster with homogenous hardware
+To illustrate, assume a cluster with homogeneous hardware
 configurations that returns the following from scan for each host:
 
 ```bash
@@ -634,7 +513,7 @@ servers:
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
@@ -653,7 +532,7 @@ servers:
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: ERR             # map to D_LOG_MASK=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS IO Server behaviour by setting env variables
+  env_vars:                 # influence DAOS IO Server behavior by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
@@ -667,91 +546,116 @@ servers:
 <end>
 ```
 
-### Network Configuration
+### Network Scan and Configuration
+The daos_server supports the `network scan` function to display the network interfaces, related OFI fabric providers and associated NUMA node for each device.  This information is used to configure the global fabric provider and the unique local network interface for each IO server instance on this node.  This section will help you determine what to provide for the `provider`, `fabric_iface` and `pinned_numa_node` entries in the daos_server.yml file.
 
-To display the fabric interface, OFI provider and NUMA node
-combinations detected on the DAOS server, use the following command:
-```bash
-$ daos_server network scan --all
-
-        fabric_iface: ib0
-        provider: ofi+psm2
-        pinned_numa_node: 0
-
-        fabric_iface: ib1
-        provider: ofi+psm2
-        pinned_numa_node: 1
-
-        fabric_iface: ib0
-        provider: ofi+verbs;ofi_rxm
-        pinned_numa_node: 0
-
-        fabric_iface: ib1
-        provider: ofi+verbs;ofi_rxm
-        pinned_numa_node: 1
-
-        fabric_iface: ib0
-        provider: ofi+verbs
-        pinned_numa_node: 0
-
-        fabric_iface: ib1
-        provider: ofi+verbs
-        pinned_numa_node: 1
-
-        fabric_iface: ib0
-        provider: ofi+sockets
-        pinned_numa_node: 0
-
-        fabric_iface: ib1
-        provider: ofi+sockets
-        pinned_numa_node: 1
-
-        fabric_iface: eth0
-        provider: ofi+sockets
-        pinned_numa_node: 0
-
-        fabric_iface: lo
-        provider: ofi+sockets
-        pinned_numa_node: 0
+The following commands are typical examples:
 ```
-The network scan leverages data from libfabric.  Results are ordered from
-highest performance at the top to lowest performance at the bottom of the list.
-Once the fabric_iface and provider pair has been chosen, those items and the
-pinned_numa_node may be inserted directly into the corresponding sections within
-daos_server.yml. Note that the provider is currently the same for all DAOS
-IO server instances and is configured once in the server configuration.
-The fabric_iface and pinned_numa_node are configured for each IO server
-instance.
+    daos_server network scan
+    daos_server network scan -p all
+    daos_server network scan -p ofi+sockets
+    daos_server network scan --provider 'ofi+verbs;ofi_rxm'
+```
+In the early stages when a daos_server has not yet been fully configured and lacks a declaration of the system's fabric provider, it may be helpful to view an unfiltered list of scan results.
 
-A list of providers that may be querried is found with the command:
+Use either of these daos_server commands in the early stages to accomplish this goal:
+```
+    daos_server network scan
+    daos_server network scan -p all
+```
+Typical network scan results look as follows:
 ```bash
-$ daos_server network list
+$ daos_server network scan -p all
+---------
+localhost
+---------
 
-Supported providers:
-        ofi+gni, ofi+psm2, ofi+tcp, ofi+sockets, ofi+verbs, ofi_rxm
+    -------------
+    NUMA Socket 0
+    -------------
+
+        Provider          Interfaces
+        --------          ----------
+        ofi+verbs;ofi_rxm ib0
+        ofi+tcp;ofi_rxm   ib0, eth0
+        ofi+verbs         ib0
+        ofi+tcp           ib0, eth0
+        ofi+sockets       ib0, eth0
+        ofi+psm2          ib0
+
+    -------------
+    NUMA Socket 1
+    -------------
+
+        Provider          Interfaces
+        --------          ----------
+        ofi+verbs;ofi_rxm ib1
+        ofi+tcp;ofi_rxm   ib1
+        ofi+verbs         ib1
+        ofi+tcp           ib1
+        ofi+sockets       ib1
+        ofi+psm2          ib1
+```
+Use one of these providers to configure the `provider` in the daos_server.yml.  Only one provider may be specified for the entire DAOS installation. Client nodes must be capable of communicating to the daos_server nodes via the same provider. Therefore, it is helpful to choose network settings for the daos_server that are compatible with the expected client node configuration.
+
+After the daos_server.yml file has been edited and contains a provider, subsequent `daos_server network scan` commands will filter the results based on that provider. If it is desired to view an unfiltered list again, issue `daos_server network scan -p all`.
+
+Regardless of the provider in the daos_server.yml file, the results may be filtered to the specified provider with the command `daos_server network scan -p ofi_provider` where `ofi_provider` is one of the available providers from the list.
+
+The results of the network scan may be used to help configure the IO server
+instances for this daos_server node.
+
+Each IO server instance is configured with a unique `fabric_iface` and
+optional `pinned_numa_node`. The interfaces and NUMA Sockets listed in the scan
+results map to the daos_server.yml `fabric_iface` and `pinned_numa_node`
+respectively. The use of `pinned_numa_node` is optional, but recommended for best performance. When specified with the value that matches the network interface, the IO server will bind itself to that NUMA node and to cores purely within that NUMA node. This configuration yields the fastest access to that network device.
+
+## Network Scanning All DAOS Server Nodes
+While the `daos_server network scan` is useful for scanning the localhost, it does not provide results for any other daos_server instance on the network.  The DAOS Management tool, `dmg`, is used for that purpose. The network scan operates the same way as the daos_server network scan, however, to use the dmg tool, at least one known daos_server instance must be running.
+
+The command `dmg network scan` performs a query over all daos_servers in the daos_control.yml `hostlist`. By default, the scan will return results that are filtered by the provider that is specified in the daos_server.yml. Like the `daos_server network scan`, the `dmg network scan` supports the optional `-p/--provider` where a different provider may be specified, or `all` for an unfiltered list that is unrelated to what was already configured on the daos_server installation.
+
+```bash
+dmg network scan
+-------
+wolf-29
+-------
+
+    -------------
+    NUMA Socket 1
+    -------------
+
+        Provider    Interfaces
+        --------    ----------
+        ofi+sockets ib1
+
+---------
+localhost
+---------
+
+    -------------
+    NUMA Socket 0
+    -------------
+
+        Provider    Interfaces
+        --------    ----------
+        ofi+sockets ib0, eth0
+
+    -------------
+    NUMA Socket 1
+    -------------
+
+        Provider    Interfaces
+        --------    ----------
+        ofi+sockets ib1
 ```
 
-Performing a network scan that filters on a specific provider is accomplished
-by issuing the following command:
-```bash
-$ daos_server network scan --provider 'ofi+verbs;ofi_rxm'
+## Provider Configuration and Debug
 
-Scanning fabric for cmdline specified provider: ofi+verbs;ofi_rxm
-Fabric scan found 2 devices matching the provider spec: ofi+verbs;ofi_rxm
-
-        fabric_iface: ib0
-        provider: ofi+verbs;ofi_rxm
-        pinned_numa_node: 0
-
-
-        fabric_iface: ib1
-        provider: ofi+verbs;ofi_rxm
-        pinned_numa_node: 1
-```
 To aid in provider configuration and debug, it may be helpful to run the
 fi_pingpong test (delivered as part of OFI/libfabric).  To run that test,
-determine the name of the provider to test usually by removing the "ofi+" prefix from the network scan provider data.  Do use the "ofi+" prefix in the
-daos_server.yml.  Do not use the "ofi+" prefix with fi_pingpong.
+determine the name of the provider to test usually by removing the "ofi+" prefix from the network scan provider data. Do use the "ofi+" prefix in the
+daos_server.yml. Do not use the "ofi+" prefix with fi_pingpong.
 
 Then, the fi_pingpong test can be used to verify that the targeted OFI provider works fine:
 ```bash
@@ -794,7 +698,7 @@ formatted and mounted based on the parameters provided in the server config file
 
 - `scm_mount` specifies the location of the mountpoint to create.
 - `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/DCPM
-is available (scm_size dictates the size of tmpfs in GB), when set to `dcpm` the device
+is available (`scm_size` dictates the size of tmpfs in GB), when set to `dcpm` the device
 specified under `scm_list` will be mounted at `scm_mount` path.
 
 ### NVMe Format
@@ -844,7 +748,7 @@ administrators. The security infrastructure is currently under
 development and will be delivered in DAOS v1.0. Initial support for certificates
 has been added to DAOS and can be disabled either via the command line or in the
 DAOS Agent configuration file. Currently, the easiest way to disable certificate
-support is to pass the -i flag to daos_agent.
+support is to pass the -i flag to `daos_agent`.
 
 ### Agent Configuration File
 
@@ -894,53 +798,65 @@ $ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
 unit file is installed in the correct location when installing from RPMs.
+
 If you wish to use systemd with a development build, you must copy the service
-file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
-modify the ExecStart line to point to your in tree daos_agent binary.
+file from `utils/systemd` to `/usr/lib/systemd/system`. Once the file is copied
+modify the ExecStart line to point to your in tree `daos_agent` binary.
 
-ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>
+`ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>`
 
-Once the service file is installed, you can start daos_agent
+Once the service file is installed, you can start `daos_agent`
 with the following commands:
 
 ```bash
-$ sudo systemctl enable daos-agent
-$ sudo systemctl start daos-agent
+$ sudo systemctl enable daos_agent.service
+$ sudo systemctl start daos_agent.service
 ```
 
 To check the component status use:
 
 ```bash
-$ sudo systemctl status daos-agent
+$ sudo systemctl status daos_agent.service
 ```
 
 If DAOS Agent failed to start check the logs with:
 
 ```bash
-$ sudo journalctl --unit daos-agent
+$ sudo journalctl --unit daos_agent.service
 ```
 
 ## System Validation
 
-To validate that the DAOS system is properly installed, the daos_test
+To validate that the DAOS system is properly installed, the `daos_test`
 suite can be executed. Ensure the DAOS Agent is configured before running
-daos_test and that the following environment variables are properly set:
+`daos_test`.  If the agent is using a non-default path for the socket, then
+configure `DAOS_AGENT_DRPC_DIR` in the client environment to point to this new
+location.
 
-- `CRT_PHY_ADDR_STR` must be set to match the provider specified in the server
-  yaml configuration file (e.g. export `CRT_PHY_ADDR_STR="ofi+sockets"`)
+DAOS automatically configures a client with a compatible fabric provider,
+network interface, network domain, CaRT timeout, and CaRT context share address,
+that will allow it to connect to the DAOS system.
 
-- `OFI_INTERFACE` is set to the network interface you want to user on the client
-  node.
+The client may not override the fabric provider or the CaRT context share
+address.
 
-- `OFI_DOMAIN` must optionally be set for infiniband deployments.
+A client application may override the three remaining settings by configuring
+environment variables in the client's shell prior to launch.
 
-- `DAOS_AGENT_DRPC_DIR` must also optionally be set if the agent is using a
-  non-default path for the socket.
-
-While those environment variables need to be set up for DAOS v1.0, versions 1.2
-and upward automatically set up the environment via the agent and don't require
-any special environment set up to run applications.
-
+To manually configure the CaRT timeout, set `CRT_TIMEOUT` such as:
+```
+export CRT_TIMEOUT=5
+```
+To manually configure the network interface, set `OFI_INTERFACE` such as:
+```
+export OFI_INTERFACE=lo
+```
+When manually configuring an Infiniband device with a verbs provider, the network
+device domain is required.  To manually configure the domain, set `OFI_DOMAIN` such as:
+```
+export OFI_DOMAIN=hfi1_0
+```
+### Launch the client application
 ```bash
 mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
 ```

@@ -74,7 +74,7 @@ rebuild_dkeys(void **state)
 	}
 	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
@@ -108,7 +108,7 @@ rebuild_akeys(void **state)
 	}
 	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
@@ -145,7 +145,7 @@ rebuild_indexes(void **state)
 	ioreq_fini(&req);
 
 	/* Rebuild rank 1 */
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
@@ -190,7 +190,7 @@ rebuild_snap_update_recs(void **state)
 			      strlen(data) + 1, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < 5; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
@@ -241,7 +241,7 @@ rebuild_snap_punch_recs(void **state)
 		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < 5; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
@@ -286,7 +286,7 @@ rebuild_snap_update_keys(void **state)
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
@@ -377,7 +377,7 @@ rebuild_snap_punch_keys(void **state)
 		punch_akey("dkey", akey, DAOS_TX_NONE, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
@@ -464,7 +464,7 @@ rebuild_multiple(void **state)
 	}
 	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 }
 
 static void
@@ -498,7 +498,7 @@ rebuild_large_rec(void **state)
 	}
 	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 }
 
 static void
@@ -520,14 +520,14 @@ rebuild_objects(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
-	{"REBUILD1: rebuild small rec mulitple dkeys",
+	{"REBUILD1: rebuild small rec multiple dkeys",
 	 rebuild_dkeys, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD2: rebuild small rec multiple akeys",
 	 rebuild_akeys, rebuild_small_sub_setup, test_teardown},

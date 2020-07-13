@@ -67,14 +67,14 @@ request_credentials_via_drpc(Drpc__Response **response)
 	int		rc;
 
 	if (dc_agent_sockpath == NULL) {
-		D_ERROR("DAOS Socket Path is Unitialized\n");
+		D_ERROR("DAOS Socket Path is Uninitialized\n");
 		return -DER_UNINIT;
 	}
 
-	agent_socket = drpc_connect(dc_agent_sockpath);
-	if (agent_socket == NULL) {
-		D_ERROR("Can't connect to agent socket\n");
-		return -DER_BADPATH;
+	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Can't connect to agent socket " DF_RC "\n", DP_RC(rc));
+		return rc;
 	}
 
 	request = drpc_call_create(agent_socket,

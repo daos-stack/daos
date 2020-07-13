@@ -121,22 +121,6 @@ void dts_ctx_fini(struct dts_context *tsc);
  */
 struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
 
-#define CFG_MAX 128
-__attribute__ ((__format__(__printf__, 2, 3)))
-static inline void
-create_config(char buf[CFG_MAX], const char *format, ...)
-{
-	va_list	ap;
-	int	count;
-
-	va_start(ap, format);
-	count = vsnprintf(buf, CFG_MAX, format, ap);
-	va_end(ap);
-
-	if (count >= CFG_MAX)
-		buf[CFG_MAX - 1] = 0;
-}
-
 /**
  * VOS test suite run tests
  */

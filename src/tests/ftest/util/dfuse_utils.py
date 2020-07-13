@@ -47,8 +47,7 @@ class DfuseCommand(ExecutableCommand):
         self.foreground = FormattedParameter("--foreground", False)
 
         # Environment variable names to export when running dfuse
-        self._env_names = [
-            "OFI_INTERFACE", "OFI_PORT", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+        self._env_names = ["D_LOG_FILE"]
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse params for the DAOS group, pool, and container uuid.
@@ -199,9 +198,12 @@ class Dfuse(DfuseCommand):
                     "following hosts: {}".format(self.mount_dir.value,
                                                  failed_nodes))
 
-    def run(self):
+    def run(self, check=True):
         """Run the dfuse command.
 
+        Args:
+            check (bool): Check if dfuse mounted properly after
+                mount is executed.
         Raises:
             CommandFailure: In case dfuse run command fails
 
@@ -211,7 +213,7 @@ class Dfuse(DfuseCommand):
         # A log file must be defined to ensure logs are captured
         if "D_LOG_FILE" not in self.env:
             raise CommandFailure(
-                "Dfuse missing environment varaibles for D_LOG_FILE")
+                "Dfuse missing environment variables for D_LOG_FILE")
 
         # create dfuse dir if does not exist
         self.create_mount_point()
@@ -233,13 +235,17 @@ class Dfuse(DfuseCommand):
                 "Error starting dfuse on the following hosts: {}".format(
                     error_hosts))
 
-        if not self.check_running(fail_on_error=False):
-            self.log.info('Waiting five seconds for dfuse to start')
-            time.sleep(5)
+        if check:
+            # Dfuse will block in the command for the mount to complete, even
+            # if run in background mode so it should be possible to start using
+            # it immediately after the command returns.
             if not self.check_running(fail_on_error=False):
-                self.log.info('Waiting twenty five seconds for dfuse to start')
-                time.sleep(25)
-                self.check_running()
+                self.log.info('Waiting two seconds for dfuse to start')
+                time.sleep(2)
+                if not self.check_running(fail_on_error=False):
+                    self.log.info('Waiting five seconds for dfuse to start')
+                    time.sleep(5)
+                    self.check_running()
 
     def check_running(self, fail_on_error=True):
         """Check dfuse is running.

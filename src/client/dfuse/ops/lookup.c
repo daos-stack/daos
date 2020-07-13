@@ -92,7 +92,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		inode->ie_parent = ie->ie_parent;
 		strncpy(inode->ie_name, ie->ie_name, NAME_MAX+1);
 
-		atomic_fetch_sub(&ie->ie_ref, 1);
+		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
 		ie->ie_root = 0;
 		ie_close(fs_handle, ie);
@@ -343,7 +343,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	if (S_ISDIR(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);

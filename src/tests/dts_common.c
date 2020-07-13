@@ -50,7 +50,7 @@ enum {
 	DTS_INIT_MODULE,	/* modules have been loaded */
 	DTS_INIT_POOL,		/* pool has been created */
 	DTS_INIT_CONT,		/* container has been created */
-	DTS_INIT_CREDITS,	/* I/O credits have been initalized */
+	DTS_INIT_CREDITS,	/* I/O credits have been initialized */
 };
 
 /**
@@ -331,6 +331,12 @@ cont_fini(struct dts_context *tsc)
 	 * destroy later. This is because container destroy could be too
 	 * expensive after performance tests.
 	 */
+}
+
+bool
+dts_is_async(struct dts_context *tsc)
+{
+	return !daos_handle_is_inval(tsc->tsc_eqh);
 }
 
 /* see comments in dts_common.h */

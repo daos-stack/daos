@@ -148,26 +148,38 @@ func NewMockMgmtSvcClient(cfg MockMgmtSvcClientConfig) mgmtpb.MgmtSvcClient {
 
 func (m *MockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
 	// return successful pool creation results
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	// initialize with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolCreateResp{}, nil
 }
 
 func (m *MockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq, o ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
 	// return successful pool destroy results
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	// initialize with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolDestroyResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq, o ...grpc.CallOption) (*mgmtpb.PoolExtendResp, error) {
+	return &mgmtpb.PoolExtendResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq, o ...grpc.CallOption) (*mgmtpb.PoolEvictResp, error) {
+	return &mgmtpb.PoolEvictResp{}, nil
 }
 
 func (m *MockMgmtSvcClient) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintegrateReq, o ...grpc.CallOption) (*mgmtpb.PoolReintegrateResp, error) {
 	// return successful pool reintegrate results
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	// initialize with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolReintegrateResp{}, nil
 }
 
 func (m *MockMgmtSvcClient) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq, o ...grpc.CallOption) (*mgmtpb.PoolExcludeResp, error) {
 	// return successful pool Exclude results
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	// initialize with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolExcludeResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq, o ...grpc.CallOption) (*mgmtpb.PoolDrainResp, error) {
+	return &mgmtpb.PoolDrainResp{}, nil
 }
 
 func (m *MockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
@@ -208,35 +220,20 @@ func (m *MockMgmtSvcClient) PoolDeleteACL(ctx context.Context, req *mgmtpb.Delet
 func (m *MockMgmtSvcClient) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq, o ...grpc.CallOption) (*mgmtpb.BioHealthResp, error) {
 
 	// return successful bio health results
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	// initialize with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.BioHealthResp{}, nil
 }
 
-func (m *MockMgmtSvcClient) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq, o ...grpc.CallOption) (*mgmtpb.SmdDevResp, error) {
-
-	// return successful SMD device list
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.SmdDevResp{}, nil
-}
-
-func (m *MockMgmtSvcClient) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq, o ...grpc.CallOption) (*mgmtpb.SmdPoolResp, error) {
-
-	// return successful SMD pool list
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.SmdPoolResp{}, nil
-}
-
-func (m *MockMgmtSvcClient) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
-
+func (m *MockMgmtSvcClient) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq, o ...grpc.CallOption) (*mgmtpb.SmdQueryResp, error) {
 	// return successful device state
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &mgmtpb.DevStateResp{}, nil
+	// initialize with zero values indicating mgmt.CTRL_SUCCESS
+	return &mgmtpb.SmdQueryResp{}, nil
 }
 
 func (m *MockMgmtSvcClient) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
 
 	// return suscessful FAULTY device state
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialize with zero values indicating mgmt.CTRL_SUCCESS
 	return &mgmtpb.DevStateResp{}, nil
 }
 

@@ -24,181 +24,249 @@ package main
 
 import (
 	"encoding/json"
-	"io"
+	"errors"
 
-	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-func sendFailure(err error, res *pbin.Response, dest io.Writer) error {
-	f, ok := errors.Cause(err).(*fault.Fault)
-	if !ok {
-		f = pbin.PrivilegedHelperRequestFailed(err.Error())
-	}
-	res.Error = f
-	data, err := json.Marshal(res)
-	if err != nil {
-		return err
-	}
-
-	_, err = dest.Write(data)
-	return err
+func getNilRequestResp() *pbin.Response {
+	return pbin.NewResponseWithError(errors.New("nil request"))
 }
 
-func sendSuccess(payloadSrc interface{}, res *pbin.Response, dest io.Writer) error {
-	payload, err := json.Marshal(payloadSrc)
-	if err != nil {
-		return sendFailure(err, res, dest)
-	}
-
-	res.Payload = payload
-	data, err := json.Marshal(res)
-	if err != nil {
-		return err
-	}
-
-	_, err = dest.Write(data)
-	return err
+// scmHandler provides the ability to set up the scm.Provider for SCM method handlers.
+type scmHandler struct {
+	scmProvider *scm.Provider
 }
 
-func readRequest(rdr io.Reader) (*pbin.Request, error) {
-	buf, err := pbin.ReadMessage(rdr)
-	if err != nil {
-		return nil, err
+func (h *scmHandler) setupProvider(log logging.Logger) {
+	if h.scmProvider == nil {
+		h.scmProvider = scm.DefaultProvider(log).WithForwardingDisabled()
 	}
-
-	var req pbin.Request
-	if err := json.Unmarshal(buf, &req); err != nil {
-		return nil, err
-	}
-
-	return &req, nil
 }
 
-func handleRequest(log logging.Logger, scmProvider *scm.Provider, bdevProvider *bdev.Provider, req *pbin.Request, resDest io.Writer) (err error) {
+// scmMountUnmountHandler implements the ScmMount and ScmUnmount methods.
+type scmMountUnmountHandler struct {
+	scmHandler
+}
+
+func (h *scmMountUnmountHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
 	if req == nil {
-		return errors.New("nil request")
+		return getNilRequestResp()
 	}
-	var res pbin.Response
 
+	var mReq scm.MountRequest
+	if err := json.Unmarshal(req.Payload, &mReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	var mRes *scm.MountResponse
+	var err error
 	switch req.Method {
-	case "Ping":
-		return sendSuccess(&pbin.PingResp{Version: build.DaosVersion}, &res, resDest)
-	case "ScmMount", "ScmUnmount":
-		var mReq scm.MountRequest
-		if err := json.Unmarshal(req.Payload, &mReq); err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		var mRes *scm.MountResponse
-		switch req.Method {
-		case "ScmMount":
-			mRes, err = scmProvider.Mount(mReq)
-		case "ScmUnmount":
-			mRes, err = scmProvider.Unmount(mReq)
-		}
-		if err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		return sendSuccess(mRes, &res, resDest)
-	case "ScmFormat", "ScmCheckFormat":
-		var fReq scm.FormatRequest
-		if err := json.Unmarshal(req.Payload, &fReq); err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		var fRes *scm.FormatResponse
-		switch req.Method {
-		case "ScmFormat":
-			fRes, err = scmProvider.Format(fReq)
-		case "ScmCheckFormat":
-			fRes, err = scmProvider.CheckFormat(fReq)
-		}
-		if err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		return sendSuccess(fRes, &res, resDest)
-	case "ScmScan":
-		var sReq scm.ScanRequest
-		if err := json.Unmarshal(req.Payload, &sReq); err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		sRes, err := scmProvider.Scan(sReq)
-		if err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		return sendSuccess(sRes, &res, resDest)
-	case "ScmPrepare":
-		var pReq scm.PrepareRequest
-		if err := json.Unmarshal(req.Payload, &pReq); err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		pRes, err := scmProvider.Prepare(pReq)
-		if err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		return sendSuccess(pRes, &res, resDest)
-	case "BdevInit":
-		var iReq bdev.InitRequest
-		if err := json.Unmarshal(req.Payload, &iReq); err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		err = bdevProvider.Init(iReq)
-		if err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		return sendSuccess(nil, &res, resDest)
-	case "BdevScan":
-		var sReq bdev.ScanRequest
-		if err := json.Unmarshal(req.Payload, &sReq); err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		sRes, err := bdevProvider.Scan(sReq)
-		if err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		return sendSuccess(sRes, &res, resDest)
-	case "BdevPrepare":
-		var pReq bdev.PrepareRequest
-		if err := json.Unmarshal(req.Payload, &pReq); err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		pRes, err := bdevProvider.Prepare(pReq)
-		if err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		return sendSuccess(pRes, &res, resDest)
-	case "BdevFormat":
-		var fReq bdev.FormatRequest
-		if err := json.Unmarshal(req.Payload, &fReq); err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		fRes, err := bdevProvider.Format(fReq)
-		if err != nil {
-			return sendFailure(err, &res, resDest)
-		}
-
-		return sendSuccess(fRes, &res, resDest)
-	default:
-		return sendFailure(errors.Errorf("unhandled method %q", req.Method), &res, resDest)
+	case "ScmMount":
+		mRes, err = h.scmProvider.Mount(mReq)
+	case "ScmUnmount":
+		mRes, err = h.scmProvider.Unmount(mReq)
 	}
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+	return pbin.NewResponseWithPayload(mRes)
+}
+
+// scmFormatCheckHandler implements the ScmFormat and ScmCheckFormat methods.
+type scmFormatCheckHandler struct {
+	scmHandler
+}
+
+func (h *scmFormatCheckHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var fReq scm.FormatRequest
+	if err := json.Unmarshal(req.Payload, &fReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	var fRes *scm.FormatResponse
+	var err error
+	switch req.Method {
+	case "ScmFormat":
+		fRes, err = h.scmProvider.Format(fReq)
+	case "ScmCheckFormat":
+		fRes, err = h.scmProvider.CheckFormat(fReq)
+	}
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	return pbin.NewResponseWithPayload(fRes)
+}
+
+// scmScanHandler implements the ScmScan method.
+type scmScanHandler struct {
+	scmHandler
+}
+
+func (h *scmScanHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var sReq scm.ScanRequest
+	if err := json.Unmarshal(req.Payload, &sReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	sRes, err := h.scmProvider.Scan(sReq)
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	return pbin.NewResponseWithPayload(sRes)
+}
+
+// scmPrepHandler implements the ScmPrepare method.
+type scmPrepHandler struct {
+	scmHandler
+}
+
+func (h *scmPrepHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var pReq scm.PrepareRequest
+	if err := json.Unmarshal(req.Payload, &pReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	pRes, err := h.scmProvider.Prepare(pReq)
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	return pbin.NewResponseWithPayload(pRes)
+}
+
+// bdevHandler provides the ability to set up the bdev.Provider for bdev methods.
+type bdevHandler struct {
+	bdevProvider *bdev.Provider
+}
+
+func (h *bdevHandler) setupProvider(log logging.Logger) {
+	if h.bdevProvider == nil {
+		h.bdevProvider = bdev.DefaultProvider(log).WithForwardingDisabled()
+	}
+}
+
+// bdevInitHandler implements the BdevInit method.
+type bdevInitHandler struct {
+	bdevHandler
+}
+
+func (h *bdevInitHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var iReq bdev.InitRequest
+	if err := json.Unmarshal(req.Payload, &iReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	err := h.bdevProvider.Init(iReq)
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	return pbin.NewResponseWithPayload(nil)
+}
+
+// bdevScanHandler implements the BdevScan method.
+type bdevScanHandler struct {
+	bdevHandler
+}
+
+func (h *bdevScanHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var sReq bdev.ScanRequest
+	if err := json.Unmarshal(req.Payload, &sReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	sRes, err := h.bdevProvider.Scan(sReq)
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	return pbin.NewResponseWithPayload(sRes)
+}
+
+// bdevPrepHandler implements the BdevPrepare method.
+type bdevPrepHandler struct {
+	bdevHandler
+}
+
+func (h *bdevPrepHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var pReq bdev.PrepareRequest
+	if err := json.Unmarshal(req.Payload, &pReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	pRes, err := h.bdevProvider.Prepare(pReq)
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	return pbin.NewResponseWithPayload(pRes)
+}
+
+// bdevFormatHandler implements the BdevFormat method.
+type bdevFormatHandler struct {
+	bdevHandler
+}
+
+func (h *bdevFormatHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var fReq bdev.FormatRequest
+	if err := json.Unmarshal(req.Payload, &fReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	fRes, err := h.bdevProvider.Format(fReq)
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	return pbin.NewResponseWithPayload(fRes)
 }

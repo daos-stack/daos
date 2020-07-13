@@ -375,7 +375,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 
 		found_session = find_session(session_id, NULL);
 		if (found_session == NULL)
-			/* No exsiting session - use this session_id */
+			/* No existing session - use this session_id */
 			break;
 
 		if (session_id == INT64_MAX)

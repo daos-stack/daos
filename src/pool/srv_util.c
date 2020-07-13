@@ -41,7 +41,8 @@ map_ranks_include(enum map_ranks_class class, int status)
 		return status == PO_COMP_ST_UP || status == PO_COMP_ST_UPIN;
 	case MAP_RANKS_DOWN:
 		return status == PO_COMP_ST_DOWN ||
-		       status == PO_COMP_ST_DOWNOUT;
+		       status == PO_COMP_ST_DOWNOUT ||
+		       status == PO_COMP_ST_DRAIN;
 	default:
 		D_ASSERTF(0, "%d\n", class);
 	}
@@ -242,6 +243,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 		D_ASSERTF(target->ta_comp.co_status == PO_COMP_ST_UP ||
 			target->ta_comp.co_status == PO_COMP_ST_UPIN ||
 			target->ta_comp.co_status == PO_COMP_ST_DOWN ||
+			target->ta_comp.co_status == PO_COMP_ST_DRAIN ||
 			target->ta_comp.co_status == PO_COMP_ST_DOWNOUT,
 			"%u\n", target->ta_comp.co_status);
 		if (opc == POOL_EXCLUDE &&
@@ -263,6 +265,17 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				dom->do_comp.co_status = PO_COMP_ST_DOWN;
 				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
 			}
+		} else if (opc == POOL_DRAIN &&
+			   target->ta_comp.co_status == PO_COMP_ST_UPIN) {
+			D_DEBUG(DF_DSMS, "change target %u/%u to DRAIN %p\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index, map);
+			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
+			target->ta_comp.co_fseq = ++version;
+
+			D_PRINT("Target (rank %u idx %u) is draining.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
 		} else if (opc == POOL_ADD &&
 			 target->ta_comp.co_status != PO_COMP_ST_UP &&
 			 target->ta_comp.co_status != PO_COMP_ST_UPIN) {
@@ -275,6 +288,9 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is added.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
+			D_DEBUG(DF_DSMS, "change rank %u to UP\n",
+				dom->do_comp.co_rank);
+			dom->do_comp.co_status = PO_COMP_ST_UP;
 		} else if (opc == POOL_ADD_IN &&
 			   target->ta_comp.co_status == PO_COMP_ST_UP) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to UPIN %p\n",

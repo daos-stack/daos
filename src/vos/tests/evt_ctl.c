@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,6 +80,7 @@ static daos_handle_t		ts_toh;
 #define EVT_SEP			','
 #define EVT_SEP_VAL		':'
 #define EVT_SEP_EXT		'-'
+#define EVT_SEP_MNR		'.'
 #define EVT_SEP_EPC		'@'
 
 /* Data sizes */
@@ -229,7 +230,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, daos_epoch_t *high,
 		*should_pass = false;
 	}
 parse_rect:
-	rect->rc_ex.ex_lo = atoi(str);
+	rect->rc_ex.ex_lo = strtoull(str, NULL, 10);
 
 	tmp = strchr(str, EVT_SEP_EXT);
 	if (tmp == NULL) {
@@ -238,7 +239,7 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_ex.ex_hi = atoi(str);
+	rect->rc_ex.ex_hi = strtoull(str, NULL, 10);
 	tmp = strchr(str, EVT_SEP_EPC);
 	if (tmp == NULL) {
 		D_PRINT("Invalid input string %s\n", str);
@@ -246,7 +247,14 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_epc = atoi(str);
+	rect->rc_epc = strtoull(str, NULL, 10);
+	tmp = strchr(str, EVT_SEP_MNR);
+	if (tmp == NULL) {
+		rect->rc_minor_epc = 1;
+	} else {
+		str = tmp + 1;
+		rect->rc_minor_epc = atoi(str);
+	}
 
 	if (high) {
 		*high = DAOS_EPOCH_MAX;
@@ -254,7 +262,7 @@ parse_rect:
 		if (tmp == NULL)
 			goto parse_value;
 		str = tmp + 1;
-		*high = atoi(str);
+		*high = strtoull(str, NULL, 10);
 	}
 
 parse_value:
@@ -429,6 +437,43 @@ ts_delete_rect(void **state)
 }
 
 static void
+ts_remove_rect(void **state)
+{
+	char			*arg;
+	struct evt_rect		 rect;
+	daos_epoch_range_t	 epr;
+	int			 rc;
+	bool			 should_pass;
+
+	arg = tst_fn_val.optval;
+	if (arg == NULL)
+		fail();
+
+	rc = ts_parse_rect(arg, &rect, NULL, NULL, &should_pass);
+	if (rc != 0)
+		fail();
+
+	D_PRINT("Remove all "DF_RECT" expect_pass=%s\n", DP_RECT(&rect),
+		should_pass ? "true" : "false");
+
+	epr.epr_lo = 0;
+	epr.epr_hi = rect.rc_epc;
+	rc = evt_remove_all(ts_toh, &rect.rc_ex, &epr);
+
+	if (should_pass) {
+		if (rc != 0)
+			D_FATAL("Remove rect failed "DF_RC"\n", DP_RC(rc));
+	} else {
+		if (rc == 0) {
+			D_FATAL("Remove rect should have failed\n");
+			fail();
+		}
+		rc = 0;
+	}
+}
+
+
+static void
 ts_find_rect(void **state)
 {
 	struct evt_entry	*ent;
@@ -588,6 +633,7 @@ start:
 			if (i % 3 == 0) {
 				rect.rc_ex = ent.en_sel_ext;
 				rect.rc_epc = ent.en_epoch;
+				rect.rc_minor_epc = ent.en_minor_epc;
 				rc = evt_iter_probe(ih, EVT_ITER_FIND,
 						    &rect, NULL);
 			}
@@ -1716,146 +1762,150 @@ test_evt_node_size_internal(void **state)
 	}
 }
 
-/* Args : Input : string_val pointer
-*                 num: number of time to repeat string val
-*         Output: ret_string: Returns concatenated string.
-*		  NOTE: pre-allocate ret_string buffer
-*		  before calling this function. Otherwise,
-*		  you will get segmentation fault.
-*/
-void repeat_string(char *ret_string, char *string_val, int num)
-{
-	int	counter;
+struct expected_epochs {
+	int	major_epc;
+	int	minor_epc;
+};
 
-	counter = num;
-	strcpy(ret_string, string_val);
-	counter--;
-	while (counter-- > 0)
-		strcat(ret_string, string_val);
+void
+set_data(struct test_arg *arg, daos_handle_t toh, char *dest_data,
+	 struct expected_epochs *dest_epc, int start, int size, const char *src,
+	 int major_epc, int minor_epc)
+{
+	struct evt_entry_in	entry = {0};
+	int			i, rc;
+	int			end = start + size;
+
+	if (dest_data != NULL)
+		memcpy(dest_data + start, src, size);
+
+	for (i = start; i < end; i++) {
+		dest_epc[i].major_epc = major_epc;
+		dest_epc[i].minor_epc = minor_epc;
+	}
+
+	entry.ei_rect.rc_ex.ex_lo = start;
+	entry.ei_rect.rc_ex.ex_hi = end - 1;
+	entry.ei_rect.rc_epc = major_epc;
+	entry.ei_rect.rc_minor_epc = minor_epc;
+	entry.ei_ver = 0;
+	entry.ei_inob = 1;
+	memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+	rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
+			    src, size);
+	assert_int_equal(rc, 0);
+	rc = evt_insert(toh, &entry, NULL);
+	assert_int_equal(rc, 0);
+}
+
+void
+check_data(struct test_arg *arg, char *expected_data,
+	   struct expected_epochs *expected_epochs, const struct evt_entry *ent)
+{
+	struct expected_epochs	*expected_epoch;
+	char			*actual_data;
+
+	expected_epoch = &expected_epochs[ent->en_sel_ext.ex_lo];
+
+	actual_data = utest_off2ptr(arg->ta_utx, ent->en_addr.ba_off);
+	if (actual_data == NULL)
+		fail_msg("Read a hole where data was expected\n");
+
+	if (memcmp(expected_data + ent->en_sel_ext.ex_lo, actual_data,
+		   evt_extent_width(&ent->en_sel_ext)) != 0) {
+		fail_msg("Extent mismatch %.*s != %.*s\n",
+			 (int)evt_extent_width(&ent->en_sel_ext), actual_data,
+			 (int)evt_extent_width(&ent->en_sel_ext),
+			 expected_data + ent->en_sel_ext.ex_lo);
+	}
+	if (expected_epoch->major_epc != ent->en_epoch)
+		fail_msg("Major epoch unexpected %x != "DF_X64"\n",
+			 expected_epoch->major_epc, ent->en_epoch);
+	if (expected_epoch->minor_epc != ent->en_minor_epc)
+		fail_msg("Minor epoch unexpected %d != %d\n",
+			 expected_epoch->minor_epc, ent->en_minor_epc);
 }
 
 static void
-test_evt_overlap_split_internal(void **state)
+test_evt_overlap_split(struct test_arg *arg, int major_num, int minor_num)
 {
-	struct test_arg		*arg = *state;
 	daos_handle_t		toh;
 	daos_handle_t		ih;
-	struct evt_entry	ent;
+	int			data_sizes[] = {1, 7, 4, 9, 5};
+	int			offset_mult[] = {17, 113, 47, 21, 13, 101, 67,
+						 47, 57, 31, 11, 71, 143, 19};
+	int			data_size;
 	int			rc;
-	struct evt_entry_in	entry = {0};
-	int			epoch;
-	int			record_size, data_size;
-	char			*data;
+	struct evt_entry	ent;
+	int			minor_epc;
+	int			major_epc;
+	int			total_size;
+	const char		*mystr = NULL;
 	char			*expected_data = NULL;
-	char			*actual_data = NULL;
-	char			*read_data = NULL;
+	struct expected_epochs	*expected_epochs = NULL;
 	uint32_t		 inob;
-	int			data_len = 9;
 	int			tree_depth_fail = 0;
-	int			mem_cmp_fail = 0;
-	int			read_counter, counter, temp_val;
-	int			last_offset = 0;
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL,
 				arg->ta_uma, &ts_evt_desc_cbs, &toh);
 	assert_int_equal(rc, 0);
-	/* Overall data : September
-	* overlap value1: Wonderful
-	* overlap value2: Rainydays
-	*/
-	record_size = ((data_len * NUM_EPOCHS) + 1);
-	/* First data malloc is for record_size.
-	* Other data malloc is only for 9 bytes.
-	* for loop frees the data every time.
-	*/
-	D_ALLOC_ARRAY(data, record_size);
-	if (data == NULL)
+	/** Arbitrary character array, not too large to create many overlaps */
+	total_size = NUM_EPOCHS * 2;
+	D_ALLOC_ARRAY(expected_epochs, total_size);
+	if (expected_epochs == NULL)
 		goto finish;
-	repeat_string(data, "September", NUM_EPOCHS);
-	data_size = record_size;
 
-	D_ALLOC_ARRAY(expected_data, NUM_EPOCHS * record_size);
+	D_ALLOC_ARRAY(expected_data, total_size);
 	if (expected_data == NULL)
-		goto finish1;
-	D_ALLOC_ARRAY(actual_data, NUM_EPOCHS * record_size);
-	if (actual_data == NULL)
-		goto finish1;
+		goto finish;
 
-	for (epoch = 1; epoch < NUM_EPOCHS; epoch++) {
-	/* Write a big extent at epoch 1.
-	* Then, write some data in the front, end, middle
-	* at different epochs and see whether overlapped data
-	* is visible.
-	*/
-		if (epoch > 1) {
-			/* For epoch=1, the data size is different.
-			* All other epoch, data size is same.
-			* The data is freed on each loop.
-			*/
-			data_size = 9;
-		} else {
-			data_size = record_size;
-		}
-		switch (epoch) {
-		case 1:
-			/* Initial long data */
-			entry.ei_rect.rc_ex.ex_lo = epoch;
-			entry.ei_rect.rc_ex.ex_hi = data_size;
-			memcpy(expected_data, data, data_size);
-			break;
-		case 2:
-			/* Add some value in front */
-			memcpy(data, "Wonderful", strlen("Wonderful"));
-			entry.ei_rect.rc_ex.ex_lo = epoch - 1;
-			entry.ei_rect.rc_ex.ex_hi = data_size;
-			memcpy(expected_data, data, data_size);
-			break;
-		case 3:
-			/* Add something in the middle */
-			memcpy(data, "Rainydays", strlen("Rainydays"));
-			temp_val = epoch * data_size;
-			entry.ei_rect.rc_ex.ex_lo = temp_val + 1;
-			entry.ei_rect.rc_ex.ex_hi = temp_val +
-			data_size;
-			memcpy(&expected_data[temp_val], data,
-				data_size);
-			break;
-		case 4:
-			/* Add something at the end */
-			memcpy(data, "deafbeefs", strlen("deadbeefs"));
-			temp_val = NUM_EPOCHS * data_size;
-			entry.ei_rect.rc_ex.ex_lo = temp_val + 1;
-			entry.ei_rect.rc_ex.ex_hi = temp_val +
-			data_size;
-			memcpy(&expected_data[temp_val], data,
-			data_size);
-			last_offset = temp_val + data_size;
-			break;
-		default:
-			/* Create extent far away for node split */
-			memcpy(data, "Wildfire", strlen("Wildfire"));
-			temp_val = epoch * NUM_EPOCHS * NUM_EPOCHS;
-			entry.ei_rect.rc_ex.ex_lo = temp_val + 1;
-			entry.ei_rect.rc_ex.ex_hi = temp_val +
-			data_size;
-			memcpy(&expected_data[last_offset],
-			data, data_size);
-			last_offset += data_size;
-			break;
-		}
-		entry.ei_rect.rc_epc = epoch;
-		entry.ei_ver = 0;
-		entry.ei_inob = 1;
+	memset(expected_data, 'X', total_size);
 
-		memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
-		rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
-				    data, data_size);
-		assert_int_equal(rc, 0);
-		rc = evt_insert(toh, &entry, NULL);
-		assert_int_equal(rc, 0);
-		memset(data, 0, data_size);
+	set_data(arg, toh, NULL, expected_epochs, 0, total_size,
+		 expected_data, 1, 1);
+
+	memset(expected_data, 'X', total_size);
+
+	for (major_epc = 1; major_epc <= major_num; major_epc++) {
+		for (minor_epc = 1; minor_epc <= minor_num; minor_epc++) {
+			int epoch = (major_epc - 1) * minor_num + minor_epc;
+			int start;
+
+			/** We write extent #1 above so skip it */
+			if (epoch == 1)
+				continue;
+
+			data_size = data_sizes[epoch % ARRAY_SIZE(data_sizes)];
+			start = offset_mult[epoch % ARRAY_SIZE(offset_mult)];
+			start = (start * epoch) % total_size;
+			if ((start + data_size) > total_size)
+				start = (start + data_size) % total_size;
+
+			switch (data_size) {
+			case 1:
+				mystr = "?";
+				break;
+			case 4:
+				mystr = "dead";
+				break;
+			case 5:
+				mystr = "moral";
+				break;
+			case 7:
+				mystr = "January";
+				break;
+			case 9:
+				mystr = "wonderful";
+				break;
+			default:
+				fail_msg("Unexpected size");
+				break;
+			}
+			set_data(arg, toh, expected_data,
+				 expected_epochs, start, data_size,
+				 mystr, major_epc, minor_epc);
+		}
 	}
-	D_FREE(data);
 
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE, NULL, &ih);
 	if (rc != 0)
@@ -1864,34 +1914,17 @@ test_evt_overlap_split_internal(void **state)
 	if (rc != 0)
 		goto finish;
 
-	read_counter = 0;
-
 	for (;;) {
 		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
 		if (rc == -DER_NONEXIST)
 			break;
 		assert_int_equal(rc, 0);
-		read_data = utest_off2ptr(arg->ta_utx, ent.en_addr.ba_off);
-		for (counter = 0;
-		counter < (int)evt_extent_width(&ent.en_sel_ext); counter++) {
-			memcpy(&actual_data[read_counter], &read_data[counter],
-				sizeof(char));
-			read_counter++;
-		}
+		check_data(arg, expected_data, expected_epochs, &ent);
 		rc = evt_iter_next(ih);
 		if (rc == -DER_NONEXIST)
 			break;
 		assert_int_equal(rc, 0);
 	}
-
-	rc = memcmp(actual_data, expected_data,
-		NUM_EPOCHS * record_size *
-		sizeof(char));
-	if (rc != 0) {
-		mem_cmp_fail = 1;
-		goto finish;
-	}
-
 
 	D_PRINT("Tree depth :%d\n", arg->ta_root->tr_depth);
 	if (arg->ta_root->tr_depth < 2)
@@ -1900,26 +1933,24 @@ test_evt_overlap_split_internal(void **state)
 
 finish:
 	if (tree_depth_fail)
-		fail_msg("Node not splitted\n");
-	if (mem_cmp_fail) {
-		D_PRINT("Actual Data\n");
-		D_PRINT("===========\n");
-		for (counter = 0; counter < read_counter; counter++)
-			D_PRINT("%c", actual_data[counter]);
-		D_PRINT("\n");
-		D_PRINT("Expected Data\n");
-		D_PRINT("===========\n");
-		for (counter = 0; counter < last_offset; counter++)
-			D_PRINT("%c", expected_data[counter]);
-		D_PRINT("\n");
-		fail_msg("Actual/Expected Data MisMatch\n");
-	}
-	D_FREE(actual_data);
-finish1:
-	D_FREE(data);
+		fail_msg("Node not split\n");
 	D_FREE(expected_data);
+	D_FREE(expected_epochs);
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
+}
+
+#define NUM_MINOR 20
+D_CASSERT((NUM_EPOCHS % NUM_MINOR) == 0);
+#define NUM_MAJOR (NUM_EPOCHS / NUM_MINOR)
+static void
+test_evt_overlap_split_internal(void **state)
+{
+	struct test_arg		*arg = *state;
+
+	test_evt_overlap_split(arg, NUM_EPOCHS, 1);
+	test_evt_overlap_split(arg, NUM_MAJOR, NUM_MINOR);
+	test_evt_overlap_split(arg, 1, NUM_EPOCHS);
 }
 
 static inline int
@@ -2194,8 +2225,8 @@ run_internal_tests(char *test_name)
 		{ "EVT055: evt_find_internal",
 			test_evt_find_internal,
 			setup_builtin, teardown_builtin},
-		{ "EVT015: evt_various_data_size_internal",
-			test_evt_various_data_size_internal,
+		{ "EVT015: evt_overlap_split_internal",
+			test_evt_overlap_split_internal,
 			setup_builtin, teardown_builtin},
 		{ "EVT016: evt_variable_record_size_internal",
 			test_evt_variable_record_size_internal,
@@ -2206,8 +2237,8 @@ run_internal_tests(char *test_name)
 		{ "EVT018: evt_node_size_internal",
 			test_evt_node_size_internal,
 			setup_builtin, teardown_builtin},
-		{ "EVT019: evt_overlap_split_internal",
-			test_evt_overlap_split_internal,
+		{ "EVT019: evt_various_data_size_internal",
+			test_evt_various_data_size_internal,
 			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -2225,6 +2256,7 @@ static struct option ts_ops[] = {
 	{ "add",	required_argument,	NULL,	'a'	},
 	{ "many_add",	required_argument,	NULL,	'm'	},
 	{ "find",	required_argument,	NULL,	'f'	},
+	{ "remove_all",	required_argument,	NULL,	'r'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "list",	optional_argument,	NULL,	'l'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
@@ -2276,6 +2308,9 @@ ts_cmd_run(char opc, char *args)
 	case 'd':
 		ts_delete_rect(st);
 		break;
+	case 'r':
+		ts_remove_rect(st);
+		break;
 	case 'b':
 		ts_tree_debug(st);
 		break;
@@ -2306,7 +2341,7 @@ ts_group(void **state)
 
 	while ((opc = getopt_long(test_group_argc,
 				 test_group_args,
-				 "C:a:m:e:f:g:d:b:Docl::ts",
+				 "C:a:m:e:f:g:d:b:Docl::tsr:",
 				 ts_ops, NULL)) != -1){
 		ts_cmd_run(opc, optarg);
 	}

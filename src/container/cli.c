@@ -449,26 +449,6 @@ dc_cont_alloc(const uuid_t uuid)
 	return dc;
 }
 
-static void
-dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
-{
-	uint32_t		csum_type_prop;
-	enum DAOS_CSUM_TYPE	csum_type;
-	uint64_t		chunksize;
-
-	csum_type_prop = daos_cont_prop2csum(props);
-	if (csum_type_prop == DAOS_PROP_CO_CSUM_OFF) {
-		cont->dc_csummer = NULL;
-		return;
-	}
-
-	csum_type = daos_contprop2csumtype(csum_type_prop);
-	chunksize = daos_cont_prop2chunksize(props);
-	daos_csummer_init(&cont->dc_csummer,
-			  daos_csum_type2algo(csum_type),
-			  chunksize, 0);
-}
-
 struct cont_open_args {
 	struct dc_pool		*coa_pool;
 	daos_cont_info_t	*coa_info;
@@ -524,7 +504,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = arg->hdl;
 
-	dc_cont_csum_init(cont, out->coo_prop);
+	rc = daos_csummer_init_with_props(&cont->dc_csummer, out->coo_prop);
 
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
@@ -609,7 +589,7 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
 	in->coi_flags = args->flags;
 	/** Determine which container properties need to be retrieved while
-	 * opening the contianer
+	 * opening the container
 	 */
 	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
 				  DAOS_CO_QUERY_PROP_CSUM_CHUNK;
@@ -957,7 +937,7 @@ dc_cont_query(tse_task_t *task)
 	int			 rc;
 
 	args = dc_task_get_args(task);
-	D_ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
@@ -1418,8 +1398,7 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	struct dc_cont *cont = arg->coaa_cont;
 	int rc = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE ||
-	    rc == -DER_EVICTED) {
+	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
 		tse_sched_t *sched = tse_task2sched(task);
 		daos_pool_query_t *pargs;
 		tse_task_t *ptask;

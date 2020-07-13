@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,11 @@
 
 package io.daos.dfs;
 
-import java.util.UUID;
+import org.apache.commons.lang.StringUtils;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.UUID;
 
 /**
  * Utility class.
@@ -64,7 +66,8 @@ public final class DaosUtils {
       Matcher m = PAT_FILENAME.matcher(p);
       if (!m.matches()) {
         throw new IllegalArgumentException("Invalid file name. " +
-                "only characters with hexadecimal [x00 to xff] are valid. max length is " + Constants.FILE_NAME_LEN_MAX);
+                "only characters with hexadecimal [x00 to xff] are valid. max length is " +
+                Constants.FILE_NAME_LEN_MAX);
       }
     }
     if (path.length() > 1 && path.endsWith("/")) {
@@ -106,5 +109,20 @@ public final class DaosUtils {
   public static long toMilliSeconds(StatAttributes.TimeSpec timeSpec) {
     long ms = timeSpec.getSeconds() * 1000;
     return ms + timeSpec.getNano() / (1000 * 1000);
+  }
+
+  /**
+   * escape UNS value to make it valid in command line.
+   *
+   * @param value
+   * value to be escaped
+   * @return escaped value
+   */
+  public static String escapeUnsValue(String value) {
+    if (StringUtils.isBlank(value)) {
+      return value;
+    }
+    value = value.replaceAll(":", "\\\\u003a");
+    return value.replaceAll("=", "\\\\u003d");
   }
 }

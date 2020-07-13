@@ -38,95 +38,16 @@
 #include <daos_srv/vos_types.h>
 
 /**
- * Refresh the DTX resync generation.
- *
- * \param coh	[IN]	Container open handle.
- *
- * \return		Zero on success.
- * \return		Negative value if error.
- */
-int
-vos_dtx_update_resync_gen(daos_handle_t coh);
-
-/**
- * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ * Check the specified DTX's status, and related epoch, pool map version
+ * information if required.
  *
  * \param coh		[IN]	Container open handle.
- * \param oid		[IN]	The target object (shard) ID.
- * \param dti		[IN]	The DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
- * \param epoch		[IN]	The DTX epoch.
- * \param gen		[IN]	The DTX generation.
- * \param flags		[IN]	See dtx_cos_flags.
- *
- * \return		Zero on success, negative value if error.
- */
-int
-vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
-		uint32_t flags);
-
-/**
- * Search the specified DTX is in the CoS cache or not.
- *
- * \param coh		[IN]	Container open handle.
- * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
- *
- * \return	0 if the DTX exists in the CoS cache.
- * \return	-DER_NONEXIST if not in the CoS cache.
- * \return	Other negative values on error.
- */
-int
-vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		   struct dtx_id *xid, uint64_t dkey_hash);
-
-/**
- * Fetch the list of the DTXs to be committed because of (potential) share.
- *
- * \param coh		[IN]	Container open handle.
- * \param oid		[IN]	The target object (shard) ID.
- * \param dkey_hash	[IN]	The hashed dkey.
- * \param max		[IN]	The max size of the array for DTX entries.
- * \param dtis		[OUT]	The DTX IDs array to be committed for share.
- *
- * \return			The count of DTXs to be committed for share
- *				on success, negative value if error.
- */
-int
-vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
-		 int max, struct dtx_id **dtis);
-
-/**
- * Fetch the list of the DTXs that can be committed.
- *
- * \param coh		[IN]	Container open handle.
- * \param max_cnt	[IN]	The max size of the array for DTX entries.
- * \param oid		[IN]	Only return the DTXs belong to the specified
- *				object if it is non-NULL.
- * \param epoch		[IN]	Only return the DTXs that is not newer than
- *				the specified epoch.
- * \param dtes		[OUT]	The array for DTX entries can be committed.
- *
- * \return		Positve value for the @dtes array size.
- *			Negative value on failure.
- */
-int
-vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
-			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry **dtes);
-
-/**
- * Check whether the given DTX is resent one or not.
- *
- * \param coh		[IN]	Container open handle.
- * \param oid		[IN]	Pointer to the object ID.
- * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
+ * \param pm_ver	[OUT]	Hold the DTX's pool map version.
+ * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -134,29 +55,14 @@ vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
  *			DTX_ST_COMMITTED means the DTX has been committed.
  *			-DER_MISMATCH	means that the DTX has ever been
  *					processed with different epoch.
+ *			-DER_AGAIN means DTX re-index is in processing, not sure
+ *				   about the existence of the DTX entry, need to
+ *				   retry sometime later.
  *			Other negative value if error.
  */
 int
-vos_dtx_check_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		     struct dtx_id *dti, uint64_t dkey_hash,
-		     daos_epoch_t *epoch);
-
-/**
- * Check the specified DTX's persistent status.
- *
- * \param coh		[IN]	Container open handle.
- * \param xid		[IN]	Pointer to the DTX identifier.
- *
- * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
- *					so the local modification has been done
- *					on related replica(s). If all replicas
- *					have 'prepared', then the whole DTX is
- *					committable.
- *			DTX_ST_COMMITTED means the DTX has been committed.
- *			Negative value if error.
- */
-int
-vos_dtx_check(daos_handle_t coh, struct dtx_id *dti);
+vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
+	      uint32_t *pm_ver, bool for_resent);
 
 /**
  * Commit the specified DTXs.
@@ -164,14 +70,15 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti);
  * \param coh	[IN]	Container open handle.
  * \param dtis	[IN]	The array for DTX identifiers to be committed.
  * \param count [IN]	The count of DTXs to be committed.
+ * \param dcks	[OUT]	The array to hold the OID and dkey hash corresponding to
+ *			the committed DTXs array for subsequent CoS handling.
  *
- * \return		Positive value to ask the caller to aggregate
- *			some old DTXs.
- * \return		Zero on success (no additional action required).
  * \return		Negative value if error.
+ * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
+	       struct dtx_cos_key *dcks);
 
 /**
  * Abort the specified DTXs.
@@ -181,7 +88,8 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Negative value if error.
+ * \return		Others are for the count of aborted DTXs.
  */
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
@@ -198,13 +106,21 @@ int
 vos_dtx_aggregate(daos_handle_t coh);
 
 /**
- * Query the container's DTXs information.
+ * Query the container's DTXs statistics information.
  *
  * \param coh	[IN]	Container open handle.
  * \param stat	[OUT]	The structure to hold the DTXs information.
  */
 void
 vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
+
+/**
+ * Set the DTX committable as committable.
+ *
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_dtx_mark_committable(struct dtx_handle *dth);
 
 /**
  * Check the latest sync epoch against the specified object.
@@ -247,6 +163,14 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
  */
 int
 vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
+
+/**
+ * Cleanup local DTX when local modification failed.
+ *
+ * \param dth	[IN]	The DTX handle.
+ */
+void
+vos_dtx_cleanup(struct dtx_handle *dth);
 
 /**
  * Initialize the environment for a VOS instance
@@ -351,6 +275,19 @@ int
 vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo);
 
 /**
+ * Query pool space by pool UUID
+ *
+ * \param pool_id [IN]	Pool UUID
+ * \param vps     [OUT]	Returned pool space info
+ *
+ * \return		Zero		: success
+ *			-DER_NONEXIST	: pool isn't opened
+ *			-ve		: error
+ */
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps);
+
+/**
  * Create a container within a VOSP
  *
  * \param poh	[IN]	Pool open handle
@@ -410,17 +347,6 @@ int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
 /**
- * Flush changes in the specified epoch to storage
- *
- * \param coh	[IN]	Container open handle
- * \param epoch	[IN]	Epoch to flush
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
-
-/**
  * Aggregates all epochs within the epoch range \a epr.
  * Data in all these epochs will be aggregated to the last epoch
  * \a epr::epr_hi, aggregated epochs will be discarded except the last one,
@@ -428,12 +354,16 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
- * \param func	  [IN]		Pointer to csum recalculation function
+ * \param csum_func  [IN]	Pointer to csum recalculation function
+ * \param yield_func [IN]	Pointer to customized yield function
+ * \param yield_arg  [IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
+	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
+	      void *yield_arg);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -452,11 +382,14 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
  * \param coh		[IN]	Container open handle
  * \param epr		[IN]	The epoch range to discard
  *				keys to discard
+ * \param yield_func	[IN]	Pointer to customized yield function
+ * \param yield_arg	[IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
+vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**
  * VOS object API
@@ -493,7 +426,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
- * Update records for the specfied object.
+ * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
  * directly write data into these addresses (rdma mode).
@@ -525,6 +458,25 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	       unsigned int iod_nr, daos_iod_t *iods,
 	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls);
+
+/**
+ * Remove all array values within the specified range.  If the specified
+ * extent and epoch range includes partial extents, the function will
+ * fail and no changes will be made.
+ *
+ * \param[in]	coh	Container open handle
+ * \param[in]	oid	object ID
+ * \param[in]	epr	Epoch range
+ * \param[in]	dkey	Distribution key
+ * \param[in]	akey	Attribute key
+ * \param[in]	recx	Extent range to remove
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
+		     const daos_epoch_range_t *epr, const daos_key_t *dkey,
+		     const daos_key_t *akey, const daos_recx_t *recx);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -564,6 +516,18 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 /**
  * I/O APIs
  */
+
+enum vos_fetch_flags {
+	/* only query iod_size */
+	VOS_FETCH_SIZE_ONLY		= (1 << 0),
+	/* query recx list */
+	VOS_FETCH_RECX_LIST		= (1 << 1),
+	/* only set read TS */
+	VOS_FETCH_SET_TS_ONLY		= (1 << 2),
+	/* check the target (obj/dkey/akey) existence */
+	VOS_FETCH_CHECK_EXISTENCE	= (1 << 3),
+};
+
 /**
  *
  * Find and return I/O source buffers for the data of the specified
@@ -579,23 +543,30 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
  *			is provided by \a iods.
- * \param flags [IN]	conditional flags
+ * \param cond_flags [IN]
+ *			conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a ios.
  * \param iods	[IN/OUT]
  *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
- * \param size_fetch[IN]
- *			Fetch size only
+ * \param fetch_flags [IN]
+ *			VOS fetch flags, VOS_FETCH_SIZE_ONLY or
+ *			VOS_FETCH_RECX_LIST.
+ * \param shadows [IN]	Optional shadow recx/epoch lists, one for each iod.
+ *			data of extents covered by these should not be returned
+ *			by fetch function. Only used for EC obj degraded fetch.
  * \param ioh	[OUT]	The returned handle for the I/O.
+ * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t flags, daos_key_t *dkey, unsigned int nr,
-		daos_iod_t *iods,
-		bool size_fetch, daos_handle_t *ioh);
+		uint64_t cond_flags, daos_key_t *dkey, unsigned int nr,
+		daos_iod_t *iods, uint32_t fetch_flags,
+		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
+		struct dtx_handle *dth);
 
 /**
  * Finish the fetch operation and release the responding resources.
@@ -656,6 +627,16 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       struct dtx_handle *dth);
 
 /**
+ * Get the recx/epoch list.
+ *
+ * \param ioh	[IN]	The I/O handle.
+ *
+ * \return		recx/epoch list.
+ */
+struct daos_recx_ep_list *
+vos_ioh2recx_list(daos_handle_t ioh);
+
+/**
  * Get the I/O descriptor.
  *
  * \param ioh	[IN]	The I/O handle.
@@ -686,7 +667,7 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
  * VOS iterator APIs
  */
 /**
- * Initialise an iterator for VOS
+ * Initialize an iterator for VOS
  *
  * \param type  [IN]	Type of iterator
  * \param param	[IN]	Parameters for the iterator.
@@ -730,12 +711,13 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
  *			is inherited from that entry.
  *
  * \param ih	[OUT]	Returned iterator handle
+ * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
-		 daos_handle_t *ih);
+		 daos_handle_t *ih, struct dtx_handle *dth);
 
 /**
  * Release a iterator
@@ -854,6 +836,7 @@ vos_iter_empty(daos_handle_t ih);
  * \param[in]		pre_cb		pre subtree iteration callback
  * \param[in]		post_cb		post subtree iteration callback
  * \param[in]		arg		callback argument
+ * \param[in]		dth		DTX handle
  *
  * \retval		0	iteration complete
  * \retval		> 0	callback return value
@@ -862,7 +845,7 @@ vos_iter_empty(daos_handle_t ih);
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg);
+	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
@@ -902,6 +885,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx	max or min offset in dkey/akey, and the size of the
  *			extent at the offset. If there are no visible array
  *			records, the size in the recx returned will be 0.
+ * \param[in]	dth	Pointer to the DTX handle.
  *
  * \return
  *			0		Success
@@ -912,7 +896,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx);
+		  daos_recx_t *recx, struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.
@@ -959,13 +943,14 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
-vos_gc_run(int *credits);
-int
-vos_gc_pool(daos_handle_t poh, int *credits);
+vos_gc_pool_run(daos_handle_t poh, int credits,
+		bool (*yield_func)(void *arg), void *yield_arg);
+bool
+vos_gc_pool_idle(daos_handle_t poh);
+
 
 enum vos_cont_opc {
-	/** abort VOS aggregation **/
-	VOS_CO_CTL_ABORT_AGG,
+	VOS_CO_CTL_DUMMY,
 };
 
 /**

@@ -41,6 +41,8 @@
 
 #include "crt_internal.h"
 
+#define CRT_CTL_MAX_LOG_MSG_SIZE 256
+
 void
 crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 {
@@ -55,6 +57,30 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 		rc = d_fault_inject_enable();
 	else
 		rc = d_fault_inject_disable();
+
+	out_args->rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
+}
+
+void
+crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
+{
+	struct crt_ctl_log_add_msg_in	*in_args;
+	struct crt_ctl_log_add_msg_out	*out_args;
+	int				rc = 0;
+
+	in_args = crt_req_get(rpc_req);
+	out_args = crt_reply_get(rpc_req);
+
+	if (in_args->log_msg == NULL) {
+		D_ERROR("Empty log message\n");
+		rc = -DER_INVAL;
+	} else {
+		D_INFO("%.*s\n", CRT_CTL_MAX_LOG_MSG_SIZE,
+			in_args->log_msg);
+	}
 
 	out_args->rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -172,6 +198,8 @@ CRT_RPC_DEFINE(crt_ctl_fi_toggle, CRT_ISEQ_CTL_FI_TOGGLE,
 	       CRT_OSEQ_CTL_FI_TOGGLE)
 
 CRT_RPC_DEFINE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
+CRT_RPC_DEFINE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
+		CRT_OSEQ_CTL_LOG_ADD_MSG)
 
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition
@@ -188,6 +216,10 @@ static struct crt_proto_rpc_format crt_internal_rpcs[] = {
 	CRT_INTERNAL_RPCS_LIST,
 };
 
+static struct crt_proto_rpc_format crt_fi_rpcs[] = {
+	CRT_FI_RPCS_LIST,
+};
+
 #undef X
 
 /* CRT RPC related APIs or internal functions */
@@ -197,15 +229,27 @@ crt_internal_rpc_register(void)
 	struct crt_proto_format	cpf;
 	int			rc;
 
-	cpf.cpf_name  = "internal-proto";
-	cpf.cpf_ver   = 0;
+	cpf.cpf_name  = "internal";
+	cpf.cpf_ver   = CRT_PROTO_INTERNAL_VERSION;
 	cpf.cpf_count = ARRAY_SIZE(crt_internal_rpcs);
 	cpf.cpf_prf   = crt_internal_rpcs;
 	cpf.cpf_base  = CRT_OPC_INTERNAL_BASE;
 
 	rc = crt_proto_register_internal(&cpf);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("crt_proto_register_internal() failed. rc %d\n", rc);
+		return rc;
+	}
+
+	cpf.cpf_name  = "fault-injection";
+	cpf.cpf_ver   = CRT_PROTO_FI_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_fi_rpcs);
+	cpf.cpf_prf   = crt_fi_rpcs;
+	cpf.cpf_base  = CRT_OPC_FI_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0)
+		D_ERROR("crt_proto_register() failed. rc %d\n", rc);
 
 	return rc;
 }
@@ -486,68 +530,6 @@ crt_req_decref(crt_rpc_t *req)
 	RPC_DECREF(rpc_priv);
 
 out:
-	return rc;
-}
-
-static int
-crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
-{
-	struct crt_rpc_priv		*rpc_priv;
-	d_rank_t			 rank;
-	struct crt_grp_priv		*grp_priv;
-	struct crt_context		*crt_ctx;
-	int				 ctx_idx;
-	uint32_t			 tag;
-	int				 rc = 0;
-
-	rpc_priv = arg;
-	D_ASSERT(rpc_priv != NULL);
-	rank = rpc_priv->crp_pub.cr_ep.ep_rank;
-	tag = rpc_priv->crp_pub.cr_ep.ep_tag;
-
-	crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	if (rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) {
-		RPC_ERROR(rpc_priv,
-			  "opc: %#x with status of FWD_UNREACH\n",
-			  rpc_priv->crp_pub.cr_opc);
-		/* Valid hg_addr gets passed despite unreachable state */
-		crt_hg_addr_free(&crt_ctx->cc_hg_ctx, hg_addr);
-		D_GOTO(unreach, rc);
-	}
-
-	grp_priv = crt_grp_pub2priv(rpc_priv->crp_pub.cr_ep.ep_grp);
-
-	ctx_idx = crt_ctx->cc_idx;
-
-	rc = crt_grp_lc_addr_insert(grp_priv, crt_ctx, rank, tag, &hg_addr);
-	if (rc != 0) {
-		D_ERROR("crt_grp_lc_addr_insert() failed. rc %d "
-			"grp_priv %p ctx_idx %d, rank: %d, tag %d.\n",
-			rc, grp_priv, ctx_idx, rank, tag);
-		/* Mark as unreachable for crt_context_req_untrack() */
-		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
-		D_GOTO(out, rc);
-	}
-	rpc_priv->crp_hg_addr = hg_addr;
-	rc = crt_req_send_internal(rpc_priv);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_req_send_internal() failed, rc %d\n",
-			  rc);
-		D_GOTO(out, rc);
-	}
-out:
-	if (rc != 0) {
-		crt_context_req_untrack(rpc_priv);
-		crt_rpc_complete(rpc_priv, rc);
-
-		/* Corresponds to cleanup in crt_hg_req_send_cb() */
-		RPC_DECREF(rpc_priv);
-	}
-
-unreach:
-	/* addref in crt_req_hg_addr_lookup */
-	RPC_DECREF(rpc_priv);
 	return rc;
 }
 
@@ -1000,27 +982,55 @@ out:
 	return rc;
 }
 
+
 /*
  * the case where we have the base URI but don't have the NA address of the tag
+ * TODO: This function will be gone after hg handle cache revamp
  */
 static int
 crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 {
+	hg_addr_t		 hg_addr;
+	hg_return_t		 hg_ret;
 	struct crt_context	*crt_ctx;
 	int			 rc = 0;
 
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	/* decref at crt_req_hg_addr_lookup_cb */
-	RPC_ADDREF(rpc_priv);
 
-	rc = crt_hg_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
-				crt_req_hg_addr_lookup_cb, rpc_priv);
-	if (rc != 0) {
-		D_ERROR("crt_addr_lookup() failed, rc %d, opc: %#x..\n",
-			rc, rpc_priv->crp_pub.cr_opc);
-		/* rollback above addref */
-		RPC_DECREF(rpc_priv);
+	hg_ret = HG_Addr_lookup2(crt_ctx->cc_hg_ctx.chc_hgcla,
+				rpc_priv->crp_tgt_uri, &hg_addr);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Addr_lookup2() failed. uri=%s, hg_ret=%d\n",
+			rpc_priv->crp_tgt_uri, hg_ret);
+		D_GOTO(out, rc = -DER_HG);
 	}
+
+	rc = crt_grp_lc_addr_insert(rpc_priv->crp_grp_priv, crt_ctx,
+				rpc_priv->crp_pub.cr_ep.ep_rank,
+				rpc_priv->crp_pub.cr_ep.ep_tag,
+				&hg_addr);
+	if (rc != 0) {
+		D_ERROR("Failed to insert\n");
+		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
+		D_GOTO(finish_rpc, rc);
+	}
+
+	rpc_priv->crp_hg_addr = hg_addr;
+	rc = crt_req_send_internal(rpc_priv);
+	if (rc != 0) {
+		RPC_ERROR(rpc_priv,
+			  "crt_req_send_internal() failed, rc %d\n",
+			  rc);
+		D_GOTO(finish_rpc, rc);
+	}
+
+finish_rpc:
+	if (rc != 0) {
+		crt_context_req_untrack(rpc_priv);
+		crt_rpc_complete(rpc_priv, rc);
+	}
+
+out:
 	return rc;
 }
 
@@ -1348,15 +1358,15 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 static inline void
 crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 {
-	uint32_t	xid;
+	uint64_t	rpcid;
 
-	xid = atomic_fetch_add(&crt_gdata.cg_xid, 1);
+	rpcid = atomic_fetch_add(&crt_gdata.cg_rpcid, 1);
 
 	rpc_priv->crp_req_hdr.cch_opc = opc;
-	rpc_priv->crp_req_hdr.cch_xid = xid;
+	rpc_priv->crp_req_hdr.cch_rpcid = rpcid;
 
 	rpc_priv->crp_reply_hdr.cch_opc = opc;
-	rpc_priv->crp_reply_hdr.cch_xid = xid;
+	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
 }
 
 int

@@ -107,7 +107,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 		D_GOTO(out, 0);
 	identical_num = 0;
 	rank_tmp = rank_list->rl_ranks[0];
-	for (i = 1; i < rank_num - identical_num; i++) {
+	for (i = 1; i < rank_num; i++) {
 		if (rank_tmp == rank_list->rl_ranks[i]) {
 			identical_num++;
 			for (j = i; j < rank_num; j++)
@@ -306,7 +306,7 @@ d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx)
 }
 
 /**
- * delete the first occurrence of rank, shrink the arrray storage size in
+ * delete the first occurrence of rank, shrink the array storage size in
  * rank_list, and reduce the size of rank_list by 1.
  */
 int
@@ -472,7 +472,7 @@ out:
 }
 
 /**
- * Initialise a scatter/gather list, create an array to store @nr iovecs.
+ * Initialize a scatter/gather list, create an array to store @nr iovecs.
  */
 int
 d_sgl_init(d_sg_list_t *sgl, unsigned int nr)

@@ -141,6 +141,37 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	return resp, nil
 }
 
+// PoolEvict implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.GetUuid() == "" {
+		return nil, errors.New("nil UUID")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolEvict dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.MethodPoolEvict, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolEvictResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolEvict response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolEvict dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // PoolExclude implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq) (*mgmtpb.PoolExcludeResp, error) {
 	if req == nil {
@@ -169,6 +200,69 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolExclude dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// PoolDrain implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*mgmtpb.PoolDrainResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.GetUuid() == "" {
+		// TODO: do we want to validate pool exists via ListPools?
+		return nil, errors.New("nil UUID")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolDrain dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.MethodPoolDrain, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolDrainResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolDrain response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolDrain dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// PoolExtend implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (*mgmtpb.PoolExtendResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.GetUuid() == "" {
+		return nil, errors.New("nil UUID")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.MethodPoolExtend, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolExtendResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolExtend response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

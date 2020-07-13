@@ -571,14 +571,69 @@ out:
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
 }
 
+void
+ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolEvictReq	*req = NULL;
+	Mgmt__PoolEvictResp	 resp = MGMT__POOL_EVICT_RESP__INIT;
+	uuid_t			 uuid;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_evict_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (evict pool_connections)\n");
+		return;
+	}
+
+	D_INFO("Received request to evict pool connections %s\n",
+		req->uuid);
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_evict_pool(uuid, req->sys);
+	if (rc != 0) {
+		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n",
+			req->uuid, DP_RC(rc));
+		goto out;
+	}
+
+out:
+	resp.status = rc;
+	len = mgmt__pool_evict_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_evict_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_evict_req__free_unpacked(req, NULL);
+}
+
 static int
 pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 			 uint32_t rank, pool_comp_state_t state)
 {
 	uuid_t				uuid;
-	struct pool_target_id_list	reint_list;
+	struct pool_target_id_list	target_id_list;
+	int				num_idxs;
 	int				rc, i;
 
+	num_idxs = (n_targetidx > 0) ? n_targetidx : 1;
 	rc = uuid_parse(id, uuid);
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", id,
@@ -586,20 +641,24 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 		return -DER_INVAL;
 	}
 
-	rc = pool_target_id_list_alloc(n_targetidx, &reint_list);
+	rc = pool_target_id_list_alloc(num_idxs, &target_id_list);
 	if (rc)
 		return rc;
 
-	for (i = 0; i < n_targetidx; ++i)
-		reint_list.pti_ids[i].pti_id = targetidx[i];
+	if (n_targetidx > 0) {
+		for (i = 0; i < n_targetidx; ++i)
+			target_id_list.pti_ids[i].pti_id = targetidx[i];
+	} else
+		target_id_list.pti_ids[0].pti_id = -1;
 
-	rc = ds_mgmt_pool_target_update_state(uuid, rank, &reint_list, state);
+	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
+					      state);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
 			DP_RC(rc));
 	}
 
-	pool_target_id_list_free(&reint_list);
+	pool_target_id_list_free(&target_id_list);
 	return rc;
 }
 
@@ -640,6 +699,105 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	mgmt__pool_exclude_req__free_unpacked(req, NULL);
+}
+
+void
+ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolDrainReq	*req = NULL;
+	Mgmt__PoolDrainResp	resp;
+	uint8_t			*body;
+	size_t			len;
+	int			rc;
+
+	mgmt__pool_drain_resp__init(&resp);
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_drain_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (Drain target)\n");
+		return;
+	}
+
+	rc = pool_change_target_state(req->uuid, req->n_targetidx,
+			req->targetidx, req->rank, PO_COMP_ST_DRAIN);
+
+	resp.status = rc;
+	len = mgmt__pool_drain_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_drain_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_drain_req__free_unpacked(req, NULL);
+}
+void
+ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolExtendReq	*req = NULL;
+	Mgmt__PoolExtendResp	resp;
+	d_rank_list_t		*rank_list = NULL;
+	uuid_t			uuid;
+	uint8_t			*body;
+	size_t			len;
+	int			rc;
+
+	mgmt__pool_extend_resp__init(&resp);
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_extend_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (Extend target)\n");
+		return;
+	}
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rank_list = uint32_array_to_rank_list(req->ranks, req->n_ranks);
+	if (rank_list == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_extend(uuid, rank_list, "pmem", req->scmbytes,
+				req->nvmebytes);
+
+	if (rc != 0) {
+		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,
+			DP_RC(rc));
+	}
+
+out:
+	if (rank_list != NULL)
+		d_rank_list_free(rank_list);
+	resp.status = rc;
+	len = mgmt__pool_extend_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_extend_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_extend_req__free_unpacked(req, NULL);
 }
 
 void
@@ -1610,16 +1768,17 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->error_count = bds.bds_error_count;
 	resp->temperature = bds.bds_temperature;
 	resp->media_errors = bds.bds_media_errors[0];
-	resp->read_errs = bds.bds_bio_read_errs;
-	resp->write_errs = bds.bds_bio_write_errs;
-	resp->unmap_errs = bds.bds_bio_unmap_errs;
-	resp->checksum_errs = bds.bds_checksum_errs;
-	resp->temp = bds.bds_temp_warning ? true : false;
-	resp->spare = bds.bds_avail_spare_warning ? true : false;
-	resp->readonly = bds.bds_read_only_warning ? true : false;
-	resp->device_reliability = bds.bds_dev_reliabilty_warning ?
+	resp->read_errors = bds.bds_bio_read_errs;
+	resp->write_errors = bds.bds_bio_write_errs;
+	resp->unmap_errors = bds.bds_bio_unmap_errs;
+	resp->checksum_errors = bds.bds_checksum_errs;
+	resp->temp_warn = bds.bds_temp_warning ? true : false;
+	resp->spare_warn = bds.bds_avail_spare_warning ? true : false;
+	resp->readonly_warn = bds.bds_read_only_warning ? true : false;
+	resp->device_reliability_warn = bds.bds_dev_reliabilty_warning ?
 					true : false;
-	resp->volatile_memory = bds.bds_volatile_mem_warning ? true : false;
+	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
+					true : false;
 
 out:
 	resp->status = rc;

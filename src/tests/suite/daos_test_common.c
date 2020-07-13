@@ -34,6 +34,7 @@
 
 /** Server crt group ID */
 const char *server_group;
+const char *dmg_config_file;
 
 /** Pool service replicas */
 unsigned int svc_nreplicas = 1;
@@ -313,6 +314,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->gid = getegid();
 
 		arg->group = server_group;
+		arg->dmg_config = dmg_config_file;
 		uuid_clear(arg->pool.pool_uuid);
 		uuid_clear(arg->co_uuid);
 
@@ -382,7 +384,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 				       &pool->svc, DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
-		if (rc != 0) { /* destroy straightaway */
+		if (rc != 0) { /* destroy straight away */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
 		}
@@ -498,15 +500,16 @@ test_teardown(void **state)
 			 * rebuild mechanism(REBUILD24/25), so even the
 			 * container is not closed, then delete will fail
 			 * here, but if we do not free the arg, then next
-			 * subtest might fail, expecially for rebuild test.
-			 * so let's destory the arg anyway. Though some pool
+			 * subtest might fail, especially for rebuild test.
+			 * so let's destroy the arg anyway. Though some pool
 			 * might be left here. XXX
 			 */
 			goto free;
 		}
 	}
 
-	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave) {
+	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave &&
+	    !arg->pool.destroyed) {
 		if (arg->myrank != 0) {
 			if (!daos_handle_is_inval(arg->pool.poh))
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);
@@ -847,6 +850,23 @@ daos_add_target(const uuid_t pool_uuid, const char *grp,
 }
 
 void
+daos_drain_target(const uuid_t pool_uuid, const char *grp,
+		const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+{
+	struct d_tgt_list	targets;
+	int			rc;
+
+	/** add tgt to the pool */
+	targets.tl_nr = 1;
+	targets.tl_ranks = &rank;
+	targets.tl_tgts = &tgt_idx;
+	rc = daos_pool_drain_tgt(pool_uuid, grp, svc, &targets, NULL);
+	if (rc)
+		print_message("drain pool failed rc %d\n", rc);
+	assert_int_equal(rc, 0);
+}
+
+void
 daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 		    const d_rank_list_t *svc, d_rank_t rank)
 {
@@ -870,6 +890,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		max_failure;
 	int		i;
 	int		rc;
+	char		dmg_cmd[DTS_CFG_MAX];
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -898,7 +919,15 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
+	/* build and invoke dmg cmd to stop the server */
+	if (arg->dmg_config == NULL)
+		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
+				  "--force", rank);
+	else
+		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
+				  "--force -o %s", rank, arg->dmg_config);
+	rc = system(dmg_cmd);
+	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 

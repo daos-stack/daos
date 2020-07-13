@@ -184,14 +184,15 @@ pool_ops_run(void **state)
 				ret = vos_pool_query(arg->poh[j], &pinfo);
 				assert_int_equal(ret, 0);
 				assert_int_equal(pinfo.pif_cont_nr, 0);
-				assert_false(pinfo.pif_scm_sz != VPOOL_16M);
-				assert_false(pinfo.pif_nvme_sz != 0);
-				assert_false(pinfo.pif_scm_free >
+				assert_false(SCM_TOTAL(&pinfo.pif_space) !=
+						VPOOL_16M);
+				assert_false(NVME_TOTAL(&pinfo.pif_space) != 0);
+				assert_false(SCM_FREE(&pinfo.pif_space) >
 				     (VPOOL_16M - sizeof(struct vos_pool_df)));
-				assert_false(pinfo.pif_nvme_free != 0);
+				assert_false(NVME_FREE(&pinfo.pif_space) != 0);
 				break;
 			default:
-				fail_msg("Shoudln't be here Unkown ops?\n");
+				fail_msg("Shouldn't be here Unknown ops?\n");
 				break;
 			}
 			if (arg->ops_seq[j][i] != QUERY)
@@ -423,9 +424,9 @@ static const struct CMUnitTest pool_tests[] = {
 int
 run_pool_test(const char *cfg)
 {
-	char	test_name[CFG_MAX];
+	char	test_name[DTS_CFG_MAX];
 
-	create_config(test_name, "VOS Pool tests %s", cfg);
+	dts_create_config(test_name, "VOS Pool tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name, pool_tests,
 					   setup, teardown);
 }
