@@ -134,7 +134,7 @@ notify_bio_error(int media_err_type, int tgt_id)
 			      DRPC_METHOD_SRV_BIO_ERR, &dreq);
 	if (rc != 0) {
 		D_FREE(req);
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	dreq->body.len = req_size;

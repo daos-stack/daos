@@ -2497,11 +2497,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		rc = crt_swim_rank_add(grp_priv, rank);
 		if (rc) {
 			D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
-			/* rc is already set for this error path so do not
-			 * check or propagate errors from here
-			 */
-			grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
-				   index, false);
+			D_GOTO(out, 0);
 		} else {
 			membs->rl_ranks[index] = rank;
 			grp_priv->gp_size++;
@@ -2513,6 +2509,13 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 
 	/* Regenerate linear list*/
 	ret = grp_regen_linear_list(grp_priv);
+	if (ret != 0) {
+		grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
+				   index, false);
+		membs->rl_ranks[index] = CRT_NO_RANK;
+		grp_priv->gp_size--;
+	}
+
 	if (ret != 0 && rc == 0)
 		rc = ret;
 out:
