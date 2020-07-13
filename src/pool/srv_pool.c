@@ -944,8 +944,8 @@ struct ds_pool_evict_arg {
 	d_rank_t	rank;
 };
 
-void
-ds_pool_evict_rank_ult(void *data)
+static void
+pool_evict_rank_ult(void *data)
 {
 	struct ds_pool_evict_arg *arg = data;
 	int			 rc;
@@ -972,19 +972,43 @@ ds_pool_enable_evict(void)
 	pool_disable_evict = false;
 }
 
+static int
+pool_evict_rank(struct pool_svc *svc, d_rank_t rank)
+{
+	struct ds_pool_evict_arg	*ult_arg;
+	int				rc;
+
+	D_ALLOC_PTR(ult_arg);
+	if (ult_arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	pool_svc_get(svc);
+	ult_arg->svc = svc;
+	ult_arg->rank = rank;
+	rc = dss_ult_create(pool_evict_rank_ult, ult_arg, DSS_ULT_MISC,
+			    DSS_TGT_SELF, 0, NULL);
+	if (rc) {
+		pool_svc_put(svc);
+		D_FREE_PTR(ult_arg);
+	}
+out:
+	if (rc)
+		D_ERROR("evict ult failed: rc %d\n", rc);
+	return rc;
+}
+
 static void
 ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		     enum crt_event_type type, void *arg)
 {
-	struct ds_pool_evict_arg	*ult_arg;
-	daos_prop_t			prop = { 0 };
-	struct daos_prop_entry		*entry;
-	struct pool_svc			*svc = arg;
-	int				rc = 0;
+	daos_prop_t		prop = { 0 };
+	struct daos_prop_entry	*entry;
+	struct pool_svc		*svc = arg;
+	int			rc = 0;
 
 	/* Only used for evict the rank for the moment */
 	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD || pool_disable_evict) {
-		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u%d\n",
+		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u/%d\n",
 			src, type, pool_disable_evict);
 		return;
 	}
@@ -1000,28 +1024,7 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		D_GOTO(out, rc);
 	}
 
-	D_ALLOC_PTR(ult_arg);
-	if (ult_arg == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	/* Failure allocation might cause event lost,
-	 * let's use assert for now XXX
-	 */
-	D_ASSERT(ult_arg);
-
-	/* Since this is called from swim_progress, let's create another
-	 * ult to do the job asynchronously, so this can return quickly.
-	 */
-	pool_svc_get(svc);
-	ult_arg->svc = svc;
-	ult_arg->rank = rank;
-	rc = dss_ult_create(ds_pool_evict_rank_ult, ult_arg, DSS_ULT_MISC,
-			    DSS_TGT_SELF, 0, NULL);
-	if (rc) {
-		pool_svc_put(svc);
-		D_FREE_PTR(ult_arg);
-		D_ERROR("create evict ult failed: rc %d\n", rc);
-	}
+	rc = pool_evict_rank(svc, rank);
 out:
 	if (rc)
 		D_ERROR("pool "DF_UUID" event %d failed: rc %d\n",
@@ -1081,6 +1084,60 @@ fini_svc_pool(struct pool_svc *svc)
 	svc->ps_pool = NULL;
 }
 
+/*
+ * There might be some swim status inconsistency, let's check and
+ * fix it.
+ */
+static int
+pool_svc_check_node_status(struct pool_svc *svc)
+{
+	struct pool_domain	*doms;
+	int			doms_cnt;
+	int			i;
+	int			rc = 0;
+
+	if (pool_disable_evict) {
+		D_DEBUG(DB_REBUILD, DF_UUID" disable swim evict.\n",
+			DP_UUID(svc->ps_uuid));
+		return 0;
+	}
+
+	doms_cnt = pool_map_find_nodes(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
+				       &doms);
+	D_ASSERT(doms_cnt >= 0);
+	for (i = 0; i < doms_cnt; i++) {
+		struct swim_member_state state;
+
+		/* Only check if UPIN server becomes DEAD for now */
+		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
+			continue;
+
+		rc = crt_rank_state_get(crt_group_lookup(NULL),
+				   doms[i].do_comp.co_rank, &state);
+		if (rc != 0) {
+			D_ERROR("failed to get swim for rank %u: %d\n",
+				doms[i].do_comp.co_rank, rc);
+			break;
+		}
+
+		/* Since there is a big chance the INACTIVE node will become
+		 * ACTIVE soon, let's only evict the DEAD node rank for the
+		 * moment.
+		 */
+		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
+			doms[i].do_comp.co_rank, state.sms_status);
+		if (state.sms_status == SWIM_MEMBER_DEAD) {
+			rc = pool_evict_rank(svc, doms[i].do_comp.co_rank);
+			if (rc) {
+				D_ERROR("failed to evict rank %u: %d\n",
+					doms[i].do_comp.co_rank, rc);
+				break;
+			}
+		}
+	}
+	return rc;
+}
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
@@ -1088,6 +1145,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version;
+	uuid_t			pool_hdl_uuid;
+	uuid_t			cont_hdl_uuid;
 	daos_prop_t	       *prop = NULL;
 	uint64_t		prop_bits;
 	bool			cont_svc_up = false;
@@ -1150,6 +1209,23 @@ unlock:
 		D_GOTO(out, rc);
 	}
 
+	rc = pool_svc_check_node_status(svc);
+	if (rc)
+		D_GOTO(out, rc);
+
+	uuid_generate(pool_hdl_uuid);
+	uuid_generate(cont_hdl_uuid);
+	rc = ds_pool_iv_srv_hdl_update(svc->ps_pool, pool_hdl_uuid,
+				       cont_hdl_uuid);
+	if (rc) {
+		D_ERROR("ds_pool_iv_srv_hdl_update failed %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_PRINT(DF_UUID": pool/cont hdl uuid "DF_UUID"/"DF_UUID"\n",
+		DP_UUID(svc->ps_uuid), DP_UUID(pool_hdl_uuid),
+		DP_UUID(cont_hdl_uuid));
+
 	rc = ds_rebuild_regenerate_task(svc->ps_pool);
 	if (rc != 0)
 		goto out;
@@ -1183,6 +1259,7 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 
 	crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 
+	ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	fini_svc_pool(svc);
 
@@ -1735,8 +1812,8 @@ pool_connect_iv_dist(struct pool_svc *svc, uuid_t pool_hdl,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = ds_pool_iv_hdl_update(svc->ps_pool, pool_hdl, flags,
-				   sec_capas, cred);
+	rc = ds_pool_iv_conn_hdl_update(svc->ps_pool, pool_hdl, flags,
+					sec_capas, cred);
 	if (rc)
 		D_GOTO(out, rc);
 out:
@@ -2490,7 +2567,8 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 		 * connect the pool, so we only verify the non-rebuild
 		 * pool.
 		 */
-		if (!is_rebuild_pool(in->plci_op.pi_uuid, in->plci_op.pi_hdl)) {
+		if (!is_pool_from_srv(in->plci_op.pi_uuid,
+				      in->plci_op.pi_hdl)) {
 			d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
 			d_iov_set(&value, &hdl, sizeof(hdl));
 			rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
@@ -2587,7 +2665,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	 * handle.
 	 */
 	if (daos_rpc_from_client(rpc) &&
-	    !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
+	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
 		d_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
 		d_iov_set(&value, &hdl, sizeof(hdl));
 		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
@@ -2705,7 +2783,7 @@ out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
 	/* See comment above, rebuild doesn't connect the pool */
 	if (rc == 0 && (in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
-	    !is_rebuild_pool(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
+	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
 					    &out->pqo_space);
 	pool_svc_put_leader(svc);
@@ -4866,5 +4944,51 @@ out_tx:
 out_svc:
 	pool_svc_put_leader(svc);
 	return rc;
+}
+
+bool
+is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid)
+{
+	struct ds_pool	*pool;
+	uuid_t		hdl_uuid;
+	int		rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		D_ERROR(DF_UUID": failed to get ds_pool\n",
+			DP_UUID(pool_uuid));
+		return false;
+	}
+
+	rc = ds_pool_iv_srv_hdl_fetch(pool, NULL, &hdl_uuid);
+	if (rc) {
+		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
+		return false;
+	}
+
+	return !uuid_compare(coh_uuid, hdl_uuid);
+}
+
+bool
+is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
+{
+	struct ds_pool	*pool;
+	uuid_t		hdl_uuid;
+	int		rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		D_ERROR(DF_UUID": failed to get ds_pool\n",
+			DP_UUID(pool_uuid));
+		return false;
+	}
+
+	rc = ds_pool_iv_srv_hdl_fetch(pool, &hdl_uuid, NULL);
+	if (rc) {
+		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
+		return false;
+	}
+
+	return !uuid_compare(poh_uuid, hdl_uuid);
 }
 
