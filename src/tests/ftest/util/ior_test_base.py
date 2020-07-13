@@ -172,7 +172,7 @@ class IorTestBase(TestWithServers):
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
-        # Always create a container
+        # Create a container, if needed.
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
         if create_cont:
