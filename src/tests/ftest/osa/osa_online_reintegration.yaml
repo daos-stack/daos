@@ -8,7 +8,7 @@ hosts:
     - server-D
   test_clients:
     - client-E
-timeout: 1000
+timeout: 1200
 server_config:
   name: daos_server
   servers:
