@@ -62,8 +62,6 @@ extern struct crt_proto_format rebuild_proto_fmt;
 
 #define DAOS_ISEQ_REBUILD_SCAN	/* input fields */		 \
 	((uuid_t)		(rsi_pool_uuid)		CRT_VAR) \
-	((uuid_t)		(rsi_pool_hdl_uuid)	CRT_VAR) \
-	((uuid_t)		(rsi_cont_hdl_uuid)	CRT_VAR) \
 	((uint64_t)		(rsi_leader_term)	CRT_VAR) \
 	((int32_t)		(rsi_rebuild_op)	CRT_VAR) \
 	((uint32_t)		(rsi_tgts_num)		CRT_VAR) \
