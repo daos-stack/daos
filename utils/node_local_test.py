@@ -1027,7 +1027,7 @@ def run_il_test(server, conf):
                           'iflag=direct',
                           'oflag=direct',
                           'bs=128k'])
-                          
+
     print(ret)
     assert ret.returncode == 0
     dfuse.stop()
