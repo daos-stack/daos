@@ -823,4 +823,6 @@ void dss_init_state_set(enum dss_init_state state);
 
 int notify_bio_error(int media_err_type, int tgt_id);
 
+bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
+bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
 #endif /* __DSS_API_H__ */
