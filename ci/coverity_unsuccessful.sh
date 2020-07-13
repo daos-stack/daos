@@ -16,7 +16,7 @@ fi
 : "${TARGET:='centos7'}"
 
 if [ -f "config${arch:-}.log" ]; then
-  mv "config${arch}.log" coverity/config.log-${TARGET}-cov
+  mv "config${arch}.log" "coverity/config.log-${TARGET}-cov"
 fi
 if [ -f cov-int/build-log.txt ]; then
   mv cov-int/build-log.txt coverity/cov-build-log.txt
