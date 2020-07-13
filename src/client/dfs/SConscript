@@ -45,6 +45,12 @@ def scons():
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
+    dfs_internal_src = ['dfs_internal.c']
+    dfs_internal = daos_build.library(denv, 'dfs_internal',
+                                      dfs_internal_src, LIBS=libraries)
+
+    denv.Install('$PREFIX/lib64/', dfs_internal)
+
     fenv = denv.Clone()
     prereqs.require(fenv, 'fuse')
     dfuse_hl_src = ['dfuse_hl.c']

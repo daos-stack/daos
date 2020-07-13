@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,15 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
 #include <daos/object.h>
+
+static struct dcs_iod_csums *
+io_iod_csums(const struct dss_enum_unpack_io *io, int i)
+{
+	if (io->ui_iods_csums != NULL)
+		return &io->ui_iods_csums[i];
+	return NULL;
+}
+
 static int
 fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 	   struct dss_enum_arg *arg, vos_iter_type_t type)
@@ -137,56 +146,82 @@ fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
 	return 0;
 }
 
-static void
-iov_append(d_iov_t *iov, void *buf, uint64_t buf_len)
+static int
+iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info)
 {
-	D_ASSERT(iov->iov_len + buf_len <= iov->iov_buf_len);
-	memcpy(iov->iov_buf + iov->iov_len, buf, buf_len);
-	iov->iov_len += buf_len;
+	size_t size_needed = ci_size(*csum_info);
+
+	/** Make sure the csum buffer is big enough ... resize if needed */
+	if (iov->iov_buf == NULL) {
+		/** This must be freed by the object layer
+		 * (currently in obj_enum_complete)
+		 */
+		D_ALLOC(iov->iov_buf, size_needed);
+		if (iov->iov_buf == NULL)
+			return -DER_NOMEM;
+		iov->iov_buf_len = size_needed;
+		iov->iov_len = 0;
+	} else if (iov->iov_len + size_needed > iov->iov_buf_len) {
+		void	*p;
+		size_t	 new_size = max(iov->iov_buf_len * 2,
+					      iov->iov_len + size_needed);
+
+		D_REALLOC(p, iov->iov_buf, new_size);
+		if (p == NULL)
+			return -DER_NOMEM;
+		iov->iov_buf = p;
+		iov->iov_buf_len = new_size;
+	}
+
+	return 0;
 }
 
+/** Fill the arg.csum information and iov with what's in the entry */
 static int
-fill_csum(vos_iter_entry_t *key_ent, struct dss_enum_arg *arg)
+fill_data_csum(struct dcs_csum_info *src_csum_info, d_iov_t *csum_iov)
+{
+	int			 rc;
+
+	if (csum_iov  == NULL || !ci_is_valid(src_csum_info))
+		return 0;
+
+	rc = iov_alloc_for_csum_info(csum_iov, src_csum_info);
+	if (rc != 0)
+		return rc;
+	rc = ci_serialize(src_csum_info, csum_iov);
+	/** iov_alloc_for_csum_info should have allocated enough so this
+	 * would be a programmer error and want to know right away
+	 */
+	D_ASSERT(rc == 0);
+
+	return 0;
+}
+
+/**
+ * Key's don't have checksums stored so key_ent won't have a valid
+ * checksum and must rely on csummer to calculate a new one.
+ */
+static int
+fill_key_csum(vos_iter_entry_t *key_ent, struct dss_enum_arg *arg)
 {
 	struct daos_csummer	*csummer = arg->csummer;
 	d_iov_t			*csum_iov = &arg->csum_iov;
 	struct dcs_csum_info	*csum_info;
-	uint16_t		 csum_len;
 	int			 rc;
 
 	if (!daos_csummer_initialized(csummer))
 		return 0;
 
-	csum_len = daos_csummer_get_csum_len(csummer);
-	arg->kds[arg->kds_len].kd_csum_len = csum_len;
-	arg->kds[arg->kds_len].kd_csum_type = daos_csummer_get_type(csummer);
-
 	rc = daos_csummer_calc_key(csummer, &key_ent->ie_key, &csum_info);
 	if (rc != 0)
 		return rc;
 
-	/** Make sure the csum buffer is big enough ... resize if needed */
-	if (csum_iov->iov_buf == NULL) {
-		/** This must be freed by the object layer
-		 * (currently in obj_enum_complete)
-		 */
-		D_ALLOC(csum_iov->iov_buf, csum_len);
-		if (csum_iov->iov_buf == NULL)
-			return -DER_NOMEM;
-		csum_iov->iov_buf_len = csum_len;
-		csum_iov->iov_len = 0;
-	} else if (csum_iov->iov_len + csum_len > csum_iov->iov_buf_len) {
-		void *p;
-
-		D_REALLOC(p, csum_iov->iov_buf,
-			  csum_iov->iov_buf_len * 2);
-		if (p == NULL)
-			return -DER_NOMEM;
-		csum_iov->iov_buf = p;
-		csum_iov->iov_buf_len *= 2;
-	}
-
-	iov_append(csum_iov, csum_info->cs_csum, csum_info->cs_buf_len);
+	iov_alloc_for_csum_info(csum_iov, csum_info);
+	rc = ci_serialize(csum_info, csum_iov);
+	/** iov_alloc_for_csum_info should have allocated enough so this
+	 * would be a programmer error and want to know right away
+	 */
+	D_ASSERT(rc == 0);
 	daos_csummer_free_ci(csummer, &csum_info);
 
 	return 0;
@@ -238,18 +273,17 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	arg->kds[arg->kds_len].kd_key_len = key_ent->ie_key.iov_len;
 	arg->kds[arg->kds_len].kd_val_type = type;
-	rc = fill_csum(key_ent, arg);
+	rc = fill_key_csum(key_ent, arg);
 	if (rc != 0)
 		return rc;
 	arg->kds_len++;
 
-	iov_append(iov, key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
+	daos_iov_append(iov, key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
 
 	if (key_ent->ie_punch != 0 && arg->need_punch) {
 		int pi_size = sizeof(key_ent->ie_punch);
 
 		arg->kds[arg->kds_len].kd_key_len = pi_size;
-		arg->kds[arg->kds_len].kd_csum_len = 0;
 		if (type == OBJ_ITER_AKEY)
 			arg->kds[arg->kds_len].kd_val_type =
 						OBJ_ITER_AKEY_EPOCH;
@@ -363,6 +397,8 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		}
 	}
 
+	fill_data_csum(&key_ent->ie_csum, &arg->csum_iov);
+
 	D_DEBUG(DB_IO, "Pack rec "DF_U64"/"DF_U64
 		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d "
 		"kds_len %d inline "DF_U64" epr "DF_U64"/"DF_U64"\n",
@@ -423,6 +459,7 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
  * \param[in]		recursive	iterate to next level recursively
  * \param[in]		anchors		iteration anchors
  * \param[in,out]	arg		enumeration argument
+ * \param[in]		dth		DTX handle
  *
  * \retval		0	enumeration complete
  * \retval		1	buffer(s) full
@@ -430,7 +467,8 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
  */
 int
 dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg)
+	      struct vos_iter_anchors *anchors, struct dss_enum_arg *arg,
+	      struct dtx_handle *dth)
 {
 	int	rc;
 
@@ -438,7 +476,7 @@ dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 		 type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
 	rc = vos_iterate(param, type, recursive, anchors, enum_pack_cb, NULL,
-			 arg);
+			 arg, dth);
 
 	D_DEBUG(DB_IO, "enum type %d tag %d rc "DF_RC"\n", type,
 		dss_get_module_info()->dmi_tgt_id, DP_RC(rc));
@@ -465,11 +503,40 @@ enum {
 	UNPACK_COMPLETE_IOD = 2,	/* Only finish current IOD */
 };
 
+static int
+unpack_csum(d_iov_t *csum_iov, struct dcs_iod_csums *iod_csums)
+{
+	if (csum_iov != NULL && csum_iov->iov_buf) {
+		/** unpack csums */
+		struct dcs_csum_info *tmp_csum_info;
+
+		ci_cast(&tmp_csum_info, csum_iov);
+		if (tmp_csum_info == NULL)
+			return 0;
+
+		ci_move_next_iov(tmp_csum_info, csum_iov);
+		iod_csums->ic_data[iod_csums->ic_nr] = *tmp_csum_info;
+		/** will be freed in clear_iod_csum() */
+		D_ALLOC(iod_csums->ic_data[iod_csums->ic_nr].cs_csum,
+			ci_csums_len(*tmp_csum_info));
+		if (iod_csums->ic_data[iod_csums->ic_nr].cs_csum == NULL)
+			return -DER_NOMEM;
+		memcpy(iod_csums->ic_data[iod_csums->ic_nr].cs_csum,
+		       tmp_csum_info->cs_csum, ci_csums_len(*tmp_csum_info));
+
+		iod_csums->ic_nr++;
+	}
+
+	return 0;
+}
+
 /* Parse recxs in <*data, len> and append them to iod and sgl. */
 static int
 unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
-	     d_sg_list_t *sgl, daos_key_t *akey, daos_key_desc_t *kds,
-	     void **data, daos_size_t len, uint32_t *version)
+	     d_sg_list_t *sgl, daos_key_t *akey,
+	     daos_key_desc_t *kds, void **data, daos_size_t len,
+	     d_iov_t *csum_iov, struct dcs_iod_csums *iod_csums,
+	     uint32_t *version)
 {
 	int rc = 0;
 	int type;
@@ -533,6 +600,16 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
 				if (rc != 0)
 					break;
 			}
+
+			/** will be freed with iod.recxs in clear_top_iod */
+			if (csum_iov != NULL && csum_iov->iov_buf) {
+				rc = grow_array((void **)&iod_csums->ic_data,
+						sizeof(*iod_csums->ic_data),
+						*recxs_cap, cap);
+				if (rc != 0)
+					break;
+			}
+
 			/* If we execute any of the three breaks above,
 			 * *recxs_cap will be < the real capacities of some of
 			 * the arrays. This is harmless, as it only causes the
@@ -572,6 +649,10 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
 			len -= iov->iov_len;
 		}
 
+		rc = unpack_csum(csum_iov, iod_csums);
+		if (rc != 0)
+			return rc;
+
 		D_DEBUG(DB_IO,
 			"unpacked data %p len "DF_U64" idx/nr "DF_U64"/"DF_U64
 			" ver %u eph "DF_U64" size %zd\n",
@@ -600,9 +681,9 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
  */
 static void
 dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
-			int *recxs_caps, d_sg_list_t *sgls,
-			daos_epoch_t *akey_ephs, daos_epoch_t *rec_ephs,
-			int iods_cap)
+			struct dcs_iod_csums *iods_csums, int *recxs_caps,
+			d_sg_list_t *sgls, daos_epoch_t *akey_ephs,
+			daos_epoch_t *rec_ephs, int iods_cap)
 {
 	memset(io, 0, sizeof(*io));
 
@@ -612,6 +693,10 @@ dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
 	D_ASSERT(iods != NULL);
 	memset(iods, 0, sizeof(*iods) * iods_cap);
 	io->ui_iods = iods;
+
+	D_ASSERT(iods_csums != NULL);
+	memset(iods_csums, 0, sizeof(*iods_csums) * iods_cap);
+	io->ui_iods_csums = iods_csums;
 
 	D_ASSERT(recxs_caps != NULL);
 	memset(recxs_caps, 0, sizeof(*recxs_caps) * iods_cap);
@@ -650,6 +735,20 @@ clear_iod(daos_iod_t *iod, d_sg_list_t *sgl, int *recxs_cap)
 
 	*recxs_cap = 0;
 }
+static void
+clear_iod_csum(struct dcs_iod_csums *iod_csum)
+{
+	int i;
+
+	if (iod_csum == NULL || iod_csum->ic_data == NULL)
+		return;
+
+	for (i = 0; i < iod_csum->ic_nr; i++)
+		if (iod_csum->ic_data[i].cs_csum != NULL)
+			D_FREE(iod_csum->ic_data->cs_csum);
+
+	D_FREE(iod_csum->ic_data);
+}
 
 /**
  * Clear the iods/sgls in \a io.
@@ -666,6 +765,7 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 
 		if (io->ui_sgls != NULL)
 			sgl = &io->ui_sgls[i];
+		clear_iod_csum(io_iod_csums(io, i));
 		clear_iod(&io->ui_iods[i], sgl, &io->ui_recxs_caps[i]);
 	}
 
@@ -681,7 +781,7 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 }
 
 /**
- * Finalize \a io. All iods/sgls must have already been cleard.
+ * Finalize \a io. All iods/sgls must have already been cleared.
  *
  * \param[in]	io	I/O descriptor
  */
@@ -706,6 +806,7 @@ clear_top_iod(struct dss_enum_unpack_io *io)
 		D_DEBUG(DB_IO, "iod without recxs: %d\n", idx);
 		if (io->ui_sgls != NULL)
 			sgl = &io->ui_sgls[idx];
+		clear_iod_csum(io_iod_csums(io, idx));
 		clear_iod(&io->ui_iods[idx], sgl, &io->ui_recxs_caps[idx]);
 		io->ui_iods_top--;
 	}
@@ -766,15 +867,26 @@ out:
  * Unpack dkey and akey
  */
 static int
-enum_unpack_key(daos_key_desc_t *kds, char *key_data,
-		struct dss_enum_unpack_io *io,
-		dss_enum_unpack_cb_t cb, void *cb_arg)
+enum_unpack_key(daos_key_desc_t *kds, char *key_data, d_iov_t *csum_iov,
+		struct dss_enum_unpack_io *io, dss_enum_unpack_cb_t cb,
+		void *cb_arg)
 {
 	daos_key_t	key;
 	int		rc = 0;
 
 	D_ASSERT(kds->kd_val_type == OBJ_ITER_DKEY ||
 		 kds->kd_val_type == OBJ_ITER_AKEY);
+
+	if (csum_iov != NULL && csum_iov->iov_buf) {
+		struct dcs_csum_info *csum_info;
+
+		/** keys aren't stored or needed by the I/O (they will have
+		 * already been verified at this point), so just move the iov
+		 * along.
+		 */
+		ci_cast(&csum_info, csum_iov);
+		ci_move_next_iov(csum_info, csum_iov);
+	}
 
 	key.iov_buf = key_data;
 	key.iov_buf_len = kds->kd_key_len;
@@ -850,7 +962,7 @@ enum_unpack_punched_ephs(daos_key_desc_t *kds, char *data,
 
 static int
 enum_unpack_recxs(daos_key_desc_t *kds, void *data,
-		  struct dss_enum_unpack_io *io,
+		  struct dss_enum_unpack_io *io, d_iov_t *csum_iov,
 		  dss_enum_unpack_cb_t cb, void *cb_arg)
 {
 	daos_iod_t	*iod;
@@ -890,6 +1002,7 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 				  io->ui_sgls == NULL ?
 				  NULL : &io->ui_sgls[j], &iod_akey,
 				  kds, &ptr, len,
+				  csum_iov, &io->ui_iods_csums[j],
 				  &io->ui_version);
 		if (rc <= 0) /* normal case */
 			break;
@@ -969,10 +1082,13 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 {
 	struct dss_enum_unpack_io	io;
 	daos_iod_t			iods[DSS_ENUM_UNPACK_MAX_IODS];
+	struct dcs_iod_csums		iods_csums[DSS_ENUM_UNPACK_MAX_IODS];
 	int				recxs_caps[DSS_ENUM_UNPACK_MAX_IODS];
 	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			ephs[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			rec_ephs[DSS_ENUM_UNPACK_MAX_IODS];
+	/** Will be used to enum the csum data */
+	d_iov_t				csum_iov_iter;
 	void				*ptr;
 	unsigned int			i;
 	int				rc = 0;
@@ -992,7 +1108,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 		return -DER_INVAL;
 	}
 
-	dss_enum_unpack_io_init(&io, iods, recxs_caps, sgls, ephs,
+	dss_enum_unpack_io_init(&io, iods, iods_csums, recxs_caps, sgls, ephs,
 				rec_ephs, DSS_ENUM_UNPACK_MAX_IODS);
 	if (type != OBJ_ITER_OBJ)
 		io.ui_oid = arg->oid;
@@ -1001,6 +1117,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 	D_ASSERT(arg->sgl->sg_iovs != NULL);
 	ptr = arg->sgl->sg_iovs[0].iov_buf;
 
+	csum_iov_iter = arg->csum_iov;
 	for (i = 0; i < arg->kds_len; i++) {
 		daos_key_desc_t *kds = &arg->kds[i];
 
@@ -1011,16 +1128,18 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 		D_ASSERT(kds->kd_key_len > 0);
 		switch (kds->kd_val_type) {
 		case OBJ_ITER_OBJ:
-			rc = enum_unpack_oid(&arg->kds[i], ptr, &io, cb,
-					     cb_arg);
+			rc = enum_unpack_oid(kds, ptr, &io, cb, cb_arg);
 			break;
 		case OBJ_ITER_DKEY:
 		case OBJ_ITER_AKEY:
-			rc = enum_unpack_key(kds, ptr, &io, cb, cb_arg);
+				rc = enum_unpack_key(kds, ptr,
+						     &csum_iov_iter, &io, cb,
+						     cb_arg);
 			break;
 		case OBJ_ITER_RECX:
 		case OBJ_ITER_SINGLE:
-			rc = enum_unpack_recxs(kds, ptr, &io, cb, cb_arg);
+			rc = enum_unpack_recxs(kds, ptr, &io,
+					       &csum_iov_iter, cb, cb_arg);
 			break;
 		case OBJ_ITER_DKEY_EPOCH:
 		case OBJ_ITER_AKEY_EPOCH:
