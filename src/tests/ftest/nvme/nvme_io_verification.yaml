@@ -14,7 +14,7 @@ server_config:
  name: daos_server
  servers:
    bdev_class: nvme
-   bdev_list: ["0000:81:00.0","0000:da:00.0"]
+   bdev_list: ["0000:81:00.0"]
 pool:
  mode: 511
  name: daos_server
