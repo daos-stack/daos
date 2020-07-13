@@ -1,0 +1,26 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+timeout: 200
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+server_config:
+  name: daos_server
+  port: 10001
+  servers:
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+pool:
+    mode: 511
+    name: daos_server
+    scm_size: 3000000000
+    nvme_size: 9000000000
+    svcn: 1
+    control_method: dmg
+health_info:
+  - ["0s", "0", "0s", "0", "0", "0", "0", "0", "0", "0",
+    OK, OK, OK, OK, OK]
+  - ["0s", "0", "0s", "0", "0", "0", "0", "0", "0", "0",
+    OK, OK, OK, OK, OK]
