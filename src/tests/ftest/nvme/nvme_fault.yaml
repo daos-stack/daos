@@ -40,7 +40,6 @@ pool:
     mode: 146
     name: daos_server
     scm_size: 53687091200
-    nvme_size: 53687091200
     control_method: dmg
 ior:
     clientslots:
