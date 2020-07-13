@@ -253,7 +253,7 @@ struct obj_ec_fail_info {
 struct obj_reasb_req;
 
 /* number of Object EC encoding Helper threads */
-#define OEH_NR			(32)
+#define OEH_NR			(2)
 
 struct oeh_work {
 	struct obj_reasb_req	*oeh_req;
@@ -273,7 +273,7 @@ struct oeh_rpc {
 };
 
 extern struct oeh_helper	 oeh;
-extern pthread_mutex_t		 oeh_lock;
+extern pthread_spinlock_t	 oeh_lock;
 
 /** Query the number of records in EC full stripe */
 #define obj_ec_stripe_rec_nr(oca)					\
