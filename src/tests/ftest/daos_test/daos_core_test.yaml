@@ -104,6 +104,10 @@ daos_tests:
       daos_test: v
       test_name: DAOS rebuild simple tests
       test_timeout: 1500
+    test_b:
+      daos_test: b
+      test_name: DAOS drain simple tests
+      test_timeout: 1500
     test_O:
       daos_test: O
       test_name: OID Allocator tests
