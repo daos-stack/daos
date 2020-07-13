@@ -1012,15 +1012,15 @@ static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 	struct json_object *parsed_json;
 	int	  rc;
 
-	/* Need to make sure -j is in the dmg cmd? */
-	rc = system(dmg_cmd);
-	assert_int_equal(rc, 0);
-
-	FILE* fp = fopen(filename, "r");
+	FILE* fp = fopen(filename, "w+");
 	if (!fp) {
 		print_message("fopen %s failed!\n", filename);
 		return NULL;
 	}
+
+	/* Need to make sure -j is in the dmg cmd? */
+	rc = system(dmg_cmd);
+	assert_int_equal(rc, 0);
 
 	/* get the content size and allocate buffer */
 	fseek(fp, 0, SEEK_END);
@@ -1044,8 +1044,8 @@ static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 	return parsed_json;
 }
 
-void daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
-			daos_mgmt_pool_info_t *pools)
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+			daos_mgmt_pool_info_t *pools_out)
 {
 	struct json_object	*parsed_json;
 	struct json_object	*pool_list;
@@ -1054,18 +1054,31 @@ void daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 	struct json_object	*rep_ranks;
 	struct json_object	*rank;
 	char	uuid_str[DAOS_UUID_STR_SIZE];
+	daos_mgmt_pool_info_t   *pools = NULL;
 	int i, j;
+//	int json_obj_type;
+	int rl_nr;
+
+	if (npools == NULL)
+		return-DER_INVAL;
 
 	parsed_json = daos_dmg_json_contents("dmg pool list -i -j > /tmp/daos_dmg.json");
 	if (parsed_json == NULL) {
 		print_message("daos_dmg_json_contents failed\n");
-		return;
+		return -DER_INVAL;
 	}
 
 	json_object_object_get_ex(parsed_json, "Pools", &pool_list);
-	*npools = json_object_array_length(pool_list);
-
+//	json_obj_type = json_object_get_type(pool_list);
+//	print_message( "Pools obj type %s\n", json_type_to_name(json_obj_type));
+	if (pool_list == NULL)
+		*npools = 0;
+	else
+		*npools = json_object_array_length(pool_list);
 	print_message("#pools %lu\n", *npools);
+
+	if (pools == NULL)
+		return 0;
 
 	for (i=0; i<*npools; i++) {
 		pool = json_object_array_get_idx(pool_list, i);
@@ -1074,15 +1087,18 @@ void daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 		uuid_parse(uuid_str, pools[i].mgpi_uuid);
 		/* pool service replica ranks */
 		json_object_object_get_ex(pool, "Svcreps", &rep_ranks);
-		pools[i].mgpi_svc->rl_nr = json_object_array_length(rep_ranks);
+		rl_nr = json_object_array_length(rep_ranks);
+		if (pools[i].mgpi_svc == NULL)
+			pools[i].mgpi_svc = d_rank_list_alloc(rl_nr);
 		print_message("pool uuid "DF_UUIDF" rl_nr %d\n",
-			pools[i].mgpi_uuid, pools[i].mgpi_svc->rl_nr);
+			DP_UUID(pools[i].mgpi_uuid), pools[i].mgpi_svc->rl_nr);
 
 		for (j=0; j<pools[i].mgpi_svc->rl_nr; j++) {
 			rank = json_object_array_get_idx(rep_ranks, j);
 			pools[i].mgpi_svc->rl_ranks[j] = 
 				json_object_get_int(rank);
+			print_message("rl_ranks = %d\n", pools[i].mgpi_svc->rl_ranks[j]);
 		}
-
 	}
+	return 0;
 }

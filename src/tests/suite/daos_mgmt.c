@@ -305,10 +305,11 @@ list_pools_test(void **state)
 	/***** Test: retrieve number of pools in system *****/
 	npools = npools_orig = 0xABC0; /* Junk value (e.g., uninitialized) */
 	/* test only */
-	daos_json_list_pool(arg, &npools, NULL /* pools */);
-
+	rc = daos_json_list_pool(arg, &npools, NULL /* pools */);
+#if 0
 	rc = daos_mgmt_list_pools(arg->group, &npools, NULL /* pools */,
 			NULL /* ev */);
+#endif
 	assert_int_equal(rc, 0);
 	verify_pool_info(state, rc, npools_orig, NULL /* pools */, npools);
 	print_message("success t%d: output npools=%zu\n", tnum++,
@@ -323,7 +324,10 @@ list_pools_test(void **state)
 	 * and that many items in pools[] filled
 	 *****/
 	npools = npools_alloc;
+        rc = daos_json_list_pool(arg, &npools, NULL /* pools */);
+#if 0
 	rc = daos_mgmt_list_pools(arg->group, &npools, pools, NULL /* ev */);
+#endif
 	assert_int_equal(rc, 0);
 	verify_pool_info(state, rc, npools_alloc, pools, npools);
 	clean_pool_info(npools_alloc, pools);
@@ -342,8 +346,7 @@ list_pools_test(void **state)
 	pools = NULL;
 
 	/***** Test: invalid npools=NULL *****/
-	rc = daos_mgmt_list_pools(arg->group, NULL /* npools */,
-				  NULL /* pools */, NULL /* ev */);
+	rc = daos_json_list_pool(arg, NULL /* npools */, NULL /* pools */);
 	assert_int_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &npools NULL, -DER_INVAL\n", tnum++);
 
