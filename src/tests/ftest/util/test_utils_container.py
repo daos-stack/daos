@@ -382,14 +382,6 @@ class TestContainer(TestDaosApiBase):
             sys_name (str, optional): system name
         """
         self.log.info("Creating Snapshot for Container: %s", self.uuid)
-#        if not pool:
-#            pool = self.pool
-#        if not cont:
-#            cont = self.uuid
-#        if not svc:
-#            svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
-#        if not sys_name:
-#            sys_name = self.pool.name.value
         if self.control_method.value == self.USE_DAOS and self.daos:
             # create snapshot using daos utility
             kwargs = {
@@ -428,15 +420,6 @@ class TestContainer(TestDaosApiBase):
         status = False
 
         self.log.info("Destroying Snapshot for Container: %s", self.uuid)
-
-#        if not pool:
-#            pool = self.pool
-#        if not cont:
-#            cont = self.uuid
-#        if not svc:
-#            svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
-#        if not sys_name:
-#            sys_name = self.pool.name.value
 
         if self.control_method.value == self.USE_DAOS and self.daos:
             # destroy snapshot using daos utility
