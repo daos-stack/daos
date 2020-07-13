@@ -72,7 +72,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// rankStateGroups initialises groupings of ranks that are at a particular state.
+// rankStateGroups initializes groupings of ranks that are at a particular state.
 func rankStateGroups(members system.Members) (system.RankGroups, error) {
 	ranksInState := make(map[system.MemberState]*bytes.Buffer)
 	ranksSeen := make(map[system.Rank]struct{})
@@ -207,7 +207,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	return displaySystemQuery(cmd.log, resp.Members)
 }
 
-// rankActionGroups initialises groupings of ranks that return the same results.
+// rankActionGroups initializes groupings of ranks that return the same results.
 func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 	ranksWithResult := make(map[string]*bytes.Buffer)
 	ranksSeen := make(map[system.Rank]struct{})
