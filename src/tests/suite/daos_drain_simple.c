@@ -21,11 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is for simple tests of rebuild, which does not need to kill the
+ * This file is for simple tests of drain, which does not need to kill the
  * rank, and only used to verify the consistency after different data model
- * rebuild.
+ * drains.
  *
- * tests/suite/daos_rebuild_simple.c
+ * tests/suite/daos_drain_simple.c
  *
  *
  */
@@ -41,12 +41,12 @@
 #define OBJ_CLS		OC_RP_3G1
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
-#define REBUILD_POOL_SIZE	(4ULL << 30)
-#define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
-#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
+#define DRAIN_POOL_SIZE	(4ULL << 30)
+#define DRAIN_SUBTEST_POOL_SIZE (1ULL << 30)
+#define DRAIN_SMALL_POOL_SIZE (1ULL << 28)
 
 static void
-rebuild_dkeys(void **state)
+drain_dkeys(void **state)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oid;
@@ -74,13 +74,12 @@ rebuild_dkeys(void **state)
 	}
 	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
-rebuild_akeys(void **state)
+drain_akeys(void **state)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oid;
@@ -108,13 +107,13 @@ rebuild_akeys(void **state)
 	}
 	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
-rebuild_indexes(void **state)
+drain_indexes(void **state)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oid;
@@ -144,14 +143,14 @@ rebuild_indexes(void **state)
 	}
 	ioreq_fini(&req);
 
-	/* Rebuild rank 1 */
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	/* Drain rank 1 */
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
-rebuild_snap_update_recs(void **state)
+drain_snap_update_recs(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -190,7 +189,7 @@ rebuild_snap_update_recs(void **state)
 			      strlen(data) + 1, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < 5; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
@@ -206,7 +205,7 @@ rebuild_snap_update_recs(void **state)
 }
 
 static void
-rebuild_snap_punch_recs(void **state)
+drain_snap_punch_recs(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -241,7 +240,7 @@ rebuild_snap_punch_recs(void **state)
 		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < 5; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
@@ -257,7 +256,7 @@ rebuild_snap_punch_recs(void **state)
 }
 
 static void
-rebuild_snap_update_keys(void **state)
+drain_snap_update_keys(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -286,7 +285,7 @@ rebuild_snap_update_keys(void **state)
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
@@ -336,7 +335,7 @@ rebuild_snap_update_keys(void **state)
 }
 
 static void
-rebuild_snap_punch_keys(void **state)
+drain_snap_punch_keys(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -377,7 +376,7 @@ rebuild_snap_punch_keys(void **state)
 		punch_akey("dkey", akey, DAOS_TX_NONE, &req);
 	}
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
@@ -427,7 +426,7 @@ rebuild_snap_punch_keys(void **state)
 }
 
 static void
-rebuild_multiple(void **state)
+drain_multiple(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -464,11 +463,11 @@ rebuild_multiple(void **state)
 	}
 	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 }
 
 static void
-rebuild_large_rec(void **state)
+drain_large_rec(void **state)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oid;
@@ -498,11 +497,11 @@ rebuild_large_rec(void **state)
 	}
 	ioreq_fini(&req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 }
 
 static void
-rebuild_objects(void **state)
+drain_objects(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oids[OBJ_NR];
@@ -520,49 +519,49 @@ rebuild_objects(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 /** create a new pool/container for each test */
-static const struct CMUnitTest rebuild_tests[] = {
-	{"REBUILD1: rebuild small rec multiple dkeys",
-	 rebuild_dkeys, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD2: rebuild small rec multiple akeys",
-	 rebuild_akeys, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD3: rebuild small rec multiple indexes",
-	 rebuild_indexes, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD4: rebuild small rec multiple keys/indexes",
-	 rebuild_multiple, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD5: rebuild large rec single index",
-	 rebuild_large_rec, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD6: rebuild records with multiple snapshots",
-	 rebuild_snap_update_recs, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD7: rebuild punch/records with multiple snapshots",
-	 rebuild_snap_punch_recs, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD8: rebuild keys with multiple snapshots",
-	 rebuild_snap_update_keys, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD9: rebuild keys/punch with multiple snapshots",
-	 rebuild_snap_punch_keys, rebuild_small_sub_setup, test_teardown},
-	{"REBUILD10: rebuild multiple objects",
-	 rebuild_objects, rebuild_sub_setup, test_teardown},
+static const struct CMUnitTest drain_tests[] = {
+	{"DRAIN1: drain small rec multiple dkeys",
+	 drain_dkeys, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN2: drain small rec multiple akeys",
+	 drain_akeys, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN3: drain small rec multiple indexes",
+	 drain_indexes, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN4: drain small rec multiple keys/indexes",
+	 drain_multiple, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN5: drain large rec single index",
+	 drain_large_rec, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN6: drain records with multiple snapshots",
+	 drain_snap_update_recs, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN7: drain punch/records with multiple snapshots",
+	 drain_snap_punch_recs, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN8: drain keys with multiple snapshots",
+	 drain_snap_update_keys, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN9: drain keys/punch with multiple snapshots",
+	 drain_snap_punch_keys, rebuild_small_sub_setup, test_teardown},
+	{"DRAIN10: drain multiple objects",
+	 drain_objects, rebuild_sub_setup, test_teardown},
 };
 
 int
-run_daos_rebuild_simple_test(int rank, int size, int *sub_tests,
+run_daos_drain_simple_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size)
 {
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
-		sub_tests_size = ARRAY_SIZE(rebuild_tests);
+		sub_tests_size = ARRAY_SIZE(drain_tests);
 		sub_tests = NULL;
 	}
 
-	run_daos_sub_tests_only("DAOS rebuild simple tests", rebuild_tests,
-				ARRAY_SIZE(rebuild_tests), sub_tests,
+	run_daos_sub_tests_only("DAOS drain simple tests", drain_tests,
+				ARRAY_SIZE(drain_tests), sub_tests,
 				sub_tests_size);
 
 	MPI_Barrier(MPI_COMM_WORLD);
