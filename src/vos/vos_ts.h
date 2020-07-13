@@ -482,7 +482,7 @@ static inline void
 vos_ts_rl_update(struct vos_ts_entry *entry, daos_epoch_t read_time,
 		 const uuid_t tx_id)
 {
-	if (entry == NULL || read_time <= entry->te_ts_rl)
+	if (entry == NULL || read_time < entry->te_ts_rl)
 		return;
 
 	entry->te_ts_rl = read_time;
@@ -499,7 +499,7 @@ static inline void
 vos_ts_rh_update(struct vos_ts_entry *entry, daos_epoch_t read_time,
 		 const uuid_t tx_id)
 {
-	if (entry == NULL || read_time <= entry->te_ts_rh)
+	if (entry == NULL || read_time < entry->te_ts_rh)
 		return;
 
 	entry->te_ts_rh = read_time;
