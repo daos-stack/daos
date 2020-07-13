@@ -56,6 +56,9 @@ int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 		 uint64_t *ncont);
 
+int ds_cont_tgt_close(uuid_t hdl_uuid);
+int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
+		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas);
 /*
  * Per-thread container (memory) object
  *

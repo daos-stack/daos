@@ -42,6 +42,7 @@
 
 /* This needs to be here to avoid pulling in all of srv_internal.h */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
+int ds_cont_tgt_force_close(uuid_t cont_uuid);
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
@@ -1494,6 +1495,15 @@ destroy_existing_container(struct migrate_pool_tls *tls, uuid_t cont_uuid)
 			" before reintegration\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UUID(cont_uuid), DP_UUID(tls->mpt_coh_uuid));
 
+		rc = ds_cont_tgt_force_close(cont_uuid);
+		if (rc != 0) {
+			D_ERROR("Migrate failed to close container "
+				"prior to reintegration: pool: "DF_UUID
+				", cont: "DF_UUID" rc: "DF_RC"\n",
+				DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont_uuid),
+				DP_RC(rc));
+		}
+
 		rc = ds_cont_tgt_destroy(tls->mpt_pool_uuid, cont_uuid);
 		if (rc != 0) {
 			D_ERROR("Migrate failed to destroy container "
@@ -1914,7 +1924,7 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" migrating=%s,"
 		" obj_count="DF_U64", rec_count="DF_U64
-		"size = "DF_U64" obj %u/%u general %u/%u status %d\n",
+		" size="DF_U64" obj %u/%u general %u/%u status %d\n",
 		DP_UUID(pool_uuid), dms->dm_migrating ? "yes" : "no",
 		dms->dm_obj_count, dms->dm_rec_count, dms->dm_total_size,
 		arg.obj_generated_ult, arg.obj_executed_ult,
