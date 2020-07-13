@@ -1326,8 +1326,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
-	/** A rebuild container */
-	if (!is_rebuild_container(pool_uuid, coh_uuid)) {
+	if (!is_container_from_srv(pool_uuid, coh_uuid)) {
 		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
 			DP_UUID(cont_uuid), coh->sch_ref);
 		D_GOTO(failed, rc = -DER_NO_HDL);
@@ -1375,7 +1374,7 @@ obj_ioc_is_rebuild_container(struct obj_io_context *ioc)
 	    ioc->ioc_coc->sc_pool == NULL)
 		return false;
 
-	return is_rebuild_container(ioc->ioc_coc->sc_pool->spc_uuid,
+	return is_container_from_srv(ioc->ioc_coc->sc_pool->spc_uuid,
 				    ioc->ioc_coh->sch_uuid);
 }
 
