@@ -98,6 +98,76 @@ func TestControl_PoolDestroy(t *testing.T) {
 	}
 }
 
+func TestControl_PoolDrain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolDrainReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"invalid UUID": {
+			req: &PoolDrainReq{
+				UUID:      "bad",
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			expErr: errors.New("invalid UUID"),
+		},
+		"success": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolDrainResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolDrain(ctx, mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
 func TestControl_PoolEvict(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic    *MockInvokerConfig
@@ -285,28 +355,30 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID:            MockUUID,
-				TotalTargets:    42,
-				ActiveTargets:   16,
-				DisabledTargets: 17,
-				Rebuild: &PoolRebuildStatus{
-					State:   PoolRebuildStateBusy,
-					Objects: 1,
-					Records: 2,
-				},
-				Scm: &StorageUsageStats{
-					Total: 123456,
-					Free:  0,
-					Min:   1,
-					Max:   2,
-					Mean:  3,
-				},
-				Nvme: &StorageUsageStats{
-					Total: 123456,
-					Free:  0,
-					Min:   1,
-					Max:   2,
-					Mean:  3,
+				UUID: MockUUID,
+				PoolInfo: PoolInfo{
+					TotalTargets:    42,
+					ActiveTargets:   16,
+					DisabledTargets: 17,
+					Rebuild: &PoolRebuildStatus{
+						State:   PoolRebuildStateBusy,
+						Objects: 1,
+						Records: 2,
+					},
+					Scm: &StorageUsageStats{
+						Total: 123456,
+						Free:  0,
+						Min:   1,
+						Max:   2,
+						Mean:  3,
+					},
+					Nvme: &StorageUsageStats{
+						Total: 123456,
+						Free:  0,
+						Min:   1,
+						Max:   2,
+						Mean:  3,
+					},
 				},
 			},
 		},

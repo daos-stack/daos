@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				8
+#define POOL_DF_VERSION				10
 
 /**
  * Durable format for VOS pool
@@ -160,7 +160,22 @@ struct vos_dtx_ent_common {
 
 /** Committed DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_cmt_ent_df {
+	/**
+	 * For single RDG based DTX, the DTX may be in the CoS cache. Under
+	 * such case, 'dce_common.dec_oid' is part of the key for CoS cache.
+	 *
+	 * For cross RDGs modification, the DTX will not be in CoS cache.
+	 * Under such case, if only single object is modified by this DTX,
+	 * its OID is stored inside 'dce_common.dec_oid'; otherwise, the
+	 * objects' OIDs are stored via 'dce_oid_off'.
+	 */
 	struct vos_dtx_ent_common	dce_common;
+	/**
+	 * The offset for the objects' OID if more than one are modified.
+	 * Under such case, 'dce_common.dec_dkey_hash' is used as the count
+	 * of objects' IDs.
+	 */
+	umem_off_t			dce_oid_off;
 };
 
 #define dce_xid		dce_common.dec_xid
@@ -174,9 +189,7 @@ struct vos_dtx_act_ent_df {
 	/** The allocated local id for the DTX entry */
 	uint32_t			dae_lid;
 	/** DTX flags, see enum dtx_entry_flags. */
-	uint16_t			dae_flags;
-	/** The index in the current vos_dtx_blob_df. */
-	int16_t				dae_index;
+	uint32_t			dae_flags;
 	/** The inlined dtx records. */
 	umem_off_t			dae_rec_inline[DTX_INLINE_REC_CNT];
 	/** The DTX records count, including inline case. */
@@ -191,8 +204,18 @@ struct vos_dtx_act_ent_df {
 	uint32_t			dae_grp_cnt;
 	/** Size of the area for dae_mbs_off. */
 	uint32_t			dae_mbs_dsize;
-	/** For 64-bits alignment. */
-	uint32_t			dae_padding;
+	/**
+	 * The count of objects that are modified by this DTX.
+	 *
+	 * If single object is modified and if it is the same as the
+	 * 'dae_oid', then 'dae_oid_cnt' is zero.
+	 *
+	 * If the single object is differet from 'dae_oid', then the
+	 * 'dae_oid_cnt' is 1, its OID is stored in 'dae_oid_inline'.
+	 */
+	uint16_t			dae_oid_cnt;
+	/** The index in the current vos_dtx_blob_df. */
+	int16_t				dae_index;
 	/**
 	 * The inline DTX targets, can hold 3-way replicas for single
 	 * RDG that does not contains the original leader information.
@@ -200,6 +223,12 @@ struct vos_dtx_act_ent_df {
 	struct dtx_daos_target		dae_mbs_inline[2];
 	/** The offset for the dtx mbs if out of inline. */
 	umem_off_t			dae_mbs_off;
+	union {
+		/** Hold the object'x OID if different from dae_oid. */
+		daos_unit_oid_t		dae_oid_inline;
+		/** The offset for objects' OIDs if out of inline case. */
+		umem_off_t		dae_oid_off;
+	};
 };
 
 #define dae_xid		dae_common.dec_xid
@@ -223,7 +252,7 @@ struct vos_dtx_blob_df {
 	/** Append only DTX entries in the blob. */
 	union {
 		struct vos_dtx_act_ent_df	dbd_active_data[0];
-		struct vos_dtx_cmt_ent_df	dbd_commmitted_data[0];
+		struct vos_dtx_cmt_ent_df	dbd_committed_data[0];
 	};
 };
 

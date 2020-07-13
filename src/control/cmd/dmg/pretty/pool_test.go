@@ -48,24 +48,26 @@ Pool space info:
 		},
 		"normal response": {
 			pqr: &control.PoolQueryResp{
-				UUID:            control.MockUUID,
-				TotalTargets:    2,
-				DisabledTargets: 1,
-				ActiveTargets:   1,
-				Leader:          42,
-				Version:         100,
-				Scm: &control.StorageUsageStats{
-					Total: 2,
-					Free:  1,
-				},
-				Nvme: &control.StorageUsageStats{
-					Total: 2,
-					Free:  1,
-				},
-				Rebuild: &control.PoolRebuildStatus{
-					State:   control.PoolRebuildStateBusy,
-					Objects: 42,
-					Records: 21,
+				UUID: control.MockUUID,
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					Scm: &control.StorageUsageStats{
+						Total: 2,
+						Free:  1,
+					},
+					Nvme: &control.StorageUsageStats{
+						Total: 2,
+						Free:  1,
+					},
+					Rebuild: &control.PoolRebuildStatus{
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
@@ -83,25 +85,27 @@ Rebuild busy, 42 objs, 21 recs
 		},
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
-				UUID:            control.MockUUID,
-				TotalTargets:    2,
-				DisabledTargets: 1,
-				ActiveTargets:   1,
-				Leader:          42,
-				Version:         100,
-				Scm: &control.StorageUsageStats{
-					Total: 2,
-					Free:  1,
-				},
-				Nvme: &control.StorageUsageStats{
-					Total: 2,
-					Free:  1,
-				},
-				Rebuild: &control.PoolRebuildStatus{
-					Status:  2,
-					State:   control.PoolRebuildStateBusy,
-					Objects: 42,
-					Records: 21,
+				UUID: control.MockUUID,
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					Scm: &control.StorageUsageStats{
+						Total: 2,
+						Free:  1,
+					},
+					Nvme: &control.StorageUsageStats{
+						Total: 2,
+						Free:  1,
+					},
+					Rebuild: &control.PoolRebuildStatus{
+						Status:  2,
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
 				},
 			},
 			expPrintStr: fmt.Sprintf(`

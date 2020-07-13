@@ -30,8 +30,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // MemberState represents the activity state of DAOS system members.
@@ -180,7 +181,7 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 }
 
 func (sm *Member) String() string {
-	return fmt.Sprintf("%s/%d", sm.Addr, sm.Rank)
+	return fmt.Sprintf("%s/%d/%s", sm.Addr, sm.Rank, sm.State())
 }
 
 // State retrieves member state.
@@ -279,42 +280,49 @@ type Membership struct {
 	members map[Rank]*Member
 }
 
+func (m *Membership) addMember(member *Member) error {
+	if _, found := m.members[member.Rank]; found {
+		return FaultMemberExists(member.Rank)
+	}
+	m.log.Debugf("adding system member: %s", member)
+
+	m.members[member.Rank] = member
+
+	return nil
+}
+
+func (m *Membership) updateMember(member *Member) {
+	old := m.members[member.Rank]
+	m.log.Debugf("updating system member: %s->%s", old, member)
+
+	m.members[member.Rank] = member
+}
+
 // Add adds member to membership, returns member count.
 func (m *Membership) Add(member *Member) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	if _, found := m.members[member.Rank]; found {
-		return -1, FaultMemberExists(member.Rank)
+	if err := m.addMember(member); err != nil {
+		return -1, err
 	}
-
-	m.members[member.Rank] = member
 
 	return len(m.members), nil
 }
 
-// AddOrUpdate adds member to membership or updates member state if member
-// already exists in membership. Returns flag for whether member was created and
-// the previous state if updated.
+// AddOrReplace adds member to membership or replaces member if it exists.
 //
 // Note: this method updates state without checking if state transition is
 //       legal so use with caution.
-func (m *Membership) AddOrUpdate(newMember *Member) (bool, *MemberState) {
+func (m *Membership) AddOrReplace(newMember *Member) {
 	m.Lock()
 	defer m.Unlock()
 
-	oldMember, found := m.members[newMember.Rank]
-	if found {
-		os := oldMember.State()
-		m.members[newMember.Rank].state = newMember.State()
-		m.members[newMember.Rank].Info = newMember.Info
-
-		return false, &os
+	if err := m.addMember(newMember); err == nil {
+		return
 	}
 
-	m.members[newMember.Rank] = newMember
-
-	return true, nil
+	m.updateMember(newMember)
 }
 
 // Remove removes member from membership, idempotent.

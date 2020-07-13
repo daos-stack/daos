@@ -106,7 +106,8 @@ truly processed.
 
 1. Open a connection to the server's Unix Domain Socket:
     ```
-    struct drpc *ctx = drpc_connect("/var/run/my_socket.sock");
+    struct drpc *ctx;
+    rc = drpc_connect("/var/run/my_socket.sock", &ctx);
     ```
 2. Send a dRPC call:
     ```
