@@ -2,11 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0~a1-1.git.4871023%{?dist}
+%global mercury_version 2.0.0~rc1-1%{?dist}
 
 Name:          daos
 Version:       1.1.0
-Release:       24%{?relval}%{?dist}
+Release:       27%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -178,15 +178,12 @@ This is the package needed to build software with the DAOS library.
 %setup -q
 
 %build
-# remove rpathing from the build
-rpath_files="utils/daos_build.py"
-rpath_files+=" $(find . -name SConscript)"
-sed -i -e 's/[_a-zA-Z0-9]*\.AppendUnique(RPATH=.*)/pass/' $rpath_files
 
 %define conf_dir %{_sysconfdir}/daos
 
 scons %{?_smp_mflags}      \
       --config=force       \
+      --no-rpath           \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot}
@@ -194,6 +191,7 @@ scons %{?_smp_mflags}      \
 %install
 scons %{?_smp_mflags}                 \
       --config=force                  \
+      --no-rpath                      \
       --install-sandbox=%{?buildroot} \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
@@ -242,13 +240,14 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_bindir}/ring_pl_map
 %{_bindir}/pl_bench
 %{_bindir}/rdbt
+%{_bindir}/vos_size_dfs_sample.py
 %{_bindir}/vos_size.py
+%{_libdir}/libdfs_internal.so
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
 %{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
-%{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %{_libdir}/libdaos_common.so
 # TODO: this should move from daos_srv to daos
@@ -364,6 +363,17 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Tue Jul 7 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-27
+- Update to mercury release 2.0.0~rc1-1
+
+* Sun Jun 28 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-26
+- Add the vos_size_dfs_sample.py tool. It is used to generate dynamically
+  the vos_dfs_sample.yaml file using the real DFS super block data.
+
+* Tue Jun 23 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-25
+- Add -no-rpath option and use it for rpm build rather than modifying
+  SCons files in place
+
 * Tue Jun 16 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-24
 - Modify RPATH removal snippet to replace line with pass as some lines
   can't be removed without breaking the code

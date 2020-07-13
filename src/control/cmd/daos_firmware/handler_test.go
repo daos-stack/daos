@@ -48,7 +48,10 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 		t.Fatalf("couldn't unmarshal response payload")
 	}
 
-	if diff := cmp.Diff(expPayload, payload); diff != "" {
+	cmpOpts := []cmp.Option{
+		cmp.Comparer(common.CmpErrBool),
+	}
+	if diff := cmp.Diff(expPayload, payload, cmpOpts...); diff != "" {
 		t.Errorf("got wrong payload (-want, +got)\n%s\n", diff)
 	}
 }
@@ -97,8 +100,11 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expPayload: &scm.FirmwareQueryResponse{
-				FirmwareInfo: map[string]storage.ScmFirmwareInfo{
-					"DeviceUID": *testFWInfo,
+				Results: []scm.ModuleFirmware{
+					{
+						Module: *testModules[0],
+						Info:   testFWInfo,
+					},
 				},
 			},
 		},
@@ -111,7 +117,14 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 				DiscoverRes:          testModules,
 				GetFirmwareStatusErr: errors.New("mock failure"),
 			},
-			expErr: pbin.PrivilegedHelperRequestFailed("error getting firmware status for device DeviceUID: mock failure"),
+			expPayload: &scm.FirmwareQueryResponse{
+				Results: []scm.ModuleFirmware{
+					{
+						Module: *testModules[0],
+						Error:  "mock failure",
+					},
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -171,8 +184,8 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 				DiscoverRes: testModules,
 			},
 			expPayload: &scm.FirmwareUpdateResponse{
-				Results: map[string]string{
-					"DeviceUID": "OK",
+				Results: []scm.ModuleFirmwareUpdateResult{
+					{Module: *testModules[0]},
 				},
 			},
 		},
@@ -186,8 +199,11 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 				UpdateFirmwareErr: errors.New("mock failure"),
 			},
 			expPayload: &scm.FirmwareUpdateResponse{
-				Results: map[string]string{
-					"DeviceUID": "mock failure",
+				Results: []scm.ModuleFirmwareUpdateResult{
+					{
+						Module: *testModules[0],
+						Error:  "mock failure",
+					},
 				},
 			},
 		},

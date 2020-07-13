@@ -200,6 +200,7 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 
 /* object Enumerate in/out */
 #define DAOS_ISEQ_OBJ_KEY_ENUM	/* input fields */		 \
+	((struct dtx_id)	(oei_dti)		CRT_VAR) \
 	((daos_unit_oid_t)	(oei_oid)		CRT_VAR) \
 	((uuid_t)		(oei_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(oei_co_hdl)		CRT_VAR) \
@@ -208,7 +209,7 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((uint32_t)		(oei_map_ver)		CRT_VAR) \
 	((uint32_t)		(oei_nr)		CRT_VAR) \
 	((uint32_t)		(oei_rec_type)		CRT_VAR) \
-	((uint32_t)		(oei_pad)		CRT_VAR) \
+	((uint32_t)		(oei_flags)		CRT_VAR) \
 	((daos_key_t)		(oei_dkey)		CRT_VAR) \
 	((daos_key_t)		(oei_akey)		CRT_VAR) \
 	((daos_anchor_t)	(oei_anchor)		CRT_VAR) \
@@ -258,6 +259,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 
 #define DAOS_ISEQ_OBJ_QUERY_KEY	/* input fields */		 \
+	((struct dtx_id)	(okqi_dti)		CRT_VAR) \
 	((uuid_t)		(okqi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(okqi_pool_uuid)	CRT_VAR) \
 	((uuid_t)		(okqi_co_uuid)		CRT_VAR) \
@@ -265,6 +267,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((uint64_t)		(okqi_epoch)		CRT_VAR) \
 	((uint32_t)		(okqi_map_ver)		CRT_VAR) \
 	((uint32_t)		(okqi_flags)		CRT_VAR) \
+	((uint64_t)		(okqi_api_flags)	CRT_VAR) \
 	((daos_key_t)		(okqi_dkey)		CRT_VAR) \
 	((daos_key_t)		(okqi_akey)		CRT_VAR) \
 	((daos_recx_t)		(okqi_recx)		CRT_VAR)
@@ -353,6 +356,36 @@ obj_is_tgt_modification_opc(uint32_t opc)
 	       opc == DAOS_OBJ_RPC_TGT_PUNCH ||
 	       opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 	       opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_rpc_is_update(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE;
+}
+
+static inline bool
+obj_rpc_is_fetch(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
+}
+
+static inline bool
+obj_rpc_is_punch(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_AKEYS ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
+	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_rpc_is_migrate(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_MIGRATE;
 }
 
 #endif /* __DAOS_OBJ_RPC_H__ */
