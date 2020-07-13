@@ -321,11 +321,11 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Tue Jun 2 2020 Maureen Jean <maureen.jean@intel.com> - 1.0.0-2
-- Fix fuse3-libs -> libfuse3 for SLES/Leap 15
+* Thu Jun 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.0-2
+- Version bump to 1.0.0-rc2
 
 * Sat May 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.0-1
-- Version bump to 1.0.0 (rc1)
+- Version bump to 1.0.0-rc1
 
 * Wed May 06 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.4-2
 - Move fuse dependencies to the client subpackage
