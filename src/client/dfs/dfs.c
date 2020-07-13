@@ -2063,16 +2063,16 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 
 		/** for every entry, issue the filler cb */
 		for (i = 0; i < num; i++) {
-			char name[DFS_MAX_PATH + 1];
-			int len;
-
-			len = snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
-			D_ASSERT(len >= kds[i].kd_key_len);
-
 			if (op) {
-				rc = op(dfs, obj, name, udata);
+				char term_char;
+
+				term_char = ptr[kds[i].kd_key_len];
+				ptr[kds[i].kd_key_len] = '\0';
+				rc = op(dfs, obj, ptr, udata);
 				if (rc)
 					D_GOTO(out, rc);
+
+				ptr[kds[i].kd_key_len] = term_char;
 			}
 
 			/** advance pointer to next entry */

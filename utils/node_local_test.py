@@ -380,7 +380,7 @@ class ValgrindHelper():
 
         self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
 
-        cmd = ['valgrind', '--quiet']
+        cmd = ['valgrind', '--quiet', '--fair-sched=try']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
@@ -723,7 +723,7 @@ def dfuse_wrapper(server, conf):
     container = create_cont(conf, pool, ctype='POSIX')[0]
     dfuse = DFuse(server, conf, pool=pool, container=container)
     dfuse.start()
-    readdir_test(dfuse, 1000)
+    readdir_test(dfuse, 250)
     dfuse.stop()
     destroy_container(conf, pool, container)
 
