@@ -41,13 +41,13 @@ import (
 )
 
 type sysRequest struct {
-	Ranks string
-	Hosts string
+	Ranks system.RankSet
+	Hosts hostlist.HostSet
 }
 
 type sysResponse struct {
-	AbsentRanks string
-	AbsentHosts string
+	AbsentRanks system.RankSet
+	AbsentHosts hostlist.HostSet
 }
 
 // SystemJoinReq contains the inputs for the system join request.
@@ -205,29 +205,25 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 		return nil, err
 	}
 
-	if len(resetRankErrors) > 0 || resetResp.AbsentHosts != "" || resetResp.AbsentRanks != "" {
+	if len(resetRankErrors) > 0 || resetResp.AbsentHosts.Count() > 0 ||
+		resetResp.AbsentRanks.Count() > 0 {
+
 		reformatResp := new(StorageFormatResp)
 
-		if resetResp.AbsentHosts != "" {
-			hostSet, err := hostlist.CreateSet(resetResp.AbsentHosts)
-			if err != nil {
-				return nil, errors.Wrapf(err, "reset format absent hosts")
-			}
-			for _, addr := range strings.Split(hostSet.DerangedString(), ",") {
+		if resetResp.AbsentHosts.Count() > 0 {
+			hostList := strings.Split(resetResp.AbsentHosts.DerangedString(), ",")
+			for _, addr := range hostList {
 				reformatResp.HostErrorsResp.addHostError(addr,
 					errors.New("unknown host"))
 			}
 		}
 
-		if resetResp.AbsentRanks != "" {
-			rankSet, err := system.CreateRankSet(resetResp.AbsentRanks)
-			if err != nil {
-				return nil, errors.Wrapf(err, "reset format absent ranks")
-			}
+		if resetResp.AbsentRanks.Count() > 0 {
 			reformatResp.HostErrorsResp.addHostError("0.0.0.0",
 				errors.Errorf("unknown %s: %s",
-					english.Plural(rankSet.Count(), "rank", "ranks"),
-					rankSet))
+					english.Plural(resetResp.AbsentRanks.Count(),
+						"rank", "ranks"),
+					resetResp.AbsentRanks.String()))
 		}
 
 		// create "X ranks failed: err..." error entries for each host address

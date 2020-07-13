@@ -240,10 +240,13 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		return cmd.printFormatResp(resp)
 	}
 
-	srReq := new(control.SystemResetFormatReq)
-	if err := cmd.validateHostsRanks(&srReq.Hosts, &srReq.Ranks); err != nil {
+	hostSet, rankSet, err := cmd.validateHostsRanks()
+	if err != nil {
 		return err
 	}
+	srReq := new(control.SystemResetFormatReq)
+	srReq.Hosts = *hostSet
+	srReq.Ranks = *rankSet
 
 	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker, srReq)
 	if err != nil {

@@ -58,12 +58,6 @@ message SystemStopReq {
 	string hosts = 6; // hostset to query
 }
 
-// SystemPrepShutdownReq supplies system shutdown parameters.
-message SystemPrepShutdownReq {
-	string ranks = 1; // rankset to query
-	string hosts = 2; // hostset to query
-}
-
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.
 message SystemStopResp {

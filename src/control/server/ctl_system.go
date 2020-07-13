@@ -112,6 +112,10 @@ func (svc *ControlService) resolveRanks(hosts, ranks string) (hitRS, missRS *sys
 //
 // Fan-out is invoked by control API *Ranks functions.
 func (svc *ControlService) rpcFanout(parent context.Context, fanReq fanoutRequest, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
+	if fanReq.Method == nil {
+		return nil, nil, errors.New("fanout request with nil method")
+	}
+
 	// populate missing hosts/ranks in outer response and resolve active ranks
 	hitRanks, missRanks, missHosts, err := svc.resolveRanks(fanReq.Hosts, fanReq.Ranks)
 	if err != nil {
@@ -177,6 +181,10 @@ func (svc *ControlService) rpcFanout(parent context.Context, fanReq fanoutReques
 func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	svc.log.Debug("Received SystemQuery RPC")
 
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T request", pbReq)
+	}
+
 	fanResp, rankSet, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.PingRanks,
 		Hosts:  pbReq.GetHosts(),
@@ -201,6 +209,20 @@ func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQ
 	return pbResp, nil
 }
 
+func populateStopResp(fanResp *fanoutResponse, pbResp *ctlpb.SystemStopResp, action string) error {
+	pbResp.Absentranks = fanResp.AbsentRanks.String()
+	pbResp.Absenthosts = fanResp.AbsentHosts.String()
+
+	if err := convert.Types(fanResp.Results, &pbResp.Results); err != nil {
+		return err
+	}
+	for _, result := range pbResp.Results {
+		result.Action = action
+	}
+
+	return nil
+}
+
 // SystemStop implements the method defined for the Management Service.
 //
 // Initiate two-phase controlled shutdown of DAOS system, return results for
@@ -213,50 +235,44 @@ func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQ
 func (svc *ControlService) SystemStop(ctx context.Context, pbReq *ctlpb.SystemStopReq) (*ctlpb.SystemStopResp, error) {
 	svc.log.Debug("Received SystemStop RPC")
 
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T request", pbReq)
+	}
+
 	// TODO: consider locking to prevent join attempts when shutting down
 	pbResp := new(ctlpb.SystemStopResp)
-
-	calls := []systemRanksFunc{}
-	if pbReq.GetPrep() {
-		svc.log.Debug("ranks will be prepared for shutdown")
-		calls = append(calls, control.PrepShutdownRanks)
-	}
-	if pbReq.GetKill() {
-		svc.log.Debug("ranks will be shutdown")
-		calls = append(calls, control.StopRanks)
-	}
 
 	fanReq := fanoutRequest{
 		Hosts: pbReq.GetHosts(),
 		Ranks: pbReq.GetRanks(),
 		Force: pbReq.GetForce(),
 	}
-	for i, call := range calls {
-		fanReq.Method = call
+
+	if pbReq.GetPrep() {
+		svc.log.Debug("prepping ranks for shutdown")
+
+		fanReq.Method = control.PrepShutdownRanks
 		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
 		if err != nil {
 			return nil, err
 		}
-		pbResp.Absentranks = fanResp.AbsentRanks.String()
-		pbResp.Absenthosts = fanResp.AbsentHosts.String()
-		if err = convert.Types(fanResp.Results, &pbResp.Results); err != nil {
+		if err := populateStopResp(fanResp, pbResp, "prep shutdown"); err != nil {
 			return nil, err
 		}
-
-		if pbReq.GetPrep() && i == 0 {
-			for _, result := range fanResp.Results {
-				result.Action = "prep shutdown"
-			}
-
-			if !fanReq.Force && fanResp.Results.HasErrors() {
-				return pbResp, errors.New("PrepShutdown HasErrors")
-			}
-
-			continue
+		if !fanReq.Force && fanResp.Results.HasErrors() {
+			return pbResp, errors.New("PrepShutdown HasErrors")
 		}
+	}
+	if pbReq.GetKill() {
+		svc.log.Debug("shutting down ranks")
 
-		for _, result := range fanResp.Results {
-			result.Action = "stop"
+		fanReq.Method = control.StopRanks
+		fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
+		if err != nil {
+			return nil, err
+		}
+		if err := populateStopResp(fanResp, pbResp, "stop"); err != nil {
+			return nil, err
 		}
 	}
 
@@ -279,6 +295,10 @@ func (svc *ControlService) SystemStop(ctx context.Context, pbReq *ctlpb.SystemSt
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *ControlService) SystemStart(ctx context.Context, pbReq *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
 	svc.log.Debug("Received SystemStart RPC")
+
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T request", pbReq)
+	}
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.StartRanks,
@@ -314,6 +334,10 @@ func (svc *ControlService) SystemStart(ctx context.Context, pbReq *ctlpb.SystemS
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *ControlService) SystemResetFormat(ctx context.Context, pbReq *ctlpb.SystemResetFormatReq) (*ctlpb.SystemResetFormatResp, error) {
 	svc.log.Debug("Received SystemResetFormat RPC")
+
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T request", pbReq)
+	}
 
 	fanResp, _, err := svc.rpcFanout(ctx, fanoutRequest{
 		Method: control.ResetFormatRanks,

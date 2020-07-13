@@ -60,7 +60,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilMembership  bool
 		members        system.Members
-		pbReq          interface{}
+		fanReq         fanoutRequest
 		mResps         []*control.HostResponse
 		hostErrors     control.HostErrorsMap
 		expResults     system.MemberResults
@@ -70,28 +70,33 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 		expAbsentHosts string
 		expErrMsg      string
 	}{
-		"nil request": {
-			pbReq:     nil,
-			expErrMsg: "nil request",
-		},
-		"nil typed request": {
-			pbReq:     (*ctlpb.SystemQueryReq)(nil),
-			expErrMsg: "nil *ctl.SystemQueryReq request",
-		},
-		"unknown request type": {
-			pbReq:     new(ctlpb.EmptyReq),
-			expErrMsg: "unknown request type: *ctl.EmptyReq",
+		"nil method in request": {
+			expErrMsg: "fanout request with nil method",
 		},
 		"hosts and ranks both specified": {
-			pbReq:     &ctlpb.SystemQueryReq{Hosts: "foo-[0-99]", Ranks: "0-99"},
+			fanReq: fanoutRequest{
+				Method: control.PingRanks, Hosts: "foo-[0-99]", Ranks: "0-99",
+			},
 			expErrMsg: "ranklist and hostlist cannot both be set in request",
 		},
 		"nil membership": {
-			pbReq:         new(ctlpb.SystemQueryReq),
+			fanReq:        fanoutRequest{Method: control.PingRanks},
 			nilMembership: true,
 			expErrMsg:     "nil system membership",
 		},
+		"empty membership": {
+			fanReq: fanoutRequest{Method: control.PingRanks},
+		},
+		"bad hosts in request": {
+			fanReq:    fanoutRequest{Method: control.PingRanks, Hosts: "123"},
+			expErrMsg: "invalid hostname \"123\"",
+		},
+		"bad ranks in request": {
+			fanReq:    fanoutRequest{Method: control.PingRanks, Ranks: "foo"},
+			expErrMsg: "unexpected alphabetic character(s)",
+		},
 		"unfiltered ranks": {
+			fanReq: fanoutRequest{Method: control.PingRanks},
 			members: system.Members{
 				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
 				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
@@ -102,7 +107,6 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 				system.NewMember(6, "", getHostAddr(4), system.MemberStateJoined),
 				system.NewMember(7, "", getHostAddr(4), system.MemberStateJoined),
 			},
-			pbReq: new(ctlpb.SystemQueryReq),
 			mResps: []*control.HostResponse{
 				{
 					Addr: getHostAddr(1).String(),
@@ -199,6 +203,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			expRanks: "0-7",
 		},
 		"filtered and oversubscribed ranks": {
+			fanReq: fanoutRequest{Method: control.PingRanks, Ranks: "0-3,6-10"},
 			members: system.Members{
 				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
 				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
@@ -209,7 +214,6 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 				system.NewMember(6, "", getHostAddr(4), system.MemberStateJoined),
 				system.NewMember(7, "", getHostAddr(4), system.MemberStateJoined),
 			},
-			pbReq: &ctlpb.SystemQueryReq{Ranks: "0-3,6-10"},
 			mResps: []*control.HostResponse{
 				{
 					Addr: getHostAddr(1).String(),
@@ -289,6 +293,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			expAbsentRanks: "8-10",
 		},
 		"filtered and oversubscribed hosts": {
+			fanReq: fanoutRequest{Method: control.PingRanks, Hosts: "10.0.0.[1-3,5]"},
 			members: system.Members{
 				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
 				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
@@ -299,7 +304,6 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 				system.NewMember(6, "", getHostAddr(4), system.MemberStateJoined),
 				system.NewMember(7, "", getHostAddr(4), system.MemberStateJoined),
 			},
-			pbReq: &ctlpb.SystemQueryReq{Hosts: "10.0.0.[1-3,5]"},
 			mResps: []*control.HostResponse{
 				{
 					Addr: getHostAddr(1).String(),
@@ -405,8 +409,12 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			})
 			cs.rpcClient = mi
 
-			gotResp, gotRankSet, gotErr := cs.rpcFanout(ctx, tc.pbReq, true)
-			common.ExpectError(t, gotErr, tc.expErrMsg, name)
+			var expErr error
+			if tc.expErrMsg != "" {
+				expErr = errors.New(tc.expErrMsg)
+			}
+			gotResp, gotRankSet, gotErr := cs.rpcFanout(ctx, tc.fanReq, true)
+			common.CmpErr(t, expErr, gotErr)
 			if tc.expErrMsg != "" {
 				return
 			}
@@ -915,10 +923,11 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 		expErrMsg      string
 	}{
 		"nil req": {
-			expErrMsg: "response results not populated",
+			req:       (*ctlpb.SystemStopReq)(nil),
+			expErrMsg: "nil *ctl.SystemStopReq request",
 		},
 		"invalid req": {
-			req:       &ctlpb.SystemStopReq{},
+			req:       new(ctlpb.SystemStopReq),
 			expErrMsg: "response results not populated",
 		},
 		"unfiltered prep fail": {

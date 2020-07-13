@@ -59,7 +59,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"HostList":null,"Ranks":"0,2,4-8","Hosts":""}`,
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"[0,2,4-8]","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -93,7 +93,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 		},
 		{
 			"system query with both hosts and ranks specified",
-			"system query --rank-hosts bar9,foo-[0-100] --ranks 0,2,fo,,4-8",
+			"system query --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
 			"",
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
@@ -140,7 +140,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"HostList":null,"Ranks":"0-1,4","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
+				`*control.SystemStopReq-{"HostList":null,"Ranks":"[0-1,4]","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
 			}, " "),
 			nil,
 		},
@@ -160,7 +160,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 		},
 		{
 			"system stop with both hosts and ranks specified",
-			"system stop --rank-hosts bar9,foo-[0-100] --ranks 0,2,fo,,4-8",
+			"system stop --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
 			"",
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
@@ -184,7 +184,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"HostList":null,"Ranks":"0-1,4","Hosts":""}`,
+				`*control.SystemStartReq-{"HostList":null,"Ranks":"[0-1,4]","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -204,7 +204,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 		},
 		{
 			"system start with both hosts and ranks specified",
-			"system start --rank-hosts bar9,foo-[0-100] --ranks 0,2,fo,,4-8",
+			"system start --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
 			"",
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
