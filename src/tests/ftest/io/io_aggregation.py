@@ -41,7 +41,7 @@ class IoAggregation(IorTestBase):
         self.dmg = self.get_dmg_command()
         self.daos_cmd = DaosCommand(self.bin)
 
-    def display_free_space(self):
+    def get_nvme_free_space(self):
         """ Display pool free space """
         free_space = self.pool.get_pool_free_space("nvme")
         self.log.info("Free nvme space: %s", free_space)
@@ -95,7 +95,7 @@ class IoAggregation(IorTestBase):
         self.run_ior_with_pool()
 
         # capture free space before taking the snapshot
-        self.display_free_space()
+        self.get_nvme_free_space()
 
         # create snapshot
         self.container.create_snap()
@@ -105,7 +105,7 @@ class IoAggregation(IorTestBase):
         self.run_ior_with_pool(create_cont=False)
 
         # capture free space after second ior write
-        free_space_before_snap_destroy = self.display_free_space()
+        free_space_before_snap_destroy = self.get_nvme_free_space()
 
         # obtain highest epoch before snapshot destroy via container query
         kwargs = {
@@ -131,7 +131,7 @@ class IoAggregation(IorTestBase):
         # Now check if the space is returned back and Highest epoch value
         # is higher than the the value just before snapshot destroy.
         counter = 1
-        returned_space = (self.display_free_space() -
+        returned_space = (self.get_nvme_free_space() -
                           free_space_before_snap_destroy)
         while returned_space < int(self.ior_cmd.block_size.value) or \
             highest_epc_before_snap_destroy >= self.highest_epoch(kwargs):
@@ -141,13 +141,13 @@ class IoAggregation(IorTestBase):
                 self.log.info("Free space before snapshot destroy: %s",
                               free_space_before_snap_destroy)
                 self.log.info("Free space when test terminated: %s",
-                              self.display_free_space())
+                              self.get_nvme_free_space())
                 self.log.info("Highest Epoch before IO Aggregation: %s",
                               highest_epc_before_snap_destroy)
                 self.log.info("Highest Epoch when test terminated: %s",
                               self.highest_epoch(kwargs))
                 self.fail("Aggregation did not complete as expected")
             time.sleep(60)
-            returned_space = (self.display_free_space() -
+            returned_space = (self.get_nvme_free_space() -
                               free_space_before_snap_destroy)
             counter += 1

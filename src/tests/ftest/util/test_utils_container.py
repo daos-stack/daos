@@ -370,8 +370,7 @@ class TestContainer(TestDaosApiBase):
         self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
-    def create_snap(self, pool=None, cont=None, snap_name=None, epoch=None,
-                    svc=None, sys_name=None):
+    def create_snap(self, snap_name=None, epoch=None):
         """Create Snapshot using daos utility
 
         Args:
@@ -383,23 +382,23 @@ class TestContainer(TestDaosApiBase):
             sys_name (str, optional): system name
         """
         self.log.info("Creating Snapshot for Container: %s", self.uuid)
-        if not pool:
-            pool = self.pool
-        if not cont:
-            cont = self.uuid
-        if not svc:
-            svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
-        if not sys_name:
-            sys_name = self.pool.name.value
+#        if not pool:
+#            pool = self.pool
+#        if not cont:
+#            cont = self.uuid
+#        if not svc:
+#            svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
+#        if not sys_name:
+#            sys_name = self.pool.name.value
         if self.control_method.value == self.USE_DAOS and self.daos:
             # create snapshot using daos utility
             kwargs = {
-                "pool" : pool.uuid,
-                "cont" : cont,
+                "pool" : self.pool.uuid,
+                "cont" : self.uuid,
                 "snap_name" : snap_name,
                 "epoch" : epoch,
-                "svc" : svc,
-                "sys_name": sys_name,
+                "svc" : ",".join(str(rank) for rank in self.pool.svc_ranks),
+                "sys_name": self.pool.name.value,
             }
             self._log_method("daos.container_create_snap", kwargs)
             output = self.daos.get_output("container_create_snap", **kwargs)[0]
@@ -415,8 +414,7 @@ class TestContainer(TestDaosApiBase):
         self.epoch = output.split()[1]
 
     @fail_on(DaosApiError)
-    def destroy_snap(self, pool=None, cont=None, snap_name=None, epoch=None,
-                     svc=None, sys_name=None):
+    def destroy_snap(self, snap_name=None, epoch=None):
         """Destroy Snapshot using daos utility
 
         Args:
@@ -431,24 +429,24 @@ class TestContainer(TestDaosApiBase):
 
         self.log.info("Destroying Snapshot for Container: %s", self.uuid)
 
-        if not pool:
-            pool = self.pool
-        if not cont:
-            cont = self.uuid
-        if not svc:
-            svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
-        if not sys_name:
-            sys_name = self.pool.name.value
+#        if not pool:
+#            pool = self.pool
+#        if not cont:
+#            cont = self.uuid
+#        if not svc:
+#            svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
+#        if not sys_name:
+#            sys_name = self.pool.name.value
 
         if self.control_method.value == self.USE_DAOS and self.daos:
             # destroy snapshot using daos utility
             kwargs = {
-                "pool" : pool.uuid,
-                "cont" : cont,
+                "pool" : self.pool.uuid,
+                "cont" : self.uuid,
                 "snap_name" : snap_name,
                 "epoch" : epoch,
-                "svc" : svc,
-                "sys_name": sys_name,
+                "svc" : ",".join(str(rank) for rank in self.pool.svc_ranks),
+                "sys_name": self.pool.name.value,
             }
             self._log_method("daos.container_destroy_snap", kwargs)
             self.daos.container_destroy_snap(**kwargs)
