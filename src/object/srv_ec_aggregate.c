@@ -21,9 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * DAOS server erasure-coded object IO handling.
+ * DAOS server erasure-coded object aggregation.
  *
- * src/object/srv_ec.c
+ * src/object/srv_ec_aggregate.c
  */
 #define D_LOGFAC	DD_FAC(object)
 
@@ -36,6 +36,7 @@
 #include "obj_ec.h"
 #include "obj_internal.h"
 
+/* Pool/container info. */
 struct ec_agg_pool_info {
 	uuid_t		 api_pool_uuid;
 	uuid_t		 api_poh_uuid;
@@ -45,9 +46,14 @@ struct ec_agg_pool_info {
 	uint32_t	 api_pool_version;
 	d_rank_list_t	*api_svc_list;
 	struct ds_pool	*api_pool;
+	/* Shared handle UUIDs, and service listr
+	 * are initialized in system Xstream.
+	 */
 	ABT_eventual	 api_eventual;
 };
 
+/* Parmeters used to drive iterate all.
+ */
 struct ec_agg_param {
 	struct ec_agg_entry	*ap_agg_entry;
 	d_sg_list_t		 ap_sgl;
@@ -55,6 +61,7 @@ struct ec_agg_param {
 	daos_handle_t		 ap_cont_handle;
 };
 
+/* Set of agg entries built from committed transaction table */
 struct ec_agg_set {
 	d_list_t		as_entries;
 	struct ec_agg_pool_info	as_pool_info;
@@ -98,17 +105,25 @@ struct ec_agg_entry {
 	struct ec_agg_stripe	 ae_cur_stripe;
 	struct ec_agg_par_extent ae_par_extent;
 	daos_handle_t		 ae_obj_hdl;
-	ABT_eventual		 ae_eventual;
 };
 
+struct ec_agg_stripe_ud {
+	struct ec_agg_entry	*asu_agg_entry;
+	uint8_t			*asu_bit_map;
+	unsigned int		 asu_cell_cnt;
+	ABT_eventual		 asu_eventual;
+};
+
+/* Represents an replicated data extent.
+ */
 struct ec_agg_extent {
 	d_list_t	ae_link;
 	daos_recx_t	ae_recx;
 	daos_epoch_t	ae_epoch;
 };
 
-#define MARK_YIELD 1
-
+/* Swap function for sorting array of agg_entry pointers
+ */
 static void
 op_swap(void *array, int a, int b)
 {
@@ -121,6 +136,8 @@ op_swap(void *array, int a, int b)
 
 }
 
+/* Compare function for sorting array of agg_entry pointers
+ */
 static int
 op_cmp(void *array, int a, int b)
 {
@@ -147,6 +164,8 @@ op_cmp(void *array, int a, int b)
 	return 0;
 }
 
+/* Key compare function for sorty array of agg_entry pointers.
+ */
 static int
 op_cmp_key(void *array, int i, uint64_t key)
 {
@@ -159,12 +178,17 @@ op_cmp_key(void *array, int i, uint64_t key)
 	return 0;
 }
 
+/* Sort operations struct for sorting array of agg_entry pointers
+ */
 static daos_sort_ops_t sort_ops = {
 	.so_swap	= op_swap,
 	.so_cmp		= op_cmp,
 	.so_cmp_key	= op_cmp_key,
 };
 
+/* Call back function for dbtree iterator used for iterating over committed
+ * transaction table.
+ */
 static int
 committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *value, void *arg)
 {
@@ -284,13 +308,16 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 	agg_entry->ae_cur_stripe.as_stripe_fill = 0U;
 }
 
-
+/* Retrunns the stripe number for the stripe containing ex_lo.
+ */
 static inline daos_off_t
 agg_stripenum(struct ec_agg_entry *entry, daos_off_t ex_lo)
 {
 	return ex_lo / (entry->ae_oca->u.ec.e_k * entry->ae_oca->u.ec.e_len);
 }
 
+/* Call back for the nested iterator used to find the parity for a stripe.
+ */
 static int
 agg_recx_iter_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		     vos_iter_type_t type, vos_iter_param_t *param,
@@ -305,7 +332,6 @@ agg_recx_iter_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_entry->ae_oca->u.ec.e_len)));
 	agg_entry->ae_par_extent.ape_recx = entry->ie_recx;
 	agg_entry->ae_par_extent.ape_epoch = entry->ie_epoch;
-	D_PRINT("epoch: %lu\n", entry->ie_epoch);
 	return rc;
 }
 
@@ -313,7 +339,7 @@ enum agg_iov_entry {
 	AGG_IOV_DATA	= 0,
 	AGG_IOV_ODATA,
 	AGG_IOV_PARITY,
-	AGG_IOV_OPARITY,
+	AGG_IOV_DIFF,
 	AGG_IOV_CNT,
 };
 
@@ -322,16 +348,16 @@ enum agg_iov_entry {
 static int
 agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry)
 {
-	unsigned char	*buf = NULL;
 	int		 rc = 0;
 
-	D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf,
-		  ent_buf_len);
-	if (buf == NULL) {
+	D_FREE(sgl->sg_iovs[iov_entry].iov_buf);
+	sgl->sg_iovs[iov_entry].iov_buf =
+		aligned_alloc(32, ent_buf_len);
+	if (sgl->sg_iovs[iov_entry].iov_buf == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	sgl->sg_iovs[iov_entry].iov_buf = buf;
+	sgl->sg_iovs[iov_entry].iov_len = ent_buf_len;
 	sgl->sg_iovs[iov_entry].iov_buf_len = ent_buf_len;
 out:
 	return rc;
@@ -363,24 +389,26 @@ agg_prep_sgl(struct ec_agg_entry *entry)
 	}
 	D_ASSERT(entry->ae_sgl->sg_nr == AGG_IOV_CNT);
 	data_buf_len = len * k * entry->ae_rsize;
-	if (entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf_len < data_buf_len) {
+	if (entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf_len != data_buf_len) {
 		rc = agg_alloc_buf(entry->ae_sgl, data_buf_len, AGG_IOV_DATA);
 		if (rc)
 			goto out;
 	}
-	if (entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_buf_len < data_buf_len) {
+	if (entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_buf_len != data_buf_len) {
 		rc = agg_alloc_buf(entry->ae_sgl, data_buf_len, AGG_IOV_ODATA);
 		if (rc)
 			goto out;
 	}
-	par_buf_len = len * p * entry->ae_rsize;
-	if (entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf_len < par_buf_len) {
-		rc = agg_alloc_buf(entry->ae_sgl, par_buf_len, AGG_IOV_PARITY);
+	if (entry->ae_sgl->sg_iovs[AGG_IOV_DIFF].iov_buf_len !=
+						len * entry->ae_rsize) {
+		rc = agg_alloc_buf(entry->ae_sgl, len * entry->ae_rsize,
+				   AGG_IOV_DIFF);
 		if (rc)
 			goto out;
 	}
-	if (entry->ae_sgl->sg_iovs[AGG_IOV_OPARITY].iov_buf_len < par_buf_len) {
-		rc = agg_alloc_buf(entry->ae_sgl, par_buf_len, AGG_IOV_OPARITY);
+	par_buf_len = len * p * entry->ae_rsize;
+	if (entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf_len != par_buf_len) {
+		rc = agg_alloc_buf(entry->ae_sgl, par_buf_len, AGG_IOV_PARITY);
 		if (rc)
 			goto out;
 	}
@@ -442,11 +470,11 @@ agg_encode_full_stripe(void *arg)
 
 	buf = entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
 	for (i = 0; i < k; i++)
-		data[i] = &buf[i*len];
+		data[i] = &buf[i*cell_bytes];
 
 	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
 	for (i = 0; i < p; i++)
-		parity_bufs[i] = &buf[i*len];
+		parity_bufs[i] = &buf[i*cell_bytes];
 
 	codec = obj_ec_codec_get(daos_obj_id2class(entry->ae_oid.id_pub));
 	ec_encode_data(cell_bytes, k, p, codec->ec_gftbls, data, parity_bufs);
@@ -591,30 +619,15 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
  * update.
  */
 static int
-agg_fetch_odata_cells(struct ec_agg_entry *entry)
+agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
+		      unsigned int cell_cnt)
 {
 	daos_iod_t		 iod = { 0 };
 	daos_recx_t		*recxs = NULL;
-	struct ec_agg_extent	*agg_extent;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
-	unsigned int		 i, j, cell_cnt = 0;
+	unsigned int		 i, j;
 	int			 rc = 0;
-	uint8_t			 bit_map[OBJ_TGT_BITMAP_LEN] = {0};
-
-	for (i = 0; i < k && cell_cnt < k; i++)
-		d_list_for_each_entry(agg_extent,
-				      &entry->ae_cur_stripe.as_dextents,
-				      ae_link) {
-			if (agg_overlap(&agg_extent->ae_recx, i, k, len,
-					entry->ae_cur_stripe.as_stripenum)) {
-				D_PRINT("incrementing cell count\n");
-				setbit(bit_map, i);
-				cell_cnt++;
-			}
-			if (cell_cnt == k)
-				break;
-		}
 
 	D_ALLOC_ARRAY(recxs, cell_cnt);
 	if (recxs == NULL) {
@@ -628,16 +641,11 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry)
 			recxs[j++].rx_nr = len;
 		}
 
-	rc = agg_prep_sgl(entry);
-	if (rc)
-		goto out;
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_size = entry->ae_rsize;
-	D_PRINT("cell count: %u\n", cell_cnt);
 	iod.iod_nr = cell_cnt;
 	iod.iod_recxs = recxs;
-	D_ASSERT(iod.iod_recxs);
 	entry->ae_sgl->sg_nr = 1;
 	entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_len = cell_cnt * len *
 								entry->ae_rsize;
@@ -654,16 +662,142 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry)
 	(entry->ae_sgl->sg_iovs)--;
 	entry->ae_sgl->sg_nr = AGG_IOV_CNT;
 out:
-	if( recxs != NULL) /* Even though it's okay to call free on NULL. */
+	if( recxs != NULL)
 		D_FREE(recxs);
 	return rc;
-
 }
 
 static int
-agg_update_parity(struct ec_agg_entry *entry)
+agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
+			unsigned int cell_cnt)
 {
-	return 0;
+	daos_iod_t		 iod = { 0 };
+	d_sg_list_t		 sgl = { 0 };
+	daos_recx_t		*recxs = NULL;
+	unsigned int		 len = entry->ae_oca->u.ec.e_len;
+	unsigned int		 k = entry->ae_oca->u.ec.e_k;
+	unsigned int		 i, j;
+	int			 rc = 0;
+
+	D_ALLOC_ARRAY(recxs, cell_cnt + 1);
+	if (recxs == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	for (i = 0, j = 0; i < k; i++)
+		if (isset(bit_map, i)) {
+			recxs[j].rx_idx =
+			  entry->ae_cur_stripe.as_stripenum * k * len + i * len;
+			recxs[j++].rx_nr = len;
+		}
+
+	D_ASSERT(j == cell_cnt);
+	recxs[cell_cnt].rx_idx = PARITY_INDICATOR |
+				entry->ae_cur_stripe.as_stripenum * k * len;
+	recxs[cell_cnt].rx_nr = len;
+
+	rc = agg_prep_sgl(entry);
+	if (rc)
+		goto out;
+	D_ALLOC_ARRAY(sgl.sg_iovs, cell_cnt + 1);
+	if (sgl.sg_iovs == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	sgl.sg_nr = cell_cnt + 1;
+	for (i = 0; i < cell_cnt; i++) {
+		unsigned char *buf = (unsigned char *)
+			entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_buf;
+
+		sgl.sg_iovs[i].iov_buf = &buf[i*len];
+		sgl.sg_iovs[i].iov_len = len;
+		sgl.sg_iovs[i].iov_buf_len = len;
+	}
+	sgl.sg_iovs[cell_cnt].iov_buf =
+		entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
+	sgl.sg_iovs[cell_cnt].iov_len = len;
+	sgl.sg_iovs[cell_cnt].iov_buf_len = len;
+	iod.iod_name = entry->ae_akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = entry->ae_rsize;
+	iod.iod_nr = cell_cnt + 1;
+	iod.iod_recxs = recxs;
+	rc = vos_obj_fetch(entry->ae_chdl, entry->ae_oid,
+			   entry->ae_cur_stripe.as_hi_epoch,
+			   VOS_FETCH_RECX_LIST, &entry->ae_dkey, 1, &iod, &sgl);
+out:
+	if( recxs != NULL)
+		D_FREE(recxs);
+	if( sgl.sg_iovs != NULL)
+		D_FREE(sgl.sg_iovs);
+	return rc;
+}
+
+static int
+agg_update_parity(struct ec_agg_entry *entry, uint8_t* bit_map,
+		  unsigned int cell_cnt)
+{
+	struct obj_ec_codec	*codec;
+	unsigned int		 len = entry->ae_oca->u.ec.e_len;
+	unsigned int		 k = entry->ae_oca->u.ec.e_k;
+	unsigned int		 p = entry->ae_oca->u.ec.e_p;
+	unsigned int		 cell_bytes = len * entry->ae_rsize;
+	unsigned char		*parity_bufs[p];
+	unsigned char		*vects[3];
+	unsigned char		*buf = NULL;
+	unsigned char		*obuf = NULL;
+	unsigned char		*old = NULL;
+	unsigned char		*new = NULL;
+	unsigned char		*diff = NULL;
+	int			 i, j, rc = 0;
+
+	codec = obj_ec_codec_get(daos_obj_id2class(entry->ae_oid.id_pub));
+	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
+	for (i = 0; i < p; i++)
+		parity_bufs[i] = &buf[i*len];
+
+	obuf = entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_buf;
+	buf = entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
+	diff = entry->ae_sgl->sg_iovs[AGG_IOV_DIFF].iov_buf;
+	for (i = 0, j = 0; i < cell_cnt; i++) {
+		old = &obuf[i*cell_bytes];
+		new = &buf[i*cell_bytes];
+		vects[0] = old;
+		vects[1] = new;
+		vects[2] = diff;
+		rc = xor_gen(3, cell_bytes, (void **)vects);
+		if (rc)
+			goto out;
+		while(!isset(bit_map, j))
+			j++;
+		ec_encode_data_update(cell_bytes, k, p, j, codec->ec_gftbls,
+				      diff, parity_bufs);
+	}
+out:
+	return rc;
+}
+
+/* Xstream offload function for partial stripe update. Fetches the old data
+ * from the data target(s) and updates the parity.
+ */
+static void
+agg_process_partial_stripe_ult(void *arg)
+{
+	struct ec_agg_stripe_ud		*stripe_ud =
+						(struct ec_agg_stripe_ud *)arg;
+	struct ec_agg_entry		*entry = stripe_ud->asu_agg_entry;
+	uint8_t				*bit_map = stripe_ud->asu_bit_map;
+	unsigned int			 cell_cnt = stripe_ud->asu_cell_cnt;
+	int				 rc = 0;
+
+	rc = agg_fetch_odata_cells(entry, bit_map, cell_cnt);
+	if (rc)
+		goto out;
+	rc = agg_update_parity(entry, bit_map, cell_cnt);
+
+out:
+	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+
 }
 
 /* Driver function for partial stripe update. Fetches the data and then invokes
@@ -672,12 +806,54 @@ agg_update_parity(struct ec_agg_entry *entry)
 static int
 agg_process_partial_stripe(struct ec_agg_entry *entry)
 {
-	int	rc = 0;
+	struct ec_agg_stripe_ud	 stripe_ud;
+	struct ec_agg_extent	*agg_extent;
+	unsigned int		len = entry->ae_oca->u.ec.e_len;
+	unsigned int		k = entry->ae_oca->u.ec.e_k;
+	unsigned int		i, cell_cnt = 0;
+	uint8_t			bit_map[OBJ_TGT_BITMAP_LEN] = {0};
+	int			*status;
+	int			rc = 0;
 
-	rc = agg_fetch_odata_cells(entry);
+	for (i = 0; i < k && cell_cnt < k; i++)
+		d_list_for_each_entry(agg_extent,
+				      &entry->ae_cur_stripe.as_dextents,
+				      ae_link) {
+			if (agg_overlap(&agg_extent->ae_recx, i, k, len,
+					entry->ae_cur_stripe.as_stripenum)) {
+				setbit(bit_map, i);
+				cell_cnt++;
+			}
+			if (cell_cnt == k)
+				break;
+		}
+
+
+	rc = agg_fetch_local_extents(entry, bit_map, cell_cnt);
 	if (rc)
 		goto out;
-	agg_update_parity(entry);
+
+	stripe_ud.asu_agg_entry = entry;
+	stripe_ud.asu_bit_map = bit_map;
+	stripe_ud.asu_cell_cnt = cell_cnt;
+	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out;
+	}
+	rc = dss_ult_create(agg_process_partial_stripe_ult, &stripe_ud,
+			    DSS_ULT_EC, 0, 0, NULL);
+	if (rc)
+		goto out;
+	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out;
+	}
+	if (*status != 0) {
+		rc = *status;
+		goto out;
+	}
 
 out:
 	return rc;
@@ -704,19 +880,10 @@ agg_process_stripe(struct ec_agg_entry *entry)
 						entry->ae_oca->u.ec.e_len);
 	iter_param.ip_recx.rx_nr	= entry->ae_oca->u.ec.e_len;
 
-	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
-		entry->ae_cur_stripe.as_stripenum,
-		iter_param.ip_recx.rx_idx);
-
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	if (rc != 0)
 		goto out;
-
-	D_PRINT("Par query: epoch: %lu, offset: %lu, length: %lu\n",
-		entry->ae_par_extent.ape_epoch,
-		entry->ae_par_extent.ape_recx.rx_idx,
-		entry->ae_par_extent.ape_recx.rx_nr);
 
 	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch &&
 			entry->ae_par_extent.ape_epoch != ~(0ULL)) {
@@ -1118,7 +1285,6 @@ agg_iterate_all(struct ds_cont_child *cont)
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
 	struct ec_agg_param	 agg_param = { 0 };
-	ABT_eventual		 eventual;
 	daos_handle_t		 ph = DAOS_HDL_INVAL;
 	int			*status;
 	int			 rc = 0;
@@ -1132,17 +1298,18 @@ agg_iterate_all(struct ds_cont_child *cont)
 	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
 	agg_param.ap_cont_handle	= cont->sc_hdl;
 
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	rc = ABT_eventual_create(sizeof(*status),
+				 &agg_param.ap_pool_info.api_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
 		goto out;
 	}
-	agg_param.ap_pool_info.api_eventual = eventual;
 	rc = dss_ult_create(agg_iv_ult, &agg_param, DSS_ULT_POOL_SRV, 0, 0,
 			    NULL);
 	if (rc)
 		goto out;
-	rc = ABT_eventual_wait(eventual, (void **)&status);
+	rc = ABT_eventual_wait(agg_param.ap_pool_info.api_eventual,
+			       (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
 		goto out;

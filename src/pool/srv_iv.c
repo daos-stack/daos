@@ -26,6 +26,8 @@
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
+#include <daos_srv/container.h>
+#include <daos_srv/security.h>
 #include <daos/pool_map.h>
 #include <daos_srv/iv.h>
 #include <daos_prop.h>
@@ -58,7 +60,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 	uint32_t	buf_size = pool_key->pik_entry_size;
 	int		rc;
 
-	D_ASSERT(buf_size != 0);
+	D_ASSERT(buf_size > 0);
 	rc = daos_sgl_init(sgl, 1);
 	if (rc)
 		return rc;
@@ -404,12 +406,32 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		src_iv->piv_master_rank);
 
 	/* Update pool map version or pool map */
-	if (entry->iv_class->iv_class_id == IV_POOL_MAP)
+	if (entry->iv_class->iv_class_id == IV_POOL_MAP) {
+		int dst_len = entry->iv_value.sg_iovs[0].iov_buf_len -
+			      sizeof(struct pool_iv_entry) +
+			      sizeof(struct pool_buf);
+		int src_len = pool_buf_size(
+			src_iv->piv_map.piv_pool_buf.pb_nr);
+
 		rc = ds_pool_tgt_map_update(pool,
 			src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 			&src_iv->piv_map.piv_pool_buf : NULL,
 			src_iv->piv_pool_map_ver);
-	else if (entry->iv_class->iv_class_id == IV_POOL_PROP)
+		if (rc)
+			return rc;
+
+		/* realloc the pool iv buffer if the size is not enough */
+		if (dst_len < src_len) {
+			int new_alloc_size = src_len + sizeof(*src_iv) -
+					     sizeof(struct pool_buf);
+
+			rc = daos_sgl_buf_extend(&entry->iv_value, 0,
+						 new_alloc_size);
+			if (rc)
+				return rc;
+		}
+
+	} else if (entry->iv_class->iv_class_id == IV_POOL_PROP)
 		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
 
 	ds_pool_put(pool);
@@ -427,8 +449,14 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct ds_pool		*pool;
 	int			rc;
 
-	if (src == NULL) /* invalidate */
+	if (src == NULL) {
+		/* invalidate */
+		if (entry->iv_valid &&
+		    entry->iv_class->iv_class_id == IV_POOL_HDL &&
+		    !uuid_is_null(dst_iv->piv_hdl.pih_cont_hdl))
+			ds_cont_tgt_close(dst_iv->piv_hdl.pih_cont_hdl);
 		return 0;
+	}
 
 	src_iv = src->sg_iovs[0].iov_buf;
 	D_ASSERT(dst_iv != NULL);
@@ -454,6 +482,11 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 				&src_iv->piv_map.piv_pool_buf : NULL,
 				src_iv->piv_pool_map_ver);
+	else if (entry->iv_class->iv_class_id == IV_POOL_HDL)
+		rc = ds_cont_tgt_open(src_iv->piv_pool_uuid,
+				      src_iv->piv_hdl.pih_cont_hdl, NULL, 0,
+				      ds_sec_get_rebuild_cont_capabilities());
+
 	ds_pool_put(pool);
 
 	return rc;
@@ -721,6 +754,21 @@ out:
 	if (iv_arg->iua_eventual)
 		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
 	D_FREE_PTR(iv_arg);
+}
+
+int
+ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool)
+{
+	struct ds_iv_key	key = { 0 };
+	int			rc;
+
+	key.class_id = IV_POOL_HDL;
+	rc = ds_iv_invalidate(pool->sp_iv_ns, &key, CRT_IV_SHORTCUT_NONE,
+			      CRT_IV_SYNC_NONE, 0, false /* retry */);
+	if (rc)
+		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
+
+	return rc;
 }
 
 int

@@ -42,6 +42,7 @@
 
 /* This needs to be here to avoid pulling in all of srv_internal.h */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
+int ds_cont_tgt_force_close(uuid_t cont_uuid);
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
@@ -1492,6 +1493,15 @@ destroy_existing_container(struct migrate_pool_tls *tls, uuid_t cont_uuid)
 			"destroying pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID
 			" before reintegration\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UUID(cont_uuid), DP_UUID(tls->mpt_coh_uuid));
+
+		rc = ds_cont_tgt_force_close(cont_uuid);
+		if (rc != 0) {
+			D_ERROR("Migrate failed to close container "
+				"prior to reintegration: pool: "DF_UUID
+				", cont: "DF_UUID" rc: "DF_RC"\n",
+				DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont_uuid),
+				DP_RC(rc));
+		}
 
 		rc = ds_cont_tgt_destroy(tls->mpt_pool_uuid, cont_uuid);
 		if (rc != 0) {
