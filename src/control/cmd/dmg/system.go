@@ -227,7 +227,8 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return cmd.outputJSON(os.Stdout, resp)
 	}
 
-	cmd.log.Debug("System-Query command succeeded")
+	cmd.log.Debugf("System-Query command succeeded, absent hosts: %s, absent ranks: %s",
+		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
 	switch {
 	case len(resp.Members) == 0:
@@ -351,7 +352,8 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 		cmd.log.Debug("System-Stop no results returned")
 		return nil
 	}
-	cmd.log.Debug("System-Stop command succeeded")
+	cmd.log.Debugf("System-Stop command succeeded, absent hosts: %s, absent ranks: %s",
+		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
 	return displaySystemAction(cmd.log, resp.Results,
 		&resp.AbsentHosts, &resp.AbsentRanks)
@@ -389,7 +391,8 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 		cmd.log.Debug("System-Start no results returned")
 		return nil
 	}
-	cmd.log.Debug("System-Start command succeeded")
+	cmd.log.Debugf("System-Start command succeeded, absent hosts: %s, absent ranks: %s",
+		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
 	return displaySystemAction(cmd.log, resp.Results,
 		&resp.AbsentHosts, &resp.AbsentRanks)
