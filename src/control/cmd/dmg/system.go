@@ -165,7 +165,7 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) {
 // which ranks are operated upon.
 type rankListCmd struct {
 	Ranks string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
-	Hosts string `long:"rank-hosts" short:"h" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
+	Hosts string `long:"rank-hosts" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
 }
 
 // validateHostsRanks validates rank and host lists have correct format.

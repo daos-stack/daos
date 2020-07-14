@@ -24,8 +24,6 @@
 package server
 
 import (
-	"fmt"
-	"net"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -42,19 +40,6 @@ import (
 )
 
 const defaultAP = "192.168.1.1:10001"
-
-var hostAddrs = make(map[int]*net.TCPAddr)
-
-func getHostAddr(i int) *net.TCPAddr {
-	if _, exists := hostAddrs[i]; !exists {
-		addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("10.0.0.%d:10001", i))
-		if err != nil {
-			panic(err)
-		}
-		hostAddrs[i] = addr
-	}
-	return hostAddrs[i]
-}
 
 func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -98,18 +83,18 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 		"unfiltered ranks": {
 			fanReq: fanoutRequest{Method: control.PingRanks},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(3, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateJoined),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateJoined),
-				system.NewMember(6, "", getHostAddr(4), system.MemberStateJoined),
-				system.NewMember(7, "", getHostAddr(4), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(3, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateJoined),
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateJoined),
+				system.NewMember(6, "", common.MockHostAddr(4), system.MemberStateJoined),
+				system.NewMember(7, "", common.MockHostAddr(4), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -121,7 +106,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -136,11 +121,11 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr:  getHostAddr(3).String(),
+					Addr:  common.MockHostAddr(3).String(),
 					Error: errors.New("connection refused"),
 				},
 				{
-					Addr:  getHostAddr(4).String(),
+					Addr:  common.MockHostAddr(4).String(),
 					Error: errors.New("connection refused"),
 				},
 			},
@@ -149,55 +134,55 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			expResults: system.MemberResults{
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
-					Addr:  getHostAddr(1).String(),
+					Addr:  common.MockHostAddr(1).String(),
 					State: system.MemberStateErrored,
 				},
 				{
-					Rank: 3, Addr: getHostAddr(1).String(),
+					Rank: 3, Addr: common.MockHostAddr(1).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 1, Addr: getHostAddr(2).String(),
+					Rank: 1, Addr: common.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 2, Addr: getHostAddr(2).String(),
+					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
 					Rank: 4, Msg: "connection refused",
-					Addr:  getHostAddr(3).String(),
+					Addr:  common.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 5, Msg: "connection refused",
-					Addr:  getHostAddr(3).String(),
+					Addr:  common.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 6, Msg: "connection refused",
-					Addr:  getHostAddr(4).String(),
+					Addr:  common.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 7, Msg: "connection refused",
-					Addr:  getHostAddr(4).String(),
+					Addr:  common.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateErrored).
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateErrored).
 					WithInfo("fatality"),
-				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(3, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateUnresponsive).
+				system.NewMember(1, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(3, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateUnresponsive).
 					WithInfo("connection refused"),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateUnresponsive).
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateUnresponsive).
 					WithInfo("connection refused"),
-				system.NewMember(6, "", getHostAddr(4), system.MemberStateUnresponsive).
+				system.NewMember(6, "", common.MockHostAddr(4), system.MemberStateUnresponsive).
 					WithInfo("connection refused"),
-				system.NewMember(7, "", getHostAddr(4), system.MemberStateUnresponsive).
+				system.NewMember(7, "", common.MockHostAddr(4), system.MemberStateUnresponsive).
 					WithInfo("connection refused"),
 			},
 			expRanks: "0-7",
@@ -205,18 +190,18 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 		"filtered and oversubscribed ranks": {
 			fanReq: fanoutRequest{Method: control.PingRanks, Ranks: "0-3,6-10"},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(3, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateJoined),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateJoined),
-				system.NewMember(6, "", getHostAddr(4), system.MemberStateJoined),
-				system.NewMember(7, "", getHostAddr(4), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(3, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateJoined),
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateJoined),
+				system.NewMember(6, "", common.MockHostAddr(4), system.MemberStateJoined),
+				system.NewMember(7, "", common.MockHostAddr(4), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -231,7 +216,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{Rank: 1, State: uint32(system.MemberStateJoined)},
@@ -240,7 +225,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr:  getHostAddr(4).String(),
+					Addr:  common.MockHostAddr(4).String(),
 					Error: errors.New("connection refused"),
 				},
 			},
@@ -250,43 +235,43 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			expResults: system.MemberResults{
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
-					Addr:  getHostAddr(1).String(),
+					Addr:  common.MockHostAddr(1).String(),
 					State: system.MemberStateErrored,
 				},
 				{
-					Rank: 3, Addr: getHostAddr(1).String(),
+					Rank: 3, Addr: common.MockHostAddr(1).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 1, Addr: getHostAddr(2).String(),
+					Rank: 1, Addr: common.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 2, Addr: getHostAddr(2).String(),
+					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
 					Rank: 6, Msg: "connection refused",
-					Addr:  getHostAddr(4).String(),
+					Addr:  common.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 7, Msg: "connection refused",
-					Addr:  getHostAddr(4).String(),
+					Addr:  common.MockHostAddr(4).String(),
 					State: system.MemberStateUnresponsive,
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateErrored).
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateErrored).
 					WithInfo("fatality"),
-				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(3, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateJoined),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateJoined),
-				system.NewMember(6, "", getHostAddr(4), system.MemberStateUnresponsive).
+				system.NewMember(1, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(3, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateJoined),
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateJoined),
+				system.NewMember(6, "", common.MockHostAddr(4), system.MemberStateUnresponsive).
 					WithInfo("connection refused"),
-				system.NewMember(7, "", getHostAddr(4), system.MemberStateUnresponsive).
+				system.NewMember(7, "", common.MockHostAddr(4), system.MemberStateUnresponsive).
 					WithInfo("connection refused"),
 			},
 			expRanks:       "0-3,6-7",
@@ -295,18 +280,18 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 		"filtered and oversubscribed hosts": {
 			fanReq: fanoutRequest{Method: control.PingRanks, Hosts: "10.0.0.[1-3,5]"},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(3, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateJoined),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateJoined),
-				system.NewMember(6, "", getHostAddr(4), system.MemberStateJoined),
-				system.NewMember(7, "", getHostAddr(4), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(3, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateJoined),
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateJoined),
+				system.NewMember(6, "", common.MockHostAddr(4), system.MemberStateJoined),
+				system.NewMember(7, "", common.MockHostAddr(4), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -321,7 +306,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{Rank: 1, State: uint32(system.MemberStateJoined)},
@@ -330,7 +315,7 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 					},
 				},
 				{
-					Addr:  getHostAddr(3).String(),
+					Addr:  common.MockHostAddr(3).String(),
 					Error: errors.New("connection refused"),
 				},
 			},
@@ -340,44 +325,44 @@ func TestServer_CtlSvc_rpcFanout(t *testing.T) {
 			expResults: system.MemberResults{
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
-					Addr:  getHostAddr(1).String(),
+					Addr:  common.MockHostAddr(1).String(),
 					State: system.MemberStateErrored,
 				},
 				{
-					Rank: 3, Addr: getHostAddr(1).String(),
+					Rank: 3, Addr: common.MockHostAddr(1).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 1, Addr: getHostAddr(2).String(),
+					Rank: 1, Addr: common.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
-					Rank: 2, Addr: getHostAddr(2).String(),
+					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: system.MemberStateJoined,
 				},
 				{
 					Rank: 4, Msg: "connection refused",
-					Addr:  getHostAddr(3).String(),
+					Addr:  common.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 				{
 					Rank: 5, Msg: "connection refused",
-					Addr:  getHostAddr(3).String(),
+					Addr:  common.MockHostAddr(3).String(),
 					State: system.MemberStateUnresponsive,
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateErrored).
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateErrored).
 					WithInfo("fatality"),
-				system.NewMember(1, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(3, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateUnresponsive).
+				system.NewMember(1, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(3, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateUnresponsive).
 					WithInfo("connection refused"),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateUnresponsive).
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateUnresponsive).
 					WithInfo("connection refused"),
-				system.NewMember(6, "", getHostAddr(4), system.MemberStateJoined),
-				system.NewMember(7, "", getHostAddr(4), system.MemberStateJoined),
+				system.NewMember(6, "", common.MockHostAddr(4), system.MemberStateJoined),
+				system.NewMember(7, "", common.MockHostAddr(4), system.MemberStateJoined),
 			},
 			expRanks:       "0-5",
 			expAbsentHosts: "10.0.0.5",
@@ -459,16 +444,16 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 		},
 		"unfiltered rank results": {
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopping),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateAwaitFormat),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateStopping),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopping),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateReady),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateAwaitFormat),
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateStopping),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -480,7 +465,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
@@ -489,7 +474,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(3).String(),
+					Addr: common.MockHostAddr(3).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{Rank: 4, State: uint32(system.MemberStateStarting)},
@@ -500,28 +485,28 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			},
 			expMembers: []*ctlpb.SystemMember{
 				&ctlpb.SystemMember{
-					Rank: 0, Addr: getHostAddr(1).String(),
+					Rank: 0, Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
 				&ctlpb.SystemMember{
-					Rank: 1, Addr: getHostAddr(1).String(),
+					Rank: 1, Addr: common.MockHostAddr(1).String(),
 					// transition to "ready" illegal
 					State: uint32(system.MemberStateStopping),
 				},
 				&ctlpb.SystemMember{
-					Rank: 2, Addr: getHostAddr(2).String(),
+					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateUnresponsive),
 				},
 				&ctlpb.SystemMember{
-					Rank: 3, Addr: getHostAddr(2).String(),
+					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateJoined),
 				},
 				&ctlpb.SystemMember{
-					Rank: 4, Addr: getHostAddr(3).String(),
+					Rank: 4, Addr: common.MockHostAddr(3).String(),
 					State: uint32(system.MemberStateStarting),
 				},
 				&ctlpb.SystemMember{
-					Rank: 5, Addr: getHostAddr(3).String(),
+					Rank: 5, Addr: common.MockHostAddr(3).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 			},
@@ -530,16 +515,16 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 		"filtered and oversubscribed ranks": {
 			ranks: "0,2-3,6-9",
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopping),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateAwaitFormat),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateStopping),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopping),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateReady),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateAwaitFormat),
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateStopping),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -550,7 +535,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
@@ -561,15 +546,15 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			},
 			expMembers: []*ctlpb.SystemMember{
 				&ctlpb.SystemMember{
-					Rank: 0, Addr: getHostAddr(1).String(),
+					Rank: 0, Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
 				&ctlpb.SystemMember{
-					Rank: 2, Addr: getHostAddr(2).String(),
+					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateUnresponsive),
 				},
 				&ctlpb.SystemMember{
-					Rank: 3, Addr: getHostAddr(2).String(),
+					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateJoined),
 				},
 			},
@@ -578,17 +563,17 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 		},
 		"filtered and oversubscribed hosts": {
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopping),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(4, "", getHostAddr(3), system.MemberStateAwaitFormat),
-				system.NewMember(5, "", getHostAddr(3), system.MemberStateStopping),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopping),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateReady),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateAwaitFormat),
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateStopping),
 			},
 			hosts: "10.0.0.[2-5]",
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{Rank: 2, State: uint32(system.MemberStateUnresponsive)},
@@ -597,7 +582,7 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(3).String(),
+					Addr: common.MockHostAddr(3).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -611,19 +596,19 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			},
 			expMembers: []*ctlpb.SystemMember{
 				&ctlpb.SystemMember{
-					Rank: 2, Addr: getHostAddr(2).String(),
+					Rank: 2, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateUnresponsive),
 				},
 				&ctlpb.SystemMember{
-					Rank: 3, Addr: getHostAddr(2).String(),
+					Rank: 3, Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateJoined),
 				},
 				&ctlpb.SystemMember{
-					Rank: 4, Addr: getHostAddr(3).String(),
+					Rank: 4, Addr: common.MockHostAddr(3).String(),
 					State: uint32(system.MemberStateErrored), Info: "couldn't ping",
 				},
 				&ctlpb.SystemMember{
-					Rank: 5, Addr: getHostAddr(3).String(),
+					Rank: 5, Addr: common.MockHostAddr(3).String(),
 					State: uint32(system.MemberStateStopping),
 				},
 			},
@@ -706,14 +691,14 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 		},
 		"unfiltered rank results": {
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -727,7 +712,7 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -743,41 +728,41 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "start", Errored: true,
-					Msg: "couldn't start", Addr: getHostAddr(1).String(),
+					Msg: "couldn't start", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 1, Action: "start", Addr: getHostAddr(1).String(),
+					Rank: 1, Action: "start", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateReady),
 				},
 				{
-					Rank: 2, Action: "start", Addr: getHostAddr(2).String(),
+					Rank: 2, Action: "start", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateReady),
 				},
 				{
-					Rank: 3, Action: "start", Addr: getHostAddr(2).String(),
+					Rank: 3, Action: "start", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateReady),
 				},
 			},
 
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateReady),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateReady),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateReady),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateReady),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateReady),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateReady),
 			},
 		},
 		"filtered and oversubscribed ranks": {
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			ranks: "0-1,4-9",
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -794,33 +779,33 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "start", Errored: true,
-					Msg: "couldn't start", Addr: getHostAddr(1).String(),
+					Msg: "couldn't start", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 1, Action: "start", Addr: getHostAddr(1).String(),
+					Rank: 1, Action: "start", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateReady),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			expAbsentRanks: "4-9",
 		},
 		"filtered and oversubscribed hosts": {
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			hosts: "10.0.0.[2-5]",
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -837,19 +822,19 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 2, Action: "start", Errored: true,
-					Msg: "couldn't start", Addr: getHostAddr(2).String(),
+					Msg: "couldn't start", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 3, Action: "start", Addr: getHostAddr(2).String(),
+					Rank: 3, Action: "start", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateReady),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateReady),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateReady),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
 		},
@@ -933,12 +918,12 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 		"unfiltered prep fail": {
 			req: &ctlpb.SystemStopReq{Prep: true, Kill: true},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -956,29 +941,29 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "prep shutdown", Errored: true,
-					Msg: "prep shutdown failed", Addr: getHostAddr(1).String(),
+					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateJoined),
 				},
 				{
-					Rank: 1, Action: "prep shutdown", Addr: getHostAddr(1).String(),
+					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateStopping),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopping),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopping),
 			},
 		},
 		"filtered and oversubscribed ranks prep fail": {
 			req: &ctlpb.SystemStopReq{Prep: true, Kill: true, Ranks: "0-1,9"},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -996,31 +981,31 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "prep shutdown", Errored: true,
-					Msg: "prep shutdown failed", Addr: getHostAddr(1).String(),
+					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateJoined),
 				},
 				{
-					Rank: 1, Action: "prep shutdown", Addr: getHostAddr(1).String(),
+					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateStopping),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopping),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopping),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
 			},
 			expAbsentRanks: "9",
 		},
 		"filtered and oversubscribed hosts prep fail": {
 			req: &ctlpb.SystemStopReq{Prep: true, Kill: true, Hosts: "10.0.0.[1,3]"},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1038,32 +1023,32 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "prep shutdown", Errored: true,
-					Msg: "prep shutdown failed", Addr: getHostAddr(1).String(),
+					Msg: "prep shutdown failed", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateJoined),
 				},
 				{
-					Rank: 1, Action: "prep shutdown", Addr: getHostAddr(1).String(),
+					Rank: 1, Action: "prep shutdown", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateStopping),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopping),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopping),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
 			},
 			expAbsentHosts: "10.0.0.3",
 		},
 		"unfiltered rank results": {
 			req: &ctlpb.SystemStopReq{Prep: false, Kill: true},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateJoined),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1077,7 +1062,7 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1093,40 +1078,40 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "stop", Errored: true,
-					Msg: "couldn't stop", Addr: getHostAddr(1).String(),
+					Msg: "couldn't stop", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateJoined),
 				},
 				{
-					Rank: 1, Action: "stop", Addr: getHostAddr(1).String(),
+					Rank: 1, Action: "stop", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 2, Action: "stop", Addr: getHostAddr(2).String(),
+					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 3, Action: "stop", Addr: getHostAddr(2).String(),
+					Rank: 3, Action: "stop", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 		},
 		"filtered and oversubscribed ranks": {
 			req: &ctlpb.SystemStopReq{Prep: false, Kill: true, Ranks: "0,2,3-9"},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1137,7 +1122,7 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1153,37 +1138,37 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "stop", Errored: true,
-					Msg: "couldn't stop", Addr: getHostAddr(1).String(),
+					Msg: "couldn't stop", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateJoined),
 				},
 				{
-					Rank: 2, Action: "stop", Addr: getHostAddr(2).String(),
+					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 3, Action: "stop", Addr: getHostAddr(2).String(),
+					Rank: 3, Action: "stop", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			expAbsentRanks: "4-9",
 		},
 		"filtered and oversubscribed hosts": {
 			req: &ctlpb.SystemStopReq{Prep: false, Kill: true, Hosts: "10.0.0.[2-5]"},
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateJoined),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1198,19 +1183,19 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 			},
 			expResults: []*ctlpb.RankResult{
 				{
-					Rank: 2, Action: "stop", Addr: getHostAddr(2).String(),
+					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 3, Action: "stop", Addr: getHostAddr(2).String(),
+					Rank: 3, Action: "stop", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
 		},
@@ -1297,14 +1282,14 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 		},
 		"unfiltered rank results": {
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1318,7 +1303,7 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 					},
 				},
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1334,41 +1319,41 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "reset format", Errored: true,
-					Msg: "something bad", Addr: getHostAddr(1).String(),
+					Msg: "something bad", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 1, Action: "reset format", Addr: getHostAddr(1).String(),
+					Rank: 1, Action: "reset format", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateAwaitFormat),
 				},
 				{
-					Rank: 2, Action: "reset format", Addr: getHostAddr(2).String(),
+					Rank: 2, Action: "reset format", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateAwaitFormat),
 				},
 				{
-					Rank: 3, Action: "reset format", Addr: getHostAddr(2).String(),
+					Rank: 3, Action: "reset format", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateAwaitFormat),
 				},
 			},
 
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateAwaitFormat),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateAwaitFormat),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateAwaitFormat),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateAwaitFormat),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateAwaitFormat),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateAwaitFormat),
 			},
 		},
 		"filtered and oversubscribed ranks": {
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			ranks: "0-1,4-9",
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(1).String(),
+					Addr: common.MockHostAddr(1).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1385,33 +1370,33 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 0, Action: "reset format", Errored: true,
-					Msg: "couldn't reset", Addr: getHostAddr(1).String(),
+					Msg: "couldn't reset", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 1, Action: "reset format", Addr: getHostAddr(1).String(),
+					Rank: 1, Action: "reset format", Addr: common.MockHostAddr(1).String(),
 					State: uint32(system.MemberStateAwaitFormat),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateAwaitFormat),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateAwaitFormat),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			expAbsentRanks: "4-9",
 		},
 		"filtered and oversubscribed hosts": {
 			members: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateStopped),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			hosts: "10.0.0.[2-5]",
 			mResps: []*control.HostResponse{
 				{
-					Addr: getHostAddr(2).String(),
+					Addr: common.MockHostAddr(2).String(),
 					Message: &mgmtpb.RanksResp{
 						Results: []*mgmtpb.RanksResp_RankResult{
 							{
@@ -1428,19 +1413,19 @@ func TestServer_CtlSvc_SystemResetFormat(t *testing.T) {
 			expResults: []*ctlpb.RankResult{
 				{
 					Rank: 2, Action: "reset format", Errored: true,
-					Msg: "couldn't reset", Addr: getHostAddr(2).String(),
+					Msg: "couldn't reset", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateStopped),
 				},
 				{
-					Rank: 3, Action: "reset format", Addr: getHostAddr(2).String(),
+					Rank: 3, Action: "reset format", Addr: common.MockHostAddr(2).String(),
 					State: uint32(system.MemberStateAwaitFormat),
 				},
 			},
 			expMembers: system.Members{
-				system.NewMember(0, "", getHostAddr(1), system.MemberStateStopped),
-				system.NewMember(1, "", getHostAddr(1), system.MemberStateJoined),
-				system.NewMember(2, "", getHostAddr(2), system.MemberStateStopped),
-				system.NewMember(3, "", getHostAddr(2), system.MemberStateAwaitFormat),
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateAwaitFormat),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
 		},
