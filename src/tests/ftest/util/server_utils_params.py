@@ -321,29 +321,23 @@ class DaosServerYamlParameters(YamlParameters):
             self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR")
             self.log_file = LogParameter(log_dir, None, "daos_server.log")
 
-            # Set extra envariables for sockets provider
-            if default_provider is "ofi+sockets":
-                self.env_vars = BasicParameter(
-                    None,
-                    ["ABT_ENV_MAX_NUM_XSTREAMS=100",
-                     "ABT_MAX_NUM_XSTREAMS=100",
-                     "DAOS_MD_CAP=1024",
-                     "FI_SOCKETS_MAX_CONN_RETRY=5",
-                     "FI_SOCKETS_CONN_TIMEOUT=2000",
-                     "CRT_SWIM_RPC_TIMEOUT=10",
-                     "SWIM_PING_TIMEOUT=10000",
-                     "SWIM_PROTOCOL_PERIOD_LEN=30000",
-                     "SWIM_SUSPECT_TIMEOUT=90000",
-                     "DD_MASK=mgmt,io,md,epc,rebuild"]
-                )
-            else:
-                self.env_vars = BasicParameter(
-                    None,
-                    ["ABT_ENV_MAX_NUM_XSTREAMS=100",
-                     "ABT_MAX_NUM_XSTREAMS=100",
-                     "DAOS_MD_CAP=1024",
-                     "DD_MASK=mgmt,io,md,epc,rebuild"]
-                )
+            # Set extra environment variables for sockets provider
+            default_env_vars = [
+                "ABT_ENV_MAX_NUM_XSTREAMS=100",
+                "ABT_MAX_NUM_XSTREAMS=100",
+                "DAOS_MD_CAP=1024",
+                "DD_MASK=mgmt,io,md,epc,rebuild"
+            ]
+            if default_provider == "ofi+sockets":
+                default_env_vars.extend([
+                    "FI_SOCKETS_MAX_CONN_RETRY=5",
+                    "FI_SOCKETS_CONN_TIMEOUT=2000",
+                    "CRT_SWIM_RPC_TIMEOUT=10",
+                    "SWIM_PING_TIMEOUT=10000",
+                    "SWIM_PROTOCOL_PERIOD_LEN=30000",
+                    "SWIM_SUSPECT_TIMEOUT=90000",
+                ])
+            self.env_vars = BasicParameter(None, default_env_vars)
 
             # global CRT_CTX_SHARE_ADDR shared with client
             self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
