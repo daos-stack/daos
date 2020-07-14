@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -809,6 +809,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch &&
 			entry->ae_par_extent.ape_epoch != ~(0ULL)) {
 		/* Parity newer than data; nothing to do. */
+		update_vos = false;
 		goto out;
 	}
 
@@ -818,7 +819,8 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		/* Replicas constitute a full stripe. */
 		rc = agg_encode_local_parity(entry);
 		goto out;
-	if (entry->ae_par_extent.ape_epoch == ~(0ULL))
+	}
+	if (entry->ae_par_extent.ape_epoch == ~(0ULL)) {
 		update_vos = false;
 		goto out;
 	}
@@ -884,7 +886,7 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
-	D_PRINT("adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
+	D_DEBUG(DB_TRACE, "adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		agg_entry->ae_oid.id_shard);
@@ -913,13 +915,9 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	int			rc = 0;
 
-	if (!(entry->ie_recx.rx_idx & PARITY_INDICATOR))
-		rc = agg_data_extent(entry, agg_entry, ih, acts);
-	else
-		/* range filter prevents return of parity extents by RECX
-		 * iterator.
-		 */
-		D_ASSERT(false);
+	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
+
+	rc = agg_data_extent(entry, agg_entry, ih, acts);
 
 	return rc;
 }
