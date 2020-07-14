@@ -132,6 +132,9 @@ class IoConfTestBase(TestWithServers):
     def unaligned_io(self):
         """Execute the unaligned IO test steps."""
         total_sizes = self.params.get("sizes", "/run/datasize/*")
+        avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
+        file_path = os.path.join(avocao_tmp_dir, 'testfile')
+
         # Setup the pool
         self.setup_test_pool()
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
@@ -140,6 +143,6 @@ class IoConfTestBase(TestWithServers):
         for record_size in total_sizes:
             print("Start test for record size = {}".format(record_size))
             # Create unaligned test data set
-            gen_unaligned_io_conf(record_size)
+            gen_unaligned_io_conf(record_size, file_path)
             # Run test file using daos_run_io_conf
             io_conf.run_conf()
