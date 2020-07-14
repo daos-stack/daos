@@ -51,21 +51,16 @@ class DmgStorageScanSCMTest(TestWithServers):
         """
         # Use --verbose and obtain the SCM Namespace values such as pmem0,
         # pmem1.
-        output = self.get_dmg_command().get_output("storage_scan_verbose")
-        pmem_names = []
-        for i in range(1, len(output)):
-            if output[i][1] == "":
-                break
-            pmem_names.append(output[i][1])
+        data = self.get_dmg_command().storage_scan(verbose=True)
+        pmem_names = data["scm_namespaces"]
         # Verifies that all namespaces exist under /dev.
         RC_SUCCESS = 0
         for pmem_name in pmem_names:
-            lscmd = "ls /dev/" + pmem_name
+            lscmd = "{} {}".format("ls", os.path.join("/dev", pmem_name))
             # rc is a dictionary where return code is the key.
             rc = pcmd(hosts=self.hostlist_servers, command=lscmd)
             self.assertTrue(RC_SUCCESS in rc)
 
         # Call without verbose and verify the namespace value.
-        output = self.get_dmg_command().get_output("storage_scan")
-        controller_count = output[0][3]
-        self.assertEqual(int(controller_count), len(pmem_names))
+        data = self.get_dmg_command().storage_scan()
+        self.assertEqual(int(data["namespaces"]), len(pmem_names))

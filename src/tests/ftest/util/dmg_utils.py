@@ -64,8 +64,8 @@ class DmgCommand(DmgCommandBase):
             verbose (bool, optional): create verbose output. Defaults to False.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: Values obtained from stdout in dictionary. Most of the values
+                are in list.
 
         Raises:
             CommandFailure: if the dmg storage scan command fails.
@@ -74,22 +74,74 @@ class DmgCommand(DmgCommandBase):
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("scan")
         self.sub_command_class.sub_command_class.verbose.value = verbose
-        return self._get_result()
+        self.result = self._get_result()
 
-    def storage_scan_verbose(self):
-        """Get the result of the dmg storage scan command with -v option.
+        if verbose:
+            vals = re.findall(
+                r"--------\n([a-z0-9-]+)\n--------|"
+                r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
+                r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
+                r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
+                r"[ ]+([A-Z]+)\n", self.result.stdout)
 
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            data = {}
+            data["host"] = vals[0][0]
 
-        Raises:
-            CommandFailure: if the dmg storage scan command fails.
-        """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("scan")
-        self.sub_command_class.sub_command_class.verbose.value = True
-        return self._get_result()
+            scm_namespaces = []
+            scm_socket_ids = []
+            scm_capacity_vals = []
+            scm_capacity_units = []
+            i = 1
+            while i < len(vals[0]):
+                if vals[i][1] == "":
+                    break
+                scm_namespaces.append(vals[i][1])
+                scm_socket_ids.append(vals[i][2])
+                scm_capacity_vals.append(vals[i][3])
+                scm_capacity_units.append(vals[i][4])
+                i += 1
+            data["scm_namespaces"] = scm_namespaces
+            data["scm_socket_ids"] = scm_socket_ids
+            data["scm_capacity_vals"] = scm_capacity_vals
+            data["scm_capacity_units"] = scm_capacity_units
+
+            pci_addrs = []
+            models = []
+            fw_revisions = []
+            nvme_socket_ids = []
+            nvme_capacity_vals = []
+            nvme_capacity_units = []
+            while i < len(vals):
+                pci_addrs.append(vals[i][5])
+                models.append("{} {}".format(vals[i][6], vals[i][7]))
+                fw_revisions.append(vals[i][8])
+                nvme_socket_ids.append(vals[i][9])
+                nvme_capacity_vals.append(vals[i][10])
+                nvme_capacity_units.append(vals[i][11])
+                i += 1
+            data["pci_addrs"] = pci_addrs
+            data["models"] = models
+            data["fw_revisions"] = fw_revisions
+            data["nvme_socket_ids"] = nvme_socket_ids
+            data["nvme_capacity_vals"] = nvme_capacity_vals
+            data["nvme_capacity_units"] = nvme_capacity_units
+
+            return data
+
+        # Without verbose.
+        vals = re.findall(
+            r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+" 
+            r"namespaces\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+controller",
+            output)
+        return {
+            "hosts": vals[0][0],
+            "scm_total_val": vals[0][1],
+            "scm_total_unit": vals[0][2],
+            "namespaces": vals[0][3],
+            "nvme_total_val": vals[0][4],
+            "nvme_total_unit": vals[0][5],
+            "controller": vals[0][6]
+        }
 
     def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
