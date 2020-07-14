@@ -130,7 +130,7 @@ reset_agg_pos(vos_iter_type_t type, struct ec_agg_entry *agg_entry)
 		break;
 	default:
 		break;
-        }
+	}
 }
 
 /* Compare function for keys.  Used to reset iterator position.
@@ -351,7 +351,8 @@ agg_fetch_data_stripe(struct ec_agg_entry *entry)
 	iod.iod_nr = 1;
 	iod.iod_recxs = &recx;
 	entry->ae_sgl->sg_nr = 1;
-	entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_len = len * k * entry->ae_rsize;
+	entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_len =
+						len * k * entry->ae_rsize;
 
 	rc = vos_obj_fetch(entry->ae_chdl, entry->ae_oid,
 			   entry->ae_cur_stripe.as_hi_epoch,
@@ -644,9 +645,9 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 	if (rc)
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 out:
-	if( recxs != NULL)
+	if (recxs != NULL)
 		D_FREE(recxs);
-	if( sgl.sg_iovs != NULL)
+	if (sgl.sg_iovs != NULL)
 		D_FREE(sgl.sg_iovs);
 	return rc;
 }
@@ -654,7 +655,7 @@ out:
 /* Performs an incremental update of the parity for the stripe.
  */
 static int
-agg_update_parity(struct ec_agg_entry *entry, uint8_t* bit_map,
+agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 		  unsigned int cell_cnt)
 {
 	struct obj_ec_codec	*codec;
@@ -688,7 +689,7 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t* bit_map,
 		rc = xor_gen(3, cell_bytes, (void **)vects);
 		if (rc)
 			goto out;
-		while(!isset(bit_map, j))
+		while (!isset(bit_map, j))
 			j++;
 		ec_encode_data_update(cell_bytes, k, p, j, codec->ec_gftbls,
 				      diff, parity_bufs);
@@ -863,7 +864,7 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL)
 			agg_process_stripe(agg_entry);
 		agg_entry->ae_cur_stripe.as_stripenum =
-			agg_stripenum(agg_entry,entry->ie_recx.rx_idx);
+			agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
 	}
 	D_ALLOC_PTR(extent);
 	if (extent == NULL) {
@@ -897,6 +898,7 @@ agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
 	 unsigned int *acts)
 {
 	int rc = 0;
+
 	if (agg_entry->ae_cur_stripe.as_extent_cnt)
 		agg_process_stripe(agg_entry);
 
@@ -907,7 +909,7 @@ agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
  */
 static int
 agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
-       struct ec_agg_entry *agg_entry, unsigned int *acts)
+	struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
 	int			rc = 0;
 
@@ -932,11 +934,11 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
 	int			 rc = 0;
 
-	switch(type) {
+	switch (type) {
 	case VOS_ITER_DKEY:
 		rc = agg_dkey(ih, entry, agg_entry, acts);
 		break;
-        case VOS_ITER_AKEY:
+	case VOS_ITER_AKEY:
 		rc = agg_akey(ih, entry, agg_entry, acts);
 		break;
 	case VOS_ITER_RECX:
@@ -959,10 +961,10 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
 	int			 rc = 0;
 
-	switch(type) {
+	switch (type) {
 	case VOS_ITER_DKEY:
 		break;
-        case VOS_ITER_AKEY:
+	case VOS_ITER_AKEY:
 		rc = agg_akey_post(ih, entry, agg_entry, acts);
 		break;
 	case VOS_ITER_RECX:
@@ -1045,7 +1047,7 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
 	if (rc == 1) {
-		if ( agg_param->ap_agg_entry == NULL) {
+		if (agg_param->ap_agg_entry == NULL) {
 			D_ALLOC_PTR(agg_param->ap_agg_entry);
 			if (entry == NULL) {
 				rc = -DER_NOMEM;
@@ -1190,8 +1192,7 @@ out:
 
 /* Public API call. Invoked from aggregation ULT  (container/srv_target.c).
  * Call to committed transaction table driven scan will also be called from
- * this 
- *
+ * this function.
  */
 int
 ds_obj_ec_aggregate(struct ds_cont_child *cont)
