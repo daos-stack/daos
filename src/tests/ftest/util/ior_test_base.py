@@ -216,7 +216,7 @@ class IorTestBase(TestWithServers):
                 self.mpirun.process, self.ior_cmd):
             self.fail("Exiting Test: Subprocess not running")
 
-    def run_ior(self, manager, processes, intercept=None):
+    def run_ior(self, manager, processes, intercept=None, display_space=True):
         """Run the IOR command.
 
         Args:
@@ -232,7 +232,8 @@ class IorTestBase(TestWithServers):
         manager.assign_processes(processes)
         manager.assign_environment(env)
         try:
-            self.pool.display_pool_daos_space()
+            if display_space:
+                self.pool.display_pool_daos_space()
             out = manager.run()
 
             if not self.subprocess:
@@ -244,7 +245,7 @@ class IorTestBase(TestWithServers):
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            if not self.subprocess:
+            if not self.subprocess and display_space:
                 self.pool.display_pool_daos_space()
 
     def stop_ior(self):

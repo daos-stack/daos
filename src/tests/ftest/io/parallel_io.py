@@ -37,25 +37,6 @@ from fio_test_base import FioBase
 from ior_test_base import IorTestBase
 
 
-def statvfs_pool(pool_obj, path):
-    """Method to obtain free space using statvfs
-
-      Args:
-        pool_obj (list): List of pool objects.
-        path (str): path for which free space needs to be obtained for.
-
-      Returns:
-        List containing free space info for each pool supplied in pool_obj.
-    """
-    statvfs_list = []
-    for _, pool in enumerate(pool_obj):
-        dfuse_pool_dir = path + "/" + pool.uuid
-        statvfs_info = os.statvfs(dfuse_pool_dir).f_bfree
-        statvfs_list.append(statvfs_info)
-
-    return statvfs_list
-
-
 class ParallelIo(FioBase, IorTestBase):
     """Base Parallel IO test class.
 
@@ -138,6 +119,25 @@ class ParallelIo(FioBase, IorTestBase):
                            self.dfuse.hosts,
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
+
+    def statvfs_pool(self, path):
+        """Method to obtain free space using statvfs
+
+          Args:
+            pool_obj (list): List of pool objects.
+            path (str): path for which free space needs to be obtained for.
+
+          Returns:
+            List containing free space info for each pool supplied in pool_obj.
+        """
+        statvfs_list = []
+        for _, pool in enumerate(self.pool):
+            dfuse_pool_dir = path + "/" + pool.uuid
+            statvfs_info = os.statvfs(dfuse_pool_dir).f_bfree
+            statvfs_list.append(statvfs_info)
+            self.log.info("Statvfs List Output: %s", statvfs_list)
+
+        return statvfs_list
 
     def test_parallelio(self):
         """Jira ID: DAOS-3775.
@@ -270,8 +270,7 @@ class ParallelIo(FioBase, IorTestBase):
         self.start_dfuse()
 
         # record free space using statvfs before any data is written.
-        statvfs_info_before = statvfs_pool(self.pool,
-                                           self.dfuse.mount_dir.value)
+        statvfs_info_before = self.statvfs_pool(self.dfuse.mount_dir.value)
 
         # Create 10 containers for each pool. Container create process cannot
         # be parallelised as different container create could complete at
@@ -318,7 +317,8 @@ class ParallelIo(FioBase, IorTestBase):
                     self.server_group, pool, self.container[cont_num].uuid)
                 thread = threading.Thread(
                     target=self.run_ior,
-                    args=(self.get_ior_job_manager_command(), processes))
+                    args=(self.get_ior_job_manager_command(), processes, None,
+                          False))
                 threads.append(thread)
                 thread.start()
 
@@ -327,8 +327,8 @@ class ParallelIo(FioBase, IorTestBase):
             job.join()
 
         # Record free space after io
-        statvfs_before_cont_destroy = statvfs_pool(
-            self.pool, self.dfuse.mount_dir.value)
+        statvfs_before_cont_destroy = self.statvfs_pool(
+            self.dfuse.mount_dir.value)
 
         # Destroy half of the containers from each pool
         pfinal = 0
@@ -346,8 +346,8 @@ class ParallelIo(FioBase, IorTestBase):
             destroy_job.join()
 
         # Record free space after container destroy.
-        statvfs_info_after_cont_destroy = statvfs_pool(
-            self.pool, self.dfuse.mount_dir.value)
+        statvfs_info_after_cont_destroy = self.statvfs_pool(
+            self.dfuse.mount_dir.value)
 
         # Calculate the expected space to be returned after containers
         # are destroyed.
@@ -372,6 +372,6 @@ class ParallelIo(FioBase, IorTestBase):
                                   statvfs_info_after_cont_destroy)
                     self.fail("Aggregation did not complete as expected")
                 time.sleep(60)
-                statvfs_info_after_cont_destroy = statvfs_pool(
-                    self.pool, self.dfuse.mount_dir.value)
+                statvfs_info_after_cont_destroy = self.statvfs_pool(
+                    self.dfuse.mount_dir.value)
                 counter += 1
