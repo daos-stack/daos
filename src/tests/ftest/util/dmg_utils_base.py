@@ -246,7 +246,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool drain command object."""
-                super(g
+                super(
                     DmgCommandBase.PoolSubCommand.DrainSubCommand,
                     self).__init__(
                         "/run/dmg/pool/drain/*", "drain")
