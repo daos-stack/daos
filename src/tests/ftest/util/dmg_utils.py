@@ -27,7 +27,6 @@ from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
-import os
 from collections import defaultdict
 
 from command_utils_base import CommandFailure
