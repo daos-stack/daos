@@ -93,7 +93,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	dfuse_show_flags(fs_handle, conn->want);
 
-	conn->max_background = 8;
+	conn->max_background = 16;
+	conn->congestion_threshold = 8;
 
 	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
 	DFUSE_TRA_INFO(fs_handle,

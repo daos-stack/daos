@@ -58,7 +58,7 @@ fio:
         blocksize: '256B'
         size: '1M'
       bs_1M:
-        blocksize: '1M'
+        blocksize: '256K'
         size: '1G'
     read_write: !mux
       sequential:
