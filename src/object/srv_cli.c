@@ -144,7 +144,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 int
 dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	      unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-	      daos_iom_t *maps)
+	      daos_iom_t *maps, bool to_leader)
 {
 	tse_task_t	*task;
 	daos_handle_t	coh, th;
@@ -155,7 +155,8 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
-	rc = dc_obj_fetch_task_create(oh, th, 0, dkey, nr, DIOF_TO_LEADER,
+	rc = dc_obj_fetch_task_create(oh, th, 0, dkey, nr,
+				      to_leader ? DIOF_TO_LEADER : 0,
 				      iods, sgls, maps, NULL, NULL,
 				      dsc_scheduler(), &task);
 	if (rc)
