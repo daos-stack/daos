@@ -1045,7 +1045,7 @@ static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 }
 
 int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
-			daos_mgmt_pool_info_t *pools_out)
+			daos_mgmt_pool_info_t *pools)
 {
 	struct json_object	*parsed_json;
 	struct json_object	*pool_list;
@@ -1053,14 +1053,14 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 	struct json_object	*uuid;
 	struct json_object	*rep_ranks;
 	struct json_object	*rank;
+	daos_size_t		npools_in;
 	char	uuid_str[DAOS_UUID_STR_SIZE];
-	daos_mgmt_pool_info_t   *pools = NULL;
 	int i, j;
-//	int json_obj_type;
 	int rl_nr;
 
 	if (npools == NULL)
 		return-DER_INVAL;
+	npools_in = *npools;
 
 	parsed_json = daos_dmg_json_contents("dmg pool list -i -j > /tmp/daos_dmg.json");
 	if (parsed_json == NULL) {
@@ -1069,8 +1069,6 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 	}
 
 	json_object_object_get_ex(parsed_json, "Pools", &pool_list);
-//	json_obj_type = json_object_get_type(pool_list);
-//	print_message( "Pools obj type %s\n", json_type_to_name(json_obj_type));
 	if (pool_list == NULL)
 		*npools = 0;
 	else
@@ -1078,7 +1076,12 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 	print_message("#pools %lu\n", *npools);
 
 	if (pools == NULL)
+		/* no need to fill up a NULL pools buffer */
 		return 0;
+	else if (npools_in && (npools_in < *npools))
+		/* For non-NULL pools, the allocated non-zero buffer size is
+		   not sufficient */
+		return -DER_TRUNC;
 
 	for (i=0; i<*npools; i++) {
 		pool = json_object_array_get_idx(pool_list, i);

@@ -245,9 +245,9 @@ find_pool(void **state, daos_mgmt_pool_info_t *pool)
 }
 
 /* Verify pool info returned by DAOS API
- * rc_ret:	return code from daos_mgmt_list_pools()
- * npools_in:	npools input argument to daos_mgmt_list_pools()
- * npools_out:	npools output argument value after daos_mgmt_list_pools()
+ * rc_ret:	return code from daos_json_list_pool()
+ * npools_in:	npools input argument to daos_json_list_pool()
+ * npools_out:	npools output argument value after daos_json_list_pool()
  */
 static void
 verify_pool_info(void **state, int rc_ret, daos_size_t npools_in,
@@ -271,7 +271,7 @@ verify_pool_info(void **state, int rc_ret, daos_size_t npools_in,
 
 	print_message("verifying pools[0..%zu], nfilled=%zu\n", npools_in,
 		      nfilled);
-	/* Walk through pools[] items daos_mgmt_list_pools() was told about */
+	/* Walk through pools[] items daos_json_list_pool() was told about */
 	for (i = 0; i < npools_in; i++) {
 		if (i < nfilled) {
 			/* pool is found in the setup state */
@@ -306,10 +306,6 @@ list_pools_test(void **state)
 	npools = npools_orig = 0xABC0; /* Junk value (e.g., uninitialized) */
 	/* test only */
 	rc = daos_json_list_pool(arg, &npools, NULL /* pools */);
-#if 0
-	rc = daos_mgmt_list_pools(arg->group, &npools, NULL /* pools */,
-			NULL /* ev */);
-#endif
 	assert_int_equal(rc, 0);
 	verify_pool_info(state, rc, npools_orig, NULL /* pools */, npools);
 	print_message("success t%d: output npools=%zu\n", tnum++,
@@ -324,10 +320,7 @@ list_pools_test(void **state)
 	 * and that many items in pools[] filled
 	 *****/
 	npools = npools_alloc;
-        rc = daos_json_list_pool(arg, &npools, NULL /* pools */);
-#if 0
-	rc = daos_mgmt_list_pools(arg->group, &npools, pools, NULL /* ev */);
-#endif
+        rc = daos_json_list_pool(arg, &npools, pools);
 	assert_int_equal(rc, 0);
 	verify_pool_info(state, rc, npools_alloc, pools, npools);
 	clean_pool_info(npools_alloc, pools);
@@ -335,7 +328,7 @@ list_pools_test(void **state)
 
 	/***** Test: provide npools=0, non-NULL pools  ****/
 	npools = 0;
-	rc = daos_mgmt_list_pools(arg->group, &npools, pools, NULL /* ev */);
+	rc = daos_json_list_pool(arg, &npools, pools);
 	assert_int_equal(rc, 0);
 	assert_int_equal(npools, lparg->nsyspools);
 	print_message("success t%d: npools=0, non-NULL pools[] rc=%d\n",
@@ -361,8 +354,7 @@ list_pools_test(void **state)
 
 		/* Test: Exact size buffer */
 		npools = npools_alloc;
-		rc = daos_mgmt_list_pools(arg->group, &npools, pools,
-					  NULL /* ev */);
+		rc = daos_json_list_pool(arg, &npools, pools);
 		assert_int_equal(rc, 0);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
 
@@ -379,8 +371,7 @@ list_pools_test(void **state)
 
 		/* Test: Under-sized buffer */
 		npools = npools_alloc;
-		rc = daos_mgmt_list_pools(arg->group, &npools, pools,
-					  NULL /* ev */);
+		rc = daos_json_list_pool(arg, &npools, pools);
 		assert_int_equal(rc, -DER_TRUNC);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
 		print_message("success t%d: pools[] under-sized\n", tnum++);
