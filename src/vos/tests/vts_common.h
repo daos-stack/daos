@@ -129,4 +129,10 @@ int run_ilog_tests(const char *cfg);
 int run_csum_extent_tests(const char *cfg);
 int run_mvcc_tests(const char *cfg);
 
+void
+vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
+	      uint64_t dkey_hash, struct dtx_handle **dthp);
+void
+vts_dtx_end(struct dtx_handle *dth);
+
 #endif

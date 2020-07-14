@@ -426,6 +426,35 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
+ * Fetch values for the given keys and their indices.
+ * If output buffer is not provided in \a sgl, then this function returns
+ * the directly accessible addresses of record data, upper layer can directly
+ * read from these addresses (rdma mode).
+ *
+ * TODO: add more detail descriptions for punched or missing records.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	Object ID
+ * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
+ *			is provided by \a iods.
+ * \param flags	[IN]	Fetch flags
+ * \param dkey	[IN]	Distribution key.
+ * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
+ * \param iods	[IN/OUT]
+ *			Array of I/O descriptors. The returned record
+ *			sizes are also stored in this parameter.
+ * \param sgls	[OUT]	Scatter/gather list to store the returned record values
+ *			or value addresses.
+ * \param dth	[IN]	Optional dtx handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+		 daos_iod_t *iods, d_sg_list_t *sgls, struct dtx_handle *dth);
+
+/**
  * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
@@ -458,6 +487,43 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	       unsigned int iod_nr, daos_iod_t *iods,
 	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls);
+
+
+/**
+ * Update records for the specified object.
+ * If input buffer is not provided in \a sgl, then this function returns
+ * the new allocated addresses to store the records, upper layer can
+ * directly write data into these addresses (rdma mode).
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	object ID
+ * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
+ *			range is provided by \a iods (kvl::kv_epr).
+ * \param pm_ver [IN]   Pool map version for this update, which will be
+ *			used during rebuild.
+ * \param flags	[IN]	Update flags
+ * \param dkey	[IN]	Distribution key.
+ * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
+ * \param iods [IN]	Array of I/O descriptors.
+ * \param iods_csums [IN]
+ *			Array of iod_csums (1 for each iod). Will be NULL
+ *			if csums are disabled.
+ * \param sgls	[IN/OUT]
+ *			Scatter/gather list to pass in record value buffers,
+ *			if caller sets the input buffer size only without
+ *			providing input buffers, then VOS will allocate spaces
+ *			for the records and return addresses of them, so upper
+ *			layer stack can transfer data via rdma.
+ * \param dth	[IN]	Optional transaction handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_update_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		  uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
+		  unsigned int iod_nr, daos_iod_t *iods,
+		  struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls,
+		  struct dtx_handle *dth);
 
 /**
  * Remove all array values within the specified range.  If the specified
@@ -583,7 +649,7 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * Prepare IO sink buffers for the specified arrays of the given
  * object. The caller can directly use thse buffers for RMA write.
  *
- * The upper layer must explicitly call \a vos_fetch_end to finalise the
+ * The upper layer must explicitly call \a vos_update_end to finalise the
  * ZC I/O and release resources.
  *
  * \param coh	[IN]	Container open handle

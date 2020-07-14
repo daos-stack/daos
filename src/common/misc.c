@@ -628,6 +628,17 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 }
 
 void
+daos_dti_gen_unique(struct dtx_id *dti)
+{
+	uuid_t uuid;
+
+	uuid_generate(uuid);
+
+	uuid_copy(dti->dti_uuid, uuid);
+	dti->dti_hlc = crt_hlc_get();
+}
+
+void
 daos_dti_gen(struct dtx_id *dti, bool zero)
 {
 	static __thread uuid_t uuid;

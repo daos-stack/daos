@@ -193,18 +193,18 @@ update_read_timestamps(struct vos_ts_set *ts_set, daos_epoch_t epoch,
 	}
 
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_CONT, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
 
 	if (ts_set->ts_init_count == 2) {
-		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
+		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
 		return;
 	}
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
 	if (ts_set->ts_init_count == 3) {
-		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
+		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
 		return;
 	}
 	for (akey_idx = 0; akey_idx < akey_nr; akey_idx++) {
@@ -212,8 +212,8 @@ update_read_timestamps(struct vos_ts_set *ts_set, daos_epoch_t epoch,
 						  akey_idx);
 		if (entry == NULL)
 			return;
-		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
-		entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
+		vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
 	}
 }
 
@@ -241,7 +241,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
-	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr);
+	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr,
+				 dth ? &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto reset;
 

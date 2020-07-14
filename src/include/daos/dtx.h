@@ -134,6 +134,7 @@ struct dtx_id {
 	uint64_t		dti_hlc;
 };
 
+void daos_dti_gen_unique(struct dtx_id *dti);
 void daos_dti_gen(struct dtx_id *dti, bool zero);
 
 static inline void

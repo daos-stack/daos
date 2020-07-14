@@ -1128,8 +1128,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 
 		rc = vos_update_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
-			      orw->orw_epoch,
-			      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
+			      orw->orw_epoch, orw->orw_api_flags,
 			      dkey, orw->orw_nr, iods,
 			      iod_csums, &ioh, dth);
 		if (rc) {
@@ -1143,7 +1142,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bool				 ec_deg_fetch;
 		struct daos_recx_ep_list	*shadows = NULL;
 
-		cond_flags = orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS;
+		cond_flags = orw->orw_api_flags;
 		bulk_op = CRT_BULK_PUT;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
@@ -2192,7 +2191,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 	case DAOS_OBJ_RPC_TGT_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
-				   VOS_OF_USE_TIMESTAMPS, NULL, 0, NULL, dth);
+				   0, NULL, 0, NULL, dth);
 		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -2207,7 +2206,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 		dkey = &((daos_key_t *)opi->opi_dkeys.ca_arrays)[0];
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
-				   opi->opi_api_flags | VOS_OF_USE_TIMESTAMPS,
+				   opi->opi_api_flags,
 				   dkey, opi->opi_akeys.ca_count,
 				   opi->opi_akeys.ca_arrays, dth);
 		break;
@@ -2542,9 +2541,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
-			       VOS_USE_TIMESTAMPS | okqi->okqi_api_flags,
-			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
-			       &dth);
+			       okqi->okqi_api_flags, okqi->okqi_epoch, dkey,
+			       akey, &okqo->okqo_recx, &dth);
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
