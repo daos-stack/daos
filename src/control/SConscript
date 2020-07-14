@@ -3,6 +3,7 @@
 #pylint: disable=too-many-locals
 import sys
 import os
+import daos_build
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
@@ -160,14 +161,12 @@ def scons():
 
     # Version-controlled DAOS Go source directory src/control
     gosrc = Dir('.').srcnode().abspath
-    cartpath = Dir('#/src/cart/src/include').srcnode().abspath
 
-    prereqs.require(denv, 'ofi', 'hwloc')
+    prereqs.require(denv, 'ofi', 'hwloc', 'spdk')
 
-    denv.AppendENVPath("CGO_LDFLAGS",
-                       denv.subst("$_LIBDIRFLAGS "
-                                  "$_RPATH"),
-                       sep=" ")
+    old_cgold = denv["ENV"].get("CGO_LDFLAGS", "")
+    # Sets CGO_LDFLAGS for rpath options
+    daos_build.add_rpaths(denv, "..", True, True)
 
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"),
                        sep=" ")
@@ -189,16 +188,17 @@ def scons():
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access (need for clang build).
-    senv.AppendENVPath("CGO_LDFLAGS", cgolibdirs + \
-                       " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev" + \
-                       " -lspdk_copy -lrte_mempool  -lrte_mempool_ring" + \
-                       " -lrte_bus_pci -lrte_pci -lrte_ring -lrte_mbuf" + \
-                       " -lrte_eal -lrte_kvargs -lspdk_bdev_aio" + \
-                       " -lspdk_bdev_nvme -lspdk_bdev_malloc -lspdk_conf" + \
-                       " -lspdk_blob -lspdk_nvme -lspdk_util -lspdk_json" + \
-                       " -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
-                       " -lspdk_sock -lspdk_log -lspdk_notify" + \
-                       " -lspdk_blob_bdev -lnuma -ldl -lisal", sep=" ")
+    ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev" + \
+             " -lspdk_copy -lrte_mempool  -lrte_mempool_ring" + \
+             " -lrte_bus_pci -lrte_pci -lrte_ring -lrte_mbuf" + \
+             " -lrte_eal -lrte_kvargs -lspdk_bdev_aio" + \
+             " -lspdk_bdev_nvme -lspdk_bdev_malloc -lspdk_conf" + \
+             " -lspdk_blob -lspdk_nvme -lspdk_util -lspdk_json" + \
+             " -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
+             " -lspdk_sock -lspdk_log -lspdk_notify" + \
+             " -lspdk_blob_bdev -lnuma -ldl -lisal"
+
+    senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     senv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SPDK_PREFIX/include "
@@ -211,13 +211,22 @@ def scons():
 
     serverbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_server",
                                "daos_server")
-    adminbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_admin",
+
+    #Admin binary is expected to be relocated so origin based paths are useless
+    aenv = senv.Clone()
+    aenv["ENV"]["CGO_LDFLAGS"] = old_cgold
+    aenv.Replace(RPATH=[])
+    # Sets CGO_LDFLAGS for rpath
+    daos_build.add_rpaths(aenv, None, True, True)
+    aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
+    adminbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin",
                               "daos_admin")
 
     AlwaysBuild([serverbin, adminbin])
 
     if is_firmware_mgmt_build(denv):
-        fwbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_firmware",
+        print("(EXPERIMENTAL) Building DAOS firmware tools")
+        fwbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_firmware",
                                "daos_firmware")
         AlwaysBuild([fwbin])
 

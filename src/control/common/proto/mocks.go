@@ -178,6 +178,10 @@ func (m *MockMgmtSvcClient) PoolExclude(ctx context.Context, req *mgmtpb.PoolExc
 	return &mgmtpb.PoolExcludeResp{}, nil
 }
 
+func (m *MockMgmtSvcClient) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq, o ...grpc.CallOption) (*mgmtpb.PoolDrainResp, error) {
+	return &mgmtpb.PoolDrainResp{}, nil
+}
+
 func (m *MockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
 	if m.Cfg.PoolQueryErr != nil {
 		return nil, m.Cfg.PoolQueryErr
@@ -220,25 +224,10 @@ func (m *MockMgmtSvcClient) BioHealthQuery(ctx context.Context, req *mgmtpb.BioH
 	return &mgmtpb.BioHealthResp{}, nil
 }
 
-func (m *MockMgmtSvcClient) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq, o ...grpc.CallOption) (*mgmtpb.SmdDevResp, error) {
-
-	// return successful SMD device list
-	// initialize with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.SmdDevResp{}, nil
-}
-
-func (m *MockMgmtSvcClient) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq, o ...grpc.CallOption) (*mgmtpb.SmdPoolResp, error) {
-
-	// return successful SMD pool list
-	// initialize with zero values indicating mgmt.CTL_SUCCESS
-	return &mgmtpb.SmdPoolResp{}, nil
-}
-
-func (m *MockMgmtSvcClient) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
-
+func (m *MockMgmtSvcClient) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq, o ...grpc.CallOption) (*mgmtpb.SmdQueryResp, error) {
 	// return successful device state
 	// initialize with zero values indicating mgmt.CTRL_SUCCESS
-	return &mgmtpb.DevStateResp{}, nil
+	return &mgmtpb.SmdQueryResp{}, nil
 }
 
 func (m *MockMgmtSvcClient) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {

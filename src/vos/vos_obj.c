@@ -253,7 +253,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
 		read_conflict = true;
 
-	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	rc = vos_tx_begin(dth, vos_cont2umm(cont));
 	if (rc != 0)
 		goto reset;
 
@@ -261,7 +261,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (dth != NULL && dth->dth_dti_cos_count > 0) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
-			D_GOTO(reset, rc = -DER_NOMEM);
+			D_GOTO(abort, rc = -DER_NOMEM);
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count,
@@ -288,21 +288,18 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc == 0 && read_conflict)
 		rc = -DER_TX_RESTART;
 
-	if (dth != NULL && rc == 0)
-		rc = vos_dtx_prepared(dth);
+abort:
+	rc = vos_tx_end(dth, vos_cont2umm(cont), rc);
 
-	rc = umem_tx_end(vos_cont2umm(cont), rc);
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 
 reset:
-	if (rc != 0) {
-		vos_dtx_cleanup_dth(dth);
+	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
-	} else if (daes != NULL) {
+	else if (daes != NULL)
 		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
-	}
 
 	D_FREE(daes);
 

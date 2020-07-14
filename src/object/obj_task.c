@@ -191,62 +191,15 @@ dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
 	return 0;
 }
 
-static void
-obj_fetch_init_args(daos_obj_fetch_t *args, daos_handle_t oh, daos_handle_t th,
-		    uint64_t flags, daos_key_t *dkey, unsigned int nr,
-		    daos_iod_t *iods, d_sg_list_t *sgls, void *extra_arg,
-		    daos_iom_t *maps)
-{
-	args->oh	= oh;
-	args->th	= th;
-	args->flags	= flags;
-	args->dkey	= dkey;
-	args->nr	= nr;
-	args->iods	= iods;
-	args->sgls	= sgls;
-	args->extra_arg	= extra_arg;
-	args->maps	= maps;
-}
-
 int
-dc_obj_fetch_shard_task_create(daos_handle_t oh, daos_handle_t th,
-			       unsigned int flags, unsigned int shard,
-			       daos_key_t *dkey, unsigned int nr,
-			       daos_iod_t *iods, d_sg_list_t *sgls,
-			       daos_iom_t *maps, daos_event_t *ev,
-			       tse_sched_t *tse, tse_task_t **task)
-{
-	struct daos_obj_fetch_shard	*args;
-	int				 rc;
-
-	DAOS_API_ARG_ASSERT(*args, OBJ_FETCH_SHARD);
-	rc = dc_task_create(dc_obj_fetch_shard_task, tse, ev, task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(*task);
-	obj_fetch_init_args(&args->base, oh, th, 0, dkey, nr, iods, sgls, NULL,
-			    maps);
-	args->flags	= flags;
-	args->shard	= shard;
-
-	return 0;
-}
-
-int
-dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-			 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-			 d_sg_list_t *sgls, void *extra_arg,
-			 daos_iom_t *maps, daos_event_t *ev,
-			 tse_sched_t *tse, tse_task_t **task)
+dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t api_flags,
+			 daos_key_t *dkey, uint32_t nr, uint32_t extra_flags,
+			 daos_iod_t *iods, d_sg_list_t *sgls, daos_iom_t *ioms,
+			 void *extra_arg, daos_event_t *ev, tse_sched_t *tse,
+			 tse_task_t **task)
 {
 	daos_obj_fetch_t	*args;
 	int			 rc;
-
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD))
-		return dc_obj_fetch_shard_task_create(oh, th,
-				DIOF_TO_SPEC_SHARD, daos_fail_value_get(),
-				dkey, nr, iods, sgls, maps, ev, tse, task);
 
 	DAOS_API_ARG_ASSERT(*args, OBJ_FETCH);
 	rc = dc_task_create(dc_obj_fetch_task, tse, ev, task);
@@ -254,8 +207,16 @@ dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		return rc;
 
 	args = dc_task_get_args(*task);
-	obj_fetch_init_args(args, oh, th, flags, dkey, nr, iods, sgls,
-			    extra_arg, maps);
+	args->oh		= oh;
+	args->th		= th;
+	args->flags		= api_flags;
+	args->dkey		= dkey;
+	args->nr		= nr;
+	args->extra_flags	= extra_flags;
+	args->iods		= iods;
+	args->sgls		= sgls;
+	args->ioms		= ioms;
+	args->extra_arg		= extra_arg;
 
 	return 0;
 }
@@ -375,15 +336,14 @@ dc_obj_list_recx_task_create(daos_handle_t oh, daos_handle_t th,
 
 int
 dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
-			    daos_epoch_range_t *epr,
-			    daos_key_t *dkey, daos_key_t *akey,
-			    daos_size_t *size, uint32_t *nr,
-			    daos_key_desc_t *kds,
+			    daos_epoch_range_t *epr, daos_key_t *dkey,
+			    daos_key_t *akey, daos_size_t *size,
+			    uint32_t *nr, daos_key_desc_t *kds,
 			    d_sg_list_t *sgl, daos_anchor_t *anchor,
 			    daos_anchor_t *dkey_anchor,
-			    daos_anchor_t *akey_anchor,
-			    bool incr_order, daos_event_t *ev, tse_sched_t *tse,
-			    tse_task_t **task)
+			    daos_anchor_t *akey_anchor, bool incr_order,
+			    daos_event_t *ev, tse_sched_t *tse,
+			    d_iov_t *csum, tse_task_t **task)
 {
 	daos_obj_list_obj_t	*args;
 	int			rc;
@@ -406,6 +366,7 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 	args->dkey_anchor = dkey_anchor;
 	args->akey_anchor = akey_anchor;
 	args->incr_order = incr_order;
+	args->csum	= csum;
 
 	return 0;
 }

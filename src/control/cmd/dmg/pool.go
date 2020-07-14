@@ -56,6 +56,7 @@ type PoolCmd struct {
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
 	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
 	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
+	Drain        PoolDrainCmd        `command:"drain" alias:"d" description:"Drain targets from a rank"`
 	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
@@ -233,6 +234,37 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 	}
 
 	r.log.Infof("Exclude command %s\n", msg)
+
+	return err
+}
+
+// PoolDrainCmd is the struct representing the command to Drain a DAOS target.
+type PoolDrainCmd struct {
+	logCmd
+	ctlInvokerCmd
+	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to drain a target in"`
+	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be drained"`
+	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
+}
+
+// Execute is run when PoolDrainCmd subcommand is activated
+func (r *PoolDrainCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	var idxlist []uint32
+	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
+		return errors.WithMessage(err, "parsing rank list")
+	}
+
+	req := &control.PoolDrainReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
+
+	ctx := context.Background()
+	err := control.PoolDrain(ctx, r.ctlInvoker, req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	r.log.Infof("Drain command %s\n", msg)
 
 	return err
 }
