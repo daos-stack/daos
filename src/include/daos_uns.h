@@ -58,6 +58,11 @@ struct duns_attr_t {
 	daos_prop_t		*da_props;
 	/** Path is on Lustre */
 	bool			da_on_lustre;
+	/*
+	 * Path that is passed does not have daos: prefix but is direct:
+	 * (/puuid/cuuid/xyz) and does not need to parse a path UNS attrs.
+	 */
+	bool			da_no_prefix;
 };
 
 /** extended attribute name that will container the UNS info */
@@ -99,7 +104,7 @@ duns_create_path(daos_handle_t poh, const char *path,
  * libraries and to settle on a unified format for a mode where users know the
  * pool and container uuids and would just like to pass them directly instead of
  * a traditional path. The format of this path should be:
- *  DAOS~pool_uuid~container_uuid~xyz
+ *  daos://pool_uuid/container_uuid/xyz
  * xyz here can be a path relative to the root of a POSIX container if the user
  * is accessing a posix container, or it can be empty for example in the case of
  * an HDF5 file.
