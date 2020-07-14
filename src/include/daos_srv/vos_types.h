@@ -32,6 +32,11 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
+struct dtx_rsrvd_uint {
+	void			*dru_scm;
+	d_list_t		dru_nvme;
+};
+
 enum dtx_cos_flags {
 	DCF_SHARED	= (1 << 0),
 };
@@ -208,12 +213,14 @@ enum {
 	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
 	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
-	/** Indicates the operation should check mvcc timestamps */
-	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 8),
+	VOS_OF_REPLAY_PC	= (1 << 7),
 	/* critical update - skip checks on SCM system/held space */
-	VOS_OF_CRIT		= (1 << 9),
+	VOS_OF_CRIT		= (1 << 8),
+	/** Instead of update or punch of extents, remove all extents
+	 * under the specified range. Intended for internal use only.
+	 */
+	VOS_OF_REMOVE		= (1 << 9),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -237,7 +244,6 @@ enum {
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
-D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */
 enum {
