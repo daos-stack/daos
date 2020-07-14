@@ -20,6 +20,7 @@ def scons():
 		      '-lrte_pci', '-lrte_ring', '-lrte_mbuf', '-lrte_eal', \
 		      '-lrte_kvargs', \
 		      '-Wl,--no-whole-archive'])
+    denv.AppendUnique(CPPPATH=['/usr/include/dpdk'])
 
     # SPDK shared libs
     libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']

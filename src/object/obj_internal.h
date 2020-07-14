@@ -373,14 +373,23 @@ void ds_obj_sync_handler(crt_rpc_t *rpc);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 static inline uint64_t
-obj_dkey2hash(daos_key_t *dkey)
+obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 {
+	uint16_t	ofeats;
 	/* return 0 for NULL dkey, for example obj punch and list dkey */
 	if (dkey == NULL)
 		return 0;
 
-	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
-			       dkey->iov_len, 5731);
+	ofeats = daos_obj_id2feat(oid);
+	if (ofeats & DAOS_OF_DKEY_UINT64) {
+		uint64_t *ptr = (uint64_t *)dkey->iov_buf;
+
+		D_ASSERT(dkey->iov_len == sizeof(*ptr));
+		return *ptr;
+	} else {
+		return d_hash_murmur64((unsigned char *)dkey->iov_buf,
+					dkey->iov_len, 5731);
+	}
 }
 
 int  obj_utils_init(void);

@@ -1189,7 +1189,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		unsigned char	*buf = dkey->iov_buf;
 
 		buf[0] += orw->orw_oid.id_shard + 1;
-		orw->orw_dkey_hash = obj_dkey2hash(dkey);
+		orw->orw_dkey_hash = obj_dkey2hash(orw->orw_oid.id_pub, dkey);
 	}
 
 	D_DEBUG(DB_TRACE,
