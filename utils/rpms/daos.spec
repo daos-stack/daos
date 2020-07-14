@@ -22,7 +22,7 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
-BuildRequires: libpsm2-devel
+BuildRequires: json-c-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
