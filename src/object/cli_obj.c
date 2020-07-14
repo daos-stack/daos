@@ -1332,6 +1332,8 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	daos_size_t		sgls_size;
 	crt_bulk_perm_t		bulk_perm;
 	int			rc = 0;
+	int			i;
+	int			j;
 
 	if (obj_auxi->io_retry)
 		return 0;
@@ -1344,8 +1346,15 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   obj_auxi);
-	}
+	} else if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+		/* unset data len for inline fetch */
+		for (i = 0; i < nr; i++) {
+			d_sg_list_t *sgl = &sgls[i];
 
+			for (j = 0; sgl->sg_iovs && j < sgl->sg_nr; j++)
+				sgl->sg_iovs[j].iov_len = 0;
+		}
+	}
 	return rc;
 }
 
@@ -2491,7 +2500,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 		goto out_task;
 	}
 
-	dkey_hash = obj_dkey2hash(args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 	obj_auxi->spec_shard = (flags & DIOF_TO_SPEC_SHARD) != 0;
 	if (obj_auxi->spec_shard)
 		D_ASSERT(!obj_auxi->to_leader);
@@ -2592,7 +2601,7 @@ dc_obj_update(tse_task_t *task)
 		goto out_task;
 	}
 
-	dkey_hash = obj_dkey2hash(args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_UPDATE, NULL, args->dkey,
 			      dkey_hash, obj_auxi->reasb_req.tgt_bitmap,
 			      map_ver, false, false, &obj_auxi->req_tgts);
@@ -2680,7 +2689,7 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 		D_GOTO(out_task, rc);
 	}
 
-	dkey_hash = obj_dkey2hash(args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 	if (args->dkey == NULL) {
 		D_ASSERT(args->dkey_anchor != NULL);
 
@@ -2830,7 +2839,7 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 		goto out_task;
 	}
 
-	dkey_hash = obj_dkey2hash(api_args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	rc = obj_req_get_tgts(obj, opc, NULL, api_args->dkey, dkey_hash,
 			      NIL_BITMAP, map_ver, false, false,
 			      &obj_auxi->req_tgts);
@@ -3112,7 +3121,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		D_GOTO(out_task, rc);
 
 	D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
-	dkey_hash = obj_dkey2hash(api_args->dkey);
+	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
 		replicas = obj_get_replicas(obj);
 		shard_first = 0;
