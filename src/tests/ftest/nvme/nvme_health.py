@@ -48,19 +48,20 @@ class NvmeHealth(ServerFillUp):
         # pylint: disable=too-many-branches
         no_of_pools = self.params.get("number_of_pools", '/run/pool/*')
         #Stop the servers to run SPDK too to get the server capacity
-        self.stop_servers_noreset()
+        self.stop_servers()
         storage = self.get_server_capacity()
         self.start_servers()
 
         single_pool_nvme_size = int((storage * 0.80)/no_of_pools)
+
         pools = []
         #Create the Large number of pools
         for _pool in range(no_of_pools):
             pool = TestPool(self.context, dmg_command=self.get_dmg_command())
             pool.get_params(self)
             #SCM size is 10% of NVMe
-            pool.scm_size.update('{}GB'.format(single_pool_nvme_size * 0.10))
-            pool.nvme_size.update('{}GB'.format(single_pool_nvme_size))
+            pool.scm_size.update('{}'.format(int(single_pool_nvme_size * 0.10)))
+            pool.nvme_size.update('{}'.format(single_pool_nvme_size))
             pool.create()
             pools.append(pool)
 

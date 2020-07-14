@@ -575,31 +575,6 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
 
-    def stop_noreset(self):
-        """Stop the server through the runner without resetting the storage.
-        """
-        self.log.info(
-            "<SERVER> Stopping server %s command", self.manager.command)
-
-        # Maintain a running list of errors detected trying to stop
-        messages = []
-
-        # Stop the subprocess running the job manager command
-        try:
-            super(DaosServerManager, self).stop()
-        except CommandFailure as error:
-            messages.append(
-                "Error stopping the {} subprocess: {}".format(
-                    self.manager.command, error))
-
-        # Kill any leftover processes that may not have been stopped correctly
-        self.kill()
-
-        # Report any errors after all stop actions have been attempted
-        if messages:
-            raise ServerFailed(
-                "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
-
     def get_environment_value(self, name):
         """Get the server config value associated with the env variable name.
 

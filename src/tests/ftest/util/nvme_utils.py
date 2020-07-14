@@ -27,7 +27,7 @@ import re
 import time
 import os
 
-from general_utils import get_file_path, run_task
+from general_utils import run_task
 from command_utils_base import CommandFailure
 from ior_test_base import IorTestBase
 from write_host_file import write_host_file
@@ -125,20 +125,83 @@ class ServerFillUp(IorTestBase):
             drive_info(list): List of disks from each daos_io_servers
 
         Returns:
-            int: Maximum NVMe storage capacity (in GB).
+            int: Maximum NVMe storage capacity.
 
         """
         # Get the Maximum storage space among all the servers.
         drive_capa = []
         for server in self.hostlist_servers:
             for daos_io_server in range(len(self.daos_io_servers)):
-                drive_capa.append(sum(drive_info[server]
-                                      [daos_io_server].values()))
-        print('Maximum Storage space from the servers is {}GB'
-              .format((min(drive_capa)) * 0.99))
+                drive_capa.append(sum(drive_info[server][daos_io_server]))
+        print('Maximum Storage space from the servers is {}'
+              .format(int(min(drive_capa) * 0.99)))
+
         #Return the 99% of storage space as it wont be used 100% for
         #pool creation.
-        return min(drive_capa) * 0.99
+        return int(min(drive_capa) * 0.99)
+
+    def get_nvme_lsblk(self):
+        """Get NVMe lsblk from servers.
+
+        Args:
+            None
+
+        Returns:
+            dict: Dictionary of server mapping with disk ID and size
+                  'wolf-A': {'nvme2n1': '1600321314816'}.
+        """
+        nvme_data = {}
+
+        task = run_task(self.hostlist_servers, "lsblk -b /dev/nvme*n*")
+        for _rc_code, _node in task.iter_retcodes():
+            if _rc_code == 1:
+                print("Failed to lsblk on {}".format(_node))
+                raise ValueError
+        #Get the drive size from each daos_io_servers
+        for buf, nodelist in task.iter_buffers():
+            for node in nodelist:
+                disk_data = {}
+                output = str(buf).split('\n')
+                for _tmp in output[1:]:
+                    if 'nvme' in _tmp:
+                        disk_data[_tmp.split()[0]] = _tmp.split()[3]
+                    nvme_data['{}'.format(node)] = disk_data
+
+        return nvme_data
+
+    def get_nvme_readlink(self):
+        """Get NVMe readlink from servers.
+
+        Args:
+            None
+
+        Returns:
+            dict: Dictionary of server readlink pci mapping with disk ID
+                  'wolf-A': {'0000:da:00.0': 'nvme9n1'}.
+                  Dictionary of server mapping with disk ID and size
+                  'wolf-A': {'nvme2n1': '1600321314816'}.
+        """
+        nvme_lsblk = self.get_nvme_lsblk()
+        nvme_readlink = {}
+
+        #Create the dictionary for NVMe readlink.
+        for server, items in nvme_lsblk.items():
+            tmp_dict = {}
+            for drive in items:
+                cmd = ('readlink /sys/block/{}/device/device'
+                       .format(drive.split()[0]))
+                task = run_task([server], cmd)
+                for _rc_code, _node in task.iter_retcodes():
+                    if _rc_code == 1:
+                        print("Failed to readlink on {}".format(_node))
+                        raise ValueError
+                #Get the drive size from each daos_io_servers
+                for buf, _node in task.iter_buffers():
+                    output = str(buf).split('\n')
+                tmp_dict[output[0].split('/')[-1]] = drive.split()[0]
+            nvme_readlink[server] = tmp_dict
+
+        return nvme_lsblk, nvme_readlink
 
     def get_server_capacity(self):
         """Get Server Pool NVMe storage capacity.
@@ -147,41 +210,32 @@ class ServerFillUp(IorTestBase):
             None
 
         Returns:
-            int: Maximum NVMe storage capacity for pool creation (in GB).
+            int: Maximum NVMe storage capacity for pool creation.
 
-        Note: Read the drive sizes from the server using SPDK application.
+        Note: Read the drive sizes from the server using lsblk command.
         This need to be replaced with dmg command when it's available.
         This is time consuming and not a final solution to get the maximum
-        capacity of servers
+        capacity of servers.
         """
         drive_info = {}
-        _spdk_hello_world = "build/external/dev/spdk/examples/nvme/hello_world"
-        identify_bin = get_file_path("hello_world", _spdk_hello_world)[0]
-        task = run_task(self.hostlist_servers, "{}".format(identify_bin))
+        nvme_lsblk, nvme_readlink = self.get_nvme_readlink()
 
-        for _rc_code, _node in task.iter_retcodes():
-            if _rc_code == 1:
-                print("Failed to identified drives on {}".format(_node))
-                raise ValueError
-
-        #Get the drive size from each daos_io_servers
-        try:
-            for buf, nodes in task.iter_buffers():
-                output = str(buf).split('\n')
-                _tmp_data = {}
-                for daos_io_server in range(len(self.daos_io_servers)):
-                    drive_size_list = {}
-                    for disk in (self.server_managers[0].manager.job.yaml.
-                                 server_params[daos_io_server].bdev_list.value):
-                        disk_index = output.index('Attached to {}'
-                                                  .format(disk)) + 2
-                        drive_size_list['{}'.format(disk)] = int(
-                            output[disk_index].split('size:')[1][:-2])
-                    _tmp_data[daos_io_server] = drive_size_list
-                drive_info[nodes[0]] = _tmp_data
-        except:
-            print('Failed to get the drive information')
-            raise
+        #Create the dictionary for NVMe size for all the servers and drives.
+        for server in nvme_lsblk:
+            tmp_dict = {}
+            for daos_io_server in range(len(self.daos_io_servers)):
+                tmp_disk_list = []
+                for disk in (self.server_managers[0].manager.job.yaml.
+                             server_params[daos_io_server].bdev_list.value):
+                    if disk in nvme_readlink[server].keys():
+                        size = int(nvme_lsblk[server]
+                                   [nvme_readlink[server][disk]])
+                        tmp_disk_list.append(size)
+                    else:
+                        self.fail("Disk {} can not found on server {}"
+                                  .format(disk, server))
+                tmp_dict[daos_io_server] = tmp_disk_list
+            drive_info[server] = tmp_dict
 
         return self.get_max_capacity(drive_info)
 
@@ -319,7 +373,7 @@ class ServerFillUp(IorTestBase):
         capacity_file = os.path.join(avocao_tmp_dir, 'storage_capacity')
         if not os.path.exists(capacity_file):
             #Stop server but do not reset.
-            self.stop_servers_noreset()
+            self.stop_servers()
             total_nvme_capacity = self.get_server_capacity()
             with open(capacity_file,
                       'w') as _file: _file.write('{}'
@@ -327,14 +381,13 @@ class ServerFillUp(IorTestBase):
             #Start the server.
             self.start_servers()
         else:
-            total_nvme_capacity = float(open(capacity_file)
-                                        .readline().rstrip())
+            total_nvme_capacity = open(capacity_file).readline().rstrip()
 
-        print("Server Stoarge capacity = {}GB".format(total_nvme_capacity))
+        print("Server Stoarge capacity = {}".format(total_nvme_capacity))
         # Create a pool
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
-        self.pool.nvme_size.update('{}G'.format(total_nvme_capacity))
+        self.pool.nvme_size.update('{}'.format(total_nvme_capacity))
         self.pool.create()
         print("Pool Usage Percentage - Before - {}"
               .format(self.pool.pool_percentage_used()))
