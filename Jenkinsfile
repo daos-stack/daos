@@ -18,6 +18,9 @@ def doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
     }
+    if (cachedCommitPragma(pragma: 'Doc-only') == 'false') {
+        return false
+    }
 
     def rc = sh label: "Determine if doc-only change",
                 script: "CHANGE_ID=${env.CHANGE_ID} " +
@@ -200,7 +203,7 @@ pipeline {
                              script: 'rpmspec -q --srpm --requires' +
                                      ' utils/rpms/daos.spec 2>/dev/null',
                              returnStdout: true
-        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'false')
+        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
     }
 
     options {
