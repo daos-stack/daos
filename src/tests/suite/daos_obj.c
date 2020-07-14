@@ -963,7 +963,7 @@ io_var_idx_offset(void **state)
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	for (offset = UINT64_MAX; offset > 0; offset >>= 8) {
+	for (offset = (UINT64_MAX >> 1); offset > 0; offset >>= 8) {
 		char buf[10];
 
 

@@ -242,8 +242,8 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 static void
 rand_iarr_swap(void *array, int a, int b)
 {
-	int	*iarray = (int *)array;
-	int	 tmp;
+	uint64_t	*iarray = array;
+	uint64_t	 tmp;
 
 	tmp = iarray[a];
 	iarray[a] = iarray[b];
@@ -254,22 +254,40 @@ static daos_sort_ops_t rand_iarr_ops = {
 	.so_swap	= rand_iarr_swap,
 };
 
-int *
-dts_rand_iarr_alloc(int nr, int base, bool shuffle)
+uint64_t *
+dts_rand_iarr_alloc(int nr)
 {
-	int	*array;
-	int	 i;
+	uint64_t	*array;
 
 	D_ALLOC_ARRAY(array, nr);
 	if (!array)
 		return NULL;
+
+	return array;
+}
+
+void
+dts_rand_iarr_set(uint64_t *array, int nr, int base, bool shuffle)
+{
+	int		 i;
 
 	for (i = 0; i < nr; i++)
 		array[i] = base + i;
 
 	if (shuffle)
 		daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
+}
 
+uint64_t *
+dts_rand_iarr_alloc_set(int nr, int base, bool shuffle)
+{
+	uint64_t	*array;
+
+	array = dts_rand_iarr_alloc(nr);
+	if (!array)
+		return NULL;
+
+	dts_rand_iarr_set(array, nr, base, shuffle);
 	return array;
 }
 

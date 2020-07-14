@@ -1102,7 +1102,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	uint64_t			 stripe_rec_nr =
 						 obj_ec_stripe_rec_nr(oca);
 	uint64_t			 cell_rec_nr = obj_ec_cell_rec_nr(oca);
-	struct obj_ec_recx		*full_ec_recx;
+	struct obj_ec_recx		*full_ec_recx = NULL;
 	uint32_t			 tidx[OBJ_EC_MAX_M] = {0};
 	uint32_t			 ridx[OBJ_EC_MAX_M] = {0};
 	d_iov_t				 iov_inline[EC_INLINE_IOVS];
