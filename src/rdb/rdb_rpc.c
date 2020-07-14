@@ -425,6 +425,7 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	ABT_mutex_unlock(db->d_mutex);
 }
 
+/* Caller holds d_raft_mutex lock */
 int
 rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db)
 {
@@ -437,12 +438,12 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db)
 	if (rrpc == NULL)
 		return -DER_NOMEM;
 
-	ABT_mutex_lock(db->d_mutex);
 	if (db->d_stop) {
-		ABT_mutex_unlock(db->d_mutex);
 		rdb_free_raft_rpc(rrpc);
 		return -DER_CANCELED;
 	}
+
+	ABT_mutex_lock(db->d_mutex);
 	d_list_add_tail(&rrpc->drc_entry, &db->d_requests);
 	ABT_mutex_unlock(db->d_mutex);
 

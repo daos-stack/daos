@@ -251,11 +251,19 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		goto err_db;
 	}
 
+	rc = ABT_mutex_create(&db->d_raft_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB": failed to create raft mutex: %d\n",
+			DP_DB(db), rc);
+		rc = dss_abterr2der(rc);
+		goto err_mutex;
+	}
+
 	rc = ABT_cond_create(&db->d_ref_cv);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR(DF_DB": failed to create ref CV: %d\n", DP_DB(db), rc);
 		rc = dss_abterr2der(rc);
-		goto err_mutex;
+		goto err_raft_mutex;
 	}
 
 	rc = rdb_kvs_cache_create(&db->d_kvss);
@@ -317,6 +325,8 @@ err_kvss:
 	rdb_kvs_cache_destroy(db->d_kvss);
 err_ref_cv:
 	ABT_cond_free(&db->d_ref_cv);
+err_raft_mutex:
+	ABT_mutex_free(&db->d_raft_mutex);
 err_mutex:
 	ABT_mutex_free(&db->d_mutex);
 err_db:
@@ -346,6 +356,7 @@ rdb_stop(struct rdb *db)
 	vos_pool_close(db->d_pool);
 	rdb_kvs_cache_destroy(db->d_kvss);
 	ABT_cond_free(&db->d_ref_cv);
+	ABT_mutex_free(&db->d_raft_mutex);
 	ABT_mutex_free(&db->d_mutex);
 	D_FREE(db);
 }
@@ -428,8 +439,14 @@ rdb_campaign(struct rdb *db)
 bool
 rdb_is_leader(struct rdb *db, uint64_t *term)
 {
+	int is_leader;
+
+	ABT_mutex_lock(db->d_raft_mutex);
 	*term = raft_get_current_term(db->d_raft);
-	return raft_is_leader(db->d_raft);
+	is_leader = raft_is_leader(db->d_raft);
+	ABT_mutex_unlock(db->d_raft_mutex);
+
+	return is_leader;
 }
 
 /**
@@ -447,13 +464,18 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 	raft_node_t	       *node;
 	struct rdb_raft_node   *dnode;
 
+	ABT_mutex_lock(db->d_raft_mutex);
 	node = raft_get_current_leader_node(db->d_raft);
-	if (node == NULL)
+	if (node == NULL) {
+		ABT_mutex_unlock(db->d_raft_mutex);
 		return -DER_NONEXIST;
+	}
 	dnode = raft_node_get_udata(node);
 	D_ASSERT(dnode != NULL);
 	*term = raft_get_current_term(db->d_raft);
 	*rank = dnode->dn_rank;
+	ABT_mutex_unlock(db->d_raft_mutex);
+
 	return 0;
 }
 
