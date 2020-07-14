@@ -285,6 +285,7 @@ main(int argc, char **argv)
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"enable-caching",	no_argument,	   0, 'A'},
+		{"disable-direct-io",	no_argument,	   0, 'D'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{0, 0, 0, 0}
@@ -337,6 +338,9 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 			dfuse_info->di_foreground = true;
+			break;
+		case 'D':
+			dfuse_info->di_no_direct_io = true;
 			break;
 		case 'h':
 			show_help(argv[0]);
