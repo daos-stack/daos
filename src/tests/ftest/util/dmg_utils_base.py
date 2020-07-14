@@ -102,6 +102,8 @@ class DmgCommandBase(YamlCommand):
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
 
+        self.result = None
+
     @property
     def hostlist(self):
         """Get the hostlist that was set.

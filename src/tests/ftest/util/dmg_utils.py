@@ -27,6 +27,8 @@ from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
+import os
+from collections import defaultdict
 
 from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
@@ -84,55 +86,36 @@ class DmgCommand(DmgCommandBase):
                 r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
                 r"[ ]+([A-Z]+)\n", self.result.stdout)
 
-            data = {}
+            data = defaultdict(list)
             data["host"] = vals[0][0]
 
-            scm_namespaces = []
-            scm_socket_ids = []
-            scm_capacity_vals = []
-            scm_capacity_units = []
             i = 1
             while i < len(vals[0]):
                 if vals[i][1] == "":
                     break
-                scm_namespaces.append(vals[i][1])
-                scm_socket_ids.append(vals[i][2])
-                scm_capacity_vals.append(vals[i][3])
-                scm_capacity_units.append(vals[i][4])
+                data["scm_namespaces"].append(vals[i][1])
+                data["scm_socket_ids"].append(vals[i][2])
+                data["scm_capacity_vals"].append(vals[i][3])
+                data["scm_capacity_units"].append(vals[i][4])
                 i += 1
-            data["scm_namespaces"] = scm_namespaces
-            data["scm_socket_ids"] = scm_socket_ids
-            data["scm_capacity_vals"] = scm_capacity_vals
-            data["scm_capacity_units"] = scm_capacity_units
 
-            pci_addrs = []
-            models = []
-            fw_revisions = []
-            nvme_socket_ids = []
-            nvme_capacity_vals = []
-            nvme_capacity_units = []
             while i < len(vals):
-                pci_addrs.append(vals[i][5])
-                models.append("{} {}".format(vals[i][6], vals[i][7]))
-                fw_revisions.append(vals[i][8])
-                nvme_socket_ids.append(vals[i][9])
-                nvme_capacity_vals.append(vals[i][10])
-                nvme_capacity_units.append(vals[i][11])
+                data["pci_addrs"].append(vals[i][5])
+                #models.append(vals[i][6] + " " + vals[i][7])
+                data["models"].append("{} {}".format(vals[i][6], vals[i][7]))
+                data["fw_revisions"].append(vals[i][8])
+                data["nvme_socket_ids"].append(vals[i][9])
+                data["nvme_capacity_vals"].append(vals[i][10])
+                data["nvme_capacity_units"].append(vals[i][11])
                 i += 1
-            data["pci_addrs"] = pci_addrs
-            data["models"] = models
-            data["fw_revisions"] = fw_revisions
-            data["nvme_socket_ids"] = nvme_socket_ids
-            data["nvme_capacity_vals"] = nvme_capacity_vals
-            data["nvme_capacity_units"] = nvme_capacity_units
 
             return data
 
         # Without verbose.
         vals = re.findall(
-            r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+" 
+            r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
             r"namespaces\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+controller",
-            output)
+            self.result.stdout)
         return {
             "hosts": vals[0][0],
             "scm_total_val": vals[0][1],
