@@ -52,7 +52,7 @@ struct ec_agg_pool_info {
 	ABT_eventual	 api_eventual;
 };
 
-/* Parmeters used to drive iterate all.
+/* Parameters used to drive iterate all.
  */
 struct ec_agg_param {
 	struct ec_agg_entry	*ap_agg_entry;
