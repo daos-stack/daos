@@ -192,13 +192,11 @@ _vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 		daos_handle_t		 ioh;
 
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
-					      VOS_OF_USE_TIMESTAMPS,
+			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch, 0,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
 					      NULL, &ioh, NULL);
 		else
-			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
-					     VOS_OF_USE_TIMESTAMPS,
+			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch, 0,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
 					     0, NULL, &ioh, NULL);
 		if (rc)
