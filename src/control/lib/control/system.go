@@ -270,6 +270,9 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	pbReq := new(ctlpb.SystemStopReq)
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
+	pbReq.Prep = req.Prep
+	pbReq.Kill = req.Kill
+	pbReq.Force = req.Force
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, pbReq)
