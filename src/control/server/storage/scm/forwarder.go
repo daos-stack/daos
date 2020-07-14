@@ -23,11 +23,6 @@
 package scm
 
 import (
-	"os"
-
-	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -112,59 +107,6 @@ func (f *AdminForwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 
 	res := new(PrepareResponse)
 	if err := f.SendReq("ScmPrepare", req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-// FirmwareForwarder forwards firmware requests to a privileged binary.
-type FirmwareForwarder struct {
-	pbin.Forwarder
-}
-
-// NewFirmwareForwarder returns a new FirmwareForwarder.
-func NewFirmwareForwarder(log logging.Logger) *FirmwareForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosFWName)
-
-	return &FirmwareForwarder{
-		Forwarder: *pf,
-	}
-}
-
-// checkSupport verifies that the firmware support binary is installed.
-func (f *FirmwareForwarder) checkSupport() error {
-	if _, err := common.FindBinary(f.Forwarder.GetBinaryName()); os.IsNotExist(err) {
-		return errors.Errorf("SCM firmware operations are not supported on this system")
-	}
-
-	return nil
-}
-
-// Query forwards an SCM firmware query request.
-func (f *FirmwareForwarder) Query(req FirmwareQueryRequest) (*FirmwareQueryResponse, error) {
-	if err := f.checkSupport(); err != nil {
-		return nil, err
-	}
-	req.Forwarded = true
-
-	res := new(FirmwareQueryResponse)
-	if err := f.SendReq("ScmFirmwareQuery", req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-// Update forwards a request to update firmware on the SCM.
-func (f *FirmwareForwarder) Update(req FirmwareUpdateRequest) (*FirmwareUpdateResponse, error) {
-	if err := f.checkSupport(); err != nil {
-		return nil, err
-	}
-	req.Forwarded = true
-
-	res := new(FirmwareUpdateResponse)
-	if err := f.SendReq("ScmFirmwareUpdate", req, res); err != nil {
 		return nil, err
 	}
 

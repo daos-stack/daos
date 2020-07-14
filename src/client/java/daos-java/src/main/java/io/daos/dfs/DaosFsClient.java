@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.apache.commons.lang.ObjectUtils;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -145,6 +146,15 @@ public final class DaosFsClient {
   }
 
   private static void loadLib() {
+    String env = "LD_PRELOAD";
+    String preload = System.getenv(env);
+    if (StringUtils.isBlank(preload)) {
+      throw new IllegalStateException(env + " need to be set as environment variable");
+    }
+    File soFile = new File(preload);
+    if ((!preload.endsWith(".so")) || !soFile.exists()) {
+      throw new IllegalArgumentException(env + " need to be set to a existed so file");
+    }
     try {
       System.loadLibrary(LIB_NAME);
       log.info("lib{}.so loaded from library", LIB_NAME);
@@ -719,11 +729,10 @@ public final class DaosFsClient {
    * pointer to dfs object
    * @param prefix
    * path prefix
-   * @return 0 for success, others for failure
    * @throws IOException
    * {@link DaosIOException}
    */
-  native int dfsSetPrefix(long dfsPtr, String prefix) throws IOException;
+  native void dfsSetPrefix(long dfsPtr, String prefix) throws IOException;
 
   /**
    * open a file with opened parent specified by <code>parentObjId</code>.
@@ -1015,6 +1024,91 @@ public final class DaosFsClient {
   static native void dfsUnmountFs(long dfsPtr) throws IOException;
 
   /**
+   * create UNS path with given data in <code>bufferAddress</code> in pool <code>poolHandle</code>.
+   * A new container will be created with some properties from <code>attribute</code>.
+   * Object type, pool UUID and container UUID are set to extended attribute of <code>path</code>.
+   *
+   * @param poolHandle
+   * handle of pool
+   * @param path
+   * OS file path to set duns attributes. make sure file not existing
+   * @param bufferAddress
+   * buffer memory address of direct buffer which holds <code>DunsAttribute</code> data serialized by
+   *     protocol buffer
+   * @param buffLen
+   * length of buffer
+   * @return UUID of container
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  static native String dunsCreatePath(long poolHandle, String path, long bufferAddress, int buffLen) throws IOException;
+
+  /**
+   * extract and parse extended attributes from given <code>path</code>.
+   *
+   * @param path
+   * OS file path
+   * @return UNS attribute info in binary get from path, including object type, pool UUID and container UUID.
+   *     user should deserialize the data by {@link io.daos.dfs.uns.DunsAttribute}
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  static native byte[] dunsResolvePath(String path) throws IOException;
+
+  /**
+   * get application info stored in <code>attrName</code> from <code>path</code>.
+   *
+   * @param path
+   * OS file path
+   * @param attrName
+   * app-specific attribute name
+   * @param maxLen
+   * maximum length of attribute value
+   * @return application info in string, key1=value1;key2=value2...
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  static native String dunsGetAppInfo(String path, String attrName, int maxLen) throws IOException;
+
+  /**
+   * set application info to <code>attrName</code> on <code>path</code>.
+   *
+   * @param path
+   * OS file path
+   * @param attrName
+   * app-specific attribute name
+   * @param value
+   * application info in string, key1=value1;key2=value2...
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  static native void dunsSetAppInfo(String path, String attrName, String value) throws IOException;
+
+  /**
+   * Destroy a container and remove the path associated with it in the UNS.
+   *
+   * @param poolHandle
+   * pool handle
+   * @param path
+   * OS file path
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  static native void dunsDestroyPath(long poolHandle, String path) throws IOException;
+
+  /**
+   * parse input string to UNS attribute.
+   *
+   * @param input
+   * attribute string
+   * @return UNS attribute info in binary.
+   *     user should deserialize the data by {@link io.daos.dfs.uns.DunsAttribute}
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  static native byte[] dunsParseAttribute(String input) throws IOException;
+
+  /**
    * finalize DAOS client.
    *
    * @throws IOException
@@ -1176,8 +1270,6 @@ public final class DaosFsClient {
      *                  {@link Constants#ACCESS_FLAG_POOL_READONLY}
      *                  {@link Constants#ACCESS_FLAG_POOL_READWRITE}
      *                  {@link Constants#ACCESS_FLAG_POOL_EXECUTE}
-     *
-     * <p>
      *                  Default is {@link Constants#ACCESS_FLAG_POOL_READWRITE}
      * @return DaosFsClientBuilder
      */
@@ -1194,9 +1286,7 @@ public final class DaosFsClient {
      *                               {@link Constants#ACCESS_FLAG_FILE_READONLY}
      *                               {@link Constants#ACCESS_FLAG_FILE_READWRITE}
      *                               {@link Constants#ACCESS_FLAG_FILE_EXCL}
-     *
-     * <p>
-     * default is {@link Constants#ACCESS_FLAG_FILE_READWRITE}
+     *     default is {@link Constants#ACCESS_FLAG_FILE_READWRITE}
      * @return DaosFsClientBuilder
      */
     public DaosFsClientBuilder defaultFileAccessFlags(int defaultFileAccessFlags) {
@@ -1206,7 +1296,7 @@ public final class DaosFsClient {
 
     /**
      * set default file mode. You can override this value when create new file by
-     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}
+     * Scalling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}.
      *
      * @param defaultFileMode
      * should be octal value. Default is 0755
@@ -1219,7 +1309,7 @@ public final class DaosFsClient {
 
     /**
      * set default file type. You can override this value when create new file by
-     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}
+     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}.
      *
      * @param defaultFileObjType
      * default is {@link DaosObjectType#OC_SX}
@@ -1232,7 +1322,7 @@ public final class DaosFsClient {
 
     /**
      * set default file chunk size. You can override this value when create new file by
-     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}
+     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}.
      *
      * @param defaultFileChunkSize
      * default is 0. DAOS will decide what default is. 1MB for now.
