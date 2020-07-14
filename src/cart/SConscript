@@ -79,9 +79,7 @@ def scons():
 
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
-    env.AppendUnique(LIBPATH=[Dir('cart')])
-    env.AppendUnique(RPATH=[Dir('cart')])
-    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('cart').path])
+    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('.').path])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
@@ -102,9 +100,6 @@ def scons():
         pp_env.AppendUnique(CPPPATH=[Dir('../include').srcnode(),
                                      Dir('.').srcnode()])
         prereqs.require(pp_env, 'mercury', headers_only=True)
-
-        pp_env.AppendUnique(CPPPATH=[Dir('../include').srcnode(),
-                                     Dir('.').srcnode()])
 
         # pylint: disable=no-member
         pp_files = pp_env.Preprocess(SRC)
