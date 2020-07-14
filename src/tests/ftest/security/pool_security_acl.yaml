@@ -5,18 +5,10 @@ hosts:
     - server-A
   test_clients:
     - server-B   #server client different host
-timeout: 1200
+timeout: 600
 server_config:
   name: daos_server
   port: 10001
-  transport_config:
-    allow_insecure: False
-agent_config:
-  transport_config:
-    allow_insecure: False
-dmg:
-  transport_config:
-    allow_insecure: False
 pool_acl:
   scm_size: 134217728
   user_prefix: daos_ci

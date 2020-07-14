@@ -4,14 +4,16 @@ hosts:
 timeout: 200
 server_config:
    name: daos_server
-   transport_config:
-     allow_insecure: False
-agent_config:
-   transport_config:
-     allow_insecure: False
-dmg:
-   transport_config:
-     allow_insecure: False
+# Uncomment following to force the use of certificates 
+#   regardless of the launch.py --insecure setting.
+#   transport_config:
+#     allow_insecure: False
+#agent_config:
+#   transport_config:
+#     allow_insecure: False
+#dmg:
+#   transport_config:
+#     allow_insecure: False
 pool:
   mode: 511
   name: daos_server

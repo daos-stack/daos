@@ -7,14 +7,6 @@ timeout: 1200
 server_config:
   name: daos_server
   port: 10001
-  transport_config:
-    allow_insecure: False
-agent_config:
-  transport_config:
-    allow_insecure: False
-dmg:
-  transport_config:
-    allow_insecure: False
 pool:
   mode: 511
   name: daos_server

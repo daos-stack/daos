@@ -26,6 +26,7 @@ from __future__ import print_function
 from command_utils_base import \
     FormattedParameter, CommandWithParameters, YamlParameters
 from command_utils import CommandWithSubCommand, YamlCommand
+from general_utils import get_log_file
 
 
 class DmgCommandBase(YamlCommand):
@@ -129,6 +130,15 @@ class DmgCommandBase(YamlCommand):
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
+
+    def set_certificates(self, hostlist):
+        """Set certificates for the hostlist.
+
+        Args:
+            hostlist (list): list of host addresses
+        """
+        if self.yaml:
+            self.yaml.copy_certificates(get_log_file("certs"), hostlist)
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
