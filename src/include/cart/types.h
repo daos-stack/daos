@@ -37,9 +37,6 @@
 
 #include <stdint.h>
 #include <gurt/types.h>
-
-#include <boost/preprocessor.hpp>
-
 /**
  * Initialization options passed during crt_init() call.
  *
