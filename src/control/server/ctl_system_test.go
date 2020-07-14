@@ -615,6 +615,19 @@ func TestServer_CtlSvc_SystemQuery(t *testing.T) {
 			expRanks:       "2-5",
 			expAbsentHosts: "10.0.0.[4-5]",
 		},
+		"missing hosts": {
+			members: system.Members{
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopping),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateReady),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
+				system.NewMember(4, "", common.MockHostAddr(3), system.MemberStateAwaitFormat),
+				system.NewMember(5, "", common.MockHostAddr(3), system.MemberStateStopping),
+			},
+			hosts:          "10.0.0.[4-5]",
+			expRanks:       "",
+			expAbsentHosts: "10.0.0.[4-5]",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -837,6 +850,67 @@ func TestServer_CtlSvc_SystemStart(t *testing.T) {
 				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateReady),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
+		},
+		"filtered hosts": {
+			members: system.Members{
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
+			},
+			hosts: "10.0.0.[1-2]",
+			mResps: []*control.HostResponse{
+				{
+					Addr: common.MockHostAddr(1).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 0, State: uint32(system.MemberStateReady),
+							},
+							{
+								Rank: 1, State: uint32(system.MemberStateReady),
+							},
+						},
+					},
+				},
+				{
+					Addr: common.MockHostAddr(2).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 2, State: uint32(system.MemberStateReady),
+							},
+							{
+								Rank: 3, State: uint32(system.MemberStateReady),
+							},
+						},
+					},
+				},
+			},
+			expResults: []*ctlpb.RankResult{
+				{
+					Rank: 0, Action: "start", Addr: common.MockHostAddr(1).String(),
+					State: uint32(system.MemberStateReady),
+				},
+				{
+					Rank: 1, Action: "start", Addr: common.MockHostAddr(1).String(),
+					State: uint32(system.MemberStateReady),
+				},
+				{
+					Rank: 2, Action: "start", Addr: common.MockHostAddr(2).String(),
+					State: uint32(system.MemberStateReady),
+				},
+				{
+					Rank: 3, Action: "start", Addr: common.MockHostAddr(2).String(),
+					State: uint32(system.MemberStateReady),
+				},
+			},
+			expMembers: system.Members{
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateReady),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1198,6 +1272,67 @@ func TestServer_CtlSvc_SystemStop(t *testing.T) {
 				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
 			},
 			expAbsentHosts: "10.0.0.[3-5]",
+		},
+		"filtered hosts": {
+			req: &ctlpb.SystemStopReq{Prep: false, Kill: true, Hosts: "10.0.0.[1-2]"},
+			members: system.Members{
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateJoined),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateJoined),
+			},
+			mResps: []*control.HostResponse{
+				{
+					Addr: common.MockHostAddr(1).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 0, State: uint32(system.MemberStateStopped),
+							},
+							{
+								Rank: 1, State: uint32(system.MemberStateStopped),
+							},
+						},
+					},
+				},
+				{
+					Addr: common.MockHostAddr(2).String(),
+					Message: &mgmtpb.RanksResp{
+						Results: []*mgmtpb.RanksResp_RankResult{
+							{
+								Rank: 2, State: uint32(system.MemberStateStopped),
+							},
+							{
+								Rank: 3, State: uint32(system.MemberStateStopped),
+							},
+						},
+					},
+				},
+			},
+			expResults: []*ctlpb.RankResult{
+				{
+					Rank: 0, Action: "stop", Addr: common.MockHostAddr(1).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				{
+					Rank: 1, Action: "stop", Addr: common.MockHostAddr(1).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				{
+					Rank: 2, Action: "stop", Addr: common.MockHostAddr(2).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+				{
+					Rank: 3, Action: "stop", Addr: common.MockHostAddr(2).String(),
+					State: uint32(system.MemberStateStopped),
+				},
+			},
+			expMembers: system.Members{
+				system.NewMember(0, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(1, "", common.MockHostAddr(1), system.MemberStateStopped),
+				system.NewMember(2, "", common.MockHostAddr(2), system.MemberStateStopped),
+				system.NewMember(3, "", common.MockHostAddr(2), system.MemberStateStopped),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

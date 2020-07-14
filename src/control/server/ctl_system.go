@@ -193,13 +193,16 @@ func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQ
 	if err != nil {
 		return nil, err
 	}
-
-	members := svc.membership.Members(rankSet)
-
 	pbResp := &ctlpb.SystemQueryResp{
 		Absentranks: fanResp.AbsentRanks.String(),
 		Absenthosts: fanResp.AbsentHosts.String(),
 	}
+	if rankSet.Count() == 0 {
+		return pbResp, nil
+	}
+
+	members := svc.membership.Members(rankSet)
+
 	if err := convert.Types(members, &pbResp.Members); err != nil {
 		return nil, err
 	}
