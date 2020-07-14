@@ -291,6 +291,7 @@ class DaosServerYamlParameters(YamlParameters):
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
+            default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
             # All log files should be placed in the same directory on each host
             # to enable easy log file archiving by launch.py
@@ -321,7 +322,7 @@ class DaosServerYamlParameters(YamlParameters):
             self.log_file = LogParameter(log_dir, None, "daos_server.log")
 
             # Set extra envariables for sockets provider
-            if self.provider is "ofi+sockets":
+            if default_provider is "ofi+sockets":
                 self.env_vars = BasicParameter(
                     None,
                     ["ABT_ENV_MAX_NUM_XSTREAMS=100",
