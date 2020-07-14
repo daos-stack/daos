@@ -285,7 +285,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 1,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 1 << 20,
 		},
 	},
 	{
@@ -297,7 +297,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 1 << 20,
 		},
 	},
 	{
@@ -309,7 +309,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 4,
 			.ca_ec_p		= 1,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 1 << 20,
 		},
 	},
 	{
@@ -321,7 +321,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 4,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 1 << 20,
 		},
 	},
 	{
@@ -333,7 +333,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 8,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 1 << 20,
 		},
 	},
 	{
@@ -345,7 +345,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 16,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 1 << 20,
 		},
 	},
 	{
