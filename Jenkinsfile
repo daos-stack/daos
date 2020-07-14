@@ -1007,9 +1007,8 @@ pipeline {
                       always {
                           unitTestPost (
                                      always_script: "ci/unit/test_post_always.sh",
-                                     vlgrind: "memcheck",
-                                     artifacts: ['run_test_memcheck.sh/*',
-                                                'vm_test/**'],
+                                     valgrind: "memcheck",
+                                     artifacts: ['run_test_memcheck.sh/*'],
                                      valgrind_pattern: "run_test_memcheck.sh/*memcheck.xml"
                                   )
                         }
