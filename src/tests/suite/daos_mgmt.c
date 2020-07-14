@@ -320,7 +320,7 @@ list_pools_test(void **state)
 	 * and that many items in pools[] filled
 	 *****/
 	npools = npools_alloc;
-        rc = daos_json_list_pool(arg, &npools, pools);
+	rc = daos_json_list_pool(arg, &npools, pools);
 	assert_int_equal(rc, 0);
 	verify_pool_info(state, rc, npools_alloc, pools, npools);
 	clean_pool_info(npools_alloc, pools);
