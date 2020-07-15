@@ -141,7 +141,8 @@ struct rebuild_global_pool_tracker {
 	uint64_t	rgt_stable_epoch;
 
 	unsigned int	rgt_abort:1,
-			rgt_notify_stable_epoch:1;
+			rgt_notify_stable_epoch:1,
+			rgt_init_scan:1;
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */
