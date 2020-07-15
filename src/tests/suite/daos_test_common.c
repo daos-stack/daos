@@ -1057,6 +1057,8 @@ static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 
 	parsed_json = json_tokener_parse(content);
 
+	free(content);
+
 	return parsed_json;
 }
 
@@ -1092,14 +1094,17 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 		*npools = json_object_array_length(pool_list);
 	print_message("#pools %lu\n", *npools);
 
-	if (pools == NULL)
+	if (pools == NULL) {
 		/* no need to fill up a NULL pools buffer */
+		json_object_put(parsed_json);
 		return 0;
-	else if (npools_in && (npools_in < *npools))
+	} else if (npools_in && (npools_in < *npools)) {
 		/* For non-NULL pools, the allocated non-zero buffer size is
 		 * not sufficient
 		 */
+		json_object_put(parsed_json);
 		return -DER_TRUNC;
+	}
 
 	for (i = 0; i < *npools; i++) {
 		pool = json_object_array_get_idx(pool_list, i);
@@ -1122,5 +1127,7 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 				pools[i].mgpi_svc->rl_ranks[j]);
 		}
 	}
+
+	json_object_put(parsed_json);
 	return 0;
 }
