@@ -429,6 +429,7 @@ func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
 		}[address], map[string]error{
 			"127.0.0.4:10001": errors.New("bad lookup"),
 			"127.0.0.5:10001": errors.New("bad lookup"),
+			"foo-6:10001":     errors.New("bad lookup"),
 		}[address]
 }
 
@@ -528,6 +529,12 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 			inHosts:         "foo-[0-9]:10001",
 			expRanks:        "1-6",
 			expMissingHosts: "foo-[0,6-9]:10001",
+		},
+		"hostnames oversubscribed without port": {
+			members:         members,
+			inHosts:         "foo-[5-7]",
+			expRanks:        "5",
+			expMissingHosts: "foo-[6-7]",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

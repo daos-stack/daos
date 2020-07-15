@@ -543,19 +543,23 @@ type resolveFnSig func(string, string) (*net.TCPAddr, error)
 // CheckHosts returns set of all ranks on any of the hosts in provided host set
 // string and another slice of all hosts from input hostset string that are
 // missing from the membership.
-func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSig) (rs *RankSet, hs *hostlist.HostSet, err error) {
+func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSig) (*RankSet, *hostlist.HostSet, error) {
 	m.RLock()
 	defer m.RUnlock()
 
 	hostRanks := m.getHostRanks(nil)
-	rs, err = CreateRankSet("")
+	rs, err := CreateRankSet("")
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
-	hs, err = hostlist.CreateSet(hosts)
+	hs, err := hostlist.CreateSet(hosts)
 	if err != nil {
-		return
+		return nil, nil, err
+	}
+	missHS, err := hostlist.CreateSet("")
+	if err != nil {
+		return nil, nil, err
 	}
 	for _, host := range strings.Split(hs.DerangedString(), ",") {
 		origHostString := host
@@ -565,23 +569,29 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSi
 
 		tcpAddr, resolveErr := resolveFn("tcp", host)
 		if resolveErr != nil {
-			m.log.Errorf("resolving host %q: %s", host, resolveErr)
+			m.log.Debugf("host addr %q didn't resolve: %s", host, resolveErr)
+			if _, err := missHS.Insert(origHostString); err != nil {
+				return nil, nil, err
+			}
 			continue
 		}
 
 		if rankList, exists := hostRanks[tcpAddr.String()]; exists {
+			m.log.Debugf("CheckHosts(): %v ranks found at %s", rankList, origHostString)
 			for _, rank := range rankList {
 				if err = rs.Add(rank); err != nil {
-					return
+					return nil, nil, err
 				}
 			}
-			if _, err = hs.Delete(origHostString); err != nil {
-				return
-			}
+			continue
+		}
+
+		if _, err := missHS.Insert(origHostString); err != nil {
+			return nil, nil, err
 		}
 	}
 
-	return
+	return rs, missHS, nil
 }
 
 // NewMembership returns a reference to a new DAOS system membership.
