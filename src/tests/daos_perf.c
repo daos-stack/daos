@@ -712,60 +712,39 @@ ts_iterate_records_internal(double *duration, d_rank_t rank)
 }
 
 static int
+ts_prep_update(void)
+{
+	return objects_update(NULL, RANK_ZERO);
+}
+
+static int
+ts_post_verify(void)
+{
+	return objects_verify_close();
+}
+
+static int
 ts_write_perf(double *duration)
 {
-	int	rc;
-
-	rc = objects_update(duration, RANK_ZERO);
-	if (rc)
-		return rc;
-
-	rc = objects_verify_close();
-	return rc;
+	return objects_update(duration, RANK_ZERO);
 }
 
 static int
 ts_fetch_perf(double *duration)
 {
-	int	rc;
-
-	rc = objects_update(NULL, RANK_ZERO);
-	if (rc)
-		return rc;
-	rc = objects_fetch(duration, RANK_ZERO);
-	if (rc)
-		return rc;
-
-	rc = objects_verify_close();
-	return rc;
+	return objects_fetch(duration, RANK_ZERO);
 }
 
 static int
 ts_iterate_perf(double *duration)
 {
-	int	rc;
-
-	rc = objects_update(NULL, RANK_ZERO);
-	if (rc)
-		return rc;
-	rc = ts_iterate_records_internal(duration, RANK_ZERO);
-	return rc;
+	return ts_iterate_records_internal(duration, RANK_ZERO);
 }
 
 static int
 ts_update_fetch_perf(double *duration)
 {
-	int	rc;
-
-	rc = objects_update(NULL, RANK_ZERO);
-	if (rc)
-		return rc;
-	rc = objects_fetch(duration, RANK_ZERO);
-	if (rc)
-		return rc;
-
-	rc = objects_verify_close();
-	return rc;
+	return objects_fetch(duration, RANK_ZERO);
 }
 
 static int
@@ -1050,17 +1029,17 @@ static struct option ts_ops[] = {
 void show_result(double duration, uint64_t start, uint64_t end,
 		 int vsize, char *test_name)
 {
-	double agg_duration;
-	double first_start;
-	double last_end;
-	double	duration_max;
-	double	duration_min;
-	double	duration_sum;
+	double		agg_duration;
+	uint64_t	first_start;
+	uint64_t	last_end;
+	double		duration_max;
+	double		duration_min;
+	double		duration_sum;
 
 	if (ts_ctx.tsc_mpi_size > 1) {
-		MPI_Reduce(&start, &first_start, 1, MPI_DOUBLE,
+		MPI_Reduce(&start, &first_start, 1, MPI_UINT64_T,
 			   MPI_MIN, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&end, &last_end, 1, MPI_DOUBLE,
+		MPI_Reduce(&end, &last_end, 1, MPI_UINT64_T,
 			   MPI_MAX, 0, MPI_COMM_WORLD);
 		agg_duration = (last_end - first_start) / (1000 * 1000 * 1000);
 	} else {
@@ -1111,6 +1090,7 @@ void show_result(double duration, uint64_t start, uint64_t end,
 			duration_sum / ((ts_ctx.tsc_mpi_size) * 1000 * 1000));
 	}
 }
+
 enum {
 	UPDATE_TEST = 0,
 	FETCH_TEST,
@@ -1121,6 +1101,8 @@ enum {
 };
 
 static int (*perf_tests[TEST_SIZE])(double *duration);
+static int (*perf_tests_prep[TEST_SIZE])(void);
+static int (*perf_tests_post[TEST_SIZE])(void);
 
 char	*perf_tests_name[] = {
 	"update",
@@ -1271,9 +1253,12 @@ main(int argc, char **argv)
 			break;
 		case 'U':
 			perf_tests[UPDATE_TEST] = ts_write_perf;
+			perf_tests_post[UPDATE_TEST] = ts_post_verify;
 			break;
 		case 'F':
+			perf_tests_prep[FETCH_TEST] = ts_prep_update;
 			perf_tests[FETCH_TEST] = ts_fetch_perf;
+			perf_tests_post[FETCH_TEST] = ts_post_verify;
 			break;
 		case 'R':
 			perf_tests[REBUILD_TEST] = ts_rebuild_perf;
@@ -1285,7 +1270,9 @@ main(int argc, char **argv)
 			ts_rebuild_no_update = true;
 			break;
 		case 'B':
+			perf_tests_prep[UPDATE_FETCH_TEST] = ts_prep_update;
 			perf_tests[UPDATE_FETCH_TEST] = ts_update_fetch_perf;
+			perf_tests_post[UPDATE_FETCH_TEST] = ts_post_verify;
 			break;
 		case 'v':
 			ts_verify_fetch = true;
@@ -1474,19 +1461,29 @@ main(int argc, char **argv)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0; i < TEST_SIZE; i++) {
-		double start;
-		double end;
+		double	start;
+		double	end;
+		int	rc_g = 0;
 
 		if (perf_tests[i] == NULL)
 			continue;
 
 		srand(seed);
 
+		if (perf_tests_prep[i] !=  NULL) {
+			rc = perf_tests_prep[i]();
+			if (rc != 0)
+				fprintf(stderr, "perf_tests_prep[%d] failed, "
+					"rc %d\n", i, rc);
+		}
+		MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+		if (rc != 0)
+			break;
+
 		start = daos_get_ntime();
 		rc = perf_tests[i](&duration);
 		end = daos_get_ntime();
 		if (ts_ctx.tsc_mpi_size > 1) {
-			int rc_g;
 
 			MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN,
 				      MPI_COMM_WORLD);
@@ -1499,6 +1496,13 @@ main(int argc, char **argv)
 		}
 
 		show_result(duration, start, end, vsize, perf_tests_name[i]);
+
+		if (perf_tests_post[i] !=  NULL) {
+			rc = perf_tests_post[i]();
+			if (rc != 0)
+				fprintf(stderr, "perf_tests_post[%d] failed, "
+					"rc %d\n", i, rc);
+		}
 	}
 
 	if (ts_in_ult)
