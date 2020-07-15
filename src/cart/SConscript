@@ -121,7 +121,7 @@ def scons():
         config_env = env.Clone()
         config = Configure(config_env)
         for header in HEADERS:
-            if not config.CheckHeader(os.path.join('cart', header)):
+            if not config.CheckHeader(os.path.join('../include', 'cart', header)):
                 broken_includes = True
         config.Finish()
 
