@@ -325,10 +325,11 @@ void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config, const d_rank_list_t *svc,
 			 d_rank_t rank, int tgt);
 void daos_add_target(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank, int tgt);
+		     const char *dmg_config, const d_rank_list_t *svc,
+		     d_rank_t rank, int tgt);
 void daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank, int tgt);
-
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank, int tgt);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config, const d_rank_list_t *svc,
 			 d_rank_t rank);
