@@ -143,6 +143,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[i]->rebuild_cb)
 			args[i]->rebuild_cb(args[i]);
 
+	sleep(10); /* make sure the rebuild happens after exclude/add/kill */
 	if (args[0]->myrank == 0)
 		test_rebuild_wait(args, args_cnt);
 

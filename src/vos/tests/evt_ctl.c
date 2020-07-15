@@ -665,7 +665,7 @@ ts_many_add(void **state)
 {
 	char			*buf;
 	char			*tmp;
-	int			*seq;
+	uint64_t		*seq;
 	struct evt_rect		*rect;
 	struct evt_entry_in	 entry = {0};
 	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
@@ -730,7 +730,7 @@ ts_many_add(void **state)
 	if (!buf)
 		fail();
 
-	seq = dts_rand_iarr_alloc(nr, 0, true);
+	seq = dts_rand_iarr_alloc_set(nr, 0, true);
 	if (!seq) {
 		D_FREE(buf);
 		fail();
