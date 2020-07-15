@@ -175,7 +175,7 @@ class Orterun(JobManager):
         load_mpi("openmpi")
         path = os.path.dirname(find_executable("orterun"))
         super(Orterun, self).__init__(
-            "/run/orterun", "orterun", job, path, subprocess)
+            "/run/orterun/*", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
         mca_default = {
