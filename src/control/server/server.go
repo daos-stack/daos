@@ -33,6 +33,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -251,8 +252,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 			// Start the system db after instance 0's SCM is
 			// ready.
-			srv.OnStorageReady(func() error {
-				return errors.Wrap(sysdb.Start(controlAddr), "failed to start system db")
+			var once sync.Once
+			srv.OnStorageReady(func() (err error) {
+				once.Do(func() {
+					err = errors.Wrap(sysdb.Start(controlAddr),
+						"failed to start system db",
+					)
+				})
+				return
 			})
 		}
 	}

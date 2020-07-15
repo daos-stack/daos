@@ -130,12 +130,13 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank  Rank
-	UUID  uuid.UUID
-	Addr  net.Addr
-	URI   string
-	state MemberState
-	Info  string
+	Rank           Rank
+	UUID           uuid.UUID
+	Addr           net.Addr
+	FabricURI      string
+	FabricContexts uint32
+	state          MemberState
+	Info           string
 }
 
 // MarshalJSON marshals system.Member to JSON.
@@ -206,7 +207,7 @@ func NewMember(rank Rank, uuidStr, uri string, addr net.Addr, state MemberState)
 	// FIXME: Either require a valid uuid.UUID to be supplied
 	// or else change the return signature to include an error
 	newUUID := uuid.MustParse(uuidStr)
-	return &Member{Rank: rank, UUID: newUUID, URI: uri, Addr: addr, state: state}
+	return &Member{Rank: rank, UUID: newUUID, FabricURI: uri, Addr: addr, state: state}
 }
 
 // Members is a type alias for a slice of member references
@@ -332,42 +333,57 @@ func (m *Membership) Count() int {
 	return m.db.MemberCount()
 }
 
-type MemberJoinResult struct {
+type JoinRequest struct {
+	UUID           uuid.UUID
+	ControlAddr    net.Addr
+	FabricURI      string
+	FabricContexts uint32
+}
+
+type JoinResponse struct {
+	Member     *Member
 	Created    bool
 	PrevState  MemberState
 	MapVersion uint32
 }
 
-func (m *Membership) Join(newMember *Member) (res *MemberJoinResult, err error) {
+func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	m.Lock()
 	defer m.Unlock()
 
-	defer func() {
-		if err != nil {
-			newMember.state = MemberStateErrored
-		}
-	}()
-
-	newMember.state = MemberStateJoined
-	r := new(MemberJoinResult)
-	curMember, err := m.db.FindMemberByUUID(newMember.UUID)
+	resp = new(JoinResponse)
+	curMember, err := m.db.FindMemberByUUID(req.UUID)
 	if err == nil {
-		r.PrevState = curMember.state
-		if err := m.db.UpdateMember(newMember); err != nil {
+		resp.PrevState = curMember.state
+		curMember.state = MemberStateJoined
+		curMember.Addr = req.ControlAddr
+		curMember.FabricURI = req.FabricURI
+		curMember.FabricContexts = req.FabricContexts
+		resp.Member = curMember
+		if err := m.db.UpdateMember(curMember); err != nil {
 			return nil, err
 		}
-		r.MapVersion = m.db.CurMapVersion()
+		resp.MapVersion = m.db.CurMapVersion()
 
-		return r, nil
+		return resp, nil
 	}
 
-	r.Created = true
+	newMember := &Member{
+		Rank:           NilRank,
+		UUID:           req.UUID,
+		Addr:           req.ControlAddr,
+		FabricURI:      req.FabricURI,
+		FabricContexts: req.FabricContexts,
+		state:          MemberStateJoined,
+	}
 	if err := m.db.AddMember(newMember); err != nil {
 		return nil, err
 	}
-	r.MapVersion = m.db.CurMapVersion()
+	resp.Created = true
+	resp.Member = newMember
+	resp.MapVersion = m.db.CurMapVersion()
 
-	return r, nil
+	return resp, nil
 }
 
 // AddOrReplace adds member to membership or replaces member if it exists.
