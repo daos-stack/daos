@@ -32,6 +32,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -46,7 +47,7 @@ func expectAuthSysErrorForToken(t *testing.T, badToken *Token, expectedErrorMess
 		t.Error("Expected a nil AuthSys")
 	}
 
-	ExpectError(t, err, expectedErrorMessage, "")
+	common.CmpErr(t, errors.New(expectedErrorMessage), err)
 }
 
 // AuthSysFromAuthToken tests
@@ -66,7 +67,7 @@ func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
 	badToken := Token{Flavor: Flavor_AUTH_SYS,
 		Data: zeroArray}
 	expectAuthSysErrorForToken(t, &badToken,
-		"unmarshaling AUTH_SYS: proto: auth.Sys: illegal tag 0 (wire type 0)")
+		"invalid field number")
 }
 
 func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {

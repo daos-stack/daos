@@ -11,7 +11,7 @@ def scons():
 
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
-    pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'srv.pb-c.c',
+    pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'iosrv.pb-c.c',
                             'storage_query.pb-c.c', 'cont.pb-c.c'])
     common = denv.SharedObject(['rpc.c']) + pb
     # Management server module

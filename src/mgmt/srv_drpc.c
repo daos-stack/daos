@@ -32,7 +32,7 @@
 #include <daos_api.h>
 #include <daos_security.h>
 
-#include "srv.pb-c.h"
+#include "iosrv.pb-c.h"
 #include "acl.pb-c.h"
 #include "pool.pb-c.h"
 #include "cont.pb-c.h"

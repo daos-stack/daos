@@ -35,7 +35,7 @@
 #include <daos/drpc_modules.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
-#include "srv.pb-c.h"
+#include "iosrv.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
 

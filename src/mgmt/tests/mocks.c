@@ -25,7 +25,7 @@
  * Mocks for DAOS mgmt unit tests
  */
 
-#include "../srv.pb-c.h"
+#include "../iosrv.pb-c.h"
 #include "../srv_internal.h"
 #include "mocks.h"
 

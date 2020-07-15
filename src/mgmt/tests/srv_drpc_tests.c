@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@
 #include "../acl.pb-c.h"
 #include "../pool.pb-c.h"
 #include "../cont.pb-c.h"
-#include "../srv.pb-c.h"
+#include "../iosrv.pb-c.h"
 #include "../drpc_internal.h"
 #include "mocks.h"
 
