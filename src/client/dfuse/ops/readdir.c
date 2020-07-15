@@ -43,7 +43,6 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(udata->req);
 	struct dfuse_obj_hdl	*oh = udata->oh;
 	dfs_obj_t		*obj;
-	daos_obj_id_t		oid;
 	struct stat		stbuf = {0};
 	int			ns = 0;
 	int			rc;
@@ -60,12 +59,8 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 	if (rc)
 		return rc;
 
-	rc = dfs_obj2id(obj, &oid);
-	if (rc)
-		D_GOTO(out, rc);
-
-	rc = dfuse_lookup_inode(fs_handle, udata->inode->ie_dfs, &oid,
-				&stbuf.st_ino);
+	rc = dfuse_lookup_inode_from_obj(fs_handle, udata->inode->ie_dfs, obj,
+					 &stbuf.st_ino);
 	if (rc)
 		D_GOTO(out, rc);
 

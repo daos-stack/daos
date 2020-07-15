@@ -34,7 +34,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 {
 	struct fuse_entry_param	entry = {0};
 	d_list_t		*rlink;
-	daos_obj_id_t		oid;
 	int			rc;
 
 	D_ASSERT(ie->ie_parent);
@@ -44,11 +43,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	if (ie->ie_stat.st_ino == 0) {
-		rc = dfs_obj2id(ie->ie_obj, &oid);
-		if (rc)
-			D_GOTO(err, rc);
-		rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, &oid,
-					&ie->ie_stat.st_ino);
+		rc = dfuse_lookup_inode_from_obj(fs_handle, ie->ie_dfs,
+						 ie->ie_obj,
+						 &ie->ie_stat.st_ino);
 		if (rc)
 			D_GOTO(err, rc);
 	}
@@ -123,7 +120,6 @@ static int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie)
 {
-	daos_obj_id_t		oid;
 	int			rc;
 	char			str[DUNS_MAX_XATTR_LEN];
 	daos_size_t		str_len = DUNS_MAX_XATTR_LEN;
@@ -251,10 +247,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	ie->ie_dfs = dfs;
-
-	rc = dfs_obj2id(ie->ie_obj, &oid);
-	if (rc)
-		D_GOTO(out_umount, ret = rc);
 
 	rc = dfuse_lookup_inode(fs_handle, dfs, NULL,
 				&ie->ie_stat.st_ino);

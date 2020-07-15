@@ -526,6 +526,12 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		   ino_t *_ino);
 
 int
+dfuse_lookup_inode_from_obj(struct dfuse_projection_info *fs_handle,
+			    struct dfuse_dfs *dfs,
+			    dfs_obj_t *obj,
+			    ino_t *_ino);
+
+int
 dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 		      struct dfuse_dfs *dfs,
 		      struct dfuse_inode_entry **_entry);
