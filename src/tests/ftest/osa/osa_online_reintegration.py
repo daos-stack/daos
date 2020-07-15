@@ -178,7 +178,6 @@ class OSAOnlineReintegration(TestWithServers):
                                             num_pool)
             pool[val].create()
             pool_uuid.append(pool[val].uuid)
-            self.pool = pool[val]
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
@@ -187,7 +186,7 @@ class OSAOnlineReintegration(TestWithServers):
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
                 threads = []
-                for thrd in range(0, num_jobs):
+                for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
                                                     kwargs={"pool": pool[val],
@@ -244,5 +243,5 @@ class OSAOnlineReintegration(TestWithServers):
         :avocado: tags=all,pr,hw,large,osa,online_reintegration
         """
         # Perform reintegration testing with 1 to 2 pools
-        for x in range(1, 3):
-            self.run_online_reintegration_test(x)
+        for pool_num in range(1, 3):
+            self.run_online_reintegration_test(pool_num)
