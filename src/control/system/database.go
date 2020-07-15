@@ -404,7 +404,7 @@ func (db *Database) GroupMap() *GroupMap {
 
 	gm := NewGroupMap(db.MapVersion)
 	for _, srv := range db.Members.Ranks {
-		gm.RankURIs[srv.Rank] = srv.URI
+		gm.RankURIs[srv.Rank] = srv.FabricURI
 	}
 	return gm
 }

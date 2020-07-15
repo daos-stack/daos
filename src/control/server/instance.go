@@ -119,8 +119,8 @@ func (srv *IOServerInstance) isMSReplica() bool {
 
 // OnStorageReady adds a list of callbacks to invoke when the instance
 // storage becomes ready.
-func (srv *IOServerInstance) OnStorageReady(fnList ...onStorageReadyFn) {
-	srv.onStorageReady = fnList
+func (srv *IOServerInstance) OnStorageReady(fn onStorageReadyFn) {
+	srv.onStorageReady = append(srv.onStorageReady, fn)
 }
 
 // LocalState returns local perspective of the current instance state

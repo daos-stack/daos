@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
 
@@ -206,22 +207,30 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			"combining peer addr with listener port")
 	}
 
-	member := system.NewMember(system.Rank(req.GetRank()), req.GetUuid(),
-		req.GetUri(), replyAddr, system.MemberStateEvicted)
+	uuid, err := uuid.Parse(req.GetUuid())
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid uuid %q", req.GetUuid())
+	}
 
-	joinResult, err := svc.membership.Join(member)
+	joinResponse, err := svc.membership.Join(&system.JoinRequest{
+		UUID:           uuid,
+		ControlAddr:    replyAddr,
+		FabricURI:      req.GetUri(),
+		FabricContexts: req.GetNctxs(),
+	})
 	if err != nil {
 		return nil, err
 	}
-	if joinResult.Created {
+	member := joinResponse.Member
+	if joinResponse.Created {
 		svc.log.Debugf("new system member: rank %d, addr %s, uri %s",
-			member.Rank, replyAddr, member.URI)
+			member.Rank, replyAddr, member.FabricURI)
 	} else {
 		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
-			member.Rank, member.URI, joinResult.PrevState, member.State())
-		if joinResult.PrevState == member.State() {
+			member.Rank, member.FabricURI, joinResponse.PrevState, member.State())
+		if joinResponse.PrevState == member.State() {
 			svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
-				member.Rank, joinResult.PrevState, member.State())
+				member.Rank, joinResponse.PrevState, member.State())
 		}
 	}
 
