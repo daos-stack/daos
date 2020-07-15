@@ -76,6 +76,8 @@ class DmgCommand(DmgCommandBase):
         self.sub_command_class.set_sub_command("scan")
         self.sub_command_class.sub_command_class.verbose.value = verbose
         self.result = self._get_result()
+        self.log.debug("### self.result.stdout ###")
+        self.log.debug(self.result.stdout)
 
         if verbose:
             vals = re.findall(
@@ -84,6 +86,8 @@ class DmgCommand(DmgCommandBase):
                 r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
                 r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
                 r"[ ]+([A-Z]+)\n", self.result.stdout)
+            self.log.debug("### re.findall output ###")
+            self.log.debug(vals)
 
             data = defaultdict(list)
             data["host"] = vals[0][0]
