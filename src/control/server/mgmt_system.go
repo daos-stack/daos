@@ -214,11 +214,11 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, err
 	}
 	if joinResult.Created {
-		svc.log.Debugf("new system member: rank %d, addr %s",
-			member.Rank, replyAddr)
+		svc.log.Debugf("new system member: rank %d, addr %s, uri %s",
+			member.Rank, replyAddr, member.URI)
 	} else {
-		svc.log.Debugf("updated system member: rank %d, addr %s, %s->%s",
-			member.Rank, replyAddr, joinResult.PrevState, member.State())
+		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
+			member.Rank, member.URI, joinResult.PrevState, member.State())
 		if joinResult.PrevState == member.State() {
 			svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
 				member.Rank, joinResult.PrevState, member.State())
