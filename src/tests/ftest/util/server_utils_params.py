@@ -291,6 +291,7 @@ class DaosServerYamlParameters(YamlParameters):
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
+            default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
             # All log files should be placed in the same directory on each host
             # to enable easy log file archiving by launch.py
@@ -319,15 +320,25 @@ class DaosServerYamlParameters(YamlParameters):
             self.pinned_numa_node = BasicParameter(None)
             self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR")
             self.log_file = LogParameter(log_dir, None, "daos_server.log")
-            self.env_vars = BasicParameter(
-                None,
-                ["ABT_ENV_MAX_NUM_XSTREAMS=100",
-                 "ABT_MAX_NUM_XSTREAMS=100",
-                 "DAOS_MD_CAP=1024",
-                 "FI_SOCKETS_MAX_CONN_RETRY=1",
-                 "FI_SOCKETS_CONN_TIMEOUT=2000",
-                 "DD_MASK=mgmt,io,md,epc,rebuild"]
-            )
+
+            # Set extra environment variables for sockets provider
+            default_env_vars = [
+                "ABT_ENV_MAX_NUM_XSTREAMS=100",
+                "ABT_MAX_NUM_XSTREAMS=100",
+                "DAOS_MD_CAP=1024",
+                "DD_MASK=mgmt,io,md,epc,rebuild"
+            ]
+            if default_provider == "ofi+sockets":
+                default_env_vars.extend([
+                    "FI_SOCKETS_MAX_CONN_RETRY=5",
+                    "FI_SOCKETS_CONN_TIMEOUT=2000",
+                    "CRT_SWIM_RPC_TIMEOUT=10",
+                    "SWIM_PING_TIMEOUT=10000",
+                    "SWIM_PROTOCOL_PERIOD_LEN=30000",
+                    "SWIM_SUSPECT_TIMEOUT=90000",
+                ])
+            self.env_vars = BasicParameter(None, default_env_vars)
+
             # global CRT_CTX_SHARE_ADDR shared with client
             self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
 
