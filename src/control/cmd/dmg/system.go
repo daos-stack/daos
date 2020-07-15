@@ -232,7 +232,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 
 	if err != nil || resp.AbsentRanks.Count() == 0 {
 		// report absent hosts xor ranks
-		resp.DisplayAbsentHostsRanks()
+		cmd.log.Info(resp.DisplayAbsentHostsRanks())
 	}
 
 	return err
