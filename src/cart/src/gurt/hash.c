@@ -221,41 +221,6 @@ d_hash_murmur64(const unsigned char *key, unsigned int key_len,
  * Generic Hash Table functions / data structures
  ******************************************************************************/
 
-static int
-ch_bucket_init(struct d_hash_table *htable, struct d_hash_bucket *bucket)
-{
-	int rc = 0;
-
-	D_INIT_LIST_HEAD(&bucket->hb_head);
-
-	if (htable->ht_feats & D_HASH_FT_NOLOCK)
-		goto out;
-
-	if (htable->ht_feats & D_HASH_FT_MUTEX)
-		rc = D_MUTEX_INIT(&bucket->hb_lock.mutex, NULL);
-	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
-		rc = D_RWLOCK_INIT(&bucket->hb_lock.rwlock, NULL);
-	else
-		rc = D_SPIN_INIT(&bucket->hb_lock.spin,
-				 PTHREAD_PROCESS_PRIVATE);
-out:
-	return rc;
-}
-
-static void
-ch_bucket_fini(struct d_hash_table *htable, struct d_hash_bucket *bucket)
-{
-	if (htable->ht_feats & D_HASH_FT_NOLOCK)
-		return;
-
-	if (htable->ht_feats & D_HASH_FT_MUTEX)
-		D_MUTEX_DESTROY(&bucket->hb_lock.mutex);
-	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
-		D_RWLOCK_DESTROY(&bucket->hb_lock.rwlock);
-	else
-		D_SPIN_DESTROY(&bucket->hb_lock.spin);
-}
-
 /**
  * Lock the hash table
  *
@@ -264,8 +229,7 @@ ch_bucket_fini(struct d_hash_table *htable, struct d_hash_bucket *bucket)
  * see D_HASH_FT_RWLOCK for the details.
  */
 static inline void
-ch_bucket_lock(struct d_hash_table *htable, struct d_hash_bucket *bucket,
-	       bool read_only)
+ch_bucket_lock(struct d_hash_table *htable, uint32_t idx, bool read_only)
 {
 	union d_hash_lock *lock;
 
@@ -273,7 +237,7 @@ ch_bucket_lock(struct d_hash_table *htable, struct d_hash_bucket *bucket,
 		return;
 
 	lock = (htable->ht_feats & D_HASH_FT_GLOCK)
-		? &htable->ht_lock : &bucket->hb_lock;
+		? &htable->ht_lock : &htable->ht_locks[idx];
 	if (htable->ht_feats & D_HASH_FT_MUTEX) {
 		D_MUTEX_LOCK(&lock->mutex);
 	} else if (htable->ht_feats & D_HASH_FT_RWLOCK) {
@@ -288,8 +252,7 @@ ch_bucket_lock(struct d_hash_table *htable, struct d_hash_bucket *bucket,
 
 /** unlock the hash table */
 static inline void
-ch_bucket_unlock(struct d_hash_table *htable, struct d_hash_bucket *bucket,
-		 bool read_only)
+ch_bucket_unlock(struct d_hash_table *htable, uint32_t idx, bool read_only)
 {
 	union d_hash_lock *lock;
 
@@ -297,7 +260,7 @@ ch_bucket_unlock(struct d_hash_table *htable, struct d_hash_bucket *bucket,
 		return;
 
 	lock = (htable->ht_feats & D_HASH_FT_GLOCK)
-		? &htable->ht_lock : &bucket->hb_lock;
+		? &htable->ht_lock : &htable->ht_locks[idx];
 	if (htable->ht_feats & D_HASH_FT_MUTEX)
 		D_MUTEX_UNLOCK(&lock->mutex);
 	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
@@ -481,18 +444,20 @@ d_hash_rec_find(struct d_hash_table *htable, const void *key,
 {
 	struct d_hash_bucket	*bucket;
 	d_list_t		*link;
+	uint32_t		 idx;
 	bool			 is_lru = (htable->ht_feats & D_HASH_FT_LRU);
 
 	D_ASSERT(key != NULL && ksize != 0);
-	bucket = &htable->ht_buckets[ch_key_hash(htable, key, ksize)];
+	idx = ch_key_hash(htable, key, ksize);
+	bucket = &htable->ht_buckets[idx];
 
-	ch_bucket_lock(htable, bucket, !is_lru);
+	ch_bucket_lock(htable, idx, !is_lru);
 
 	link = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_HEAD);
 	if (link != NULL)
 		ch_rec_addref(htable, link);
 
-	ch_bucket_unlock(htable, bucket, !is_lru);
+	ch_bucket_unlock(htable, idx, !is_lru);
 	return link;
 }
 
@@ -502,21 +467,24 @@ d_hash_rec_insert(struct d_hash_table *htable, const void *key,
 {
 	struct d_hash_bucket	*bucket;
 	d_list_t		*tmp;
+	uint32_t		 idx;
 	int			 rc = 0;
 
 	D_ASSERT(key != NULL && ksize != 0);
-	bucket = &htable->ht_buckets[ch_key_hash(htable, key, ksize)];
+	idx = ch_key_hash(htable, key, ksize);
+	bucket = &htable->ht_buckets[idx];
 
-	ch_bucket_lock(htable, bucket, false);
+	ch_bucket_lock(htable, idx, false);
 
 	if (exclusive) {
 		tmp = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_NONE);
 		if (tmp)
-			D_GOTO(out, rc = -DER_EXIST);
+			D_GOTO(out_unlock, rc = -DER_EXIST);
 	}
 	ch_rec_insert_addref(htable, bucket, link);
-out:
-	ch_bucket_unlock(htable, bucket, false);
+
+out_unlock:
+	ch_bucket_unlock(htable, idx, false);
 	return rc;
 }
 
@@ -526,21 +494,24 @@ d_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
 {
 	struct d_hash_bucket	*bucket;
 	d_list_t		*tmp;
+	uint32_t		 idx;
 
 	D_ASSERT(key != NULL && ksize != 0);
-	bucket = &htable->ht_buckets[ch_key_hash(htable, key, ksize)];
+	idx = ch_key_hash(htable, key, ksize);
+	bucket = &htable->ht_buckets[idx];
 
-	ch_bucket_lock(htable, bucket, false);
+	ch_bucket_lock(htable, idx, false);
 
 	tmp = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_HEAD);
 	if (tmp) {
 		ch_rec_addref(htable, tmp);
 		link = tmp;
-		D_GOTO(out, 0);
+		D_GOTO(out_unlock, 0);
 	}
 	ch_rec_insert_addref(htable, bucket, link);
-out:
-	ch_bucket_unlock(htable, bucket, false);
+
+out_unlock:
+	ch_bucket_unlock(htable, idx, false);
 	return link;
 }
 
@@ -549,19 +520,36 @@ d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *link,
 			 void *arg)
 {
 	struct d_hash_bucket	*bucket;
+	uint32_t	 idx;
+	uint32_t	 nr = 1U << htable->ht_bits;
+	bool		 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 
 	if (htable->ht_ops->hop_key_init == NULL)
 		return -DER_INVAL;
 
+	if (need_lock) {
+		/* Lock all buckets because of unknown key yet */
+		for (idx = 0; idx < nr; idx++) {
+			ch_bucket_lock(htable, idx, false);
+			if (htable->ht_feats & D_HASH_FT_GLOCK)
+				break;
+		}
+	}
+
 	/* has no key, hash table should have provided key generator */
 	ch_key_init(htable, link, arg);
 
-	bucket = &htable->ht_buckets[ch_rec_hash(htable, link)];
-	ch_bucket_lock(htable, bucket, false);
-
+	idx = ch_rec_hash(htable, link);
+	bucket = &htable->ht_buckets[idx];
 	ch_rec_insert_addref(htable, bucket, link);
 
-	ch_bucket_unlock(htable, bucket, false);
+	if (need_lock) {
+		for (idx = 0; idx < nr; idx++) {
+			ch_bucket_unlock(htable, idx, false);
+			if (htable->ht_feats & D_HASH_FT_GLOCK)
+				break;
+		}
+	}
 	return 0;
 }
 
@@ -571,13 +559,15 @@ d_hash_rec_delete(struct d_hash_table *htable, const void *key,
 {
 	struct d_hash_bucket	*bucket;
 	d_list_t		*link;
+	uint32_t		 idx;
 	bool			 deleted = false;
 	bool			 zombie  = false;
 
 	D_ASSERT(key != NULL && ksize != 0);
-	bucket = &htable->ht_buckets[ch_key_hash(htable, key, ksize)];
+	idx = ch_key_hash(htable, key, ksize);
+	bucket = &htable->ht_buckets[idx];
 
-	ch_bucket_lock(htable, bucket, false);
+	ch_bucket_lock(htable, idx, false);
 
 	link = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_NONE);
 	if (link != NULL) {
@@ -585,7 +575,7 @@ d_hash_rec_delete(struct d_hash_table *htable, const void *key,
 		deleted = true;
 	}
 
-	ch_bucket_unlock(htable, bucket, false);
+	ch_bucket_unlock(htable, idx, false);
 
 	if (zombie)
 		ch_rec_free(htable, link);
@@ -595,13 +585,14 @@ d_hash_rec_delete(struct d_hash_table *htable, const void *key,
 bool
 d_hash_rec_delete_at(struct d_hash_table *htable, d_list_t *link)
 {
-	struct d_hash_bucket	*bucket = NULL;
-	bool			 deleted = false;
-	bool			 zombie  = false;
+	uint32_t idx = 0;
+	bool	 deleted = false;
+	bool	 zombie  = false;
+	bool	 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 
-	if (!(htable->ht_feats & D_HASH_FT_NOLOCK)) {
-		bucket = &htable->ht_buckets[ch_rec_hash(htable, link)];
-		ch_bucket_lock(htable, bucket, false);
+	if (need_lock) {
+		idx = ch_rec_hash(htable, link);
+		ch_bucket_lock(htable, idx, false);
 	}
 
 	if (!d_list_empty(link)) {
@@ -609,8 +600,8 @@ d_hash_rec_delete_at(struct d_hash_table *htable, d_list_t *link)
 		deleted = true;
 	}
 
-	if (!(htable->ht_feats & D_HASH_FT_NOLOCK))
-		ch_bucket_unlock(htable, bucket, false);
+	if (need_lock)
+		ch_bucket_unlock(htable, idx, false);
 
 	if (zombie)
 		ch_rec_free(htable, link);
@@ -623,18 +614,20 @@ d_hash_rec_evict(struct d_hash_table *htable, const void *key,
 {
 	struct d_hash_bucket	*bucket;
 	d_list_t		*link;
+	uint32_t		 idx;
 
 	if (!(htable->ht_feats & D_HASH_FT_LRU))
 		return false;
 
 	D_ASSERT(key != NULL && ksize != 0);
-	bucket = &htable->ht_buckets[ch_key_hash(htable, key, ksize)];
+	idx = ch_key_hash(htable, key, ksize);
+	bucket = &htable->ht_buckets[idx];
 
-	ch_bucket_lock(htable, bucket, false);
+	ch_bucket_lock(htable, idx, false);
 
 	link = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_TAIL);
 
-	ch_bucket_unlock(htable, bucket, false);
+	ch_bucket_unlock(htable, idx, false);
 	return link != NULL;
 }
 
@@ -642,49 +635,54 @@ bool
 d_hash_rec_evict_at(struct d_hash_table *htable, d_list_t *link)
 {
 	struct d_hash_bucket	*bucket;
+	uint32_t		 idx;
 	bool			 evicted = false;
 
 	if (!(htable->ht_feats & D_HASH_FT_LRU))
 		return false;
 
-	bucket = &htable->ht_buckets[ch_rec_hash(htable, link)];
-	ch_bucket_lock(htable, bucket, false);
+	idx = ch_rec_hash(htable, link);
+	bucket = &htable->ht_buckets[idx];
+
+	ch_bucket_lock(htable, idx, false);
 
 	if (link != bucket->hb_head.prev) {
 		d_list_move_tail(link, &bucket->hb_head);
 		evicted = true;
 	}
 
-	ch_bucket_unlock(htable, bucket, false);
+	ch_bucket_unlock(htable, idx, false);
 	return evicted;
 }
 
 void
 d_hash_rec_addref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct d_hash_bucket	*bucket = NULL;
+	uint32_t idx = 0;
+	bool	 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 
-	if (!(htable->ht_feats & D_HASH_FT_NOLOCK)) {
-		bucket = &htable->ht_buckets[ch_rec_hash(htable, link)];
-		ch_bucket_lock(htable, bucket, true);
+	if (need_lock) {
+		idx = ch_rec_hash(htable, link);
+		ch_bucket_lock(htable, idx, true);
 	}
 
 	ch_rec_addref(htable, link);
 
-	if (!(htable->ht_feats & D_HASH_FT_NOLOCK))
-		ch_bucket_unlock(htable, bucket, true);
+	if (need_lock)
+		ch_bucket_unlock(htable, idx, true);
 }
 
 void
 d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct d_hash_bucket	*bucket = NULL;
-	bool ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
-	bool zombie;
+	uint32_t idx = 0;
+	bool	 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
+	bool	 ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
+	bool	 zombie;
 
-	if (!(htable->ht_feats & D_HASH_FT_NOLOCK)) {
-		bucket = &htable->ht_buckets[ch_rec_hash(htable, link)];
-		ch_bucket_lock(htable, bucket, !ephemeral);
+	if (need_lock) {
+		idx = ch_rec_hash(htable, link);
+		ch_bucket_lock(htable, idx, !ephemeral);
 	}
 
 	zombie = ch_rec_decref(htable, link);
@@ -693,8 +691,8 @@ d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 
 	D_ASSERT(!zombie || d_list_empty(link));
 
-	if (!(htable->ht_feats & D_HASH_FT_NOLOCK))
-		ch_bucket_unlock(htable, bucket, !ephemeral);
+	if (need_lock)
+		ch_bucket_unlock(htable, idx, !ephemeral);
 
 	if (zombie)
 		ch_rec_free(htable, link);
@@ -703,14 +701,15 @@ d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 int
 d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *link)
 {
-	struct d_hash_bucket	*bucket = NULL;
-	bool ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
-	bool zombie = false;
-	int rc = 0;
+	uint32_t idx = 0;
+	bool	 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
+	bool	 ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
+	bool	 zombie = false;
+	int	 rc = 0;
 
-	if (!(htable->ht_feats & D_HASH_FT_NOLOCK)) {
-		bucket = &htable->ht_buckets[ch_rec_hash(htable, link)];
-		ch_bucket_lock(htable, bucket, !ephemeral);
+	if (need_lock) {
+		idx = ch_rec_hash(htable, link);
+		ch_bucket_lock(htable, idx, !ephemeral);
 	}
 
 	if (htable->ht_ops->hop_rec_ndecref) {
@@ -735,8 +734,8 @@ d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *link)
 		D_ASSERT(!zombie || d_list_empty(link));
 	}
 
-	if (!(htable->ht_feats & D_HASH_FT_NOLOCK))
-		ch_bucket_unlock(htable, bucket, !ephemeral);
+	if (need_lock)
+		ch_bucket_unlock(htable, idx, !ephemeral);
 
 	if (zombie)
 		ch_rec_free(htable, link);
@@ -777,10 +776,9 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 			    d_hash_table_ops_t *hops,
 			    struct d_hash_table *htable)
 {
-	struct d_hash_bucket	*buckets;
-	uint32_t		 nr = (1 << bits);
-	uint32_t		 i;
-	int			 rc = 0;
+	uint32_t nr = (1 << bits);
+	uint32_t i;
+	int	 rc = 0;
 
 	D_ASSERT(hops != NULL);
 	D_ASSERT(hops->hop_key_cmp  != NULL);
@@ -790,41 +788,68 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 	htable->ht_ops	 = hops;
 	htable->ht_priv	 = priv;
 
-	D_ALLOC_ARRAY(buckets, nr);
-	if (buckets == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	for (i = 0; i < nr; i++) {
-		rc = ch_bucket_init(htable, &buckets[i]);
-		if (rc) {
-			while (i > 0)
-				ch_bucket_fini(htable, &buckets[--i]);
-			D_FREE(buckets);
-			D_GOTO(out, rc);
-		}
-	}
-	htable->ht_buckets = buckets;
-
-	if (htable->ht_feats & D_HASH_FT_MUTEX)
-		rc = D_MUTEX_INIT(&htable->ht_lock.mutex, NULL);
-	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
-		rc = D_RWLOCK_INIT(&htable->ht_lock.rwlock, NULL);
-	else
-		rc = D_SPIN_INIT(&htable->ht_lock.spin,
-				 PTHREAD_PROCESS_PRIVATE);
-	if (rc) {
-		for (i = 0; i < nr; i++)
-			ch_bucket_fini(htable, &buckets[i]);
-		D_FREE(buckets);
-		D_GOTO(out, rc);
-	}
-
 	if (hops->hop_rec_hash == NULL && !(feats & D_HASH_FT_NOLOCK)) {
 		htable->ht_feats |= D_HASH_FT_GLOCK;
 		D_WARN("The d_hash_table_ops_t->hop_rec_hash() callback is "
 			"not provided!\nTherefore the whole hash table locking "
 			"will be used for backward compatibility.\n");
 	}
+
+	D_ALLOC_ARRAY(htable->ht_buckets, nr);
+	if (htable->ht_buckets == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	for (i = 0; i < nr; i++)
+		D_INIT_LIST_HEAD(&htable->ht_buckets[i].hb_head);
+
+	if (htable->ht_feats & D_HASH_FT_NOLOCK)
+		D_GOTO(out, rc = 0);
+
+	if (htable->ht_feats & D_HASH_FT_GLOCK) {
+		if (htable->ht_feats & D_HASH_FT_MUTEX)
+			rc = D_MUTEX_INIT(&htable->ht_lock.mutex, NULL);
+		else if (htable->ht_feats & D_HASH_FT_RWLOCK)
+			rc = D_RWLOCK_INIT(&htable->ht_lock.rwlock, NULL);
+		else
+			rc = D_SPIN_INIT(&htable->ht_lock.spin,
+					 PTHREAD_PROCESS_PRIVATE);
+		if (rc)
+			D_GOTO(free_buckets, rc);
+	} else {
+		D_ALLOC_ARRAY(htable->ht_locks, nr);
+		if (htable->ht_locks == NULL)
+			D_GOTO(free_buckets, rc = -DER_NOMEM);
+
+		for (i = 0; i < nr; i++) {
+			if (htable->ht_feats & D_HASH_FT_MUTEX)
+				rc = D_MUTEX_INIT(&htable->ht_locks[i].mutex,
+						  NULL);
+			else if (htable->ht_feats & D_HASH_FT_RWLOCK)
+				rc = D_RWLOCK_INIT(&htable->ht_locks[i].rwlock,
+						   NULL);
+			else
+				rc = D_SPIN_INIT(&htable->ht_locks[i].spin,
+						 PTHREAD_PROCESS_PRIVATE);
+			if (rc)
+				D_GOTO(free_locks, rc);
+		}
+	}
+
+	D_GOTO(out, rc = 0);
+
+free_locks:
+	while (i > 0) {
+		i--; /* last successful */
+		if (htable->ht_feats & D_HASH_FT_MUTEX)
+			D_MUTEX_DESTROY(&htable->ht_locks[i].mutex);
+		else if (htable->ht_feats & D_HASH_FT_RWLOCK)
+			D_RWLOCK_DESTROY(&htable->ht_locks[i].rwlock);
+		else
+			D_SPIN_DESTROY(&htable->ht_locks[i].spin);
+	}
+	D_FREE(htable->ht_locks);
+free_buckets:
+	D_FREE(htable->ht_buckets);
 out:
 	return rc;
 }
@@ -857,8 +882,8 @@ d_hash_table_traverse(struct d_hash_table *htable, d_hash_traverse_cb_t cb,
 {
 	struct d_hash_bucket	*bucket;
 	d_list_t		*link;
-	uint32_t		 nr;
-	uint32_t		 i;
+	uint32_t		 nr = 1U << htable->ht_bits;
+	uint32_t		 idx;
 	int			 rc = 0;
 
 	if (htable->ht_buckets == NULL) {
@@ -871,16 +896,15 @@ d_hash_table_traverse(struct d_hash_table *htable, d_hash_traverse_cb_t cb,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	nr = 1U << htable->ht_bits;
-	for (i = 0; i < nr && !rc; i++) {
-		bucket = &htable->ht_buckets[i];
-		ch_bucket_lock(htable, bucket, true);
+	for (idx = 0; idx < nr && !rc; idx++) {
+		bucket = &htable->ht_buckets[idx];
+		ch_bucket_lock(htable, idx, true);
 		d_list_for_each(link, &bucket->hb_head) {
 			rc = cb(link, arg);
 			if (rc)
 				break;
 		}
-		ch_bucket_unlock(htable, bucket, true);
+		ch_bucket_unlock(htable, idx, true);
 	}
 out:
 	return rc;
@@ -889,10 +913,9 @@ out:
 static bool
 d_hash_table_is_empty(struct d_hash_table *htable)
 {
-	struct d_hash_bucket	*bucket;
-	uint32_t		 nr;
-	uint32_t		 i;
-	bool			 is_empty = true;
+	uint32_t	 nr = 1U << htable->ht_bits;
+	uint32_t	 idx;
+	bool		 is_empty = true;
 
 	if (htable->ht_buckets == NULL) {
 		D_ERROR("d_hash_table %p not initialized (NULL buckets).\n",
@@ -900,14 +923,12 @@ d_hash_table_is_empty(struct d_hash_table *htable)
 		D_GOTO(out, 0);
 	}
 
-	nr = 1U << htable->ht_bits;
-	for (i = 0; i < nr && is_empty == true; i++) {
-		bucket = &htable->ht_buckets[i];
-		ch_bucket_lock(htable, bucket, true);
-		if (!d_list_empty(&bucket->hb_head))
-			is_empty = false;
-		ch_bucket_unlock(htable, bucket, true);
+	for (idx = 0; idx < nr && is_empty == true; idx++) {
+		ch_bucket_lock(htable, idx, true);
+		is_empty = d_list_empty(&htable->ht_buckets[idx].hb_head);
+		ch_bucket_unlock(htable, idx, true);
 	}
+
 out:
 	return is_empty;
 }
@@ -916,36 +937,47 @@ int
 d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 {
 	struct d_hash_bucket	*bucket;
-	uint32_t		 nr;
+	uint32_t		 nr = 1U << htable->ht_bits;
 	uint32_t		 i;
 	int			 rc = 0;
 
-	if (htable->ht_buckets == NULL)
-		D_GOTO(out, rc);
-
-	nr = 1U << htable->ht_bits;
 	for (i = 0; i < nr; i++) {
 		bucket = &htable->ht_buckets[i];
 		while (!d_list_empty(&bucket->hb_head)) {
 			if (!force) {
 				D_DEBUG(DB_TRACE, "Warning, non-empty hash\n");
-				D_GOTO(err, rc = -DER_BUSY);
+				D_GOTO(out, rc = -DER_BUSY);
 			}
 			d_hash_rec_delete_at(htable, bucket->hb_head.next);
 		}
-		ch_bucket_fini(htable, bucket);
 	}
-	D_FREE(htable->ht_buckets);
 
-	if (htable->ht_feats & D_HASH_FT_MUTEX)
-		D_MUTEX_DESTROY(&htable->ht_lock.mutex);
-	else if (htable->ht_feats & D_HASH_FT_RWLOCK)
-		D_RWLOCK_DESTROY(&htable->ht_lock.rwlock);
-	else
-		D_SPIN_DESTROY(&htable->ht_lock.spin);
-out:
+	if (htable->ht_feats & D_HASH_FT_NOLOCK)
+		D_GOTO(free_buckets, rc = 0);
+
+	if (htable->ht_feats & D_HASH_FT_GLOCK) {
+		if (htable->ht_feats & D_HASH_FT_MUTEX)
+			D_MUTEX_DESTROY(&htable->ht_lock.mutex);
+		else if (htable->ht_feats & D_HASH_FT_RWLOCK)
+			D_RWLOCK_DESTROY(&htable->ht_lock.rwlock);
+		else
+			D_SPIN_DESTROY(&htable->ht_lock.spin);
+	} else {
+		for (i = 0; i < nr; i++) {
+			if (htable->ht_feats & D_HASH_FT_MUTEX)
+				D_MUTEX_DESTROY(&htable->ht_locks[i].mutex);
+			else if (htable->ht_feats & D_HASH_FT_RWLOCK)
+				D_RWLOCK_DESTROY(&htable->ht_locks[i].rwlock);
+			else
+				D_SPIN_DESTROY(&htable->ht_locks[i].spin);
+		}
+		D_FREE(htable->ht_locks);
+	}
+
+free_buckets:
+	D_FREE(htable->ht_buckets);
 	memset(htable, 0, sizeof(*htable));
-err:
+out:
 	return rc;
 }
 
@@ -1015,11 +1047,14 @@ rl_op_init(struct d_rlink *rlink)
 static bool
 rl_op_empty(struct d_rlink *rlink)
 {
+	bool is_unlinked;
+
 	if (!rlink->rl_initialized)
 		return true;
 
-	D_ASSERT(rlink->rl_ref != 0 || d_hash_rec_unlinked(&rlink->rl_link));
-	return d_hash_rec_unlinked(&rlink->rl_link);
+	is_unlinked = d_hash_rec_unlinked(&rlink->rl_link);
+	D_ASSERT(rlink->rl_ref != 0 || is_unlinked);
+	return is_unlinked;
 }
 
 static inline struct d_hlink *
@@ -1168,6 +1203,8 @@ d_uhash_link_empty(struct d_ulink *ulink)
 void
 d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 {
+	bool need_lock = !(hhash->ch_htable.ht_feats & D_HASH_FT_NOLOCK);
+
 	D_ASSERT(hlink->hl_link.rl_initialized);
 
 	/* check if handle type fits in allocated bits */
@@ -1177,16 +1214,24 @@ d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 
 	if (d_hhash_is_ptrtype(hhash)) {
 		uint64_t ptr_key = (uintptr_t)hlink;
+		uint32_t idx = 0;
 
 		D_ASSERTF(type == D_HTYPE_PTR, "direct/ptr-based htable can "
 			  "only contain D_HTYPE_PTR type entries");
 		D_ASSERTF(d_hhash_key_isptr(ptr_key), "hlink ptr %p is invalid "
 			  "D_HTYPE_PTR type", hlink);
 
-		/* TODO: ch_lock(&hhtab->ch_htable, bucket, false); */
-		d_hash_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+		if (need_lock) {
+			idx = ch_rec_hash(&hhash->ch_htable,
+					  &hlink->hl_link.rl_link);
+			ch_bucket_lock(&hhash->ch_htable, idx, false);
+		}
+
+		ch_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 		hlink->hl_key = ptr_key;
-		/* TODO: ch_unlock(&hhtab->ch_htable, bucket, false); */
+
+		if (need_lock)
+			ch_bucket_unlock(&hhash->ch_htable, idx, false);
 	} else {
 		D_ASSERTF(type != D_HTYPE_PTR, "PTR type key being inserted "
 			  "in a non ptr-based htable.\n");
@@ -1307,6 +1352,22 @@ link2ulink(d_list_t *link)
 	return container_of(rlink, struct d_ulink, ul_link);
 }
 
+static void
+uh_op_rec_addref(struct d_hash_table *htable, d_list_t *link)
+{
+	struct d_ulink		*ulink	= link2ulink(link);
+
+	rl_op_addref(&ulink->ul_link);
+}
+
+static bool
+uh_op_rec_decref(struct d_hash_table *htable, d_list_t *link)
+{
+	struct d_ulink		*ulink	= link2ulink(link);
+
+	return rl_op_decref(&ulink->ul_link);
+}
+
 static uint32_t
 uh_op_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
@@ -1335,7 +1396,7 @@ uh_op_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key,
 	struct d_ulink		*ulink	= link2ulink(link);
 	struct d_uhash_bundle	*uhbund	= (struct d_uhash_bundle *)key;
 	struct d_uuid		*lkey	= (struct d_uuid *)uhbund->key;
-	bool			 res	= true;
+	bool			 res;
 
 	D_ASSERT(ksize == sizeof(struct d_uhash_bundle));
 	D_DEBUG(DB_TRACE, "Link key, Key:"CF_UUID","CF_UUID"\n",
@@ -1362,8 +1423,8 @@ static d_hash_table_ops_t uh_ops = {
 	.hop_key_hash		= uh_op_key_hash,
 	.hop_key_cmp		= uh_op_key_cmp,
 	.hop_rec_hash		= uh_op_rec_hash,
-	.hop_rec_addref		= hh_op_rec_addref, /* Reuse hh_op_add/decref */
-	.hop_rec_decref		= hh_op_rec_decref, /* Reuse hh_op_add/decref */
+	.hop_rec_addref		= uh_op_rec_addref,
+	.hop_rec_decref		= uh_op_rec_decref,
 	.hop_rec_free		= uh_op_rec_free,
 };
 
