@@ -96,7 +96,7 @@ class OSAOnlineReintegration(TestWithServers):
         Args:
             pool (object): pool handle
             oclass (str): IOR object class
-            API (str): IOR API
+            api (str): IOR api
             test (list): IOR test sequence
             flags (str): IOR flags
             results (queue): queue for returning thread results
@@ -108,7 +108,8 @@ class OSAOnlineReintegration(TestWithServers):
         container_info = {}
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
+            self.fail("Exiting Test : Mpich not installed on :"
+                      " {}".format(self.hostfile_clients[0]))
         self.pool = pool
         # Define the arguments for the ior_runner_thread method
         ior_cmd = IorCommand()
@@ -142,8 +143,6 @@ class OSAOnlineReintegration(TestWithServers):
         except CommandFailure as _error:
             results.put("FAIL")
 
-
-
     def run_online_reintegration_test(self, num_pool):
         """Run the Online reintegration without data.
             Args:
@@ -164,7 +163,7 @@ class OSAOnlineReintegration(TestWithServers):
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
-        # Exclude rank : two ranks other than rank 0.
+        # Exclude one rank : other than rank 0.
         rank = random.randint(1, exclude_servers)
 
         for val in range(0, num_pool):
