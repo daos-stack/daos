@@ -8,9 +8,9 @@ control_log_file: /tmp/dnt_control.log
 access_points: ['localhost:10001']
 servers:
 -
-  targets: 1
+  targets: 2
   first_core: 0
-  nr_xs_helpers: 1
+  nr_xs_helpers: 2
   fabric_iface: eth0
   fabric_iface_port: 31416
   log_mask: DEBUG

@@ -361,7 +361,7 @@ class ValgrindHelper():
     def __init__(self, logid=None):
 
         # Set this to False to disable valgrind, which will run faster.
-        self.use_valgrind = False
+        self.use_valgrind = True
         self.full_check = True
         self._xml_file = None
         self._logid = logid
