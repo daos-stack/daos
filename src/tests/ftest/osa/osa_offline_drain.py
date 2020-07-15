@@ -168,4 +168,5 @@ class OSAOfflineDrain(TestWithServers):
         for pool_num in range(1, 3):
             self.run_offline_drain_test(pool_num)
         # Perform drain testing : inserting data in pool
-        self.run_offline_drain_test(1, True)
+        # Bug : DAOS-4946 blocks the following test case.
+        # self.run_offline_drain_test(1, True)
