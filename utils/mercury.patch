@@ -1,0 +1,127 @@
+From 32ffd61f0cbd231439b99de5e4e5644cd289ecac Mon Sep 17 00:00:00 2001
+From: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
+Date: Tue, 14 Jul 2020 13:03:55 -0700
+Subject: [PATCH] Mercury patch to improve IOPS
+
+Signed-off-by: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
+---
+ src/mercury.c   |  2 +-
+ src/na/na_ofi.c | 27 +++++++++++++++++++++++++--
+ 2 files changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/src/mercury.c b/src/mercury.c
+index 4101ffe..c6e8c35 100644
+--- a/src/mercury.c
++++ b/src/mercury.c
+@@ -26,7 +26,7 @@
+ /* Local Macros */
+ /****************/
+ 
+-#define HG_POST_LIMIT_DEFAULT 256
++#define HG_POST_LIMIT_DEFAULT 1024
+ 
+ #define HG_CONTEXT_CLASS(context) \
+     ((struct hg_private_class *)(context->hg_class))
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index 16534f5..77d1ff1 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -194,13 +194,13 @@ static unsigned long const na_ofi_prov_flags[] = { NA_OFI_PROV_TYPES };
+ 
+ /* Memory pool (enabled by default, comment out to disable) */
+ #define NA_OFI_HAS_MEM_POOL
+-#define NA_OFI_MEM_BLOCK_COUNT          (256)
++#define NA_OFI_MEM_BLOCK_COUNT          (1024)
+ 
+ /* Max tag */
+ #define NA_OFI_MAX_TAG                  UINT32_MAX
+ 
+ /* Unexpected size */
+-#define NA_OFI_UNEXPECTED_SIZE          (4096)
++#define NA_OFI_UNEXPECTED_SIZE          (16384)
+ #define NA_OFI_UNEXPECTED_TAG           (0x100000000ULL)
+ #define NA_OFI_TAG_MASK                 (0xFFFFFFFFULL)
+ 
+@@ -411,6 +411,7 @@ struct na_ofi_class {
+     na_uint8_t max_contexts;                /* Max number of contexts   */
+     na_bool_t no_wait;                      /* Ignore wait object       */
+     na_bool_t no_retry;                     /* Do not retry operations  */
++    na_size_t block_size;                   /* Node block size          */
+ };
+ 
+ /********************/
+@@ -2301,15 +2302,21 @@ na_ofi_addr_decref(struct na_ofi_addr *na_ofi_addr)
+     free(na_ofi_addr);
+ }
+ 
++#define MEM_POOL_ALIGN	1
++
+ /*---------------------------------------------------------------------------*/
+ static struct na_ofi_mem_pool *
+ na_ofi_mem_pool_create(na_class_t *na_class, na_size_t block_size,
+     na_size_t block_count)
+ {
+     struct na_ofi_mem_pool *na_ofi_mem_pool = NULL;
++#if MEM_POOL_ALIGN
++    na_size_t pool_size = block_size * (block_count + 1);
++#else
+     na_size_t pool_size = block_size * block_count
+         + sizeof(struct na_ofi_mem_pool)
+         + block_count * (offsetof(struct na_ofi_mem_node, block));
++#endif
+     struct fid_mr *mr_hdl = NULL;
+     na_size_t i;
+ 
+@@ -2326,9 +2333,15 @@ na_ofi_mem_pool_create(na_class_t *na_class, na_size_t block_size,
+     /* Assign nodes and insert them to free list */
+     for (i = 0; i < block_count; i++) {
+         struct na_ofi_mem_node *na_ofi_mem_node =
++#if MEM_POOL_ALIGN /* NB: header consumes 1 block as well */
++            (struct na_ofi_mem_node *)((char *)na_ofi_mem_pool +
++			    (i + 2) * block_size -
++			    sizeof(struct na_ofi_mem_node));
++#else
+             (struct na_ofi_mem_node *) ((char *) na_ofi_mem_pool
+                 + sizeof(struct na_ofi_mem_pool)
+                 + i * (offsetof(struct na_ofi_mem_node, block) + block_size));
++#endif
+         HG_QUEUE_PUSH_TAIL(&na_ofi_mem_pool->node_list, na_ofi_mem_node, entry);
+     }
+ 
+@@ -2439,7 +2452,11 @@ retry:
+     }
+     HG_QUEUE_POP_HEAD(&na_ofi_mem_pool->node_list, entry);
+     hg_thread_spin_unlock(&na_ofi_mem_pool->node_list_lock);
++#if MEM_POOL_ALIGN
++    mem_ptr = (char *)&na_ofi_mem_node[1] - na_ofi_mem_pool->block_size;
++#else
+     mem_ptr = &na_ofi_mem_node->block;
++#endif
+     *mr_hdl = na_ofi_mem_pool->mr_hdl;
+ 
+ out:
+@@ -2451,8 +2468,13 @@ static void
+ na_ofi_mem_pool_free(na_class_t *na_class, void *mem_ptr, struct fid_mr *mr_hdl)
+ {
+     struct na_ofi_mem_pool *na_ofi_mem_pool;
++#if MEM_POOL_ALIGN
++    struct na_ofi_mem_node *na_ofi_mem_node =
++	    ((struct na_ofi_mem_node *)&mem_ptr[NA_OFI_CLASS(na_class)->block_size]) - 1;
++#else
+     struct na_ofi_mem_node *na_ofi_mem_node =
+         container_of(mem_ptr, struct na_ofi_mem_node, block);
++#endif
+ 
+     /* Put the node back to the pool */
+     hg_thread_spin_lock(&NA_OFI_CLASS(na_class)->buf_pool_lock);
+@@ -3159,6 +3181,7 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
+     ret = na_ofi_get_ep_addr(na_class, &priv->endpoint->src_addr);
+     NA_CHECK_NA_ERROR(out, ret, "Could not get address from endpoint");
+ 
++    priv->block_size = na_ofi_msg_get_max_unexpected_size(na_class);
+ out:
+     if (ret != NA_SUCCESS) {
+         if (na_class->plugin_class) {
+-- 
+1.8.3.1
+
