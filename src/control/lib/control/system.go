@@ -26,6 +26,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/dustin/go-humanize/english"
@@ -64,6 +65,17 @@ func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	sr.AbsentRanks = *ars
 
 	return nil
+}
+
+func (sr *sysResponse) DisplayAbsentHostsRanks() string {
+	switch {
+	case sr.AbsentHosts.Count() > 0:
+		return fmt.Sprintf("\nUnknown hosts: %s", sr.AbsentHosts.String())
+	case sr.AbsentRanks.Count() > 0:
+		return fmt.Sprintf("\nUnknown ranks: %s", sr.AbsentRanks.String())
+	default:
+		return ""
+	}
 }
 
 // SystemJoinReq contains the inputs for the system join request.

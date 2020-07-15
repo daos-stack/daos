@@ -188,17 +188,6 @@ func (cmd *rankListCmd) validateHostsRanks() (outHosts *hostlist.HostSet, outRan
 	return
 }
 
-func (cmd *rankListCmd) displayAbsent(absentHosts *hostlist.HostSet, absentRanks *system.RankSet) string {
-	switch {
-	case absentHosts.Count() > 0:
-		return fmt.Sprintf("\nUnknown hosts: %s", absentHosts)
-	case absentRanks.Count() > 0:
-		return fmt.Sprintf("\nUnknown ranks: %s", absentRanks)
-	default:
-		return ""
-	}
-}
-
 // systemQueryCmd is the struct representing the command to query system status.
 type systemQueryCmd struct {
 	logCmd
@@ -239,13 +228,12 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		displaySystemQueryVerbose(cmd.log, resp.Members)
 	default:
 		err = displaySystemQuery(cmd.log, resp.Members, &resp.AbsentRanks)
-		if err == nil && resp.AbsentRanks.Count() > 0 {
-			// absent ranks already reported
-			return err
-		}
 	}
 
-	cmd.displayAbsent(&resp.AbsentHosts, &resp.AbsentRanks)
+	if err != nil || resp.AbsentRanks.Count() == 0 {
+		// report absent hosts xor ranks
+		resp.DisplayAbsentHostsRanks()
+	}
 
 	return err
 }
