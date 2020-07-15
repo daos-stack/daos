@@ -2207,12 +2207,12 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 		}
 
 		if (rank == psr_rank)
-			crt_grp_psr_set(grp_priv, rank, addr_str);
+			crt_grp_psr_set(grp_priv, rank, addr_str, false);
 	}
 
 	/* TODO: PSR selection logic to be changed with CART-688 */
 	if (psr_rank != -1)
-		crt_grp_psr_set(grp_priv, rank, addr_str);
+		crt_grp_psr_set(grp_priv, rank, addr_str, false);
 
 out:
 	if (fp)
@@ -2323,8 +2323,8 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 			if (uri == NULL)
 				break;
 
-			crt_grp_psr_set(grp_priv, psr_rank, uri);
-			D_GOTO(out, rc = 0);
+			rc = crt_grp_psr_set(grp_priv, psr_rank, uri, false);
+			D_GOTO(out, 0);
 		} else if (rc != -DER_EVICTED) {
 			/*
 			 * DER_EVICTED means the psr_rank being evicted then can
@@ -2451,6 +2451,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	uint32_t	new_amount;
 	d_rank_t	*tmp;
 	int		rc = 0;
+	int		ret;
 
 	membs = grp_priv->gp_membs.cgm_list;
 
@@ -2479,9 +2480,11 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		membs->rl_nr = new_amount;
 		for (i = first; i < first + RANK_LIST_REALLOC_SIZE; i++) {
 			membs->rl_ranks[i] = CRT_NO_RANK;
-			grp_add_free_index(
+			rc = grp_add_free_index(
 				&grp_priv->gp_membs.cgm_free_indices,
 				i, true);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(out, 0);
 		}
 
 		index = grp_get_free_index(grp_priv);
@@ -2494,8 +2497,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		rc = crt_swim_rank_add(grp_priv, rank);
 		if (rc) {
 			D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
-			grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
-				   index, false);
+			D_GOTO(out, 0);
 		} else {
 			membs->rl_ranks[index] = rank;
 			grp_priv->gp_size++;
@@ -2506,8 +2508,16 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	}
 
 	/* Regenerate linear list*/
-	grp_regen_linear_list(grp_priv);
+	ret = grp_regen_linear_list(grp_priv);
+	if (ret != 0) {
+		grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
+				   index, false);
+		membs->rl_ranks[index] = CRT_NO_RANK;
+		grp_priv->gp_size--;
+	}
 
+	if (ret != 0 && rc == 0)
+		rc = ret;
 out:
 	return rc;
 }
@@ -2707,8 +2717,7 @@ crt_group_rank_remove_internal(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			grp_add_free_index(
 				&grp_priv->gp_membs.cgm_free_indices,
 				i, false);
-			grp_regen_linear_list(grp_priv);
-			rc = 0;
+			rc = grp_regen_linear_list(grp_priv);
 			break;
 		}
 
@@ -2928,9 +2937,7 @@ crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
 		D_GOTO(out, rc);
 	}
 
-	crt_grp_psr_set(grp_priv, rank, uri);
-	D_FREE(uri);
-
+	rc = crt_grp_psr_set(grp_priv, rank, uri, true);
 out:
 	return rc;
 }
