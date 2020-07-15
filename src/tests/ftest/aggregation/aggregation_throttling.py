@@ -97,9 +97,9 @@ class DaosAggregationThrottling(IorTestBase):
 
     def verify_performance(self, before_metric, after_metric, read_write_idx,
                            expected_perf_diff):
-        """Verify the after_metric read/write performances are within 
+        """Verify the after_metric read/write performances are within
            +/- expected_perf_diff % of before_metric_performance.
-       
+
         Args:
            before_metric (IorMetrics): ior metrics before aggregation
            after_metric (IorMetrics): ior metrics in concurrent with aggregation
