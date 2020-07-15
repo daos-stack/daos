@@ -564,7 +564,9 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
 	else
 		scm_left = 0;
 
-	if (NVME_FREE(&vps) > NVME_SYS(&vps))
+	if (NVME_TOTAL(&vps) == 0)	/* NVMe not enabled */
+		nvme_left = UINT64_MAX;
+	else if (NVME_FREE(&vps) > NVME_SYS(&vps))
 		nvme_left = NVME_FREE(&vps) - NVME_SYS(&vps);
 	else
 		nvme_left = 0;
