@@ -38,7 +38,7 @@ class IoConfGen(ExecutableCommand):
     :avocado: recursive
     """
 
-    def __init__(self, path="", env=None):
+    def __init__(self, path="", filename="testfile", env=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -59,7 +59,7 @@ class IoConfGen(ExecutableCommand):
         self.dkeys = FormattedParameter("-d {}")
         self.record_size = FormattedParameter("-s {}")
         self.obj_class = FormattedParameter("-O {}")
-        self.filename = BasicParameter(None, "testfile")
+        self.filename = BasicParameter(None, filename)
 
     def run_conf(self):
         """Run the daos_run_io_conf command as a foreground process.
@@ -113,17 +113,24 @@ class IoConfTestBase(TestWithServers):
 
     :avocado: recursive
     """
+    def __init__(self, *args, **kwargs):
+        """Initialize a IoConfTestBase object."""
+        super(IoConfTestBase, self).__init__(*args, **kwargs)
+        self.testfile = None
 
     def setup_test_pool(self):
         """Define a TestPool object."""
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
+        avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
+        self.testfile = os.path.join(avocao_tmp_dir, 'testfile')
 
     def execute_io_conf_run_test(self):
         """Execute the rebuild test steps."""
         self.setup_test_pool()
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
-        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), self.testfile,
+                            env=pool_env)
         io_conf.get_params(self)
         io_conf.run()
         # Run test file using daos_run_io_conf
@@ -132,17 +139,16 @@ class IoConfTestBase(TestWithServers):
     def unaligned_io(self):
         """Execute the unaligned IO test steps."""
         total_sizes = self.params.get("sizes", "/run/datasize/*")
-        avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
-        file_path = os.path.join(avocao_tmp_dir, 'testfile')
 
         # Setup the pool
         self.setup_test_pool()
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
-        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), self.testfile,
+                            env=pool_env)
         io_conf.get_params(self)
         for record_size in total_sizes:
             print("Start test for record size = {}".format(record_size))
             # Create unaligned test data set
-            gen_unaligned_io_conf(record_size, file_path)
+            gen_unaligned_io_conf(record_size, self.testfile)
             # Run test file using daos_run_io_conf
             io_conf.run_conf()
