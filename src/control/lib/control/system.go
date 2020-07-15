@@ -70,9 +70,13 @@ func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 func (sr *sysResponse) DisplayAbsentHostsRanks() string {
 	switch {
 	case sr.AbsentHosts.Count() > 0:
-		return fmt.Sprintf("\nUnknown hosts: %s", sr.AbsentHosts.String())
+		return fmt.Sprintf("\nUnknown %s: %s",
+			english.Plural(sr.AbsentHosts.Count(), "host", "hosts"),
+			sr.AbsentHosts.String())
 	case sr.AbsentRanks.Count() > 0:
-		return fmt.Sprintf("\nUnknown ranks: %s", sr.AbsentRanks.String())
+		return fmt.Sprintf("\nUnknown %s: %s",
+			english.Plural(sr.AbsentRanks.Count(), "rank", "ranks"),
+			sr.AbsentRanks.String())
 	default:
 		return ""
 	}

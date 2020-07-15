@@ -30,6 +30,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -297,7 +298,9 @@ func displaySystemAction(log logging.Logger, results system.MemberResults,
 	}
 
 	if absentHosts.Count() > 0 {
-		out += fmt.Sprintf("\nUnknown hosts: %s", absentHosts)
+		out += fmt.Sprintf("\nUnknown %s: %s",
+			english.Plural(absentHosts.Count(), "host", "hosts"),
+			absentHosts.String())
 	}
 
 	log.Info(out)
