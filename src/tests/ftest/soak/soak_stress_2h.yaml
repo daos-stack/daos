@@ -109,7 +109,7 @@ ior_stress:
         - DAOS
         - MPIIO
     test_file: daos:testFile
-    flags: -v -w -W -r -R -q
+    flags: -v -w -W -r -R
     block_size:
         - '64M'
         - '4M'
