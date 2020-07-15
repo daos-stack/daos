@@ -641,7 +641,6 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		}
 
 		rc = daos_rpc_send(req, task);
-		//D_ERROR("lxz directly send rpc\n");
 		if (rc != 0) {
 			D_ERROR("update/fetch rpc failed rc "DF_RC"\n",
 				DP_RC(rc));

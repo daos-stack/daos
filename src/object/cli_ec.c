@@ -46,6 +46,11 @@
 #define EC_TRACE(fmt, ...)
 #endif
 
+/* Object EC encoding Helper */
+static pthread_mutex_t		oeh_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t		oeh_cond = PTHREAD_COND_INITIALIZER;
+static struct oeh_helper	oeh;
+
 static int
 obj_ec_recxs_init(struct obj_ec_recx_array *recxs, uint32_t recx_nr)
 {
@@ -1480,10 +1485,6 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 		}
 	}
 
-	if (update && !oeh.oeh_valid && OEH_NR > 0) {
-		rc = oeh_init();
-		D_ASSERT(rc == 0);
-	}
 	if (oeh.oeh_valid && update) {
 		rc = oeh_insert(reasb_req);
 		D_ASSERT(rc == 0);
@@ -2423,10 +2424,6 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 	return tgt_oiods;
 }
 
-/* Object EC encoding Helper */
-pthread_spinlock_t	oeh_lock;
-struct oeh_helper	oeh;
-
 static void *
 oeh_thread(void *arg)
 {
@@ -2435,7 +2432,7 @@ oeh_thread(void *arg)
 	int			 rc;
 
 	while (1) {
-		D_SPIN_LOCK(&oeh_lock);
+		D_MUTEX_LOCK(&oeh_lock);
 		if (!d_list_empty(&oeh.oeh_work_list)) {
 			work = d_list_entry(oeh.oeh_work_list.next,
 				struct oeh_work, oeh_link);
@@ -2443,8 +2440,9 @@ oeh_thread(void *arg)
 			d_list_del_init(&work->oeh_link);
 		} else {
 			work = NULL;
+			rc = pthread_cond_wait(&oeh_cond, &oeh_lock);
 		}
-		D_SPIN_UNLOCK(&oeh_lock);
+		D_MUTEX_UNLOCK(&oeh_lock);
 
 		if (work == NULL)
 			continue;
@@ -2453,7 +2451,6 @@ oeh_thread(void *arg)
 		D_FREE(work);
 		rc = obj_ec_encode(reasb_req);
 
-		//D_ERROR("lxz encode\n");
 		D_SPIN_LOCK(&reasb_req->orr_oeh_lock);
 		reasb_req->orr_oeh_rc = rc;
 		reasb_req->orr_wait_oeh = 0;
@@ -2464,7 +2461,6 @@ oeh_thread(void *arg)
 			rc = daos_rpc_send(reasb_req->orr_oeh_rpc.oeh_rpc,
 					   reasb_req->orr_oeh_rpc.oeh_task);
 			D_ASSERT(rc == 0);
-			//D_ERROR("lxz oeh send RPC\n");
 		}
 	}
 
@@ -2479,9 +2475,9 @@ oeh_init(void)
 	if (OEH_NR == 0 || oeh.oeh_valid)
 		return 0;
 
-	D_SPIN_LOCK(&oeh_lock);
+	D_MUTEX_LOCK(&oeh_lock);
 	if (oeh.oeh_valid) {
-		D_SPIN_UNLOCK(&oeh_lock);
+		D_MUTEX_UNLOCK(&oeh_lock);
 		return 0;
 	}
 
@@ -2493,7 +2489,7 @@ oeh_init(void)
 	}
 	oeh.oeh_valid = 1;
 
-	D_SPIN_UNLOCK(&oeh_lock);
+	D_MUTEX_UNLOCK(&oeh_lock);
 	D_ERROR("lxz %d threads created.\n", OEH_NR);
 	return rc;
 }
@@ -2513,9 +2509,10 @@ oeh_insert(struct obj_reasb_req *reasb_req)
 	reasb_req->orr_wait_oeh = 1;
 	reasb_req->orr_oeh_lock_inited = 1;
 
-	D_SPIN_LOCK(&oeh_lock);
+	D_MUTEX_LOCK(&oeh_lock);
 	d_list_add_tail(&work->oeh_link, &oeh.oeh_work_list);
-	D_SPIN_UNLOCK(&oeh_lock);
+	pthread_cond_signal(&oeh_cond);
+	D_MUTEX_UNLOCK(&oeh_lock);
 
 	return 0;
 }

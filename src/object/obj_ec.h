@@ -272,9 +272,6 @@ struct oeh_rpc {
 	tse_task_t		*oeh_task;
 };
 
-extern struct oeh_helper	 oeh;
-extern pthread_spinlock_t	 oeh_lock;
-
 /** Query the number of records in EC full stripe */
 #define obj_ec_stripe_rec_nr(oca)					\
 	((oca)->u.ec.e_k * (oca)->u.ec.e_len)

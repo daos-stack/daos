@@ -64,7 +64,8 @@ dc_obj_init(void)
 		D_GOTO(out, rc);
 	}
 
-	D_SPIN_INIT(&oeh_lock, PTHREAD_PROCESS_PRIVATE);
+	rc = oeh_init();
+	D_ASSERT(rc == 0);
 
 	rc = obj_ec_codec_init();
 	if (rc != 0)
