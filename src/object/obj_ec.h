@@ -253,7 +253,7 @@ struct obj_ec_fail_info {
 struct obj_reasb_req;
 
 /* number of Object EC encoding Helper threads */
-#define OEH_NR			(2)
+#define OEH_NR			(4)
 
 struct oeh_work {
 	struct obj_reasb_req	*oeh_req;

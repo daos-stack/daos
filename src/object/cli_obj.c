@@ -659,6 +659,8 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
 		reasb_req->tgt_oiods = NULL;
 	}
+	if (reasb_req->orr_oeh_lock_inited)
+		D_SPIN_DESTROY(&reasb_req->orr_oeh_lock);
 	obj_ec_fail_info_free(reasb_req);
 	D_FREE(reasb_req->orr_iods);
 }

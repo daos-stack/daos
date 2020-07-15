@@ -628,21 +628,16 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		rc = daos_rpc_complete(req, task);
 	} else {
 		struct obj_reasb_req	*reasb_req = args->reasb_req;
-		bool			 is_ec_obj;
 
-		is_ec_obj = (reasb_req != NULL) &&
-			    DAOS_OC_IS_EC(reasb_req->orr_oca);
-
-		//D_ERROR("lxz is_ec_obj %d\n", is_ec_obj);
-		if (oeh.oeh_valid && opc == DAOS_OBJ_RPC_UPDATE && is_ec_obj) {
-			D_SPIN_LOCK(&oeh_lock);
+		if (reasb_req->orr_oeh_lock_inited) {
+			D_SPIN_LOCK(&reasb_req->orr_oeh_lock);
 			if (reasb_req->orr_wait_oeh) {
 				reasb_req->orr_oeh_rpc.oeh_rpc = req;
 				reasb_req->orr_oeh_rpc.oeh_task = task;
-				D_SPIN_UNLOCK(&oeh_lock);
+				D_SPIN_UNLOCK(&reasb_req->orr_oeh_lock);
 				return rc;
 			}
-			D_SPIN_UNLOCK(&oeh_lock);
+			D_SPIN_UNLOCK(&reasb_req->orr_oeh_lock);
 		}
 
 		rc = daos_rpc_send(req, task);

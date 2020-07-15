@@ -64,6 +64,8 @@ dc_obj_init(void)
 		D_GOTO(out, rc);
 	}
 
+	D_SPIN_INIT(&oeh_lock, PTHREAD_PROCESS_PRIVATE);
+
 	rc = obj_ec_codec_init();
 	if (rc != 0)
 		D_ERROR("failed to obj_ec_codec_init: "DF_RC"\n", DP_RC(rc));

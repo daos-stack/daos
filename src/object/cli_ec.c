@@ -2454,10 +2454,10 @@ oeh_thread(void *arg)
 		rc = obj_ec_encode(reasb_req);
 
 		//D_ERROR("lxz encode\n");
-		D_SPIN_LOCK(&oeh_lock);
+		D_SPIN_LOCK(&reasb_req->orr_oeh_lock);
 		reasb_req->orr_oeh_rc = rc;
 		reasb_req->orr_wait_oeh = 0;
-		D_SPIN_UNLOCK(&oeh_lock);
+		D_SPIN_UNLOCK(&reasb_req->orr_oeh_lock);
 
 		if (reasb_req->orr_oeh_rpc.oeh_rpc != NULL) {
 			D_ASSERT(reasb_req->orr_oeh_rpc.oeh_task != NULL);
@@ -2478,8 +2478,6 @@ oeh_init(void)
 
 	if (OEH_NR == 0 || oeh.oeh_valid)
 		return 0;
-
-	D_SPIN_INIT(&oeh_lock, PTHREAD_PROCESS_PRIVATE);
 
 	D_SPIN_LOCK(&oeh_lock);
 	if (oeh.oeh_valid) {
@@ -2511,9 +2509,11 @@ oeh_insert(struct obj_reasb_req *reasb_req)
 
 	D_INIT_LIST_HEAD(&work->oeh_link);
 	work->oeh_req = reasb_req;
+	D_SPIN_INIT(&reasb_req->orr_oeh_lock, PTHREAD_PROCESS_PRIVATE);
+	reasb_req->orr_wait_oeh = 1;
+	reasb_req->orr_oeh_lock_inited = 1;
 
 	D_SPIN_LOCK(&oeh_lock);
-	reasb_req->orr_wait_oeh = 1;
 	d_list_add_tail(&work->oeh_link, &oeh.oeh_work_list);
 	D_SPIN_UNLOCK(&oeh_lock);
 

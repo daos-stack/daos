@@ -157,6 +157,8 @@ struct obj_reasb_req {
 	uint32_t			 orr_iod_nr;
 	/* return code from oeh (object EC encoding helper) */
 	int				 orr_oeh_rc;
+	/* to protect oeh related fields */
+	pthread_spinlock_t		 orr_oeh_lock;
 	/* EC update RPC wait for EC encoding helper */
 	struct oeh_rpc			 orr_oeh_rpc;
 	/* for data recovery flag */
@@ -168,7 +170,9 @@ struct obj_reasb_req {
 	/* only with single target flag */
 					 orr_single_tgt:1,
 	/* wait for oeh (object EC encoding helper) */
-					 orr_wait_oeh:1;
+					 orr_wait_oeh:1,
+	/* flag of orr_oeh_lock initialized */
+					 orr_oeh_lock_inited:1;
 };
 
 static inline void
