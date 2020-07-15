@@ -215,6 +215,10 @@ func (b *spdkBackend) Format(pciAddr string, InitVmd bool) (*storage.NvmeControl
 
 	ctrlr, err := getController(pciAddr, b.binding.controllers)
 	if err != nil {
+		if err == FaultPCIAddrNotFound(pciAddr) {
+			return new(storage.NvmeController), nil
+		}
+
 		return nil, err
 	}
 
