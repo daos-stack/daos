@@ -27,18 +27,18 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"text/template"
-	"strings"
-	"os/exec"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 const (
@@ -72,12 +72,12 @@ const (
 )
 
 const (
-	confOutVMD  = "daos_nvme.conf"
-	vmdTempl    = `[VMD]
+	confOutVMD = "daos_nvme.conf"
+	vmdTempl   = `[VMD]
     Enable True
 
 [Nvme]
-{{ $host := .Config.Hostname }}{{ range $i, $e := .DevList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
+{{ $host := .Config.Hostname }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
 {{ end }}    RetryCount 4
     TimeoutUsec 0
     ActionOnTimeout None
@@ -91,14 +91,14 @@ const (
 type bdev struct {
 	templ   string
 	vosEnv  string
-	isEmpty func(storage.BdevConfig) string                // check no elements
-	isValid func(storage.BdevConfig) string                // check valid elements
-	prep    func(logging.Logger, storage.BdevConfig) error // prerequisite actions
+	isEmpty func(storage.BdevConfig) string                 // check no elements
+	isValid func(storage.BdevConfig) string                 // check valid elements
+	prep    func(logging.Logger, *storage.BdevConfig) error // prerequisite actions
 }
 
 func nilValidate(c storage.BdevConfig) string { return "" }
 
-func nilPrep(l logging.Logger, c storage.BdevConfig) error { return nil }
+func nilPrep(l logging.Logger, c *storage.BdevConfig) error { return nil }
 
 func isEmptyList(c storage.BdevConfig) string {
 	if len(c.DeviceList) == 0 {
@@ -164,7 +164,7 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 	return nil
 }
 
-func prepBdevFile(l logging.Logger, c storage.BdevConfig) error {
+func prepBdevFile(l logging.Logger, c *storage.BdevConfig) error {
 	// truncate or create files for SPDK AIO emulation,
 	// requested size aligned with block size
 	size := (int64(c.FileSize*gbyte) / int64(blkSize)) * int64(blkSize)
@@ -180,7 +180,7 @@ func prepBdevFile(l logging.Logger, c storage.BdevConfig) error {
 }
 
 //  Convert DeviceList from VMD addresses to list of NVMe SSDs behind the VMDs.
-func prepBdevVmd(c storage.BdevConfig) ([]string, error) {
+func prepBdevVmd(l logging.Logger, c *storage.BdevConfig) error {
 	addrs, err := spdk.ListVmdNvmeAddrs(c.DeviceList)
 
 	// Remove VMD addrs from DeviceList and replace with NVMe addrs behind VMD
@@ -214,33 +214,24 @@ func prepBdevVmd(c storage.BdevConfig) ([]string, error) {
 		c.DeviceList = append(c.DeviceList, dev)
 	}
 
-
-	// This will return a new memory copy of c.DeviceList, since the size
-	// of the list got modified, changes are not visible outside of the function.
-	return c.DeviceList, err
+	return err
 }
 
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
 func genFromTempl(cfg storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
-	type Variables struct {
-		Config  storage.BdevConfig
-		DevList []string
-	}
+	conf := confOut
 
 	if cfg.EnableVmd {
-		newDevList, _ := prepBdevVmd(cfg)
-		var DevVars Variables
-			DevVars = Variables{
-			Config: cfg,
-			DevList: newDevList,
-		}
-		t := template.Must(template.New(confOutVMD).Parse(templ))
-		err = t.Execute(&out, DevVars)
-	} else {
-		t := template.Must(template.New(confOut).Parse(templ))
-		err = t.Execute(&out, cfg)
+		conf = `[VMD]
+    Enable True
+
+` + conf
 	}
+
+	t := template.Must(template.New(conf).Parse(templ))
+	err = t.Execute(&out, cfg)
+
 	return
 }
 
@@ -262,10 +253,10 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 	case storage.BdevClassNone:
 		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilPrep}
 	case storage.BdevClassNvme:
+		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilPrep}
 		if cfg.EnableVmd {
-			p.bdev = bdev{vmdTempl, "VMD", isEmptyList, isValidList, nilPrep}
-		} else {
-			p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilPrep}
+			p.bdev.vosEnv = "VMD"
+			p.bdev.prep = prepBdevVmd
 		}
 	case storage.BdevClassMalloc:
 		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep}
@@ -301,7 +292,7 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 }
 
 func (p *ClassProvider) PrepareDevices() error {
-	return p.bdev.prep(p.log, p.cfg)
+	return p.bdev.prep(p.log, &p.cfg)
 }
 
 func (p *ClassProvider) GenConfigFile() (err error) {
@@ -334,4 +325,3 @@ func (p *ClassProvider) GenConfigFile() (err error) {
 
 	return nil
 }
-
