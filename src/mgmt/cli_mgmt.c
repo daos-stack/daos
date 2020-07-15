@@ -332,10 +332,9 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 		goto out_ctx;
 	}
 	mgmt__get_attach_info_req__pack(&req, reqb);
-	dreq = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-				DRPC_METHOD_MGMT_GET_ATTACH_INFO);
-	if (dreq == NULL) {
-		rc = -DER_NOMEM;
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+				DRPC_METHOD_MGMT_GET_ATTACH_INFO, &dreq);
+	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_ctx;
 	}

@@ -479,10 +479,10 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 	rc = crt_proto_reg_L1(crt_gdata.cg_opc_map, cpf);
 	if (rc != 0)
 		D_ERROR("crt_proto_reg_L1() failed, "
-				"protocol: %s, version %u, base_opc %#x.\n",
-				cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base);
+			"protocol: '%s', version %u, base_opc %#x. %d\n",
+			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base, rc);
 	else
-		D_DEBUG(DB_TRACE, "registered protocol: %s, version %u, "
+		D_DEBUG(DB_TRACE, "registered protocol: '%s', version %u, "
 			"base_opc %#x.\n",
 			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base);
 

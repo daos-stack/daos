@@ -354,18 +354,27 @@ out:
 	return rc;
 }
 
-static inline void
+static inline int
 crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
-		crt_phy_addr_t psr_addr)
+		crt_phy_addr_t psr_addr, bool steal)
 {
+	int rc = 0;
+
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	D_FREE(grp_priv->gp_psr_phy_addr);
 	grp_priv->gp_psr_rank = psr_rank;
-	D_STRNDUP(grp_priv->gp_psr_phy_addr, psr_addr,
-		CRT_ADDR_STR_MAX_LEN);
+	if (steal) {
+		grp_priv->gp_psr_phy_addr = psr_addr;
+	} else {
+		D_STRNDUP(grp_priv->gp_psr_phy_addr, psr_addr,
+			CRT_ADDR_STR_MAX_LEN);
+		if (grp_priv->gp_psr_phy_addr == NULL)
+			rc = -DER_NOMEM;
+	}
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
 		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
+	return rc;
 }
 
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
