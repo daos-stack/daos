@@ -29,7 +29,7 @@ RUN zypper --non-interactive --no-gpg-checks refresh; \
            readline-devel sg3_utils which yasm                        \
            python-devel python3-devel valgrind-devel hwloc-devel      \
            openmpi3-devel Modules man fuse3-devel patchelf            \
-           json-c-devel
+           libjson-c-devel
 
 RUN update-ca-certificates;    \
     pip install --upgrade pip; \
