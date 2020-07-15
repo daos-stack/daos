@@ -44,7 +44,7 @@ SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
 Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
 
 # pylint: disable=unused-argument
-def macro_expand(target, source, env_in):
+def macro_expand(target, source, env):
     """Function for PostAction"""
     scope = r"'/struct [^ ]*_\(in\|out\) {/,/};/p'"
     sed_e = r"-e 's/\s\s*/ /g' -e 's/};struct /};\nstruct /g'"
