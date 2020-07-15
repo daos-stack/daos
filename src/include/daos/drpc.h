@@ -83,7 +83,8 @@ enum rpcflags {
 	R_SYNC = 1
 };
 
-Drpc__Call *drpc_call_create(struct drpc *ctx, int32_t module, int32_t method);
+int drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
+		     Drpc__Call **callp);
 void drpc_call_free(Drpc__Call *call);
 
 Drpc__Response *drpc_response_create(Drpc__Call *call);

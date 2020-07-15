@@ -147,12 +147,12 @@ bool d_should_fail(struct d_fault_attr_t *fault_attr_ptr);
  */
 #define D_SHOULD_FAIL(fault_attr)			\
 	({								\
-		bool __rc;						\
-		__rc = d_fault_inject && d_should_fail(fault_attr);	\
-		if (__rc)						\
+		bool __rb;						\
+		__rb = d_fault_inject && d_should_fail(fault_attr);	\
+		if (__rb)						\
 			D_WARN("fault_id %d, injecting fault.\n",	\
 				fault_attr->fa_id);			\
-		__rc;							\
+		__rb;							\
 	})
 
 /**
