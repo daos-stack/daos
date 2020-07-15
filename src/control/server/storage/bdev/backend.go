@@ -193,9 +193,9 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 		}
 	}
 
-	//	if spdkController == nil {
-	//		return nil, FaultPCIAddrNotFound(pciAddr)
-	//	}
+	if spdkController == nil {
+		return nil, FaultPCIAddrNotFound(pciAddr)
+	}
 
 	scs, err := convertControllers([]spdk.Controller{*spdkController})
 	if err != nil {
