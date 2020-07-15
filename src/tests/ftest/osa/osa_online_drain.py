@@ -35,7 +35,6 @@ from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from mpio_utils import MpioUtils
-from daos_racer_utils import DaosRacerCommand
 
 try:
     # python 3.x
@@ -57,9 +56,6 @@ class OSAOnlineDrain(TestWithServers):
         """Set up for test case."""
         super(OSAOnlineDrain, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
-        self.record_length = self.params.get("length", '/run/record/*')
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence",
@@ -215,18 +211,11 @@ class OSAOnlineDrain(TestWithServers):
             pver_drain = self.get_pool_version()
             self.log.info("Pool Version after drain %s", pver_drain)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_drain > (pver_begin + 1),
+            self.assertTrue(pver_drain > pver_begin,
                             "Pool Version Error:  After drain")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
-
-        # Run the daos_racer to varify the object integrity
-        # daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
-        # daos_racer.get_params(self)
-        # daos_racer.set_environment(daos_racer.get_environment(
-        #                           self.server_managers[0]))
-        # daos_racer.run()
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
@@ -240,6 +229,6 @@ class OSAOnlineDrain(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,osa,osa_drain,online_drain
         """
-        # Perform drain testing with 1 to 3 pools
-        for x in range(1, 4):
+        # Perform drain testing with 1 to 2 pools
+        for x in range(1, 3):
             self.run_online_drain_test(x)

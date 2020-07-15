@@ -30,7 +30,6 @@ from test_utils_pool import TestPool
 from command_utils import CommandFailure
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
-from daos_racer_utils import DaosRacerCommand
 
 
 class OSAOfflineDrain(TestWithServers):
@@ -45,9 +44,9 @@ class OSAOfflineDrain(TestWithServers):
         """Set up for test case."""
         super(OSAOfflineDrain, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
-        self.record_length = self.params.get("length", '/run/record/*')
+        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
+        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
+        self.record_length = self.params.get("length", '/run/record/*')[0]
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -88,11 +87,10 @@ class OSAOfflineDrain(TestWithServers):
                           container,
                           obj, objtype=4)
         self.log.info("Writing the Single Dataset")
-        record_index = 0
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0])
-                          * self.record_length[record_index])
+                          * self.record_length)
                 d_key_value = "dkey {0}".format(dkey)
                 c_dkey = ctypes.create_string_buffer(d_key_value)
                 a_key_value = "akey {0}".format(akey)
@@ -100,9 +98,6 @@ class OSAOfflineDrain(TestWithServers):
                 c_value = ctypes.create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
                 ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
-                record_index = record_index + 1
-                if record_index == len(self.record_length):
-                    record_index = 0
 
     def run_offline_drain_test(self, num_pool, data=False):
         """Run the offline drain without data.
@@ -157,13 +152,6 @@ class OSAOfflineDrain(TestWithServers):
             self.assertTrue(pver_drain > pver_begin,
                             "Pool Version Error:  After drain")
 
-        # Run daos_racer and verify object integrity
-        # daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
-        # daos_racer.get_params(self)
-        # daos_racer.set_environment(daos_racer.get_environment(
-        #                           self.server_managers[0]))
-        # daos_racer.run()
-
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
@@ -176,8 +164,8 @@ class OSAOfflineDrain(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,osa,osa_drain,offline_drain
         """
-        # Perform drain testing with 1 to 3 pools
-        for x in range(1, 4):
-            self.run_offline_drain_test(x)
+        # Perform drain testing with 1 to 2 pools
+        for pool_num in range(1, 3):
+            self.run_offline_drain_test(pool_num)
         # Perform drain testing : inserting data in pool
         self.run_offline_drain_test(1, True)
