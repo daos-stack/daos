@@ -32,6 +32,7 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 	else
 		DFUSE_REPLY_ERR_RAW(ev, ev->de_req,
 				    daos_der2errno(ev->de_ev.ev_error));
+	D_FREE(ev->de_buff);
 }
 
 void
@@ -39,13 +40,19 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	       off_t position, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	int				rc;
 	struct dfuse_event		*ev;
 
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
+
+	D_ALLOC(ev->de_buff, len);
+	if (ev->de_buff == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	memcpy(ev->de_buff, buff, len);
 
 	DFUSE_TRA_UP(ev, oh, "write");
 
@@ -58,7 +65,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
 	ev->de_sgl.sg_nr = 1;
-	d_iov_set(&ev->de_iov, (void *)buff, len);
+	d_iov_set(&ev->de_iov, ev->de_buff, len);
 	ev->de_sgl.sg_iovs = &ev->de_iov;
 
 	/* Check for potentially using readahead on this file, ie_truncated
@@ -88,5 +95,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	if (ev)
+		D_FREE(ev->de_buff);
 	D_FREE(ev);
 }
