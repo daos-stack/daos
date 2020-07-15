@@ -78,10 +78,14 @@ func (svc *ControlService) resolveRanks(hosts, ranks string) (hitRS, missRS *sys
 
 			return
 		}
+		svc.log.Debugf("resolveRanks(): req hosts %s, hit ranks %s, miss hosts %s",
+			hosts, hitRS, missHS)
 	case hasRanks:
 		if hitRS, missRS, err = svc.membership.CheckRanks(ranks); err != nil {
 			return
 		}
+		svc.log.Debugf("resolveRanks(): req ranks %s, hit ranks %s, miss ranks %s",
+			ranks, hitRS, missRS)
 	default:
 		// empty rank/host sets implies include all ranks so pass empty
 		// string to CheckRanks()
@@ -121,6 +125,8 @@ func (svc *ControlService) rpcFanout(parent context.Context, fanReq fanoutReques
 	if err != nil {
 		return nil, nil, err
 	}
+	svc.log.Debugf("resolveRanks returned %q missing hosts", missHosts.String())
+
 	resp := &fanoutResponse{AbsentHosts: missHosts, AbsentRanks: missRanks}
 	if hitRanks.Count() == 0 {
 		return resp, hitRanks, nil
@@ -193,21 +199,20 @@ func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQ
 	if err != nil {
 		return nil, err
 	}
+	svc.log.Debugf("rpcfanout returned %q missing hosts", fanResp.AbsentHosts.String())
 	pbResp := &ctlpb.SystemQueryResp{
 		Absentranks: fanResp.AbsentRanks.String(),
 		Absenthosts: fanResp.AbsentHosts.String(),
 	}
-	if rankSet.Count() == 0 {
-		return pbResp, nil
+
+	if rankSet.Count() > 0 {
+		members := svc.membership.Members(rankSet)
+		if err := convert.Types(members, &pbResp.Members); err != nil {
+			return nil, err
+		}
 	}
 
-	members := svc.membership.Members(rankSet)
-
-	if err := convert.Types(members, &pbResp.Members); err != nil {
-		return nil, err
-	}
-
-	svc.log.Debug("Responding to SystemQuery RPC")
+	svc.log.Debugf("Responding to SystemQuery RPC: %+v", pbResp)
 
 	return pbResp, nil
 }
@@ -283,7 +288,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, pbReq *ctlpb.SystemSt
 		return nil, errors.New("response results not populated")
 	}
 
-	svc.log.Debug("Responding to SystemStop RPC")
+	svc.log.Debugf("Responding to SystemStop RPC: %+v", pbResp)
 
 	return pbResp, nil
 }
@@ -323,7 +328,7 @@ func (svc *ControlService) SystemStart(ctx context.Context, pbReq *ctlpb.SystemS
 		result.Action = "start"
 	}
 
-	svc.log.Debug("Responding to SystemStart RPC")
+	svc.log.Debugf("Responding to SystemStart RPC: %+v", pbResp)
 
 	return pbResp, nil
 }
@@ -362,7 +367,7 @@ func (svc *ControlService) SystemResetFormat(ctx context.Context, pbReq *ctlpb.S
 		result.Action = "reset format"
 	}
 
-	svc.log.Debug("Responding to SystemResetFormat RPC")
+	svc.log.Debugf("Responding to SystemResetFormat RPC: %+v", pbResp)
 
 	return pbResp, nil
 }
