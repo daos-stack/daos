@@ -66,7 +66,7 @@ class DaosCoreBase(TestWithServers):
         dmg_config_file = dmg.yaml.filename
 
         cmd = "{} {} -n {} -x D_LOG_FILE={} \
-            -x D_LOG_MASK=DEBUG -x DD_MASK=mgmt,io,md,epc,rebuild \
+            -x D_LOG_MASK=DEBUG -x DD_MASK=io,md,epc,rebuild \
             {} -s {} -{} {}".format(self.orterun, self.client_mca,
                                     num_clients,
                                     get_log_file(self.client_log),
