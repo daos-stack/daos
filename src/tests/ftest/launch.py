@@ -719,7 +719,7 @@ def generate_certs():
     subprocess.call(["/usr/bin/rm", "-rf", certs_dir])
     subprocess.call(
         ["../../../../lib64/daos/certgen/gen_certificates.sh",
-            daos_test_log_dir])
+         daos_test_log_dir])
 
 def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
