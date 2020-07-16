@@ -40,6 +40,7 @@
  */
 #define D_LOGFAC	DD_FAC(rpc)
 
+#include <execinfo.h>
 #include "crt_internal.h"
 
 static void crt_epi_destroy(struct crt_ep_inflight *epi);
