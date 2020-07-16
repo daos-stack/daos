@@ -21,6 +21,8 @@ clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
    TEST_RPMS=${TEST_RPMS}                              \
    $(cat ci/functional/test_main_prep_node.sh)"
 
+# this is being mis-flagged as SC2026 where shellcheck.net is OK with it
+# shellcheck disable=SC2026
 trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 '"set -x; umount /mnt/share"' EXIT
 
