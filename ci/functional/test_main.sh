@@ -2,7 +2,8 @@
 
 set -eux
 
-test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag$PRAGMA_SUFFIX:/s/^.*: *//p")
+test_tag=$(git show -s --format=%B | \
+           sed -ne "/^Test-tag$PRAGMA_SUFFIX:/s/^.*: *//p")
 if [ -z "$test_tag" ]; then
     # shellcheck disable=SC2153
     test_tag=$TEST_TAG
@@ -20,8 +21,8 @@ clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
    TEST_RPMS=${TEST_RPMS}                              \
    $(cat ci/functional/test_main_prep_node.sh)"
 
-trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" \
-    "set -x; umount /mnt/share"' EXIT
+trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
+'"set -x; umount /mnt/share"' EXIT
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
@@ -37,7 +38,7 @@ if $TEST_RPMS; then
     # now collect up the logs and store them like non-RPM test does
     mkdir -p install/lib/daos/TESTING/
     # scp doesn't copy symlinks, it resolves them
-    ssh -i ci_key -l jenkins "${first_node}" tar -C /var/tmp/ -czf - ftest | 
+    ssh -i ci_key -l jenkins "${first_node}" tar -C /var/tmp/ -czf - ftest |
         tar -C install/lib/daos/TESTING/ -xzf -
 else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
