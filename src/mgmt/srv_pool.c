@@ -394,6 +394,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 {
 	struct mgmt_pool_create_in	*pc_in;
 	struct mgmt_pool_create_out	*pc_out;
+	d_rank_list_t			*tgt_ranks;
 	int				 rc;
 
 	pc_in = crt_req_get(rpc_req);
@@ -401,8 +402,29 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	pc_out = crt_reply_get(rpc_req);
 	D_ASSERT(pc_out != NULL);
 
+	if (pc_in->pc_tgts != NULL) {
+		rc = d_rank_list_dup_sort_uniq(&tgt_ranks, pc_in->pc_tgts);
+		if (rc != 0) {
+			D_ERROR("failed to dup target ranks\n");
+			return;
+		}
+	} else {
+		uint32_t	n;
+		int		i;
+
+		rc = crt_group_size(NULL, &n);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+		tgt_ranks = d_rank_list_alloc(n);
+		if (tgt_ranks == NULL) {
+			D_ERROR("falled to alloc rank list\n");
+			return;
+		}
+		for (i = 0; i < n; i++)
+			tgt_ranks->rl_ranks[i] = i;
+	}
+
 	rc = ds_mgmt_create_pool(pc_in->pc_pool_uuid, pc_in->pc_grp,
-				 pc_in->pc_tgt_dev, pc_in->pc_tgts,
+				 pc_in->pc_tgt_dev, tgt_ranks,
 				 pc_in->pc_scm_size, pc_in->pc_nvme_size,
 				 pc_in->pc_prop, pc_in->pc_svc_nr,
 				 &pc_out->pc_svc);
@@ -413,6 +435,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 			rc, pc_in->pc_tgt_dev);
 	if (pc_out->pc_rc == 0)
 		d_rank_list_free(pc_out->pc_svc);
+	d_rank_list_free(tgt_ranks);
 }
 
 int
