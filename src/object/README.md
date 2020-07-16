@@ -136,43 +136,88 @@ feature is still working in progress.
 
 ### Checksum
 
-The checksum feature attempts to provide end-to-end data integrity. On an update, the DAOS client calculates checksums for user data and sends with the RPC to the DAOS server. The DAOS server returns the checksum with the data on a fetch so the DAOS client can verify the integrity of the data. See [End-to-end Data Integrity Overiew](../../doc/overview/data_integrity.md) for more information.
+The checksum feature attempts to provide end-to-end data integrity. On an update,
+ the DAOS client calculates checksums for user data and sends with the RPC to
+ the DAOS server. The DAOS server returns the checksum with the data on a fetch
+ so the DAOS client can verify the integrity of the data. See [End-to-end Data
+ Integrity Overiew](../../doc/overview/data_integrity.md) for more information.
 
-Checksums are configured at the container level and when a client opens a container, the checksum properties will be queried automatically, and, if enabled, both the server and client will init and hold a reference to a [daos_csummer](src/common/README.md) in ds_cont_hdl and dc_cont respectively.
+Checksums are configured at the container level and when a client opens a
+ container, the checksum properties will be queried automatically, and, if
+ enabled, both the server and client will init and hold a reference to a
+ [daos_csummer](src/common/README.md) in ds_cont_hdl and dc_cont respectively.
 
-For Array Value Types, the DAOS server might need to calculate new checksums for requested extents. After extents are fetched by the server object layer, the checksums srv_csum
+For Array Value Types, the DAOS server might need to calculate new checksums for
+ requested extents. After extents are fetched by the server object layer, the
+ checksums srv_csum
 
 #### Object Update
 On an object update (`dc_obj_update`) the client will calculate checksums
 using the data in the sgl as described by an iod (`daos_csummer_calc_iod`).
 Memory will be allocated for the checksums and the iod checksum
-structures that represent the checksums (`dcs_iod_csums`). The checksums will be sent to the server as part of the IOD and the server will store in [VOS](src/vos/README.md).
+structures that represent the checksums (`dcs_iod_csums`). The checksums will
+ be sent to the server as part of the IOD and the server will store in [VOS]
+ (src/vos/README.md).
 
 #### Object Fetch - Server
-On handling an object fetch (`ds_obj_rw_handler`), the server will allocate memory for the checksums and iod checksum structures. Then during the `vos_fetch_begin` stage, the checksums will be fetched from [VOS](src/vos/README.md). For Array Value Types, the extents fetched will need to be compared to the requested extent and new checksum might need to be calculated. `ds_csum_add2iod` will look at the fetched bio_sglist and the iod request to determine if the stored checksums for the request are sufficient or if new ones need to be calculated. The function `ds_csum_calc_needed` holds the logic to determine this.
-##### `ds_csum_calc_needed` Logic
-As long as a request includes only chunks for which a checksum is derived, then the server needs only to return the correct checksums with the extent. The following diagrams include examples for which the server needs to only return the correct checksums. In the top example, the request matches the previously written extent exactly. In the bottom example, the server must return the chunks 4-7 and 8-11 from the extent at epoch 2 with its two checksums, and chunk 12-15 from the extent at epoch 1 with its checksum.
+On handling an object fetch (`ds_obj_rw_handler`), the server will allocate
+ memory for the checksums and iod checksum structures. Then during the
+ `vos_fetch_begin` stage, the checksums will be fetched from
+ [VOS](src/vos/README.md). For Array Value Types, the extents fetched will
+ need to be compared to the requested extent and new checksums might need
+ to be calculated. `ds_csum_add2iod` will look at the fetched bio_sglist and
+ the iod request to determine if the stored checksums for the request
+ are sufficient or if new ones need to be calculated.
 
-![](../../doc/graph/data_integrity/aligned_request_1.png)
-![](../../doc/graph/data_integrity/aligned_request_2.png)
 
-In the following diagram the requested extent includes several partial chunks from extents of different epochs. There are several resulting chunks with no appropriate checksums. In this case, the server must calculate new checksums for the chunks requested and use the stored checksums to verify the original chunks.
+##### `cc_need_new_csum` Logic
+The following are some examples of when checksums are copied and when
+ new checksums are needed. There are more examples in the unit tests for this
+ logic( ./src/object/tests/srv_checksum_tests.c)
+```
+     Request  |----|----|----|----|
+     Extent 2           |----|----|
+     Extent 1 |----|----|
+```
+> Chunk length is 4. Extent 1 is bytes 0-7, extent 2 is bytes 8-15. Request is
+ bytes 0-15. There is no overlap of extents and each extent is completely
+ requested. Therefore, the checksum for each chunk of each extent is copied.
+---
+```
+     Request  |----|----|----
+     Extent 2 |    |----|----
+     Extent 1 |----|----|
+```
+> Chunk length is 4. Extent 1 is bytes 0-7. Extent 2 is bytes 8-11. Request is
+ bytes 0-1. Even though there is overlap, the extents are aligned to chunks,
+ therefore each chunk's checksum is copied. The checksum for the first chunk
+ will come from extent 1, the second and third checksums come from extent 2,
+ just like the data does.
+---
+```
+     Request  |  ----  |
+     Extent 1 |--------|
+```
+> Chunk length is 8. Extent 1 is bytes 0-7. Request is bytes 2-5. Because the
+ request is only part of the stored extent, a new checksum will need to be created
 
-![](../../doc/graph/data_integrity/unaligned_request.png)
+---
+```
+     Request  |--------|--------|
+     Extent 2 |   -----|--------|
+     Extent 1 |------  |        |
+```
+> Chunk length is 8. Extent 1 is bytes 0-5. Extent 2 is bytes 3-15. Request
+ is bytes 0-15. The first chunk needs a new checksum because it will be
+ made up of data from extent 1 and extent 2. The checksum for the second
+ chunk is copied.
 
-To make the request :
-- Chunk 2-3 will come from epoch 1
-- Chunk 4-7 will be from epoch 2 & 4
-- Chunk 8-11 will be from epoch 3 & 4
-- Chunk 12-13 will come from epoch 3
-For any derived chunk from more than one epoch, the server will calculate a new checksum. For any partial chunk used (chunk 12-13 comes from epoch 3, but the original chunk from epoch 3 is 12-15; therefore the stored checksum is for 12-15), the server will calculate a new checksum.
-
-Anytime the server calculates a new checksum; it will use the stored checksum to verify the original chunks. For example, after calculating the checksum for chunk 12-13, the server will use the stored checksum to verify chunk 12-15 from epoch 3.
-
-</div>
+Note: Anytime the server calculates a new checksum; it will use the stored
+ checksum to verify the original chunks.
 
 #### Object Fetch - Client
-In the client RPC callback, the client will calculate checksums for the data fetched and compare to the checksums fetched (`daos_csummer_verify`).
+In the client RPC callback, the client will calculate checksums for the
+ data fetched and compare to the checksums fetched (`daos_csummer_verify`).
 
 ## Object Sharding
 

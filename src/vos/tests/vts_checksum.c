@@ -687,7 +687,7 @@ test_evt_entry_csum_update(void **state)
 	actual = expected;
 
 	/** Don't update unnecessarily */
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len, actual.cs_buf_len);
 	assert_ptr_equal(expected.cs_csum, actual.cs_csum);
@@ -695,7 +695,7 @@ test_evt_entry_csum_update(void **state)
 	/** Will still need the first checksum to verify the first chunk */
 	actual = expected;
 	sel.ex_lo = 3;
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len, actual.cs_buf_len);
 	assert_ptr_equal(expected.cs_csum, actual.cs_csum);
@@ -706,7 +706,7 @@ test_evt_entry_csum_update(void **state)
 	 */
 	actual = expected;
 	sel.ex_lo = 4;
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr - 1, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len - expected.cs_len,
 		actual.cs_buf_len);
@@ -717,7 +717,7 @@ test_evt_entry_csum_update(void **state)
 	 */
 	actual = expected;
 	sel.ex_lo = 7;
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr - 1, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len - expected.cs_len,
 		actual.cs_buf_len);
@@ -729,7 +729,7 @@ test_evt_entry_csum_update(void **state)
 	actual = expected;
 	sel.ex_lo = 8;
 	sel.ex_hi = 16;
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr - 2, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len - expected.cs_len * 2,
 		actual.cs_buf_len);

@@ -165,7 +165,7 @@ struct csum_test_ctx {
 	d_sg_list_t		update_sgl;
 	daos_iod_t		fetch_iod;
 	d_sg_list_t		fetch_sgl;
-	daos_recx_t		recx[4];
+	daos_recx_t		recx[8];
 };
 
 static void
@@ -847,7 +847,6 @@ overwrites_after_first_chunk(void **state)
 		},
 		.fetch_recx = {.rx_idx = 8, .rx_nr = 3},
 	});
-
 }
 
 static void
@@ -878,6 +877,22 @@ record_size_larger_than_chunksize(void **state)
 			{.idx = 0, .nr = 100, .data = "A"},
 		},
 		.fetch_recx = {.rx_idx = 0, .rx_nr = 100},
+	});
+}
+
+static void
+larger_record_size_with_second_chunk_half_first(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 64,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.server_verify = false,
+		.rec_size = 2,
+		.recx_cfgs = {
+			{.idx = 0, .nr = 64 * 2, .data = "One"},
+			{.idx = 0, .nr = 64, .data = "Six"},
+		},
+		.fetch_recx = {.rx_idx = 0, .rx_nr = 64 * 2},
 	});
 }
 
@@ -1462,6 +1477,63 @@ request_non_existent_data(void **state)
 	assert_success(rc);
 }
 
+static void
+unaligned_hole_at_beginning(void **state)
+{
+	daos_size_t chunksize = 8;
+
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = chunksize,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.server_verify = false,
+		.rec_size = 1,
+		.recx_cfgs = {
+			{.idx = chunksize, .nr = chunksize, .data = "Two"},
+		},
+		.fetch_recx = {
+			.rx_idx = 1, .rx_nr = chunksize
+		},
+	});
+}
+
+static void
+bug_rounding_error(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 65536,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.server_verify = false,
+		.rec_size = 16,
+		.recx_cfgs = {
+			{.idx = 931011156, .nr = 752674,
+				.data = "Lorem ipsum dolor sit amet, consect"},
+			{.idx = 931011156, .nr = 695491,
+				.data = "adipiscing elit, sed do eiusmod temp"},
+		},
+		.fetch_recx = {
+			.rx_idx = 931011156, .rx_nr = 943009
+		},
+	});
+}
+
+static void
+request_is_after_extent_start(void **state)
+{
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.chunksize = 32768,
+		.csum_prop_type = DAOS_PROP_CO_CSUM_CRC32,
+		.server_verify = false,
+		.rec_size = 1,
+		.recx_cfgs = {
+			{.idx = 874741704, .nr = 316950,
+				.data = "in reprehenderit in voluptate velit"},
+		},
+		.fetch_recx = {
+			.rx_idx = 874939430, .rx_nr = 168688
+		},
+	});
+}
+
 static bool
 rank_in_placement(uint32_t rank, struct daos_obj_layout *placement)
 {
@@ -1963,9 +2035,11 @@ static const struct CMUnitTest csum_tests[] = {
 		  unaligned_record_size),
 	CSUM_TEST("DAOS_CSUM03.3: Record size is larger than chunk size",
 		record_size_larger_than_chunksize),
-	CSUM_TEST("DAOS_CSUM03.4: Setup multiple overlapping/unaligned extents",
+	CSUM_TEST("DAOS_CSUM03.4: Record size is 20",
+		  larger_record_size_with_second_chunk_half_first),
+	CSUM_TEST("DAOS_CSUM03.5: Setup multiple overlapping/unaligned extents",
 		  overlapping_after_first_chunk),
-	CSUM_TEST("DAOS_CSUM03.5: Request the second half of a chunk",
+	CSUM_TEST("DAOS_CSUM03.6: Request the second half of a chunk",
 		  request_second_half_of_chunk),
 	CSUM_TEST("DAOS_CSUM04.1: With holes between extents. All in 1 chunk",
 		  extents_with_holes_1),
@@ -1997,7 +2071,13 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM14: Many IODs", many_iovs_with_single_values),
 	CSUM_TEST("DAOS_CSUM15: Request non existent data",
 		  request_non_existent_data),
-
+	CSUM_TEST("DAOS_CSUM16: Unaligned hole at beginning",
+		  unaligned_hole_at_beginning),
+	CSUM_TEST("DAOS_CSUM17: Through some random testing found a rounding "
+		  "error", bug_rounding_error),
+	CSUM_TEST("DAOS_CSUM18: request extent starts much later than the "
+		  "beginning of the stored extent",
+		  request_is_after_extent_start),
 	CSUM_TEST("DAOS_CSUM_REBUILD01: Array, Data is inlined", rebuild_1),
 	CSUM_TEST("DAOS_CSUM_REBUILD02: Array, Data not inlined, not bulk",
 		  rebuild_2),
@@ -2013,20 +2093,46 @@ static const struct CMUnitTest csum_tests[] = {
 	EC_CSUM_TEST("DAOS_EC_CSUM02: Single Value Checksum", single_value),
 };
 
+static int
+run_csum_tests(int rc)
+{
+	rc += cmocka_run_group_tests_name("DAOS Checksum Tests",
+		  csum_tests, setup,
+		  test_teardown);
+	return rc;
+}
+
 int
 run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	int i;
 
-	if (rank == 0) {
-		if (sub_tests_size == 0) {
-			rc = cmocka_run_group_tests_name("DAOS Checksum Tests",
-				csum_tests, setup, test_teardown);
+	if (rank != 0) {
+		MPI_Barrier(MPI_COMM_WORLD);
+		return 0;
+	}
+
+	if (sub_tests_size == 0) {
+		if (getenv("DAOS_CSUM_TEST_ALL_TYPE")) {
+			for (i = DAOS_PROP_CO_CSUM_OFF + 1;
+			     i <= DAOS_PROP_CO_CSUM_SHA512; i++) {
+				dts_csum_prop_type = i;
+				print_message("Running tests with csum_type: "
+					      "%d\n", i);
+				rc = run_csum_tests(rc);
+			}
 		} else {
-			rc = run_daos_sub_tests("DAOS Checksum Tests",
-				csum_tests, ARRAY_SIZE(csum_tests), sub_tests,
-				sub_tests_size, setup, test_teardown);
+			rc = run_csum_tests(rc);
 		}
+
+	} else {
+		rc = run_daos_sub_tests("DAOS Checksum Tests",
+					csum_tests,
+					ARRAY_SIZE(csum_tests),
+					sub_tests,
+					sub_tests_size, setup,
+					test_teardown);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
