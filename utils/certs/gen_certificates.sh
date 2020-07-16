@@ -179,8 +179,8 @@ function generate_server_cert () {
     openssl genrsa -out "${CERTS}/server.key" 4096
     chmod 0400 "${CERTS}/server.key"
     # Generate a Certificate Signing Request (CRS)
-    openssl req -new -config "${CONFIGS}/server.cnf" -key "${CERTS}/server.key" \
-        -out "${CA_HOME}/server.csr" -batch
+    openssl req -new -config "${CONFIGS}/server.cnf" \
+        -key "${CERTS}/server.key" -out "${CA_HOME}/server.csr" -batch
     # Create Certificate from request
     openssl ca -config "$CA_HOME/ca.cnf" -keyfile "${PRIVATE}/daosCA.key" \
         -cert "${CERTS}/daosCA.crt" -policy signing_policy \
