@@ -689,6 +689,9 @@ int dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg,
 		 int arg_size, bool sync);
 tse_sched_t *dsc_scheduler(void);
 
+typedef int (*iter_copy_data_cb_t)(daos_handle_t ih,
+				   vos_iter_entry_t *it_entry,
+				   d_iov_t *iov_out);
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
@@ -698,7 +701,7 @@ struct dss_enum_arg {
 	int			eprs_cap;
 	int			eprs_len;
 	int			last_type;	/* hack for tweaking kds_len */
-
+	iter_copy_data_cb_t	copy_data_cb;
 	/* Buffer fields */
 	union {
 		struct {	/* !fill_recxs */
@@ -722,10 +725,20 @@ struct dss_enum_arg {
 };
 
 struct dtx_handle;
+typedef int (*enum_iterate_cb_t)(vos_iter_param_t *param, vos_iter_type_t type,
+			    bool recursive, struct vos_iter_anchors *anchors,
+			    vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
+			    void *arg, struct dtx_handle *dth);
+
 int dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 		  struct vos_iter_anchors *anchors, struct dss_enum_arg *arg,
-		  struct dtx_handle *dth);
-
+		  enum_iterate_cb_t iter_cb, struct dtx_handle *dth);
+typedef int (*obj_enum_process_cb_t)(daos_key_desc_t *kds, void *ptr,
+				     unsigned int size, void *arg);
+int
+obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
+		 unsigned int type, obj_enum_process_cb_t cb,
+		 void *cb_arg);
 /** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
 #define DSS_ENUM_UNPACK_MAX_IODS 16
 
