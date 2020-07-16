@@ -91,12 +91,10 @@ class MultipleContainerDelete(IorTestBase):
         #self.assertTrue(final_scm_fs == initial_scm_fs)
 
     def get_pool_space(self):
-        """Get pool free space for a given storage index
-        Args:
-            storage_index (int): pool property name. Defaults to
-                None.
+        """Get sscm and ssd pool free space
+
         Returns:
-            free_space (int)
+            (scm_free_space (int), ssd_free_space (int))
         """
         if self.pool is not None:
             scm_index, ssd_index = 0, 1
