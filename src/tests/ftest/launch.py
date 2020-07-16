@@ -717,8 +717,9 @@ def generate_certs():
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
     certs_dir = os.path.join(daos_test_log_dir, "certs")
     subprocess.call(["/usr/bin/rm", "-rf", certs_dir])
-    subprocess.call(["../../../../lib64/daos/certgen/gen_certificates.sh"])
-    subprocess.call(["/usr/bin/mv", "daosCA/certs", daos_test_log_dir])
+    subprocess.call(
+        ["../../../../lib64/daos/certgen/gen_certificates.sh",
+            daos_test_log_dir])
 
 def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
@@ -1020,6 +1021,8 @@ def install_debuginfos():
     """Install debuginfo packages."""
     install_pkgs = [{'name': 'gdb'},
                     {'name': 'python-magic'}]
+
+    cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
     for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury']:

@@ -53,8 +53,8 @@ CERTS="${CA_HOME}/certs"
 CONFIGS="$(dirname "$BASH_SOURCE")"
 
 function setup_directories () {
-    mkdir -p $PRIVATE
-    mkdir -p $CERTS
+    mkdir -p ${PRIVATE}
+    mkdir -p ${CERTS}
 }
 
 function generate_ca_cnf () {
@@ -71,7 +71,8 @@ function generate_ca_cnf () {
     echo "certificate = \$dir/daosCA.crt" >> "${CA_HOME}/ca.cnf"
     echo "private_key = \$dir/private/daosCA.key" >> "${CA_HOME}/ca.cnf"
     echo "" >> "${CA_HOME}/ca.cnf"
-    echo "default_md = sha512 # SAFE Crypto Requires SHA-512" >> "${CA_HOME}/ca.cnf"
+    echo "default_md = sha512 # SAFE Crypto Requires SHA-512" \
+        >> "${CA_HOME}/ca.cnf"
     echo "default_days = 1095 # how long to certify for" >> "${CA_HOME}/ca.cnf"
     echo "copy_extensions = copy" >> "${CA_HOME}/ca.cnf"
     echo "unique_subject  = no" >> "${CA_HOME}/ca.cnf"
@@ -86,7 +87,9 @@ function generate_ca_cnf () {
     echo "commonName = DAOS CA" >> "${CA_HOME}/ca.cnf"
     echo "" >> "${CA_HOME}/ca.cnf"
     echo "[ ca_ext ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment,keyCertSign" >> "${CA_HOME}/ca.cnf"
+    echo "keyUsage = \
+        critical,digitalSignature,nonRepudiation,keyEncipherment,keyCertSign" \
+        >> "${CA_HOME}/ca.cnf"
     echo "basicConstraints = critical,CA:true,pathlen:1" >> "${CA_HOME}/ca.cnf"
     echo "" >> "${CA_HOME}/ca.cnf"
     echo "[ signing_policy ]" >> "${CA_HOME}/ca.cnf"
@@ -94,96 +97,100 @@ function generate_ca_cnf () {
     echo "commonName = supplied" >> "${CA_HOME}/ca.cnf"
     echo "" >> "${CA_HOME}/ca.cnf"
     echo "[ signing_agent ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> "${CA_HOME}/ca.cnf"
+    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> \
+        "${CA_HOME}/ca.cnf"
     echo "extendedKeyUsage = clientAuth" >> "${CA_HOME}/ca.cnf"
     echo "" >> "${CA_HOME}/ca.cnf"
     echo "[ signing_server ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> "${CA_HOME}/ca.cnf"
+    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> \
+        "${CA_HOME}/ca.cnf"
     echo "extendedKeyUsage = serverAuth, clientAuth" >> "${CA_HOME}/ca.cnf"
     echo "" >> "${CA_HOME}/ca.cnf"
     echo "[ signing_admin ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> "${CA_HOME}/ca.cnf"
+    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> \
+        "${CA_HOME}/ca.cnf"
     echo "extendedKeyUsage = clientAuth" >> "${CA_HOME}/ca.cnf"
     echo "" >> "${CA_HOME}/ca.cnf"
     echo "[ signing_test ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> "${CA_HOME}/ca.cnf"
+    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> \
+        "${CA_HOME}/ca.cnf"
     echo "extendedKeyUsage = clientAuth" >> "${CA_HOME}/ca.cnf"
 }
 
 function generate_ca_cert () {
     echo "Generating Private CA Root Certificate"
     # Generate Private key and set permissions
-    openssl genrsa -out $PRIVATE/daosCA.key 4096
-    chmod 0400 $PRIVATE/daosCA.key
+    openssl genrsa -out "${PRIVATE}/daosCA.key" 4096
+    chmod 0400 "${PRIVATE}/daosCA.key"
     # Generate CA Certificate
     openssl req -new -x509 -config "$CA_HOME/ca.cnf" -days 1095  -sha512 \
-        -key $PRIVATE/daosCA.key \
-        -out $CERTS/daosCA.crt -batch
+        -key "${PRIVATE}/daosCA.key" \
+        -out "${CERTS}/daosCA.crt" -batch
     # Reset the the CA index
-    rm -f ${CA_HOME}/index.txt ${ph_cert}/serial.txt
-    touch ${CA_HOME}/index.txt
-    echo '01' > ${CA_HOME}/serial.txt
+    rm -f "${CA_HOME}/index.txt" "${CA_HOME}/serial.txt"
+    touch "${CA_HOME}/index.txt"
+    echo '01' > "${CA_HOME}/serial.txt"
     echo "Private CA Root Certificate created in ${CA_HOME}"
 }
 
 function generate_agent_cert () {
     echo "Generating Agent Certificate"
     # Generate Private key and set its permissions
-    openssl genrsa -out $CERTS/agent.key 4096
-    chmod 0400 $CERTS/agent.key
+    openssl genrsa -out ${CERTS}/agent.key 4096
+    chmod 0400 ${CERTS}/agent.key
     # Generate a Certificate Signing Request (CRS)
-    openssl req -new -config "$CONFIGS/agent.cnf" -key $CERTS/agent.key \
+    openssl req -new -config "$CONFIGS/agent.cnf" -key ${CERTS}/agent.key \
         -out ${CA_HOME}/agent.csr -batch
     # Create Certificate from request
-    openssl ca -config "$CA_HOME/ca.cnf" -keyfile $PRIVATE/daosCA.key \
-        -cert $CERTS/daosCA.crt -policy signing_policy \
-        -extensions signing_agent -out $CERTS/agent.crt \
-        -outdir $CERTS -in ${CA_HOME}/agent.csr -batch
+    openssl ca -config "$CA_HOME/ca.cnf" -keyfile ${PRIVATE}/daosCA.key \
+        -cert ${CERTS}/daosCA.crt -policy signing_policy \
+        -extensions signing_agent -out ${CERTS}/agent.crt \
+        -outdir ${CERTS} -in ${CA_HOME}/agent.csr -batch
 
     echo "Required Agent Certificate Files:
-    $CERTS/daosCA.crt
-    $CERTS/agent.key
-    $CERTS/agent.crt"
+    ${CERTS}/daosCA.crt
+    ${CERTS}/agent.key
+    ${CERTS}/agent.crt"
 }
 
 function generate_admin_cert () {
     echo "Generating Admin Certificate"
     # Generate Private key and set its permissions
-    openssl genrsa -out $CERTS/admin.key 4096
-    chmod 0400 $CERTS/admin.key
+    openssl genrsa -out ${CERTS}/admin.key 4096
+    chmod 0400 ${CERTS}/admin.key
     # Generate a Certificate Signing Request (CRS)
-    openssl req -new -config "$CONFIGS/admin.cnf" -key $CERTS/admin.key \
+    openssl req -new -config "$CONFIGS/admin.cnf" -key ${CERTS}/admin.key \
         -out ${CA_HOME}/admin.csr -batch
     # Create Certificate from request
-    openssl ca -config "$CA_HOME/ca.cnf" -keyfile $PRIVATE/daosCA.key \
-        -cert $CERTS/daosCA.crt -policy signing_policy \
-        -extensions signing_admin -out $CERTS/admin.crt \
-        -outdir $CERTS -in ${CA_HOME}/admin.csr -batch
+    openssl ca -config "$CA_HOME/ca.cnf" -keyfile ${PRIVATE}/daosCA.key \
+        -cert ${CERTS}/daosCA.crt -policy signing_policy \
+        -extensions signing_admin -out ${CERTS}/admin.crt \
+        -outdir ${CERTS} -in ${CA_HOME}/admin.csr -batch
 
     echo "Required Admin Certificate Files:
-    $CERTS/daosCA.crt
-    $CERTS/admin.key
-    $CERTS/admin.crt"
+    ${CERTS}/daosCA.crt
+    ${CERTS}/admin.key
+    ${CERTS}/admin.crt"
 }
 
 function generate_server_cert () {
     echo "Generating Server Certificate"
     # Generate Private key and set its permissions
-    openssl genrsa -out $CERTS/server.key 4096
-    chmod 0400 $CERTS/server.key
+    openssl genrsa -out ${CERTS}/server.key 4096
+    chmod 0400 ${CERTS}/server.key
     # Generate a Certificate Signing Request (CRS)
-    openssl req -new -config "$CONFIGS/server.cnf" -key $CERTS/server.key \
+    openssl req -new -config "$CONFIGS/server.cnf" -key ${CERTS}/server.key \
         -out ${CA_HOME}/server.csr -batch
     # Create Certificate from request
-    openssl ca -config "$CA_HOME/ca.cnf" -keyfile $PRIVATE/daosCA.key \
-        -cert $CERTS/daosCA.crt -policy signing_policy \
-        -extensions signing_server -out $CERTS/server.crt \
-        -outdir $CERTS -in ${CA_HOME}/server.csr -batch
+    openssl ca -config "$CA_HOME/ca.cnf" -keyfile ${PRIVATE}/daosCA.key \
+        -cert ${CERTS}/daosCA.crt -policy signing_policy \
+        -extensions signing_server -out ${CERTS}/server.crt \
+        -outdir ${CERTS} -in ${CA_HOME}/server.csr -batch
 
     echo "Required Server Certificate Files:
-    $CERTS/daosCA.crt
-    $CERTS/server.key
-    $CERTS/server.crt"
+    ${CERTS}/daosCA.crt
+    ${CERTS}/server.key
+    ${CERTS}/server.crt"
 }
 
 function generate_test_cert () {
@@ -194,35 +201,35 @@ function generate_test_cert () {
 
     echo "Generating Test Certificate"
     # Generate Private key and set its permissions
-    openssl genrsa -out $CERTS/test.key 4096
-    chmod 0400 $CERTS/test.key
+    openssl genrsa -out ${CERTS}/test.key 4096
+    chmod 0400 ${CERTS}/test.key
     # Generate a Certificate Signing Request (CRS)
-    openssl req -new -config "$CONFIGS/test.cnf" -key $CERTS/test.key \
-        -out ${CA_HOME}/test.csr -batch
+    openssl req -new -config "$CONFIGS/test.cnf" -key "${CERTS}/test.key" \
+        -out "${CA_HOME}/test.csr" -batch
     # Create Certificate from request
-    openssl ca -config "$CA_HOME/ca.cnf" -keyfile $PRIVATE/daosCA.key \
-        -cert $CERTS/daosCA.crt -policy signing_policy \
-        -extensions signing_test -out $CERTS/test.crt \
-        -outdir $CERTS -in ${CA_HOME}/test.csr -batch
+    openssl ca -config "$CA_HOME/ca.cnf" -keyfile "${PRIVATE}/daosCA.key" \
+        -cert "${CERTS}/daosCA.crt" -policy signing_policy \
+        -extensions signing_test -out "${CERTS}/test.crt" \
+        -outdir ${CERTS} -in "${CA_HOME}/test.csr" -batch
 
     echo "Required Test Certificate Files:
-    $CERTS/daosCA.crt
-    $CERTS/test.key
-    $CERTS/test.crt"
+    ${CERTS}/daosCA.crt
+    ${CERTS}/test.key
+    ${CERTS}/test.crt"
 }
 
 function cleanup () {
-    rm -f $CERTS/*pem
-    rm -f ${CA_HOME}/agent.csr
-    rm -f ${CA_HOME}/admin.csr
-    rm -f ${CA_HOME}/server.csr
-    rm -f ${CA_HOME}/test.csr
-    rm -f ${CA_HOME}/ca.cnf
+    rm -f "${CERTS}/*pem"
+    rm -f "${CA_HOME}/agent.csr"
+    rm -f "${CA_HOME}/admin.csr"
+    rm -f "${CA_HOME}/server.csr"
+    rm -f "${CA_HOME}/test.csr"
+    rm -f "${CA_HOME}/ca.cnf"
 }
 
 function fixup_permissions() {
-    chmod 0400 $CERTS/*.key
-    chmod 0664 $CERTS/*.crt
+    chmod 0400 ${CERTS}/*.key
+    chmod 0664 ${CERTS}/*.crt
 }
 
 function main () {

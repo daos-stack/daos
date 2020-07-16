@@ -138,7 +138,7 @@ class DmgCommandBase(YamlCommand):
             hostlist (list): list of host addresses
         """
         if self.yaml:
-            self.yaml.copy_certificates(get_log_file("certs"), hostlist)
+            self.yaml.copy_certificates(get_log_file("daosCA/certs"), hostlist)
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
