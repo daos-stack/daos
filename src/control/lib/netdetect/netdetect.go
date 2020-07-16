@@ -235,7 +235,7 @@ func Init() (context.Context, error) {
 	ndc := NetDetectContext{}
 	ndc.topology, err = initLib()
 	if err != nil {
-		return nil, errors.Errorf("unable to intialize netdetect context: %v", err)
+		return nil, errors.Errorf("unable to initialize netdetect context: %v", err)
 	}
 	ndc.numNUMANodes = numNUMANodes(ndc.topology)
 	ndc.numaAware = ndc.numNUMANodes > 0
