@@ -62,20 +62,20 @@ func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
 }
 
-func (mb *MockBackend) Init(initVmd bool, _ ...int) error {
+func (mb *MockBackend) Init(_ ...int) error {
 	return mb.cfg.InitErr
 }
 
-func (mb *MockBackend) Scan(initVmd bool) (storage.NvmeControllers, error) {
-	if err := mb.Init(initVmd); err != nil {
+func (mb *MockBackend) Scan() (storage.NvmeControllers, error) {
+	if err := mb.Init(); err != nil {
 		return nil, err
 	}
 
 	return mb.cfg.ScanRes, mb.cfg.ScanErr
 }
 
-func (mb *MockBackend) Format(pciAddr string, initVmd bool) (*storage.NvmeController, error) {
-	if err := mb.Init(initVmd); err != nil {
+func (mb *MockBackend) Format(pciAddr string) (*storage.NvmeController, error) {
+	if err := mb.Init(); err != nil {
 		return nil, err
 	}
 
