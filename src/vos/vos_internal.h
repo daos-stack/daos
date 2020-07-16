@@ -111,8 +111,6 @@ enum {
 	DTX_LID_RESERVED,
 };
 
-/** hash seed for murmur hash */
-#define VOS_BTR_MUR_SEED	0xC0FFEE
 /*
  * When aggregate merge window reaches this size threshold, it will stop
  * growing and trigger window flush immediately.
@@ -1028,15 +1026,6 @@ vos_gc_pool(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(daos_size_t *rsrvd);
 
-
-static inline uint64_t
-vos_hash_get(void *buf, uint64_t len)
-{
-	if (buf == NULL)
-		return vos_kh_get();
-
-	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
-}
 
 /**
  * Aggregate the creation/punch records in the current entry of the object

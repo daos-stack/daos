@@ -58,7 +58,6 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_ilog_info	 akey_info = {0};
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
-	bool			 read_conflict = false;
 	int			 rc;
 
 	if (flags & VOS_OF_COND_PUNCH) {
@@ -103,9 +102,6 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 			D_GOTO(out, rc);
 		}
 
-		if (vos_ts_check_rl_conflict(ts_set, epoch))
-			read_conflict = true;
-
 		rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr,
 				    &obj_info, &dkey_info, ts_set, false);
 		if (rc)
@@ -137,9 +133,6 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		vos_ilog_fetch_finish(&akey_info);
 	}
 
-	if (rc == 0 && read_conflict)
-		rc = -DER_TX_RESTART;
-
 	return rc;
 }
 
@@ -168,57 +161,6 @@ failed:
 	return rc;
 }
 
-static void
-update_read_timestamps(struct vos_ts_set *ts_set, daos_epoch_t epoch,
-		       int akey_nr, int err)
-{
-	struct vos_ts_entry	*entry;
-	int			 akey_idx;
-
-	if (ts_set == NULL)
-		return;
-
-	/** No conditional flags, so no timestamp updates */
-	if ((ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0)
-		return;
-
-	/** Aborted for another reason, no timestamp updates */
-	if (err != 0 && err != -DER_NONEXIST)
-		return;
-
-	if (err == 0) {
-		/** the update succeeded so any negative entries used for
-		 *  checks should be changed to positive entries
-		 */
-		vos_ts_set_upgrade(ts_set);
-	}
-
-	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_CONT, 0);
-	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
-	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
-	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
-
-	if (ts_set->ts_init_count == 2) {
-		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
-		return;
-	}
-	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
-	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
-	if (ts_set->ts_init_count == 3) {
-		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
-		return;
-	}
-	for (akey_idx = 0; akey_idx < akey_nr; akey_idx++) {
-		entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_AKEY,
-						  akey_idx);
-		if (entry == NULL)
-			return;
-		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
-		vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
-	}
-}
-
-
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys.
  */
@@ -228,13 +170,12 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	**daes = NULL;
-	struct vos_ts_entry	*entry;
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
 	daos_epoch_range_t	 epr = {0, dth ? dth->dth_epoch : epoch};
-	bool			 read_conflict = false;
 	int			 rc = 0;
+	uint64_t		 cflags = 0;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
 		DP_UOID(oid), epr.epr_hi);
@@ -242,18 +183,31 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
-	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr,
+	if (dth != NULL) {
+		if (akey_nr) {
+			cflags = VOS_TS_WRITE_AKEY;
+			if (flags & VOS_OF_COND_PUNCH)
+				cflags |= VOS_TS_READ_AKEY;
+		} else if (dkey != NULL) {
+			cflags = VOS_TS_WRITE_DKEY;
+			if (flags & VOS_OF_COND_PUNCH)
+				cflags |= VOS_TS_READ_DKEY;
+		} else {
+			cflags = VOS_TS_WRITE_OBJ;
+			if (flags & VOS_OF_COND_PUNCH)
+				cflags |= VOS_TS_READ_OBJ;
+		}
+
+	}
+
+	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr,
 				 dth ? &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto reset;
 
-	if (!vos_ts_lookup(ts_set, cont->vc_ts_idx, false, &entry)) {
-		/** Re-cache the container timestamps */
-		entry = vos_ts_alloc(ts_set, cont->vc_ts_idx, 0);
-	}
-
-	if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
-		read_conflict = true;
+	rc = vos_ts_set_add(ts_set, cont->vc_ts_idx, NULL, 0);
+	if (rc != 0)
+		goto reset;
 
 	rc = vos_tx_begin(dth, vos_cont2umm(cont));
 	if (rc != 0)
@@ -277,18 +231,12 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			  false, DAOS_INTENT_PUNCH, true, &obj, ts_set);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
-			if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
-				read_conflict = true;
-
 			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
 		} else { /* object punch */
 			rc = obj_punch(coh, obj, epr.epr_hi, flags, ts_set);
 		}
 	}
-
-	if (rc == 0 && read_conflict)
-		rc = -DER_TX_RESTART;
 
 abort:
 	rc = vos_tx_end(dth, vos_cont2umm(cont), rc);
@@ -307,7 +255,12 @@ reset:
 
 	vos_dth_set(NULL);
 
-	update_read_timestamps(ts_set, epr.epr_hi, akey_nr, rc);
+	if (rc == 0)
+		vos_ts_set_upgrade(ts_set);
+
+	if (rc == -DER_NONEXIST || rc == 0)
+		vos_ts_set_update(ts_set, epr.epr_hi);
+
 	vos_ts_set_free(ts_set);
 
 	return rc;

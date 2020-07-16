@@ -206,7 +206,6 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_t			 val_iov;
 	int			 rc;
 	int			 tmprc;
-	bool			 found = false;
 
 	*obj_p = NULL;
 	d_iov_set(&key_iov, &oid, sizeof(oid));
@@ -220,16 +219,12 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 		D_ASSERT(daos_unit_obj_id_equal(obj->vo_id, oid));
 		*obj_p = obj;
 		ilog = &obj->vo_ilog;
-
-		found = vos_ilog_ts_lookup(ts_set, ilog);
-		if (found)
-			goto out;
 	}
 
-	tmprc = vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+	tmprc = vos_ilog_ts_add(ts_set, ilog, &oid, sizeof(oid));
 
 	D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
-out:
+
 	return rc;
 }
 
@@ -311,7 +306,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, NULL,
 			    info, ts_set, true);
 
-	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
+	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;
 
 	VOS_TX_LOG_FAIL(rc, "Failed to update incarnation log entry: "DF_RC"\n",

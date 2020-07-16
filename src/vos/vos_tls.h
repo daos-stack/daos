@@ -143,4 +143,16 @@ vos_kh_get(void)
 	return vos_tls_get()->vtl_kh;
 }
 
+/** hash seed for murmur hash */
+#define VOS_BTR_MUR_SEED	0xC0FFEE
+
+static inline uint64_t
+vos_hash_get(const void *buf, uint64_t len)
+{
+	if (buf == NULL)
+		return vos_kh_get();
+
+	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
+}
+
 #endif /* __VOS_TLS_H__ */

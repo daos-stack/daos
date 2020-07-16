@@ -894,7 +894,6 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
-	bool			 found;
 	int			 rc;
 	int			 tmprc;
 
@@ -932,15 +931,12 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	case 0:
 		krec = rbund.rb_krec;
 		ilog = &krec->kr_ilog;
-		found = vos_ilog_ts_lookup(ts_set, ilog);
-		if (found)
-			break;
 		/** fall through to cache re-cache entry */
 	case -DER_NONEXIST:
 		/** Key hash already be calculated by dbtree_fetch so no need
 		 *  to pass in the key here.
 		 */
-		tmprc = vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		tmprc = vos_ilog_ts_add(ts_set, ilog, NULL, 0);
 		if (tmprc != 0) {
 			rc = tmprc;
 			D_ASSERT(tmprc == -DER_NO_PERM);
@@ -1004,13 +1000,13 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
 	       struct vos_ilog_info *info)
 {
-	struct vos_rec_bundle	*rbund;
+	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 	struct vos_krec_df	*krec;
 	struct ilog_df		*ilog = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
-	bool			 found = false;
 	bool			 mark = false;
 	int			 rc;
+	int			 lrc;
 
 	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
 			  val_iov);
@@ -1020,11 +1016,13 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			rbund = iov2rec_bundle(val_iov);
 			krec = rbund->rb_krec;
 			ilog = &krec->kr_ilog;
-			found = vos_ilog_ts_lookup(ts_set, ilog);
 		}
 
-		if (!found)
-			vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		lrc = vos_ilog_ts_add(ts_set, ilog, NULL, 0);
+		if (lrc != 0) {
+			rc = lrc;
+			goto done;
+		}
 
 		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
 			rc = -DER_NONEXIST;
@@ -1046,14 +1044,15 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	/** Punch always adds a log entry */
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
+	ilog = &krec->kr_ilog;
 
 	if (mark)
 		vos_ilog_ts_mark(ts_set, ilog);
 
-	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, parent,
+	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, parent,
 			    info, ts_set, true);
 
-	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
+	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
