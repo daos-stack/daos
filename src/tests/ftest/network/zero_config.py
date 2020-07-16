@@ -32,36 +32,6 @@ from command_utils import CommandFailure
 from general_utils import check_file_exists, get_host_data, get_log_file
 
 
-def get_log_info(hosts, dev, env_state, log_file):
-        """Get information from daos.log file to verify device used.
-
-        Args:
-            hosts (list): list of hosts
-            dev (str): device to get counter information for
-            env_state (bool): set state for OFI_INTERFACE env variable
-            log_file (str): log file to verify
-
-        Returns:
-            bool: status of whether correct device was used.
-
-        """
-        cmd = "cat {}".format(log_file)
-        err = "Error getting log data."
-        pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
-
-        detected = 0
-        for output in get_host_data(hosts, cmd, log_file, err).values():
-            detected = len(re.findall(pattern, output))
-
-        # Verify
-        status = True
-        if env_state and detected != 1:
-            status = False
-        elif not env_state and detected == 1:
-            status = False
-        return status
-
-
 class ZeroConfigTest(TestWithServers):
     """Test class for zero-config tests.
 
@@ -101,6 +71,38 @@ class ZeroConfigTest(TestWithServers):
         text = "port_counter"
         error = "Error obtaining {} info".format(port_counter)
         return get_host_data(hosts, cmd, text, error, 20)
+
+    def get_log_info(self, hosts, dev, env_state, log_file):
+        """Get information from daos.log file to verify device used.
+
+        Args:
+            hosts (list): list of hosts
+            dev (str): device to get counter information for
+            env_state (bool): set state for OFI_INTERFACE env variable
+            log_file (str): log file to verify
+
+        Returns:
+            bool: status of whether correct device was used.
+
+        """
+        cmd = "cat {}".format(log_file)
+        err = "Error getting log data."
+        pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
+
+        detected = 0
+        for output in get_host_data(hosts, cmd, log_file, err).values():
+            detected = len(re.findall(pattern, output))
+        self.log.info(
+            "Found %s instances of client setting up OFI_INTERFACE=%s",
+            detected, dev)
+
+        # Verify
+        status = True
+        if env_state and detected != 1:
+            status = False
+        elif not env_state and detected == 1:
+            status = False
+        return status
 
     @fail_on(CommandFailure)
     def verify_client_run(self, server_idx, exp_iface, env):
@@ -147,7 +149,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Read daos.log to verify device used and prevent false positives
         self.assertTrue(
-            get_log_info(
+            self.get_log_info(
                 self.hostlist_clients, exp_iface, env, get_log_file(logf)))
 
         # If we don't see data going through the device, fail
@@ -181,6 +183,10 @@ class ZeroConfigTest(TestWithServers):
                 self.hostlist_servers,
                 self.hostfile_servers_slots,
                 self.hostlist_servers)
+            self.assertTrue(
+                self.server_managers[idx].set_config_value(
+                    "fabric_iface", exp_iface),
+                "Error updating daos_server 'fabric_iface' config opt")
             self.assertTrue(
                 self.server_managers[idx].set_config_value(
                     "pinned_numa_node", idx),
