@@ -51,6 +51,10 @@ from test_utils_pool import TestPool
 #  ~40MB for background aggregation use
 NO_OF_MAX_CONTAINER = 9300
 
+# DAOS_MD_CAP=92, 5% fragmentation, and ~47700000 bytes more overhead
+# NO_OF_MAX_CONTAINER = 5500
+
+
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
 

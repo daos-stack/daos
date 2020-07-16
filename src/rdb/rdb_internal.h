@@ -49,11 +49,19 @@ struct rdb_raft_event {
 
 /* rdb.c **********************************************************************/
 
+/* multi-ULT locking in struct rdb:
+ *  d_mutex: for RPC mgmt and ref count:
+ *    d_requests, d_replies/cv, d_ref/cv
+ *  d_raft_mutex: for raft state
+ *    d_lc_record, d_applied/cv, d_events[]/cv, d_nevents, d_compact_cv
+ *
+ * TODO: locking for d_stop
+ */
 struct rdb {
 	/* General fields */
 	d_list_t		d_entry;	/* in rdb_hash */
 	uuid_t			d_uuid;		/* of database */
-	ABT_mutex		d_mutex;	/* mainly for using CVs */
+	ABT_mutex		d_mutex;	/* d_replies, d_replies_cv */
 	int			d_ref;		/* of callers and RPCs */
 	ABT_cond		d_ref_cv;	/* for d_ref decrements */
 	struct rdb_cbs	       *d_cbs;		/* callers' callbacks */
@@ -64,6 +72,7 @@ struct rdb {
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
+	ABT_mutex		d_raft_mutex;	/* for raft state machine */
 	daos_handle_t		d_lc;		/* log container */
 	struct rdb_lc_record	d_lc_record;	/* of d_lc */
 	daos_handle_t		d_slc;		/* staging log container */
