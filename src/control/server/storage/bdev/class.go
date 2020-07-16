@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -181,7 +181,10 @@ func prepBdevFile(l logging.Logger, c *storage.BdevConfig) error {
 
 //  Convert DeviceList from VMD addresses to list of NVMe SSDs behind the VMDs.
 func prepBdevVmd(l logging.Logger, c *storage.BdevConfig) error {
-	addrs, err := spdk.ListVmdNvmeAddrs(c.DeviceList)
+	addrs, err := spdk.DiscoverVmd(l) //c.DeviceList)
+	if err != nil {
+		return err
+	}
 
 	// Remove VMD addrs from DeviceList and replace with NVMe addrs behind VMD
 	// "$lspci | grep  -i -E "$devaddr.*Volume Management Device|$devaddr.*201d"

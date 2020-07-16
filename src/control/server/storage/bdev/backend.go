@@ -128,7 +128,7 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 
 	// discover backing vmd devs when vmd enabled in config
 	if w.vmdEnabled {
-		vmdDevAddrs, err := w.DiscoverVMD()
+		vmdDevAddrs, err := w.DiscoverVMD(log)
 		if err != nil {
 			return errors.Wrapf(err, "failed to discover VMD")
 		}
