@@ -444,12 +444,6 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	ctx = crt_ctx;
-	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
-	if (rc) {
-		D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n", rc);
-		if (!force)
-			D_GOTO(out, rc);
-	}
 
 	flags = force ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
 	D_MUTEX_LOCK(&ctx->cc_mutex);
