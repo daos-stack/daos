@@ -34,6 +34,12 @@ class DaosAgentTransportCredentials(TransportCredentials):
         """Initialize a TransportConfig object."""
         super(DaosAgentTransportCredentials, self).__init__(
             "/run/agent_config/transport_config/*", "transport_config", log_dir)
+
+        # Additional daos_agent transport credential parameters:
+        #   - server_name: <str>, e.g. "daos_server"
+        #       Name of server accodring to its certificate [daos_agent only]
+        #
+        self.server_name = BasicParameter(None, None)
         self.cert = LogParameter(log_dir, None, "agent.crt")
         self.key = LogParameter(log_dir, None, "agent.key")
 
