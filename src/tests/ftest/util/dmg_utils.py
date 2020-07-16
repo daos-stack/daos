@@ -85,8 +85,8 @@ class DmgCommand(DmgCommandBase):
                 r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
                 r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
                 r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
-                r"[ ]+([A-Z]+)\n", self.result.stdout)
-            self.log.debug("### re.findall output ###")
+                r"[ ]+([A-Z]+)[ ]*\n", self.result.stdout)
+            self.log.debug("### Verbose output parse result ###")
             self.log.debug(vals)
 
             data = defaultdict(list)
@@ -119,6 +119,8 @@ class DmgCommand(DmgCommandBase):
             r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
             r"namespaces\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+controller",
             self.result.stdout)
+        self.log.debug("### Non-verbose output parse result ###")
+        self.log.debug(vals)
         return {
             "hosts": vals[0][0],
             "scm_total_val": vals[0][1],
