@@ -58,63 +58,58 @@ function setup_directories () {
 }
 
 function generate_ca_cnf () {
-    echo "[ ca ]" > "${CA_HOME}/ca.cnf"
-    echo "default_ca = CA_daos" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ CA_daos ]" >> "${CA_HOME}/ca.cnf"
-    echo "dir      = ${CA_HOME}" >> "${CA_HOME}/ca.cnf"
-    echo "certs    = \$dir/certs" >> "${CA_HOME}/ca.cnf"
-    echo "database = \$dir/index.txt" >> "${CA_HOME}/ca.cnf"
-    echo "serial   = \$dir/serial.txt" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "# Key and Certificate for the root" >> "${CA_HOME}/ca.cnf"
-    echo "certificate = \$dir/daosCA.crt" >> "${CA_HOME}/ca.cnf"
-    echo "private_key = \$dir/private/daosCA.key" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "default_md = sha512 # SAFE Crypto Requires SHA-512" \
-        >> "${CA_HOME}/ca.cnf"
-    echo "default_days = 1095 # how long to certify for" >> "${CA_HOME}/ca.cnf"
-    echo "copy_extensions = copy" >> "${CA_HOME}/ca.cnf"
-    echo "unique_subject  = no" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ req ]" >> "${CA_HOME}/ca.cnf"
-    echo "prompt = no" >> "${CA_HOME}/ca.cnf"
-    echo "distinguished_name = ca_dn" >> "${CA_HOME}/ca.cnf"
-    echo "x509_extensions = ca_ext" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ ca_dn ]" >> "${CA_HOME}/ca.cnf"
-    echo "organizationName  = DAOS" >> "${CA_HOME}/ca.cnf"
-    echo "commonName = DAOS CA" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ ca_ext ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = \
-        critical,digitalSignature,nonRepudiation,keyEncipherment,keyCertSign" \
-        >> "${CA_HOME}/ca.cnf"
-    echo "basicConstraints = critical,CA:true,pathlen:1" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ signing_policy ]" >> "${CA_HOME}/ca.cnf"
-    echo "organizationName  = supplied" >> "${CA_HOME}/ca.cnf"
-    echo "commonName = supplied" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ signing_agent ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> \
-        "${CA_HOME}/ca.cnf"
-    echo "extendedKeyUsage = clientAuth" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ signing_server ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> \
-        "${CA_HOME}/ca.cnf"
-    echo "extendedKeyUsage = serverAuth, clientAuth" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ signing_admin ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> \
-        "${CA_HOME}/ca.cnf"
-    echo "extendedKeyUsage = clientAuth" >> "${CA_HOME}/ca.cnf"
-    echo "" >> "${CA_HOME}/ca.cnf"
-    echo "[ signing_test ]" >> "${CA_HOME}/ca.cnf"
-    echo "keyUsage = critical,digitalSignature,keyEncipherment" >> \
-        "${CA_HOME}/ca.cnf"
-    echo "extendedKeyUsage = clientAuth" >> "${CA_HOME}/ca.cnf"
+    echo "
+[ ca ]
+default_ca              = CA_daos
+
+[ CA_daos ]
+dir                     = ${CA_HOME}
+certs                   = \$dir/certs
+database                = \$dir/index.txt
+serial                  = \$dir/serial.txt
+
+# Key and Certificate for the root
+certificate             = \$dir/daosCA.crt
+private_key             = \$dir/private/daosCA.key
+
+default_md              = sha512        # SAFE Crypto Requires SHA-512
+default_days            = 1095          # how long to certify for
+copy_extensions         = copy
+unique_subject          = no
+
+[ req ]
+prompt = no
+distinguished_name = ca_dn
+x509_extensions = ca_ext
+
+[ ca_dn ]
+organizationName        = DAOS
+commonName              = DAOS CA
+
+[ ca_ext ]
+keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment,keyCertSign
+basicConstraints = critical,CA:true,pathlen:1
+
+[ signing_policy ]
+organizationName        = supplied
+commonName              = supplied
+
+[ signing_agent ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth
+
+[ signing_server ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+
+[ signing_admin ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth
+
+[ signing_test ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth
+" > "${CA_HOME}/ca.cnf"
 }
 
 function generate_ca_cert () {

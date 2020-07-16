@@ -36,6 +36,11 @@ class DaosServerTransportCredentials(TransportCredentials):
         super(DaosServerTransportCredentials, self).__init__(
             "/run/server_config/transport_config/*",
             "transport_config", log_dir)
+
+        # Additional daos_server transport credential parameters:
+        #   - client_cert_dir: <str>, e.g. "".daos/clients"
+        #       Location of client certificates [daos_server only]
+        #
         self.client_cert_dir = LogParameter(log_dir, None, "clients")
         self.cert = LogParameter(log_dir, None, "server.crt")
         self.key = LogParameter(log_dir, None, "server.key")

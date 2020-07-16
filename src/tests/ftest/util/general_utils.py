@@ -29,7 +29,6 @@ import re
 import json
 import random
 import string
-from pathlib import Path
 from errno import ENOENT
 from avocado.utils import process
 from ClusterShell.Task import task_self
@@ -341,32 +340,6 @@ def check_file_exists(hosts, filename, user=None, directory=False):
             missing_file.add(NodeSet.fromlist(node_list))
 
     return len(missing_file) == 0, missing_file
-
-
-def get_file_path(bin_name, dir_path=""):
-    """
-    Find the binary path name in daos_m and return the list of path.
-
-    args:
-        bin_name: bin file to be.
-        dir_path: Directory location on top of daos_m to find the
-                  bin.
-    return:
-        list: list of the paths for bin_name file
-    Raises:
-        OSError: If failed to find the bin_name file
-    """
-    with open('../../.build_vars.json') as json_file:
-        build_paths = json.load(json_file)
-    basepath = os.path.normpath(build_paths['PREFIX'] + "/../{0}"
-                                .format(dir_path))
-
-    file_path = list(Path(basepath).glob('**/{0}'.format(bin_name)))
-    if not file_path:
-        raise OSError(ENOENT, "File {0} not found inside {1} Directory"
-                      .format(bin_name, basepath))
-
-    return file_path
 
 
 def process_host_list(hoststr):

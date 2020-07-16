@@ -93,46 +93,47 @@ agent_config_val: !mux
        - "ca_cert"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
        - "PASS"
-  ca_cert_num:
-    config_val:
-       - "ca_cert"
-       - 12345678
-       - "PASS"
-  ca_cert_file_does_not_exist:
-    config_val:
-       - "ca_cert"
-       - /tmp/does_not_exist.ext
-       - "PASS"
+#Following 6 cases skipped due to DAOS-5283
+#   ca_cert_num:
+#   config_val:
+#       - "ca_cert"
+#       - 12345678
+#       - "PASS"
+#  ca_cert_file_does_not_exist:
+#    config_val:
+#       - "ca_cert"
+#       - /tmp/does_not_exist.ext
+#       - "PASS"
   cert_junk:
     config_val:
        - "cert"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
        - "PASS"
-  cert_num:
-    config_val:
-       - "cert"
-       - 12345678
-       - "PASS"
-  cert_file_does_not_exist:
-    config_val:
-       - "cert"
-       - /tmp/does_not_exist.ext
-       - "PASS"
+#  cert_num:
+#    config_val:
+#       - "cert"
+#       - 12345678
+#       - "PASS"
+#  cert_file_does_not_exist:
+#    config_val:
+#       - "cert"
+#       - /tmp/does_not_exist.ext
+#       - "PASS"
   key_junk:
     config_val:
        - "key"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
        - "PASS"
-  key_num:
-    config_val:
-       - "key"
-       - 12345678
-       - "PASS"
-  key_file_does_not_exist:
-    config_val:
-       - "key"
-       - /tmp/does_not_exist.ext
-       - "PASS"
+#  key_num:
+#    config_val:
+#       - "key"
+#       - 12345678
+#       - "PASS"
+#  key_file_does_not_exist:
+#    config_val:
+#       - "key"
+#       - /tmp/does_not_exist.ext
+#       - "PASS"
   server_name_junk:
     config_val:
        - "server_name"
