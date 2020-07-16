@@ -41,7 +41,7 @@ SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_swim.c', 'crt_tree.c', 'crt_tree_flat.c', 'crt_tree_kary.c',
        'crt_tree_knomial.c', 'crt_hlc.c']
 
-Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
+#Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION') #DM
 
 # pylint: disable=unused-argument
 def macro_expand(target, source, env):
@@ -76,6 +76,10 @@ def macro_expand(target, source, env):
 
 def scons():
     """Scons function"""
+
+    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION') #DM
+
+    env.Alias('install', '$PREFIX') #DM
 
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
@@ -130,10 +134,10 @@ def scons():
             Exit(2)
 
     Default(cart_lib)
-    Default('cart', 'test', 'self_test')
+    #Default('cart', 'test', 'self_test') #DM
     Export('cart_lib', 'cart_targets')
 
-    env.Alias('install', '$PREFIX')
+    #env.Alias('install', '$PREFIX') #DM
 
     Export('env', 'prereqs')
 
