@@ -5,6 +5,24 @@
 
 set -ex
 
+remove_daos_path(){
+    file_name=$1
+    while IFS="" read -r LINE || [ -n "$LINE" ]
+    do
+        printf "%s\n" "${LINE//$DAOS_BASE/}" >> "${file_name}.tmp"
+    done < $file_name
+
+}
+
+memcheck_convert_xml(){
+    for i in $(ls results-*-memcheck.xml); do
+        remove_daos_path $i
+    done
+    for i in *.tmp; do
+        mv -- "$i" "${i%%.tmp}"
+    done
+}
+
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
 if grep /mnt/daos\  /proc/mounts; then
     sudo umount /mnt/daos
@@ -27,6 +45,7 @@ if [ "$WITH_VALGRIND" = "memcheck" ]; then
     echo "run_test_main_node.sh with memcheck"
     # run_test.sh with valgrind memcheck
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
+    memcheck_convert_xml
     mkdir -p valgrind_memcheck_results
     mv results-*-memcheck.xml valgrind_memcheck_results
 elif [ "$WITH_VALGRIND" = "disabled" ]; then
