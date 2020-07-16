@@ -35,16 +35,14 @@ cont_set_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop)
 {
 	int		rc = 0;
 	d_rank_list_t	*ranks;
-	struct mgmt_svc	*svc;
-
-	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
-	if (rc != 0)
-		goto out;
 
 	/* Container svc colocated with pool svc */
-	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
-	if (rc != 0)
-		goto out_svc;
+	rc = get_pool_svc_ranks(pool_uuid, &ranks);
+	if (rc != 0) {
+		D_ERROR("Failed to get pool service ranks "DF_UUID" rc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		goto out;
+	}
 
 	rc = ds_cont_svc_set_prop(pool_uuid, cont_uuid, ranks, prop);
 	if (rc != 0)
@@ -52,8 +50,6 @@ cont_set_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop)
 
 out_ranks:
 	d_rank_list_free(ranks);
-out_svc:
-	ds_mgmt_svc_put_leader(svc);
 out:
 	return rc;
 }

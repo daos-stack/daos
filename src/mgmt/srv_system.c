@@ -669,64 +669,20 @@ add_server(struct rdb_tx *tx, struct mgmt_svc *svc, uint32_t rank,
 int
 ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 {
-	struct mgmt_svc		*svc;
-	struct rdb_tx		tx;
-	struct server_rec	server = {};
-	d_iov_t			value;
-	uint32_t		map_version;
-	int			rc, i;
-
-	rc = ds_mgmt_svc_lookup_leader(&svc, NULL);
-	if (rc != 0)
-		goto out;
-
-	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
-	if (rc != 0)
-		goto out_svc;
-
-	ABT_rwlock_wrlock(svc->ms_lock);
+	struct dss_module_info *info = dss_get_module_info();
+	int			rc;
 
 	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE, in->gui_servers,
 				  in->gui_n_servers, in->gui_map_version);
 	if (rc != 0)
-		goto out_lock;
+		goto out;
 
-	for (i = 0; i < in->gui_n_servers; i++) {
-		strncpy(server.sr_uri, in->gui_servers[i].se_uri, ADDR_STR_MAX_LEN);
-		rc = add_server(&tx, svc, in->gui_servers[i].se_rank, &server);
-		if (rc != 0)
-			goto out_lock;
-	}
+	D_DEBUG(DB_MGMT, "set %d servers in map version %u\n",
+		in->gui_n_servers, in->gui_map_version);
 
-	map_version = in->gui_map_version;
-	d_iov_set(&value, &map_version, sizeof(map_version));
-	rc = rdb_tx_update(&tx, &svc->ms_root, &ds_mgmt_prop_map_version,
-			   &value);
-	if (rc != 0) {
-		D_ERROR("failed to increment map version to %u: %d\n",
-			map_version, rc);
-		goto out_lock;
-	}
+	rc = map_update_bcast(info->dmi_ctx, NULL, in->gui_map_version,
+			      in->gui_n_servers, in->gui_servers);
 
-	rc = rdb_tx_commit(&tx);
-	if (rc != 0) {
-		D_ERROR("failed to commit map version %u: %d\n", map_version,
-			rc);
-		goto out_lock;
-	}
-
-	D_DEBUG(DB_TRACE, "set %d servers in map version %u\n",
-		in->gui_n_servers, map_version);
-
-	svc->ms_map_version = map_version;
-
-	ds_rsvc_request_map_dist(&svc->ms_rsvc);
-
-out_lock:
-	ABT_rwlock_unlock(svc->ms_lock);
-	rdb_tx_end(&tx);
-out_svc:
-	ds_mgmt_svc_put_leader(svc);
 out:
 	return rc;
 }

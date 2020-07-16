@@ -282,7 +282,7 @@ class DaosServer():
                                         '--logfile', '/tmp/dnt_agent.log'],
                                        env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
-        time.sleep(2)
+        time.sleep(20)
         self.running = True
 
     def stop(self):

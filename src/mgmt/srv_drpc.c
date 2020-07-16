@@ -311,83 +311,6 @@ out:
 	mgmt__group_update_req__free_unpacked(req, NULL);
 }
 
-void
-ds_mgmt_drpc_join(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
-{
-	Mgmt__JoinReq		*req = NULL;
-	Mgmt__JoinResp		 resp = MGMT__JOIN_RESP__INIT;
-	struct mgmt_join_in	 in = {};
-	struct mgmt_join_out	 out = {};
-	uint8_t			*body;
-	size_t			 len;
-	int			 rc;
-
-	/* Unpack the inner request from the drpc call body */
-	req = mgmt__join_req__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
-
-	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (join)\n");
-		return;
-	}
-
-	D_INFO("Received request to join\n");
-
-	in.ji_rank = req->rank;
-	in.ji_map_version = req->map_version;
-	in.ji_server.sr_flags = SERVER_IN;
-	in.ji_server.sr_nctxs = req->nctxs;
-	rc = uuid_parse(req->uuid, in.ji_server.sr_uuid);
-	if (rc != 0) {
-		D_ERROR("Failed to parse UUID: %s\n", req->uuid);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	len = strnlen(req->addr, ADDR_STR_MAX_LEN);
-	if (len >= ADDR_STR_MAX_LEN) {
-		D_ERROR("Server address '%.*s...' too long\n", ADDR_STR_MAX_LEN,
-			req->addr);
-		rc = -DER_INVAL;
-		goto out;
-	}
-	memcpy(in.ji_server.sr_addr, req->addr, len + 1);
-	len = strnlen(req->uri, ADDR_STR_MAX_LEN);
-	if (len >= ADDR_STR_MAX_LEN) {
-		D_ERROR("Self URI '%.*s...' too long\n", ADDR_STR_MAX_LEN,
-			req->uri);
-		rc = -DER_INVAL;
-		goto out;
-	}
-	memcpy(in.ji_server.sr_uri, req->uri, len + 1);
-
-	rc = ds_mgmt_join_handler(&in, &out);
-	if (rc != 0) {
-		D_ERROR("Failed to join: "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-
-	resp.rank = out.jo_rank;
-	if (out.jo_flags & SERVER_IN)
-		resp.state = MGMT__JOIN_RESP__STATE__IN;
-	else
-		resp.state = MGMT__JOIN_RESP__STATE__OUT;
-
-out:
-	resp.status = rc;
-	len = mgmt__join_resp__get_packed_size(&resp);
-	D_ALLOC(body, len);
-	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
-	} else {
-		mgmt__join_resp__pack(&resp, body);
-		drpc_resp->body.len = len;
-		drpc_resp->body.data = body;
-	}
-
-	mgmt__join_req__free_unpacked(req, NULL);
-}
-
 static int
 create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		  const char **ace_list, size_t ace_nr)
@@ -578,7 +501,6 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolDestroyReq	*req = NULL;
 	Mgmt__PoolDestroyResp	 resp = MGMT__POOL_DESTROY_RESP__INIT;
 	uuid_t			 uuid;
-	d_rank_list_t		*svc_ranks;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
@@ -603,22 +525,15 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	svc_ranks = uint32_array_to_rank_list(req->svcreps, req->n_svcreps);
-	if (svc_ranks == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	/* Sys and force params are currently ignored in receiver. */
-	rc = ds_mgmt_destroy_pool(uuid, svc_ranks, req->sys,
+	rc = ds_mgmt_destroy_pool(uuid, req->sys,
 				  (req->force == true) ? 1 : 0);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-		goto out_ranks;
+		goto out;
 	}
 
-out_ranks:
-	if (svc_ranks)
-		d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
 	len = mgmt__pool_destroy_resp__get_packed_size(&resp);
@@ -1560,7 +1475,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__StorageUsageStats	nvme = MGMT__STORAGE_USAGE_STATS__INIT;
 	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
 	uuid_t			uuid;
-	d_rank_list_t		*svc_ranks;
 	daos_pool_info_t	pool_info = {0};
 	size_t			len;
 	uint8_t			*body;
@@ -1580,15 +1494,11 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	svc_ranks = uint32_array_to_rank_list(req->svcreps, req->n_svcreps);
-	if (svc_ranks == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	pool_info.pi_bits = DPI_ALL;
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, &pool_info);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
-		D_GOTO(out_ranks, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* Populate the response */
@@ -1611,9 +1521,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
-out_ranks:
-	if (svc_ranks)
-		d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
 

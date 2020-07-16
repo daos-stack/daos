@@ -156,9 +156,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 
 	gm := svc.sysdb.GroupMap()
 	req := &mgmtpb.GroupUpdateReq{
-		// Ugh, awful hack. For the moment, because we're using two
-		// DBs, we have to make sure that our map version is higher.
-		MapVersion: gm.Version + 1,
+		MapVersion: gm.Version,
 	}
 	for rank, uri := range gm.RankURIs {
 		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{

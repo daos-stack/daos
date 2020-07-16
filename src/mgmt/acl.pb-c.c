@@ -264,7 +264,7 @@ const ProtobufCMessageDescriptor mgmt__aclresp__descriptor =
   (ProtobufCMessageInit) mgmt__aclresp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_aclreq__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__get_aclreq__field_descriptors[1] =
 {
   {
     "uuid",
@@ -278,27 +278,14 @@ static const ProtobufCFieldDescriptor mgmt__get_aclreq__field_descriptors[2] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "svcreps",
-    2,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__GetACLReq, n_svcreps),
-    offsetof(Mgmt__GetACLReq, svcreps),
-    NULL,
-    NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__get_aclreq__field_indices_by_name[] = {
-  1,   /* field[1] = svcreps */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__get_aclreq__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 1 }
 };
 const ProtobufCMessageDescriptor mgmt__get_aclreq__descriptor =
 {
@@ -308,14 +295,14 @@ const ProtobufCMessageDescriptor mgmt__get_aclreq__descriptor =
   "Mgmt__GetACLReq",
   "mgmt",
   sizeof(Mgmt__GetACLReq),
-  2,
+  1,
   mgmt__get_aclreq__field_descriptors,
   mgmt__get_aclreq__field_indices_by_name,
   1,  mgmt__get_aclreq__number_ranges,
   (ProtobufCMessageInit) mgmt__get_aclreq__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[2] =
 {
   {
     "uuid",
@@ -341,28 +328,15 @@ static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[3] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "svcreps",
-    3,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__ModifyACLReq, n_svcreps),
-    offsetof(Mgmt__ModifyACLReq, svcreps),
-    NULL,
-    NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__modify_aclreq__field_indices_by_name[] = {
   1,   /* field[1] = ACL */
-  2,   /* field[2] = svcreps */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__modify_aclreq__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__modify_aclreq__descriptor =
 {
@@ -372,14 +346,14 @@ const ProtobufCMessageDescriptor mgmt__modify_aclreq__descriptor =
   "Mgmt__ModifyACLReq",
   "mgmt",
   sizeof(Mgmt__ModifyACLReq),
-  3,
+  2,
   mgmt__modify_aclreq__field_descriptors,
   mgmt__modify_aclreq__field_indices_by_name,
   1,  mgmt__modify_aclreq__number_ranges,
   (ProtobufCMessageInit) mgmt__modify_aclreq__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[2] =
 {
   {
     "uuid",
@@ -405,28 +379,15 @@ static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[3] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "svcreps",
-    3,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__DeleteACLReq, n_svcreps),
-    offsetof(Mgmt__DeleteACLReq, svcreps),
-    NULL,
-    NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__delete_aclreq__field_indices_by_name[] = {
   1,   /* field[1] = principal */
-  2,   /* field[2] = svcreps */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__delete_aclreq__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__delete_aclreq__descriptor =
 {
@@ -436,7 +397,7 @@ const ProtobufCMessageDescriptor mgmt__delete_aclreq__descriptor =
   "Mgmt__DeleteACLReq",
   "mgmt",
   sizeof(Mgmt__DeleteACLReq),
-  3,
+  2,
   mgmt__delete_aclreq__field_descriptors,
   mgmt__delete_aclreq__field_indices_by_name,
   1,  mgmt__delete_aclreq__number_ranges,

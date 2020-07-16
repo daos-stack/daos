@@ -170,11 +170,6 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
-	if err != nil {
-		return nil, err
-	}
-
 	dresp, err := mi.CallDrpc(drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
@@ -198,11 +193,6 @@ func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*m
 	svc.log.Debugf("MgmtSvc.PoolEvict dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
 	if err != nil {
 		return nil, err
 	}
@@ -234,11 +224,6 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 		return nil, err
 	}
 
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
-	if err != nil {
-		return nil, err
-	}
-
 	dresp, err := mi.CallDrpc(drpc.MethodPoolExclude, req)
 	if err != nil {
 		return nil, err
@@ -262,11 +247,6 @@ func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*m
 	svc.log.Debugf("MgmtSvc.PoolDrain dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
 	if err != nil {
 		return nil, err
 	}
@@ -298,11 +278,6 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 		return nil, err
 	}
 
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
-	if err != nil {
-		return nil, err
-	}
-
 	dresp, err := mi.CallDrpc(drpc.MethodPoolExtend, req)
 	if err != nil {
 		return nil, err
@@ -330,11 +305,6 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 		return nil, err
 	}
 
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
-	if err != nil {
-		return nil, err
-	}
-
 	dresp, err := mi.CallDrpc(drpc.MethodPoolReintegrate, req)
 	if err != nil {
 		return nil, err
@@ -358,11 +328,6 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
 	if err != nil {
 		return nil, err
 	}
@@ -427,11 +392,6 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", *newReq)
 
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
-	if err != nil {
-		return nil, err
-	}
-
 	dresp, err := mi.CallDrpc(drpc.MethodPoolSetProp, newReq)
 	if err != nil {
 		return nil, err
@@ -474,11 +434,6 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 		return nil, err
 	}
 
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
-	if err != nil {
-		return nil, err
-	}
-
 	dresp, err := mi.CallDrpc(drpc.MethodPoolGetACL, req)
 	if err != nil {
 		return nil, err
@@ -499,11 +454,6 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 	svc.log.Debugf("MgmtSvc.PoolOverwriteACL dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
 	if err != nil {
 		return nil, err
 	}
@@ -533,11 +483,6 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 		return nil, err
 	}
 
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
-	if err != nil {
-		return nil, err
-	}
-
 	dresp, err := mi.CallDrpc(drpc.MethodPoolUpdateACL, req)
 	if err != nil {
 		return nil, err
@@ -559,11 +504,6 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 	svc.log.Debugf("MgmtSvc.PoolDeleteACL dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	req.Svcreps, err = svc.getPoolServiceRanks(req.GetUuid())
 	if err != nil {
 		return nil, err
 	}

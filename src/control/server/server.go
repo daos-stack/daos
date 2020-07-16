@@ -348,5 +348,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, sysdb, cfg), "%s exited with error", DataPlaneName)
 }

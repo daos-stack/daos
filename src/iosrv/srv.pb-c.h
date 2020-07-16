@@ -17,6 +17,8 @@ PROTOBUF_C__BEGIN_DECLS
 
 typedef struct _Srv__NotifyReadyReq Srv__NotifyReadyReq;
 typedef struct _Srv__BioErrorReq Srv__BioErrorReq;
+typedef struct _Srv__GetPoolSvcReq Srv__GetPoolSvcReq;
+typedef struct _Srv__GetPoolSvcResp Srv__GetPoolSvcResp;
 
 
 /* --- enums --- */
@@ -90,6 +92,37 @@ struct  _Srv__BioErrorReq
     , 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
+struct  _Srv__GetPoolSvcReq
+{
+  ProtobufCMessage base;
+  /*
+   * Pool UUID
+   */
+  char *uuid;
+};
+#define SRV__GET_POOL_SVC_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__get_pool_svc_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Srv__GetPoolSvcResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * Pool service replica ranks
+   */
+  size_t n_svcreps;
+  uint32_t *svcreps;
+};
+#define SRV__GET_POOL_SVC_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__get_pool_svc_resp__descriptor) \
+    , 0, 0,NULL }
+
+
 /* Srv__NotifyReadyReq methods */
 void   srv__notify_ready_req__init
                      (Srv__NotifyReadyReq         *message);
@@ -128,6 +161,44 @@ Srv__BioErrorReq *
 void   srv__bio_error_req__free_unpacked
                      (Srv__BioErrorReq *message,
                       ProtobufCAllocator *allocator);
+/* Srv__GetPoolSvcReq methods */
+void   srv__get_pool_svc_req__init
+                     (Srv__GetPoolSvcReq         *message);
+size_t srv__get_pool_svc_req__get_packed_size
+                     (const Srv__GetPoolSvcReq   *message);
+size_t srv__get_pool_svc_req__pack
+                     (const Srv__GetPoolSvcReq   *message,
+                      uint8_t             *out);
+size_t srv__get_pool_svc_req__pack_to_buffer
+                     (const Srv__GetPoolSvcReq   *message,
+                      ProtobufCBuffer     *buffer);
+Srv__GetPoolSvcReq *
+       srv__get_pool_svc_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__get_pool_svc_req__free_unpacked
+                     (Srv__GetPoolSvcReq *message,
+                      ProtobufCAllocator *allocator);
+/* Srv__GetPoolSvcResp methods */
+void   srv__get_pool_svc_resp__init
+                     (Srv__GetPoolSvcResp         *message);
+size_t srv__get_pool_svc_resp__get_packed_size
+                     (const Srv__GetPoolSvcResp   *message);
+size_t srv__get_pool_svc_resp__pack
+                     (const Srv__GetPoolSvcResp   *message,
+                      uint8_t             *out);
+size_t srv__get_pool_svc_resp__pack_to_buffer
+                     (const Srv__GetPoolSvcResp   *message,
+                      ProtobufCBuffer     *buffer);
+Srv__GetPoolSvcResp *
+       srv__get_pool_svc_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__get_pool_svc_resp__free_unpacked
+                     (Srv__GetPoolSvcResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Srv__NotifyReadyReq_Closure)
@@ -135,6 +206,12 @@ typedef void (*Srv__NotifyReadyReq_Closure)
                   void *closure_data);
 typedef void (*Srv__BioErrorReq_Closure)
                  (const Srv__BioErrorReq *message,
+                  void *closure_data);
+typedef void (*Srv__GetPoolSvcReq_Closure)
+                 (const Srv__GetPoolSvcReq *message,
+                  void *closure_data);
+typedef void (*Srv__GetPoolSvcResp_Closure)
+                 (const Srv__GetPoolSvcResp *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -144,6 +221,8 @@ typedef void (*Srv__BioErrorReq_Closure)
 
 extern const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__bio_error_req__descriptor;
+extern const ProtobufCMessageDescriptor srv__get_pool_svc_req__descriptor;
+extern const ProtobufCMessageDescriptor srv__get_pool_svc_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 
