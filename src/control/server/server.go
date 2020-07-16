@@ -24,18 +24,18 @@
 package server
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"os/user"
-	"os/exec"
 	"strings"
 	"syscall"
-	"bytes"
-	"bufio"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -124,7 +124,6 @@ func vmdDetected() []string {
 	return vmdAddrs
 }
 
-
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	err := cfg.Validate(log)
@@ -183,26 +182,19 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
 	}
 
-	// Check for VMD devices, disabled by default
-	vmdDevs := []string{}
-	if cfg.DisableVmd {
-		vmdDevs = vmdDetected()
-		if vmdDevs != nil {
-			log.Debugf("VMD devices detected!\n")
-			log.Debugf("VMD devices: %v\n", vmdDevs)
-		}
+	// Decide whether to use VMD devices.
+	if cfg.UseVmd {
 		if !iommuDetected() {
-			log.Errorf("IOMMU/VFIO not detected, unable to use VMD devices\n")
-			vmdDevs = nil
+			return errors.New("VMD could not be enabled as IOMMU/VFIO is disabled")
 		}
-	} else {
-		log.Debugf("VMD devices disabled\n")
-		vmdDevs = nil
-	}
 
-	// If VMD devices are going to be used, then need to run a separate
-	// SPDK setup with the VMD address as the PCI_WHITELIST
-	if vmdDevs != nil {
+		vmdDevs := vmdDetected()
+		if len(vmdDevs) == 0 {
+			return errors.New("VMD enabled but no capable devices found")
+		}
+
+		// If VMD devices are going to be used, then need to run a separate
+		// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
 		prepReqVmd := bdev.PrepareRequest{
 			PCIWhitelist:  strings.Join(vmdDevs, " "),
 			SkipReset:     true,
@@ -210,9 +202,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			TargetUser:    prepReq.TargetUser,
 		}
 		log.Debugf("automatic VMD prepare req: %+v", prepReqVmd)
+
 		if _, err := bdevProvider.Prepare(prepReqVmd); err != nil {
 			log.Errorf("automatic NVMe prepare for VMD failed (check configuration?)\n%s", err)
 		}
+
+		bdevProvider.EnableVmd()
+	} else {
+		log.Debugf("VMD disabled in config (use_vmd: false)")
 	}
 
 	hugePages, err := getHugePageInfo()

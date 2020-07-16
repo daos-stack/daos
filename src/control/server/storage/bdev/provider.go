@@ -36,7 +36,7 @@ type (
 	InitRequest struct {
 		pbin.ForwardableRequest
 		SPDKShmID int
-		InitVmd bool
+		InitVmd   bool
 	}
 
 	// InitResponse contains the results of a successful Init operation.
@@ -45,7 +45,7 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
-		InitVmd	bool
+		InitVmd bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -91,11 +91,12 @@ type (
 
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
-		Init(initvmd bool, shmID ...int) error
+		Init(shmID ...int) error
 		Reset() error
 		Prepare(hugePageCount int, targetUser string, pciWhitelist string) error
-		Scan(initvmd bool) (storage.NvmeControllers, error)
-		Format(pciAddr string, initvmd bool) (*storage.NvmeController, error)
+		Scan() (storage.NvmeControllers, error)
+		Format(pciAddr string) (*storage.NvmeController, error)
+		EnableVmd() error
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -130,12 +131,17 @@ func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
 	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
+// EnableVmd turns on VMD device awareness.
+func (p *Provider) EnableVmd() error {
+	return p.backend.EnableVmd()
+}
+
 // Init performs any initialization steps required by the provider.
 func (p *Provider) Init(req InitRequest) error {
 	if p.shouldForward(req) {
 		return p.fwd.Init(req)
 	}
-	return p.backend.Init(req.InitVmd, req.SPDKShmID)
+	return p.backend.Init(req.SPDKShmID)
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the system.
@@ -144,7 +150,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		return p.fwd.Scan(req)
 	}
 
-	cs, err := p.backend.Scan(req.InitVmd)
+	cs, err := p.backend.Scan()
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +213,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 			p.log.Infof("%s format for non-NVMe bdev skipped (%s)", req.Class, dev)
 		case storage.BdevClassNvme:
 			p.log.Infof("%s format starting (%s)", req.Class, dev)
-			c, err := p.backend.Format(dev, req.InitVmd)
+			c, err := p.backend.Format(dev)
 			if err != nil {
 				p.log.Errorf("%s format failed (%s)", req.Class, dev)
 				res.DeviceResponses[dev].Error = FaultFormatError(err)

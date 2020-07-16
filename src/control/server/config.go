@@ -71,7 +71,7 @@ type Configuration struct {
 	Servers             []*ioserver.Config        `yaml:"servers"`
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
-	DisableVmd          bool                      `yaml:"disable_vmd"`
+	UseVmd              bool                      `yaml:"use_vmd"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`
 	SetHugepages        bool                      `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
@@ -270,9 +270,9 @@ func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
 	return c
 }
 
-// WithDisableVmd disables VMD devices from being used.
-func (c *Configuration) WithDisableVmd(enabled bool) *Configuration {
-	c.DisableVmd = enabled
+// WithUseVmd declares intent to use VMD.
+func (c *Configuration) WithUseVmd(enabled bool) *Configuration {
+	c.UseVmd = enabled
 	return c
 }
 
@@ -334,7 +334,6 @@ func newDefaultConfiguration(ext External) *Configuration {
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
 		getDeviceClassFn:   netdetect.GetDeviceClass,
-		DisableVmd:         true,
 	}
 }
 

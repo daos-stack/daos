@@ -42,6 +42,7 @@ type (
 		controllers []spdk.Controller
 
 		initialized bool
+		vmdEnabled  bool
 	}
 
 	spdkBackend struct {
@@ -86,7 +87,7 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(log logging.Logger, initVmd bool, initShmID ...int) (err error) {
+func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 
 	if w.initialized {
 		return nil
@@ -103,13 +104,18 @@ func (w *spdkWrapper) init(log logging.Logger, initVmd bool, initShmID ...int) (
 		shmID = initShmID[0]
 	}
 
-	if err := w.InitSPDKEnv(shmID); err != nil {
+	var pciWhitelist string
+	if w.vmdEnabled {
+		// TODO: use devlist to construct opts.pci_whitelist
+		pciWhitelist = "0000:5d:05.5"
+	}
+
+	if err := w.InitSPDKEnv(shmID, pciWhitelist); err != nil {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
-	// Only call init when VMD is enabled in config
-	if initVmd {
-		if err := w.InitVMDEnv(); err != nil {
+	if w.vmdEnabled {
+		if err := w.InitVMD(); err != nil {
 			return errors.Wrap(err, "failed to initialize VMD")
 		}
 	}
@@ -119,6 +125,20 @@ func (w *spdkWrapper) init(log logging.Logger, initVmd bool, initShmID ...int) (
 		return errors.Wrap(err, "failed to discover NVMe")
 	}
 	w.controllers = cs
+
+	// discover backing vmd devs when vmd enabled in config
+	if w.vmdEnabled {
+		vmdDevAddrs, err := w.DiscoverVMD()
+		if err != nil {
+			return errors.Wrapf(err, "failed to discover VMD")
+		}
+		// add vmd addresses to stored controllers
+		for _, addr := range vmdDevAddrs {
+			w.controllers = append(w.controllers, spdk.Controller{
+				PCIAddr: addr,
+			})
+		}
+	}
 
 	w.initialized = true
 	return nil
@@ -149,9 +169,18 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
-func (b *spdkBackend) Init(initVmd bool, shmID ...int) error {
-	if err := b.binding.init(b.log, initVmd, shmID...); err != nil {
+func (b *spdkBackend) Init(shmID ...int) error {
+	if err := b.binding.init(b.log, shmID...); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// EnableVmd turns on VMD device awareness.
+func (b *spdkBackend) EnableVmd() error {
+	if b.binding.vmdEnabled {
+		return errors.New("EnableVmd(): VMD already enabled")
 	}
 
 	return nil
@@ -172,8 +201,8 @@ func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error
 	return scs, nil
 }
 
-func (b *spdkBackend) Scan(InitVmd bool) (storage.NvmeControllers, error) {
-	if err := b.Init(InitVmd); err != nil {
+func (b *spdkBackend) Scan() (storage.NvmeControllers, error) {
+	if err := b.Init(); err != nil {
 		return nil, err
 	}
 
@@ -208,8 +237,8 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	return scs[0], nil
 }
 
-func (b *spdkBackend) Format(pciAddr string, InitVmd bool) (*storage.NvmeController, error) {
-	if err := b.Init(InitVmd); err != nil {
+func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
+	if err := b.Init(); err != nil {
 		return nil, err
 	}
 

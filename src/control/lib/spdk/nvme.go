@@ -41,6 +41,7 @@ import "C"
 
 import (
 	"os"
+	"strings"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -54,6 +55,8 @@ const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
 type NVME interface {
 	// Discover NVMe controllers and namespaces, and device health info
 	Discover(logging.Logger) ([]Controller, error)
+	// Discover NVMe SSD PCIe addresses behind VMD
+	DiscoverVmd(log logging.Logger) ([]string, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger, string) error
 	// Cleanup NVMe object references
@@ -176,6 +179,55 @@ func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
 
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
+}
+
+// Discover NVMe SSD PCIe addresses behind VMD
+func (n *Nvme) DiscoverVMD(log logging.Logger) (addrs []string, err error) {
+	var rc C.int
+
+	addr_buf := C.malloc(C.sizeof_char * 128)
+	defer C.free(unsafe.Pointer(addr_buf))
+
+	count := 0
+	pci_device := C.spdk_pci_get_first_device()
+	for pci_device != nil {
+		devType := C.spdk_pci_device_get_type(pci_device)
+		if strings.Compare(C.GoString(devType), "vmd") == 0 {
+			count += 1
+		}
+
+		pci_device = C.spdk_pci_get_next_device(pci_device)
+	}
+
+	addrs = make([]string, 0, count)
+
+	i := 0
+	pci_device = C.spdk_pci_get_first_device()
+	for pci_device != nil {
+		devType := C.spdk_pci_device_get_type(pci_device)
+
+		if strings.Compare(C.GoString(devType), "vmd") == 0 {
+			rc = C.spdk_pci_addr_fmt((*C.char)(addr_buf), C.sizeof_char*128,
+				&pci_device.addr)
+			if rc != 0 {
+				if err = Rc2err("spdk_pci_addr_fmt", rc); err != nil {
+					continue
+				}
+			}
+
+			if i == count {
+				break
+			}
+			addrs = append(addrs, C.GoString((*C.char)(addr_buf)))
+		}
+
+		pci_device = C.spdk_pci_get_next_device(pci_device)
+		i += 1
+	}
+
+	log.Debugf("discovered nvme ssds behind VMD: %v", addrs)
+
+	return addrs, nil
 }
 
 // Format device at given pci address, destructive operation!
