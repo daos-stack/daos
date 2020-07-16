@@ -26,6 +26,7 @@
 package netdetect
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -42,12 +43,11 @@ const maxConcurrent = 1000
 func getSocketID(t *testing.T, pid int32, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	ndc := NetDetectContext{}
-	err := ndc.Init()
-	defer ndc.CleanUp()
+	netCtx, err := Init()
+	defer CleanUp(netCtx)
 	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
 
-	numaNode, err := ndc.GetNUMASocketIDForPid(int32(pid))
+	numaNode, err := GetNUMASocketIDForPid(netCtx, int32(pid))
 	common.AssertEqual(t, err, nil, fmt.Sprintf("GetNUMASocketIDForPid error on NUMA %d / pid %d", numaNode, pid))
 }
 
@@ -71,9 +71,9 @@ func TestConcurrentGetNUMASocket(t *testing.T) {
 	wg.Wait()
 }
 
-func getSocketIDWithContext(t *testing.T, pid int32, wg *sync.WaitGroup, ndc *NetDetectContext) {
+func getSocketIDWithContext(t *testing.T, pid int32, wg *sync.WaitGroup, ctx context.Context) {
 	defer wg.Done()
-	numaNode, err := ndc.GetNUMASocketIDForPid(int32(pid))
+	numaNode, err := GetNUMASocketIDForPid(ctx, int32(pid))
 	common.AssertEqual(t, err, nil, fmt.Sprintf("GetNUMASocketIDForPid error on NUMA %d / pid %d", numaNode, pid))
 }
 
@@ -84,9 +84,8 @@ func TestConcurrentGetNUMASocketWithContext(t *testing.T) {
 	_, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	ndc := NetDetectContext{}
-	err := ndc.Init()
-	defer ndc.CleanUp()
+	netCtx, err := Init()
+	defer CleanUp(netCtx)
 	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
 
 	var wg sync.WaitGroup
@@ -94,10 +93,10 @@ func TestConcurrentGetNUMASocketWithContext(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < maxConcurrent; i++ {
 		wg.Add(1)
-		go func(n int32, dc *NetDetectContext) {
+		go func(n int32, ctx context.Context) {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
-			getSocketIDWithContext(t, n, &wg, dc)
-		}(int32(pid), &ndc)
+			getSocketIDWithContext(t, n, &wg, ctx)
+		}(int32(pid), netCtx)
 	}
 	wg.Wait()
 }

@@ -62,14 +62,13 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		provider = cmd.FabricProvider
 	}
 
-	ndc := netdetect.NetDetectContext{}
-	err := ndc.Init()
-	defer ndc.CleanUp()
+	netCtx, err := netdetect.Init()
 	if err != nil {
 		return err
 	}
+	defer netdetect.CleanUp(netCtx)
 
-	results, err := ndc.ScanFabric(provider, defaultExcludeInterfaces)
+	results, err := netdetect.ScanFabric(netCtx, provider, defaultExcludeInterfaces)
 	if err != nil {
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}

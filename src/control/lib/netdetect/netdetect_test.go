@@ -162,12 +162,12 @@ func TestScanFabricNoDevices(t *testing.T) {
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
-			ndc := NetDetectContext{}
-			err = ndc.Init()
-			defer ndc.CleanUp()
+			netCtx, err := Init()
+			defer CleanUp(netCtx)
+
 			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
-			results, err := ndc.ScanFabric("", tc.excludes)
+			results, err := ScanFabric(netCtx, "", tc.excludes)
 			AssertEqual(t, err, nil, "ScanFabric failure")
 			AssertEqual(t, len(results), tc.results, "ScanFabric had unexpected number of results")
 		})
@@ -178,13 +178,12 @@ func TestScanFabricNoDevices(t *testing.T) {
 // we do expect that libfabric is installed and will report at least one provider,device,numa record.
 // If we get at least one record and no errors, the test is successful.
 func TestScanFabric(t *testing.T) {
-	ndc := NetDetectContext{}
-	err := ndc.Init()
-	defer ndc.CleanUp()
+	netCtx, err := Init()
+	defer CleanUp(netCtx)
 	AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
 	provider := "" // an empty provider string is a search for 'all'
-	results, err := ndc.ScanFabric(provider)
+	results, err := ScanFabric(netCtx, provider)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,13 +195,12 @@ func TestScanFabric(t *testing.T) {
 // ValidateProviderConfig and  ValidateNUMAConfig functions to make sure it matches.  Each record from ScanFabric is
 // examined.  We expect that libfabric is installed and will report at least one record.
 func TestValidateNetworkConfig(t *testing.T) {
-	ndc := NetDetectContext{}
-	err := ndc.Init()
-	defer ndc.CleanUp()
+	netCtx, err := Init()
+	defer CleanUp(netCtx)
 	AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
 	provider := "" // an empty provider string is a search for 'all'
-	results, err := ndc.ScanFabric(provider)
+	results, err := ScanFabric(netCtx, provider)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,11 +256,10 @@ func TestValidateNUMAConfigNonNumaAware(t *testing.T) {
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
-			ndc := NetDetectContext{}
-			err = ndc.Init()
-			defer ndc.CleanUp()
+			netCtx, err := Init()
+			defer CleanUp(netCtx)
 			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
-			AssertEqual(t, ndc.NumaAware, false, "Unexpected detection of NUMA nodes in provided topology")
+			AssertEqual(t, HasNUMA(netCtx), false, "Unexpected detection of NUMA nodes in provided topology")
 
 			err = ValidateNUMAConfig(tc.device, 0)
 			AssertEqual(t, err, nil, "Error on ValidateNUMAConfig")
@@ -300,15 +297,14 @@ func TestNumaAware(t *testing.T) {
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
-			ndc := NetDetectContext{}
-			err = ndc.Init()
-			defer ndc.CleanUp()
+			netCtx, err := Init()
+			defer CleanUp(netCtx)
 			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
 			if tc.result {
-				AssertEqual(t, ndc.NumaAware, tc.result, "Unable to detect NUMA on provided topology")
+				AssertEqual(t, HasNUMA(netCtx), tc.result, "Unable to detect NUMA on provided topology")
 			} else {
-				AssertEqual(t, ndc.NumaAware, tc.result, "Detected NUMA on non-numa topology")
+				AssertEqual(t, HasNUMA(netCtx), tc.result, "Detected NUMA on non-numa topology")
 			}
 		})
 	}
@@ -522,13 +518,12 @@ func TestDeviceAlias(t *testing.T) {
 // TestValidateProviderSm verifies that using the shared memory provider 'sm'
 // is validated with a positive result.
 func TestValidateProviderSm(t *testing.T) {
-	ndc := NetDetectContext{}
-	err := ndc.Init()
-	defer ndc.CleanUp()
+	netCtx, err := Init()
+	defer CleanUp(netCtx)
 	AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
 	provider := "" // an empty provider string is a search for 'all'
-	results, err := ndc.ScanFabric(provider)
+	results, err := ScanFabric(netCtx, provider)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -119,6 +119,7 @@ int getHFIUnit(void *src_addr) {
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -132,6 +133,8 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+type key int
+
 const (
 	direct = iota
 	sibling
@@ -141,21 +144,22 @@ const (
 	allHFIUsed            = -1
 	badAddress            = C.getHFIUnitError
 	// ARP protocol hardware identifiers: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
-	Netrom     = 0
-	Ether      = 1
-	Eether     = 2
-	Ax25       = 3
-	Pronet     = 4
-	Chaos      = 5
-	IEEE802    = 6
-	Arcnet     = 7
-	Appletlk   = 8
-	Dlci       = 15
-	Atm        = 19
-	Metricom   = 23
-	IEEE1394   = 24
-	Eui64      = 27
-	Infiniband = 32
+	Netrom          = 0
+	Ether           = 1
+	Eether          = 2
+	Ax25            = 3
+	Pronet          = 4
+	Chaos           = 5
+	IEEE802         = 6
+	Arcnet          = 7
+	Appletlk        = 8
+	Dlci            = 15
+	Atm             = 19
+	Metricom        = 23
+	IEEE1394        = 24
+	Eui64           = 27
+	Infiniband      = 32
+	topologyKey key = 0
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
@@ -210,22 +214,49 @@ func (da *DeviceAffinity) String() string {
 
 type NetDetectContext struct {
 	topology     C.hwloc_topology_t
-	NumaAware    bool
+	numaAware    bool
 	numNUMANodes int
 }
 
-func (ndc *NetDetectContext) Init() error {
-	var err error
-	ndc.topology, err = initLib()
-	if err != nil {
-		return err
+func getContext(ctx context.Context) *NetDetectContext {
+	if ctx != nil {
+		ndc := ctx.Value(topologyKey).(NetDetectContext)
+		return &ndc
 	}
-	ndc.numNUMANodes = numNUMANodes(ndc.topology)
-	ndc.NumaAware = ndc.numNUMANodes > 0
 	return nil
 }
 
-func (ndc *NetDetectContext) CleanUp() {
+// Init initializes hwloc and returns a context that maintains a pointer
+// to the topology.  Intended for functions that make repeated calls into hwloc APIs
+// to avoid the overhead of reinitialization
+func Init() (context.Context, error) {
+	var err error
+
+	ndc := NetDetectContext{}
+	ndc.topology, err = initLib()
+	if err != nil {
+		return nil, errors.Errorf("unable to intialize netdetect context: %v", err)
+	}
+	ndc.numNUMANodes = numNUMANodes(ndc.topology)
+	ndc.numaAware = ndc.numNUMANodes > 0
+	return context.WithValue(context.Background(), topologyKey, ndc), nil
+}
+
+// HasNUMA returns true if the topology has NUMA node data
+func HasNUMA(ctx context.Context) bool {
+	ndc := getContext(ctx)
+	if ndc == nil || ndc.topology == nil {
+		return false
+	}
+	return ndc.numaAware
+}
+
+// Cleanup releases the hwloc topology resources
+func CleanUp(ctx context.Context) {
+	ndc := getContext(ctx)
+	if ndc == nil || ndc.topology == nil {
+		return
+	}
 	cleanUp(ndc.topology)
 }
 
@@ -291,12 +322,15 @@ func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
 }
 
 // initDeviceScan initializes the hwloc library and initializes DeviceScan entries
-// that are frequently used for hwloc queries
-func initDeviceScan(ndc *NetDetectContext) (DeviceScan, error) {
+// that are frequently used for hwloc queries.  If a valid context is provided,
+// the topology associated with that context is used and hwloc will not be reinitialized.
+// If the context is nil, or has a nil topology, hwloc is initialized.
+func initDeviceScan(ctx context.Context) (DeviceScan, error) {
 	var deviceScanCfg DeviceScan
 	var err error
 
-	if ndc == nil {
+	ndc := getContext(ctx)
+	if ndc == nil || ndc.topology == nil {
 		deviceScanCfg.topology, err = initLib()
 		if err != nil {
 			log.Debugf("Error from initLib %v", err)
@@ -310,7 +344,7 @@ func initDeviceScan(ndc *NetDetectContext) (DeviceScan, error) {
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_OS_DEVICE)
 	if depth != C.HWLOC_TYPE_DEPTH_OS_DEVICE {
 		if ndc == nil {
-			defer cleanUp(deviceScanCfg.topology)
+			cleanUp(deviceScanCfg.topology)
 		}
 		return deviceScanCfg,
 			errors.New("hwloc_get_type_depth returned invalid value")
@@ -322,7 +356,7 @@ func initDeviceScan(ndc *NetDetectContext) (DeviceScan, error) {
 	systemDeviceNames, err := GetDeviceNames()
 	if err != nil {
 		if ndc == nil {
-			defer cleanUp(deviceScanCfg.topology)
+			cleanUp(deviceScanCfg.topology)
 		}
 		return deviceScanCfg, err
 	}
@@ -336,7 +370,7 @@ func initDeviceScan(ndc *NetDetectContext) (DeviceScan, error) {
 	deviceScanCfg.hwlocDeviceNames, err = getHwlocDeviceNames(deviceScanCfg)
 	if err != nil {
 		if ndc == nil {
-			defer cleanUp(deviceScanCfg.topology)
+			cleanUp(deviceScanCfg.topology)
 		}
 		return deviceScanCfg, errors.New("unable to obtain hwloc I/O device names")
 	}
@@ -536,12 +570,14 @@ func numNUMANodes(topology C.hwloc_topology_t) int {
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
 // It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
-func (ndc *NetDetectContext) GetNUMASocketIDForPid(pid int32) (int, error) {
-	if ndc.topology == nil {
+func GetNUMASocketIDForPid(ctx context.Context, pid int32) (int, error) {
+
+	ndc := getContext(ctx)
+	if ndc == nil || ndc.topology == nil {
 		return 0, errors.Errorf("netdetect context was not initialized")
 	}
 
-	if !ndc.NumaAware {
+	if !ndc.numaAware {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
@@ -1085,7 +1121,7 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
-func (ndc *NetDetectContext) ScanFabric(provider string, excludes ...string) ([]FabricScan, error) {
+func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]FabricScan, error) {
 	var ScanResults []FabricScan
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
@@ -1119,7 +1155,7 @@ func (ndc *NetDetectContext) ScanFabric(provider string, excludes ...string) ([]
 	defer C.fi_freeinfo(fi)
 
 	// We have some data from libfabric scan.  Let's initialize the remaining device scan elements
-	deviceScanCfg, err := initDeviceScan(ndc)
+	deviceScanCfg, err := initDeviceScan(ctx)
 	if err != nil {
 		return ScanResults, err
 	}

@@ -49,17 +49,18 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 	cmd.log.Infof(fmtStr, args...)
 }
 
+type key int
+
+const topologyKey key = 0
+
 func (cmd *netScanCmd) Execute(_ []string) error {
-
-	ndc := netdetect.NetDetectContext{}
-	err := ndc.Init()
-	defer ndc.CleanUp()
+	netCtx, err := netdetect.Init()
 	if err != nil {
-		exitWithError(cmd.log, err)
-		return nil
+		return err
 	}
+	defer netdetect.CleanUp(netCtx)
 
-	if !ndc.NumaAware {
+	if !netdetect.HasNUMA(netCtx) {
 		cmd.printUnlessJson("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
 	}
 
@@ -68,7 +69,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		provider = ""
 	}
 
-	results, err := ndc.ScanFabric(provider, defaultExcludeInterfaces)
+	results, err := netdetect.ScanFabric(netCtx, provider, defaultExcludeInterfaces)
 	if err != nil {
 		exitWithError(cmd.log, err)
 		return nil
