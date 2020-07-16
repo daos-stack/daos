@@ -298,7 +298,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 			     ((SCM_FREE(&vps) - SCM_SYS(&vps)) * 52) / 100;
 		rc = vos_pool_space_sys_set(db->d_pool, &rdb_extra_sys[0]);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to reserve more vos pool SCM space "
+			D_ERROR(DF_DB": failed to reserve more vos pool SCM "
 				DF_U64" : "DF_RC"\n", DP_DB(db),
 				rdb_extra_sys[DAOS_MEDIA_SCM], DP_RC(rc));
 			goto err_pool;
