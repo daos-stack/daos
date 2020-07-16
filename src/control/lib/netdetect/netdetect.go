@@ -239,6 +239,7 @@ func Init() (context.Context, error) {
 	}
 	ndc.numNUMANodes = numNUMANodes(ndc.topology)
 	ndc.numaAware = ndc.numNUMANodes > 0
+
 	return context.WithValue(context.Background(), topologyKey, ndc), nil
 }
 
@@ -264,6 +265,13 @@ func CleanUp(ctx context.Context) {
 func initLib() (C.hwloc_topology_t, error) {
 	var topology C.hwloc_topology_t
 	var version C.uint
+	var status C.int
+
+	defer func() {
+		if status != 0 && topology != nil {
+			cleanUp(topology)
+		}
+	}()
 
 	version = C.hwloc_get_api_version()
 	if (version >> 16) != (C.HWLOC_API_VERSION >> 16) {
@@ -273,22 +281,18 @@ func initLib() (C.hwloc_topology_t, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	status := C.hwloc_topology_init(&topology)
+	status = C.hwloc_topology_init(&topology)
 	if status != 0 {
 		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
 	}
 
 	status = C.cmpt_setFlags(topology)
 	if status != 0 {
-		// Call cleanUp because we failed after hwloc_topology_init succeeded.
-		cleanUp(topology)
 		return nil, errors.Errorf("hwloc setFlags failure: %v", status)
 	}
 
 	status = C.hwloc_topology_load(topology)
 	if status != 0 {
-		// Call cleanUp because we failed after hwloc_topology_init succeeded.
-		cleanUp(topology)
 		return nil, errors.Errorf("hwloc_topology_load failure: %v", status)
 	}
 	return topology, nil
@@ -329,6 +333,12 @@ func initDeviceScan(ctx context.Context) (DeviceScan, error) {
 	var deviceScanCfg DeviceScan
 	var err error
 
+	defer func() {
+		if err != nil && ctx == nil && deviceScanCfg.topology != nil {
+			cleanUp(deviceScanCfg.topology)
+		}
+	}()
+
 	ndc := getContext(ctx)
 	if ndc == nil || ndc.topology == nil {
 		deviceScanCfg.topology, err = initLib()
@@ -343,9 +353,6 @@ func initDeviceScan(ctx context.Context) (DeviceScan, error) {
 
 	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_OS_DEVICE)
 	if depth != C.HWLOC_TYPE_DEPTH_OS_DEVICE {
-		if ndc == nil {
-			cleanUp(deviceScanCfg.topology)
-		}
 		return deviceScanCfg,
 			errors.New("hwloc_get_type_depth returned invalid value")
 	}
@@ -355,9 +362,6 @@ func initDeviceScan(ctx context.Context) (DeviceScan, error) {
 	// Create the list of all the valid network device names
 	systemDeviceNames, err := GetDeviceNames()
 	if err != nil {
-		if ndc == nil {
-			cleanUp(deviceScanCfg.topology)
-		}
 		return deviceScanCfg, err
 	}
 	deviceScanCfg.systemDeviceNames = systemDeviceNames
@@ -369,9 +373,6 @@ func initDeviceScan(ctx context.Context) (DeviceScan, error) {
 
 	deviceScanCfg.hwlocDeviceNames, err = getHwlocDeviceNames(deviceScanCfg)
 	if err != nil {
-		if ndc == nil {
-			cleanUp(deviceScanCfg.topology)
-		}
 		return deviceScanCfg, errors.New("unable to obtain hwloc I/O device names")
 	}
 
@@ -626,6 +627,13 @@ func GetDeviceAlias(device string) (string, error) {
 // to the system device list that is automatically determined.
 func getDeviceAliasWithSystemList(device string, additionalSystemDevices []string) (string, error) {
 	var node C.hwloc_obj_t
+	var deviceScanCfg DeviceScan
+
+	defer func() {
+		if deviceScanCfg.topology != nil {
+			cleanUp(deviceScanCfg.topology)
+		}
+	}()
 
 	log.Debugf("Searching for a device alias for: %s", device)
 
@@ -633,7 +641,6 @@ func getDeviceAliasWithSystemList(device string, additionalSystemDevices []strin
 	if err != nil {
 		return "", errors.Errorf("unable to initialize device scan:  Error: %v", err)
 	}
-	defer cleanUp(deviceScanCfg.topology)
 
 	deviceScanCfg.targetDevice = device
 
@@ -912,6 +919,13 @@ func getHFIDeviceCount(hwlocDeviceNames []string) int {
 func ValidateProviderConfig(device string, provider string) error {
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
+	var deviceScanCfg DeviceScan
+
+	defer func() {
+		if deviceScanCfg.topology != nil {
+			cleanUp(deviceScanCfg.topology)
+		}
+	}()
 
 	if provider == "" {
 		return errors.New("provider required")
@@ -949,11 +963,10 @@ func ValidateProviderConfig(device string, provider string) error {
 	}
 	defer C.fi_freeinfo(fi)
 
-	deviceScanCfg, err := initDeviceScan(nil)
+	deviceScanCfg, err = initDeviceScan(nil)
 	if err != nil {
 		return errors.Errorf("unable to initialize device scan:  Error: %v", err)
 	}
-	defer cleanUp(deviceScanCfg.topology)
 
 	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
 		return errors.Errorf("device: %s is an invalid device name", device)
@@ -1036,16 +1049,24 @@ func ValidateNUMAStub(device string, numaNode uint) error {
 
 // ValidateNUMAConfig confirms that the given network device matches the NUMA ID given.
 func ValidateNUMAConfig(device string, numaNode uint) error {
+	var err error
+	var deviceScanCfg DeviceScan
+
+	defer func() {
+		if deviceScanCfg.topology != nil {
+			cleanUp(deviceScanCfg.topology)
+		}
+	}()
+
 	log.Debugf("Validate network config for numaNode: %d", numaNode)
 	if device == "" {
 		return errors.New("device required")
 	}
 
-	deviceScanCfg, err := initDeviceScan(nil)
+	deviceScanCfg, err = initDeviceScan(nil)
 	if err != nil {
 		return errors.Errorf("unable to initialize device scan:  Error: %v", err)
 	}
-	defer cleanUp(deviceScanCfg.topology)
 
 	// If the system isn't NUMA aware, skip validation
 	if numNUMANodes(deviceScanCfg.topology) == 0 {
