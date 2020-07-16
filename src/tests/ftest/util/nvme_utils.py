@@ -298,9 +298,10 @@ class ServerFillUp(IorTestBase):
         # run IOR Command
         try:
             result = manager.run()
-        # Exception does not work so better to verify the proper completion too.
-        if 'Finished' not in result.stdout:
-            results.put("FAIL")            
+            # Exception does not work so better to verify the proper
+            # completion too.
+            if 'Finished' not in result.stdout:
+                results.put("FAIL")
         except CommandFailure as _error:
             results.put("FAIL")
 
