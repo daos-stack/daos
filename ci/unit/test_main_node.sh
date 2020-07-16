@@ -10,13 +10,13 @@ remove_daos_path(){
     while IFS="" read -r LINE || [ -n "$LINE" ]
     do
         printf "%s\n" "${LINE//$DAOS_BASE/}" >> "${file_name}.tmp"
-    done < $file_name
+    done < "$file_name"
 
 }
 
 memcheck_convert_xml(){
-    for i in $(ls results-*-memcheck.xml); do
-        remove_daos_path $i
+    for i in results-*-memcheck.xml; do
+        remove_daos_path "$i"
     done
     for i in *.tmp; do
         mv -- "$i" "${i%%.tmp}"
