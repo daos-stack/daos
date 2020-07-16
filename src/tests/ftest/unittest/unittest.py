@@ -21,9 +21,12 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
+import os
+import json
 from avocado.utils import process
 from apricot import Test
 from pathlib import Path
+from errno import ENOENT
 
 
 def get_file_path(bin_name, dir_path=""):

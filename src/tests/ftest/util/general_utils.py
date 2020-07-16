@@ -26,10 +26,8 @@ from logging import getLogger
 
 import os
 import re
-import json
 import random
 import string
-from errno import ENOENT
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError

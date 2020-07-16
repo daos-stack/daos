@@ -27,7 +27,7 @@ import avocado
 import re
 from command_utils import CommandFailure
 from control_test_base import ControlTestBase
-from apricot import TestWithServers, skipForTicket
+from apricot import skipForTicket
 
 
 class DmgStorageQuery(ControlTestBase):
