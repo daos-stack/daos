@@ -25,10 +25,13 @@ package server
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
@@ -48,6 +51,8 @@ func (m *mgmtModule) ID() drpc.ModuleID {
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_io_server iosrv module (src/iosrv).
 type srvModule struct {
+	log    logging.Logger
+	sysdb  *system.Database
 	iosrvs []*IOServerInstance
 }
 
@@ -58,6 +63,8 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req 
 		return nil, mod.handleNotifyReady(req)
 	case drpc.MethodBIOError:
 		return nil, mod.handleBioErr(req)
+	case drpc.MethodGetPoolServiceRanks:
+		return mod.handleGetPoolServiceRanks(req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
@@ -65,6 +72,32 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req 
 
 func (mod *srvModule) ID() drpc.ModuleID {
 	return drpc.ModuleSrv
+}
+
+func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
+	req := new(srvpb.GetPoolSvcReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	uuid, err := uuid.Parse(req.GetUuid())
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid pool uuid %q", uuid)
+	}
+
+	mod.log.Debugf("handling GetPoolSvcReq: %+v", req)
+
+	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(srvpb.GetPoolSvcResp)
+	resp.Svcreps = system.RanksToUint32(ps.Replicas)
+
+	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
+
+	return proto.Marshal(resp)
 }
 
 func (mod *srvModule) handleNotifyReady(reqb []byte) error {

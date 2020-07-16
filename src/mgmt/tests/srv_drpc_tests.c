@@ -109,7 +109,6 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_set_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_create_mgmt_svc);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_get_attach_info);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_join);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_create);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_extend);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);

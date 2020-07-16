@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -837,6 +837,7 @@ enum dss_media_error_type {
 void dss_init_state_set(enum dss_init_state state);
 
 int notify_bio_error(int media_err_type, int tgt_id);
+int get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);

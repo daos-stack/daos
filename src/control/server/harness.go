@@ -144,7 +144,7 @@ func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, cfg *Configuration) error {
+func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membership, db *system.Database, cfg *Configuration) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -158,7 +158,7 @@ func (h *IOServerHarness) Start(ctx context.Context, membership *system.Membersh
 	if cfg != nil {
 		// Single daos_server dRPC server to handle all iosrv requests
 		if err := drpcServerSetup(ctx, h.log, cfg.SocketDir, h.Instances(),
-			cfg.TransportConfig); err != nil {
+			cfg.TransportConfig, db); err != nil {
 
 			return errors.WithMessage(err, "dRPC server setup")
 		}

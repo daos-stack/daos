@@ -262,6 +262,8 @@ const (
 	MethodNotifyReady srvMethod = C.DRPC_METHOD_SRV_NOTIFY_READY
 	// MethodBIOError is a ModuleSrv method
 	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
+	// MethodGetPoolServiceRanks requests the service ranks for a pool
+	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
 )
 
 type securityMethod int32

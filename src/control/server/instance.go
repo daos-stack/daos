@@ -261,6 +261,9 @@ func (srv *IOServerInstance) setTargetCount(numTargets int) {
 // with this instance. If no replica is associated with this instance, this
 // function is a no-op.
 func (srv *IOServerInstance) startMgmtSvc() error {
+	// disable for now
+	return nil
+
 	superblock := srv.getSuperblock()
 
 	// should have been loaded by now

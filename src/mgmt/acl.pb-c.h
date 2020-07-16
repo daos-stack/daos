@@ -65,15 +65,10 @@ struct  _Mgmt__GetACLReq
    * Target UUID
    */
   char *uuid;
-  /*
-   * pool service replica ranks
-   */
-  size_t n_svcreps;
-  uint32_t *svcreps;
 };
 #define MGMT__GET_ACLREQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_aclreq__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string }
 
 
 /*
@@ -92,15 +87,10 @@ struct  _Mgmt__ModifyACLReq
    */
   size_t n_acl;
   char **acl;
-  /*
-   * pool service replica ranks
-   */
-  size_t n_svcreps;
-  uint32_t *svcreps;
 };
 #define MGMT__MODIFY_ACLREQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__modify_aclreq__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -117,15 +107,10 @@ struct  _Mgmt__DeleteACLReq
    * Principal whose entry is to be deleted
    */
   char *principal;
-  /*
-   * pool service replica ranks
-   */
-  size_t n_svcreps;
-  uint32_t *svcreps;
 };
 #define MGMT__DELETE_ACLREQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__delete_aclreq__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /* Mgmt__ACLResp methods */

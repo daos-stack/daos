@@ -34,6 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func getDrpcServerSocketPath(sockDir string) string {
@@ -82,7 +83,7 @@ func checkSocketDir(sockDir string) error {
 }
 
 // drpcServerSetup specifies socket path and starts drpc server.
-func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
+func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig, db *system.Database) error {
 	// Clean up any previous execution's sockets before we create any new sockets
 	if err := drpcCleanup(sockDir); err != nil {
 		return err
@@ -97,7 +98,11 @@ func drpcServerSetup(ctx context.Context, log logging.Logger, sockDir string, io
 	// Create and add our modules
 	drpcServer.RegisterRPCModule(NewSecurityModule(log, tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
-	drpcServer.RegisterRPCModule(&srvModule{iosrvs})
+	drpcServer.RegisterRPCModule(&srvModule{
+		log:    log,
+		sysdb:  db,
+		iosrvs: iosrvs,
+	})
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
