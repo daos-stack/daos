@@ -28,9 +28,8 @@ from apricot import TestWithServers
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
 from command_utils import ExecutableCommand
-from general_utils import run_command, DaosTestError
 from test_utils_pool import TestPool
-
+from job_manager_utils import Mpirun
 
 class IoConfGen(ExecutableCommand):
     """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
@@ -70,12 +69,13 @@ class IoConfGen(ExecutableCommand):
         """
         command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
                             self.filename.value])
-        try:
-            return run_command(
-                command, self.timeout, self.verbose, env=self.env)
-        except DaosTestError as error:
-            raise CommandFailure(error)
 
+        manager = Mpirun(command, mpitype="mpich")
+        # run daos_run_io_conf Command using mpirun
+        try:
+            manager.run()
+        except CommandFailure as error:
+            raise CommandFailure(error)
 
 def gen_unaligned_io_conf(record_size, filename="testfile"):
     """Generate the data-set file based on record size.
