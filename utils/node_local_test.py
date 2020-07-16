@@ -152,8 +152,18 @@ class WarningsFactory():
            entry['severity'] != 'ERROR':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
+        if self.pending and self.pending[0][0].pid != line.pid:
+            self.reset_pending()
         self.pending.append((line, message))
         self._flush()
+
+    def reset_pending(self):
+        """Reset the pending list
+
+        Should be called before iterating on each new file, so errors
+        from previous files aren't attribured to new files.
+        """
+        self.pending = []
 
     def _flush(self):
         """Write the current list to the json file
@@ -380,7 +390,7 @@ class ValgrindHelper():
 
         self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
 
-        cmd = ['valgrind', '--quiet']
+        cmd = ['valgrind', '--quiet', '--fair-sched=yes']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
@@ -488,7 +498,7 @@ class DFuse():
             except subprocess.TimeoutExpired:
                 pass
             total_time += 1
-            if total_time > 30:
+            if total_time > 60:
                 raise Exception('Timeout starting dfuse')
 
     def _close_files(self):

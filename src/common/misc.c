@@ -223,6 +223,28 @@ daos_sgls_buf_size(d_sg_list_t *sgls, int nr)
 	return size;
 }
 
+int
+daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size)
+{
+	char	*new_buf;
+
+	if (sgl == NULL || sgl->sg_iovs == NULL)
+		return 0;
+
+	D_ASSERT(sgl->sg_nr > idx);
+	if (sgl->sg_iovs[idx].iov_buf_len >= new_size)
+		return 0;
+
+	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf, new_size);
+	if (new_buf == NULL)
+		return -DER_NOMEM;
+
+	sgl->sg_iovs[idx].iov_buf = new_buf;
+	sgl->sg_iovs[idx].iov_buf_len = new_size;
+
+	return 0;
+}
+
 /**
  * Query the size of packed sgls, if the \a buf_size != NULL then will set its
  * value as buffer size as well.
@@ -603,6 +625,17 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	}
 
 	return &daos_crt_init_opt;
+}
+
+void
+daos_dti_gen_unique(struct dtx_id *dti)
+{
+	uuid_t uuid;
+
+	uuid_generate(uuid);
+
+	uuid_copy(dti->dti_uuid, uuid);
+	dti->dti_hlc = crt_hlc_get();
 }
 
 void
