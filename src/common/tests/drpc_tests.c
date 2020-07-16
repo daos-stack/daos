@@ -82,16 +82,20 @@ static void
 test_drpc_connect_returns_null_if_socket_fails(void **state)
 {
 	socket_return = -1; /* < 0 indicates failure */
+	struct drpc *drpc;
 
-	assert_null(drpc_connect(TEST_SOCK_ADDR));
+	assert_int_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
+	assert_null(drpc);
 }
 
 static void
 test_drpc_connect_returns_null_if_connect_fails(void **state)
 {
 	connect_return = -1; /* < 0 indicates failure */
+	struct drpc *drpc;
 
-	assert_null(drpc_connect(TEST_SOCK_ADDR));
+	assert_int_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
+	assert_null(drpc);
 
 	/* Closed the socket */
 	assert_int_equal(close_fd, socket_return);
@@ -100,7 +104,12 @@ test_drpc_connect_returns_null_if_connect_fails(void **state)
 static void
 test_drpc_connect_success(void **state)
 {
-	struct drpc *ctx = drpc_connect(TEST_SOCK_ADDR);
+	int rc;
+	struct drpc *ctx;
+
+	rc = drpc_connect(TEST_SOCK_ADDR, &ctx);
+	assert_int_equal(rc, 0);
+	assert_non_null(ctx);
 
 	/* created socket with correct input params */
 	assert_int_equal(socket_family, AF_UNIX);
@@ -704,7 +713,10 @@ test_drpc_send_response_success(void **state)
 static void
 test_drpc_call_create_null_ctx(void **state)
 {
-	assert_null(drpc_call_create(NULL, 1, 2));
+	Drpc__Call	*call;
+
+	assert_int_equal(drpc_call_create(NULL, 1, 2, &call), -DER_INVAL);
+	assert_null(call);
 }
 
 static void
@@ -715,11 +727,13 @@ test_drpc_call_create_free(void **state)
 	int32_t		method = 25;
 	uint64_t	sequence = 203;
 	Drpc__Call	*call;
+	int		rc;
 
 	ctx->sequence = sequence;
 
-	call = drpc_call_create(ctx, module, method);
+	rc = drpc_call_create(ctx, module, method, &call);
 
+	assert_int_equal(rc, DER_SUCCESS);
 	assert_non_null(call);
 	assert_memory_equal(call->base.descriptor, &drpc__call__descriptor,
 			sizeof(ProtobufCMessageDescriptor));

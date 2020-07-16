@@ -112,8 +112,6 @@ dss_ctx_nr_get(void)
 	return DSS_CTX_NR_TOTAL;
 }
 
-static void dss_gc_ult(void *args);
-
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_IO_XS_NAME_FMT	"daos_io_%d"
 #define DSS_OFFLOAD_XS_NAME_FMT	"daos_off_%d"
@@ -529,14 +527,6 @@ dss_srv_handler(void *arg)
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
 			D_GOTO(tse_fini, rc);
-		}
-
-		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GC],
-				       dss_gc_ult, NULL,
-				       ABT_THREAD_ATTR_NULL, NULL);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("create GC ULT failed: %d\n", rc);
-			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
@@ -1372,56 +1362,4 @@ dss_dump_ABT_state()
 		 */
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
-}
-
-void
-dss_gc_run(daos_handle_t poh, int credits)
-{
-	struct dss_xstream *dxs	 = dss_current_xstream();
-	int		    total = 0;
-
-	while (1) {
-		int	creds = DSS_GC_CREDS;
-		int	rc;
-
-		if (credits > 0 && (credits - total) < creds)
-			creds = credits - total;
-
-		total += creds;
-		if (daos_handle_is_inval(poh))
-			rc = vos_gc_run(&creds);
-		else
-			rc = vos_gc_pool(poh, &creds);
-
-		if (rc) {
-			D_ERROR("GC run failed: %s\n", d_errstr(rc));
-			break;
-		}
-		total -= creds; /* subtract the remainded credits */
-		if (creds != 0)
-			break; /* reclaimed everything */
-
-		if (credits > 0 && total >= credits)
-			break; /* consumed all credits */
-
-		if (dss_xstream_exiting(dxs))
-			break;
-
-		ABT_thread_yield();
-	}
-
-	if (total != 0) /* did something */
-		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
-}
-
-static void
-dss_gc_ult(void *args)
-{
-	 struct dss_xstream *dxs  = dss_current_xstream();
-
-	 while (!dss_xstream_exiting(dxs)) {
-		/* -1 means GC will run until there is nothing to do */
-		dss_gc_run(DAOS_HDL_INVAL, -1);
-		ABT_thread_yield();
-	 }
 }
