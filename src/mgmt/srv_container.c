@@ -31,31 +31,22 @@
 #include "srv_internal.h"
 
 static int
-cont_set_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop)
+cont_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+	      uuid_t cont_uuid, daos_prop_t *prop)
 {
 	int		rc = 0;
-	d_rank_list_t	*ranks;
 
-	/* Container svc colocated with pool svc */
-	rc = get_pool_svc_ranks(pool_uuid, &ranks);
-	if (rc != 0) {
-		D_ERROR("Failed to get pool service ranks "DF_UUID" rc: %d\n",
-			DP_UUID(pool_uuid), rc);
-		goto out;
-	}
-
-	rc = ds_cont_svc_set_prop(pool_uuid, cont_uuid, ranks, prop);
+	rc = ds_cont_svc_set_prop(pool_uuid, cont_uuid, svc_ranks, prop);
 	if (rc != 0)
-		goto out_ranks;
+		goto out;
 
-out_ranks:
-	d_rank_list_free(ranks);
 out:
 	return rc;
 }
 
 int
-ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
+ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		       uuid_t cont_uuid, const char *user,
 		       const char *group)
 {
 	int		rc = 0;
@@ -97,7 +88,7 @@ ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
 		i++;
 	}
 
-	rc = cont_set_prop(pool_uuid, cont_uuid, prop);
+	rc = cont_set_prop(pool_uuid, svc_ranks, cont_uuid, prop);
 out_prop:
 	daos_prop_free(prop);
 	return rc;

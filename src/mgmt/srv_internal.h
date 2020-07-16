@@ -99,35 +99,43 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			d_rank_list_t *targets, size_t scm_size,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
 			d_rank_list_t **svcp);
-int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
-int ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group);
-int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
+int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			 const char *group, uint32_t force);
+int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		       const char *group);
+int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+				     uint32_t rank,
 				     struct pool_target_id_list *tgt_list,
 				     pool_comp_state_t new_state);
-int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
+int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			     uint32_t reint_rank,
 			     struct pool_target_id_list *reint_list);
-int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
-			char *tgt_dev,  size_t scm_size, size_t nvme_size);
-int ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
-			  daos_prop_t **result);
+int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			d_rank_list_t *rank_list, char *tgt_dev,
+			size_t scm_size, size_t nvme_size);
+int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			  daos_prop_t *prop, daos_prop_t **result);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 void ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len);
 int ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		       struct mgmt_list_pools_one **poolsp, size_t *pools_len);
 void ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req);
-int ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **access_prop);
-int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			       daos_prop_t **result);
-int ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			    daos_prop_t **result);
-int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
-			    daos_prop_t **result);
-int ds_mgmt_pool_list_cont(uuid_t uuid,
+int ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			 daos_prop_t **access_prop);
+int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			       struct daos_acl *acl, daos_prop_t **result);
+int ds_mgmt_pool_update_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			    struct daos_acl *acl, daos_prop_t **result);
+int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			    const char *principal, daos_prop_t **result);
+int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
-int ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info);
-int ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
+int ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		       daos_pool_info_t *pool_info);
+int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			   uuid_t cont_uuid, const char *user,
 			   const char *group);
 
 /** srv_query.c */
