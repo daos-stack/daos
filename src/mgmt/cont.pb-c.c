@@ -97,7 +97,7 @@ void   mgmt__cont_set_owner_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__cont_set_owner_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptors[5] =
 {
   {
     "contUUID",
@@ -147,17 +147,30 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    5,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__ContSetOwnerReq, n_svc_ranks),
+    offsetof(Mgmt__ContSetOwnerReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__cont_set_owner_req__field_indices_by_name[] = {
   0,   /* field[0] = contUUID */
   3,   /* field[3] = ownergroup */
   2,   /* field[2] = owneruser */
   1,   /* field[1] = poolUUID */
+  4,   /* field[4] = svc_ranks */
 };
 static const ProtobufCIntRange mgmt__cont_set_owner_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__cont_set_owner_req__descriptor =
 {
@@ -167,7 +180,7 @@ const ProtobufCMessageDescriptor mgmt__cont_set_owner_req__descriptor =
   "Mgmt__ContSetOwnerReq",
   "mgmt",
   sizeof(Mgmt__ContSetOwnerReq),
-  4,
+  5,
   mgmt__cont_set_owner_req__field_descriptors,
   mgmt__cont_set_owner_req__field_indices_by_name,
   1,  mgmt__cont_set_owner_req__number_ranges,

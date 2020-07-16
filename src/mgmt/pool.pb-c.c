@@ -1292,7 +1292,7 @@ const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_create_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_destroy_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_destroy_req__field_descriptors[4] =
 {
   {
     "uuid",
@@ -1330,16 +1330,29 @@ static const ProtobufCFieldDescriptor mgmt__pool_destroy_req__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolDestroyReq, n_svc_ranks),
+    offsetof(Mgmt__PoolDestroyReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_destroy_req__field_indices_by_name[] = {
   2,   /* field[2] = force */
+  3,   /* field[3] = svc_ranks */
   1,   /* field[1] = sys */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_destroy_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor =
 {
@@ -1349,7 +1362,7 @@ const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor =
   "Mgmt__PoolDestroyReq",
   "mgmt",
   sizeof(Mgmt__PoolDestroyReq),
-  3,
+  4,
   mgmt__pool_destroy_req__field_descriptors,
   mgmt__pool_destroy_req__field_indices_by_name,
   1,  mgmt__pool_destroy_req__number_ranges,
@@ -1394,7 +1407,7 @@ const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_destroy_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[3] =
 {
   {
     "uuid",
@@ -1420,15 +1433,28 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[2]
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolEvictReq, n_svc_ranks),
+    offsetof(Mgmt__PoolEvictReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_evict_req__field_indices_by_name[] = {
+  2,   /* field[2] = svc_ranks */
   1,   /* field[1] = sys */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_evict_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
 {
@@ -1438,7 +1464,7 @@ const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
   "Mgmt__PoolEvictReq",
   "mgmt",
   sizeof(Mgmt__PoolEvictReq),
-  2,
+  3,
   mgmt__pool_evict_req__field_descriptors,
   mgmt__pool_evict_req__field_indices_by_name,
   1,  mgmt__pool_evict_req__number_ranges,
@@ -1483,7 +1509,7 @@ const ProtobufCMessageDescriptor mgmt__pool_evict_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_evict_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[4] =
 {
   {
     "uuid",
@@ -1521,16 +1547,29 @@ static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[
     0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolExcludeReq, n_svc_ranks),
+    offsetof(Mgmt__PoolExcludeReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_exclude_req__field_indices_by_name[] = {
   1,   /* field[1] = rank */
+  3,   /* field[3] = svc_ranks */
   2,   /* field[2] = targetidx */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_exclude_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_exclude_req__descriptor =
 {
@@ -1540,7 +1579,7 @@ const ProtobufCMessageDescriptor mgmt__pool_exclude_req__descriptor =
   "Mgmt__PoolExcludeReq",
   "mgmt",
   sizeof(Mgmt__PoolExcludeReq),
-  3,
+  4,
   mgmt__pool_exclude_req__field_descriptors,
   mgmt__pool_exclude_req__field_indices_by_name,
   1,  mgmt__pool_exclude_req__number_ranges,
@@ -1585,7 +1624,7 @@ const ProtobufCMessageDescriptor mgmt__pool_exclude_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_exclude_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_drain_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_drain_req__field_descriptors[4] =
 {
   {
     "uuid",
@@ -1623,16 +1662,29 @@ static const ProtobufCFieldDescriptor mgmt__pool_drain_req__field_descriptors[3]
     0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolDrainReq, n_svc_ranks),
+    offsetof(Mgmt__PoolDrainReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_drain_req__field_indices_by_name[] = {
   1,   /* field[1] = rank */
+  3,   /* field[3] = svc_ranks */
   2,   /* field[2] = targetidx */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_drain_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_drain_req__descriptor =
 {
@@ -1642,7 +1694,7 @@ const ProtobufCMessageDescriptor mgmt__pool_drain_req__descriptor =
   "Mgmt__PoolDrainReq",
   "mgmt",
   sizeof(Mgmt__PoolDrainReq),
-  3,
+  4,
   mgmt__pool_drain_req__field_descriptors,
   mgmt__pool_drain_req__field_indices_by_name,
   1,  mgmt__pool_drain_req__number_ranges,
@@ -1687,7 +1739,7 @@ const ProtobufCMessageDescriptor mgmt__pool_drain_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_drain_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[5] =
 {
   {
     "uuid",
@@ -1714,8 +1766,20 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[4
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "scmbytes",
+    "svc_ranks",
     3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolExtendReq, n_svc_ranks),
+    offsetof(Mgmt__PoolExtendReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "scmbytes",
+    4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1727,7 +1791,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[4
   },
   {
     "nvmebytes",
-    4,
+    5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1739,15 +1803,16 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[4
   },
 };
 static const unsigned mgmt__pool_extend_req__field_indices_by_name[] = {
-  3,   /* field[3] = nvmebytes */
+  4,   /* field[4] = nvmebytes */
   1,   /* field[1] = ranks */
-  2,   /* field[2] = scmbytes */
+  3,   /* field[3] = scmbytes */
+  2,   /* field[2] = svc_ranks */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_extend_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor =
 {
@@ -1757,7 +1822,7 @@ const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor =
   "Mgmt__PoolExtendReq",
   "mgmt",
   sizeof(Mgmt__PoolExtendReq),
-  4,
+  5,
   mgmt__pool_extend_req__field_descriptors,
   mgmt__pool_extend_req__field_indices_by_name,
   1,  mgmt__pool_extend_req__number_ranges,
@@ -1802,7 +1867,7 @@ const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_extend_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[4] =
 {
   {
     "uuid",
@@ -1840,16 +1905,29 @@ static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descript
     0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolReintegrateReq, n_svc_ranks),
+    offsetof(Mgmt__PoolReintegrateReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_reintegrate_req__field_indices_by_name[] = {
   1,   /* field[1] = rank */
+  3,   /* field[3] = svc_ranks */
   2,   /* field[2] = targetidx */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_reintegrate_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
 {
@@ -1859,7 +1937,7 @@ const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
   "Mgmt__PoolReintegrateReq",
   "mgmt",
   sizeof(Mgmt__PoolReintegrateReq),
-  3,
+  4,
   mgmt__pool_reintegrate_req__field_descriptors,
   mgmt__pool_reintegrate_req__field_indices_by_name,
   1,  mgmt__pool_reintegrate_req__number_ranges,
@@ -2044,7 +2122,7 @@ const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor =
   (ProtobufCMessageInit) mgmt__list_pools_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__list_cont_req__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__list_cont_req__field_descriptors[2] =
 {
   {
     "uuid",
@@ -2058,14 +2136,27 @@ static const ProtobufCFieldDescriptor mgmt__list_cont_req__field_descriptors[1] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__ListContReq, n_svc_ranks),
+    offsetof(Mgmt__ListContReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__list_cont_req__field_indices_by_name[] = {
+  1,   /* field[1] = svc_ranks */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__list_cont_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__list_cont_req__descriptor =
 {
@@ -2075,7 +2166,7 @@ const ProtobufCMessageDescriptor mgmt__list_cont_req__descriptor =
   "Mgmt__ListContReq",
   "mgmt",
   sizeof(Mgmt__ListContReq),
-  1,
+  2,
   mgmt__list_cont_req__field_descriptors,
   mgmt__list_cont_req__field_indices_by_name,
   1,  mgmt__list_cont_req__number_ranges,
@@ -2171,7 +2262,7 @@ const ProtobufCMessageDescriptor mgmt__list_cont_resp__descriptor =
   (ProtobufCMessageInit) mgmt__list_cont_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_req__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__pool_query_req__field_descriptors[2] =
 {
   {
     "uuid",
@@ -2185,14 +2276,27 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_req__field_descriptors[1]
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolQueryReq, n_svc_ranks),
+    offsetof(Mgmt__PoolQueryReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_query_req__field_indices_by_name[] = {
+  1,   /* field[1] = svc_ranks */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_query_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_query_req__descriptor =
 {
@@ -2202,7 +2306,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_req__descriptor =
   "Mgmt__PoolQueryReq",
   "mgmt",
   sizeof(Mgmt__PoolQueryReq),
-  1,
+  2,
   mgmt__pool_query_req__field_descriptors,
   mgmt__pool_query_req__field_indices_by_name,
   1,  mgmt__pool_query_req__number_ranges,
@@ -2574,7 +2678,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_set_prop_req__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__pool_set_prop_req__field_descriptors[6] =
 {
   {
     "uuid",
@@ -2636,18 +2740,31 @@ static const ProtobufCFieldDescriptor mgmt__pool_set_prop_req__field_descriptors
     0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "svc_ranks",
+    6,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolSetPropReq, n_svc_ranks),
+    offsetof(Mgmt__PoolSetPropReq, svc_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_set_prop_req__field_indices_by_name[] = {
   1,   /* field[1] = name */
   2,   /* field[2] = number */
   4,   /* field[4] = numval */
   3,   /* field[3] = strval */
+  5,   /* field[5] = svc_ranks */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_set_prop_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_set_prop_req__descriptor =
 {
@@ -2657,7 +2774,7 @@ const ProtobufCMessageDescriptor mgmt__pool_set_prop_req__descriptor =
   "Mgmt__PoolSetPropReq",
   "mgmt",
   sizeof(Mgmt__PoolSetPropReq),
-  5,
+  6,
   mgmt__pool_set_prop_req__field_descriptors,
   mgmt__pool_set_prop_req__field_indices_by_name,
   1,  mgmt__pool_set_prop_req__number_ranges,

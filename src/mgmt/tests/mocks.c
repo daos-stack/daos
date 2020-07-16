@@ -38,7 +38,8 @@ daos_prop_t	*ds_mgmt_pool_get_acl_return_acl;
 uuid_t		ds_mgmt_pool_get_acl_uuid;
 void		*ds_mgmt_pool_get_acl_acl_ptr;
 int
-ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **acl)
+ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		     daos_prop_t **acl)
 {
 	uuid_copy(ds_mgmt_pool_get_acl_uuid, pool_uuid);
 	ds_mgmt_pool_get_acl_acl_ptr = (void *)acl;
@@ -79,8 +80,8 @@ struct daos_acl	*ds_mgmt_pool_overwrite_acl_acl;
 daos_prop_t	*ds_mgmt_pool_overwrite_acl_result;
 void		*ds_mgmt_pool_overwrite_acl_result_ptr;
 int
-ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			   daos_prop_t **result)
+ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			   struct daos_acl *acl, daos_prop_t **result)
 {
 	uuid_copy(ds_mgmt_pool_overwrite_acl_uuid, pool_uuid);
 	if (acl != NULL)
@@ -115,8 +116,8 @@ struct daos_acl	*ds_mgmt_pool_update_acl_acl;
 daos_prop_t	*ds_mgmt_pool_update_acl_result;
 void		*ds_mgmt_pool_update_acl_result_ptr;
 int
-ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			daos_prop_t **result)
+ds_mgmt_pool_update_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			struct daos_acl *acl, daos_prop_t **result)
 {
 	uuid_copy(ds_mgmt_pool_update_acl_uuid, pool_uuid);
 	if (acl != NULL)
@@ -150,8 +151,9 @@ const char	*ds_mgmt_pool_delete_acl_principal;
 daos_prop_t	*ds_mgmt_pool_delete_acl_result;
 void		*ds_mgmt_pool_delete_acl_result_ptr;
 int
-ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
-			daos_prop_t **result)
+ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			const char *principal, daos_prop_t **result)
+			
 {
 	uuid_copy(ds_mgmt_pool_delete_acl_uuid, pool_uuid);
 	ds_mgmt_pool_delete_acl_principal = principal;
@@ -277,7 +279,8 @@ daos_prop_t	*ds_mgmt_pool_set_prop_prop;
 daos_prop_t	*ds_mgmt_pool_set_prop_result;
 void		*ds_mgmt_pool_set_prop_result_ptr;
 int
-ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
+ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		      daos_prop_t *prop,
 		      daos_prop_t **result)
 {
 	if (prop != NULL)
@@ -317,7 +320,7 @@ int				 ds_mgmt_pool_list_cont_return;
 struct daos_pool_cont_info	*ds_mgmt_pool_list_cont_out;
 uint64_t			 ds_mgmt_pool_list_cont_nc_out;
 
-int ds_mgmt_pool_list_cont(uuid_t uuid,
+int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers)
 {
@@ -364,7 +367,8 @@ daos_pool_info_t	ds_mgmt_pool_query_info_out;
 daos_pool_info_t	ds_mgmt_pool_query_info_in;
 void			*ds_mgmt_pool_query_info_ptr;
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		   daos_pool_info_t *pool_info)
 {
 	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
 	ds_mgmt_pool_query_info_ptr = (void *)pool_info;
@@ -390,7 +394,8 @@ uuid_t	ds_mgmt_cont_set_owner_cont;
 char	*ds_mgmt_cont_set_owner_user;
 char	*ds_mgmt_cont_set_owner_group;
 int
-ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
+ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		       uuid_t cont_uuid, const char *user,
 		       const char *group)
 {
 	uuid_copy(ds_mgmt_cont_set_owner_pool, pool_uuid);
@@ -424,7 +429,8 @@ void mock_ds_mgmt_cont_set_owner_teardown(void)
 int     ds_mgmt_target_update_return;
 uuid_t  ds_mgmt_target_update_uuid;
 int
-ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
+ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+				uint32_t rank,
 				struct pool_target_id_list *target_list,
 				pool_comp_state_t state)
 {
@@ -442,7 +448,8 @@ mock_ds_mgmt_tgt_update_setup(void)
 int     ds_mgmt_pool_extend_return;
 uuid_t  ds_mgmt_pool_extend_uuid;
 int
-ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
+ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			d_rank_list_t *rank_list,
 			char *tgt_dev,  size_t scm_size, size_t nvme_size)
 {
 	uuid_copy(ds_mgmt_pool_extend_uuid, pool_uuid);
@@ -459,7 +466,8 @@ mock_ds_mgmt_pool_extend_setup(void)
 int     ds_mgmt_pool_evict_return;
 uuid_t  ds_mgmt_pool_evict_uuid;
 int
-ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group)
+ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		   const char *group)
 {
 	uuid_copy(ds_mgmt_pool_evict_uuid, pool_uuid);
 	return ds_mgmt_pool_evict_return;
@@ -522,7 +530,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		     const char *group, uint32_t force)
 {
 	return 0;
 }

@@ -143,10 +143,15 @@ struct  _Mgmt__PoolDestroyReq
    * destroy regardless of active connections
    */
   protobuf_c_boolean force;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__POOL_DESTROY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_destroy_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL }
 
 
 /*
@@ -179,10 +184,15 @@ struct  _Mgmt__PoolEvictReq
    * DAOS system identifier
    */
   char *sys;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__POOL_EVICT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_evict_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -220,10 +230,15 @@ struct  _Mgmt__PoolExcludeReq
    */
   size_t n_targetidx;
   uint32_t *targetidx;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__POOL_EXCLUDE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_exclude_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
 
 
 /*
@@ -261,10 +276,15 @@ struct  _Mgmt__PoolDrainReq
    */
   size_t n_targetidx;
   uint32_t *targetidx;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__POOL_DRAIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_drain_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
 
 
 /*
@@ -299,6 +319,11 @@ struct  _Mgmt__PoolExtendReq
   size_t n_ranks;
   uint32_t *ranks;
   /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+  /*
    * SCM size in bytes
    */
   uint64_t scmbytes;
@@ -309,7 +334,7 @@ struct  _Mgmt__PoolExtendReq
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0 }
 
 
 /*
@@ -347,10 +372,15 @@ struct  _Mgmt__PoolReintegrateReq
    */
   size_t n_targetidx;
   uint32_t *targetidx;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
 
 
 /*
@@ -436,10 +466,15 @@ struct  _Mgmt__ListContReq
    * uuid of pool
    */
   char *uuid;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__LIST_CONT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_req__descriptor) \
-    , (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0,NULL }
 
 
 struct  _Mgmt__ListContResp__Cont
@@ -480,10 +515,15 @@ struct  _Mgmt__PoolQueryReq
 {
   ProtobufCMessage base;
   char *uuid;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__POOL_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -602,6 +642,11 @@ struct  _Mgmt__PoolSetPropReq
    * uuid of pool to modify
    */
   char *uuid;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
   Mgmt__PoolSetPropReq__PropertyCase property_case;
   union {
     /*
@@ -627,7 +672,7 @@ struct  _Mgmt__PoolSetPropReq
 };
 #define MGMT__POOL_SET_PROP_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_set_prop_req__descriptor) \
-    , (char *)protobuf_c_empty_string, MGMT__POOL_SET_PROP_REQ__PROPERTY__NOT_SET, {0}, MGMT__POOL_SET_PROP_REQ__VALUE__NOT_SET, {0} }
+    , (char *)protobuf_c_empty_string, 0,NULL, MGMT__POOL_SET_PROP_REQ__PROPERTY__NOT_SET, {0}, MGMT__POOL_SET_PROP_REQ__VALUE__NOT_SET, {0} }
 
 
 typedef enum {

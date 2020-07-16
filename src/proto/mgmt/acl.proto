@@ -37,6 +37,7 @@ message ACLResp {
 // Request to fetch an ACL
 message GetACLReq {
 	string uuid = 1; // Target UUID
+	repeated uint32 svc_ranks = 2; // List of pool service ranks
 }
 
 // Request to modify an ACL
@@ -44,10 +45,12 @@ message GetACLReq {
 message ModifyACLReq {
 	string uuid = 1; // Target UUID
 	repeated string ACL = 2; // List of ACEs to overwrite ACL with
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
 // Delete a principal's entry from the ACL
 message DeleteACLReq {
 	string uuid = 1; // Target UUID
 	string principal = 2; // Principal whose entry is to be deleted
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
