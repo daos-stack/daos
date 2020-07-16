@@ -291,15 +291,22 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 			DP_DB(db), DP_RC(rc));
 		goto err_pool;
 	}
-	rdb_extra_sys[DAOS_MEDIA_SCM] =
-		     ((SCM_FREE(&vps) - SCM_SYS(&vps)) * 52) / 100;
+	rdb_extra_sys[DAOS_MEDIA_SCM] = 0;
 	rdb_extra_sys[DAOS_MEDIA_NVME] = 0;
-	rc = vos_pool_space_sys_set(db->d_pool, &rdb_extra_sys[0]);
-	if (rc != 0) {
-		D_ERROR(DF_DB": failed to reserve more vos pool SCM space "
-			DF_U64" : "DF_RC"\n", DP_DB(db),
-			rdb_extra_sys[DAOS_MEDIA_SCM], DP_RC(rc));
-		goto err_pool;
+	if (SCM_FREE(&vps) > SCM_SYS(&vps)) {
+		rdb_extra_sys[DAOS_MEDIA_SCM] =
+			     ((SCM_FREE(&vps) - SCM_SYS(&vps)) * 52) / 100;
+		rc = vos_pool_space_sys_set(db->d_pool, &rdb_extra_sys[0]);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to reserve more vos pool SCM space "
+				DF_U64" : "DF_RC"\n", DP_DB(db),
+				rdb_extra_sys[DAOS_MEDIA_SCM], DP_RC(rc));
+			goto err_pool;
+		}
+	} else {
+		D_WARN(DF_DB": vos pool SCM not reserved for SLC: "
+		       "free="DF_U64 "sys="DF_U64"\n", DP_DB(db),
+		       SCM_FREE(&vps), SCM_SYS(&vps));
 	}
 	D_DEBUG(DB_MD, DF_DB": vos pool SCM: tot: "DF_U64" free: "DF_U64
 		" vos-rsvd: "DF_U64" rdb-rsvd-slc: "DF_U64"\n", DP_DB(db),
