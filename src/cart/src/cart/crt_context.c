@@ -298,9 +298,27 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		if (cbinfo.cci_rc == 0)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
-		if (cbinfo.cci_rc != 0)
+		if (cbinfo.cci_rc != 0) {
 			RPC_ERROR(rpc_priv, "RPC failed; rc: %d\n",
 				  cbinfo.cci_rc);
+			if (cbinfo.cci_rc == -DER_INVAL) {
+				void *bt[128];
+				int bt_size, i;
+				char **symbols;
+
+				bt_size = backtrace(bt, 128);
+				if (bt_size >= 128)
+					fprintf(stderr, "backtrace may have been truncated\n");
+
+				symbols = backtrace_symbols(bt, bt_size);
+				if (symbols != NULL) {
+					for (i = 0; i < bt_size; i++)
+						RPC_ERROR(rpc_priv, "%s\n",
+							  symbols[i]);
+					free(symbols);
+				}
+			}
+		}
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
