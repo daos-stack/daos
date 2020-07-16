@@ -7,6 +7,27 @@ set -ex
 # JENKINS-52781 tar function is breaking symlinks
 rm -rf test_results
 mkdir test_results
+
+# Check if this is a Bulleye stage
+USE_BULLSEYE=
+if [ -n "${STAGE_NAME:?}" ]; then
+  case $STAGE_NAME in
+    *Bullseye**)
+      USE_BULLSEYE="true"
+      ;;
+  esac
+fi
+
+: "${BULLSEYE:=}"
+
+if [ -n "$USE_BULLSEYE" ];then
+  rm -rf bullseye
+  mkdir -p bullseye
+  tar -C bullseye --strip-components=1 -xf bullseye.tar
+else
+  BULLSEYE=
+fi
+
 # shellcheck disable=SC1091
 source ./.build_vars.sh
 rm -f "${SL_BUILD_DIR}/src/control/src/github.com/daos-stack/daos/src/control"
@@ -23,4 +44,5 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTNAME=$HOSTNAME        \
                                      HOSTPWD=$PWD              \
                                      SL_PREFIX=$SL_PREFIX      \
+                                     BULLSEYE=$BULLSEYE        \
                                      $(cat "$mydir/test_main_node.sh")"
