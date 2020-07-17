@@ -183,7 +183,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 	if (cont->sc_pool->spc_rebuild_fence != 0) {
 		uint64_t rebuild_fence = cont->sc_pool->spc_rebuild_fence;
 		int	j;
-		int	k;
+		int	insert_idx;
 
 		D_DEBUG(DB_EPC, "rebuild fence "DF_U64"\n", rebuild_fence);
 		/* Insert the rebuild_epoch into snapshots */
@@ -192,15 +192,15 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		if (snapshots == NULL)
 			return -DER_NOMEM;
 
-		for (j = 0, k = 0; j < cont->sc_snapshots_nr; j++) {
-			if (cont->sc_snapshots[j] > rebuild_fence) {
+		for (j = 0, insert_idx = 0; j < cont->sc_snapshots_nr; j++) {
+			if (cont->sc_snapshots[j] < rebuild_fence) {
 				snapshots[j] = cont->sc_snapshots[j];
-				k++;
+				insert_idx++;
 			} else {
 				snapshots[j+1] = cont->sc_snapshots[j];
 			}
 		}
-		snapshots[k] = rebuild_fence;
+		snapshots[insert_idx] = rebuild_fence;
 		snapshots_nr = cont->sc_snapshots_nr + 1;
 	} else {
 		/* Since sc_snapshots might be freed by other ULT, let's
