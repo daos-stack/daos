@@ -301,6 +301,8 @@ func displaySystemAction(log logging.Logger, results system.MemberResults,
 		out += fmt.Sprintf("\nUnknown %s: %s",
 			english.Plural(absentHosts.Count(), "host", "hosts"),
 			absentHosts.String())
+	} else {
+		out += "\n"
 	}
 
 	log.Info(out)

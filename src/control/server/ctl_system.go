@@ -125,7 +125,6 @@ func (svc *ControlService) rpcFanout(parent context.Context, fanReq fanoutReques
 	if err != nil {
 		return nil, nil, err
 	}
-	svc.log.Debugf("resolveRanks returned %q missing hosts", missHosts.String())
 
 	resp := &fanoutResponse{AbsentHosts: missHosts, AbsentRanks: missRanks}
 	if hitRanks.Count() == 0 {
@@ -199,7 +198,6 @@ func (svc *ControlService) SystemQuery(ctx context.Context, pbReq *ctlpb.SystemQ
 	if err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("rpcfanout returned %q missing hosts", fanResp.AbsentHosts.String())
 	pbResp := &ctlpb.SystemQueryResp{
 		Absentranks: fanResp.AbsentRanks.String(),
 		Absenthosts: fanResp.AbsentHosts.String(),
