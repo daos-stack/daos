@@ -1,7 +1,5 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-server_manager:
-    srv_timeout: 500
 hosts:
  test_servers:
   - boro-A
