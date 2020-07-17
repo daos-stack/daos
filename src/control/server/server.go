@@ -199,6 +199,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	// Decide whether to use VMD devices.
 	if cfg.UseVmd {
+		if cfg.DisableVFIO {
+			return errors.New("VMD could not be enabled as VFIO disabled in config (disable_vfio: true)")
+		}
 		if !iommuDetected() {
 			return errors.New("VMD could not be enabled as IOMMU/VFIO is disabled")
 		}
