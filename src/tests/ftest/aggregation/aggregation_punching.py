@@ -52,28 +52,21 @@ class AggregationPunching(MdtestBase):
             self.create_pool()
         self.pool.connect()
 
-        storage_index = 1 # SCM
+        storage_index = 1 # SSD
         pool_info = self.pool.pool.pool_query()
         initial_free_space =\
             pool_info.pi_space.ps_space.s_free[storage_index]
-
-
-        # local params
-        params = self.params.get("mdtest_params", "/run/mdtest/*")
 
         # Disable the aggregation
         self.log.info("Disabling aggregation")
         self.pool.set_property("reclaim", "disabled")
 
-        # update mdtest params
-        self.mdtest_cmd.api.update(params[0])
-        self.mdtest_cmd.write_bytes.update(params[1])
-        self.mdtest_cmd.branching_factor.update(params[2])
-        # if branching factor is 1 use num_of_files_dirs
-        # else use items option of mdtest
-        self.mdtest_cmd.num_of_files_dirs.update(params[3])
-        self.mdtest_cmd.depth.update(params[4])
-        mdtest_data_size = params[1] * params[3]
+        # local params
+        params = self.params.get("mdtest_params", "/run/mdtest/*")
+        processes = self.params.get("np", "/run/mdtest/*")
+
+        # write bytes * num_dir_size * num_of_client_processes
+        mdtest_data_size = params[1] * params[3] * processes
         # run mdtest
         self.execute_mdtest()
 
@@ -101,7 +94,7 @@ class AggregationPunching(MdtestBase):
             pool_info = self.pool.pool.pool_query()
             final_free_space =\
                 pool_info.pi_space.ps_space.s_free[storage_index]
-            
+
             if final_free_space == initial_free_space:
                 break
             else:

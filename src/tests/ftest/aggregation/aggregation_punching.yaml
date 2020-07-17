@@ -17,8 +17,8 @@ server_config:
 pool:
     mode: 146 # 146 is RW
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 30000000000
+    scm_size: 8000000000
+    nvme_size: 80000000000
     svcn: 1
     control_method: dmg
 container:
@@ -27,7 +27,7 @@ container:
 mdtest:
   client_processes:
     np_4:
-      np: 1
+      np: 4
   test_dir: "/"
   dfs_destroy: False
   iteration: 1
