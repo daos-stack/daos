@@ -89,8 +89,6 @@ class DmgCommand(DmgCommandBase):
         "storage_set_faulty":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
-        "system_query":
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)",
     }
 
     def __init__(self, path, yaml_cfg=None):
@@ -754,7 +752,7 @@ class DmgCommand(DmgCommandBase):
                 r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)", self.result.stdout)
             for info in match:
                 for rank in get_numeric_list(info[0]):
-                    data[rank] = {"state": info[1]}
+                    data[rank]["state"] = info[1]
         return data
 
     def system_start(self):
@@ -810,36 +808,39 @@ class DmgCommand(DmgCommandBase):
         return data
 
 
-def check_system_query_status(stdout_str):
+def check_system_query_status(data):
     """Check if any server crashed.
 
     Args:
-        stdout_str (list): list obtained from 'dmg system query -v'
+        data (dict): dictionary of system query data obtained from
+            DmgCommand.system_query()
 
     Returns:
         bool: True if no server crashed, False otherwise.
 
     """
-    check = True
-    rank_info = []
+    failed_states = ("Unknown", "Evicted", "Errored", "Unresponsive")
     failed_rank_list = []
-    # iterate to obtain failed rank list
-    for i, _ in enumerate(stdout_str):
-        rank_info.append(stdout_str[i][0])
-        print("rank_info: \n{}".format(rank_info))
-        for items in rank_info:
-            item = items.split()
-            if item[3] in ["Unknown", "Evicted", "Errored", "Unresponsive"]:
-                failed_rank_list.append(items)
-    # if failed rank list is not empty display the failed ranks
-    # and return False
+
+    # Check the state of each rank.
+    for rank in data:
+        rank_info = [
+            "{}: {}".format(key, data[rank][key])
+            for key in sorted(data[rank].keys())
+        ]
+        print("Rank {} info:\n  {}".format(rank, "\n  ".join(rank_info)))
+        if "state" in data[rank] and data[rank]["state"] in failed_states:
+            failed_rank_list.append(rank)
+
+    # Display the details of any failed ranks
     if failed_rank_list:
-        for failed_list in failed_rank_list:
-            print("failed_list: {}\n".format(failed_list))
-            out = failed_list.split()
-            print("Rank {} failed with state '{}'".format(out[0], out[3]))
-        check = False
-    return check
+        for rank in failed_rank_list:
+            print(
+                "Rank {} failed with state '{}'".format(
+                    rank, data[rank]["state"]))
+
+    # Return True if no ranks failed
+    return not bool(failed_rank_list)
 
 
 # ************************************************************************

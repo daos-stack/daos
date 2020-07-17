@@ -65,7 +65,7 @@ class CrashIor(IorTestBase):
         self.stop_ior()
 
         # obtain server rank info using 'dmg system query -v'
-        scan_info = self.dmg.get_output("system_query_verbose")
+        scan_info = self.dmg.system_query(verbose=True)
         # check for any crashed servers after killing ior in the middle
         if not check_system_query_status(scan_info):
             self.fail("One or more server crashed")
@@ -81,7 +81,7 @@ class CrashIor(IorTestBase):
         self.stop_ior()
 
         # obtain server rank info using 'dmg system query -v'
-        scan_info = self.dmg.get_output("system_query_verbose")
+        scan_info = self.dmg.system_query(verbose=True)
         # check for any crashed servers after killing ior in the middle
         if not check_system_query_status(scan_info):
             self.fail("One or more server crashed")

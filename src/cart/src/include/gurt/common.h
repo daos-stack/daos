@@ -172,7 +172,10 @@ extern "C" {
 		 */							\
 		if (_sz == 0)						\
 			_sz = 1;					\
-		(newptr) = realloc(optr, _sz);				\
+		if (D_SHOULD_FAIL(d_fault_attr_mem))			\
+			newptr = NULL;					\
+		else							\
+			(newptr) = realloc(optr, _sz);			\
 		if ((newptr) != NULL) {					\
 			if ((_cnt) <= 1)				\
 				D_DEBUG(DB_MEM,				\

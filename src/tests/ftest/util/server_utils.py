@@ -615,21 +615,21 @@ class DaosServerManager(SubprocessManager):
             str: the current DAOS system state
 
         """
-        result = self.dmg.get_output("system_query")
-        if not result:
+        data = self.dmg.system_query()
+        if not data:
             # The regex failed to get the rank and state
             raise ServerFailed(
-                "Error obtaining {} output: {}".format(self.dmg, result))
-        if len(result) > 1:
+                "Error obtaining {} output: {}".format(self.dmg, data))
+        if len(data) > 1:
             # Multiple states for different ranks detected
             raise ServerFailed(
-                "Multiple system states detected:\n  {}".format(
-                    "\n  ".join(result)))
-        if len(result[0]) != 2:
-            # Single state but missing ranks and state - should not occur.
+                "Multiple system states detected:\n  {}".format(data))
+        ranks = next(iter(data))
+        if "state" not in data[ranks]:
+            # Single state but missing state - should not occur.
             raise ServerFailed(
-                "Unexpected result from {}: {}".format(self.dmg, result))
-        return result[0][1]
+                "Unexpected result from {}: {}".format(self.dmg, data))
+        return data[ranks]["state"]
 
     def check_system_state(self, valid_states, max_checks=1):
         """Check that the DAOS system state is one of the provided states.
