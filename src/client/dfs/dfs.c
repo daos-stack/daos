@@ -83,7 +83,11 @@
 /** OIDs for Superblock and Root objects */
 #define RESERVED_LO	0
 #define SB_HI		0
-#define ROOT_HI		1
+#define ROOT_HI	1
+
+typedef uint64_t dfs_magic_t;
+typedef uint16_t dfs_sb_ver_t;
+typedef uint16_t dfs_layout_ver_t;
 
 /** object struct that is instantiated for a DFS open object */
 struct dfs_obj {
@@ -846,6 +850,36 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 	return ENOTSUP;
 }
 
+static void
+set_daos_iod(bool create, daos_iod_t *iod, char *buf, size_t size)
+{
+	d_iov_set(&iod->iod_name, buf, strlen(buf));
+	iod->iod_nr	= 1;
+	iod->iod_size	= DAOS_REC_ANY;
+	iod->iod_recxs	= NULL;
+	iod->iod_type	= DAOS_IOD_SINGLE;
+
+	if (create) {
+		iod->iod_size = size;
+	}
+}
+
+static void
+set_inode_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
+{
+	int i = 0;
+
+	d_iov_set(dkey, SB_DKEY, strlen(SB_DKEY));
+
+	set_daos_iod(for_update, &iods[i++], MAGIC_NAME, sizeof(dfs_magic_t));
+	set_daos_iod(for_update, &iods[i++],
+		SB_VERSION_NAME, sizeof(dfs_sb_ver_t));
+	set_daos_iod(for_update, &iods[i++],
+		LAYOUT_NAME, sizeof(dfs_layout_ver_t));
+	set_daos_iod(for_update, &iods[i++], CS_NAME, sizeof(daos_size_t));
+	set_daos_iod(for_update, &iods[i++], OC_NAME, sizeof(daos_oclass_id_t));
+}
+
 static int
 open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 {
@@ -853,9 +887,9 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	d_iov_t			sg_iovs[SB_AKEYS];
 	daos_iod_t		iods[SB_AKEYS];
 	daos_key_t		dkey;
-	uint64_t		magic;
-	uint16_t		sb_ver;
-	uint16_t		layout_ver;
+	dfs_magic_t		magic;
+	dfs_sb_ver_t		sb_ver;
+	dfs_layout_ver_t	layout_ver;
 	daos_size_t		chunk_size = 0;
 	daos_oclass_id_t	oclass = OC_UNKNOWN;
 	daos_obj_id_t		super_oid;
@@ -876,54 +910,31 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		return daos_der2errno(rc);
 	}
 
-	d_iov_set(&dkey, SB_DKEY, strlen(SB_DKEY));
-
-	i = 0;
-	d_iov_set(&sg_iovs[i], &magic, sizeof(magic));
-	d_iov_set(&iods[i].iod_name, MAGIC_NAME, strlen(MAGIC_NAME));
-	i++;
-
-	d_iov_set(&sg_iovs[i], &sb_ver, sizeof(sb_ver));
-	d_iov_set(&iods[i].iod_name, SB_VERSION_NAME, strlen(SB_VERSION_NAME));
-	i++;
-
-	d_iov_set(&sg_iovs[i], &layout_ver, sizeof(layout_ver));
-	d_iov_set(&iods[i].iod_name, LAYOUT_NAME, strlen(LAYOUT_NAME));
-	i++;
-
-	d_iov_set(&sg_iovs[i], &chunk_size, sizeof(chunk_size));
-	d_iov_set(&iods[i].iod_name, CS_NAME, strlen(CS_NAME));
-	i++;
-
-	d_iov_set(&sg_iovs[i], &oclass, sizeof(oclass));
-	d_iov_set(&iods[i].iod_name, OC_NAME, strlen(OC_NAME));
-	i++;
+	d_iov_set(&sg_iovs[0], &magic, sizeof(dfs_magic_t));
+	d_iov_set(&sg_iovs[1], &sb_ver, sizeof(dfs_sb_ver_t));
+	d_iov_set(&sg_iovs[2], &layout_ver, sizeof(dfs_layout_ver_t));
+	d_iov_set(&sg_iovs[3], &chunk_size, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[4], &oclass, sizeof(daos_oclass_id_t));
 
 	for (i = 0; i < SB_AKEYS; i++) {
 		sgls[i].sg_nr		= 1;
 		sgls[i].sg_nr_out	= 0;
 		sgls[i].sg_iovs		= &sg_iovs[i];
-
-		iods[i].iod_nr		= 1;
-		iods[i].iod_size	= DAOS_REC_ANY;
-		iods[i].iod_recxs	= NULL;
-		iods[i].iod_type	= DAOS_IOD_SINGLE;
 	}
+
+	set_inode_params(create, iods, &dkey);
 
 	/** create the SB and exit */
 	if (create) {
-		iods[0].iod_size = sizeof(magic);
 		magic = DFS_SB_MAGIC;
-		iods[1].iod_size = sizeof(sb_ver);
 		sb_ver = DFS_SB_VERSION;
-		iods[2].iod_size = sizeof(layout_ver);
 		layout_ver = DFS_LAYOUT_VERSION;
-		iods[3].iod_size = sizeof(chunk_size);
+
 		if (attr && attr->da_chunk_size != 0)
 			chunk_size = attr->da_chunk_size;
 		else
 			chunk_size = DFS_DEFAULT_CHUNK_SIZE;
-		iods[4].iod_size = sizeof(oclass);
+
 		if (attr && attr->da_oclass_id != OC_UNKNOWN)
 			oclass = attr->da_oclass_id;
 		else
@@ -983,6 +994,24 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 err:
 	daos_obj_close(*oh, NULL);
 	return rc;
+}
+
+int
+dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
+	 int *dfs_entry_size)
+{
+	if (dkey == NULL || akey_count == NULL)
+		return EINVAL;
+
+	D_ALLOC_ARRAY(*iods, SB_AKEYS);
+	if (*iods == NULL)
+		return ENOMEM;
+
+	*akey_count = SB_AKEYS;
+	*dfs_entry_size = sizeof(struct dfs_entry);
+	set_inode_params(true, *iods, dkey);
+
+	return 0;
 }
 
 int
@@ -3715,7 +3744,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_PUNCH;
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
-		D_CDEBUG(rc == -DER_EXIST, DLOG_INFO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
 			"Failed to punch extended attribute '%s'\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}

@@ -115,7 +115,7 @@ static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
 	struct dfuse_inode_entry	*ie;
-	uint				oldref;
+	uint				oldref = 0;
 	uint				newref = 0;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
@@ -218,25 +218,28 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	args.argc = 4;
 
+	/* These allocations are freed later by libfuse so do not use the
+	 * standard allocation macros
+	 */
 	args.allocated = 1;
-	D_ALLOC_ARRAY(args.argv, args.argc);
+	args.argv = calloc(sizeof(*args.argv), args.argc);
 	if (!args.argv)
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[0], "", 1);
+	args.argv[0] = strndup("", 1);
 	if (!args.argv[0])
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[1], "-ofsname=dfuse", 32);
+	args.argv[1] = strndup("-ofsname=dfuse", 32);
 	if (!args.argv[1])
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[2], "-osubtype=daos", 32);
+	args.argv[2] = strndup("-osubtype=daos", 32);
 	if (!args.argv[2])
 		D_GOTO(err, 0);
 
-	D_ASPRINTF(args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
-	if (!args.argv[3])
+	rc = asprintf(&args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
+	if (rc < 0 || !args.argv[3])
 		D_GOTO(err, 0);
 
 	fuse_ops = dfuse_get_fuse_ops();

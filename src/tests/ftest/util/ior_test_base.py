@@ -125,7 +125,8 @@ class IorTestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          test_file="daos:testFile"):
+                          test_file="daos:testFile", update=True,
+                          create_cont=True):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -138,12 +139,16 @@ class IorTestBase(TestWithServers):
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
                 "daos:testFile". Is ignored when using POSIX through DFUSE.
+            update (bool, optional): If it is true, create pool and container
+                else just run the ior. Defaults to True.
 
         Returns:
             CmdResult: result of the ior command execution
 
         """
-        self.update_ior_cmd_with_pool()
+        if update:
+            self.update_ior_cmd_with_pool(create_cont)
+
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
@@ -162,16 +167,17 @@ class IorTestBase(TestWithServers):
             self.dfuse = None
         return out
 
-    def update_ior_cmd_with_pool(self):
+    def update_ior_cmd_with_pool(self, create_cont=True):
         """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
-        # Always create a container
+        # Create a container, if needed.
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
-        self.pool.connect()
-        self.create_cont()
+        if create_cont:
+            self.pool.connect()
+            self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)

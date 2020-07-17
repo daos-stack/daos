@@ -268,9 +268,8 @@ ioil_fini(void)
 		POOL_DISCONNECT(ioil_ioc);
 	}
 	DFUSE_TRA_DOWN(&ioil_ioc);
-	daos_fini();
-
 	vector_destroy(&fd_table);
+	daos_fini();
 }
 
 static int

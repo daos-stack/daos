@@ -115,9 +115,10 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 		}
 
 		if (rc != 0) {
-			D_ERROR(DF_UOID " %s end failed: %d\n",
-				DP_UOID(orwi->orw_oid),
-				update ? "Update" : "Fetch", rc);
+			D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+				 DF_UOID " %s end failed: %d\n",
+				 DP_UOID(orwi->orw_oid),
+				 update ? "Update" : "Fetch", rc);
 			if (status == 0)
 				status = rc;
 		}
@@ -136,7 +137,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
 
-	D_DEBUG(DB_TRACE, "rpc %p opc %d send reply, pmv %d, status %d.\n",
+	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, status %d.\n",
 		rpc, opc_get(rpc->cr_opc), map_version, status);
 
 	rc = crt_reply_send(rpc);
@@ -356,8 +357,9 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				break;
 
 			if (length > remote_bulk_size) {
-				D_ERROR(DF_U64 "> %zu : %d\n", length,
-					remote_bulk_size, -DER_OVERFLOW);
+				D_DEBUG(DLOG_DBG, DF_U64 " > %zu : %d\n",
+					length,	remote_bulk_size,
+					-DER_OVERFLOW);
 				rc = -DER_OVERFLOW;
 				break;
 			}
@@ -1105,7 +1107,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		return rc;
 	}
 	dkey = (daos_key_t *)&orw->orw_dkey;
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_U64".\n",
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
 		tag, orw->orw_epoch);
@@ -1126,8 +1128,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 
 		rc = vos_update_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
-			      orw->orw_epoch,
-			      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
+			      orw->orw_epoch, orw->orw_api_flags,
 			      dkey, orw->orw_nr, iods,
 			      iod_csums, &ioh, dth);
 		if (rc) {
@@ -1141,7 +1142,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bool				 ec_deg_fetch;
 		struct daos_recx_ep_list	*shadows = NULL;
 
-		cond_flags = orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS;
+		cond_flags = orw->orw_api_flags;
 		bulk_op = CRT_BULK_PUT;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
@@ -1244,8 +1245,9 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (rc == -DER_OVERFLOW)
 			rc = -DER_REC2BIG;
 
-		D_ERROR(DF_UOID" data transfer failed, dma %d rc "DF_RC"",
-			DP_UOID(orw->orw_oid), rma, DP_RC(rc));
+		D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+			 DF_UOID" data transfer failed, dma %d rc "DF_RC"",
+			 DP_UOID(orw->orw_oid), rma, DP_RC(rc));
 		D_GOTO(post, rc);
 	}
 
@@ -1324,7 +1326,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
-	if (!is_rebuild_container(pool_uuid, coh_uuid)) {
+	if (!is_container_from_srv(pool_uuid, coh_uuid)) {
 		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
 			DP_UUID(cont_uuid), coh->sch_ref);
 		D_GOTO(failed, rc = -DER_NO_HDL);
@@ -1339,6 +1341,13 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 
 	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(coh_uuid), coh);
+
+	/* load csummer on demand for rebuild - will be destroyed in
+	 * obj_ioc_fini if rebuild container
+	 */
+	rc = ds_cont_csummer_init(&coh->sch_csummer, pool_uuid, cont_uuid);
+	if (rc)
+		D_GOTO(failed, rc);
 
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
@@ -1357,9 +1366,24 @@ failed:
 	return rc;
 }
 
+static bool
+obj_ioc_is_rebuild_container(struct obj_io_context *ioc)
+{
+	if (ioc->ioc_coh == NULL ||
+	    ioc->ioc_coc == NULL ||
+	    ioc->ioc_coc->sc_pool == NULL)
+		return false;
+
+	return is_container_from_srv(ioc->ioc_coc->sc_pool->spc_uuid,
+				    ioc->ioc_coh->sch_uuid);
+}
+
 static void
 obj_ioc_fini(struct obj_io_context *ioc)
 {
+	if (obj_ioc_is_rebuild_container(ioc))
+		daos_csummer_destroy(&ioc->ioc_coh->sch_csummer);
+
 	if (ioc->ioc_coh != NULL) {
 		ds_cont_hdl_put(ioc->ioc_coh);
 		ioc->ioc_coh = NULL;
@@ -1476,7 +1500,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		orw->orw_dkey_hash = obj_dkey2hash(dkey);
 	}
 
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
 		DF_U64", pmv %u/%u dti "DF_DTI".\n",
 		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(dkey),
@@ -1624,7 +1648,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
 		DF_U64", pmv %u/%u dti "DF_DTI".\n",
 		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
@@ -1913,7 +1937,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	 * is our epoch. (See dc_obj_shard_list.)
 	 */
 	rc = dtx_begin(ioc->ioc_coc, &oei->oei_dti, oei->oei_epr.epr_hi,
-		       oei->oei_flags & ORF_EPOCH_UNCERTAIN, 1,
+		       oei->oei_flags & ORF_EPOCH_UNCERTAIN, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, NULL, &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
@@ -2041,6 +2065,12 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
+	D_DEBUG(DB_IO, "rpc %p opc %d oid "DF_UOID" tag/xs %d/%d pmv %u/%u\n",
+		rpc, opc, DP_UOID(oei->oei_oid),
+		dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id,
+		oei->oei_map_ver, ioc.ioc_map_ver);
+
 	anchors.ia_dkey = oei->oei_dkey_anchor;
 	anchors.ia_akey = oei->oei_akey_anchor;
 	anchors.ia_ev = oei->oei_anchor;
@@ -2161,7 +2191,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 	case DAOS_OBJ_RPC_TGT_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
-				   VOS_OF_USE_TIMESTAMPS, NULL, 0, NULL, dth);
+				   0, NULL, 0, NULL, dth);
 		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -2176,7 +2206,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 		dkey = &((daos_key_t *)opi->opi_dkeys.ca_arrays)[0];
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
-				   opi->opi_api_flags | VOS_OF_USE_TIMESTAMPS,
+				   opi->opi_api_flags,
 				   dkey, opi->opi_akeys.ca_count,
 				   opi->opi_akeys.ca_arrays, dth);
 		break;
@@ -2505,15 +2535,14 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 		akey = &okqo->okqo_akey;
 
 	rc = dtx_begin(ioc.ioc_coc, &okqi->okqi_dti, okqi->okqi_epoch,
-		       okqi->okqi_flags & ORF_EPOCH_UNCERTAIN, 1,
+		       okqi->okqi_flags & ORF_EPOCH_UNCERTAIN, 0,
 		       okqi->okqi_map_ver, &okqi->okqi_oid, NULL, 0, NULL,
 		       &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
-			       VOS_USE_TIMESTAMPS | okqi->okqi_api_flags,
-			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
-			       &dth);
+			       okqi->okqi_api_flags, okqi->okqi_epoch, dkey,
+			       akey, &okqo->okqo_recx, &dth);
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
