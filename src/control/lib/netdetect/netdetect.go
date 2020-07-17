@@ -221,14 +221,15 @@ type NetDetectContext struct {
 
 func getContext(ctx context.Context) *NetDetectContext {
 	if ctx != nil {
-		ndc := ctx.Value(topologyKey).(NetDetectContext)
+		ndc, ok := ctx.Value(topologyKey).(NetDetectContext)
+		if !ok {
+			return nil
+		}
 		return &ndc
 	}
 	return nil
 }
 
-// Init initializes hwloc and returns a context that maintains a pointer
-// to the topology and device scan data
 func Init() (context.Context, error) {
 	var err error
 
