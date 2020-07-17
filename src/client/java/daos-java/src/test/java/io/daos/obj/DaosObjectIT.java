@@ -175,7 +175,8 @@ public class DaosObjectIT {
         object.fetch(desc2);
         Assert.assertEquals(dataSize, entry.getActualSize());
         byte[] actualBytes = new byte[dataSize];
-        entry.get(actualBytes);
+        ByteBuf buf = entry.getFetchedData();
+        buf.readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
       } finally {
         desc2.release();
@@ -189,7 +190,8 @@ public class DaosObjectIT {
         object.fetch(desc2);
         Assert.assertEquals(dataSize - 10, entry.getActualSize());
         byte[] actualBytes2 = new byte[dataSize - 10];
-        entry.get(actualBytes2);
+        ByteBuf buf = entry.getFetchedData();
+        buf.readBytes(actualBytes2);
         byte[] originBytes = Arrays.copyOfRange(bytes, 10, 30);
         Assert.assertTrue(Arrays.equals(originBytes, actualBytes2));
       } finally {
@@ -232,7 +234,8 @@ public class DaosObjectIT {
         object.fetch(desc2);
         Assert.assertEquals(10, entry.getActualSize());
         actualBytes = new byte[entry.getActualSize()];
-        entry.get(actualBytes);
+        ByteBuf buf = entry.getFetchedData();
+        buf.readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
       } finally {
         desc2.release();
@@ -246,9 +249,9 @@ public class DaosObjectIT {
         object.fetch(desc2);
         Assert.assertEquals(10, list2.get(0).getActualSize());
         Assert.assertEquals(10, list2.get(1).getActualSize());
-        list2.get(0).get(actualBytes);
+        list2.get(0).getFetchedData().readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
-        list2.get(1).get(actualBytes);
+        list2.get(1).getFetchedData().readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
       } finally {
         desc2.release();
