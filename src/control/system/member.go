@@ -128,7 +128,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 type Member struct {
 	Rank           Rank
 	UUID           uuid.UUID
-	Addr           net.Addr
+	Addr           *net.TCPAddr
 	FabricURI      string
 	FabricContexts uint32
 	state          MemberState
@@ -193,7 +193,7 @@ func (sm *Member) State() MemberState {
 }
 
 // NewMember returns a reference to a new member struct.
-func NewMember(rank Rank, uuidStr, uri string, addr net.Addr, state MemberState) *Member {
+func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
 	// FIXME: Either require a valid uuid.UUID to be supplied
 	// or else change the return signature to include an error
 	newUUID := uuid.MustParse(uuidStr)
@@ -325,7 +325,7 @@ func (m *Membership) Count() int {
 
 type JoinRequest struct {
 	UUID           uuid.UUID
-	ControlAddr    net.Addr
+	ControlAddr    *net.TCPAddr
 	FabricURI      string
 	FabricContexts uint32
 }

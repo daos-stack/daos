@@ -681,7 +681,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = pool_change_target_state(req->uuid, svc_ranks,
-			req->n_targetidx, req->targetidx, 
+			req->n_targetidx, req->targetidx,
 			req->rank, PO_COMP_ST_DOWN);
 
 	d_rank_list_free(svc_ranks);
@@ -845,7 +845,7 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = pool_change_target_state(req->uuid, svc_ranks,
 			req->n_targetidx, req->targetidx,
 			req->rank, PO_COMP_ST_UP);
-			
+
 	d_rank_list_free(svc_ranks);
 
 out:
@@ -1324,6 +1324,105 @@ rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 		(*ints)[i] = (uint32_t)rl->rl_ranks[i];
 
 	return 0;
+}
+
+void
+ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__ListPoolsReq		*req = NULL;
+	Mgmt__ListPoolsResp		 resp = MGMT__LIST_POOLS_RESP__INIT;
+	uint8_t				*body;
+	size_t				 len;
+	struct mgmt_list_pools_one	*pools = NULL;
+	size_t				 pools_len = 0;
+	int				 i;
+	int				 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__list_pools_req__unpack(NULL, drpc_req->body.len,
+					   drpc_req->body.data);
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (list pools)\n");
+		mgmt__list_pools_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	D_INFO("Received request to list pools in DAOS system %s\n", req->sys);
+
+	/* Get all the pools - don't care how many */
+	rc = ds_mgmt_list_pools(req->sys, NULL, &pools, &pools_len);
+	if (rc != 0) {
+		D_ERROR("Failed to list pools in %s :"DF_RC"\n", req->sys,
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	if (pools) {
+		D_ALLOC_ARRAY(resp.pools, pools_len);
+		if (resp.pools == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		resp.n_pools = pools_len;
+
+		for (i = 0; i < pools_len; i++) {
+			d_rank_list_t	*svc = pools[i].lp_svc;
+			uint32_t	*svcreps;
+			size_t		svcreps_len;
+
+			D_ALLOC_PTR(resp.pools[i]);
+			if (resp.pools[i] == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			mgmt__list_pools_resp__pool__init(resp.pools[i]);
+
+			D_ALLOC(resp.pools[i]->uuid, DAOS_UUID_STR_SIZE);
+			if (resp.pools[i]->uuid == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			uuid_unparse(pools[i].lp_puuid, resp.pools[i]->uuid);
+
+			rc = rank_list_to_uint32_array(svc, &svcreps,
+						       &svcreps_len);
+			if (rc != 0)
+				D_GOTO(out, rc);
+
+			resp.pools[i]->svcreps = svcreps;
+			resp.pools[i]->n_svcreps = svcreps_len;
+		}
+	} else if (pools_len != 0) {
+		D_ERROR("Invalid results - pools=NULL, pools_len=%lu\n",
+			pools_len);
+		D_GOTO(out, rc = -DER_UNKNOWN);
+	}
+
+out:
+	resp.status = rc;
+
+	len = mgmt__list_pools_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__list_pools_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__list_pools_req__free_unpacked(req, NULL);
+
+	if (resp.pools) {
+		for (i = 0; i < resp.n_pools; i++) {
+			if (resp.pools[i]) {
+				if (resp.pools[i]->uuid)
+					D_FREE(resp.pools[i]->uuid);
+				if (resp.pools[i]->svcreps)
+					D_FREE(resp.pools[i]->svcreps);
+				D_FREE(resp.pools[i]);
+			}
+		}
+		D_FREE(resp.pools);
+	}
+
+	ds_mgmt_free_pool_list(&pools, pools_len);
 }
 
 void

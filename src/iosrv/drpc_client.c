@@ -234,7 +234,8 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (gps_resp->status != 0)
 		D_GOTO(out_dresp, rc = gps_resp->status);
 
-	ranks = uint32_array_to_rank_list(gps_resp->svcreps, gps_resp->n_svcreps);
+	ranks = uint32_array_to_rank_list(gps_resp->svcreps,
+					  gps_resp->n_svcreps);
 	if (ranks == NULL)
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 

@@ -120,14 +120,10 @@ struct  _Mgmt__JoinReq
    * Server management address.
    */
   char *addr;
-  /*
-   * Current system map version
-   */
-  uint32_t map_version;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__JoinResp

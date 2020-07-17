@@ -83,7 +83,7 @@ func pollInstanceState(ctx context.Context, instances []*IOServerInstance, valid
 }
 
 // getPeerListenAddr combines peer ip from supplied context with input port.
-func getPeerListenAddr(ctx context.Context, listenAddrStr string) (net.Addr, error) {
+func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr, error) {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, errors.New("peer details not found in context")
@@ -154,7 +154,10 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 		return err
 	}
 
-	gm := svc.sysdb.GroupMap()
+	gm, err := svc.sysdb.GroupMap()
+	if err != nil {
+		return err
+	}
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,
 	}
