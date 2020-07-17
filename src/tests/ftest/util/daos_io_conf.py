@@ -71,7 +71,7 @@ class IoConfGen(ExecutableCommand):
                             self.filename.value])
 
         manager = Orterun(command)
-        # run daos_run_io_conf Command using mpirun
+        # run daos_run_io_conf Command using Openmpi
         try:
             manager.run()
         except CommandFailure as error:
