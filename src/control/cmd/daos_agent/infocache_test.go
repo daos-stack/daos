@@ -48,7 +48,10 @@ func TestInfoCacheInitNoScanResults(t *testing.T) {
 	enabled := atm.NewBool(true)
 	scanResults := []netdetect.FabricScan{}
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
+	netCtx, err := netdetect.Init()
+	defer netdetect.CleanUp(netCtx)
+	common.AssertTrue(t, err == nil, "failed to init netdetect context")
+	err = aiCache.initResponseCache(netCtx, &mgmtpb.GetAttachInfoResp{}, scanResults)
 	common.AssertTrue(t, err == nil, "initResponseCache error")
 	common.AssertTrue(t, aiCache.isCached() == true, "initResponseCache failed to initialized")
 
@@ -103,7 +106,10 @@ func TestInfoCacheInit(t *testing.T) {
 		{Provider: "ofi+sockets", DeviceName: "eth3_node2", NUMANode: 2}}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
+	netCtx, err := netdetect.Init()
+	defer netdetect.CleanUp(netCtx)
+	common.AssertTrue(t, err == nil, "failed to init netdetect context")
+	err = aiCache.initResponseCache(netCtx, &mgmtpb.GetAttachInfoResp{}, scanResults)
 	common.AssertEqual(t, err, nil, "initResponseCache error")
 
 	for name, tc := range map[string]struct {
@@ -136,6 +142,10 @@ func TestInfoCacheInitWithDeviceFiltering(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
+	netCtx, err := netdetect.Init()
+	defer netdetect.CleanUp(netCtx)
+	common.AssertTrue(t, err == nil, "failed to init netdetect context")
+
 	scanResults := []netdetect.FabricScan{
 		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
 		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
@@ -187,7 +197,7 @@ func TestInfoCacheInitWithDeviceFiltering(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			resp := &mgmtpb.GetAttachInfoResp{NetDevClass: tc.serverNetDevClass}
-			err := aiCache.initResponseCache(resp, scanResults)
+			err := aiCache.initResponseCache(netCtx, resp, scanResults)
 			common.AssertEqual(t, err, nil, "initResponseCache error")
 
 			numDevs := len(aiCache.numaDeviceMarshResp[tc.numaNode])
@@ -209,7 +219,10 @@ func TestInfoCacheGetResponse(t *testing.T) {
 		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
+	netCtx, err := netdetect.Init()
+	defer netdetect.CleanUp(netCtx)
+	common.AssertTrue(t, err == nil, "failed to init netdetect context")
+	err = aiCache.initResponseCache(netCtx, &mgmtpb.GetAttachInfoResp{}, scanResults)
 	common.AssertEqual(t, err, nil, "initResponseCache error")
 
 	for name, tc := range map[string]struct {
@@ -257,7 +270,10 @@ func TestInfoCacheDefaultNumaNode(t *testing.T) {
 		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
+	netCtx, err := netdetect.Init()
+	defer netdetect.CleanUp(netCtx)
+	common.AssertTrue(t, err == nil, "failed to init netdetect context")
+	err = aiCache.initResponseCache(netCtx, &mgmtpb.GetAttachInfoResp{}, scanResults)
 	common.AssertEqual(t, err, nil, "initResponseCache error")
 
 	for name, tc := range map[string]struct {
@@ -322,7 +338,10 @@ func TestInfoCacheLoadBalancer(t *testing.T) {
 	}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
+	netCtx, err := netdetect.Init()
+	defer netdetect.CleanUp(netCtx)
+	common.AssertTrue(t, err == nil, "failed to init netdetect context")
+	err = aiCache.initResponseCache(netCtx, &mgmtpb.GetAttachInfoResp{}, scanResults)
 	common.AssertEqual(t, err, nil, "initResponseCache error")
 
 	var results map[int][]byte
@@ -434,7 +453,10 @@ func TestInfoCacheConcurrentAccess(t *testing.T) {
 		{Provider: "ofi+sockets", DeviceName: "eth3_node2", NUMANode: 2, Priority: 3}}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
+	netCtx, err := netdetect.Init()
+	defer netdetect.CleanUp(netCtx)
+	common.AssertTrue(t, err == nil, "failed to init netdetect context")
+	err = aiCache.initResponseCache(netCtx, &mgmtpb.GetAttachInfoResp{}, scanResults)
 	common.AssertEqual(t, err, nil, "initResponseCache error")
 
 	var wg sync.WaitGroup

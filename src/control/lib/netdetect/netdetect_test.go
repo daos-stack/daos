@@ -116,18 +116,24 @@ func TestParseTopology(t *testing.T) {
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
-			deviceScanCfg, err := initDeviceScan(nil)
+			netCtx, err := Init()
+			defer CleanUp(netCtx)
+			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
-			deviceScanCfg.systemDeviceNames = []string{tc.netDev}
-			deviceScanCfg.systemDeviceNamesMap = make(map[string]struct{})
-			for _, deviceName := range deviceScanCfg.systemDeviceNames {
-				deviceScanCfg.systemDeviceNamesMap[deviceName] = struct{}{}
+			ndc := getContext(netCtx)
+			AssertEqual(t, ndc != nil, true, "Failed to retrieve context")
+			AssertEqual(t, ndc.topology != nil, true, "Error on getContext - no topology")
+
+			ndc.deviceScanCfg.systemDeviceNames = []string{tc.netDev}
+			ndc.deviceScanCfg.systemDeviceNamesMap = make(map[string]struct{})
+			for _, deviceName := range ndc.deviceScanCfg.systemDeviceNames {
+				ndc.deviceScanCfg.systemDeviceNamesMap[deviceName] = struct{}{}
 			}
 
-			deviceScanCfg.targetDevice = tc.netDev
+			ndc.deviceScanCfg.targetDevice = tc.netDev
 			AssertEqual(t, err, nil, "Failed to initDeviceScan")
 
-			deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+			deviceAffinity, err := GetAffinityForDevice(ndc.deviceScanCfg)
 			AssertEqual(t, err, nil, "Failed to GetAffinityForDevice")
 
 			AssertEqual(t, deviceAffinity.DeviceName, tc.expected.DeviceName,
@@ -164,7 +170,6 @@ func TestScanFabricNoDevices(t *testing.T) {
 
 			netCtx, err := Init()
 			defer CleanUp(netCtx)
-
 			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
 			results, err := ScanFabric(netCtx, "", tc.excludes)
@@ -210,10 +215,10 @@ func TestValidateNetworkConfig(t *testing.T) {
 	}
 
 	for _, sf := range results {
-		err := ValidateProviderConfig(sf.DeviceName, sf.Provider)
+		err := ValidateProviderConfig(netCtx, sf.DeviceName, sf.Provider)
 		AssertEqual(t, err, nil, "Network device configuration is invalid - provider not supported")
 
-		err = ValidateNUMAConfig(sf.DeviceName, sf.NUMANode)
+		err = ValidateNUMAConfig(netCtx, sf.DeviceName, sf.NUMANode)
 		AssertEqual(t, err, nil, "Network device configuration is invalid - NUMA node does not match")
 	}
 }
@@ -261,7 +266,7 @@ func TestValidateNUMAConfigNonNumaAware(t *testing.T) {
 			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 			AssertEqual(t, HasNUMA(netCtx), false, "Unexpected detection of NUMA nodes in provided topology")
 
-			err = ValidateNUMAConfig(tc.device, 0)
+			err = ValidateNUMAConfig(netCtx, tc.device, 0)
 			AssertEqual(t, err, nil, "Error on ValidateNUMAConfig")
 		})
 	}
@@ -330,10 +335,9 @@ func TestInitDeviceScan(t *testing.T) {
 			AssertEqual(t, err, nil, "unable to load xmlTopology")
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
-
-			deviceScanCfg, err := initDeviceScan(nil)
-			defer cleanUp(deviceScanCfg.topology)
-			AssertEqual(t, err, nil, "Error on initDeviceScan")
+			netCtx, err := Init()
+			defer CleanUp(netCtx)
+			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 		})
 	}
 }
@@ -368,12 +372,16 @@ func TestGetAffinityForDeviceEdgeCases(t *testing.T) {
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
-			deviceScanCfg, err := initDeviceScan(nil)
-			AssertEqual(t, err, nil, "Error on initDeviceScan")
-			defer cleanUp(deviceScanCfg.topology)
+			netCtx, err := Init()
+			defer CleanUp(netCtx)
+			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
-			deviceScanCfg.targetDevice = tc.device
-			deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+			ndc := getContext(netCtx)
+			AssertEqual(t, ndc != nil, true, "Failed to retrieve context")
+			AssertEqual(t, ndc.topology != nil, true, "Error on getContext - no topology")
+
+			ndc.deviceScanCfg.targetDevice = tc.device
+			deviceAffinity, err := GetAffinityForDevice(ndc.deviceScanCfg)
 
 			AssertEqual(t, err, nil, "Unexpected error on GetAffinityForDevice")
 			AssertEqual(t, deviceAffinity.NUMANode, uint(0), "deviceAffinity mismatch on NUMA node")
@@ -418,7 +426,10 @@ func TestDeviceAliasErrors(t *testing.T) {
 			AssertEqual(t, err, nil, "unable to load xmlTopology")
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
-			deviceAlias, err := getDeviceAliasWithSystemList(tc.device, []string{})
+			netCtx, err := Init()
+			defer CleanUp(netCtx)
+			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
+			deviceAlias, err := getDeviceAliasWithSystemList(netCtx, tc.device, []string{})
 			AssertTrue(t, err != nil,
 				"an error was expected but not received")
 			AssertEqual(t, deviceAlias, "",
@@ -505,7 +516,10 @@ func TestDeviceAlias(t *testing.T) {
 			AssertEqual(t, err, nil, "unable to load xmlTopology")
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
-			deviceAlias, err := getDeviceAliasWithSystemList(tc.device, mockSystemDevices)
+			netCtx, err := Init()
+			defer CleanUp(netCtx)
+			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
+			deviceAlias, err := getDeviceAliasWithSystemList(netCtx, tc.device, mockSystemDevices)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -533,7 +547,7 @@ func TestValidateProviderSm(t *testing.T) {
 	}
 
 	for _, sf := range results {
-		err := ValidateProviderConfig(sf.DeviceName, "sm")
+		err := ValidateProviderConfig(netCtx, sf.DeviceName, "sm")
 		AssertEqual(t, err, nil, "Network device configuration is invalid - provider not supported")
 	}
 }

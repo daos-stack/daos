@@ -142,7 +142,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, errors.Wrap(err, "Failed to convert GetAttachInfo response")
 	}
 
-	err = mod.aiCache.initResponseCache(pbResp, scanResults)
+	err = mod.aiCache.initResponseCache(mod.netCtx, pbResp, scanResults)
 	if err != nil {
 		return nil, err
 	}
