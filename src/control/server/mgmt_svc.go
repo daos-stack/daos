@@ -168,21 +168,18 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
 
-	mi, err := svc.harness.GetMSLeaderInstance()
+	resp := new(mgmtpb.GetAttachInfoResp)
+	replicas, err := svc.sysdb.ReplicaRanks()
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.MethodGetAttachInfo, req)
-	if err != nil {
-		return nil, err
+	for rank, uri := range replicas.RankURIs {
+		resp.Psrs = append(resp.Psrs, &mgmtpb.GetAttachInfoResp_Psr{
+			Rank: rank.Uint32(),
+			Uri:  uri,
+		})
 	}
-
-	resp := &mgmtpb.GetAttachInfoResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
-	}
-
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout

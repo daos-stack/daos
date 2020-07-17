@@ -700,8 +700,8 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	struct server_entry	entry = {};
 	int			rc;
 
-	// Nothing should be calling this now...
-	// TODO: Remove *_join_* from ioserver.
+	/* Nothing should be calling this now...
+	   TODO: Remove *_join_* from ioserver. */
 	rc = -DER_INVAL;
 	goto out;
 
@@ -813,10 +813,10 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	if (in->ji_rank != -1)
 		svc->ms_rank_next = rank_next;
 
-	entry.se_rank = in->ji_rank;
+	entry.se_rank = rank;
 	entry.se_uri = in->ji_server.sr_uri;
 	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_ADD, &entry,
-				  1 /* nservers */, in->ji_map_version);
+				  1 /* nservers */, map_version);
 	if (rc != 0) {
 		rdb_resign(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term);
 		rc = 0;
@@ -824,7 +824,7 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	}
 	ds_rsvc_request_map_dist(&svc->ms_rsvc);
 
-	out->jo_rank = in->ji_rank;
+	out->jo_rank = rank;
 	out->jo_flags = SERVER_IN;
 
 out_lock:

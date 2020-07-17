@@ -396,7 +396,10 @@ func NewGroupMap(version uint32) *GroupMap {
 	}
 }
 
-func (db *Database) GroupMap() *GroupMap {
+func (db *Database) GroupMap() (*GroupMap, error) {
+	if err := db.checkLeader(); err != nil {
+		return nil, err
+	}
 	db.RLock()
 	defer db.RUnlock()
 
@@ -404,7 +407,29 @@ func (db *Database) GroupMap() *GroupMap {
 	for _, srv := range db.Members.Ranks {
 		gm.RankURIs[srv.Rank] = srv.FabricURI
 	}
-	return gm
+	return gm, nil
+}
+
+func (db *Database) ReplicaRanks() (*GroupMap, error) {
+	if err := db.checkLeader(); err != nil {
+		return nil, err
+	}
+	db.RLock()
+	defer db.RUnlock()
+
+	// TODO: Should this only return one rank per replica, or
+	// should we return all ready ranks per replica, for resiliency?
+	gm := NewGroupMap(db.MapVersion)
+	for _, srv := range db.Members.Ranks {
+		isReplica, _, err := db.checkReplica(srv.Addr)
+		// FIXME: Joined doesn't seem like the right state here, but
+		// I don't see where it ever transitions to Ready...
+		if err != nil || !isReplica || srv.state != MemberStateJoined {
+			continue
+		}
+		gm.RankURIs[srv.Rank] = srv.FabricURI
+	}
+	return gm, nil
 }
 
 func (db *Database) AllMembers() []*Member {

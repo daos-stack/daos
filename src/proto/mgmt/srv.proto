@@ -51,7 +51,6 @@ message JoinReq {
 	string uri = 3;		// Server CaRT base URI (i.e., for context 0).
 	uint32 nctxs = 4;	// Server CaRT context count.
 	string addr = 5;	// Server management address.
-	uint32 map_version = 6; // Current system map version
 }
 
 message JoinResp {

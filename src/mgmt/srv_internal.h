@@ -76,7 +76,6 @@ int ds_mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint);
 void ds_mgmt_svc_put_leader(struct mgmt_svc *svc);
 struct mgmt_join_in {
 	uint32_t		ji_rank;
-	uint32_t		ji_map_version;
 	struct server_rec	ji_server;
 };
 struct mgmt_join_out {

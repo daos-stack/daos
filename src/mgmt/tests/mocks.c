@@ -153,7 +153,6 @@ void		*ds_mgmt_pool_delete_acl_result_ptr;
 int
 ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			const char *principal, daos_prop_t **result)
-			
 {
 	uuid_copy(ds_mgmt_pool_delete_acl_uuid, pool_uuid);
 	ds_mgmt_pool_delete_acl_principal = principal;

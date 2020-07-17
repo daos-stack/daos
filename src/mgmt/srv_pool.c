@@ -373,7 +373,7 @@ int
 ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		     const char *group, uint32_t force)
 {
-	int		 	rc;
+	int		rc;
 
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
@@ -626,9 +626,6 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 	struct rdb_tx			 tx;
 	struct list_pools_iter_args	 iter_args;
 	int				 rc;
-
-	/* Nothing should be calling this now */
-	return -DER_NOSYS;
 
 	*poolsp = NULL;
 	*pools_len = 0;
