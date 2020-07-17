@@ -81,7 +81,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
 					       ie->ie_name);
-			if (rc != -DER_SUCCESS)
+			if (rc != 0)
 				DFUSE_TRA_ERROR(inode,
 						"dfs_update_parent() failed %d",
 						rc);

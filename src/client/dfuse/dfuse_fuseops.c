@@ -85,11 +85,15 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
 
-	DFUSE_TRA_INFO(fs_handle, "Capability supported %#x", conn->capable);
+	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
+		       conn->capable);
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
+
+	conn->want |= FUSE_CAP_READDIRPLUS;
+	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
 	dfuse_show_flags(fs_handle, conn->want);
 
@@ -351,42 +355,40 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
-/*
- * Implement readdir without a opendir/closedir pair.  This works perfectly
- * well, but adding (open|close)dir would allow us to cache the inode_entry
- * between calls which would help performance, and may be necessary later on
- * to support directories which require multiple calls to readdir() to return
- * all entries.
+/* Handle readdir and readdirplus slightly differently, the presence of the
+ * opendir callback will mean fi->fh is set for dfs files but not containers
+ * or pools to use this fact to avoid a hash table lookup on the inode.
  */
 static void
 df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	      struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*inode;
-	d_list_t			*rlink;
-	int				rc;
+	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", ino);
-		D_GOTO(err, rc = ENOENT);
+	if (oh == NULL) {
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
+		return;
 	}
 
-	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	if (!inode->ie_dfs->dfs_ops->readdir) {
-		D_GOTO(decref, rc = ENOTSUP);
-	}
-	inode->ie_dfs->dfs_ops->readdir(req, inode, size, offset, fi);
-
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	return;
-decref:
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	dfuse_cb_readdir(req, oh, size, offset, false);
 }
+
+static void
+df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
+		  struct fuse_file_info *fi)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
+
+	if (oh == NULL) {
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
+		return;
+	}
+
+	dfuse_cb_readdir(req, oh, size, offset, true);
+}
+
 
 void
 df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
@@ -632,7 +634,6 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.releasedir	= dfuse_cb_releasedir,
 	.getattr	= dfuse_cb_getattr,
 	.unlink		= dfuse_cb_unlink,
-	.readdir	= dfuse_cb_readdir,
 	.create		= dfuse_cb_create,
 	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
@@ -674,6 +675,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->unlink	= df_ll_unlink;
 	fuse_ops->rmdir		= df_ll_unlink;
 	fuse_ops->readdir	= df_ll_readdir;
+	fuse_ops->readdirplus	= df_ll_readdirplus;
 	fuse_ops->create	= df_ll_create;
 	fuse_ops->rename	= df_ll_rename;
 	fuse_ops->symlink	= df_ll_symlink;

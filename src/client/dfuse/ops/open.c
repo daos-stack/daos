@@ -76,9 +76,6 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;
 
-	/** Files should not have readdir buffers */
-	D_ASSERT(oh->doh_buf == NULL);
-
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
 		DFUSE_REPLY_ZERO(oh, req);

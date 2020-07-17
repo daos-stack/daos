@@ -69,23 +69,12 @@ struct dfuse_projection_info {
 	ATOMIC uint64_t			dpi_ino_next;
 };
 
-/*
- * Max number of 4k (fuse buffer size for readdir) blocks that need offset
- * tracking in the readdir implementation. Since in readdir implementation we
- * specify a larger buffer size (16k) to fetch the dir entries, the buffer we
- * track those entries on the OH needs to know where fuse_add_direntry() exceeds
- * the 4k size of a block that we return to readdir. In the next call to
- * readdir, we need to resume from that last offset before we exceeded that 4k
- * size. We define this max number of blocks to 8 (not 4 - 16k/4k) to account
- * for the possibility that we need to re-alloc that buffer on OH since
- * fuse_add_direntry() adds more metadata (the fuse direntry attributes) in
- * addition to the entry name, which could exceed 16K in some cases. We just
- * double the buffer size inthis case to 32k, and so we need a max of 8 offsets
- * to track in this case.
- */
-#define READDIR_BLOCKS 8
-
 struct dfuse_inode_entry;
+
+struct dfuse_readdir_entry {
+	char	dre_name[NAME_MAX];
+	off_t	dre_offset;
+};
 
 /** what is returned as the handle for fuse fuse_file_info on create/open */
 struct dfuse_obj_hdl {
@@ -97,18 +86,10 @@ struct dfuse_obj_hdl {
 	struct dfuse_inode_entry *doh_ie;
 	/** an anchor to track listing in readdir */
 	daos_anchor_t	doh_anchor;
-	/** current offset in dir stream (what is returned to fuse) */
-	off_t		doh_fuse_off;
-	/** current offset in dir stream (includes cached entries) */
-	off_t		doh_dir_off[READDIR_BLOCKS];
-	/** Buffer with all entries listed from DFS with the fuse dirents */
-	void		*doh_buf;
-	/** offset to start from of doh_buffer */
-	off_t		doh_start_off[READDIR_BLOCKS];
-	/** ending offset in doh_buf */
-	off_t		doh_cur_off;
-	/** current idx to process in doh_start_off */
-	uint32_t	doh_idx;
+
+	struct dfuse_readdir_entry	*doh_dre;
+	int		doh_dre_index;
+	int doh_anchor_index;
 };
 
 struct dfuse_inode_ops {
@@ -126,8 +107,6 @@ struct dfuse_inode_ops {
 			struct fuse_file_info *fi);
 	void (*releasedir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			   struct fuse_file_info *fi);
-	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
-			size_t size, off_t offset, struct fuse_file_info *fi);
 	void (*rename)(fuse_req_t req, struct dfuse_inode_entry *parent_inode,
 		       const char *name,
 		       struct dfuse_inode_entry *newparent_inode,
@@ -587,8 +566,7 @@ dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
 		const char *);
 
 void
-dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t,
-		 struct fuse_file_info *);
+dfuse_cb_readdir(fuse_req_t, struct dfuse_obj_hdl *, size_t, off_t, bool);
 
 void
 dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,

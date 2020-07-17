@@ -733,7 +733,7 @@ def dfuse_wrapper(server, conf):
     container = create_cont(conf, pool, ctype='POSIX')[0]
     dfuse = DFuse(server, conf, pool=pool, container=container)
     dfuse.start()
-    readdir_test(dfuse, 250)
+    readdir_test(dfuse, 30)
     dfuse.stop()
     destroy_container(conf, pool, container)
 
@@ -754,7 +754,9 @@ def readdir_test(dfuse, count):
                                                              duration,
                                                              count / duration))
     print('Listing dir contents')
-    print(os.listdir(wide_dir))
+    files = os.listdir(wide_dir)
+    print(files)
+    print(len(files))
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
