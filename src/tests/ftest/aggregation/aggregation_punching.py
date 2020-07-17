@@ -40,10 +40,9 @@ class AggregationPunching(MdtestBase):
             Test the aggregation feature after punching records.
 
         Use Cases:
-            Create a POSIX container and run mdtest with '-C' option
-            to just create records
-            Punch those records using '-r' in the next run
-            Let the aggregation run and verify the space is reclaimed.
+            Disable aggregation
+            Create a POSIX container and run mdtest
+            Enable the aggregation run and verify the space is reclaimed.
 
         :avocado: tags=all,pr,hw,medium,ib2,aggregation,mdtest
         :avocado: tags=aggregatepunching
@@ -92,15 +91,29 @@ class AggregationPunching(MdtestBase):
         self.log.info("Enabling aggregation")
         self.pool.set_property("reclaim", "time")
 
-        self.log.info("Waiting for 120 seconds")
-        time.sleep(120)
+        counter = 0
+        self.log.info("Verifying the aggregation deleted the punched" +
+                      " records and space is reclaimed")
+
+        # For the given mdtest configuration, the aggregation should
+        # be done in less than 120 seconds.
+        while counter < 4:
+            pool_info = self.pool.pool.pool_query()
+            final_free_space =\
+                pool_info.pi_space.ps_space.s_free[storage_index]
+            
+            if final_free_space == initial_free_space:
+                break
+            else:
+                self.log.info("Space is not reclaimed yet !")
+                self.log.info("Sleeping for 30 seconds")
+                time.sleep(30)
+                counter += 1
 
         pool_info = self.pool.pool.pool_query()
         final_free_space =\
             pool_info.pi_space.ps_space.s_free[storage_index]
 
-        self.log.info("Verifying the aggregation deleted the punched" +
-                      " records and space is reclaimed")
         self.log.info("{} == {}".format(
             final_free_space, initial_free_space))
         self.assertTrue(final_free_space == initial_free_space)
