@@ -43,7 +43,7 @@ class DmgCommand(DmgCommandBase):
     methods to issue dmg commands in unit test cases with the dmg command output
     returned as a dictionary of keyed values.
 
-    Each time a command is issued the resulting CmdResult object, contianing
+    Each time a command is issued the resulting CmdResult object, containing
     information such as the exit code, stdout, stderr, etc., will be stored to
     the DmgCommand.result attribute.  This can be useful for detecting failed
     commands as part of negative testing.
@@ -51,7 +51,7 @@ class DmgCommand(DmgCommandBase):
 
     # Eventually move each regex into the appropriate class method to return the
     # result of the regex in a more usable dictionary of values.  As each class
-    # method is updated the associated regex should be removed from ths list.
+    # method is updated the associated regex should be removed from this list.
     METHOD_REGEX = {
         "run":
             r"(.*)",

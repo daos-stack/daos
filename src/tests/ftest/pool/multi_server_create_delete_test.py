@@ -24,7 +24,6 @@
 import os
 from apricot import TestWithServers
 import check_for_pool
-from dmg_utils import DmgCommand
 
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
@@ -94,14 +93,15 @@ class MultiServerCreateDeleteTest(TestWithServers):
                 # check_for_pool checks if the uuid directory exists in host1
                 exists = check_for_pool.check_for_pool(host1, data["uuid"])
                 if exists != 0:
-                    self.fail("Pool {0} not found on host {1}.\n"
-                              .format(data["uuid"], host1))
+                    self.fail(
+                        "Pool {0} not found on host {1}.\n".format(
+                            data["uuid"], host1))
             if '1' in tgtlist:
                 exists = check_for_pool.check_for_pool(host2, data["uuid"])
                 if exists != 0:
                     self.fail(
-                        "Pool {0} not found on host {1}.\n"
-                              .format(data["uuid"], host2))
+                        "Pool {0} not found on host {1}.\n".format(
+                            data["uuid"], host2))
         else:
             test_destroy = False
             if expected_result == RESULT_PASS:
@@ -117,13 +117,15 @@ class MultiServerCreateDeleteTest(TestWithServers):
                 if '0' in tgtlist:
                     exists = check_for_pool.check_for_pool(host1, data["uuid"])
                     if exists == 0:
-                        self.fail("Pool {0} found on host {1} after destroy.\n"
-                                  .format(data["uuid"], host1))
+                        self.fail(
+                            "Pool {0} found on host {1} after destroy.".format(
+                                data["uuid"], host1))
                 if '1' in tgtlist:
                     exists = check_for_pool.check_for_pool(host2, data["uuid"])
                     if exists == 0:
-                        self.fail("Pool {0} found on host {1} after destroy.\n"
-                                  .format(data["uuid"], host2))
+                        self.fail(
+                            "Pool {0} found on host {1} after destroy.".format(
+                                data["uuid"], host2))
             else:
                 if expected_result == RESULT_PASS:
                     self.fail("Test was expected to pass but it failed at " +

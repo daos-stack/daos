@@ -99,24 +99,16 @@ class PoolCreateTests(TestWithServers):
                         "configured!")
 
                 # The I/O server allocates NVMe storage on targets in multiples
-                # of 1GiB per target.  An server with 8 targets will have a
+                # of 1GiB per target.  A server with 8 targets will have a
                 # minimum NVMe size of 8 GiB.  Specify the largest NVMe size in
                 # GiB that can be used with the configured number of targets and
                 # specified capacity in GB.
                 targets = self.server_managers[0].get_config_value("targets")
                 nvme_multiple = Bytes(int(targets), "GiB")
-                multiplier = 1
-                while nvme_multiple <
-
-                # The minimum NVMe size is 8 GiB.
-                min_nvme_size = Bytes(8, "GiB")
-                if sizes[1] < min_nvme_size:
-                    self.log.warning(
-                        "Calculated NVMe size %s is too small.  Using %s "
-                        "minimum NVMe size.", str(sizes[1]), str(min_nvme_size))
-                    pool.nvme_size.update(str(min_nvme_size), "nvme_size")
-                else:
-                    pool.nvme_size.update(str(sizes[1]), "nvme_size")
+                while nvme_multiple + targets <= sizes[1]:
+                    nvme_multiple += targets
+                self.log.info("Largest NVMe multiple: %s", str(nvme_multiple))
+                pool.nvme_size.update(str(nvme_multiple), "nvme_size")
 
     def check_pool_creation(self, max_duration):
         """Check the duration of each pool creation meets the requirement.
@@ -171,7 +163,7 @@ class PoolCreateTests(TestWithServers):
         self.define_pools(1, 0.9, 0.9)
         self.check_pool_creation(240)
 
-    @skipForTicket("DAOS-5202")
+    # @skipForTicket("DAOS-5202")
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-3599.
 
@@ -214,7 +206,7 @@ class PoolCreateTests(TestWithServers):
             pool_uuid_list, result,
             "Pool UUID list does not match after reboot")
 
-    @skipForTicket("DAOS-5203")
+    # @skipForTicket("DAOS-5203")
     def test_create_no_space(self):
         """JIRA ID: DAOS-3728.
 

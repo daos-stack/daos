@@ -161,7 +161,6 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
-
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
@@ -315,7 +314,6 @@ class DaosServerManager(SubprocessManager):
         # Dmg command to access this group of servers which will be configured
         # to access the daos_servers when they are started
         self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
-
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.
@@ -677,9 +675,10 @@ class DaosServerManager(SubprocessManager):
         """
         self.log.info("Starting DAOS IO servers")
         self.check_system_state(("stopped"))
-        result = self.dmg.system_start()
-        if result.exit_status != 0:
-            raise ServerFailed("Error starting DAOS:\n{}".format(result))
+        self.dmg.system_start()
+        if self.dmg.result.exit_status != 0:
+            raise ServerFailed(
+                "Error starting DAOS:\n{}".format(self.dmg.result))
 
     def system_stop(self):
         """Stop the DAOS IO servers.
@@ -690,9 +689,10 @@ class DaosServerManager(SubprocessManager):
         """
         self.log.info("Stopping DAOS IO servers")
         self.check_system_state(("started", "joined"))
-        result = self.dmg.system_stop()
-        if result.exit_status != 0:
-            raise ServerFailed("Error stopping DAOS:\n{}".format(result))
+        self.dmg.system_stop()
+        if self.dmg.result.exit_status != 0:
+            raise ServerFailed(
+                "Error stopping DAOS:\n{}".format(self.dmg.result))
 
     def get_available_storage(self):
         """Get the available SCM and NVMe storage.
