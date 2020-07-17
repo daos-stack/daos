@@ -765,16 +765,19 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	rc = dss_ult_create(agg_process_partial_stripe_ult, &stripe_ud,
 			    DSS_ULT_EC, 0, 0, NULL);
 	if (rc)
-		goto out;
+		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out;
+		goto ev_out;
 	}
 	if (*status != 0) {
 		rc = *status;
-		goto out;
+		goto ev_out;
 	}
+
+ev_out:
+	ABT_eventual_free(&stripe_ud.asu_eventual);
 
 out:
 	return rc;
@@ -827,7 +830,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	/* Parity, some later replicas, not full stripe. */
 	rc = agg_process_partial_stripe(entry);
 out:
-	if (update_vos)
+	if (update_vos && rc == 0)
 		rc = agg_update_vos(entry);
 		/* offload of ds_obj_update (TBD) to push remote parity */
 
@@ -1062,8 +1065,10 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = agg_subtree_iterate(ih, &entry->ie_oid, agg_param);
 		if (rc)
 			D_ERROR("Subtred iterate failed "DF_RC"\n", DP_RC(rc));
-	} else if (rc < 0)
+	} else if (rc < 0) {
 		D_ERROR("ds_pool_check_leader failed "DF_RC"\n", DP_RC(rc));
+		rc = 0;
+	}
 out:
 	return rc;
 }
@@ -1137,10 +1142,8 @@ agg_iterate_all(struct ds_cont_child *cont)
 
 	rc = ABT_eventual_create(sizeof(*status),
 				 &agg_param.ap_pool_info.api_eventual);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto out;
-	}
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
 	rc = dss_ult_create(agg_iv_ult, &agg_param, DSS_ULT_POOL_SRV, 0, 0,
 			    NULL);
 	if (rc)
@@ -1180,6 +1183,7 @@ agg_iterate_all(struct ds_cont_child *cont)
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
 out:
+	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	D_FREE(agg_param.ap_agg_entry);
 	agg_sgl_fini(&agg_param.ap_sgl);
 	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
