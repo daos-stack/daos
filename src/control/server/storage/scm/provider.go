@@ -26,12 +26,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/provider/system"
@@ -137,29 +139,6 @@ type (
 		Mounted bool
 	}
 
-	// FirmwareQueryRequest defines the parameters for a firmware query.
-	FirmwareQueryRequest struct {
-		pbin.ForwardableRequest
-		Devices []string // requested device UIDs, empty for all
-	}
-
-	// FirmwareQueryResponse contains the results of a successful firmware query.
-	FirmwareQueryResponse struct {
-		FirmwareInfo map[string]storage.ScmFirmwareInfo // info mapped by device UID
-	}
-
-	// FirmwareUpdateRequest defines the parameters for a firmware update.
-	FirmwareUpdateRequest struct {
-		pbin.ForwardableRequest
-		Devices      []string // requested device UIDs, empty for all
-		FirmwarePath string   // location of the firmware binary
-	}
-
-	// FirmwareUpdateResponse contains the results of the firmware update.
-	FirmwareUpdateResponse struct {
-		Results map[string]string // result error string mapped by device UID
-	}
-
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
 		Discover() (storage.ScmModules, error)
@@ -198,7 +177,7 @@ type (
 		backend Backend
 		sys     SystemProvider
 		fwd     *AdminForwarder
-		fwFwd   *FirmwareForwarder
+		firmwareProvider
 	}
 )
 
@@ -372,13 +351,14 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
 		sys:     sys,
 		fwd:     NewAdminForwarder(log),
-		fwFwd:   NewFirmwareForwarder(log),
 	}
+	p.setupFirmwareProvider(log)
+	return p
 }
 
 func (p *Provider) WithForwardingDisabled() *Provider {
@@ -832,79 +812,37 @@ func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
 }
 
-func (p *Provider) getUIDs(requested []string) ([]string, error) {
+func (p *Provider) getRequestedModules(requestedUIDs []string) (storage.ScmModules, error) {
 	modules, err := p.backend.Discover()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(modules) == 0 {
-		return nil, errors.New("no SCM modules")
+	if len(requestedUIDs) == 0 {
+		return modules, nil
 	}
 
-	uids := make([]string, 0, len(modules))
-	if len(requested) == 0 {
-		for _, m := range modules {
-			uids = append(uids, m.UID)
+	uniqueUIDs := common.DedupeStringSlice(requestedUIDs)
+	sort.Strings(uniqueUIDs)
+
+	result := make(storage.ScmModules, 0, len(modules))
+	for _, uid := range uniqueUIDs {
+		mod, err := getModule(uid, modules)
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		uids = requested
+		result = append(result, mod)
 	}
 
-	return uids, nil
+	return result, nil
 }
 
-// QueryFirmware fetches the status of SCM device firmware.
-func (p *Provider) QueryFirmware(req FirmwareQueryRequest) (*FirmwareQueryResponse, error) {
-	if p.shouldForward(req) {
-		return p.fwFwd.Query(req)
-	}
-
-	uids, err := p.getUIDs(req.Devices)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &FirmwareQueryResponse{
-		FirmwareInfo: make(map[string]storage.ScmFirmwareInfo, len(uids)),
-	}
-	for _, uid := range uids {
-		fwInfo, err := p.backend.GetFirmwareStatus(uid)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error getting firmware status for device %s", uid)
+func getModule(uid string, modules storage.ScmModules) (*storage.ScmModule, error) {
+	for _, mod := range modules {
+		if mod.UID == uid {
+			return mod, nil
 		}
-		resp.FirmwareInfo[uid] = *fwInfo
 	}
 
-	return resp, nil
-}
-
-// UpdateFirmware updates the SCM device firmware.
-func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateResponse, error) {
-	if p.shouldForward(req) {
-		return p.fwFwd.Update(req)
-	}
-
-	if len(req.FirmwarePath) == 0 {
-		return nil, errors.New("missing path to firmware file")
-	}
-
-	uids, err := p.getUIDs(req.Devices)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &FirmwareUpdateResponse{
-		Results: make(map[string]string, len(uids)),
-	}
-	for _, uid := range uids {
-		result := "OK"
-		err = p.backend.UpdateFirmware(uid, req.FirmwarePath)
-		if err != nil {
-			result = err.Error()
-		}
-		resp.Results[uid] = result
-	}
-
-	return resp, nil
+	return nil, fmt.Errorf("no module found with UID %q", uid)
 }

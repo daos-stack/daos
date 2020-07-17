@@ -11,7 +11,7 @@ def scons():
     prereqs.require(denv, 'argobots')
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     vtsenv = denv.Clone()
     vtsenv.Append(CPPDEFINES={'VOS_UNIT_TEST' : '1'})
 
@@ -29,8 +29,9 @@ def scons():
     vos_size = daos_build.program(denv, 'vos_size', ['vos_size.c'],
                                   LIBS=libraries)
 
-    denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl, 'vos_size.py'])
-    denv.Install('$PREFIX/etc/', ['vos_size_input.yaml', 'vos_dfs_sample.yaml'])
+    denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl, 'vos_size.py',
+                                  'vos_size_dfs_sample.py'])
+    denv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
 
 if __name__ == "SCons.Script":
     scons()

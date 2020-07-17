@@ -27,21 +27,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/security"
 )
 
 type dmgTestErr string
@@ -62,75 +58,18 @@ type cmdTest struct {
 }
 
 type testConn struct {
-	t            *testing.T
-	clientConfig *client.Configuration
-	called       []string
+	t      *testing.T
+	called []string
 }
 
 func newTestConn(t *testing.T) *testConn {
-	cfg := client.NewConfiguration()
 	return &testConn{
-		clientConfig: cfg,
-		t:            t,
+		t: t,
 	}
 }
 
 func (tc *testConn) appendInvocation(name string) {
 	tc.called = append(tc.called, name)
-}
-
-func (tc *testConn) ConnectClients(addrList client.Addresses) client.ResultMap {
-	tc.appendInvocation("ConnectClients")
-
-	return map[string]client.ClientResult{
-		tc.clientConfig.HostList[0]: client.ClientResult{
-			Address: tc.clientConfig.HostList[0],
-		},
-	}
-}
-
-func (tc *testConn) GetActiveConns(rm client.ResultMap) client.ResultMap {
-	tc.appendInvocation("GetActiveConns")
-
-	return map[string]client.ClientResult{
-		tc.clientConfig.HostList[0]: client.ClientResult{
-			Address: tc.clientConfig.HostList[0],
-		},
-	}
-}
-
-func (tc *testConn) ClearConns() client.ResultMap {
-	tc.appendInvocation("ClearConns")
-	return nil
-}
-
-func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
-	tc.appendInvocation(fmt.Sprintf("BioHealthQuery-%s", req))
-	return nil
-}
-
-func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
-	tc.appendInvocation(fmt.Sprintf("SmdListDevs-%s", req))
-	return nil
-}
-
-func (tc *testConn) SmdListPools(req *mgmtpb.SmdPoolReq) client.ResultSmdMap {
-	tc.appendInvocation(fmt.Sprintf("SmdListPools-%s", req))
-	return nil
-}
-
-func (tc *testConn) DevStateQuery(req *mgmtpb.DevStateReq) client.ResultStateMap {
-	tc.appendInvocation(fmt.Sprintf("DevStateQuery-%s", req))
-	return nil
-}
-
-func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultStateMap {
-	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
-	return nil
-}
-
-func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
-	tc.appendInvocation("SetTransportConfig")
 }
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -142,36 +81,12 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
-func createTestConfig(t *testing.T, log logging.Logger, path string) (*os.File, func()) {
-	t.Helper()
-
-	defaultConfig := client.NewConfiguration()
-	if err := defaultConfig.SetPath(path); err != nil {
-		t.Fatal(err)
-	}
-
-	// create default config file
-	if err := os.MkdirAll(filepath.Dir(defaultConfig.Path), 0755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(defaultConfig.Path)
-	if err != nil {
-		os.RemoveAll(filepath.Dir(defaultConfig.Path))
-		t.Fatal(err)
-	}
-	cleanup := func() {
-		os.RemoveAll(filepath.Dir(defaultConfig.Path))
-	}
-
-	return f, cleanup
-}
-
-func runCmd(t *testing.T, cmd string, log *logging.LeveledLogger, ctlClient control.Invoker, conn client.Connect) error {
+func runCmd(t *testing.T, cmd string, log *logging.LeveledLogger, ctlClient control.Invoker) error {
 	t.Helper()
 
 	var opts cliOptions
 	args := append([]string{"--insecure"}, strings.Split(cmd, " ")...)
-	return parseOpts(args, &opts, ctlClient, conn, log)
+	return parseOpts(args, &opts, ctlClient, log)
 }
 
 // printRequest generates a stable string representation of the
@@ -197,7 +112,6 @@ type bridgeConnInvoker struct {
 func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.UnaryRequest) (*control.UnaryResponse, error) {
 	// Use the testConn to fill out the calls slice for compatibility
 	// with old-style Connection tests.
-	bci.conn.ConnectClients(nil)
 	bci.conn.appendInvocation(printRequest(bci.t, uReq))
 
 	// Synthesize a response as necessary. The dmg command tests
@@ -235,6 +149,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
 	case *control.PoolExcludeReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExcludeResp{})
+	case *control.PoolDrainReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolDrainResp{})
 	case *control.PoolExtendReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.PoolReintegrateReq:
@@ -253,10 +169,6 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			f, cleanup := createTestConfig(t, log, "")
-			f.Close()
-			defer cleanup()
-
 			ctlClient := control.DefaultMockInvoker(log)
 			conn := newTestConn(t)
 			bridge := &bridgeConnInvoker{
@@ -264,7 +176,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 				t:           t,
 				conn:        conn,
 			}
-			err := runCmd(t, st.cmd, log, bridge, conn)
+			err := runCmd(t, st.cmd, log, bridge)
 			if err != st.expectedErr {
 				if st.expectedErr == nil {
 					t.Fatalf("expected nil error, got %+v", err)
@@ -276,9 +188,6 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 
 				testExpectedError(t, st.expectedErr, err)
 				return
-			}
-			if st.expectedCalls != "" {
-				st.expectedCalls = fmt.Sprintf("SetTransportConfig %s", st.expectedCalls)
 			}
 
 			if diff := cmp.Diff(st.expectedCalls, strings.Join(conn.called, " ")); diff != "" {
@@ -293,8 +202,7 @@ func TestBadCommand(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
-	conn := newTestConn(t)
-	err := parseOpts([]string{"foo"}, &opts, nil, conn, log)
+	err := parseOpts([]string{"foo"}, &opts, nil, log)
 	testExpectedError(t, fmt.Errorf("Unknown command `foo'"), err)
 }
 
@@ -303,7 +211,6 @@ func TestNoCommand(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
-	conn := newTestConn(t)
-	err := parseOpts([]string{}, &opts, nil, conn, log)
+	err := parseOpts([]string{}, &opts, nil, log)
 	testExpectedError(t, fmt.Errorf("Please specify one command"), err)
 }

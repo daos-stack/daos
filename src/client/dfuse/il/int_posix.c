@@ -110,11 +110,7 @@ entry_array_close(void *arg) {
 	DFUSE_LOG_INFO("entry %p closing array fd_count %d",
 		       entry, ioil_ioc.ioc_open_fd_count);
 
-	if (entry->fd_dfsoh) {
-		dfs_release(entry->fd_dfsoh);
-	} else {
-		daos_array_close(entry->fd_aoh, NULL);
-	}
+	dfs_release(entry->fd_dfsoh);
 
 	ioil_ioc.ioc_open_fd_count -= 1;
 
@@ -226,6 +222,8 @@ ioil_init(void)
 	if (rc)
 		return;
 
+	DFUSE_TRA_ROOT(&ioil_ioc, "il");
+
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
 	if (rc != 0) {
@@ -269,66 +267,116 @@ ioil_fini(void)
 		CONT_CLOSE(ioil_ioc);
 		POOL_DISCONNECT(ioil_ioc);
 	}
-	daos_fini();
-
+	DFUSE_TRA_DOWN(&ioil_ioc);
 	vector_destroy(&fd_table);
+	daos_fini();
 }
 
 static int
 _fetch_dfs_obj(int fd,
-	struct dfuse_hs_reply *hs_reply,
+	struct dfuse_hsd_reply *hsd_reply,
 	struct fd_entry *entry)
 {
 	d_iov_t			iov = {};
 	int			cmd;
 	int			rc;
 
-	D_ALLOC(iov.iov_buf, hs_reply->fsr_dobj_size);
+
+	if (!ioil_ioc.ioc_dfs) {
+		D_ALLOC(iov.iov_buf, hsd_reply->fsr_dfs_size);
+		if (!iov.iov_buf)
+			return ENOMEM;
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
+			DFUSE_IOCTL_REPLY_DOH, hsd_reply->fsr_dfs_size);
+
+		errno = 0;
+		rc = ioctl(fd, cmd, iov.iov_buf);
+		if (rc != 0) {
+			int err = errno;
+
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+					  err, strerror(err));
+
+			D_FREE(iov.iov_buf);
+			return rc;
+		}
+
+		iov.iov_buf_len = hsd_reply->fsr_dfs_size;
+		iov.iov_len = iov.iov_buf_len;
+
+		rc = dfs_global2local(ioil_ioc.ioc_poh,
+				ioil_ioc.ioc_coh,
+				0,
+				iov, &ioil_ioc.ioc_dfs);
+		if (rc) {
+			DFUSE_LOG_WARNING("Failed to use dfs handle %d", rc);
+			D_FREE(iov.iov_buf);
+			return rc;
+		}
+
+		D_FREE(iov.iov_buf);
+	}
+
+	entry->fd_dfs = ioil_ioc.ioc_dfs;
+
+	D_ALLOC(iov.iov_buf, hsd_reply->fsr_dobj_size);
 	if (!iov.iov_buf)
 		return ENOMEM;
 
 	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-		   DFUSE_IOCTL_REPLY_DOOH, hs_reply->fsr_dobj_size);
+		   DFUSE_IOCTL_REPLY_DOOH, hsd_reply->fsr_dobj_size);
 
+	errno = 0;
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
+		int err = errno;
+
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+				  err, strerror(err));
+
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
 
-	iov.iov_buf_len = hs_reply->fsr_dobj_size;
+	iov.iov_buf_len = hsd_reply->fsr_dobj_size;
 	iov.iov_len = iov.iov_buf_len;
 
-	rc = dfs_obj_global2local(ioil_ioc.ioc_dfs,
+	rc = dfs_obj_global2local(entry->fd_dfs,
 				  0,
 				  iov,
 				  &entry->fd_dfsoh);
-	if (rc) {
-		DFUSE_LOG_INFO("Failed to use dfs object handle %d", rc);
-		D_FREE(iov.iov_buf);
-		return rc;
-	}
+	if (rc)
+		DFUSE_LOG_WARNING("Failed to use dfs object handle %d", rc);
 
 	D_FREE(iov.iov_buf);
-
-	return 0;
+	return rc;
 }
 
 static int
 fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 {
-	struct dfuse_hs_reply hs_reply;
+	struct dfuse_hsd_reply hsd_reply;
 	int rc;
 
-	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
+	errno = 0;
+	rc = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl returned %d err %d", rc, err);
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+				  err, strerror(err));
+
 		return rc;
 	}
 
-	return _fetch_dfs_obj(fd, &hs_reply, entry);
+	if (hsd_reply.fsr_version != DFUSE_IOCTL_VERSION) {
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
+				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
+				  hsd_reply.fsr_version);
+		return EIO;
+	}
+
+	return _fetch_dfs_obj(fd, &hsd_reply, entry);
 }
 
 static int
@@ -339,19 +387,31 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	int			cmd;
 	int			rc;
 
+	errno = 0;
 	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl returned %d err %d", rc, err);
+		if (err == EPERM)
+			DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+				       err, strerror(err));
+		else
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+					  err, strerror(err));
+
 		return rc;
 	}
 
-	DFUSE_LOG_INFO("ioctl returned %zi %zi %zi %zi",
+	if (hs_reply.fsr_version != DFUSE_IOCTL_VERSION) {
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
+				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
+				  hs_reply.fsr_version);
+		return EIO;
+	}
+
+	DFUSE_LOG_INFO("ioctl returned %zi %zi",
 		       hs_reply.fsr_pool_size,
-		       hs_reply.fsr_cont_size,
-		       hs_reply.fsr_dfs_size,
-		       hs_reply.fsr_dobj_size);
+		       hs_reply.fsr_cont_size);
 
 	D_ALLOC(iov.iov_buf, hs_reply.fsr_pool_size);
 	if (!iov.iov_buf)
@@ -360,8 +420,14 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
 		   DFUSE_IOCTL_REPLY_POH, hs_reply.fsr_pool_size);
 
+	errno = 0;
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
+		int err = errno;
+
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+				 err, strerror(err));
+
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -371,7 +437,7 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 
 	rc = daos_pool_global2local(iov, &ioil_ioc.ioc_poh);
 	if (rc) {
-		DFUSE_LOG_INFO("Failed to use pool handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use pool handle %d", rc);
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -385,8 +451,14 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
 		   DFUSE_IOCTL_REPLY_COH, hs_reply.fsr_cont_size);
 
+	errno = 0;
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
+		int err = errno;
+
+		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+				  err, strerror(err));
+
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -396,41 +468,14 @@ fetch_daos_handles(int fd, struct fd_entry *entry)
 
 	rc = daos_cont_global2local(ioil_ioc.ioc_poh, iov, &ioil_ioc.ioc_coh);
 	if (rc) {
-		DFUSE_LOG_INFO("Failed to use cont handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use cont handle %d", rc);
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
 
 	D_FREE(iov.iov_buf);
 
-	D_ALLOC(iov.iov_buf, hs_reply.fsr_dfs_size);
-	if (!iov.iov_buf)
-		return ENOMEM;
-	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-		   DFUSE_IOCTL_REPLY_DOH, hs_reply.fsr_dfs_size);
-
-	rc = ioctl(fd, cmd, iov.iov_buf);
-	if (rc != 0) {
-		D_FREE(iov.iov_buf);
-		return rc;
-	}
-
-	iov.iov_buf_len = hs_reply.fsr_dfs_size;
-	iov.iov_len = iov.iov_buf_len;
-
-	rc = dfs_global2local(ioil_ioc.ioc_poh,
-			      ioil_ioc.ioc_coh,
-			      0,
-			      iov, &ioil_ioc.ioc_dfs);
-	if (rc) {
-		DFUSE_LOG_INFO("Failed to use dfs handle %d", rc);
-		D_FREE(iov.iov_buf);
-		return rc;
-	}
-
-	D_FREE(iov.iov_buf);
-
-	return _fetch_dfs_obj(fd, &hs_reply, entry);
+	return fetch_dfs_obj_handle(fd, entry);
 }
 
 static int
@@ -451,6 +496,11 @@ connect_daos_cont(int fd, struct dfuse_il_reply *il_reply)
 	if (rc)
 		D_GOTO(pool_close, 0);
 
+	rc = dfs_mount(ioil_ioc.ioc_poh, ioil_ioc.ioc_coh, O_RDWR,
+		       &ioil_ioc.ioc_dfs);
+	if (rc)
+		D_GOTO(pool_close, 0);
+
 	return 0;
 
 pool_close:
@@ -462,25 +512,25 @@ static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 {
 	struct dfuse_il_reply	il_reply;
-	daos_size_t		cell_size = 1;
-	daos_size_t		chunk_size = 1024 * 1024;
 	int			rc;
 
 	if (fd == -1)
 		return false;
 
+	errno = 0;
 	rc = ioctl(fd, DFUSE_IOCTL_IL, &il_reply);
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_INFO("ioctl call on %d failed %d %d", fd, rc, err);
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %s", fd,
+			       err, strerror(err));
 		return false;
 	}
 
 	if (il_reply.fir_version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_INFO("ioctl version mismatch (fd=%d): expected "
-			       "%d got %d", fd, DFUSE_IOCTL_VERSION,
-			       il_reply.fir_version);
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
+				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
+				  il_reply.fir_version);
 		return false;
 	}
 
@@ -522,15 +572,14 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (entry->fd_dfsoh) {
 		entry->fd_dfs = ioil_ioc.ioc_dfs;
 	} else {
-		rc = daos_array_open_with_attr(ioil_ioc.ioc_coh,
-					       il_reply.fir_oid,
-					       DAOS_TX_NONE, DAOS_OO_RW,
-					       cell_size, chunk_size,
-					       &entry->fd_aoh, NULL);
+		entry->fd_dfs = ioil_ioc.ioc_dfs;
+
+		rc = fetch_dfs_obj_handle(fd, entry);
 		if (rc)
 			D_GOTO(cont_close, 0);
-
 	}
+
+	DFUSE_TRA_UP(entry->fd_dfsoh, &ioil_ioc, "dfs_obj");
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
@@ -538,7 +587,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 			       rc);
 		/* Disable kernel bypass */
 		entry->fd_status = DFUSE_IO_DIS_RSRC;
-		D_GOTO(array_close, 0);
+		D_GOTO(obj_close, 0);
 	}
 
 	DFUSE_LOG_INFO("Added entry for new fd %d", fd);
@@ -549,11 +598,19 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	return true;
 
-array_close:
-	daos_array_close(entry->fd_aoh, NULL);
+obj_close:
+	dfs_release(entry->fd_dfsoh);
 
 cont_close:
 	if (ioil_ioc.ioc_open_fd_count == 0) {
+		if (ioil_ioc.ioc_dfs) {
+			rc = dfs_umount(ioil_ioc.ioc_dfs);
+			if (rc != 0) {
+				DFUSE_LOG_ERROR("Could not close dfs rc = %d",
+						rc);
+			}
+		}
+
 		CONT_CLOSE(ioil_ioc);
 		POOL_DISCONNECT(ioil_ioc);
 	}
@@ -606,8 +663,11 @@ dfuse_open(const char *pathname, int flags, ...)
 	if ((flags & (O_PATH | O_APPEND)) != 0)
 		status = DFUSE_IO_DIS_FLAG;
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status))
+	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible",
+				pathname);
 		goto finish;
+	}
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_INFO("open(pathname=%s, flags=0%o, mode=0%o) = "

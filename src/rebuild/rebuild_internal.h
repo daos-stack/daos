@@ -120,10 +120,6 @@ struct rebuild_global_pool_tracker {
 	/* link to rebuild_global.rg_global_tracker_list */
 	d_list_t	rgt_list;
 
-	/* rebuild cont/pool hdl uuid */
-	uuid_t		rgt_poh_uuid;
-	uuid_t		rgt_coh_uuid;
-
 	/* the pool uuid */
 	uuid_t		rgt_pool_uuid;
 
@@ -145,7 +141,8 @@ struct rebuild_global_pool_tracker {
 	uint64_t	rgt_stable_epoch;
 
 	unsigned int	rgt_abort:1,
-			rgt_notify_stable_epoch:1;
+			rgt_notify_stable_epoch:1,
+			rgt_init_scan:1;
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */

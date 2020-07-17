@@ -59,7 +59,7 @@ dsc_obj_retry_cb(tse_task_t *task, void *arg)
 		return rc;
 	}
 
-	D_DEBUG(DB_TRACE, "retry task %p\n", task);
+	D_DEBUG(DB_REBUILD, "retry task %p\n", task);
 	rc = dc_task_resched(task);
 	if (rc != 0) {
 		D_ERROR("Failed to re-init task (%p)\n", task);
@@ -155,9 +155,9 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
-	rc = dc_obj_fetch_shard_task_create(oh, th, DIOF_TO_LEADER, 0, dkey,
-					    nr, iods, sgls, maps, NULL,
-					    dsc_scheduler(), &task);
+	rc = dc_obj_fetch_task_create(oh, th, 0, dkey, nr, DIOF_TO_LEADER,
+				      iods, sgls, maps, NULL, NULL,
+				      dsc_scheduler(), &task);
 	if (rc)
 		return rc;
 
@@ -175,7 +175,8 @@ int
 dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 		 daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 		 daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
-		 daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor)
+		 daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor,
+		 d_iov_t *csum)
 {
 	tse_task_t	*task;
 	daos_handle_t	coh, th;
@@ -189,7 +190,7 @@ dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 	rc = dc_obj_list_obj_task_create(oh, th, epr, dkey, akey, size, nr,
 					 kds, sgl, anchor, dkey_anchor,
 					 akey_anchor, true, NULL,
-					 dsc_scheduler(), &task);
+					 dsc_scheduler(), csum, &task);
 	if (rc)
 		return rc;
 

@@ -44,6 +44,9 @@ class IorTestBase(TestWithServers):
     :avocado: recursive
     """
 
+    IOR_WRITE_PATTERN = "Commencing write performance test"
+    IOR_READ_PATTERN = "Commencing read performance test"
+
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
         super(IorTestBase, self).__init__(*args, **kwargs)
@@ -53,6 +56,7 @@ class IorTestBase(TestWithServers):
         self.dfuse = None
         self.container = None
         self.lock = None
+        self.mpirun = None
 
     def setUp(self):
         """Set up each test case."""
@@ -65,6 +69,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
 
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
@@ -120,7 +125,8 @@ class IorTestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          test_file="daos:testFile"):
+                          test_file="daos:testFile", update=True,
+                          create_cont=True):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -133,12 +139,16 @@ class IorTestBase(TestWithServers):
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
                 "daos:testFile". Is ignored when using POSIX through DFUSE.
+            update (bool, optional): If it is true, create pool and container
+                else just run the ior. Defaults to True.
 
         Returns:
             CmdResult: result of the ior command execution
 
         """
-        self.update_ior_cmd_with_pool()
+        if update:
+            self.update_ior_cmd_with_pool(create_cont)
+
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
@@ -157,16 +167,17 @@ class IorTestBase(TestWithServers):
             self.dfuse = None
         return out
 
-    def update_ior_cmd_with_pool(self):
+    def update_ior_cmd_with_pool(self, create_cont=True):
         """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
-        # Always create a container
+        # Create a container, if needed.
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
-        self.pool.connect()
-        self.create_cont()
+        if create_cont:
+            self.pool.connect()
+            self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
@@ -186,7 +197,26 @@ class IorTestBase(TestWithServers):
         else:
             self.fail("Unsupported IOR API")
 
-        return Mpirun(self.ior_cmd, mpitype="mpich")
+        if self.subprocess:
+            self.mpirun = Mpirun(self.ior_cmd, True, mpitype="mpich")
+        else:
+            self.mpirun = Mpirun(self.ior_cmd, mpitype="mpich")
+
+        return self.mpirun
+
+    def check_subprocess_status(self, operation="write"):
+        """Check subprocess status """
+        if operation == "write":
+            self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
+        elif operation == "read":
+            self.ior_cmd.pattern = self.IOR_READ_PATTERN
+        else:
+            self.fail("Exiting Test: Inappropriate operation type \
+                      for subprocess status check")
+
+        if not self.ior_cmd.check_ior_subprocess_status(
+                self.mpirun.process, self.ior_cmd):
+            self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None):
         """Run the IOR command.
@@ -207,15 +237,35 @@ class IorTestBase(TestWithServers):
             self.pool.display_pool_daos_space()
             out = manager.run()
 
-            for line in out.stdout.splitlines():
-                if 'WARNING' in line:
-                    self.fail("IOR command issued warnings.\n")
+            if not self.subprocess:
+                for line in out.stdout.splitlines():
+                    if 'WARNING' in line:
+                        self.fail("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
+            if not self.subprocess:
+                self.pool.display_pool_daos_space()
+
+    def stop_ior(self):
+        """Stop IOR process.
+        Args:
+            manager (str): mpi job manager command
+        """
+        self.log.info(
+            "<IOR> Stopping in-progress IOR command: %s", self.mpirun.__str__())
+
+        try:
+            out = self.mpirun.stop()
+            return out
+        except CommandFailure as error:
+            self.log.error("IOR stop Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
+        finally:
             self.pool.display_pool_daos_space()
+
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.

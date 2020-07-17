@@ -96,7 +96,7 @@ struct crt_gdata {
 				cg_swim_inited		: 1,
 				cg_auto_swim_disable	: 1;
 
-	ATOMIC uint32_t		cg_xid; /* transfer id for rpcs */
+	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
 	/* protects crt_gdata */
 	pthread_rwlock_t	cg_rwlock;

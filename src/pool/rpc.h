@@ -64,6 +64,9 @@
 	X(POOL_EXCLUDE,							\
 		0, &CQF_pool_exclude,					\
 		ds_pool_update_handler, NULL),				\
+	X(POOL_DRAIN,							\
+		0, &CQF_pool_drain,					\
+		ds_pool_update_handler, NULL),				\
 	X(POOL_EXTEND,							\
 		0, &CQF_pool_extend,					\
 		ds_pool_extend_handler, NULL),				\
@@ -110,6 +113,10 @@
 		0, &CQF_pool_tgt_query,					\
 		ds_pool_tgt_query_handler,				\
 		&ds_pool_tgt_query_co_ops),				\
+	X(POOL_TGT_DIST_HDLS,						\
+		0, &CQF_pool_tgt_dist_hdls,				\
+		ds_pool_tgt_dist_hdls_handler,				\
+		NULL),							\
 	X(POOL_PROP_GET,						\
 		0, &CQF_pool_prop_get,					\
 		ds_pool_prop_get_handler,				\
@@ -294,6 +301,8 @@ CRT_RPC_DECLARE(pool_add_in, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DECLARE(pool_drain, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 
@@ -334,6 +343,16 @@ CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 
 CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
+
+#define DAOS_ISEQ_POOL_TGT_DIST_HDLS	/* input fields */	 \
+	((uuid_t)		(tfi_pool_uuid)		CRT_VAR) \
+	((d_iov_t)		(tfi_hdls)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_DIST_HDLS	/* output fields */	 \
+	((uint32_t)		(tfo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_dist_hdls, DAOS_ISEQ_POOL_TGT_DIST_HDLS,
+		DAOS_OSEQ_POOL_TGT_DIST_HDLS)
 
 #define DAOS_ISEQ_POOL_PROP_GET	/* input fields */		 \
 	((struct pool_op_in)	(pgi_op)		CRT_VAR) \

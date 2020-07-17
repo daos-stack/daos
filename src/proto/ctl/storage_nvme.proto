@@ -39,22 +39,22 @@ message NvmeController {
 	}
 
 	message Health {
-		uint32 temp = 1;
-		uint32 tempwarntime = 2; // temperature warning duration
-		uint32 tempcrittime = 3; // temperature critical duration
-		uint64 ctrlbusytime = 4; // controller busy duration
-		uint64 powercycles = 5;
-		uint64 poweronhours = 6;
-		uint64 unsafeshutdowns = 7;
-		uint64 mediaerrors = 8;
-		uint64 errorlogentries = 9; // error log entries
+		uint32 temperature = 1;
+		uint32 temp_warn_time = 2; // temperature warning duration
+		uint32 temp_crit_time = 3; // temperature critical duration
+		uint64 ctrl_busy_time = 4; // controller busy duration
+		uint64 power_cycles = 5;
+		uint64 power_on_hours = 6;
+		uint64 unsafe_shutdowns = 7;
+		uint64 media_errors = 8;
+		uint64 error_count = 9; // error log entries
 		// critical warnings
-		bool tempwarn = 10;
-		bool availsparewarn = 11;
-		bool reliabilitywarn = 12;
-		bool readonlywarn = 13;
-		bool volatilewarn = 14;
-		string ctrlrpciaddr = 15;
+		bool temp_warn = 10;
+		bool spare_warn = 11;
+		bool device_reliability_warn = 12;
+		bool readonly_warn = 13;
+		bool volatile_memory_warn = 14;
+		string ctrlr_pci_addr = 15;
 	}
 
 	string model = 1;	// model name

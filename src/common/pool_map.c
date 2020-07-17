@@ -1918,7 +1918,8 @@ pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 
 	memset(&param, 0, sizeof(param));
 	param.ftp_chk_status = 1;
-	param.ftp_status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
+	param.ftp_status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
+		PO_COMP_ST_DRAIN;
 
 	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
 				  tgt_cnt);
@@ -1966,8 +1967,10 @@ pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  struct pool_target ***tgt_ppp,
 				  unsigned int *tgt_cnt, d_rank_t rank)
 {
-	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt,
-					    PO_COMP_ST_DOWN|PO_COMP_ST_DOWNOUT,
+	unsigned int status;
+
+	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_DRAIN;
+	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt, status,
 					    rank);
 }
 
