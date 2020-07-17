@@ -53,7 +53,6 @@ class OSAOfflineDrain(TestWithServers):
         """Get the pool leader
            Returns : int (pool_leader)
         """
-        out = []
         kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
         return int(out[0][3])
@@ -63,7 +62,6 @@ class OSAOfflineDrain(TestWithServers):
         """Get the pool version
            Returns : int (pool_version_value)
         """
-        out = []
         kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
         return int(out[0][4])
@@ -154,8 +152,7 @@ class OSAOfflineDrain(TestWithServers):
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space(display_string)
+            pool[val].display_pool_daos_space(display_string)
             pool[val].destroy()
 
     def test_osa_offline_drain(self):

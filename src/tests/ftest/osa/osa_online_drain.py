@@ -230,5 +230,5 @@ class OSAOnlineDrain(TestWithServers):
         :avocado: tags=all,pr,hw,large,osa,osa_drain,online_drain
         """
         # Perform drain testing with 1 to 2 pools
-        for x in range(1, 3):
-            self.run_online_drain_test(x)
+        for pool_num in range(1, 3):
+            self.run_online_drain_test(pool_num)
