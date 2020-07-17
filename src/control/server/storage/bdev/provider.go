@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ type (
 		TargetUser    string
 		ResetOnly     bool
 		SkipReset     bool
+		DisableVFIO   bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
@@ -93,7 +94,7 @@ type (
 	Backend interface {
 		Init(shmID ...int) error
 		Reset() error
-		Prepare(hugePageCount int, targetUser string, pciWhitelist string) error
+		Prepare(PrepareRequest) error
 		Scan() (storage.NvmeControllers, error)
 		Format(pciAddr string) (*storage.NvmeController, error)
 		EnableVmd() error
@@ -180,7 +181,7 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return res, nil
 	}
 
-	if err := p.backend.Prepare(req.HugePageCount, req.TargetUser, req.PCIWhitelist); err != nil {
+	if err := p.backend.Prepare(req); err != nil {
 		return nil, errors.WithMessage(err, "SPDK prepare")
 	}
 

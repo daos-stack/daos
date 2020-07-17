@@ -71,6 +71,7 @@ type Configuration struct {
 	Servers             []*ioserver.Config        `yaml:"servers"`
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO         bool                      `yaml:"disable_vfio"`
 	UseVmd              bool                      `yaml:"use_vmd"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`
 	SetHugepages        bool                      `yaml:"set_hugepages"`
@@ -267,6 +268,14 @@ func (c *Configuration) WithBdevExclude(bList ...string) *Configuration {
 // WithBdevInclude sets the block device include list.
 func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
 	c.BdevInclude = bList
+	return c
+}
+
+// WithDisableVFIO indicates that the vfio-pci driver should not be
+// used by SPDK even if an IOMMU is detected. Note that this option
+// requires that DAOS be run as root.
+func (c *Configuration) WithDisableVFIO() *Configuration {
+	c.DisableVFIO = true
 	return c
 }
 

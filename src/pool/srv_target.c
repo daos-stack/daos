@@ -107,6 +107,84 @@ ds_pool_child_purge(struct pool_tls *tls)
 	}
 }
 
+static void
+gc_ult(void *arg)
+{
+	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
+	struct dss_module_info	*dmi = dss_get_module_info();
+	int			 rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT started\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+
+	D_ASSERT(child->spc_gc_req != NULL);
+	while (!dss_ult_exiting(child->spc_gc_req)) {
+
+		rc = vos_gc_pool_run(child->spc_hdl, -1, dss_ult_yield,
+				     (void *)child->spc_gc_req);
+		if (rc < 0)
+			D_ERROR(DF_UUID"[%d]: GC pool run failed. "DF_RC"\n",
+				DP_UUID(child->spc_uuid), dmi->dmi_tgt_id,
+				DP_RC(rc));
+
+		if (dss_ult_exiting(child->spc_gc_req))
+			break;
+
+		/* Sleep 2 seconds */
+		sched_req_sleep(child->spc_gc_req, 2ULL * 1000);
+	}
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+}
+
+static int
+start_gc_ult(struct ds_pool_child *child)
+{
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+	ABT_thread		 gc = ABT_THREAD_NULL;
+	int			 rc;
+
+	D_ASSERT(child != NULL);
+	D_ASSERT(child->spc_gc_req == NULL);
+
+	rc = dss_ult_create(gc_ult, child, DSS_ULT_GC, DSS_TGT_SELF, 0, &gc);
+	if (rc) {
+		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT. %d\n",
+			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);
+		return rc;
+	}
+
+	D_ASSERT(gc != ABT_THREAD_NULL);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	child->spc_gc_req = sched_req_get(&attr, gc);
+	if (child->spc_gc_req == NULL) {
+		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
+		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		ABT_thread_join(gc);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+static void
+stop_gc_ult(struct ds_pool_child *child)
+{
+	D_ASSERT(child != NULL);
+	/* GC ULT is not started */
+	if (child->spc_gc_req == NULL)
+		return;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
+		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	sched_req_wait(child->spc_gc_req, true);
+	sched_req_put(child->spc_gc_req);
+	child->spc_gc_req = NULL;
+}
+
 struct pool_child_lookup_arg {
 	struct ds_pool *pla_pool;
 	void	       *pla_uuid;
@@ -162,12 +240,19 @@ pool_child_add_one(void *varg)
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
+	rc = start_gc_ult(child);
+	if (rc != 0) {
+		D_FREE(child);
+		return rc;
+	}
+
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 	/* Load all containers */
 	rc = ds_cont_child_start_all(child);
 	if (rc) {
 		d_list_del_init(&child->spc_list);
 		ds_cont_child_stop_all(child);
+		stop_gc_ult(child);
 		vos_pool_close(child->spc_hdl);
 		D_FREE(child);
 		return rc;
@@ -192,6 +277,7 @@ pool_child_delete_one(void *uuid)
 
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
+	stop_gc_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
 	ds_pool_child_put(child); /* -1 for lookup */
@@ -1025,6 +1111,70 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	ds_pool_put(pool);
 out:
 	out->tqo_rc = (rc == 0 ? 0 : 1);
+	crt_reply_send(rpc);
+}
+
+void
+ds_pool_tgt_dist_hdls_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_dist_hdls_in	*in = crt_req_get(rpc);
+	struct pool_tgt_dist_hdls_out	*out = crt_reply_get(rpc);
+	struct ds_pool			*pool;
+	int				 rc = DER_SUCCESS;
+	struct pool_iv_conn		*conn;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc",
+		DP_UUID(in->tfi_pool_uuid));
+
+	pool = ds_pool_lookup(in->tfi_pool_uuid);
+	if (pool == NULL) {
+		D_ERROR("Failed to find pool "DF_UUID"\n",
+			DP_UUID(in->tfi_pool_uuid));
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	conn = in->tfi_hdls.iov_buf;
+
+	/* This while loop check first checks that there is room in the buffer
+	 * for the struct itself (not including the variable length creds field)
+	 * If there is room, it reaches into the buffer to get the size of the
+	 * creds field and repeats the check to ensure there is room. If
+	 * there was room for the header but not the payload, it returns
+	 * -DER_TRUNC (indicating almost certainly a bug in the sending code)
+	 */
+	while (((char *)conn - (char *)in->tfi_hdls.iov_buf +
+		sizeof(struct pool_iv_conn) <= in->tfi_hdls.iov_buf_len)) {
+
+		if ((char *)conn - (char *)in->tfi_hdls.iov_buf +
+		    sizeof(struct pool_iv_conn) +
+		    conn->pic_cred_size > in->tfi_hdls.iov_buf_len) {
+			D_ERROR(DF_UUID": dist_hdls got invalid size buffer."
+				"Expected: %zu, got: %zu\n",
+				DP_UUID(pool->sp_uuid),
+				in->tfi_hdls.iov_buf_len,
+				(char *)conn - (char *)in->tfi_hdls.iov_buf +
+				sizeof(struct pool_iv_conn) +
+				conn->pic_cred_size);
+			D_GOTO(out, rc = -DER_TRUNC);
+		}
+
+		rc = ds_pool_tgt_connect(pool, conn);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": ds_pool_tgt_connect failed rc="DF_RC
+				"\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+
+		/* Shift the conn pointer to the next potential entry */
+		conn = (struct pool_iv_conn *)(((char *)conn) +
+					       sizeof(struct pool_iv_conn) +
+					       conn->pic_cred_size);
+	}
+
+out:
+	ds_pool_put(pool);
+
+	out->tfo_rc = rc;
 	crt_reply_send(rpc);
 }
 

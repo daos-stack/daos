@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,13 @@ package io.daos.dfs;
  */
 public final class Constants {
 
-  private Constants() {
-  }
+  private Constants() {}
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
   public static final String POOL_DEFAULT_RANKS = "0";
+
+  public static final String DUNS_XATTR_NAME = "user.daos";
+  public static final String DUNS_XATTR_FMT = "DAOS.%s://%36s/%36s";
 
   // DAOS will decide what default is. 1MB for now.
   public static final int FILE_DEFAULT_CHUNK_SIZE = 0;
@@ -58,6 +60,8 @@ public final class Constants {
           new ErrorCode(-1000003, "malloc or realloc buffer failed");
   public static final ErrorCode CUSTOM_ERR_TOO_LONG_VALUE =
           new ErrorCode(-1000004, "value length greater than expected");
+  public static final ErrorCode CUSTOM_ERR_UNS_INVALID =
+          new ErrorCode(-1000005, "invalid argument in UNS");
 
   public static final int FILE_NAME_LEN_MAX = 255;
   public static final int FILE_PATH_LEN_MAX = 4096;
@@ -86,4 +90,8 @@ public final class Constants {
   public static final int ACCESS_FLAG_CONTAINER_READONLY = 1;
   public static final int ACCESS_FLAG_CONTAINER_READWRITE = 2;
   public static final int ACCESS_FLAG_CONTAINER_NOSLIP = 4;
+
+  public static final int UNS_ATTR_NAME_MAX_LEN = 255;
+  public static final int UNS_ATTR_VALUE_MAX_LEN = 64 * 1024;
+  public static final int UNS_ATTR_VALUE_MAX_LEN_DEFAULT = 1024;
 }

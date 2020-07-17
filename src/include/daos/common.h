@@ -68,8 +68,10 @@ struct daos_node_overhead {
 
 /** Overheads for a tree */
 struct daos_tree_overhead {
-	/** Overhead for full size tree node */
-	struct daos_node_overhead	to_node_overhead;
+	/** Overhead for full size of leaf tree node */
+	struct daos_node_overhead	to_leaf_overhead;
+	/** Overhead for full size intermediate tree node */
+	int				to_int_node_size;
 	/** Overhead for dynamic tree nodes */
 	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
 	/** Number of dynamic tree node sizes */
@@ -245,6 +247,8 @@ daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
+int
+daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 
 /** Move to next iov, it's caller's responsibility to ensure the idx boundary */
 #define daos_sgl_next_iov(iov_idx, iov_off)				\
@@ -255,6 +259,10 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 /** Get the leftover space in an iov of sgl */
 #define daos_iov_left(sgl, iov_idx, iov_off)				\
 	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+/** get remaining space in an iov, assuming that iov_len is used and
+ * iov_buf_len is total in buf
+ */
+#define daos_iov_remaining(iov) ((iov).iov_buf_len - (iov).iov_len)
 /**
  * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
  * caller's responsibility to check the boundary.
@@ -320,15 +328,17 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
  * return true, meaning the end was reached.
  *
  * @param[in]		sgl		sgl to be read from
+ * @param[in]		check_buf	if true process on the sgl buf len
+					instead of iov_len
  * @param[in/out]	idx		index into the sgl to start reading from
  * @param[in]		buf_len_req	number of bytes requested
  * @param[out]		p_buf		resulting pointer to buffer
- * @param[out]		p_buf_len		length of buffer
+ * @param[out]		p_buf_len	length of buffer
  *
  * @return		true if end of SGL was reached
  */
-bool daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-			size_t buf_len_req,
+bool daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf,
+			struct daos_sgl_idx *idx, size_t buf_len_req,
 			uint8_t **p_buf, size_t *p_buf_len);
 
 typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
@@ -337,6 +347,7 @@ typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
  * each contiguous set of bytes provided in the SGL's I/O vectors.
  *
  * @param sgl		sgl to process
+ * @param check_buf	if true process on the sgl buf len instead of iov_len
  * @param idx		index to keep track of what's been processed
  * @param requested_bytes		number of bytes to process
  * @param process_cb	callback function for the processing
@@ -345,14 +356,15 @@ typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
  * @return		Result of the callback function.
  *			Expectation is 0 is success.
  */
-int daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-		       size_t requested_bytes,
+int daos_sgl_processor(d_sg_list_t *sgl, bool check_buf,
+		       struct daos_sgl_idx *idx, size_t requested_bytes,
 		       daos_sgl_process_cb process_cb, void *cb_args);
 
 char *daos_str_trimwhite(char *str);
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
 void daos_iov_free(d_iov_t *iov);
 bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
+void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 
 #define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
 
@@ -516,7 +528,10 @@ void
 daos_fail_value_set(uint64_t val);
 void
 daos_fail_num_set(uint64_t num);
-
+uint64_t
+daos_shard_fail_value(uint16_t *shards, int nr);
+bool
+daos_shard_in_fail_value(uint16_t shard);
 int
 daos_fail_check(uint64_t id);
 
@@ -609,8 +624,13 @@ enum {
 #define DAOS_CSUM_CORRUPT_UPDATE_DKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x24)
 #define DAOS_CSUM_CORRUPT_FETCH_DKEY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x25)
 
- /** This fault simulates corruption on disk. Must be set on server side. */
+/** This fault simulates corruption on disk. Must be set on server side. */
 #define DAOS_CSUM_CORRUPT_DISK		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x26)
+/**
+ * This fault simulates shard fetch failure. Can be used to test EC degraded
+ * fetch.
+ */
+#define DAOS_FAIL_SHARD_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)

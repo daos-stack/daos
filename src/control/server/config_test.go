@@ -227,8 +227,10 @@ func TestServer_ConstructedConfig(t *testing.T) {
 	constructed := NewConfiguration().
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
-		WithVmdInclude("0000:5d:05.5")
-	WithBdevExclude("0000:81:00.1").
+		WithVmdInclude("0000:5d:05.5").
+		WithBdevExclude("0000:81:00.1").
+		WithDisableVFIO().
+		WithUseVmd().
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").

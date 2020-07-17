@@ -827,7 +827,7 @@ out_pool:
 	dc_pool_put(pool);
 out:
 	if (rc != 0)
-		D_ERROR("dc_pool_l2g failed, rc: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -913,7 +913,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 
 out:
 	if (rc != 0)
-		D_ERROR("dc_pool_g2l failed, rc: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 	if (pool != NULL)
 		dc_pool_put(pool);
 	return rc;
@@ -948,7 +948,7 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 
 	rc = dc_pool_g2l(pool_glob, glob.iov_len, poh);
 	if (rc != 0)
-		D_ERROR("dc_pool_g2l failed, rc: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 
 out:
 	return rc;
@@ -1139,6 +1139,16 @@ dc_pool_add(tse_task_t *task)
 	args = dc_task_get_args(task);
 
 	return dc_pool_update_internal(task, args, POOL_ADD);
+}
+
+int
+dc_pool_drain(tse_task_t *task)
+{
+	daos_pool_update_t *args;
+
+	args = dc_task_get_args(task);
+
+	return dc_pool_update_internal(task, args, POOL_DRAIN);
 }
 
 int

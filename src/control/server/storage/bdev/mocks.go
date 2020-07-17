@@ -109,7 +109,7 @@ func (mb *MockBackend) Reset() error {
 	return mb.cfg.ResetErr
 }
 
-func (mb *MockBackend) Prepare(_ int, _, _ string) error {
+func (mb *MockBackend) Prepare(_ PrepareRequest) error {
 	return mb.cfg.PrepareErr
 }
 

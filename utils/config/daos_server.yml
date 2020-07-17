@@ -111,6 +111,15 @@ vmd_include: ["0000:5d:05.5"]
 #bdev_exclude: ["0000:81:00.1"]
 #
 #
+## Disable VFIO Driver
+#
+## In some circumstances it may be preferable to force SPDK to use the UIO
+## driver for NVMe device access even though an IOMMU is available. Note
+## that use of the UIO driver requires that DAOS must run as root.
+#
+#disable_vfio: true
+#
+#
 ## Use Hyperthreads
 #
 ## When Hyperthreading is enabled and supported on the system, this parameter
