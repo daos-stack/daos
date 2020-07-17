@@ -82,7 +82,8 @@ li_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return *(const uint32_t *)key % (1U << CRT_LOOKUP_CACHE_BITS);
+	return (uint32_t)(*(const uint32_t *)key
+			  & ((1U << CRT_LOOKUP_CACHE_BITS) - 1));
 }
 
 static bool
@@ -101,7 +102,7 @@ li_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
 {
 	struct crt_lookup_item *li = crt_li_link2ptr(link);
 
-	return li->li_rank % (1U << CRT_LOOKUP_CACHE_BITS);
+	return (uint32_t)li->li_rank & ((1U << CRT_LOOKUP_CACHE_BITS) - 1);
 }
 
 static void
@@ -149,7 +150,8 @@ rm_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return *(const uint32_t *)key % (1U << CRT_LOOKUP_CACHE_BITS);
+	return (uint32_t)(*(const uint32_t *)key
+			  & ((1U << CRT_LOOKUP_CACHE_BITS) - 1));
 }
 
 static bool
@@ -168,7 +170,7 @@ rm_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
 {
 	struct crt_rank_mapping *rm = crt_rm_link2ptr(link);
 
-	return rm->rm_key % (1U << CRT_LOOKUP_CACHE_BITS);
+	return (uint32_t)rm->rm_key & ((1U << CRT_LOOKUP_CACHE_BITS) - 1);
 }
 
 static void
@@ -217,7 +219,8 @@ ui_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return *(const uint32_t *)key % (1U << CRT_LOOKUP_CACHE_BITS);
+	return (uint32_t)(*(const uint32_t *)key
+			  & ((1U << CRT_LOOKUP_CACHE_BITS) - 1));
 }
 
 static bool
@@ -236,7 +239,7 @@ ui_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
 {
 	struct crt_uri_item *ui = crt_ui_link2ptr(link);
 
-	return ui->ui_rank % (1U << CRT_LOOKUP_CACHE_BITS);
+	return (uint32_t)ui->ui_rank & ((1U << CRT_LOOKUP_CACHE_BITS) - 1);
 }
 
 static void

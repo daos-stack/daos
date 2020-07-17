@@ -1074,7 +1074,7 @@ hh_op_key_init(struct d_hash_table *htable, d_list_t *link, void *arg)
 
 	hhash = container_of(htable, struct d_hhash, ch_htable);
 	hlink->hl_key = ((hhash->ch_cookie++) << D_HTYPE_BITS)
-			| (type & (D_HTYPE_BITS - 1));
+			| (type & D_HTYPE_MASK);
 }
 
 static uint32_t
@@ -1092,6 +1092,7 @@ hh_op_key_cmp(struct d_hash_table *htable, d_list_t *link,
 	struct d_hlink	*hlink = link2hlink(link);
 
 	D_ASSERT(ksize == sizeof(uint64_t));
+
 	return hlink->hl_key == *(uint64_t *)key;
 }
 
@@ -1214,7 +1215,8 @@ d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 
 	if (d_hhash_is_ptrtype(hhash)) {
 		uint64_t ptr_key = (uintptr_t)hlink;
-		uint32_t idx = 0;
+		uint32_t idx_old = 0;
+		uint32_t idx_new = 0;
 
 		D_ASSERTF(type == D_HTYPE_PTR, "direct/ptr-based htable can "
 			  "only contain D_HTYPE_PTR type entries");
@@ -1222,16 +1224,22 @@ d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 			  "D_HTYPE_PTR type", hlink);
 
 		if (need_lock) {
-			idx = ch_rec_hash(&hhash->ch_htable,
-					  &hlink->hl_link.rl_link);
-			ch_bucket_lock(&hhash->ch_htable, idx, false);
+			idx_old = ch_rec_hash(&hhash->ch_htable,
+					      &hlink->hl_link.rl_link);
+			ch_bucket_lock(&hhash->ch_htable, idx_old, false);
+
+			idx_new = ch_key_hash(&hhash->ch_htable, &ptr_key,
+					      sizeof(ptr_key));
+			ch_bucket_lock(&hhash->ch_htable, idx_new, false);
 		}
 
 		ch_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 		hlink->hl_key = ptr_key;
 
-		if (need_lock)
-			ch_bucket_unlock(&hhash->ch_htable, idx, false);
+		if (need_lock) {
+			ch_bucket_unlock(&hhash->ch_htable, idx_new, false);
+			ch_bucket_unlock(&hhash->ch_htable, idx_old, false);
+		}
 	} else {
 		D_ASSERTF(type != D_HTYPE_PTR, "PTR type key being inserted "
 			  "in a non ptr-based htable.\n");

@@ -71,7 +71,8 @@ ir_rec_hash(struct d_hash_table *htable, d_list_t *link)
 
 	ir = container_of(link, struct dfuse_inode_record, ir_htl);
 
-	return d_hash_string_u32((const char *)&ir->ir_id, sizeof(ir->ir_id));
+	return (uint32_t)ir->ir_id.irid_oid.hi;
+
 }
 
 static void

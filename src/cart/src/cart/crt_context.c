@@ -57,7 +57,8 @@ epi_op_key_hash(struct d_hash_table *hhtab, const void *key,
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return *(const uint32_t *)key % (1U << CRT_EPI_TABLE_BITS);
+	return (uint32_t)(*(const uint32_t *)key
+			 & ((1U << CRT_EPI_TABLE_BITS) - 1));
 }
 
 static bool
@@ -77,7 +78,8 @@ epi_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
 {
 	struct crt_ep_inflight *epi = epi_link2ptr(link);
 
-	return epi->epi_ep.ep_rank % (1U << CRT_EPI_TABLE_BITS);
+	return (uint32_t)epi->epi_ep.ep_rank
+			& ((1U << CRT_EPI_TABLE_BITS) - 1);
 }
 
 static void
