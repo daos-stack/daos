@@ -51,7 +51,8 @@ class OSAOfflineDrain(TestWithServers):
     @fail_on(CommandFailure)
     def get_pool_leader(self):
         """Get the pool leader
-           Returns : int (pool_leader)
+           Returns :
+            int: pool leader value
         """
         kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
@@ -60,7 +61,8 @@ class OSAOfflineDrain(TestWithServers):
     @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version
-           Returns : int (pool_version_value)
+           Returns :
+            int : pool_version_value
         """
         kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
@@ -68,8 +70,7 @@ class OSAOfflineDrain(TestWithServers):
 
     @fail_on(DaosApiError)
     def write_single_object(self):
-        """Write some data to the existing pool.
-        """
+        """Write some data to the existing pool."""
         self.pool.connect(2)
         csum = self.params.get("enable_checksum", '/run/container/*')
         container = DaosContainer(self.context)
@@ -156,7 +157,9 @@ class OSAOfflineDrain(TestWithServers):
             pool[val].destroy()
 
     def test_osa_offline_drain(self):
-        """Test ID: DAOS-4750
+        """
+        JIRA ID: DAOS-4750
+
         Test Description: Validate Offline Drain
 
         :avocado: tags=all,pr,hw,large,osa,osa_drain,offline_drain

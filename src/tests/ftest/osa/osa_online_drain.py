@@ -71,7 +71,8 @@ class OSAOnlineDrain(TestWithServers):
     @fail_on(CommandFailure)
     def get_pool_leader(self):
         """Get the pool leader
-           Returns : int (pool_leader)
+           Returns :
+            int : pool leader value
         """
         out = []
         kwargs = {"pool": self.pool.uuid}
@@ -81,7 +82,8 @@ class OSAOnlineDrain(TestWithServers):
     @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version
-           Returns : int (pool_version_value)
+           Returns :
+            int : pool version value
         """
         out = []
         kwargs = {"pool": self.pool.uuid}
@@ -97,9 +99,6 @@ class OSAOnlineDrain(TestWithServers):
             test (list): IOR test sequence
             flags (str): IOR flags
             results (queue): queue for returning thread results
-
-        Returns:
-            None
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
@@ -139,14 +138,10 @@ class OSAOnlineDrain(TestWithServers):
         except CommandFailure as _error:
             results.put("FAIL")
 
-
-
     def run_online_drain_test(self, num_pool):
         """Run the Online drain without data.
             Args:
-            num_pool (int) : total pools to create for testing purposes.
-            data (bool) : whether pool has no data or to create
-                          some data in pool. Defaults to False.
+             int : total pools to create for testing purposes.
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
@@ -175,7 +170,6 @@ class OSAOnlineDrain(TestWithServers):
                                             num_pool)
             pool[val].create()
             pool_uuid.append(pool[val].uuid)
-            self.pool = pool[val]
 
         # Drain the pool_uuid, rank and targets
         for val in range(0, num_pool):
