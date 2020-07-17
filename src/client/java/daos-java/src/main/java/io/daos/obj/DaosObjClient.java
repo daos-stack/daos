@@ -196,13 +196,10 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and list of {@link IODataDesc} of akeys, types, offset, record
    * sizes, index in value buffer and how many records to fetch
-   * @param dataBufferAddress
-   * address of direct data buffer which holds all records described in <code>descBuffer</code>. Actual fetch lengths
-   * of each IODesc also updated in this buffer, like "actual len1+data1+actual len2+data2..."
    * @throws DaosIOException
    * {@link io.daos.DaosIOException}
    */
-  native void fetchObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress, long dataBufferAddress)
+  native void fetchObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress)
       throws DaosIOException;
 
   /**
@@ -217,12 +214,10 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and serialized list of {@link IODataDesc} of akeys, types,
    * offset and record sizes, index in value buffer and how many records to update
-   * @param dataBufferAddress
-   * address of direct data buffer which holds all records described in <code>descBuffer</code>
    * @throws DaosIOException
    * {@link io.daos.DaosIOException}
    */
-  native void updateObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress, long dataBufferAddress)
+  native void updateObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress)
       throws DaosIOException;
 
   /**

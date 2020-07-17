@@ -181,22 +181,10 @@ public class IODataDescTest {
       Assert.assertNotNull(ee);
       Assert.assertTrue(ee.getMessage().contains("only support for fetch"));
       ee = null;
-      byte[] bytes = new byte[10];
       try {
-        entry.get(bytes);
+        entry.getFetchedData();
       } catch (UnsupportedOperationException e) {
         ee = e;
-      }
-      Assert.assertNotNull(ee);
-      Assert.assertTrue(ee.getMessage().contains("only support for fetch"));
-      ee = null;
-      ByteBuf byteBuffer = BufferAllocator.objBufWithNativeOrder(10);
-      try {
-        entry.get(byteBuffer);
-      } catch (UnsupportedOperationException e) {
-        ee = e;
-      } finally {
-        byteBuffer.release();
       }
       Assert.assertNotNull(ee);
       Assert.assertTrue(ee.getMessage().contains("only support for fetch"));
@@ -223,70 +211,13 @@ public class IODataDescTest {
   }
 
   @Test
-  public void testSetGlobalBuffer() throws Exception {
-    IllegalArgumentException ee = null;
-    // fetch
-    IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
-      10, 10);
-    ByteBuf globalBuffer  = BufferAllocator.objBufWithNativeOrder(100);
-    try {
-      entry.setGlobalDataBuffer(globalBuffer);
-      Assert.assertEquals(14, globalBuffer.writerIndex());
-      try {
-        entry.setGlobalDataBuffer(globalBuffer);
-      } catch (IllegalArgumentException e) {
-        ee = e;
-      }
-      Assert.assertNotNull(ee);
-      Assert.assertTrue(ee.getMessage().contains("global buffer is set already."));
-    } finally {
-      globalBuffer.release();
-    }
-    // update, need padding
-    ByteBuf valueBuffer = BufferAllocator.objBufWithNativeOrder(8);
-    valueBuffer.writerIndex(valueBuffer.capacity());
-    IODataDesc.Entry entry2 = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
-      10, valueBuffer);
-    ByteBuf globalBuffer2  = BufferAllocator.objBufWithNativeOrder(100);
-    try {
-      entry2.setGlobalDataBuffer(globalBuffer2);
-      Assert.assertEquals(14, globalBuffer2.writerIndex());
-      try {
-        entry2.setGlobalDataBuffer(globalBuffer2);
-      } catch (IllegalArgumentException e) {
-        ee = e;
-      }
-      Assert.assertNotNull(ee);
-      Assert.assertTrue(ee.getMessage().contains("global buffer is set already."));
-    } finally {
-      valueBuffer.release();
-      globalBuffer2.release();
-    }
-    // update no padding
-    ByteBuf valueBuffer2 = BufferAllocator.objBufWithNativeOrder(30);
-    valueBuffer2.writerIndex(valueBuffer2.capacity());
-    IODataDesc.Entry entry3 = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
-      10, valueBuffer2);
-    ByteBuf globalBuffer3  = BufferAllocator.objBufWithNativeOrder(100);
-    try {
-      entry3.setGlobalDataBuffer(globalBuffer3);
-      Assert.assertEquals(34, globalBuffer3.writerIndex());
-    } finally {
-      valueBuffer2.release();
-      globalBuffer3.release();
-    }
-  }
-
-  @Test
   public void testEncode() throws Exception {
     IllegalArgumentException ee = null;
     // array value
-    ByteBuf globalBuffer  = BufferAllocator.objBufWithNativeOrder(14);
     ByteBuf descBuffer  = BufferAllocator.objBufWithNativeOrder(30);
     try {
       IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
           10, 10);
-      entry.setGlobalDataBuffer(globalBuffer);
       entry.encode(descBuffer);
       Assert.assertEquals(23, descBuffer.writerIndex());
       descBuffer.readerIndex(0);
@@ -299,15 +230,12 @@ public class IODataDescTest {
       Assert.assertEquals(1, descBuffer.readInt());
       Assert.assertEquals(1, descBuffer.readInt());
       // single value
-      globalBuffer.clear();
       descBuffer.clear();
       entry = new IODataDesc.Entry("akey", IODataDesc.IodType.SINGLE, 10,
           0, 10);
-      entry.setGlobalDataBuffer(globalBuffer);
       entry.encode(descBuffer);
       Assert.assertEquals(15, descBuffer.writerIndex());
     } finally {
-      globalBuffer.release();
       descBuffer.release();
     }
   }
@@ -315,43 +243,25 @@ public class IODataDescTest {
   @Test
   public void testGetDataWhenFetch() throws Exception {
     // single value
-    ByteBuf globalBuffer  = BufferAllocator.objBufWithNativeOrder(14);
     ByteBuf descBuffer  = BufferAllocator.objBufWithNativeOrder(30);
     try {
       IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.SINGLE, 10,
           0, 10);
-      entry.setGlobalDataBuffer(globalBuffer);
       entry.encode(descBuffer);
       Assert.assertEquals(15, descBuffer.writerIndex());
-      globalBuffer.writerIndex(4);
-      byte[] bytes = "1234567890".getBytes();
-      globalBuffer.writeBytes(bytes);
       entry.setActualSize(10);
       // read to byte array
-      byte[] bytes1 = new byte[10];
-      entry.get(bytes1);
-      Assert.assertTrue(Arrays.equals(bytes, bytes1));
-      // read to bytebuffer
-      ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(10);
-      try {
-        entry.get(buffer);
-        for (int i = 0; i < bytes.length; i++) {
-          Assert.assertEquals(bytes[i], buffer.readByte());
-        }
-      } finally {
-        buffer.release();
-      }
+      ByteBuf buf = entry.getFetchedData();
+      Assert.assertEquals(0, buf.readerIndex());
+      Assert.assertEquals(10, buf.writerIndex());
     } finally {
-      globalBuffer.release();
       descBuffer.release();
     }
     // array value
-    globalBuffer  = BufferAllocator.objBufWithNativeOrder(34);
     descBuffer  = BufferAllocator.objBufWithNativeOrder(30);
     try {
       IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
           0, 30);
-      entry.setGlobalDataBuffer(globalBuffer);
       entry.encode(descBuffer);
       Assert.assertEquals(23, descBuffer.writerIndex());
       descBuffer.readerIndex(0);
@@ -363,26 +273,12 @@ public class IODataDescTest {
       Assert.assertEquals(10, descBuffer.readInt());
       Assert.assertEquals(0, descBuffer.readInt());
       Assert.assertEquals(3, descBuffer.readInt());
-      globalBuffer.writerIndex(4);
-      byte[] bytes = "123456789012345678901234567890".getBytes();
-      globalBuffer.writeBytes(bytes);
       entry.setActualSize(30);
       // read to byte array
-      byte[] bytes1 = new byte[30];
-      entry.get(bytes1);
-      Assert.assertTrue(Arrays.equals(bytes, bytes1));
-      // read to bytebuffer
-      ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(30);
-      try {
-        entry.get(buffer);
-        for (int i = 0; i < bytes.length; i++) {
-          Assert.assertEquals(bytes[i], buffer.readByte());
-        }
-      } finally {
-        buffer.release();
-      }
+      ByteBuf buf = entry.getFetchedData();
+      Assert.assertEquals(0, buf.readerIndex());
+      Assert.assertEquals(30, buf.writerIndex());
     } finally {
-      globalBuffer.release();
       descBuffer.release();
     }
   }

@@ -213,14 +213,11 @@ Java_io_daos_obj_DaosObjClient_queryObjectAttribute(JNIEnv *env,
 
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_fetchObject(JNIEnv *env, jobject clientObject,
-        jlong objectHandle, jlong flags, jint nbrOfAkeys, jlong descBufAddress,
-        jlong dataBufAddress)
+        jlong objectHandle, jlong flags, jint nbrOfAkeys, jlong descBufAddress)
 {
     daos_handle_t oh;
     daos_key_t dkey;
     char *desc_buffer = (char *)descBufAddress;
-    char *data_buffer = (char *)dataBufAddress;
-    char *data_buffer_cur;
     daos_iod_t *iods = (daos_iod_t *)calloc(nbrOfAkeys, sizeof(daos_iod_t));
     d_sg_list_t *sgls = (d_sg_list_t *)calloc(nbrOfAkeys, sizeof(d_sg_list_t));
     daos_recx_t *recxs = (daos_recx_t *)calloc(nbrOfAkeys, sizeof(daos_recx_t));
@@ -229,6 +226,9 @@ Java_io_daos_obj_DaosObjClient_fetchObject(JNIEnv *env, jobject clientObject,
     uint8_t b;
     uint16_t len;
     uint32_t value;
+    uint32_t record_size;
+    uint32_t nbr_of_record;
+    uint64_t address;
     int dataBufIdx = 0;
     int i;
     int rc;
@@ -248,27 +248,25 @@ Java_io_daos_obj_DaosObjClient_fetchObject(JNIEnv *env, jobject clientObject,
         memcpy(&b, desc_buffer, 1);
         iod->iod_type = (daos_iod_type_t)b;
         desc_buffer += 1;
-        memcpy(&value, desc_buffer, 4);
-        iod->iod_size = (uint64_t)value;
+        memcpy(&record_size, desc_buffer, 4);
+        iod->iod_size = (uint64_t)record_size;
         iod->iod_nr = 1;
         desc_buffer += 4;
         if (iod->iod_type == DAOS_IOD_ARRAY) {
             memcpy(&value, desc_buffer, 4);
             recxs[i].rx_idx = (uint64_t)value;
             desc_buffer += 4;
-            memcpy(&value, desc_buffer, 4);
-            recxs[i].rx_nr = (uint64_t)value;
+            memcpy(&nbr_of_record, desc_buffer, 4);
+            recxs[i].rx_nr = (uint64_t)nbr_of_record;
             desc_buffer += 4;
             iod->iod_recxs = &recxs[i];
+        } else {
+            nbr_of_record = 1;
         }
         // sgl
-        memcpy(&value, desc_buffer, 4);
-        desc_buffer += 4;
-        dataBufIdx = value;
-        data_buffer_cur = data_buffer + dataBufIdx;
-        memcpy(&value, data_buffer_cur, 4);
-        data_buffer_cur += 4;
-        d_iov_set(&iovs[i], data_buffer_cur, value);
+        memcpy(&address, desc_buffer, 8);
+        desc_buffer += 8;
+        d_iov_set(&iovs[i], address, nbr_of_record * record_size);
         sgls[i].sg_iovs = &iovs[i];
         sgls[i].sg_nr = 1;
         sgls[i].sg_nr_out = 0;
@@ -312,8 +310,6 @@ Java_io_daos_obj_DaosObjClient_updateObject(JNIEnv *env, jobject clientObject,
     daos_handle_t oh;
     daos_key_t dkey;
     char *desc_buffer = (char *)descBufAddress;
-    char *data_buffer = (char *)dataBufAddress;
-    char *data_buffer_cur;
     daos_iod_t *iods = (daos_iod_t *)calloc(nbrOfAkeys, sizeof(daos_iod_t));
     d_sg_list_t *sgls = (d_sg_list_t *)calloc(nbrOfAkeys, sizeof(d_sg_list_t));
     daos_recx_t *recxs = (daos_recx_t *)calloc(nbrOfAkeys, sizeof(daos_recx_t));
@@ -322,6 +318,9 @@ Java_io_daos_obj_DaosObjClient_updateObject(JNIEnv *env, jobject clientObject,
     uint8_t b;
     uint16_t len;
     uint32_t value;
+    uint32_t record_size;
+    uint32_t nbr_of_record;
+    uint64_t address;
     int dataBufIdx = 0;
     int i;
     int rc;
@@ -341,27 +340,25 @@ Java_io_daos_obj_DaosObjClient_updateObject(JNIEnv *env, jobject clientObject,
         memcpy(&b, desc_buffer, 1);
         iod->iod_type = (daos_iod_type_t)b;
         desc_buffer += 1;
-        memcpy(&value, desc_buffer, 4);
-        iod->iod_size = (uint64_t)value;
+        memcpy(&record_size, desc_buffer, 4);
+        iod->iod_size = (uint64_t)record_size;
         iod->iod_nr = 1;
         desc_buffer += 4;
         if (iod->iod_type == DAOS_IOD_ARRAY) {
             memcpy(&value, desc_buffer, 4);
             recxs[i].rx_idx = (uint64_t)value;
             desc_buffer += 4;
-            memcpy(&value, desc_buffer, 4);
-            recxs[i].rx_nr = (uint64_t)value;
+            memcpy(&nbr_of_record, desc_buffer, 4);
+            recxs[i].rx_nr = (uint64_t)nbr_of_record;
             desc_buffer += 4;
             iod->iod_recxs = &recxs[i];
+        } else {
+            nbr_of_record = 1;
         }
         // sgl
-        memcpy(&value, desc_buffer, 4);
-        desc_buffer += 4;
-        dataBufIdx = value;
-        data_buffer_cur = data_buffer + dataBufIdx;
-        memcpy(&value, data_buffer_cur, 4);
-        data_buffer_cur += 4;
-        d_iov_set(&iovs[i], data_buffer_cur, value);
+        memcpy(&address, desc_buffer, 8);
+        desc_buffer += 8;
+        d_iov_set(&iovs[i], address, nbr_of_record * record_size);
         sgls[i].sg_iovs = &iovs[i];
         sgls[i].sg_nr = 1;
         sgls[i].sg_nr_out = 0;

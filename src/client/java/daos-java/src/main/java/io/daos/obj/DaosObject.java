@@ -299,8 +299,7 @@ public class DaosObject {
     }
     ByteBuf descBuffer = desc.getDescBuffer();
     try {
-      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress(),
-        desc.getDataBuffer().memoryAddress());
+      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to fetch object with description " +
         desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -324,8 +323,7 @@ public class DaosObject {
       log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
-        desc.getDataBuffer().memoryAddress());
+      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to update object with description " +
         desc.toString(MAX_EXCEPTION_SIZE), e);
