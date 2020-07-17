@@ -196,7 +196,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 	if (offset == 0) {
 		/*
-		 * if starting from the begining, reset the anchor attached to
+		 * if starting from the beginning, reset the anchor attached to
 		 * the open handle.
 		 */
 		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
