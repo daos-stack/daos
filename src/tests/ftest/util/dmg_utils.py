@@ -76,8 +76,8 @@ class DmgCommand(DmgCommandBase):
         self.sub_command_class.set_sub_command("scan")
         self.sub_command_class.sub_command_class.verbose.value = verbose
         self.result = self._get_result()
-        self.log.debug("### self.result.stdout ###")
-        self.log.debug(self.result.stdout)
+        self.log.info("--- self.result.stdout ---")
+        self.log.info(self.result.stdout)
 
         if verbose:
             vals = re.findall(
@@ -86,8 +86,8 @@ class DmgCommand(DmgCommandBase):
                 r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
                 r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
                 r"[ ]+([A-Z]+)[ ]*\n", self.result.stdout)
-            self.log.debug("### Verbose output parse result ###")
-            self.log.debug(vals)
+            self.log.info("--- Verbose output parse result ---")
+            self.log.info(vals)
 
             data = defaultdict(list)
             data["host"] = vals[0][0]
@@ -104,7 +104,6 @@ class DmgCommand(DmgCommandBase):
 
             while i < len(vals):
                 data["pci_addrs"].append(vals[i][5])
-                #models.append(vals[i][6] + " " + vals[i][7])
                 data["models"].append("{} {}".format(vals[i][6], vals[i][7]))
                 data["fw_revisions"].append(vals[i][8])
                 data["nvme_socket_ids"].append(vals[i][9])
@@ -119,8 +118,8 @@ class DmgCommand(DmgCommandBase):
             r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
             r"namespaces\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+controller",
             self.result.stdout)
-        self.log.debug("### Non-verbose output parse result ###")
-        self.log.debug(vals)
+        self.log.info("--- Non-verbose output parse result ---")
+        self.log.info(vals)
         return {
             "hosts": vals[0][0],
             "scm_total_val": vals[0][1],
