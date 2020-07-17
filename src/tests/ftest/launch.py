@@ -715,7 +715,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 def generate_certs():
     """Generate the certificates for the test."""
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
-    certs_dir = os.path.join(daos_test_log_dir, "certs")
+    certs_dir = os.path.join(daos_test_log_dir, "daosCA")
     subprocess.call(["/usr/bin/rm", "-rf", certs_dir])
     subprocess.call(
         ["../../../../lib64/daos/certgen/gen_certificates.sh",

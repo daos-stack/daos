@@ -26,7 +26,6 @@ from __future__ import print_function
 from command_utils_base import \
     FormattedParameter, CommandWithParameters, YamlParameters
 from command_utils import CommandWithSubCommand, YamlCommand
-from general_utils import get_log_file
 
 
 class DmgCommandBase(YamlCommand):
@@ -72,7 +71,7 @@ class DmgCommandBase(YamlCommand):
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
         "system_query":
-            r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+)\s+[A-Za-z]+)",
+            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
         "system_start":
             r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
         "system_stop":
@@ -130,15 +129,6 @@ class DmgCommandBase(YamlCommand):
             if isinstance(hostlist, list):
                 hostlist = ",".join(hostlist)
             self._hostlist.update(hostlist, "dmg._hostlist")
-
-    def set_certificates(self, hostlist):
-        """Set certificates for the hostlist.
-
-        Args:
-            hostlist (list): list of host addresses
-        """
-        if self.yaml:
-            self.yaml.copy_certificates(get_log_file("daosCA/certs"), hostlist)
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type

@@ -26,12 +26,13 @@ from importlib import import_module
 import re
 import time
 import signal
+import os
 
 from avocado.utils import process
 
 from command_utils_base import \
     CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, EnvironmentVariables
+    CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError
 
@@ -684,6 +685,35 @@ class YamlCommand(SubProcessCommand):
             self.create_yaml_file()
 
         return super(YamlCommand, self)._get_result()
+
+    def copy_certificates(self, source, hosts):
+        """Copy certificates files from the source to the destination hosts.
+
+        Args:
+            source (str): source of the certificate files.
+            hosts (list): list of the destination hosts.
+        """
+        yaml = self.yaml
+        while isinstance(yaml, YamlParameters):
+            if hasattr(yaml, "get_certificate_data"):
+                data = yaml.get_certificate_data(
+                    yaml.get_attribute_names(LogParameter))
+                for name in data:
+                    run_command(
+                        "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
+                            ",".join(hosts), name))
+                    for file_name in data[name]:
+                        src_file = os.path.join(source, file_name)
+                        dst_file = os.path.join(name, file_name)
+                        run_command(
+                            "clush -S -v -w {} --copy {} --dest {}".format(
+                                ",".join(hosts), src_file, dst_file))
+
+                    # debug to list copy of cert files
+                    run_command(
+                        "clush -S -v -w {} /usr/bin/ls -la {}".format(
+                            ",".join(hosts), name))
+            yaml = yaml.other_params
 
 
 class SubprocessManager(object):

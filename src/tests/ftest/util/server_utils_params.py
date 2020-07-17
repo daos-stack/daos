@@ -45,7 +45,7 @@ class DaosServerTransportCredentials(TransportCredentials):
         self.cert = LogParameter(log_dir, None, "server.crt")
         self.key = LogParameter(log_dir, None, "server.key")
 
-    def _get_certificate_data(self, name_list):
+    def get_certificate_data(self, name_list):
         """Get certificate data.
 
            Args:
@@ -59,7 +59,7 @@ class DaosServerTransportCredentials(TransportCredentials):
         # Ensure the client cert directory includes the required certificate
         name_list.remove("client_cert_dir")
         data = super(
-            DaosServerTransportCredentials, self)._get_certificate_data(
+            DaosServerTransportCredentials, self).get_certificate_data(
                 name_list)
         if self.client_cert_dir.value:
             if self.client_cert_dir.value not in data:

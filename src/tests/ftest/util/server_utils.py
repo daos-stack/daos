@@ -342,10 +342,11 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.create_yaml_file()
 
         # Copy certificates
-        self.manager.job.yaml.copy_certificates(
+        self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
         local_host = socket.gethostname().split('.', 1)[0]
-        self.dmg.set_certificates(local_host.split())
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), local_host.split())
 
         # Prepare dmg for running storage format on all server hosts
         self.dmg.hostlist = self._hosts

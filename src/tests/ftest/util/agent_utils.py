@@ -177,7 +177,7 @@ class DaosAgentManager(SubprocessManager):
             "<AGENT> Starting daos_agent on %s with %s",
             self._hosts, self.manager.command)
         # Copy certificates
-        self.manager.job.yaml.copy_certificates(
+        self.manager.job.copy_certificates(
             get_log_file("daosCA/certs"), self._hosts)
         super(DaosAgentManager, self).start()
 

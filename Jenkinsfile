@@ -122,7 +122,6 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
-def test_rpm_rpms  = "python2-avocado python-pathlib python2-clustershell"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -1202,7 +1201,6 @@ pipeline {
                     }
                     steps {
                         testRpm inst_repos: el7_daos_repos(),
-                                inst_rpms: test_rpm_rpms,
                                 daos_pkg_version: daos_packages_version("centos7")
                    }
                 } // stage('Test CentOS 7 RPMs')

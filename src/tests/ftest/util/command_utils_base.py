@@ -24,7 +24,6 @@
 from logging import getLogger
 import os
 import yaml
-from general_utils import run_command
 
 class CommandFailure(Exception):
     """Base exception for this module."""
@@ -463,17 +462,6 @@ class YamlParameters(ObjectWithParameters):
             value = None
         return value
 
-    def copy_certificates(self, source, hosts):
-        """Copy the certificates to the destination hosts.
-
-        Args:
-            source (str): source of the certificates.
-            hosts (list): list of the destination hosts.
-
-        """
-        if self.other_params is not None:
-            self.other_params.copy_certificates(source, hosts)
-
 
 class TransportCredentials(YamlParameters):
     """Transport credentials listing certificates for secure communication."""
@@ -509,7 +497,7 @@ class TransportCredentials(YamlParameters):
 
         return yaml_data
 
-    def _get_certificate_data(self, name_list):
+    def get_certificate_data(self, name_list):
         """Get certificate data by name_list.
 
         Args:
@@ -530,30 +518,6 @@ class TransportCredentials(YamlParameters):
                 else:
                     data[dir_name].append(file_name)
         return data
-
-    def copy_certificates(self, source, hosts):
-        """Copy certificates files from the source to the destination hosts.
-        Args:
-            source (str): source of the certificate files.
-            hosts (list): list of the destination hosts.
-
-        """
-        data = self._get_certificate_data(
-            self.get_attribute_names(LogParameter))
-        for name in data:
-            run_command(
-                "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
-                    ",".join(hosts), name))
-            for file_name in data[name]:
-                src_file = os.path.join(source, file_name)
-                dst_file = os.path.join(name, file_name)
-                run_command(
-                    "clush -S -v -w {} --copy {} --dest {}".format(
-                        ",".join(hosts), src_file, dst_file))
-            # debug to list copy of cert files
-            run_command(
-                "clush -S -v -w {} /usr/bin/ls -la {}".format(
-                    ",".join(hosts), name))
 
 
 class CommonConfig(YamlParameters):
