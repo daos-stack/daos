@@ -452,7 +452,7 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 }
 
 static void
-crt_grp_lc_uri_remove(struct crt_grp_priv *passed_grp_priv,
+crt_grp_uri_cache_remove(struct crt_grp_priv *passed_grp_priv,
 		d_rank_t rank)
 {
 	d_list_t		*rlink;
@@ -490,7 +490,7 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *passed_grp_priv,
 
 
 static int
-grp_lc_uri_insert_internal_locked(struct crt_grp_priv *grp_priv,
+grp_uri_cache_insert_internal_locked(struct crt_grp_priv *grp_priv,
 				d_rank_t rank,
 				uint32_t tag,
 				const char *uri)
@@ -602,7 +602,7 @@ crt_grp_uri_cache_insert(struct crt_grp_priv *passed_grp_priv,
 	}
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-	rc = grp_lc_uri_insert_internal_locked(grp_priv, rank,
+	rc = grp_uri_cache_insert_internal_locked(grp_priv, rank,
 						tag, uri);
 	if (rc != 0)
 		D_ERROR("Insertion failed: rc %d\n", rc);
@@ -612,7 +612,7 @@ crt_grp_uri_cache_insert(struct crt_grp_priv *passed_grp_priv,
 }
 
 int
-crt_grp_lc_addr_invalid(d_list_t *rlink, void *arg)
+crt_grp_purge_hg_addr(d_list_t *rlink, void *arg)
 {
 	struct crt_lookup_item	*li;
 	struct crt_context	*ctx;
@@ -654,13 +654,16 @@ crt_grp_hg_cache_purge(struct crt_grp_priv *grp_priv)
 
 	D_ASSERT(grp_priv != NULL && grp_priv->gp_primary == 1);
 
+	if (!d_hash_table_is_initialized(&grp_priv->gp_hg_addr_cache))
+		D_GOTO(out, rc);
+
 	/* group private could be destroyed after contexts are gone */
 	ctx = crt_context_lookup_locked(0);
 	if (ctx == NULL)
 		D_GOTO(out, rc = 0);
 
 	rc = d_hash_table_traverse(&grp_priv->gp_hg_addr_cache,
-				   crt_grp_lc_addr_invalid, ctx);
+				   crt_grp_purge_hg_addr, ctx);
 	if (rc != 0)
 		D_ERROR("d_hash_table_traverse failed; rc=%d\n", rc);
 
@@ -981,10 +984,9 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 
 	if (grp_priv->gp_primary) {
 		rc = crt_grp_hg_cache_purge(grp_priv);
-		if (rc != 0) {
-			D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n",
+		if (rc != 0)
+			D_ERROR("crt_grp_hg_cache_purge failed, rc: %d.\n",
 				rc);
-		}
 	}
 
 	crt_grp_lc_destroy(grp_priv);
@@ -2593,7 +2595,7 @@ crt_group_rank_remove_internal(struct crt_grp_priv *grp_priv, d_rank_t rank)
 
 		d_hash_rec_decref(&grp_priv->gp_uri_lookup_cache, rlink);
 
-		crt_grp_lc_uri_remove(grp_priv, rank);
+		crt_grp_uri_cache_remove(grp_priv, rank);
 
 		d_hash_rec_delete(&grp_priv->gp_uri_lookup_cache,
 			&rank, sizeof(d_rank_t));
@@ -3374,7 +3376,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 		}
 
 		/* TODO: Change for multi-provider support */
-		rc = grp_lc_uri_insert_internal_locked(grp_priv,
+		rc = grp_uri_cache_insert_internal_locked(grp_priv,
 					rank, 0, uris[uri_idx[i]]);
 
 		if (rc != 0)

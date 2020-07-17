@@ -330,7 +330,16 @@ int d_hash_table_traverse(struct d_hash_table *htable,
  *
  * \return			zero on success, negative value if error.
  */
-int  d_hash_table_destroy(struct d_hash_table *htable, bool force);
+int d_hash_table_destroy(struct d_hash_table *htable, bool force);
+
+/**
+ * Check whether hash table has been initialized.
+ *
+ * \param[in] htable		The hash table to check.
+ *
+ * \return			true or false
+ */
+bool d_hash_table_is_initialized(struct d_hash_table *htable);
 
 /**
  * Finalise a hash table, reset all struct members.

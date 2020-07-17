@@ -768,6 +768,15 @@ out:
 	return rc;
 }
 
+bool
+d_hash_table_is_initialized(struct d_hash_table *htable)
+{
+	if (!htable || !htable->ht_buckets)
+		return false;
+
+	return true;
+}
+
 static bool
 d_hash_table_is_empty(struct d_hash_table *htable)
 {
