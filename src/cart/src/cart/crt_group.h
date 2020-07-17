@@ -107,11 +107,6 @@ struct crt_grp_priv {
 	 */
 	struct crt_swim_membs	 gp_membs_swim;
 
-	/* CaRT context for address lookup/free; in future will be 1 per
-	 * provider. Only valid for primary groups
-	 */
-	crt_context_t		 gp_ctx;
-
 	/* size (number of membs) of group */
 	uint32_t		 gp_size;
 	/*
@@ -279,11 +274,11 @@ int crt_grp_detach(crt_group_t *attached_grp);
 int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv,
 		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
 		      hg_addr_t *hg_addr);
-int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv,
+int crt_grp_uri_cache_insert(struct crt_grp_priv *grp_priv,
 			  d_rank_t rank, uint32_t tag, const char *uri);
-int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
+int crt_grp_hg_cache_insert(struct crt_grp_priv *grp_priv,
 			   d_rank_t rank, uint32_t tag, hg_addr_t *hg_addr);
-int crt_grp_ctx_invalid(bool locked);
+int crt_groups_hg_cache_purge(bool locked);
 struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 struct crt_grp_priv *crt_grp_lookup_grpid(crt_group_id_t grp_id);
 int crt_validate_grpid(const crt_group_id_t grpid);

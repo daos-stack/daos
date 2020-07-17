@@ -644,9 +644,9 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 	uri = ul_out->ul_uri;
 
 	/* insert uri to hash table */
-	rc = crt_grp_lc_uri_insert(grp_priv, rank, tag, uri);
+	rc = crt_grp_uri_cache_insert(grp_priv, rank, tag, uri);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
+		D_ERROR("crt_grp_uri_cache_insert() failed, rc %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -839,10 +839,10 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 				D_GOTO(out, rc = -DER_NOMEM);
 
 			base_addr = uri;
-			rc = crt_grp_lc_uri_insert(grp_priv,
+			rc = crt_grp_uri_cache_insert(grp_priv,
 						   tgt_ep->ep_rank, 0, uri);
 			if (rc != 0) {
-				D_ERROR("crt_grp_lc_uri_insert() failed, "
+				D_ERROR("crt_grp_uri_cache_insert() failed, "
 					"rc: %d\n", rc);
 				D_GOTO(out, rc);
 			}
@@ -951,10 +951,9 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_grp_lc_uri_insert(grp_priv,
-			rank, tag, uri);
+	rc = crt_grp_uri_cache_insert(grp_priv, rank, tag, uri);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
+		D_ERROR("crt_grp_uri_cache_insert() failed, rc %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -999,7 +998,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	rc = crt_grp_lc_addr_insert(rpc_priv->crp_grp_priv,
+	rc = crt_grp_hg_cache_insert(rpc_priv->crp_grp_priv,
 				rpc_priv->crp_pub.cr_ep.ep_rank,
 				rpc_priv->crp_pub.cr_ep.ep_tag,
 				&hg_addr);

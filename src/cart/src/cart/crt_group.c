@@ -468,7 +468,7 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *passed_grp_priv,
 		rank = crt_grp_priv_get_primary_rank(passed_grp_priv, rank);
 	}
 
-	ctx = grp_priv->gp_ctx;
+	ctx = crt_context_lookup_locked(0);
 
 	rlink = d_hash_rec_find(&grp_priv->gp_hg_addr_cache,
 				&rank, sizeof(rank));
@@ -577,11 +577,12 @@ err_free_li:
 out:
 	return rc;
 }
+
 /*
- * Fill in the base URI of rank in the lookup cache
+ * Store uri for a given rank:tag endpoint
  */
 int
-crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv,
+crt_grp_uri_cache_insert(struct crt_grp_priv *passed_grp_priv,
 		      d_rank_t rank, uint32_t tag, const char *uri)
 {
 	struct crt_grp_priv	*grp_priv;
@@ -643,29 +644,35 @@ out:
 }
 
 /*
- * Invalid all cached hg_addr in group of one context.
- * It should only be called by crt_context_destroy.
+ * Invalidate mercury address cache for given group
  */
 static int
-crt_grp_lc_ctx_invalid(struct crt_grp_priv *grp_priv)
+crt_grp_hg_cache_purge(struct crt_grp_priv *grp_priv)
 {
-	int	 rc = 0;
+	struct	crt_context_t	*ctx;
+	int			rc = 0;
 
 	D_ASSERT(grp_priv != NULL && grp_priv->gp_primary == 1);
 
+	/* group private could be destroyed after contexts are gone */
+	ctx = crt_context_lookup_locked(0);
+	if (ctx == NULL)
+		D_GOTO(out, rc = 0);
+
 	rc = d_hash_table_traverse(&grp_priv->gp_hg_addr_cache,
-				   crt_grp_lc_addr_invalid, grp_priv->gp_ctx);
+				   crt_grp_lc_addr_invalid, ctx);
 	if (rc != 0)
 		D_ERROR("d_hash_table_traverse failed; rc=%d\n", rc);
 
+out:
 	return rc;
 }
 
 /*
- * Invalid context for all groups.
+ * Purge mercury address cache for all primary groups
  */
 int
-crt_grp_ctx_invalid(bool locked)
+crt_groups_hg_cache_purge(bool locked)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_grp_gdata	*grp_gdata;
@@ -680,9 +687,9 @@ crt_grp_ctx_invalid(bool locked)
 	grp_priv = grp_gdata->gg_primary_grp;
 	if (grp_priv != NULL) {
 		crt_swim_disable_all();
-		rc = crt_grp_lc_ctx_invalid(grp_priv);
+		rc = crt_grp_hg_cache_purge(grp_priv);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
+			D_ERROR("crt_grp_hg_cache_purge failed, group %s, "
 				"rc: %d.\n",
 				grp_priv->gp_pub.cg_grpid, rc);
 			D_GOTO(out, rc);
@@ -695,9 +702,9 @@ crt_grp_ctx_invalid(bool locked)
 		if (grp_priv->gp_primary == 0)
 			continue;
 
-		rc = crt_grp_lc_ctx_invalid(grp_priv);
+		rc = crt_grp_hg_cache_purge(grp_priv);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
+			D_ERROR("crt_grp_hg_cache_purge failed, group %s, "
 				"rc: %d.\n",
 				grp_priv->gp_pub.cg_grpid, rc);
 			break;
@@ -711,12 +718,10 @@ out:
 }
 
 /*
- * Fill in the hg address  of a tag in the lookup cache. The host
- * rank where the tag resides in must exist in the cache before calling this
- * routine.
+ * Store hg_address inside of hg address cache
  */
 int
-crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
+crt_grp_hg_cache_insert(struct crt_grp_priv *passed_grp_priv,
 		       d_rank_t rank, uint32_t tag, hg_addr_t *hg_addr)
 {
 	d_list_t		*rlink;
@@ -737,7 +742,8 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 
-	ctx = grp_priv->gp_ctx;
+	ctx = crt_context_lookup_locked(0);
+
 	rlink = d_hash_rec_find(&grp_priv->gp_hg_addr_cache,
 				(void *)&rank, sizeof(rank));
 	D_ASSERT(rlink != NULL);
@@ -974,7 +980,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 		return;
 
 	if (grp_priv->gp_primary) {
-		rc = crt_grp_ctx_invalid(true);
+		rc = crt_grp_hg_cache_purge(grp_priv);
 		if (rc != 0) {
 			D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n",
 				rc);
@@ -1346,8 +1352,6 @@ crt_primary_grp_init(crt_group_id_t grpid)
 
 	grp_gdata->gg_primary_grp = grp_priv;
 
-	grp_priv->gp_ctx = crt_context_lookup_locked(0);
-
 	rc = crt_grp_lc_create(grp_priv);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lc_create failed, rc: %d.\n",
@@ -1415,10 +1419,10 @@ crt_uri_lookup_forward_cb(const struct crt_cb_info *cb_info)
 	uri = ul_fwd_out->ul_uri;
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
-	rc = crt_grp_lc_uri_insert(default_grp_priv,
+	rc = crt_grp_uri_cache_insert(default_grp_priv,
 				   g_rank, tag, uri);
 	if (rc != 0)
-		D_ERROR("crt_grp_lc_uri_insert(%p, %u, %s) failed."
+		D_ERROR("crt_grp_uri_cache_insert(%p, %u, %s) failed."
 			" rc: %d\n", default_grp_priv, g_rank,
 			uri, rc);
 
@@ -2447,9 +2451,9 @@ crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_grp_lc_uri_insert(grp_priv, rank, tag, uri);
+	rc = crt_grp_uri_cache_insert(grp_priv, rank, tag, uri);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d\n", rc);
+		D_ERROR("crt_grp_uri_cache_insert() failed; rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -2500,7 +2504,6 @@ crt_rank_self_set(d_rank_t rank)
 		D_GOTO(out, rc);
 	}
 
-	/* Get address from any context */
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
 		rc = crt_na_class_get_addr(ctx->cc_hg_ctx.chc_nacla,
@@ -2510,10 +2513,10 @@ crt_rank_self_set(d_rank_t rank)
 			D_GOTO(unlock, rc);
 		}
 
-		rc = crt_grp_lc_uri_insert(default_grp_priv, rank, ctx->cc_idx,
-					uri_addr);
+		rc = crt_grp_uri_cache_insert(default_grp_priv, rank,
+					ctx->cc_idx, uri_addr);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert_all() failed; rc=%d\n",
+			D_ERROR("crt_grp_uri_cache_insert() failed; rc=%d\n",
 				rc);
 			D_GOTO(unlock, rc);
 		}
