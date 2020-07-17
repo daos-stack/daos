@@ -29,7 +29,7 @@ from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
 from command_utils import ExecutableCommand
 from test_utils_pool import TestPool
-from job_manager_utils import Mpirun
+from job_manager_utils import Orterun
 
 class IoConfGen(ExecutableCommand):
     """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
@@ -70,7 +70,7 @@ class IoConfGen(ExecutableCommand):
         command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
                             self.filename.value])
 
-        manager = Mpirun(command, mpitype="mpich")
+        manager = Orterun(command)
         # run daos_run_io_conf Command using mpirun
         try:
             manager.run()
