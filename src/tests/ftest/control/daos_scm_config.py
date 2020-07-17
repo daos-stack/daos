@@ -77,7 +77,7 @@ class SCMConfigTest(TestWithServers):
         # Run storage prepare
         if self.server_managers[-1].manager.job.using_dcpm:
             self.log.info("==>    Verifying storage prepare is done")
-            kwargs = {"scm": True, "force": True}
+            kwargs = {"scm_only": True, "force": True}
             try:
                 self.server_managers[-1].dmg.storage_prepare(**kwargs)
             except CommandFailure as error:

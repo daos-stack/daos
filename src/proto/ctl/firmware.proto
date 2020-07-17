@@ -1,0 +1,63 @@
+//
+// (C) Copyright 2020 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+syntax = "proto3";
+package ctl;
+
+import "storage_scm.proto";
+
+message FirmwareQueryReq {
+	bool queryScm = 1; // Should we query SCM devices?
+	bool queryNvme = 2; // Should we query NVMe devices?
+}
+
+message ScmFirmwareQueryResp {
+	ScmModule module = 1; // The module of this firmware
+	string activeVersion = 2; // Active FW version
+	string stagedVersion = 3; // Staged FW version
+	uint32 imageMaxSizeBytes = 4; // Maximum size of FW image accepted
+	uint32 updateStatus = 5; // Status of FW update
+	string error = 6; // Error string, if any
+}
+
+message FirmwareQueryResp {
+	repeated ScmFirmwareQueryResp scmResults = 1;
+}
+
+message FirmwareUpdateReq {
+	string firmwarePath = 1; // Path to firmware file
+	enum DeviceType {
+		SCM = 0;
+		NVMe = 1;
+	}
+	DeviceType type = 2; // Type of device this firmware applies to
+}
+
+message ScmFirmwareUpdateResp {
+	ScmModule module = 1; // SCM device
+	string error = 2; // empty if successful
+}
+
+message FirmwareUpdateResp {
+	repeated ScmFirmwareUpdateResp scmResults = 1; // results for SCM update
+}

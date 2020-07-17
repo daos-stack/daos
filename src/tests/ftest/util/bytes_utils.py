@@ -24,29 +24,43 @@ portions thereof marked with this legend must also reproduce the markings.
 from logging import getLogger
 
 
-class ByteUnit(object):
+class BytePrefix(object):
     # pylint: disable=too-few-public-methods
     """Defines the unit for a Byte object."""
 
-    VALUES = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
+    ORDER = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
 
     def __init__(self, value=None):
         """Initialize a ByteUnit object with a unit.
 
         Args:
-            value (str, optional): unit value. Defaults to None.
+            value (str, optional): case-sensitive unit value. Defaults to None.
         """
-        self._value = None
-        if value is None:
-            self._value = self.VALUES[0]
-        elif value in self.VALUES:
+        self._value = ""
+        self._base = 1000
+
+        supported = [""]
+        supported.extend(["".join([item, "B"]) for item in self.ORDER if item])
+        supported.extend(["".join([item, "iB"]) for item in self.ORDER if item])
+        if value in supported:
             self._value = str(value)
-        elif isinstance(value, str) and value.upper()[0] in self.VALUES:
-            self._value = value.upper()[0]
-        else:
+        elif value is not None:
             raise ValueError(
-                "Invalid ByteUnit value; {} is not a {}".format(
-                    value, self.VALUES))
+                "Invalid BytePrefix value; {} is not a {}".format(
+                    value, supported))
+
+        if "i" in self._value:
+            self._base = 1024
+
+    @property
+    def base(self):
+        """Get the base.
+
+        Returns:
+            int: unit base
+
+        """
+        return self._base
 
     @property
     def order(self):
@@ -56,10 +70,19 @@ class ByteUnit(object):
             int: unit order
 
         """
-        return self.VALUES.index(self._value)
+        return self.ORDER.index(self._get_order_key())
+
+    def _get_order_key(self):
+        """Get the order list key for the current prefix value.
+
+        Returns:
+            str: the first character of the current prefix value
+
+        """
+        return self._value[0] if self._value else self._value
 
     def __str__(self):
-        """Convert the ByteUnit object into a string.
+        """Convert the BytePrefix object into a string.
 
         Returns:
             str: the unit
@@ -68,7 +91,7 @@ class ByteUnit(object):
         return self._value
 
     def __repr__(self):
-        """Represent the ByteUnit object as a string.
+        """Represent the BytePrefix object as a string.
 
         Returns:
             str: the unit
@@ -80,7 +103,7 @@ class ByteUnit(object):
         """Determine if this object is equal to the other object.
 
         Args:
-            other (ByteUnit): the other ByteUnit object to compare
+            other (BytePrefix): the other ByteUnit object to compare
 
         Returns:
             bool: whether this object equals the other object
@@ -92,7 +115,7 @@ class ByteUnit(object):
         """Determine if this object is not equal to the other object.
 
         Args:
-            other (ByteUnit): the other ByteUnit object to compare
+            other (BytePrefix): the other ByteUnit object to compare
 
         Returns:
             bool: whether this object does not equal the other object
@@ -104,37 +127,37 @@ class ByteUnit(object):
         """Determine if this object is less than the other object.
 
         Args:
-            other (ByteUnit): the other Bytes object to compare
+            other (BytePrefix): the other Bytes object to compare
 
         Returns:
             bool: whether this object is less than the other object
 
         """
-        return self.order < other.order
+        return self.order < other.order and self.base < other.base
 
     def __le__(self, other):
         """Determine if this object is less than or equal to the other object.
 
         Args:
-            other (ByteUnit): the other ByteUnit object to compare
+            other (BytePrefix): the other ByteUnit object to compare
 
         Returns:
             bool: whether this object is less than or equal to the other object
 
         """
-        return self.order <= other.order
+        return self.__lt__(other) or self.__eq__(other)
 
     def __gt__(self, other):
         """Determine if this object is greater than the other object.
 
         Args:
-            other (ByteUnit): the other ByteUnit object to compare
+            other (BytePrefix): the other ByteUnit object to compare
 
         Returns:
             bool: whether this object is greater than the other object
 
         """
-        return self.order > other.order
+        return not self.__lt__(other) and not self.__eq__(other)
 
     def __ge__(self, other):
         """Determine if this object is greater or equal to the other object.
@@ -147,7 +170,7 @@ class ByteUnit(object):
                 object
 
         """
-        return self.order >= other.order
+        return not self.__lt__(other) or self.__eq__(other)
 
 
 class Bytes(object):
@@ -155,8 +178,6 @@ class Bytes(object):
 
     Allows comparison values with different units, e.g. '1.6T' to '750G'.
     """
-
-    SIZES = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
 
     def __init__(self, amount, units):
         """Initialize a Bytes object.
@@ -202,13 +223,13 @@ class Bytes(object):
         """Set the units amount.
 
         Args:
-            units (str, ByteUnit): units to assign
+            units (str, BytePrefix): units to assign
 
         Raises:
-            ValueError: if the value is not a supported ByteUnit value
+            ValueError: if the value is not a supported BytePrefix value
 
         """
-        self._units = ByteUnit(value)
+        self._units = BytePrefix(value)
 
     def __str__(self):
         """Convert the Bytes object into a string.
@@ -528,7 +549,7 @@ class Bytes(object):
         """Get the current amount converted to the specified units.
 
         Args:
-            unit (str): unit to which to convert
+            unit (str, BytePrefix): unit to which to convert
 
         Raises:
             ValueError: if the unit is not valid
@@ -537,11 +558,15 @@ class Bytes(object):
             float: the converted amount
 
         """
-        if unit not in self.SIZES:
-            raise ValueError(
-                "Invalid 'unit'; must be {}: {}".format(self.SIZES, unit))
-        power = self.SIZES.index(self.units) - self.SIZES.index(unit)
-        return self.amount * (1000 ** power)
+        if not isinstance(unit, BytePrefix):
+            try:
+                unit = BytePrefix(unit)
+            except ValueError as error:
+                raise ValueError(
+                    "Invalid 'unit' {}: {}".format(unit, error))
+
+        power = self.units.order - unit.order
+        return self.amount * (self.units ** power)
 
     def convert(self, unit):
         """Convert the current Bytes object to a different unit.
@@ -562,15 +587,15 @@ class Bytes(object):
     def convert_down(self):
         """Decrement the units until the amount is greater than 1000."""
         log = getLogger()
-        while self.amount < 1000 and self.units != self.SIZES[0]:
-            previous_unit = self.SIZES[self.SIZES.index(self.units) - 1]
+        while self.amount < 1000 and self.units.order != 0:
+            previous_unit = self.units.ORDER[self.units.order - 1]
             self.convert(previous_unit)
         log.debug("Updated Bytes: %s", str(self))
 
     def convert_up(self):
         """Increment the units until the amount is less than 1000."""
         log = getLogger()
-        while self.amount > 1000 and self.units != self.SIZES[-1]:
-            next_unit = self.SIZES[self.SIZES.index(self.units) + 1]
+        while self.amount > 1000 and self.units != self.units.ORDER[-1]:
+            next_unit = self.units.ORDER[self.units.order + 1]
             self.convert(next_unit)
         log.debug("Updated Bytes: %s", str(self))

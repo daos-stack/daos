@@ -716,7 +716,7 @@ class DaosServerManager(SubprocessManager):
             self.dmg.hostlist = self._hosts
             result = self.dmg.storage_scan(verbose=True)
             self.dmg.hostlist = self.get_config_value("access_points")
-            if result.exit_status != 0:
+            if self.dmg.result.exit_status != 0:
                 raise ServerFailed(
                     "Error obtaining DAOS storage:\n{}".format(result))
 

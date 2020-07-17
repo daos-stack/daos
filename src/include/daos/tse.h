@@ -37,6 +37,8 @@
 #define TSE_TASK_SIZE		1024
 /* 8 bytes used for public members */
 #define TSE_PRIV_SIZE		1016
+/* tse_task arguments max length */
+#define TSE_TASK_ARG_LEN		888
 
 typedef struct tse_task {
 	int			dt_result;

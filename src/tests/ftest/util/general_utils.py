@@ -48,6 +48,7 @@ def human_to_bytes(h_size):
 
     Returns:
         int: value translated to bytes.
+
     """
     units = {"b": 1, "kb": (2**10), "mb": (2**20), "gb": (2**30)}
     pattern = r"([0-9.]+|[a-zA-Z]+)"
@@ -253,7 +254,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         command (str): the command to run in parallel
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to None.
-        expect_rc (int, optional): exepcted return code. Defaults to 0.
+        expect_rc (int, optional): expected return code. Defaults to 0.
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
@@ -376,7 +377,7 @@ def process_host_list(hoststr):
     e.g. server-[26-27] becomes a list with entries server-26, server-27
 
     This works for every thing that has come up so far but I don't know what
-    all slurmfinds acceptable so it might not parse everything possible.
+    all slurm finds acceptable so it might not parse everything possible.
     """
     # 1st split into cluster name and range of hosts
     split_loc = hoststr.index('-')
@@ -543,13 +544,47 @@ def get_log_file(name):
 
 
 def check_uuid_format(uuid):
-    """Checks a correct UUID format.
+    """Check for a correct UUID format.
 
     Args:
         uuid (str): Pool or Container UUID.
 
     Returns:
         bool: status of valid or invalid uuid
+
     """
     pattern = re.compile("([0-9a-fA-F-]+)")
     return bool(len(uuid) == 36 and pattern.match(uuid))
+
+
+def get_numeric_list(numeric_range):
+    """Convert a string of numeric ranges into an expanded list of integers.
+
+    Example: "0-3,7,9-13,15" -> [0, 1, 2, 3, 7, 9, 10, 11, 12, 13, 15]
+
+    Args:
+        numeric_range (str): the string of numbers and/or ranges of numbers to
+            convert
+
+    Raises:
+        AttributeError: if the syntax of the numeric_range argument is invalid
+
+    Returns:
+        list: an expanded list of integers
+
+    """
+    numeric_list = []
+    try:
+        for item in numeric_range.split(","):
+            if "-" in item:
+                range_args = [int(val) for val in item.split("-")]
+                numeric_list.extend([int(val) for val in range(*range_args)])
+            else:
+                numeric_list.append(int(item))
+    except (AttributeError, ValueError, TypeError):
+        raise AttributeError(
+            "Invalid 'numeric_range' argument - must be a string containing "
+            "only numbers, dashes (-), and/or commas (,): {}".format(
+                numeric_range))
+
+    return numeric_list

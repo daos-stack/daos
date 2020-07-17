@@ -28,7 +28,7 @@ import traceback
 from apricot import TestWithServers
 
 import check_for_pool
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
+
 
 # pylint: disable=fixme, broad-except
 class ConnectTest(TestWithServers):
@@ -39,8 +39,7 @@ class ConnectTest(TestWithServers):
     """
 
     def test_connect(self):
-        """
-        Test connecting to a pool.
+        """Test connecting to a pool.
 
         :avocado: tags=all,pool,smoke,pr,small,poolconnect
         """
@@ -68,27 +67,26 @@ class ConnectTest(TestWithServers):
         scm_size = self.params.get("scm_size", "/run/pool*")
 
         try:
-            result = dmg.pool_create(scm_size=scm_size, group=setid)
-            if result.exit_status == 0:
-                uuid_str, _ = get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-            else:
-                self.fail("    Unable to parse the Pool's UUID and SVC.")
+            data = dmg.pool_create(scm_size=scm_size, group=setid)
+            if not data:
+                self.fail("    Unable to parse the Pool's UUID and SVC")
 
-            print("uuid is {0}\n".format(uuid_str))
+            print("uuid is {0}\n".format(data["uuid"]))
 
-            exists = check_for_pool.check_for_pool(host1, uuid_str)
+            exists = check_for_pool.check_for_pool(host1, data["uuid"])
             if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".
-                          format(uuid_str, host1))
-            exists = check_for_pool.check_for_pool(host2, uuid_str)
+                self.fail(
+                    "Pool {0} not found on host {1}.\n".format(
+                        data["uuid"], host1))
+            exists = check_for_pool.check_for_pool(host2, data["uuid"])
             if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".
-                          format(uuid_str, host2))
+                self.fail(
+                    "Pool {0} not found on host {1}.\n".format(
+                        data["uuid"], host2))
 
-            result = dmg.pool_query(uuid_str)
+            result = dmg.pool_query(data["uuid"])
             if result.exit_status != 0:
-                self.fail("Could not connect to Pool {}\n".format(uuid_str))
+                self.fail("Could not connect to Pool {}\n".format(data["uuid"]))
 
             if expected_result == 'FAIL':
                 self.fail("Expected to fail but passed.\n")

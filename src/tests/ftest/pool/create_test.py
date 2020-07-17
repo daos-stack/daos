@@ -97,8 +97,19 @@ class PoolCreateTests(TestWithServers):
                     self.fail(
                         "Unable to assign a max pool NVMe size; NVMe not "
                         "configured!")
+
+                # The I/O server allocates NVMe storage on targets in multiples
+                # of 1GiB per target.  An server with 8 targets will have a
+                # minimum NVMe size of 8 GiB.  Specify the largest NVMe size in
+                # GiB that can be used with the configured number of targets and
+                # specified capacity in GB.
+                targets = self.server_managers[0].get_config_value("targets")
+                nvme_multiple = Bytes(int(targets), "GiB")
+                multiplier = 1
+                while nvme_multiple <
+
                 # The minimum NVMe size is 8 GiB.
-                min_nvme_size = Bytes(8 * (2 ** 30 / 10 ** 9), "G")
+                min_nvme_size = Bytes(8, "GiB")
                 if sizes[1] < min_nvme_size:
                     self.log.warning(
                         "Calculated NVMe size %s is too small.  Using %s "
@@ -233,21 +244,21 @@ class PoolCreateTests(TestWithServers):
         # should succeed.  The second pool creation should fail due to not
         # enough space.
         self.pool[0].create()
-        self.assertTrue(
-            self.pool[0].dmg_result.exit_status == 0,
+        self.assertEqual(
+            self.pool[0].dmg.result.exit_status, 0,
             "Creating a large capacity pool on a single server should succeed."
         )
         self.pool[1].create()
         self.assertTrue(
-            self.pool[1].dmg_result.exit_status == 1 and
-            "-1007" in self.pool[1].dmg_result.stdout,
+            self.pool[1].dmg.result.exit_status == 1 and
+            "-1007" in self.pool[1].dmg.result.stdout,
             "Creating a large capacity pool across all servers should fail "
             "due to an existing pool on one server consuming the required "
             "space."
         )
         self.pool[2].create()
-        self.assertTrue(
-            self.pool[2].dmg_result.exit_status == 0,
+        self.assertEqual(
+            self.pool[2].dmg.result.exit_status, 0,
             "Creating a large capacity pool across all but the first server "
             "should succeed."
         )
@@ -287,28 +298,28 @@ class PoolCreateTests(TestWithServers):
         self.log.info("Creating")
         self.pool[0].create()
         self.assertTrue(
-            self.pool[0].dmg_result.exit_status == 0,
+            self.pool[0].dmg.result.exit_status == 0,
             "Creating a large capacity pool on a single server should succeed."
         )
         for index in range(100):
             self.log.info("Loop %s", index)
             self.pool[1].create()
             self.assertTrue(
-                self.pool[1].dmg_result.exit_status == 1 and
-                "-1007" in self.pool[1].dmg_result.stdout,
+                self.pool[1].dmg.result.exit_status == 1 and
+                "-1007" in self.pool[1].dmg.result.stdout,
                 "Creating a large capacity pool across all servers should fail "
                 "due to an existing pool on one server consuming the required "
                 "space."
             )
             self.pool[2].create()
             self.assertTrue(
-                self.pool[2].dmg_result.exit_status == 0,
+                self.pool[2].dmg.result.exit_status == 0,
                 "Creating a large capacity pool that spans across all but the "
                 "first server should succeed."
             )
             self.pool[2].destroy()
             self.assertTrue(
-                self.pool[2].dmg_result.exit_status == 0,
+                self.pool[2].dmg.result.exit_status == 0,
                 "Destroying a large capacity pool that spans across all but "
                 "the first server should succeed."
             )

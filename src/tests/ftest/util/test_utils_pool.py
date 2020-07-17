@@ -34,8 +34,6 @@ from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
-
 
 class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods
@@ -79,7 +77,6 @@ class TestPool(TestDaosApiBase):
         self.connected = False
 
         self.dmg = dmg_command
-        self.dmg_result = None          # CmdResult of last issued dmg command
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -137,14 +134,11 @@ class TestPool(TestDaosApiBase):
         elif self.control_method.value == self.USE_DMG and self.dmg:
             # Create a pool with the dmg command and store its CmdResult
             self._log_method("dmg.pool_create", kwargs)
-            self.dmg_result = self.dmg.pool_create(**kwargs)
+            data = self.dmg.pool_create(**kwargs)
 
             # Manually populate the DaosPool object attributes only if the pool
             # creation was successful.
-            if self.dmg_result.exit_status == 0:
-                uuid, svc = get_pool_uuid_service_replicas_from_stdout(
-                    self.dmg_result.stdout)
-
+            if self.dmg.result.exit_status == 0:
                 # Populate the empty DaosPool object with the properties of the
                 # pool created with dmg pool create.
                 if self.name.value:
@@ -153,7 +147,8 @@ class TestPool(TestDaosApiBase):
                 # Convert the string of service replicas from the dmg command
                 # output into an ctypes array for the DaosPool object using the
                 # same technique used in DaosPool.create().
-                service_replicas = [int(value) for value in svc.split(",")]
+                service_replicas = [
+                    int(value) for value in data["svc"].split(",")]
                 rank_t = c_uint * len(service_replicas)
                 rank = rank_t(*list([svc for svc in service_replicas]))
                 rl_ranks = POINTER(c_uint)(rank)
@@ -161,7 +156,7 @@ class TestPool(TestDaosApiBase):
                     rl_ranks, len(service_replicas))
 
                 # Set UUID and attached to the DaosPool object
-                self.pool.set_uuid_str(uuid)
+                self.pool.set_uuid_str(data["uuid"])
                 self.pool.attached = 1
 
         elif self.control_method.value == self.USE_DMG:
@@ -246,8 +241,7 @@ class TestPool(TestDaosApiBase):
 
                 elif self.control_method.value == self.USE_DMG and self.dmg:
                     # Destroy the pool with the dmg command
-                    self.dmg_result = self.dmg.pool_destroy(
-                        pool=self.uuid, force=force)
+                    self.dmg.pool_destroy(pool=self.uuid, force=force)
                     status = True
 
                 elif self.control_method.value == self.USE_DMG:
@@ -266,20 +260,32 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(CommandFailure)
-    def set_property(self):
+    def set_property(self, prop_name=None, prop_value=None):
         """Set Property.
 
         It sets property for a given pool uuid using
         dmg.
+
+        Args:
+            prop_name (str, optional): pool property name. Defaults to
+                None, which uses the TestPool.prop_name.value
+            prop_value (str, optional): value to be set for the property.
+                Defaults to None, which uses the TestPool.prop_value.value
+
+        Returns:
+            None
 
         """
         if self.pool:
             self.log.info("Set-prop for Pool: %s", self.uuid)
 
             if self.control_method.value == self.USE_DMG and self.dmg:
-                # set-prop for given pool using dmg
-                self.dmg_result = self.dmg.pool_set_prop(
-                    self.uuid, self.prop_name, self.prop_value)
+                # If specific values are not provided, use the class values
+                if prop_name is None:
+                    prop_name = self.prop_name.value
+                if prop_value is None:
+                    prop_value = self.prop_value.value
+                self.dmg.pool_set_prop(self.uuid, prop_name, prop_value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
