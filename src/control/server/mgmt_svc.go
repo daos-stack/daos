@@ -215,7 +215,7 @@ func queryRank(reqRank uint32, srvRank system.Rank) bool {
 }
 
 func (svc *mgmtSvc) getBioHealth(ctx context.Context, srv *IOServerInstance, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
-	dresp, err := srv.CallDrpc(drpc.MethodBioHealth, req)
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 		rResp := new(mgmtpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		dresp, err := srv.CallDrpc(drpc.MethodSmdDevs, new(mgmtpb.SmdDevReq))
+		dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdDevs, new(mgmtpb.SmdDevReq))
 		if err != nil {
 			return err
 		}
@@ -336,7 +336,7 @@ func (svc *mgmtSvc) querySmdPools(ctx context.Context, req *mgmtpb.SmdQueryReq, 
 		rResp := new(mgmtpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		dresp, err := srv.CallDrpc(drpc.MethodSmdPools, new(mgmtpb.SmdPoolReq))
+		dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdPools, new(mgmtpb.SmdPoolReq))
 		if err != nil {
 			return err
 		}
@@ -419,7 +419,7 @@ func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (
 
 	svc.log.Debugf("calling set-faulty on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(drpc.MethodSetFaultyState, &mgmtpb.DevStateReq{
+	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodSetFaultyState, &mgmtpb.DevStateReq{
 		DevUuid: req.Uuid,
 	})
 	if err != nil {
@@ -496,7 +496,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.MethodListContainers, req)
+	dresp, err := mi.CallDrpc(ctx, drpc.MethodListContainers, req)
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +520,7 @@ func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerRe
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(drpc.MethodContSetOwner, req)
+	dresp, err := mi.CallDrpc(ctx, drpc.MethodContSetOwner, req)
 	if err != nil {
 		return nil, err
 	}

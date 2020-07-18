@@ -158,6 +158,9 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if len(gm.RankURIs) == 0 {
+		return errors.New("empty groupmap")
+	}
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,
 	}
@@ -169,7 +172,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	}
 
 	svc.log.Debugf("group update request: %+v", req)
-	dResp, err := mi.CallDrpc(drpc.MethodGroupUpdate, req)
+	dResp, err := mi.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
 		return err

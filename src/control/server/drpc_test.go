@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestCheckDrpcClientSocketPath_Empty(t *testing.T) {
@@ -269,6 +271,9 @@ func TestDrpc_Errors(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
 			cfg := &mockDrpcClientConfig{
 				SendMsgError:    tc.sendError,
 				SendMsgResponse: tc.resp,
@@ -276,7 +281,8 @@ func TestDrpc_Errors(t *testing.T) {
 			}
 			mc := newMockDrpcClient(cfg)
 
-			_, err := makeDrpcCall(mc, drpc.MethodPoolCreate,
+			_, err := makeDrpcCall(context.TODO(), log,
+				mc, drpc.MethodPoolCreate,
 				&mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)
 		})

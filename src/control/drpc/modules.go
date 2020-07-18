@@ -144,6 +144,7 @@ func (m mgmtMethod) String() string {
 		MethodPingRank:     "ping",
 		MethodSetRank:      "set rank",
 		MethodSetUp:        "setup MS",
+		MethodPoolCreate:   "PoolCreate",
 	}[m]; ok {
 		return s
 	}

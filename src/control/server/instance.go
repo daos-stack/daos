@@ -217,7 +217,7 @@ func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyRea
 }
 
 func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
-	dresp, err := srv.CallDrpc(drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+	dresp, err := srv.CallDrpc(context.TODO(), drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
 	}
@@ -323,7 +323,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 		req.Addr = msAddr
 	}
 
-	dresp, err := srv.CallDrpc(drpc.MethodCreateMS, req)
+	dresp, err := srv.CallDrpc(context.TODO(), drpc.MethodCreateMS, req)
 	if err != nil {
 		return err
 	}
@@ -340,7 +340,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 }
 
 func (srv *IOServerInstance) callStartMS() error {
-	dresp, err := srv.CallDrpc(drpc.MethodStartMS, nil)
+	dresp, err := srv.CallDrpc(context.TODO(), drpc.MethodStartMS, nil)
 	if err != nil {
 		return err
 	}
@@ -357,7 +357,7 @@ func (srv *IOServerInstance) callStartMS() error {
 }
 
 func (srv *IOServerInstance) callSetUp() error {
-	dresp, err := srv.CallDrpc(drpc.MethodSetUp, nil)
+	dresp, err := srv.CallDrpc(context.TODO(), drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}
