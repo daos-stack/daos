@@ -705,9 +705,14 @@ class YamlCommand(SubProcessCommand):
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
-                        run_command(
+                        result = run_command(
                             "clush -S -v -w {} --copy {} --dest {}".format(
-                                ",".join(hosts), src_file, dst_file))
+                                ",".join(hosts), src_file, dst_file),
+                            raise_exception=False)
+                        if result.exit_status != 0:
+                            self.log.info(
+                                "WARNING: failure copying '%s' to '%s' on %s",
+                            src_file, dst_file, hosts)
 
                     # debug to list copy of cert files
                     run_command(

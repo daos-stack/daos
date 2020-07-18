@@ -197,9 +197,16 @@ class LogParameter(FormattedParameter):
         initial log file value (just the log file name) to include the directory
         and name for the log file.
         """
-        if self.value is not None:
+        if isinstance(self.value, int):
+            name = os.path.basename(str(self.value))
+            self.value = os.path.join(self._directory, name)
+        elif isinstance(self.value, str):
             name = os.path.basename(self.value)
             self.value = os.path.join(self._directory, name)
+        elif self.value is not None:
+            self.log.info(
+                "Warning: '%s' not added to '%s' due to incompatible type: %s",
+                self._directory, self.value, type(self.value))
 
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
