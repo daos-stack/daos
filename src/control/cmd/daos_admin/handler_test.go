@@ -601,7 +601,8 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 			expPayload: &bdev.FormatResponse{
 				DeviceResponses: bdev.DeviceFormatResponses{
 					"foo": &bdev.DeviceFormatResponse{
-						Error: bdev.FaultFormatError(errors.New("test format failed")),
+						Error: bdev.FaultFormatError(
+							"foo", errors.New("test format failed")),
 					},
 				},
 			},

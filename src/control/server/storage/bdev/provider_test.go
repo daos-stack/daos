@@ -277,7 +277,9 @@ func TestBdevFormat(t *testing.T) {
 					},
 					storage.MockNvmeController(2).PciAddr: &DeviceFormatResponse{
 						Formatted: false,
-						Error:     FaultFormatError(errors.New("format failed")),
+						Error: FaultFormatError(
+							storage.MockNvmeController(2).PciAddr,
+							errors.New("format failed")),
 					},
 					storage.MockNvmeController(3).PciAddr: &DeviceFormatResponse{
 						Formatted:  true,

@@ -123,14 +123,12 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 }
 
 type cliOptions struct {
-	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList   string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
-	Insecure   bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
-	Debug      bool   `short:"d" long:"debug" description:"enable debug output"`
-	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs   bool   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	// TODO: implement host file parsing
-	HostFile       string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
+	AllowProxy     bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	HostList       string     `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	Insecure       bool       `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
+	Debug          bool       `short:"d" long:"debug" description:"enable debug output"`
+	JSON           bool       `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs       bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath     string     `short:"o" long:"config-path" description:"Client config file path"`
 	Storage        storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
 	System         SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
@@ -178,10 +176,6 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {
 			return nil
-		}
-
-		if opts.HostFile != "" {
-			return errors.New("hostfile option not implemented")
 		}
 
 		if !opts.AllowProxy {

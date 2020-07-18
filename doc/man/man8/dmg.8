@@ -1,4 +1,4 @@
-.TH dmg 1 "24 June 2020"
+.TH dmg 1 "14 July 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -29,9 +29,6 @@ Enable JSON output
 .TP
 \fB\fB\-J\fR, \fB\-\-json-logging\fR\fP
 Enable JSON-formatted log output
-.TP
-\fB\fB\-f\fR, \fB\-\-host-file\fR\fP
-path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList
 .TP
 \fB\fB\-o\fR, \fB\-\-config-path\fR\fP
 Client config file path
@@ -322,14 +319,17 @@ Format SCM and NVMe storage attached to remote servers.
 \fBAliases\fP: f
 
 .TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated ranges or individual system ranks to operate on
+.TP
+\fB\fB\-\-rank-hosts\fR\fP
+Hostlist representing hosts whose managed ranks are to be operated on
+.TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Show results of each SCM & NVMe device format operation
 .TP
 \fB\fB\-\-reformat\fR\fP
-Reformat storage overwriting any existing filesystem (CAUTION: Potentially destructive)
-.TP
-\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
-Comma separated list of system ranks to format, default is all ranks
+Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)
 .SS storage prepare
 Prepare SCM and NVMe storage attached to remote servers.
 
@@ -482,11 +482,14 @@ Query DAOS system status
 \fBAliases\fP: q
 
 .TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated ranges or individual system ranks to operate on
+.TP
+\fB\fB\-\-rank-hosts\fR\fP
+Hostlist representing hosts whose managed ranks are to be operated on
+.TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Display more member details
-.TP
-\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
-Comma separated ranges or individual system ranks to query
 .SS system start
 Perform start of stopped DAOS system
 
@@ -497,7 +500,10 @@ Perform start of stopped DAOS system
 
 .TP
 \fB\fB\-r\fR, \fB\-\-ranks\fR\fP
-Comma separated list of system ranks to query
+Comma separated ranges or individual system ranks to operate on
+.TP
+\fB\fB\-\-rank-hosts\fR\fP
+Hostlist representing hosts whose managed ranks are to be operated on
 .SS system stop
 Perform controlled shutdown of DAOS system
 
@@ -507,10 +513,13 @@ Perform controlled shutdown of DAOS system
 \fBAliases\fP: s
 
 .TP
+\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
+Comma separated ranges or individual system ranks to operate on
+.TP
+\fB\fB\-\-rank-hosts\fR\fP
+Hostlist representing hosts whose managed ranks are to be operated on
+.TP
 \fB\fB\-\-force\fR\fP
 Force stop DAOS system members
-.TP
-\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
-Comma separated list of system ranks to query
 .SS version
 Print dmg version

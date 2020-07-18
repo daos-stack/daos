@@ -156,16 +156,16 @@ type storageFormatCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose  bool   `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
-	Reformat bool   `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: Potentially destructive)"`
-	Ranks    string `long:"ranks" short:"r" description:"Comma separated list of system ranks to format, default is all ranks"`
+	rankListCmd
+	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
+	Reformat bool `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)"`
 }
 
 // shouldReformatSystem queries system to interrogate membership before deciding
 // whether a system reformat is appropriate.
 //
 // Reformat system if membership is not empty and all member ranks are stopped.
-func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []system.Rank) (bool, error) {
+func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, error) {
 	if cmd.Reformat {
 		cmd.log.Info("processing system reformat request")
 
@@ -176,15 +176,19 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 
 		if len(resp.Members) == 0 {
 			cmd.log.Debug("no system members, reformat host list")
-			if len(ranks) > 0 {
+			if cmd.Ranks != "" {
 				return false, errors.New(
 					"--ranks parameter invalid as membership is empty")
+			}
+			if cmd.Hosts != "" {
+				return false, errors.New(
+					"--rank-hosts parameter invalid as membership is empty")
 			}
 
 			return false, nil
 		}
 
-		notStoppedRanks, err := system.NewRankSet("")
+		notStoppedRanks, err := system.CreateRankSet("")
 		if err != nil {
 			return false, err
 		}
@@ -205,8 +209,11 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 		return true, nil
 	}
 
-	if len(ranks) > 0 {
+	if cmd.Ranks != "" {
 		return false, errors.New("--ranks parameter invalid if --reformat is not set")
+	}
+	if cmd.Hosts != "" {
+		return false, errors.New("--rank-hosts parameter invalid if --reformat is not set")
 	}
 
 	return false, nil
@@ -218,12 +225,7 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	ctx := context.Background()
 
-	ranks, err := system.ParseRanks(cmd.Ranks)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
-	}
-
-	sysReformat, err := cmd.shouldReformatSystem(ctx, ranks)
+	sysReformat, err := cmd.shouldReformatSystem(ctx)
 	if err != nil {
 		return err
 	}
@@ -238,8 +240,15 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		return cmd.printFormatResp(resp)
 	}
 
-	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
-		&control.SystemResetFormatReq{Ranks: ranks})
+	hostSet, rankSet, err := cmd.validateHostsRanks()
+	if err != nil {
+		return err
+	}
+	srReq := new(control.SystemResetFormatReq)
+	srReq.Hosts = *hostSet
+	srReq.Ranks = *rankSet
+
+	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker, srReq)
 	if err != nil {
 		return err
 	}
