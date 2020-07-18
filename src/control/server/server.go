@@ -328,6 +328,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 	mgmtSvc := newMgmtSvc(harness, membership, sysdb, &clientNetworkCfg)
 	mgmtSvc.startUpdateLoop(ctx)
+	mgmtSvc.requestGroupUpdate(ctx)
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
 
 	go func() {
