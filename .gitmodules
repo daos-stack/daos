@@ -1,6 +1,7 @@
 [submodule "scons_local"]
 	path = scons_local
-	url = https://github.com/daos-stack/scons_local.git
+    url = https://github.com/daos-stack/scons_local.git
+    branch = RSP
 [submodule "raft"]
 	path = src/rdb/raft
 	url = https://github.com/daos-stack/raft.git
