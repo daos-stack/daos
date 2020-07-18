@@ -348,11 +348,14 @@ void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 
+struct obj_io_context;
+
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
 	struct ds_cont_hdl	*cont_hdl;
 	struct ds_cont_child	*cont;
 	void			*args;
+	struct obj_io_context	*ioc;
 	uint32_t		 flags;
 };
 

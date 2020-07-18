@@ -126,6 +126,12 @@ daos_handle_is_inval(daos_handle_t hdl)
 	return hdl.cookie == 0;
 }
 
+static inline bool
+daos_handle_is_valid(daos_handle_t hdl)
+{
+	return !daos_handle_is_inval(hdl);
+}
+
 /**
  * DAOS_PC_RO connects to the pool for reading only.
  *
