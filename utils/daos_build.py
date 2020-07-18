@@ -102,7 +102,6 @@ def configure_mpi(prereqs, env, libs, required=None):
         if mpi == "openmpi":
             comp = "ompi"
         if _find_mpicc(env):
-            prereqs.require(env, comp)
             print("%s is installed" % mpi)
             return comp
         print("No %s installed and/or loaded" % mpi)
