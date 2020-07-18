@@ -712,7 +712,7 @@ class YamlCommand(SubProcessCommand):
                         if result.exit_status != 0:
                             self.log.info(
                                 "WARNING: failure copying '%s' to '%s' on %s",
-                            src_file, dst_file, hosts)
+                                src_file, dst_file, hosts)
 
                     # debug to list copy of cert files
                     run_command(
