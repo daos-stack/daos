@@ -66,18 +66,18 @@ JNIEXPORT jbyteArray JNICALL Java_io_daos_obj_DaosObjClient_queryObjectAttribute
 /*
  * Class:     io_daos_obj_DaosObjClient
  * Method:    fetchObject
- * Signature: (JJIJJ)V
+ * Signature: (JJIJ)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_fetchObject
-  (JNIEnv *, jobject, jlong, jlong, jint, jlong, jlong);
+  (JNIEnv *, jobject, jlong, jlong, jint, jlong);
 
 /*
  * Class:     io_daos_obj_DaosObjClient
  * Method:    updateObject
- * Signature: (JJIJJ)V
+ * Signature: (JJIJ)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_updateObject
-  (JNIEnv *, jobject, jlong, jlong, jint, jlong, jlong);
+  (JNIEnv *, jobject, jlong, jlong, jint, jlong);
 
 /*
  * Class:     io_daos_obj_DaosObjClient

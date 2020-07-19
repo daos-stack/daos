@@ -194,23 +194,6 @@ public class IODataDescTest {
   }
 
   @Test
-  public void testEncodeBeforeSetGlobalBuffer() throws Exception {
-    IllegalStateException ee = null;
-    IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
-      10, 10);
-    ByteBuf descBuffer  = BufferAllocator.objBufWithNativeOrder(100);
-    try {
-      entry.encode(descBuffer);
-    } catch (IllegalStateException e) {
-      ee = e;
-    } finally {
-      descBuffer.release();
-    }
-    Assert.assertNotNull(ee);
-    Assert.assertTrue(ee.getMessage().contains("value buffer index is not set"));
-  }
-
-  @Test
   public void testEncode() throws Exception {
     IllegalArgumentException ee = null;
     // array value
@@ -219,7 +202,7 @@ public class IODataDescTest {
       IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
           10, 10);
       entry.encode(descBuffer);
-      Assert.assertEquals(23, descBuffer.writerIndex());
+      Assert.assertEquals(27, descBuffer.writerIndex());
       descBuffer.readerIndex(0);
       Assert.assertEquals(4, descBuffer.readShort());
       byte keyBytes[] = new byte[4];
@@ -234,7 +217,7 @@ public class IODataDescTest {
       entry = new IODataDesc.Entry("akey", IODataDesc.IodType.SINGLE, 10,
           0, 10);
       entry.encode(descBuffer);
-      Assert.assertEquals(15, descBuffer.writerIndex());
+      Assert.assertEquals(19, descBuffer.writerIndex());
     } finally {
       descBuffer.release();
     }
@@ -248,7 +231,7 @@ public class IODataDescTest {
       IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.SINGLE, 10,
           0, 10);
       entry.encode(descBuffer);
-      Assert.assertEquals(15, descBuffer.writerIndex());
+      Assert.assertEquals(19, descBuffer.writerIndex());
       entry.setActualSize(10);
       // read to byte array
       ByteBuf buf = entry.getFetchedData();
@@ -263,7 +246,7 @@ public class IODataDescTest {
       IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
           0, 30);
       entry.encode(descBuffer);
-      Assert.assertEquals(23, descBuffer.writerIndex());
+      Assert.assertEquals(27, descBuffer.writerIndex());
       descBuffer.readerIndex(0);
       Assert.assertEquals(4, descBuffer.readShort());
       byte keyBytes[] = new byte[4];
