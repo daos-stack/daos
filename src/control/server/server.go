@@ -327,9 +327,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		NetDevClass:     netDevClass,
 	}
 	mgmtSvc := newMgmtSvc(harness, membership, sysdb, &clientNetworkCfg)
-	mgmtSvc.startUpdateLoop(ctx)
-	mgmtSvc.requestGroupUpdate(ctx)
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
+	sysdb.OnStart(func() error {
+		mgmtSvc.startUpdateLoop(ctx)
+		mgmtSvc.requestGroupUpdate(ctx)
+		return nil
+	})
 
 	go func() {
 		_ = grpcServer.Serve(lis)
