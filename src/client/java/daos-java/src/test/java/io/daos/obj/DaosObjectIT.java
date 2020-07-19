@@ -117,15 +117,15 @@ public class DaosObjectIT {
       IODataDesc desc = object.createDataDescForUpdate("dkey1", list);
       try {
         object.update(desc);
+      } finally {
+        desc.release();
+      }
+      try {
         // update with different record size
         dataSize = 40;
         bytes = generateDataArray(dataSize);
         // old entry is in list
         list.add(createEntryForUpdate("akey2", 20, 0, dataSize, bytes));
-      } finally {
-        desc.release();
-      }
-      try {
         desc = object.createDataDescForUpdate("dkey1", list);
         Exception ee = null;
         try {
@@ -134,8 +134,8 @@ public class DaosObjectIT {
           ee = e;
         }
         Assert.assertNotNull(ee);
-        Assert.assertTrue(ee instanceof IllegalArgumentException);
-        Assert.assertTrue(ee.getMessage().contains("global buffer is set already"));
+        Assert.assertTrue(ee instanceof DaosObjectException);
+        Assert.assertTrue(ee.getMessage().contains("failed to update object"));
       } finally {
         desc.release();
       }
@@ -293,7 +293,7 @@ public class DaosObjectIT {
         Assert.assertEquals(10, entry.getActualRecSize());
         Assert.assertEquals(20, entry.getActualSize());
         byte[] actualBytes = new byte[entry.getActualSize()];
-        entry.get(actualBytes);
+        entry.getFetchedData().readBytes(actualBytes);
         byte[] bytes020 = Arrays.copyOfRange(bytes, 0, 20);
         Assert.assertTrue(Arrays.equals(bytes020, actualBytes));
       } finally {
@@ -310,7 +310,7 @@ public class DaosObjectIT {
         Assert.assertEquals(10, entry.getActualRecSize());
         Assert.assertEquals(10, entry.getActualSize());
         actualBytes2 = new byte[entry.getActualSize()];
-        entry.get(actualBytes2);
+        entry.getFetchedData().readBytes(actualBytes2);
         byte[] bytes1020 = Arrays.copyOfRange(bytes, 10, 20);
         Assert.assertTrue(Arrays.equals(bytes1020, actualBytes2));
       } finally {
@@ -344,7 +344,7 @@ public class DaosObjectIT {
         Assert.assertEquals(10, entry.getActualRecSize());
         Assert.assertEquals(30, entry.getActualSize());
         actualBytes2 = new byte[entry.getActualSize()];
-        entry.get(actualBytes2);
+        entry.getFetchedData().readBytes(actualBytes2);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes2));
       } finally {
         desc2.release();
@@ -386,7 +386,7 @@ public class DaosObjectIT {
         Assert.assertEquals(30, entry.getActualRecSize());
         Assert.assertEquals(dataSize, entry.getActualSize());
         byte[] actualBytes = new byte[dataSize];
-        entry.get(actualBytes);
+        entry.getFetchedData().readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
       } finally {
         desc2.release();
@@ -445,7 +445,7 @@ public class DaosObjectIT {
         IODataDesc.Entry entry = list2.get(0);
         Assert.assertEquals(dataSize, entry.getActualSize());
         actualBytes = new byte[dataSize];
-        entry.get(actualBytes);
+        entry.getFetchedData().readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
       } finally {
         desc2.release();
@@ -458,7 +458,7 @@ public class DaosObjectIT {
         object.fetch(desc2);
         IODataDesc.Entry entry = list2.get(0);
         Assert.assertEquals(dataSize, entry.getActualSize());
-        entry.get(actualBytes);
+        entry.getFetchedData().readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
       } finally {
         desc2.release();
@@ -472,11 +472,11 @@ public class DaosObjectIT {
         object.fetch(desc2);
         IODataDesc.Entry entry1 = list2.get(0);
         Assert.assertEquals(dataSize, entry1.getActualSize());
-        entry1.get(actualBytes);
+        entry1.getFetchedData().readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
         IODataDesc.Entry entry2 = list2.get(1);
         Assert.assertEquals(dataSize, entry2.getActualSize());
-        entry2.get(actualBytes);
+        entry2.getFetchedData().readBytes(actualBytes);
         Assert.assertTrue(Arrays.equals(bytes, actualBytes));
       } finally {
         desc2.release();
