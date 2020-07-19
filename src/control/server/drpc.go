@@ -220,10 +220,10 @@ func newDrpcCall(method drpc.Method, bodyMessage proto.Message) (*drpc.Call, err
 // protobuf message marshalled in the body, and closes the connection.
 // drpc response is returned after basic checks.
 func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSocketClient, method drpc.Method, body proto.Message) (drpcResp *drpc.Response, err error) {
-	client.Lock()
-	defer client.Unlock()
-
 	tryCall := func(msg proto.Message) (*drpc.Response, error) {
+		client.Lock()
+		defer client.Unlock()
+
 		drpcCall, err := newDrpcCall(method, msg)
 		if err != nil {
 			return nil, errors.Wrap(err, "build drpc call")

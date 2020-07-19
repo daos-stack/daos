@@ -60,6 +60,8 @@ type (
 		Addrs PoolAddrMap
 	}
 
+	onDatabaseStartedFn func() error
+
 	Database struct {
 		sync.RWMutex
 		rankLock       sync.Mutex
@@ -69,6 +71,7 @@ type (
 		resolveTCPAddr func(string, string) (*net.TCPAddr, error)
 		interfaceAddrs func() ([]net.Addr, error)
 		raft           *raft.Raft
+		onStarted      []onDatabaseStartedFn
 
 		NextRank      Rank
 		MapVersion    uint32
@@ -316,6 +319,12 @@ func (db *Database) checkReplica(ctrlAddr *net.TCPAddr) (isReplica, isBootStrap 
 	return
 }
 
+// OnStart registers callbacks to be run when the database
+// has started.
+func (db *Database) OnStart(fn onDatabaseStartedFn) {
+	db.onStarted = append(db.onStarted, fn)
+}
+
 func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 	var isBootStrap, needsBootStrap bool
 	var err error
@@ -379,6 +388,12 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 			},
 		}
 		db.raft.BootstrapCluster(bsc)
+	}
+
+	for _, fn := range db.onStarted {
+		if err := fn(); err != nil {
+			return errors.Wrap(err, "failure in onStarted callback")
+		}
 	}
 
 	return nil
