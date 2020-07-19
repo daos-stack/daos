@@ -116,7 +116,8 @@ class DmgCommand(DmgCommandBase):
         # Without verbose.
         vals = re.findall(
             r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
-            r"namespaces\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+controller",
+            r"[modules|namespaces]+\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
+            r"controller",
             self.result.stdout)
         self.log.info("--- Non-verbose output parse result ---")
         self.log.info(vals)
