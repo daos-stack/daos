@@ -144,11 +144,20 @@ class OSAOfflineDrain(TestWithServers):
             output = self.dmg_command.pool_drain(self.pool.uuid,
                                                  rank, t_string)
             self.log.info(output)
-            time.sleep(10)
+
+            pver_drain = self.get_pool_version()
+            fail_count = 0
+            while fail_count <= 20:
+                pver_drain = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_drain > pver_begin + 1:
+                    break
+
             pver_drain = self.get_pool_version()
             self.log.info("Pool Version after drain %d", pver_drain)
             # Check pool version incremented after pool drain
-            self.assertTrue(pver_drain > pver_begin,
+            self.assertTrue(pver_drain > (pver_begin + 1),
                             "Pool Version Error:  After drain")
 
         for val in range(0, num_pool):

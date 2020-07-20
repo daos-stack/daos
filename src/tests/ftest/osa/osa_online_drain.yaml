@@ -28,7 +28,7 @@ container:
   properties:
     enable_checksum: True
 ior:
-    no_parallel_job: 10
+    no_parallel_job: 5
     clientslots:
       slots: 2
     test_file: daos:testFile
