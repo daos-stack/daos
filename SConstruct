@@ -50,11 +50,11 @@ def update_rpm_version(version, tag):
         if line.startswith("Version:"):
             current_version = line[line.rfind(' ')+1:].rstrip()
             if version < current_version:
-                print("You cannot create a new verison ({}) lower than the RPM "
+                print("You cannot create a new version ({}) lower than the RPM "
                       "spec file has currently ({})".format(version,
                                                             current_version))
                 return False
-            elif version > current_version:
+            if version > current_version:
                 spec[line_num] = "Version:       {}\n".format(version)
         if line.startswith("Release:"):
             if version == current_version:
@@ -174,7 +174,7 @@ def scons():
                   "using a previous pre-release such as a release candidate.\n")
             question = "Are you sure you want to continue? (y/N): "
             answer = None
-            while answer != "y" and answer != "n" and answer != "":
+            while answer not in ["y", "n", ""]:
                 answer = input(question).lower().strip()
             if answer != 'y':
                 exit(1)
@@ -222,12 +222,18 @@ def scons():
 
         # and check it out
         print("Checking out branch for the PR...")
-        repo.checkout(repo.lookup_branch(branch))
-
+        try:
+            repo.checkout(repo.lookup_branch(branch))
+        except pygit2.GitError:
+            print("Could not checkout {0}.  Uncommitted changes perhaps?\n"
+                  "Please either commit or discard your uncommmited changes.\n"
+                  "Deleting branch {0}".format(branch))
+            repo.branches.delete(branch)
+            exit(1)
         print("Updating the RPM specfile...")
         if not update_rpm_version(version, tag):
-            print("Branch has been left in the created state.  You will have "
-                  "to clean it up manually.")
+            print("Deleting branch {0}".format(branch))
+            repo.branches.delete(branch)
             exit(1)
 
         print("Updating the API_VERSION, VERSION and TAG files...")
@@ -265,7 +271,9 @@ def scons():
         # set up authentication callback
         class MyCallbacks(pygit2.RemoteCallbacks):
             """ Callbacks for pygit2 """
-            def credentials(self, url, username_from_url, allowed_types): # pylint: disable=method-hidden
+            @staticmethod
+            def credentials(_url, username_from_url, allowed_types): # pylint: disable=method-hidden
+                """setup credentials"""
                 if allowed_types & pygit2.credentials.GIT_CREDTYPE_SSH_KEY:
                     if "SSH_AUTH_SOCK" in os.environ:
                         # Use ssh agent for authentication
@@ -285,6 +293,7 @@ def scons():
                                     "by remote end.  SSH_AUTH_SOCK not found "
                                     "in your environment.  Are you running an "
                                     "ssh-agent?")
+                return None
 
         # and push it
         print("Pushing the changes to GitHub...")
