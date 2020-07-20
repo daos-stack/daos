@@ -120,8 +120,9 @@ def qb_inst_rpms = ""
 el7_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
-                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
+                       "romio-tests-cart-4-daos-0 hdf5-mpich-tests " +
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio" +
+                       "hdf5-openmpi-tests"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
