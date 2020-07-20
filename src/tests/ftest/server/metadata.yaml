@@ -9,7 +9,7 @@ hosts:
     - server-D
   test_clients:
     - client-C
-timeout: 240
+timeout: 300
 server_config:
   name: daos_server
   servers_per_host: 2
@@ -53,7 +53,7 @@ pool:
   createset:
     group: daos_server
   createsvc:
-    svcn: 1
+    svcn: 3
   createsize:
     scm_size: 1073741824
     nvme_size: 8589934592
