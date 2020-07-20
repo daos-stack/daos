@@ -235,35 +235,6 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid,
 	return rc;
 }
 
-static size_t
-pool_rec_size(int nreplicas)
-{
-	struct pool_rec *rec = NULL;
-
-	return sizeof(*rec) + sizeof(*rec->pr_replicas) * nreplicas;
-}
-
-static bool
-pool_rec_valid(d_iov_t *v)
-{
-	struct pool_rec *rec;
-
-	if (v->iov_len < sizeof(*rec)) {
-		D_ERROR("invalid pool record header size %zu (not %zu)\n",
-			v->iov_len, sizeof(*rec));
-		return false;
-	}
-	rec = v->iov_buf;
-
-	if (v->iov_len != pool_rec_size(rec->pr_nreplicas)) {
-		D_ERROR("invalid pool record size %zu (not %zu)\n", v->iov_len,
-			pool_rec_size(rec->pr_nreplicas));
-		return false;
-	}
-
-	return true;
-}
-
 int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
@@ -355,6 +326,25 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 				 pc_in->pc_prop, pc_in->pc_svc_nr,
 				 &pc_out->pc_svc);
 	pc_out->pc_rc = rc;
+
+	/* NB: This is a deprecated code path, but we
+	   need to handle it for now until daos_test is
+	   converted to use dmg for pool management. */
+	if (rc == 0) {
+		rc = pool_create_upcall(pc_in->pc_pool_uuid, pc_out->pc_svc);
+		if (rc != 0) {
+			pc_out->pc_rc = rc;
+			D_ERROR("pool_create_upcall failed, rc: %d\n", rc);
+			rc = ds_mgmt_destroy_pool(pc_in->pc_pool_uuid,
+						  pc_out->pc_svc,
+						  pc_in->pc_grp, true);
+			if (rc != 0) {
+				D_ERROR("pool cleanup failed, rc: %d\n", rc);
+				/* now what? */
+			}
+		}
+	}
+
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d (pc_tgt_dev: %s).\n",
@@ -424,8 +414,22 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		return;
 	}
 
-	pd_out->pd_rc = ds_mgmt_destroy_pool(pd_in->pd_pool_uuid, svc_ranks,
+	rc = ds_mgmt_destroy_pool(pd_in->pd_pool_uuid, svc_ranks,
 					     pd_in->pd_grp, pd_in->pd_force);
+	pd_out->pd_rc = rc;
+
+	/* NB: This is a deprecated code path, but we
+	   need to handle it for now until daos_test is
+	   converted to use dmg for pool management. */
+	if (rc == 0) {
+		rc = pool_destroy_upcall(pd_in->pd_pool_uuid);
+		if (rc != 0) {
+			pd_out->pd_rc = rc;
+			D_ERROR("pool_destroy_upcall failed, rc: %d\n", rc);
+			/* now what? */
+		}
+	}
+
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
@@ -539,111 +543,65 @@ ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 	}
 }
 
-static int
-enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+static void
+free_cli_pool_list(daos_mgmt_pool_info_t **poolsp, uint64_t len)
 {
-	struct pool_rec			*rec;
-	struct list_pools_iter_args	*ap = varg;
-	struct mgmt_list_pools_one	*pool = NULL;
-	uint32_t			 ri;
+	daos_mgmt_pool_info_t	*pools;
 
-	if (key->iov_len != sizeof(uuid_t)) {
-		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
-		return -DER_IO;
+	D_ASSERT(poolsp != NULL);
+	pools = *poolsp;
+
+	if (pools) {
+		uint64_t pc;
+
+		for (pc = 0; pc < len; pc++)
+			d_rank_list_free(pools[pc].mgpi_svc);
+		D_FREE(pools);
+		*poolsp = NULL;
 	}
-	if (!pool_rec_valid(val))
-		return -DER_IO;
-	rec = val->iov_buf;
+}
 
-	ap->npools++;
+static int
+pool_cli_to_rpc(struct mgmt_list_pools_one *dst, daos_mgmt_pool_info_t *src)
+{
+	if (src == NULL || dst == NULL)
+		return -DER_INVAL;
 
-	/* Client didn't provide buffer or not enough space */
-	if (ap->avail_npools < ap->npools)
-		return 0;
-
-	/* Realloc pools[] if needed (double each time starting with 1) */
-	if (ap->pools_index == ap->pools_len) {
-		void	*ptr;
-		size_t	realloc_elems = (ap->pools_len == 0) ? 1 :
-					ap->pools_len * 2;
-
-		D_REALLOC_ARRAY(ptr, ap->pools, realloc_elems);
-		if (ptr == NULL)
-			return -DER_NOMEM;
-		ap->pools = ptr;
-		ap->pools_len = realloc_elems;
-	}
-
-	pool = &ap->pools[ap->pools_index];
-	ap->pools_index++;
-	uuid_copy(pool->lp_puuid, key->iov_buf);
-	pool->lp_svc = d_rank_list_alloc(rec->pr_nreplicas);
-	if (pool->lp_svc == NULL)
-		return DER_NOMEM;
-	for (ri = 0; ri < rec->pr_nreplicas; ri++)
-		pool->lp_svc->rl_ranks[ri] = rec->pr_replicas[ri];
-	return 0;
+	uuid_copy(dst->lp_puuid, src->mgpi_uuid);
+	return d_rank_list_dup(&dst->lp_svc, src->mgpi_svc);
 }
 
 int
 ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		   struct mgmt_list_pools_one **poolsp, size_t *pools_len)
 {
-	struct mgmt_svc			*svc;
-	struct rdb_tx			 tx;
-	struct list_pools_iter_args	 iter_args;
-	int				 rc;
+	daos_mgmt_pool_info_t		*cli_pools;
+	size_t				cli_pools_len;
+	struct mgmt_list_pools_one	*rpc_pools;
+	int				i, rc;
 
-	*poolsp = NULL;
-	*pools_len = 0;
-
-	/* TODO: attach to DAOS system based on group argument */
-
-	if (npools == NULL)
-		iter_args.avail_npools = UINT64_MAX; /* get all the pools */
-	else
-		iter_args.avail_npools = *npools;
-
-	iter_args.npools = 0;
-	iter_args.pools_index = 0;		/* num pools in pools[] */
-	iter_args.pools_len = 0;		/* alloc length of pools[] */
-	iter_args.pools = NULL;			/* realloc in enum_pool_cb() */
-
-	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	rc = pool_list_upcall(group, npools, &cli_pools, &cli_pools_len);
 	if (rc != 0)
 		goto out;
 
-	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
-	if (rc != 0)
-		goto out_svc;
-	ABT_rwlock_rdlock(svc->ms_lock);
+	D_ALLOC_ARRAY(rpc_pools, cli_pools_len);
+	if (rpc_pools == NULL)
+		D_GOTO(out_cli_pools, rc = -DER_NOMEM);
 
-	rc = rdb_tx_iterate(&tx, &svc->ms_pools, false /* !backward */,
-			    enum_pool_cb, &iter_args);
-
-	ABT_rwlock_unlock(svc->ms_lock);
-	rdb_tx_end(&tx);
-
-out_svc:
-	ds_mgmt_svc_put_leader(svc);
-out:
-	if (npools != NULL)
-		*npools = iter_args.npools;
-	/* poolsp, pools_len initialized to NULL,0 - update if successful */
-
-	if (rc != 0) {
-		/* Error in iteration */
-		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
-	} else if ((iter_args.avail_npools > 0) &&
-		   (iter_args.npools > iter_args.avail_npools)) {
-		/* Got a list, but client buffer not supplied or too small */
-		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
-		rc = -DER_TRUNC;
-	} else {
-		*poolsp = iter_args.pools;
-		*pools_len = iter_args.pools_index;
+	for (i = 0; i < cli_pools_len; i++) {
+		rc = pool_cli_to_rpc(&rpc_pools[i], &cli_pools[i]);
+		if (rc != 0) {
+			ds_mgmt_free_pool_list(&rpc_pools, cli_pools_len);
+			goto out_cli_pools;
+		}
 	}
 
+	*poolsp = rpc_pools;
+	*pools_len = cli_pools_len;
+
+out_cli_pools:
+	free_cli_pool_list(&cli_pools, cli_pools_len);
+out:
 	return rc;
 }
 

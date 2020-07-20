@@ -56,3 +56,29 @@ message GetPoolSvcResp {
 	int32 status = 1; // DAOS error code
 	repeated uint32 svcreps = 2; // Pool service replica ranks
 }
+
+// following messages support the deprecated C mgmt API and
+// maintain compatibility with the iosrv MS
+message PoolCreateUpcall {
+	string uuid = 1; // Pool UUID
+	repeated uint32 svcreps = 2; // Pool service replica ranks
+}
+
+message PoolDestroyUpcall {
+	string uuid = 1; // Pool UUID
+}
+
+message PoolListUpcall {
+	string group = 1; // server group
+	uint64 npools = 2; // number of pools to include in response
+}
+
+// copied from mgmt/pool.proto
+message PoolListUpcallResp {
+	message Pool {
+		string uuid = 1;
+		repeated uint32 svcreps = 2;
+	}
+	int32 status = 1; // DAOS error code
+	repeated Pool pools = 2;
+}

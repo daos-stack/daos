@@ -823,6 +823,11 @@ void dss_init_state_set(enum dss_init_state state);
 
 int notify_bio_error(int media_err_type, int tgt_id);
 int get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
+/* deprecated mgmt API functions */
+int pool_create_upcall(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int pool_destroy_upcall(uuid_t pool_uuid);
+int pool_list_upcall(const char *group, uint64_t *npools,
+		     daos_mgmt_pool_info_t **pools, size_t *pools_len);
 
 bool is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);

@@ -238,8 +238,12 @@ func (m srvMethod) ID() int32 {
 
 func (m srvMethod) String() string {
 	if s, ok := map[srvMethod]string{
-		MethodNotifyReady: "notify ready",
-		MethodBIOError:    "block i/o error",
+		MethodNotifyReady:         "notify ready",
+		MethodBIOError:            "block i/o error",
+		MethodGetPoolServiceRanks: "GetPoolServiceRanks",
+		MethodPoolCreateUpcall:    "PoolCreateUpcall",
+		MethodPoolDestroyUpcall:   "PoolDestroyUpcall",
+		MethodPoolListUpcall:      "PoolListUpcall",
 	}[m]; ok {
 		return s
 	}
@@ -265,6 +269,15 @@ const (
 	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 	// MethodGetPoolServiceRanks requests the service ranks for a pool
 	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
+	// MethodPoolCreateUpcall handles a notification from the data plane
+	// that a pool was created via the deprecated C mgmt API.
+	MethodPoolCreateUpcall srvMethod = C.DRPC_METHOD_SRV_POOL_CREATE_UPCALL
+	// MethodPoolDestroyUpcall handles a notification from the data plane
+	// that a pool was destroyed via the deprecated C mgmt API.
+	MethodPoolDestroyUpcall srvMethod = C.DRPC_METHOD_SRV_POOL_DESTROY_UPCALL
+	// MethodPoolListUpcall provides backward compatibility to list
+	// pools via the deprecated C mgmt API.
+	MethodPoolListUpcall srvMethod = C.DRPC_METHOD_SRV_POOL_LIST_UPCALL
 )
 
 type securityMethod int32

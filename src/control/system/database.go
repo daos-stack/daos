@@ -669,6 +669,11 @@ func (db *Database) FindMembersByAddr(addr net.Addr) ([]*Member, error) {
 	return nil, &FindMemberError{byAddr: addr}
 }
 
+func IsFindPoolError(err error) bool {
+	_, ok := err.(*FindPoolError)
+	return ok
+}
+
 type FindPoolError struct {
 	byRank *Rank
 	byUUID *uuid.UUID

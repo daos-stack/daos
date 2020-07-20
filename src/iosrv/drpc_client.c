@@ -158,7 +158,7 @@ out_dreq:
 	return rc;
 }
 
-/* FIXME: Don't copy this -- move to common? */
+/* FIXME: Don't copy these -- move to common? */
 static d_rank_list_t *
 uint32_array_to_rank_list(uint32_t *ints, size_t len)
 {
@@ -249,6 +249,294 @@ out_dreq:
 	drpc_call_free(dreq);
 out_uuid:
 	D_FREE(gps_req.uuid);
+out:
+	return rc;
+}
+
+/* NB: The following functions (and any helpers/messages) should be
+ * removed when the C mgmt API is removed:
+ * free_pool_list()
+ * rank_list_to_uint32_array()
+ * pool_list_upcall()
+ * pool_create_upcall()
+ * pool_destroy_upcall()
+ */
+
+static void
+free_pool_list(daos_mgmt_pool_info_t **poolsp, uint64_t len)
+{
+	daos_mgmt_pool_info_t	*pools;
+
+	D_ASSERT(poolsp != NULL);
+	pools = *poolsp;
+
+	if (pools) {
+		uint64_t pc;
+
+		for (pc = 0; pc < len; pc++)
+			d_rank_list_free(pools[pc].mgpi_svc);
+		D_FREE(pools);
+		*poolsp = NULL;
+	}
+}
+
+int
+pool_list_upcall(const char *group, uint64_t *npools,
+		 daos_mgmt_pool_info_t **out_pools, size_t *pools_len)
+{
+	Srv__PoolListUpcall		plu_req = SRV__POOL_LIST_UPCALL__INIT;
+	Srv__PoolListUpcallResp		*plu_resp = NULL;
+	Srv__PoolListUpcallResp__Pool	*plu_pool;
+	Drpc__Call			*dreq;
+	Drpc__Response			*dresp;
+	uint8_t				*req;
+	size_t			 	req_size;
+	uint64_t			pi = 0;
+	uint64_t			pool_count = 0;
+	uint64_t			avail_npools;
+	daos_mgmt_pool_info_t		*pools = NULL;
+	daos_mgmt_pool_info_t		*pool;
+	int				rc;
+
+	*out_pools = NULL;
+	*pools_len = 0;
+
+	if (dss_drpc_ctx == NULL) {
+		D_ERROR("DRPC not connected\n");
+		return -DER_INVAL;
+	}
+
+	if (npools == NULL)
+		avail_npools = UINT64_MAX; /* get all the pools */
+	else
+		avail_npools = *npools;
+
+	if (group != NULL)
+		D_STRNDUP(plu_req.group, group, DAOS_SYS_NAME_MAX);
+	plu_req.npools = avail_npools;
+
+	req_size = srv__pool_list_upcall__get_packed_size(&plu_req);
+	D_ALLOC(req, req_size);
+	if (req == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	srv__pool_list_upcall__pack(&plu_req, req);
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+			      DRPC_METHOD_SRV_POOL_LIST_UPCALL, &dreq);
+	if (rc != 0) {
+		D_FREE(req);
+		goto out;
+	}
+
+	dreq->body.len = req_size;
+	dreq->body.data = req;
+
+	D_DEBUG(DB_MGMT, "sending pool list upcall\n");
+
+	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0)
+		goto out_dreq;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		D_GOTO(out_dreq, rc = -DER_IO);
+	}
+
+	plu_resp = srv__pool_list_upcall_resp__unpack(NULL,
+					   dresp->body.len,
+					   dresp->body.data);
+	if (plu_resp == NULL) {
+		D_ERROR("Failed to unpack resp (list pools)\n");
+		D_GOTO(out_dreq, rc = -DER_INVAL);
+	}
+
+	D_DEBUG(DB_MGMT, "got %zu pools back\n", plu_resp->n_pools);
+
+	D_ALLOC(pools, plu_resp->n_pools);
+	if (pools == NULL) {
+		D_ERROR("failed to allocate pool list\n");
+		D_GOTO(out_resp, rc = -DER_INVAL);
+	}
+
+	for (pi = 0; pi < plu_resp->n_pools; pi++) {
+		plu_pool = plu_resp->pools[pi];
+		pool = &pools[pi];
+		rc = uuid_parse(plu_pool->uuid, pool->mgpi_uuid);
+		if (rc != 0) {
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+		pool->mgpi_svc = uint32_array_to_rank_list(plu_pool->svcreps,
+							plu_pool->n_svcreps);
+		if (pool->mgpi_svc == NULL)
+			D_GOTO(out_resp, rc = -DER_NOMEM);
+		pool_count++;
+	}
+
+out_resp:
+	srv__pool_list_upcall_resp__free_unpacked(plu_resp, NULL);
+out_dreq:
+	/* also frees req via dreq->body.data */
+	drpc_call_free(dreq);
+out:
+	if (npools != NULL)
+		*npools = plu_resp->n_pools;
+
+	if (rc != 0) {
+		/* Error in iteration */
+		free_pool_list(&pools, pi);
+	} else {
+		*out_pools = pools;
+		*pools_len = pool_count;
+	}
+
+	return rc;
+}
+
+static int
+rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
+{
+	uint32_t i;
+
+	D_ALLOC_ARRAY(*ints, rl->rl_nr);
+	if (*ints == NULL)
+		return -DER_NOMEM;
+
+	*len = rl->rl_nr;
+
+	for (i = 0; i < rl->rl_nr; i++)
+		(*ints)[i] = (uint32_t)rl->rl_ranks[i];
+
+	return 0;
+}
+
+int
+pool_create_upcall(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	Srv__PoolCreateUpcall	pcu_req = SRV__POOL_CREATE_UPCALL__INIT;
+	Drpc__Call		*dreq;
+	Drpc__Response		*dresp;
+	uint8_t			*req;
+	size_t			 req_size;
+	int			 rc;
+
+	if (dss_drpc_ctx == NULL) {
+		D_ERROR("DRPC not connected\n");
+		return -DER_INVAL;
+	}
+
+	if (svc_ranks == NULL) {
+		D_ERROR("pool service ranks was NULL\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC(pcu_req.uuid, DAOS_UUID_STR_SIZE);
+	if (pcu_req.uuid == NULL) {
+		D_ERROR("failed to allocate device uuid\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	uuid_unparse_lower(pool_uuid, pcu_req.uuid);
+
+	rc = rank_list_to_uint32_array(svc_ranks,
+		&pcu_req.svcreps, &pcu_req.n_svcreps);
+	if (rc != 0) {
+		D_ERROR("failed to allocate rank list\n");
+		D_GOTO(out_uuid, rc = -DER_NOMEM);
+	}
+
+	req_size = srv__pool_create_upcall__get_packed_size(&pcu_req);
+	D_ALLOC(req, req_size);
+	if (req == NULL)
+		D_GOTO(out_svcreps, rc = -DER_NOMEM);
+
+	srv__pool_create_upcall__pack(&pcu_req, req);
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+			      DRPC_METHOD_SRV_POOL_CREATE_UPCALL, &dreq);
+	if (rc != 0) {
+		D_FREE(req);
+		goto out_svcreps;
+	}
+
+	dreq->body.len = req_size;
+	dreq->body.data = req;
+
+	D_DEBUG(DB_MGMT, DF_UUID": sending pool create upcall (# ranks: %zu)\n",
+		DP_UUID(pool_uuid), pcu_req.n_svcreps);
+
+	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0)
+		goto out_dreq;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		rc = -DER_IO;
+	}
+
+out_dreq:
+	/* also frees req via dreq->body.data */
+	drpc_call_free(dreq);
+out_svcreps:
+	D_FREE(pcu_req.svcreps);
+out_uuid:
+	D_FREE(pcu_req.uuid);
+out:
+	return rc;
+}
+
+int
+pool_destroy_upcall(uuid_t pool_uuid)
+{
+	Srv__PoolDestroyUpcall	pdu_req = SRV__POOL_DESTROY_UPCALL__INIT;
+	Drpc__Call		*dreq;
+	Drpc__Response		*dresp;
+	uint8_t			*req;
+	size_t			 req_size;
+	int			 rc;
+
+	if (dss_drpc_ctx == NULL) {
+		D_ERROR("DRPC not connected\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC(pdu_req.uuid, DAOS_UUID_STR_SIZE);
+	if (pdu_req.uuid == NULL) {
+		D_ERROR("failed to allocate device uuid\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	uuid_unparse_lower(pool_uuid, pdu_req.uuid);
+
+	req_size = srv__pool_destroy_upcall__get_packed_size(&pdu_req);
+	D_ALLOC(req, req_size);
+	if (req == NULL)
+		D_GOTO(out_uuid, rc = -DER_NOMEM);
+
+	srv__pool_destroy_upcall__pack(&pdu_req, req);
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+			      DRPC_METHOD_SRV_POOL_DESTROY_UPCALL, &dreq);
+	if (rc != 0) {
+		D_FREE(req);
+		goto out_uuid;
+	}
+
+	dreq->body.len = req_size;
+	dreq->body.data = req;
+
+	D_DEBUG(DB_MGMT, DF_UUID": sending pool destroy upcall\n",
+		DP_UUID(pool_uuid));
+
+	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0)
+		goto out_dreq;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		rc = -DER_IO;
+	}
+
+out_dreq:
+	/* also frees req via dreq->body.data */
+	drpc_call_free(dreq);
+out_uuid:
+	D_FREE(pdu_req.uuid);
 out:
 	return rc;
 }

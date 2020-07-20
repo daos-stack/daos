@@ -65,6 +65,12 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req 
 		return nil, mod.handleBioErr(req)
 	case drpc.MethodGetPoolServiceRanks:
 		return mod.handleGetPoolServiceRanks(req)
+	case drpc.MethodPoolCreateUpcall:
+		return nil, mod.handlePoolCreateUpcall(req)
+	case drpc.MethodPoolDestroyUpcall:
+		return nil, mod.handlePoolDestroyUpcall(req)
+	case drpc.MethodPoolListUpcall:
+		return mod.handlePoolListUpcall(req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
@@ -72,6 +78,84 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req 
 
 func (mod *srvModule) ID() drpc.ModuleID {
 	return drpc.ModuleSrv
+}
+
+func (mod *srvModule) handlePoolListUpcall(reqb []byte) ([]byte, error) {
+	req := new(srvpb.PoolListUpcall)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	mod.log.Debugf("handling PoolListUpcall: %+v", req)
+
+	resp := new(srvpb.PoolListUpcallResp)
+	for i, ps := range mod.sysdb.PoolServiceList() {
+		resp.Pools = append(resp.Pools, &srvpb.PoolListUpcallResp_Pool{
+			Uuid:    ps.PoolUUID.String(),
+			Svcreps: system.RanksToUint32(ps.Replicas),
+		})
+		if uint64(i) == req.Npools {
+			break
+		}
+	}
+
+	mod.log.Debugf("PoolListUpcallResp: %+v", resp)
+
+	return proto.Marshal(resp)
+}
+
+func (mod *srvModule) handlePoolCreateUpcall(reqb []byte) error {
+	req := new(srvpb.PoolCreateUpcall)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return drpc.UnmarshalingPayloadFailure()
+	}
+
+	uuid, err := uuid.Parse(req.GetUuid())
+	if err != nil {
+		return errors.Wrapf(err, "invalid pool uuid %q", uuid)
+	}
+
+	mod.log.Debugf("handling PoolCreateUpcall: %+v", req)
+
+	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
+	if err != nil && !system.IsFindPoolError(err) {
+		return err
+	}
+
+	if ps != nil {
+		return drpc.DaosAlready
+	}
+
+	ps = &system.PoolService{
+		PoolUUID: uuid,
+		Replicas: system.RanksFromUint32(req.GetSvcreps()),
+	}
+	return mod.sysdb.AddPoolService(ps)
+}
+
+func (mod *srvModule) handlePoolDestroyUpcall(reqb []byte) error {
+	req := new(srvpb.PoolDestroyUpcall)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return drpc.UnmarshalingPayloadFailure()
+	}
+
+	uuid, err := uuid.Parse(req.GetUuid())
+	if err != nil {
+		return errors.Wrapf(err, "invalid pool uuid %q", uuid)
+	}
+
+	mod.log.Debugf("handling PoolDestroyUpcall: %+v", req)
+
+	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
+	if err != nil && !system.IsFindPoolError(err) {
+		return err
+	}
+
+	if ps == nil {
+		return drpc.DaosAlready
+	}
+
+	return mod.sysdb.RemovePoolService(uuid)
 }
 
 func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {

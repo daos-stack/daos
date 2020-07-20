@@ -19,6 +19,11 @@ typedef struct _Srv__NotifyReadyReq Srv__NotifyReadyReq;
 typedef struct _Srv__BioErrorReq Srv__BioErrorReq;
 typedef struct _Srv__GetPoolSvcReq Srv__GetPoolSvcReq;
 typedef struct _Srv__GetPoolSvcResp Srv__GetPoolSvcResp;
+typedef struct _Srv__PoolCreateUpcall Srv__PoolCreateUpcall;
+typedef struct _Srv__PoolDestroyUpcall Srv__PoolDestroyUpcall;
+typedef struct _Srv__PoolListUpcall Srv__PoolListUpcall;
+typedef struct _Srv__PoolListUpcallResp Srv__PoolListUpcallResp;
+typedef struct _Srv__PoolListUpcallResp__Pool Srv__PoolListUpcallResp__Pool;
 
 
 /* --- enums --- */
@@ -123,6 +128,88 @@ struct  _Srv__GetPoolSvcResp
     , 0, 0,NULL }
 
 
+/*
+ * following messages support the deprecated C mgmt API and
+ * maintain compatibility with the iosrv MS
+ */
+struct  _Srv__PoolCreateUpcall
+{
+  ProtobufCMessage base;
+  /*
+   * Pool UUID
+   */
+  char *uuid;
+  /*
+   * Pool service replica ranks
+   */
+  size_t n_svcreps;
+  uint32_t *svcreps;
+};
+#define SRV__POOL_CREATE_UPCALL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__pool_create_upcall__descriptor) \
+    , (char *)protobuf_c_empty_string, 0,NULL }
+
+
+struct  _Srv__PoolDestroyUpcall
+{
+  ProtobufCMessage base;
+  /*
+   * Pool UUID
+   */
+  char *uuid;
+};
+#define SRV__POOL_DESTROY_UPCALL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__pool_destroy_upcall__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Srv__PoolListUpcall
+{
+  ProtobufCMessage base;
+  /*
+   * server group
+   */
+  char *group;
+  /*
+   * number of pools to include in response
+   */
+  uint64_t npools;
+};
+#define SRV__POOL_LIST_UPCALL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__pool_list_upcall__descriptor) \
+    , (char *)protobuf_c_empty_string, 0 }
+
+
+struct  _Srv__PoolListUpcallResp__Pool
+{
+  ProtobufCMessage base;
+  char *uuid;
+  size_t n_svcreps;
+  uint32_t *svcreps;
+};
+#define SRV__POOL_LIST_UPCALL_RESP__POOL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__pool_list_upcall_resp__pool__descriptor) \
+    , (char *)protobuf_c_empty_string, 0,NULL }
+
+
+/*
+ * copied from mgmt/pool.proto
+ */
+struct  _Srv__PoolListUpcallResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  size_t n_pools;
+  Srv__PoolListUpcallResp__Pool **pools;
+};
+#define SRV__POOL_LIST_UPCALL_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__pool_list_upcall_resp__descriptor) \
+    , 0, 0,NULL }
+
+
 /* Srv__NotifyReadyReq methods */
 void   srv__notify_ready_req__init
                      (Srv__NotifyReadyReq         *message);
@@ -199,6 +286,85 @@ Srv__GetPoolSvcResp *
 void   srv__get_pool_svc_resp__free_unpacked
                      (Srv__GetPoolSvcResp *message,
                       ProtobufCAllocator *allocator);
+/* Srv__PoolCreateUpcall methods */
+void   srv__pool_create_upcall__init
+                     (Srv__PoolCreateUpcall         *message);
+size_t srv__pool_create_upcall__get_packed_size
+                     (const Srv__PoolCreateUpcall   *message);
+size_t srv__pool_create_upcall__pack
+                     (const Srv__PoolCreateUpcall   *message,
+                      uint8_t             *out);
+size_t srv__pool_create_upcall__pack_to_buffer
+                     (const Srv__PoolCreateUpcall   *message,
+                      ProtobufCBuffer     *buffer);
+Srv__PoolCreateUpcall *
+       srv__pool_create_upcall__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__pool_create_upcall__free_unpacked
+                     (Srv__PoolCreateUpcall *message,
+                      ProtobufCAllocator *allocator);
+/* Srv__PoolDestroyUpcall methods */
+void   srv__pool_destroy_upcall__init
+                     (Srv__PoolDestroyUpcall         *message);
+size_t srv__pool_destroy_upcall__get_packed_size
+                     (const Srv__PoolDestroyUpcall   *message);
+size_t srv__pool_destroy_upcall__pack
+                     (const Srv__PoolDestroyUpcall   *message,
+                      uint8_t             *out);
+size_t srv__pool_destroy_upcall__pack_to_buffer
+                     (const Srv__PoolDestroyUpcall   *message,
+                      ProtobufCBuffer     *buffer);
+Srv__PoolDestroyUpcall *
+       srv__pool_destroy_upcall__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__pool_destroy_upcall__free_unpacked
+                     (Srv__PoolDestroyUpcall *message,
+                      ProtobufCAllocator *allocator);
+/* Srv__PoolListUpcall methods */
+void   srv__pool_list_upcall__init
+                     (Srv__PoolListUpcall         *message);
+size_t srv__pool_list_upcall__get_packed_size
+                     (const Srv__PoolListUpcall   *message);
+size_t srv__pool_list_upcall__pack
+                     (const Srv__PoolListUpcall   *message,
+                      uint8_t             *out);
+size_t srv__pool_list_upcall__pack_to_buffer
+                     (const Srv__PoolListUpcall   *message,
+                      ProtobufCBuffer     *buffer);
+Srv__PoolListUpcall *
+       srv__pool_list_upcall__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__pool_list_upcall__free_unpacked
+                     (Srv__PoolListUpcall *message,
+                      ProtobufCAllocator *allocator);
+/* Srv__PoolListUpcallResp__Pool methods */
+void   srv__pool_list_upcall_resp__pool__init
+                     (Srv__PoolListUpcallResp__Pool         *message);
+/* Srv__PoolListUpcallResp methods */
+void   srv__pool_list_upcall_resp__init
+                     (Srv__PoolListUpcallResp         *message);
+size_t srv__pool_list_upcall_resp__get_packed_size
+                     (const Srv__PoolListUpcallResp   *message);
+size_t srv__pool_list_upcall_resp__pack
+                     (const Srv__PoolListUpcallResp   *message,
+                      uint8_t             *out);
+size_t srv__pool_list_upcall_resp__pack_to_buffer
+                     (const Srv__PoolListUpcallResp   *message,
+                      ProtobufCBuffer     *buffer);
+Srv__PoolListUpcallResp *
+       srv__pool_list_upcall_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   srv__pool_list_upcall_resp__free_unpacked
+                     (Srv__PoolListUpcallResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Srv__NotifyReadyReq_Closure)
@@ -213,6 +379,21 @@ typedef void (*Srv__GetPoolSvcReq_Closure)
 typedef void (*Srv__GetPoolSvcResp_Closure)
                  (const Srv__GetPoolSvcResp *message,
                   void *closure_data);
+typedef void (*Srv__PoolCreateUpcall_Closure)
+                 (const Srv__PoolCreateUpcall *message,
+                  void *closure_data);
+typedef void (*Srv__PoolDestroyUpcall_Closure)
+                 (const Srv__PoolDestroyUpcall *message,
+                  void *closure_data);
+typedef void (*Srv__PoolListUpcall_Closure)
+                 (const Srv__PoolListUpcall *message,
+                  void *closure_data);
+typedef void (*Srv__PoolListUpcallResp__Pool_Closure)
+                 (const Srv__PoolListUpcallResp__Pool *message,
+                  void *closure_data);
+typedef void (*Srv__PoolListUpcallResp_Closure)
+                 (const Srv__PoolListUpcallResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -223,6 +404,11 @@ extern const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__bio_error_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__get_pool_svc_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__get_pool_svc_resp__descriptor;
+extern const ProtobufCMessageDescriptor srv__pool_create_upcall__descriptor;
+extern const ProtobufCMessageDescriptor srv__pool_destroy_upcall__descriptor;
+extern const ProtobufCMessageDescriptor srv__pool_list_upcall__descriptor;
+extern const ProtobufCMessageDescriptor srv__pool_list_upcall_resp__descriptor;
+extern const ProtobufCMessageDescriptor srv__pool_list_upcall_resp__pool__descriptor;
 
 PROTOBUF_C__END_DECLS
 

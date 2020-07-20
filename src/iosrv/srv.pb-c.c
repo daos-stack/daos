@@ -187,6 +187,192 @@ void   srv__get_pool_svc_resp__free_unpacked
   assert(message->base.descriptor == &srv__get_pool_svc_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   srv__pool_create_upcall__init
+                     (Srv__PoolCreateUpcall         *message)
+{
+  static const Srv__PoolCreateUpcall init_value = SRV__POOL_CREATE_UPCALL__INIT;
+  *message = init_value;
+}
+size_t srv__pool_create_upcall__get_packed_size
+                     (const Srv__PoolCreateUpcall *message)
+{
+  assert(message->base.descriptor == &srv__pool_create_upcall__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t srv__pool_create_upcall__pack
+                     (const Srv__PoolCreateUpcall *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &srv__pool_create_upcall__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t srv__pool_create_upcall__pack_to_buffer
+                     (const Srv__PoolCreateUpcall *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &srv__pool_create_upcall__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Srv__PoolCreateUpcall *
+       srv__pool_create_upcall__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Srv__PoolCreateUpcall *)
+     protobuf_c_message_unpack (&srv__pool_create_upcall__descriptor,
+                                allocator, len, data);
+}
+void   srv__pool_create_upcall__free_unpacked
+                     (Srv__PoolCreateUpcall *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &srv__pool_create_upcall__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   srv__pool_destroy_upcall__init
+                     (Srv__PoolDestroyUpcall         *message)
+{
+  static const Srv__PoolDestroyUpcall init_value = SRV__POOL_DESTROY_UPCALL__INIT;
+  *message = init_value;
+}
+size_t srv__pool_destroy_upcall__get_packed_size
+                     (const Srv__PoolDestroyUpcall *message)
+{
+  assert(message->base.descriptor == &srv__pool_destroy_upcall__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t srv__pool_destroy_upcall__pack
+                     (const Srv__PoolDestroyUpcall *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &srv__pool_destroy_upcall__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t srv__pool_destroy_upcall__pack_to_buffer
+                     (const Srv__PoolDestroyUpcall *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &srv__pool_destroy_upcall__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Srv__PoolDestroyUpcall *
+       srv__pool_destroy_upcall__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Srv__PoolDestroyUpcall *)
+     protobuf_c_message_unpack (&srv__pool_destroy_upcall__descriptor,
+                                allocator, len, data);
+}
+void   srv__pool_destroy_upcall__free_unpacked
+                     (Srv__PoolDestroyUpcall *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &srv__pool_destroy_upcall__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   srv__pool_list_upcall__init
+                     (Srv__PoolListUpcall         *message)
+{
+  static const Srv__PoolListUpcall init_value = SRV__POOL_LIST_UPCALL__INIT;
+  *message = init_value;
+}
+size_t srv__pool_list_upcall__get_packed_size
+                     (const Srv__PoolListUpcall *message)
+{
+  assert(message->base.descriptor == &srv__pool_list_upcall__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t srv__pool_list_upcall__pack
+                     (const Srv__PoolListUpcall *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &srv__pool_list_upcall__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t srv__pool_list_upcall__pack_to_buffer
+                     (const Srv__PoolListUpcall *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &srv__pool_list_upcall__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Srv__PoolListUpcall *
+       srv__pool_list_upcall__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Srv__PoolListUpcall *)
+     protobuf_c_message_unpack (&srv__pool_list_upcall__descriptor,
+                                allocator, len, data);
+}
+void   srv__pool_list_upcall__free_unpacked
+                     (Srv__PoolListUpcall *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &srv__pool_list_upcall__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   srv__pool_list_upcall_resp__pool__init
+                     (Srv__PoolListUpcallResp__Pool         *message)
+{
+  static const Srv__PoolListUpcallResp__Pool init_value = SRV__POOL_LIST_UPCALL_RESP__POOL__INIT;
+  *message = init_value;
+}
+void   srv__pool_list_upcall_resp__init
+                     (Srv__PoolListUpcallResp         *message)
+{
+  static const Srv__PoolListUpcallResp init_value = SRV__POOL_LIST_UPCALL_RESP__INIT;
+  *message = init_value;
+}
+size_t srv__pool_list_upcall_resp__get_packed_size
+                     (const Srv__PoolListUpcallResp *message)
+{
+  assert(message->base.descriptor == &srv__pool_list_upcall_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t srv__pool_list_upcall_resp__pack
+                     (const Srv__PoolListUpcallResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &srv__pool_list_upcall_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t srv__pool_list_upcall_resp__pack_to_buffer
+                     (const Srv__PoolListUpcallResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &srv__pool_list_upcall_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Srv__PoolListUpcallResp *
+       srv__pool_list_upcall_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Srv__PoolListUpcallResp *)
+     protobuf_c_message_unpack (&srv__pool_list_upcall_resp__descriptor,
+                                allocator, len, data);
+}
+void   srv__pool_list_upcall_resp__free_unpacked
+                     (Srv__PoolListUpcallResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &srv__pool_list_upcall_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[5] =
 {
   {
@@ -480,5 +666,247 @@ const ProtobufCMessageDescriptor srv__get_pool_svc_resp__descriptor =
   srv__get_pool_svc_resp__field_indices_by_name,
   1,  srv__get_pool_svc_resp__number_ranges,
   (ProtobufCMessageInit) srv__get_pool_svc_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__pool_create_upcall__field_descriptors[2] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolCreateUpcall, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "svcreps",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Srv__PoolCreateUpcall, n_svcreps),
+    offsetof(Srv__PoolCreateUpcall, svcreps),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__pool_create_upcall__field_indices_by_name[] = {
+  1,   /* field[1] = svcreps */
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange srv__pool_create_upcall__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor srv__pool_create_upcall__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.PoolCreateUpcall",
+  "PoolCreateUpcall",
+  "Srv__PoolCreateUpcall",
+  "srv",
+  sizeof(Srv__PoolCreateUpcall),
+  2,
+  srv__pool_create_upcall__field_descriptors,
+  srv__pool_create_upcall__field_indices_by_name,
+  1,  srv__pool_create_upcall__number_ranges,
+  (ProtobufCMessageInit) srv__pool_create_upcall__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__pool_destroy_upcall__field_descriptors[1] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolDestroyUpcall, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__pool_destroy_upcall__field_indices_by_name[] = {
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange srv__pool_destroy_upcall__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor srv__pool_destroy_upcall__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.PoolDestroyUpcall",
+  "PoolDestroyUpcall",
+  "Srv__PoolDestroyUpcall",
+  "srv",
+  sizeof(Srv__PoolDestroyUpcall),
+  1,
+  srv__pool_destroy_upcall__field_descriptors,
+  srv__pool_destroy_upcall__field_indices_by_name,
+  1,  srv__pool_destroy_upcall__number_ranges,
+  (ProtobufCMessageInit) srv__pool_destroy_upcall__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__pool_list_upcall__field_descriptors[2] =
+{
+  {
+    "group",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolListUpcall, group),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "npools",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolListUpcall, npools),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__pool_list_upcall__field_indices_by_name[] = {
+  0,   /* field[0] = group */
+  1,   /* field[1] = npools */
+};
+static const ProtobufCIntRange srv__pool_list_upcall__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor srv__pool_list_upcall__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.PoolListUpcall",
+  "PoolListUpcall",
+  "Srv__PoolListUpcall",
+  "srv",
+  sizeof(Srv__PoolListUpcall),
+  2,
+  srv__pool_list_upcall__field_descriptors,
+  srv__pool_list_upcall__field_indices_by_name,
+  1,  srv__pool_list_upcall__number_ranges,
+  (ProtobufCMessageInit) srv__pool_list_upcall__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__pool_list_upcall_resp__pool__field_descriptors[2] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolListUpcallResp__Pool, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "svcreps",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Srv__PoolListUpcallResp__Pool, n_svcreps),
+    offsetof(Srv__PoolListUpcallResp__Pool, svcreps),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__pool_list_upcall_resp__pool__field_indices_by_name[] = {
+  1,   /* field[1] = svcreps */
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange srv__pool_list_upcall_resp__pool__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor srv__pool_list_upcall_resp__pool__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.PoolListUpcallResp.Pool",
+  "Pool",
+  "Srv__PoolListUpcallResp__Pool",
+  "srv",
+  sizeof(Srv__PoolListUpcallResp__Pool),
+  2,
+  srv__pool_list_upcall_resp__pool__field_descriptors,
+  srv__pool_list_upcall_resp__pool__field_indices_by_name,
+  1,  srv__pool_list_upcall_resp__pool__number_ranges,
+  (ProtobufCMessageInit) srv__pool_list_upcall_resp__pool__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor srv__pool_list_upcall_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Srv__PoolListUpcallResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "pools",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Srv__PoolListUpcallResp, n_pools),
+    offsetof(Srv__PoolListUpcallResp, pools),
+    &srv__pool_list_upcall_resp__pool__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned srv__pool_list_upcall_resp__field_indices_by_name[] = {
+  1,   /* field[1] = pools */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange srv__pool_list_upcall_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor srv__pool_list_upcall_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "srv.PoolListUpcallResp",
+  "PoolListUpcallResp",
+  "Srv__PoolListUpcallResp",
+  "srv",
+  sizeof(Srv__PoolListUpcallResp),
+  2,
+  srv__pool_list_upcall_resp__field_descriptors,
+  srv__pool_list_upcall_resp__field_indices_by_name,
+  1,  srv__pool_list_upcall_resp__number_ranges,
+  (ProtobufCMessageInit) srv__pool_list_upcall_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
