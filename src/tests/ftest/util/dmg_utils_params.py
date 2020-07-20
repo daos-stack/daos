@@ -29,7 +29,7 @@ from command_utils_base import \
 class DmgTransportCredentials(TransportCredentials):
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, log_dir):
+    def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
         super(DmgTransportCredentials, self).__init__(
             "/run/dmg/transport_config/*", "transport_config", log_dir)

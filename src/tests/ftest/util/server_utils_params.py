@@ -31,7 +31,7 @@ class DaosServerTransportCredentials(TransportCredentials):
     # pylint: disable=too-few-public-methods
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, log_dir):
+    def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
         super(DaosServerTransportCredentials, self).__init__(
             "/run/server_config/transport_config/*",

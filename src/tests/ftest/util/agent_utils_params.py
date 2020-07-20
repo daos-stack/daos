@@ -30,7 +30,7 @@ from command_utils_base import \
 class DaosAgentTransportCredentials(TransportCredentials):
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, log_dir):
+    def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
         super(DaosAgentTransportCredentials, self).__init__(
             "/run/agent_config/transport_config/*", "transport_config", log_dir)
