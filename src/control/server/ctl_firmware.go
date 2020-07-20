@@ -79,6 +79,17 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.FirmwareUpdateReq) (*ctlpb.FirmwareUpdateResp, error) {
 	svc.log.Debug("received FirmwareUpdate RPC")
 
+	instances := svc.harness.Instances()
+	for _, srv := range instances {
+		if srv.isStarted() {
+			rank, err := srv.GetRank()
+			if err != nil {
+				return nil, errors.New("unidentified server rank is running")
+			}
+			return nil, FaultInstancesNotStopped("firmware update", rank)
+		}
+	}
+
 	pbResp := new(ctlpb.FirmwareUpdateResp)
 
 	switch pbReq.Type {
