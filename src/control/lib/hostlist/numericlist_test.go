@@ -87,6 +87,10 @@ func TestHostSet_CreateNumericSet(t *testing.T) {
 			expOut:    "[1-128]",
 			expCount:  128,
 		},
+		"whitespace in numeric list": {
+			startList: "[0, 5]",
+			expErr:    errors.New("unexpected whitespace character(s)"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			hs, gotErr := hostlist.CreateNumericSet(tc.startList)

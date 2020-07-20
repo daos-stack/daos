@@ -804,6 +804,19 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 }
 
 int
+vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
+{
+	struct vos_pool	*pool = vos_hdl2pool(poh);
+
+	if (pool == NULL)
+		return -DER_NO_HDL;
+	if (space_sys == NULL)
+		return -DER_INVAL;
+
+	return vos_space_sys_set(pool, space_sys);
+}
+
+int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 {
 	struct vos_pool		*pool;
