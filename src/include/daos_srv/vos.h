@@ -288,6 +288,21 @@ int
 vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps);
 
 /**
+ * Set aside additional "system reserved" space in pool SCM and NVMe
+ * (additive to any existing reserved space by vos)
+ *
+ * \param poh		[IN]	Pool open handle
+ * \param space_sys	[IN]	Array of sizes in bytes, indexed by media type
+ *				(DAOS_MEDIA_SCM and DAOS_MEDIA_NVME)
+ *
+ * \return		Zero		: success
+ *			-DER_NO_HDL	: invalid pool handle
+ *			-DER_INVAL	: space_sys is NULL
+ */
+int
+vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys);
+
+/**
  * Create a container within a VOSP
  *
  * \param poh	[IN]	Pool open handle
