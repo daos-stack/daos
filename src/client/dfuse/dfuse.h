@@ -72,7 +72,7 @@ struct dfuse_projection_info {
 struct dfuse_inode_entry;
 
 struct dfuse_readdir_entry {
-	char	dre_name[NAME_MAX];
+	char	dre_name[NAME_MAX + 1];
 	off_t	dre_offset;
 };
 

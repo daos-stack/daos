@@ -54,7 +54,7 @@ static int
 fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 {
 	int rc;
-	uint32_t count = READDIR_COUNT;
+	uint32_t count = READDIR_COUNT - 1;
 	struct iterate_data idata = {};
 
 	idata.dre = oh->doh_dre;
@@ -76,7 +76,9 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	if (daos_anchor_is_eof(&oh->doh_anchor)) {
 		off_t eof_offset = oh->doh_dre[count ? count - 1 : 0].dre_offset;
 
-		DFUSE_TRA_DEBUG(oh, "End of stream reached, offset %ld",
+		DFUSE_TRA_DEBUG(oh,
+				"End of stream reached, count %d offset %ld",
+				count,
 				eof_offset);
 		*eof = eof_offset;
 	}
@@ -271,7 +273,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(err, 0);
 		}
 
-		DFUSE_TRA_DEBUG(oh, "processing entries");
+		DFUSE_TRA_DEBUG(oh, "processing entries %ld %ld", offset, eof);
 
 		/* Populate dir */
 		for (i = oh->doh_dre_index; i < READDIR_COUNT ; i++) {
@@ -375,7 +377,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			oh->doh_dre[oh->doh_dre_index].dre_offset = 0;
 		}
 
-	} while (added == 0);
+	} while (added == 0 && oh->doh_dre[0].dre_offset != 0);
 
 reply:
 
@@ -384,9 +386,7 @@ reply:
 	else
 		DFUSE_TRA_DEBUG(oh, "Replying %d %d", added, rc);
 
-	if (added == 0) {
-		if (rc == 0)
-			rc = EIO;
+	if (added == 0 && rc != 0) {
 		D_GOTO(err, 0);
 	}
 
