@@ -170,7 +170,7 @@ class ZeroConfigTest(TestWithServers):
             or unset. The test expects that the server will have two interfaces
             available: hfi_0 and hfi_1.
 
-        :avocado: tags=all,pr,hw,small,zero_config,env_set
+        :avocado: tags=all,pr,hw,medium,zero_config,env_set
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
         for idx, exp_iface in enumerate(["ib0", "ib1"]):
