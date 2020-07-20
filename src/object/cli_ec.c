@@ -1657,7 +1657,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 				return rc;
 		}
 	}
-	daos_recx_ep_list_set_ep_valid(dst_list, nr);
+	daos_recx_ep_list_set_ep_valid(recov_lists, nr);
 	return 0;
 }
 
@@ -2007,7 +2007,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 			rtask = &fail_info->efi_recov_tasks[tidx++];
 			rtask->ert_iod.iod_name = iod->iod_name;
 			rtask->ert_iod.iod_type = iod->iod_type;
-			rtask->ert_iod.iod_size = iod->iod_size;
+			rtask->ert_iod.iod_size = recx_ep->re_rec_size;
 			rtask->ert_iod.iod_nr = 1;
 			rtask->ert_iod.iod_recxs = &recx_ep->re_recx;
 			rtask->ert_epoch = recx_ep->re_ep;
