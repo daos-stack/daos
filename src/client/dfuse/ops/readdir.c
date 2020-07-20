@@ -64,7 +64,8 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	DFUSE_TRA_DEBUG(oh, "Fetching new entries at offset %ld", offset);
 
 	rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &count,
-			(size_t)((NAME_MAX+1) * READDIR_COUNT), filler_cb, &idata);
+			 (size_t)((NAME_MAX+1) * READDIR_COUNT),
+			 filler_cb, &idata);
 
 	oh->doh_anchor_index = count;
 	oh->doh_dre[count].dre_offset = 0;
@@ -73,7 +74,8 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	DFUSE_TRA_DEBUG(oh, "Added %d entries rc %d", count, rc);
 
 	if (daos_anchor_is_eof(&oh->doh_anchor)) {
-		off_t eof_offset = oh->doh_dre[count ? count -1 : 0].dre_offset;
+		off_t eof_offset = oh->doh_dre[count ? count - 1 : 0].dre_offset;
+
 		DFUSE_TRA_DEBUG(oh, "End of stream reached, offset %ld",
 				eof_offset);
 		*eof = eof_offset;
@@ -82,7 +84,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	return rc;
 }
 
-int
+static int
 create_entry(struct dfuse_projection_info *fs_handle,
 	     struct dfuse_inode_entry *parent,
 	     struct fuse_entry_param *entry,
@@ -177,7 +179,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	char			*reply_buff;
 	off_t			buff_offset = 0;
 	int			added = 0;
-	int			rc;
+	int			rc = 0;
 
 	if (offset == -1) {
 		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
@@ -297,13 +299,15 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 					dre->dre_name);
 
 			rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
-					    dre->dre_name, O_RDONLY, &obj, &stbuf.st_mode,
+					    dre->dre_name, O_RDONLY, &obj,
+					    &stbuf.st_mode,
 					    plus ? &stbuf : NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				continue;
 			} else if (rc != 0) {
-				DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
+				DFUSE_TRA_DEBUG(oh, "Problem finding file %d",
+						rc);
 				D_GOTO(reply, 0);
 			}
 
@@ -332,24 +336,27 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				if (rc != 0)
 					D_GOTO(reply, rc);
 
-				written = fuse_add_direntry_plus(req, &reply_buff[buff_offset],
-							size - buff_offset,
-							dre->dre_name,
-							&entry,
-							next_offset);
+				written = fuse_add_direntry_plus(req,
+								 &reply_buff[buff_offset],
+								 size - buff_offset,
+							         dre->dre_name,
+								 &entry,
+								 next_offset);
 				if (written > size - buff_offset) {
-					d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+					d_hash_rec_decref(&fs_handle->dpi_iet,
+							  rlink);
 				}
 
 			} else {
 
 				dfs_release(obj);
 
-				written = fuse_add_direntry(req, &reply_buff[buff_offset],
-						size - buff_offset,
-						dre->dre_name,
-						&stbuf,
-						next_offset);
+				written = fuse_add_direntry(req,
+							    &reply_buff[buff_offset],
+							    size - buff_offset,
+							    dre->dre_name,
+							    &stbuf,
+							    next_offset);
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
