@@ -1265,7 +1265,76 @@ fetch_array_with_map_4(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+small_sgl(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl[3];
+	d_iov_t		 sg_iov[3];
+	daos_iod_t	 iod[3];
+	char		 buf1[24];
+	char		 buf2[24];
+	char		 buf3[24];
+	int		 i, rc;
+
+	dts_buf_render(buf1, 24);
+	dts_buf_render(buf2, 24);
+	dts_buf_render(buf3, 24);
+
+	/** open object */
+	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	d_iov_set(&sg_iov[0], buf1, 4);
+	d_iov_set(&sg_iov[1], buf2, 8);
+	d_iov_set(&sg_iov[2], buf3, 4);
+
+	for (i = 0; i < 3; i++) {
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 0;
+		sgl[i].sg_iovs = &sg_iov[i];
+		iod[i].iod_nr = 1;
+		iod[i].iod_recxs = NULL;
+		iod[i].iod_type = DAOS_IOD_SINGLE;
+	}
+
+	d_iov_set(&iod[0].iod_name, "akey1", strlen("akey1"));
+	d_iov_set(&iod[1].iod_name, "akey2", strlen("akey2"));
+	d_iov_set(&iod[2].iod_name, "akey3", strlen("akey2"));
+	iod[0].iod_size = 4;
+	iod[1].iod_size = 8;
+	iod[2].iod_size = 4;
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	/** setup for fetch */
+	d_iov_set(&sg_iov[0], buf1, 4);
+	d_iov_set(&sg_iov[1], buf2, 2);
+	d_iov_set(&sg_iov[2], buf3, 10);
+	for (i = 0; i < 3; i++)
+		iod[i].iod_size = DAOS_REC_ANY;
+
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl,
+			    NULL, NULL);
+	assert_int_equal(rc, -DER_REC2BIG);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest array_tests[] = {
+	{ "ARRAY0: small_sgl",
+	  small_sgl, NULL, test_case_teardown},
 	{ "ARRAY1: byte array with buffer on stack",
 	  byte_array_simple_stack, NULL, test_case_teardown},
 	{ "ARRAY2: array of uint8_t",

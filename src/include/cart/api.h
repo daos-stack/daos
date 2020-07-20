@@ -454,6 +454,16 @@ uint64_t
 crt_hlc_get(void);
 
 /**
+ * Sync HLC with remote message and return current HLC timestamp.
+ *
+ * \param[in] msg              remote HLC timestamp
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+crt_hlc_get_msg(uint64_t msg);
+
+/**
  * Return the second timestamp of hlc.
  *
  * \param[in] hlc              HLC timestamp
