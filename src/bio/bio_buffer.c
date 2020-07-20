@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -321,6 +321,8 @@ iterate_biov(struct bio_desc *biod,
 			if (rc)
 				break;
 		}
+		if (rc)
+			break;
 	}
 
 	return rc;
@@ -859,7 +861,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 	}
 
 	D_DEBUG(DB_TRACE, "Consumed all iovs, "DF_U64" bytes left\n", size);
-	return -DER_OVERFLOW;
+	return -DER_REC2BIG;
 }
 
 static void
