@@ -197,10 +197,7 @@ class LogParameter(FormattedParameter):
         initial log file value (just the log file name) to include the directory
         and name for the log file.
         """
-        if isinstance(self.value, int):
-            name = os.path.basename(str(self.value))
-            self.value = os.path.join(self._directory, name)
-        elif isinstance(self.value, str):
+        if isinstance(self.value, str):
             name = os.path.basename(self.value)
             self.value = os.path.join(self._directory, name)
         elif self.value is not None:
@@ -518,7 +515,7 @@ class TransportCredentials(YamlParameters):
         data = {}
         for name in name_list:
             value = getattr(self, name).value
-            if value is not None:
+            if isinstance(value, str):
                 dir_name, file_name = os.path.split(value)
                 if dir_name not in data:
                     data[dir_name] = [file_name]
