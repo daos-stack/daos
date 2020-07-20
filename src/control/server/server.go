@@ -90,7 +90,9 @@ func iommuDetected() bool {
 	return len(dmars) > 0
 }
 
-func vmdDetected() []string {
+// detectVmd returns whether VMD devices have been found and a slice of VMD
+// PCI addresses if found.
+func detectVmd() ([]string, error) {
 	// Check available VMD devices with command:
 	// "$lspci | grep  -i -E "201d | Volume Management Device"
 	lspciCmd := exec.Command("lspci")
@@ -104,7 +106,7 @@ func vmdDetected() []string {
 	_ = lspciCmd.Wait()
 
 	if cmdOut.Len() == 0 {
-		return nil
+		return nil, errors.New("no vmd devices found")
 	}
 
 	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
@@ -121,7 +123,11 @@ func vmdDetected() []string {
 		i += 1
 	}
 
-	return vmdAddrs
+	if len(vmdAddrs) == 0 {
+		return nil, errors.New("error parsing cmd output")
+	}
+
+	return vmdAddrs, nil
 }
 
 // Start is the entry point for a daos_server instance.
@@ -176,11 +182,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// The config value is intended to be per-ioserver, so we need to adjust
 		// based on the number of ioservers.
 		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
-	}
 
-	// Perform these checks to avoid even trying a prepare if the system
-	// isn't configured properly.
-	if cfgHasBdev(cfg) {
+		// Perform these checks to avoid even trying a prepare if the system
+		// isn't configured properly.
 		if runningUser.Uid != "0" {
 			if cfg.DisableVFIO {
 				return FaultVfioDisabled
@@ -197,39 +201,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
 	}
 
-	// Decide whether to use VMD devices.
-	if cfg.UseVmd {
-		if cfg.DisableVFIO {
-			return errors.New("VMD could not be enabled as VFIO disabled in config (disable_vfio: true)")
-		}
-		if !iommuDetected() {
-			return errors.New("VMD could not be enabled as IOMMU/VFIO is disabled")
-		}
-
-		vmdDevs := vmdDetected()
-		if len(vmdDevs) == 0 {
-			return errors.New("VMD enabled but no capable devices found")
-		}
-
-		// If VMD devices are going to be used, then need to run a separate
-		// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
-		prepReqVmd := bdev.PrepareRequest{
-			PCIWhitelist:  strings.Join(vmdDevs, " "),
-			SkipReset:     true,
-			HugePageCount: prepReq.HugePageCount,
-			TargetUser:    prepReq.TargetUser,
-		}
-		log.Debugf("automatic VMD prepare req: %+v", prepReqVmd)
-
-		if _, err := bdevProvider.Prepare(prepReqVmd); err != nil {
-			log.Errorf("automatic NVMe prepare for VMD failed (check configuration?)\n%s", err)
-		}
-
-		bdevProvider.EnableVmd()
-	} else {
-		log.Debugf("VMD disabled in config (use_vmd: false)")
-	}
-
 	hugePages, err := getHugePageInfo()
 	if err != nil {
 		return errors.Wrap(err, "unable to read system hugepage info")
@@ -240,6 +211,43 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		if hugePages.Free < prepReq.HugePageCount {
 			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 		}
+	}
+
+	// Decide whether to use VMD devices.
+	if cfg.UseVmd {
+		if cfg.DisableVFIO {
+			return errors.New("VMD could not be enabled: VFIO disabled in config (disable_vfio: true)")
+		}
+		if !iommuDetected() {
+			return errors.New("VMD could not be enabled: IOMMU/VFIO is disabled")
+		}
+
+		vmdDevs, err := detectVmd()
+		if err != nil {
+			return errors.Wrap(err, "VMD could not be enabled")
+		}
+
+		// If VMD devices are going to be used, then need to run a separate
+		// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
+		prepReqVmd := bdev.PrepareRequest{
+			PCIWhitelist:  strings.Join(vmdDevs, " "),
+			SkipReset:     true,
+			HugePageCount: prepReq.HugePageCount,
+			TargetUser:    prepReq.TargetUser,
+		}
+		log.Debugf("VMD enabled, automatic prepare req: %+v", prepReqVmd)
+
+		if _, err := bdevProvider.Prepare(prepReqVmd); err != nil {
+			log.Errorf("automatic NVMe prepare for VMD failed (check configuration?)\n%s", err)
+		}
+
+		bdevProvider.EnableVmd()
+		for i := range cfg.Servers {
+			cfg.Servers[i].Storage.Bdev.VmdDeviceList = append(
+				cfg.Servers[i].Storage.Bdev.VmdDeviceList, vmdDevs...)
+		}
+	} else {
+		log.Debugf("VMD disabled in config (use_vmd: false)")
 	}
 
 	// If this daos_server instance ends up being the MS leader,

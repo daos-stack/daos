@@ -24,7 +24,7 @@
 package bdev
 
 import (
-	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -43,7 +43,7 @@ func TestParseBdev(t *testing.T) {
 	tests := map[string]struct {
 		bdevClass  storage.BdevClass
 		bdevList   []string
-		enableVMD  string
+		vmdList    []string
 		bdevSize   int // relevant for MALLOC/FILE
 		bdevNumber int // relevant for MALLOC
 		vosEnv     string
@@ -82,8 +82,8 @@ func TestParseBdev(t *testing.T) {
 		},
 		"VMD devices": {
 			bdevClass: storage.BdevClassNvme,
-			enableVMD: "true",
 			bdevList:  []string{"5d0505:01:00.0", "5d0505:03:00.0"},
+			vmdList:   []string{"5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[VMD]`,
 				`    Enable True`,
@@ -98,14 +98,13 @@ func TestParseBdev(t *testing.T) {
 				`    HotplugEnable No`,
 				`    HotplugPollRate 0`,
 				``,
-				``,
 			},
 			vosEnv: "VMD",
 		},
 		"multiple VMD and NVMe controllers": {
 			bdevClass: storage.BdevClassNvme,
-			enableVMD: "true",
 			bdevList:  []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+			vmdList:   []string{"5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[VMD]`,
 				`    Enable True`,
@@ -120,7 +119,6 @@ func TestParseBdev(t *testing.T) {
 				`    AdminPollRate 100000`,
 				`    HotplugEnable No`,
 				`    HotplugPollRate 0`,
-				``,
 				``,
 			},
 			vosEnv: "VMD",
@@ -192,26 +190,23 @@ func TestParseBdev(t *testing.T) {
 				}
 			}
 
-			if tt.enableVMD == "true" {
-				config.EnableVmd = true
-			}
-
 			if tt.bdevSize != 0 {
 				config.FileSize = tt.bdevSize
 			}
 			if tt.bdevNumber != 0 {
 				config.DeviceCount = tt.bdevNumber
 			}
+			config.VmdDeviceList = tt.vmdList
 
-			var logBuf bytes.Buffer
-			testLog := logging.NewCombinedLogger(t.Name(), &logBuf)
+			log, buf := logging.NewTestLogger(t.Name())
 			defer func(t *testing.T) {
+				t.Helper()
 				if t.Failed() {
-					t.Error(logBuf.String())
+					fmt.Printf(buf.String())
 				}
 			}(t)
 
-			provider, err := NewClassProvider(testLog, testDir, &config)
+			provider, err := NewClassProvider(log, testDir, &config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -238,10 +233,6 @@ func TestParseBdev(t *testing.T) {
 
 			if config.VosEnv != tt.vosEnv {
 				t.Fatalf("expected VosEnv to be %q, but it was %q", tt.vosEnv, config.VosEnv)
-			}
-
-			if err := provider.PrepareDevices(); err != nil {
-				t.Fatal(err)
 			}
 
 			// The remainder only applies to loopback file devices.

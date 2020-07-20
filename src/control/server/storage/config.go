@@ -133,16 +133,16 @@ func (b BdevClass) String() string {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	ConfigPath  string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	Class       BdevClass `yaml:"bdev_class,omitempty"`
-	EnableVmd   bool      `yaml:"enable_vmd,omitempty"`
-	DeviceList  []string  `yaml:"bdev_list,omitempty"`
-	DeviceCount int       `yaml:"bdev_number,omitempty"`
-	FileSize    int       `yaml:"bdev_size,omitempty"`
-	ShmID       int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
-	MemSize     int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
-	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	Hostname    string    `yaml:"-"` // used when generating templates
+	ConfigPath    string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	Class         BdevClass `yaml:"bdev_class,omitempty"`
+	DeviceList    []string  `yaml:"bdev_list,omitempty"`
+	VmdDeviceList []string  `yaml:"-"` // populated during start-up
+	DeviceCount   int       `yaml:"bdev_number,omitempty"`
+	FileSize      int       `yaml:"bdev_size,omitempty"`
+	ShmID         int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
+	MemSize       int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
+	VosEnv        string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	Hostname      string    `yaml:"-"` // used when generating templates
 }
 
 func (bc *BdevConfig) Validate() error {
@@ -155,12 +155,4 @@ func (bc *BdevConfig) GetNvmeDevs() []string {
 	}
 
 	return []string{}
-}
-
-func (bc *BdevConfig) IsVMDEnabled() bool {
-	if bc.EnableVmd {
-		return true
-	}
-
-	return false
 }

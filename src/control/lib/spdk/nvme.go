@@ -181,8 +181,8 @@ func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
 
-// Discover NVMe SSD PCIe addresses behind VMD
-func (n *Nvme) DiscoverVMD(log logging.Logger) (addrs []string, err error) {
+// DiscoverVmd discovers NVMe SSD PCIe addresses behind VMD
+func (n *Nvme) DiscoverVmd(log logging.Logger) (addrs []string, err error) {
 	var rc C.int
 
 	addr_buf := C.malloc(C.sizeof_char * 128)

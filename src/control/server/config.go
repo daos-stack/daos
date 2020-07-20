@@ -280,8 +280,8 @@ func (c *Configuration) WithDisableVFIO() *Configuration {
 }
 
 // WithUseVmd declares intent to use VMD.
-func (c *Configuration) WithUseVmd(enabled bool) *Configuration {
-	c.UseVmd = enabled
+func (c *Configuration) WithUseVmd() *Configuration {
+	c.UseVmd = true
 	return c
 }
 

@@ -46,8 +46,7 @@ import (
 // ENV is the interface that provides SPDK environment management.
 type ENV interface {
 	InitSPDKEnv(int) error
-	InitVMDEnv() error
-	//ListVmdNvmeAddrs() error
+	InitVMD() error
 }
 
 // Env is a simple ENV implementation.

@@ -227,7 +227,6 @@ func TestServer_ConstructedConfig(t *testing.T) {
 	constructed := NewConfiguration().
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
-		WithVmdInclude("0000:5d:05.5").
 		WithBdevExclude("0000:81:00.1").
 		WithDisableVFIO().
 		WithUseVmd().
@@ -258,8 +257,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 				WithScmClass("ram").
 				WithScmRamdiskSize(16).
 				WithBdevClass("nvme").
-				WithEnableVmd(true).
-				WithBdevDeviceList("0000:81:00.0", "5d0505:01:00.0").
+				WithBdevDeviceList("0000:81:00.0").
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).

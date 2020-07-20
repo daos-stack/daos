@@ -86,32 +86,18 @@ func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing [
 	return missing, len(missing) == 0
 }
 
-func (c *StorageControlService) vmdDevsUsed() bool {
-	for _, storageCfg := range c.instanceStorage {
-		if storageCfg.Bdev.IsVMDEnabled() {
-			return true
-		}
-	}
-
-	return false
-}
-
 // Setup delegates to Storage implementation's Setup methods.
 func (c *StorageControlService) Setup() error {
-	sr, err := c.bdev.Scan(bdev.ScanRequest{
-		InitVmd:	c.vmdDevsUsed(),
-	})
+	sr, err := c.bdev.Scan(bdev.ScanRequest{})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
-	} else {
+		return nil
+	}
 
-		// fail if config specified nvme devices are inaccessible
-		missing, ok := c.canAccessBdevs(sr)
-		if !ok && !c.vmdDevsUsed(){
-		// TODO: need to skip this check until prepBdevVmd is called
-		// currently will fail if VMD address is put in bdev_list
-			return FaultBdevNotFound(missing)
-		}
+	// fail if config specified nvme devices are inaccessible
+	missing, ok := c.canAccessBdevs(sr)
+	if !ok {
+		return FaultBdevNotFound(missing)
 	}
 
 	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {

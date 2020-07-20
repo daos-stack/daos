@@ -36,7 +36,6 @@ type (
 	InitRequest struct {
 		pbin.ForwardableRequest
 		SPDKShmID int
-		InitVmd   bool
 	}
 
 	// InitResponse contains the results of a successful Init operation.
@@ -45,7 +44,6 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
-		InitVmd bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -72,7 +70,6 @@ type (
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
-		InitVmd    bool
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.

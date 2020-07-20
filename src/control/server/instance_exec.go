@@ -43,25 +43,22 @@ type IOServerRunner interface {
 	GetConfig() *ioserver.Config
 }
 
-func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
+func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error {
 	idx := srv.Index()
 
 	srv.log.Debugf("instance %d: checking if storage is formatted", idx)
-	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
-		return
+	if err := srv.awaitStorageReady(ctx, recreateSBs); err != nil {
+		return err
 	}
-	if err = srv.createSuperblock(recreateSBs); err != nil {
-		return
+	if err := srv.createSuperblock(recreateSBs); err != nil {
+		return err
 	}
 
 	if !srv.hasSuperblock() {
 		return errors.Errorf("instance %d: no superblock after format", idx)
 	}
-	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
-		return errors.Wrap(err, "unable to prepare NVMe device(s)")
-	}
 
-	return
+	return nil
 }
 
 // start checks to make sure that the instance has a valid superblock before

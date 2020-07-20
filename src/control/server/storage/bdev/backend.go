@@ -128,7 +128,7 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 
 	// discover backing vmd devs when vmd enabled in config
 	if w.vmdEnabled {
-		vmdDevAddrs, err := w.DiscoverVMD(log)
+		vmdDevAddrs, err := w.DiscoverVmd(log)
 		if err != nil {
 			return errors.Wrapf(err, "failed to discover VMD")
 		}
@@ -182,6 +182,8 @@ func (b *spdkBackend) EnableVmd() error {
 	if b.binding.vmdEnabled {
 		return errors.New("EnableVmd(): VMD already enabled")
 	}
+
+	b.binding.vmdEnabled = true
 
 	return nil
 }

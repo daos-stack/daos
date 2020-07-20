@@ -36,7 +36,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -71,34 +70,18 @@ const (
 	msgBdevBadSize = "backfile_size should be greater than 0"
 )
 
-const (
-	confOutVMD = "daos_nvme.conf"
-	vmdTempl   = `[VMD]
-    Enable True
-
-[Nvme]
-{{ $host := .Config.Hostname }}{{ range $i, $e := .DeviceList }}    TransportID "trtype:PCIe traddr:{{$e}}" Nvme_{{$host}}_{{$i}}
-{{ end }}    RetryCount 4
-    TimeoutUsec 0
-    ActionOnTimeout None
-    AdminPollRate 100000
-    HotplugEnable No
-    HotplugPollRate 0
-`
-)
-
 // bdev describes parameters and behaviours for a particular bdev class.
 type bdev struct {
 	templ   string
 	vosEnv  string
 	isEmpty func(storage.BdevConfig) string                 // check no elements
 	isValid func(storage.BdevConfig) string                 // check valid elements
-	prep    func(logging.Logger, *storage.BdevConfig) error // prerequisite actions
+	init    func(logging.Logger, *storage.BdevConfig) error // prerequisite actions
 }
 
-func nilValidate(c storage.BdevConfig) string { return "" }
+func nilValidate(_ storage.BdevConfig) string { return "" }
 
-func nilPrep(l logging.Logger, c *storage.BdevConfig) error { return nil }
+func nilInit(_ logging.Logger, _ *storage.BdevConfig) error { return nil }
 
 func isEmptyList(c storage.BdevConfig) string {
 	if len(c.DeviceList) == 0 {
@@ -164,13 +147,13 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 	return nil
 }
 
-func prepBdevFile(l logging.Logger, c *storage.BdevConfig) error {
+func bdevFileInit(log logging.Logger, c *storage.BdevConfig) error {
 	// truncate or create files for SPDK AIO emulation,
 	// requested size aligned with block size
 	size := (int64(c.FileSize*gbyte) / int64(blkSize)) * int64(blkSize)
 
 	for _, path := range c.DeviceList {
-		err := createEmptyFile(l, path, size)
+		err := createEmptyFile(log, path, size)
 		if err != nil {
 			return err
 		}
@@ -179,18 +162,25 @@ func prepBdevFile(l logging.Logger, c *storage.BdevConfig) error {
 	return nil
 }
 
-//  Convert DeviceList from VMD addresses to list of NVMe SSDs behind the VMDs.
-func prepBdevVmd(l logging.Logger, c *storage.BdevConfig) error {
-	addrs, err := spdk.DiscoverVmd(l) //c.DeviceList)
-	if err != nil {
-		return err
+// bdevNvmeInit performs any necessary preparation forNVME class bdev config.
+//
+// Augment bdev device list if VMD backing SSD PCI addresses have been added to
+// config.
+func bdevNvmeInit(log logging.Logger, c *storage.BdevConfig) error {
+	log.Debugf("init bdev nvme, vmds: %v", c.VmdDeviceList)
+	if len(c.VmdDeviceList) == 0 {
+		return nil
 	}
+
+	logMsg := fmt.Sprintf("VMD: prepare conf device list, before: %v, vmds: %v",
+		c.VmdDeviceList, c.DeviceList)
 
 	// Remove VMD addrs from DeviceList and replace with NVMe addrs behind VMD
 	// "$lspci | grep  -i -E "$devaddr.*Volume Management Device|$devaddr.*201d"
 	lspciCmd := exec.Command("lspci")
 
 	for i, dev := range c.DeviceList {
+		// TODO: handle cmd errors
 		// Remove leading "0000:" from device address, since once this device
 		// is unbound the prefix will be gone in lspci.
 		devNoPrefix := strings.TrimPrefix(dev, "0000:")
@@ -212,27 +202,33 @@ func prepBdevVmd(l logging.Logger, c *storage.BdevConfig) error {
 		c.DeviceList = c.DeviceList[:len(c.DeviceList)-1]
 	}
 
-	for _, dev := range addrs {
-		// add the new NVMe SSD behind VMD addrs
+	// add the new NVMe SSD behind VMD addrs
+	for _, dev := range c.VmdDeviceList {
+		if common.Includes(c.DeviceList, dev) {
+			continue
+		}
 		c.DeviceList = append(c.DeviceList, dev)
 	}
 
-	return err
+	log.Debug(fmt.Sprintf("%s, after: %v", logMsg, c.DeviceList))
+
+	return nil
 }
 
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
 func genFromTempl(cfg storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
-	conf := confOut
+	fmt.Printf("generating from template")
 
-	if cfg.EnableVmd {
-		conf = `[VMD]
+	if len(cfg.VmdDeviceList) > 0 {
+		fmt.Printf("got it")
+		templ = `[VMD]
     Enable True
 
-` + conf
+` + templ
 	}
 
-	t := template.Must(template.New(conf).Parse(templ))
+	t := template.Must(template.New(confOut).Parse(templ))
 	err = t.Execute(&out, cfg)
 
 	return
@@ -252,21 +248,23 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 		cfg: *cfg,
 	}
 
+	log.Debug("creating new class provider")
 	switch cfg.Class {
 	case storage.BdevClassNone:
-		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilPrep}
+		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilInit}
 	case storage.BdevClassNvme:
-		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilPrep}
-		if cfg.EnableVmd {
+		log.Debug("bdev nvme detected")
+		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, bdevNvmeInit}
+		if len(cfg.VmdDeviceList) > 0 {
+			log.Debug("set vmd vos env")
 			p.bdev.vosEnv = "VMD"
-			p.bdev.prep = prepBdevVmd
 		}
 	case storage.BdevClassMalloc:
-		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep}
+		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilInit}
 	case storage.BdevClassKdev:
-		p.bdev = bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilPrep}
+		p.bdev = bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilInit}
 	case storage.BdevClassFile:
-		p.bdev = bdev{fileTempl, "AIO", isEmptyList, isValidSize, prepBdevFile}
+		p.bdev = bdev{fileTempl, "AIO", isEmptyList, isValidSize, bdevFileInit}
 	default:
 		return nil, errors.Errorf("unable to map %q to BdevClass", cfg.Class)
 	}
@@ -294,13 +292,13 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 	return p, nil
 }
 
-func (p *ClassProvider) PrepareDevices() error {
-	return p.bdev.prep(p.log, &p.cfg)
-}
-
-func (p *ClassProvider) GenConfigFile() (err error) {
+func (p *ClassProvider) GenConfigFile() error {
 	if p.cfgPath == "" {
 		return nil
+	}
+
+	if err := p.bdev.init(p.log, &p.cfg); err != nil {
+		return errors.Wrap(err, "bdev device init")
 	}
 
 	confBytes, err := genFromTempl(p.cfg, p.bdev.templ)

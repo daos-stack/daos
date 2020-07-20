@@ -102,7 +102,6 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 	res, err := p.Format(bdev.FormatRequest{
 		Class:      cfg.Class,
 		DeviceList: cfg.DeviceList,
-		InitVmd:    cfg.EnableVmd,
 	})
 	if err != nil {
 		results = append(results,
