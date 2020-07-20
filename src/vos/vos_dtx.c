@@ -1143,7 +1143,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 	if (dae->dae_aborted)
 		return ALB_UNAVAILABLE;
 
-	/* The followings are for non-committable cases. */
+	/* The following are for non-committable cases. */
 
 	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_REBUILD) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||

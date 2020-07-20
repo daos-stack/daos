@@ -90,13 +90,13 @@ func TestFirmwareCommands(t *testing.T) {
 		},
 		{
 			"Update with no type",
-			"firmware update --path=/doesnt/matter",
+			"firmware update --path=/does_not/matter",
 			"",
 			errors.New("the required flag `-t, --type' was not specified"),
 		},
 		{
 			"Update with invalid type",
-			"firmware update --type=all --path=/doesnt/matter",
+			"firmware update --type=all --path=/does_not/matter",
 			"",
 			errors.New("Invalid value `all' for option `-t, --type'. Allowed values are: nvme or scm"),
 		},
