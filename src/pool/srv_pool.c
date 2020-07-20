@@ -448,23 +448,44 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 }
 
 static int
-pool_buf_fill_extend(struct pool_map *map, struct pool_buf *map_buf,
-		int nnodes, int map_version, int ndomains,
+gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
+		int map_version, int ndomains, int nnodes, int ntargets,
 		const int32_t *domains, uuid_t target_uuids[],
-		const d_rank_list_t *target_addrs, uuid_t *uuids, bool *updated)
+		const d_rank_list_t *target_addrs, uuid_t **uuids_out)
 {
 	struct pool_component	map_comp;
+	struct pool_buf		*map_buf;
+	struct pool_domain      *found_dom;
+	uuid_t		       *uuids;
 	uint32_t		num_comps;
-	struct pool_domain	*found_dom;
+	bool			updated;
 	int i, rc;
 
-	num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK, PO_COMP_ID_ALL,
-					 NULL);
-	/* fill domains */
+	updated = false;
+
+	/* Prepare the pool map attribute buffers. */
+	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
+	if (map_buf == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+
+	/* Make a sorted target UUID array to determine target IDs. */
+	D_ALLOC_ARRAY(uuids, nnodes);
+	if (uuids == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
+	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
+
+	if (map != NULL)
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
+						 PO_COMP_ID_ALL, NULL);
+	else
+		num_comps = 0;
+
+	/* fill racks */
 	for (i = 0; i < ndomains; i++) {
 		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
 		map_comp.co_status = PO_COMP_ST_NEW;
-		map_comp.co_index = i;
+		map_comp.co_index = i + num_comps;
 		map_comp.co_id = i + num_comps;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
@@ -476,21 +497,28 @@ pool_buf_fill_extend(struct pool_map *map, struct pool_buf *map_buf,
 			return rc;
 	}
 
-	num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL,
-					 NULL);
+	if (map != NULL)
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
+						 PO_COMP_ID_ALL, NULL);
+	else
+		num_comps = 0;
+
 	/* fill nodes */
 	for (i = 0; i < nnodes; i++) {
 		uuid_t *p = bsearch(target_uuids[i], uuids, nnodes,
 				    sizeof(uuid_t), uuid_compare_cb);
 
-		found_dom = pool_map_find_node_by_rank(map, domains[i]);
-		if (found_dom)
-			continue;
+		if (map) {
+			found_dom = pool_map_find_node_by_rank(map,
+					target_addrs->rl_ranks[i]);
+			if (found_dom)
+				continue;
+		}
 
-		*updated = true;
+		updated = true;
 		map_comp.co_type = PO_COMP_TP_NODE;
 		map_comp.co_status = PO_COMP_ST_NEW;
-		map_comp.co_index = i;
+		map_comp.co_index = i + num_comps;
 		map_comp.co_id = (p - uuids) + num_comps;
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
@@ -503,9 +531,13 @@ pool_buf_fill_extend(struct pool_map *map, struct pool_buf *map_buf,
 	}
 
 	if (!updated)
-		return 0;
+		return -DER_ALREADY;
 
-	num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
+	if (map != NULL)
+		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
+	else
+		num_comps = 0;
+
 	/* fill targets */
 	for (i = 0; i < nnodes; i++) {
 		int j;
@@ -525,7 +557,16 @@ pool_buf_fill_extend(struct pool_map *map, struct pool_buf *map_buf,
 				return rc;
 		}
 	}
+	if (uuids_out)
+		*uuids_out = uuids;
+
+	*map_buf_out = map_buf;
 	return 0;
+
+out_map_buf:
+	pool_buf_free(map_buf);
+
+	return rc;
 }
 
 static int
@@ -535,85 +576,20 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		   uint32_t ndomains, const int32_t *domains)
 {
 	struct pool_buf	       *map_buf;
-	struct pool_component	map_comp;
 	uint32_t		map_version = 1;
 	uint32_t		connectable;
 	uint32_t		nhandles = 0;
 	uuid_t		       *uuids;
-	d_iov_t		value;
+	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
 	int			rc;
-	int			i;
 
-	/* Prepare the pool map attribute buffers. */
-	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
-	if (map_buf == NULL)
-		return -DER_NOMEM;
-	/*
-	 * Make a sorted target UUID array to determine target IDs. See the
-	 * bsearch() call below.
-	 */
-	D_ALLOC_ARRAY(uuids, nnodes);
-	if (uuids == NULL)
-		D_GOTO(out_map_buf, rc = -DER_NOMEM);
-	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
-	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
-
-	/* Fill the pool_buf out. */
-	for (i = 0; i < ndomains; i++) {
-		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
-		map_comp.co_status = PO_COMP_ST_UPIN;
-		map_comp.co_index = i;
-		map_comp.co_id = i;
-		map_comp.co_rank = 0;
-		map_comp.co_ver = map_version;
-		map_comp.co_fseq = 1;
-		map_comp.co_nr = domains[i];
-
-		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-		if (rc != 0)
-			D_GOTO(out_uuids, rc);
-	}
-
-	/* fill nodes */
-	for (i = 0; i < nnodes; i++) {
-		uuid_t *p = bsearch(target_uuids[i], uuids, nnodes,
-				    sizeof(uuid_t), uuid_compare_cb);
-
-		map_comp.co_type = PO_COMP_TP_NODE;
-		map_comp.co_status = PO_COMP_ST_UPIN;
-		map_comp.co_index = i;
-		map_comp.co_id = p - uuids;
-		map_comp.co_rank = target_addrs->rl_ranks[i];
-		map_comp.co_ver = map_version;
-		map_comp.co_fseq = 1;
-		map_comp.co_nr = dss_tgt_nr;
-
-		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-		if (rc != 0)
-			D_GOTO(out_uuids, rc);
-	}
-
-	/* fill targets */
-	for (i = 0; i < nnodes; i++) {
-		int j;
-
-		for (j = 0; j < dss_tgt_nr; j++) {
-			map_comp.co_type = PO_COMP_TP_TARGET;
-			map_comp.co_status = PO_COMP_ST_UPIN;
-			map_comp.co_index = j;
-			map_comp.co_id = i * dss_tgt_nr + j;
-			map_comp.co_rank = target_addrs->rl_ranks[i];
-			map_comp.co_ver = map_version;
-			map_comp.co_fseq = 1;
-			map_comp.co_nr = 1;
-
-			rc = pool_buf_attach(map_buf, &map_comp, 1);
-			if (rc != 0)
-				D_GOTO(out_uuids, rc);
-		}
-	}
+	/* Generate the pool buffer. */
+	rc = gen_pool_buf(NULL, &map_buf, map_version, ndomains, nnodes,
+			ntargets, domains, target_uuids, target_addrs, &uuids);
+	if (rc != 0)
+		D_GOTO(out_map_buf, rc);
 
 	/* Initialize the pool map properties. */
 	rc = write_map_buf(tx, kvs, map_buf, map_version);
@@ -3176,7 +3152,7 @@ rechoose:
 	uuid_copy(in->pei_op.pi_uuid, pool_uuid);
 	in->pei_ntgts = ntargets;
 	in->pei_ndomains = ndomains;
-	in->pei_tgt_uuids.ca_count = 1;
+	in->pei_tgt_uuids.ca_count = rank_list->rl_nr;
 	in->pei_tgt_uuids.ca_arrays = target_uuids;
 	in->pei_tgt_ranks = (d_rank_list_t *)rank_list;
 	in->pei_domains.ca_count = ndomains;
@@ -4424,7 +4400,6 @@ ds_pool_extend_internal(struct rdb_tx *tx, struct pool_svc *svc,
 	struct pool_buf		*map_buf;
 	struct pool_map		*map = NULL;
 	uint32_t		map_version;
-	uuid_t			*uuids = NULL;
 	bool			updated = false;
 	int			ntargets;
 	int			rc;
@@ -4438,24 +4413,9 @@ ds_pool_extend_internal(struct rdb_tx *tx, struct pool_svc *svc,
 
 	map_version = pool_map_get_version(map) + 1;
 
-	/* Prepare the pool map attribute buffers. */
-	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
-	if (map_buf == NULL)
-		return -DER_NOMEM;
-
-	/* Make a sorted target UUID array to determine target IDs. */
-	D_ALLOC_ARRAY(uuids, nnodes);
-	if (uuids == NULL)
-		D_GOTO(out_map_buf, rc = -DER_NOMEM);
-	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
-	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
-
-	/* Fill the pool_buf out. */
-	rc = pool_buf_fill_extend(map, map_buf, nnodes, map_version, ndomains,
-			    domains, target_uuids, rank_list, uuids, &updated);
+	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
+			ntargets, domains, target_uuids, rank_list, NULL);
 	if (rc != 0)
-		D_GOTO(out_uuids, rc);
-	if (!updated)
 		D_GOTO(out_map_buf, rc);
 
 	/* Extend the current pool map */
@@ -4480,7 +4440,6 @@ ds_pool_extend_internal(struct rdb_tx *tx, struct pool_svc *svc,
 	}
 
 	updated = true;
-
 	/* Update svc->ps_pool to match the new pool map. */
 	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, map_version);
 	if (rc != 0) {
@@ -4500,15 +4459,11 @@ out_map:
 		*map_version_p = pool_map_get_version((map == NULL || rc != 0) ?
 						      svc->ps_pool->sp_map :
 						      map);
-	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(tx);
 
-out_uuids:
-	D_FREE(uuids);
-
 out_map_buf:
-	pool_buf_free(map_buf);
-
+	if (map_buf != NULL)
+		pool_buf_free(map_buf);
 	if (updated_p)
 		*updated_p = updated;
 	if (map)
@@ -4541,6 +4496,8 @@ ds_pool_extend(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 		rank_list, ndomains, domains,
 		&updated, map_version_p, hint);
 
+	ABT_rwlock_unlock(svc->ps_lock);
+
 	if (!updated)
 		D_GOTO(out_svc, rc);
 
@@ -4566,7 +4523,7 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	d_rank_list_t		rank_list;
 	uint32_t		ndomains;
 	int32_t			*domains;
-	int rc = 0;
+	int rc;
 
 	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
 	target_uuids = in->pei_tgt_uuids.ca_arrays;
@@ -4579,9 +4536,6 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 		       target_uuids, &rank_list, ndomains, domains,
 		       &out->peo_op.po_map_version);
 
-	if (target_uuids == NULL || ndomains || domains || rank_list.rl_nr > 0)
-		goto out;
-out:
 	out->peo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pei_op.pi_uuid), rpc, DP_RC(rc));
