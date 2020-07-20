@@ -21,5 +21,8 @@ then
     done
 fi
 
+./ci/check_d_macro_calls.py | patch -p1
+./ci/check_d_macro_calls.py | patch -p1
+./ci/check_d_macro_calls.py | patch -p1
 
 exit 0
