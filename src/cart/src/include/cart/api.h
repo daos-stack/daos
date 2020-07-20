@@ -2015,6 +2015,18 @@ int crt_swim_init(int crt_ctx_idx);
  */
 void crt_swim_fini(void);
 
+/**
+ * Specify the list of PSR ranks
+ *
+ * \param[in] grp               Group handle
+ * \param[in] psr_ranks         Rank list to set as PSR's
+ * \param[in] 
+ *
+ * \return                       DER_SUCCESS on success, negative value on
+ *                               failure.
+ */
+int crt_group_psr_list_set(crt_group_t *grp, d_rank_list_t *psr_ranks);
+
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_d_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t

@@ -306,6 +306,21 @@ d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx)
 }
 
 /**
+ * Return the rank corresponding to the index.
+ *
+ **/
+bool
+d_rank_list_idx(d_rank_list_t *rank_list, d_rank_t *rank, uint32_t idx)
+{
+
+	if (rank_list == NULL)
+		return false;
+
+	*rank = rank_list->rl_ranks[idx];
+	return true;
+}
+
+/**
  * delete the first occurrence of rank, shrink the array storage size in
  * rank_list, and reduce the size of rank_list by 1.
  */

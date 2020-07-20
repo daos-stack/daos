@@ -116,6 +116,13 @@ typedef enum {
 	RPC_STATE_FWD_UNREACH,
 } crt_rpc_state_t;
 
+typedef enum {
+	PSR_STATE_INITED = 0,
+	PSR_STATE_LOOKUP_RANKTAG0,
+	PSR_STATE_LOOKUP_GROUP,
+	PSR_STATE_LOOKUP_LIST,
+} crt_psr_state_t;
+
 /* corpc info to track the tree topo and child RPCs info */
 struct crt_corpc_info {
 	struct crt_grp_priv	*co_grp_priv;
@@ -170,6 +177,7 @@ struct crt_rpc_priv {
 	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
 
 	crt_rpc_state_t		crp_state; /* RPC state */
+	crt_psr_state_t		crp_psr_state; /* PSR lookup state */
 	hg_handle_t		crp_hg_hdl; /* HG request handle */
 	hg_addr_t		crp_hg_addr; /* target na address */
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
