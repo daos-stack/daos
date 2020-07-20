@@ -152,8 +152,18 @@ class WarningsFactory():
            entry['severity'] != 'ERROR':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
+        if self.pending and self.pending[0][0].pid != line.pid:
+            self.reset_pending()
         self.pending.append((line, message))
         self._flush()
+
+    def reset_pending(self):
+        """Reset the pending list
+
+        Should be called before iterating on each new file, so errors
+        from previous files aren't attribured to new files.
+        """
+        self.pending = []
 
     def _flush(self):
         """Write the current list to the json file
@@ -1060,14 +1070,6 @@ def test_pydaos_kv(server, conf):
 
     daos = import_daos(server, conf)
 
-    file_self = os.path.dirname(os.path.abspath(__file__))
-    mod_dir = os.path.join(file_self,
-                           '../src/client/pydaos')
-    if mod_dir not in sys.path:
-        sys.path.append(mod_dir)
-
-    dbm = __import__('daosdbm')
-
     pools = get_pool_list()
 
     while len(pools) < 1:
@@ -1079,9 +1081,9 @@ def test_pydaos_kv(server, conf):
 
     print(container)
     c_uuid = container.decode().split()[-1]
-    kvg = dbm.daos_named_kv(pool, c_uuid)
+    container = daos.Cont(pool, c_uuid)
 
-    kv = kvg.get_kv_by_name('Dave')
+    kv = container.get_kv_by_name('my_test_kv', create=True)
     kv['a'] = 'a'
     kv['b'] = 'b'
     kv['list'] = pickle.dumps(list(range(1, 100000)))
@@ -1116,6 +1118,10 @@ def test_pydaos_kv(server, conf):
 
     if failed:
         print("That's not good")
+
+    kv = None
+    print('Closing container and opening new one')
+    kv = container.get_kv_by_name('my_test_kv')
 
 def test_alloc_fail(conf):
     """run 'daos' client binary with fault injection
