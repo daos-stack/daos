@@ -119,9 +119,9 @@ class DfuseSpaceCheck(IorTestBase):
         file_count = 0
         while self.get_nvme_free_space(False) >= self.block_size:
             if 0 in self.ret_code:
-                file_loc = self.dfuse.mount_dir.value + "/largefile_{}.txt".\
-                    format(file_count)
-                write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(
+                file_loc = unicode(self.dfuse.mount_dir.value +
+                           "/largefile_{}.txt".format(file_count))
+                write_dd_cmd = u"dd if=/dev/zero of={} bs={} count=1".format(
                     file_loc, self.block_size)
                 self.execute_cmd(write_dd_cmd, False, False)
                 file_count += 1
@@ -164,11 +164,11 @@ class DfuseSpaceCheck(IorTestBase):
 
         # create large fle and perform write to it so that if goes out of
         # space.
-        large_file = self.dfuse.mount_dir.value + "/" + "largefile.txt"
+        large_file = unicode(self.dfuse.mount_dir.value + "/" + "largefile.txt")
         cmd = u"touch {}".format(large_file)
         self.execute_cmd(cmd)
         dd_count = ((self.space_before / self.block_size) + 1)
-        write_dd_cmd = "dd if=/dev/zero of={} bs={} count={}".format(
+        write_dd_cmd = u"dd if=/dev/zero of={} bs={} count={}".format(
             large_file, self.block_size, dd_count)
         self.execute_cmd(write_dd_cmd, False)
 
@@ -195,5 +195,5 @@ class DfuseSpaceCheck(IorTestBase):
 
         # Check if both the files counts is equal. If not, fail the test.
         if file_count1 != file_count2:
-            self.fail("Space was not returned completely after re-writing the"
+            self.fail("Space was not returned completely after re-writing the "
                       "same number of files after deletion")
