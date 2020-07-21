@@ -114,16 +114,17 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		}
 	}
 	if len(invalid) > 0 {
-		t.Fatalf("%s has test cases for the following invalid methods:\n%s", t.Name(), strings.Join(invalid, "\n"))
+		t.Fatalf("%s has test cases for the following methods that are not in methodAuthorizations:\n%s", t.Name(), strings.Join(invalid, "\n"))
 	}
 
 	for method, correctComponent := range testCases {
-		t.Run(method, func(t *testing.T) {
+		methodName := strings.SplitAfterN(method, "/", 3)[2]
+		t.Run(methodName, func(t *testing.T) {
 			for _, comp := range allComponents {
 				if comp == correctComponent {
-					common.AssertTrue(t, comp.HasAccess(method), fmt.Sprintf("%s should have access to %s but does not", comp, method))
+					common.AssertTrue(t, comp.HasAccess(method), fmt.Sprintf("%s should have access to %s but does not", comp, methodName))
 				} else {
-					common.AssertFalse(t, comp.HasAccess(method), fmt.Sprintf("%s should not have access to %s but does", comp, method))
+					common.AssertFalse(t, comp.HasAccess(method), fmt.Sprintf("%s should not have access to %s but does", comp, methodName))
 				}
 			}
 		})
