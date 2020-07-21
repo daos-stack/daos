@@ -1164,7 +1164,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 	}
 
-	if (hg_ret == HG_NA_ERROR) {
+	if (hg_ret == HG_NA_ERROR ||
+		hg_ret == HG_PROTOCOL_ERROR) {
 		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
