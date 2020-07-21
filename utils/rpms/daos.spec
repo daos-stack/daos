@@ -322,7 +322,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 
 %changelog
 * Mon Jul 20 2020 Maureen Jean <maureen.jean@intel.com> - 1.0.1-2
-- Include correct SLES fuse lib package
+- Include correct Suse fuse lib package
 
 * Wed Jul 08 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0.1-1
 - Version bump up to 1.0.1-rc1
