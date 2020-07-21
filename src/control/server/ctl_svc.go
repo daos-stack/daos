@@ -44,17 +44,12 @@ type ControlService struct {
 
 // NewControlService returns ControlService to be used as gRPC control service
 // datastore. Initialized with sensible defaults and provided components.
-func NewControlService(l logging.Logger, h *IOServerHarness,
+func NewControlService(log logging.Logger, h *IOServerHarness,
 	bp *bdev.Provider, sp *scm.Provider,
 	cfg *Configuration, m *system.Membership,
-	rc control.Invoker) (*ControlService, error) {
+	rc control.Invoker) *ControlService {
 
-	scs, err := DefaultStorageControlService(l, cfg)
-	if err != nil {
-		return nil, err
-	}
-	scs.scm = sp
-	scs.bdev = bp
+	scs := NewStorageControlService(log, bp, sp, cfg.Servers)
 
 	return &ControlService{
 		StorageControlService: *scs,
@@ -62,5 +57,5 @@ func NewControlService(l logging.Logger, h *IOServerHarness,
 		membership:            m,
 		rpcClient:             rc,
 		srvCfg:                cfg,
-	}, nil
+	}
 }

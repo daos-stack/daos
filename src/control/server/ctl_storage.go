@@ -41,14 +41,6 @@ type StorageControlService struct {
 	instanceStorage []ioserver.StorageConfig
 }
 
-// DefaultStorageControlService returns a initialized *StorageControlService
-// with default behavior
-func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
-	return NewStorageControlService(log,
-		bdev.DefaultProvider(log),
-		scm.DefaultProvider(log), cfg.Servers), nil
-}
-
 // NewStorageControlService returns an initialized *StorageControlService
 func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.Provider, srvCfgs []*ioserver.Config) *StorageControlService {
 	instanceStorage := []ioserver.StorageConfig{}

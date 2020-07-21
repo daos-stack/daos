@@ -322,10 +322,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		control.WithClientLogger(log))
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, rpcClient)
-	if err != nil {
-		return errors.Wrap(err, "init control service")
-	}
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, rpcClient)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}

@@ -88,6 +88,7 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 }
 
 func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
+	log.Debugf("spdk wrapper init: vmdEnabled: %v", w.vmdEnabled)
 
 	if w.initialized {
 		return nil
@@ -115,6 +116,8 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 	}
 
 	if w.vmdEnabled {
+		log.Debug("spdk init vmd")
+
 		if err := w.InitVMD(); err != nil {
 			return errors.Wrap(err, "failed to initialize VMD")
 		}
@@ -132,6 +135,7 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 		if err != nil {
 			return errors.Wrapf(err, "failed to discover VMD")
 		}
+		log.Debugf("spdk discover vmd: %v", vmdDevAddrs)
 		// add vmd addresses to stored controllers
 		for _, addr := range vmdDevAddrs {
 			w.controllers = append(w.controllers, spdk.Controller{
@@ -170,6 +174,8 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 }
 
 func (b *spdkBackend) Init(shmID ...int) error {
+	b.log.Debug("spdk backend init")
+
 	if err := b.binding.init(b.log, shmID...); err != nil {
 		return err
 	}
@@ -179,6 +185,8 @@ func (b *spdkBackend) Init(shmID ...int) error {
 
 // EnableVmd turns on VMD device awareness.
 func (b *spdkBackend) EnableVmd() error {
+	b.log.Debug("spdk backend enable vmd")
+
 	if b.binding.vmdEnabled {
 		return errors.New("EnableVmd(): VMD already enabled")
 	}
@@ -186,6 +194,10 @@ func (b *spdkBackend) EnableVmd() error {
 	b.binding.vmdEnabled = true
 
 	return nil
+}
+
+func (b *spdkBackend) IsVmdEnabled() bool {
+	return b.binding.vmdEnabled
 }
 
 func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error) {

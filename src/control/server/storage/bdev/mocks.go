@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
@@ -115,6 +116,10 @@ func (mb *MockBackend) Prepare(_ PrepareRequest) error {
 
 func (mb *MockBackend) EnableVmd() error {
 	return nil
+}
+
+func (mb *MockBackend) IsVmdEnabled() bool {
+	return false
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {

@@ -43,6 +43,7 @@ type (
 
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
+		shouldEnableVmd bool
 		pbin.ForwardableRequest
 	}
 
@@ -95,6 +96,7 @@ type (
 		Scan() (storage.NvmeControllers, error)
 		Format(pciAddr string) (*storage.NvmeController, error)
 		EnableVmd() error
+		IsVmdEnabled() bool
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -134,6 +136,11 @@ func (p *Provider) EnableVmd() error {
 	return p.backend.EnableVmd()
 }
 
+// IsVmdEnabled returns true if provider is VMD device aware.
+func (p *Provider) IsVmdEnabled() bool {
+	return p.backend.IsVmdEnabled()
+}
+
 // Init performs any initialization steps required by the provider.
 func (p *Provider) Init(req InitRequest) error {
 	if p.shouldForward(req) {
@@ -144,8 +151,12 @@ func (p *Provider) Init(req InitRequest) error {
 
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
-	if p.shouldForward(req) {
+	if p.shouldForward(req) && p.IsVmdEnabled() {
+		req.shouldEnableVmd = true
 		return p.fwd.Scan(req)
+	}
+	if req.IsForwarded() && req.shouldEnableVmd {
+		p.EnableVmd()
 	}
 
 	cs, err := p.backend.Scan()
