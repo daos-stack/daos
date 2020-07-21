@@ -26,7 +26,7 @@ cd "$DAOS_BASE"
 if [ "$WITH_VALGRIND" = "memcheck" ]; then
     echo "run_test_main_node.sh with memcheck"
     # run_test.sh with valgrind memcheck
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh |
     # Remove DAOS_BASE from memcheck xml results
     sed -i "s:$DAOS_BASE::g" results-*-memcheck.xml
     mkdir -p valgrind_memcheck_results
