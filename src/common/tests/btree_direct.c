@@ -1160,7 +1160,7 @@ main(int argc, char **argv)
 	sk_toh = DAOS_HDL_INVAL;
 	sk_root_off = UMOFF_NULL;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 

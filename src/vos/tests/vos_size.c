@@ -181,7 +181,7 @@ main(int argc, char **argv)
 	int				 index = 0;
 	int				 opt = 0;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc) {
 		printf("Error initializing debug system\n");
 		return rc;
