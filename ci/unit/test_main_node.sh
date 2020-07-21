@@ -45,7 +45,7 @@ if [ "$WITH_VALGRIND" = "memcheck" ]; then
     echo "run_test_main_node.sh with memcheck"
     # run_test.sh with valgrind memcheck
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
-    memcheck_convert_xml
+    #memcheck_convert_xml
     mkdir -p valgrind_memcheck_results
     mv results-*-memcheck.xml valgrind_memcheck_results
 elif [ "$WITH_VALGRIND" = "disabled" ]; then
