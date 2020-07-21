@@ -290,6 +290,7 @@ class TestContainer(TestDaosApiBase):
         self.info = None
         self.opened = False
         self.written_data = []
+        self.epoch = None
 
     def __str__(self):
         """Return a string representation of this TestContainer object.
@@ -367,6 +368,84 @@ class TestContainer(TestDaosApiBase):
 
         self.uuid = self.container.get_uuid_str()
         self.log.info("  Container created with uuid %s", self.uuid)
+
+    @fail_on(DaosApiError)
+    def create_snap(self, snap_name=None, epoch=None):
+        """Create Snapshot using daos utility
+
+        Args:
+            pool (str): pool uuid
+            cont (str):Cont uuid
+            snap_name (str, optional): Snapshot name
+            epoch (str, optional): Epoch ID
+            svc (str, optional): Pool svc
+            sys_name (str, optional): system name
+        """
+        self.log.info("Creating Snapshot for Container: %s", self.uuid)
+        if self.control_method.value == self.USE_DAOS and self.daos:
+            # create snapshot using daos utility
+            kwargs = {
+                "pool" : self.pool.uuid,
+                "cont" : self.uuid,
+                "snap_name" : snap_name,
+                "epoch" : epoch,
+                "svc" : ",".join(str(rank) for rank in self.pool.svc_ranks),
+                "sys_name": self.pool.name.value,
+            }
+            self._log_method("daos.container_create_snap", kwargs)
+            output = self.daos.get_output("container_create_snap", **kwargs)[0]
+
+        elif self.control_method.value == self.USE_DAOS:
+            self.log.error("Error: Undefined daos command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+
+        self.epoch = output.split()[1]
+
+    @fail_on(DaosApiError)
+    def destroy_snap(self, snap_name=None, epoch=None):
+        """Destroy Snapshot using daos utility
+
+        Args:
+            pool (str): pool uuid
+            cont (str):Cont uuid
+            snap_name (str, optional): Snapshot name
+            epoch (str, optional): Epoch ID
+            svc (str, optional): Pool svc
+            sys_name (str, optional): system name
+        """
+        status = False
+
+        self.log.info("Destroying Snapshot for Container: %s", self.uuid)
+
+        if self.control_method.value == self.USE_DAOS and self.daos:
+            # destroy snapshot using daos utility
+            kwargs = {
+                "pool" : self.pool.uuid,
+                "cont" : self.uuid,
+                "snap_name" : snap_name,
+                "epoch" : epoch,
+                "svc" : ",".join(str(rank) for rank in self.pool.svc_ranks),
+                "sys_name": self.pool.name.value,
+            }
+            self._log_method("daos.container_destroy_snap", kwargs)
+            self.daos.container_destroy_snap(**kwargs)
+            status = True
+
+        elif self.control_method.value == self.USE_DAOS:
+            self.log.error("Error: Undefined daos command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+
+        self.epoch = None
+
+        return status
 
     @fail_on(DaosApiError)
     def open(self, pool_handle=None, container_uuid=None):
