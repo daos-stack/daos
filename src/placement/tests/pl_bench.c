@@ -688,7 +688,7 @@ main(int argc, char **argv)
 		print_usage(argv[0], op_names, ARRAY_SIZE(op_names));
 		return -1;
 	}
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 
