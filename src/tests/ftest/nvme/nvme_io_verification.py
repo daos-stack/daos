@@ -156,8 +156,6 @@ class NvmeIoVerification(IorTestBase):
             self.pool.get_info()
 
             for tsize in transfer_size:
-                # Get the current pool sizes
-
                 # Run ior with the parameters specified for this pass
                 self.ior_cmd.transfer_size.update(tsize)
                 self.ior_cmd.flags.update(flag_write)
