@@ -33,9 +33,9 @@
 #include "vos_internal.h"
 
 enum {
-	GC_CREDS_MIN	= 1,	/**< minimum credits for vos_gc_run */
+	GC_CREDS_MIN	= 1,	/**< minimum credits for vos_gc_run/pool() */
 	GC_CREDS_PRIV	= 256,	/**< credits for internal usage */
-	GC_CREDS_MAX	= 4096,	/**< maximum credits for vos_gc_run */
+	GC_CREDS_MAX	= 4096,	/**< maximum credits for vos_gc_run/pool() */
 };
 
 /**
@@ -229,11 +229,14 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool,
 static int
 gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, struct vos_gc_item *item)
 {
-	vos_dtx_table_destroy(&pool->vp_umm,
-			      umem_off2ptr(&pool->vp_umm, item->it_addr));
-	umem_free(&pool->vp_umm, item->it_addr);
+	int	rc;
 
-	return 0;
+	rc = vos_dtx_table_destroy(&pool->vp_umm,
+				   umem_off2ptr(&pool->vp_umm, item->it_addr));
+	if (rc == 0)
+		rc = umem_free(&pool->vp_umm, item->it_addr);
+
+	return rc;
 }
 
 static struct vos_gc	gc_table[] = {
@@ -295,26 +298,33 @@ gc_bin_free_bag(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 		umem_off_t bag_id)
 {
 	struct vos_gc_bag_df *bag = umem_off2ptr(umm, bag_id);
+	int		      rc;
 
 	D_ASSERT(bag_id == bin->bin_bag_first);
 	if (bag_id == bin->bin_bag_last) {
 		/* don't free the last bag, only reset it */
 		D_ASSERT(bin->bin_bag_nr == 1);
-		umem_tx_add_ptr(umm, bag, sizeof(*bag));
-		bag->bag_item_first = bag->bag_item_last = 0;
-		bag->bag_item_nr = 0;
-		return 0;
+		rc = umem_tx_add_ptr(umm, bag, sizeof(*bag));
+		if (rc == 0) {
+			bag->bag_item_first = bag->bag_item_last = 0;
+			bag->bag_item_nr = 0;
+		}
+
+		return rc;
 	}
 
 	D_ASSERT(bin->bin_bag_nr > 1);
 	D_ASSERT(bag->bag_next != UMOFF_NULL);
 
-	umem_tx_add_ptr(umm, bin, sizeof(*bin));
-	bin->bin_bag_first = bag->bag_next;
-	bin->bin_bag_nr--;
+	rc = umem_tx_add_ptr(umm, bin, sizeof(*bin));
+	if (rc == 0) {
+		bin->bin_bag_first = bag->bag_next;
+		bin->bin_bag_nr--;
 
-	umem_free(umm, bag_id);
-	return 0;
+		rc = umem_free(umm, bag_id);
+	}
+
+	return rc;
 }
 
 /**
@@ -327,6 +337,7 @@ gc_bin_find_bag(struct umem_instance *umm, struct vos_gc_bin_df *bin)
 	struct vos_gc_bag_df *bag = NULL;
 	umem_off_t	      bag_id;
 	int		      size;
+	int		      rc;
 
 	if (!UMOFF_IS_NULL(bin->bin_bag_last)) {
 		bag_id = bin->bin_bag_last;
@@ -341,16 +352,24 @@ gc_bin_find_bag(struct umem_instance *umm, struct vos_gc_bin_df *bin)
 	if (UMOFF_IS_NULL(bag_id))
 		return NULL;
 
-	umem_tx_add_ptr(umm, bin, sizeof(*bin));
-	bin->bin_bag_last = bag_id;
-	bin->bin_bag_nr++;
+	rc = umem_tx_add_ptr(umm, bin, sizeof(*bin));
+	if (rc != 0)
+		return NULL;
+
 	if (bag) { /* the original last bag */
-		umem_tx_add_ptr(umm, bag, sizeof(*bag));
+		rc = umem_tx_add_ptr(umm, bag, sizeof(*bag));
+		if (rc != 0)
+			return NULL;
+
 		bag->bag_next = bag_id;
 	} else {
 		/* this is a new bin */
 		bin->bin_bag_first = bag_id;
 	}
+
+	bin->bin_bag_last = bag_id;
+	bin->bin_bag_nr++;
+
 	return umem_off2ptr(umm, bag_id);
 }
 
@@ -361,6 +380,7 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	struct vos_gc_bag_df *bag;
 	struct vos_gc_item   *it;
 	int		      last;
+	int		      rc;
 
 	bag = gc_bin_find_bag(umm, bin);
 	if (!bag)
@@ -377,10 +397,13 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	if (last == bin->bin_bag_size)
 		last = 0;
 
-	umem_tx_add_ptr(umm, bag, sizeof(*bag));
-	bag->bag_item_last = last;
-	bag->bag_item_nr += 1;
-	return 0;
+	rc = umem_tx_add_ptr(umm, bag, sizeof(*bag));
+	if (rc == 0) {
+		bag->bag_item_last = last;
+		bag->bag_item_nr += 1;
+	}
+
+	return rc;
 }
 
 static struct vos_gc_item *
@@ -471,9 +494,12 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool, struct vos_gc_item *item)
 	D_DEBUG(DB_TRACE, "GC released a %s\n", gc->gc_name);
 	/* this is the real container|object|dkey|akey free */
 	if (gc->gc_free)
-		gc->gc_free(gc, pool, item);
+		rc = gc->gc_free(gc, pool, item);
 	else
-		umem_free(&pool->vp_umm, item->it_addr);
+		rc = umem_free(&pool->vp_umm, item->it_addr);
+
+	if (rc != 0)
+		goto failed;
 
 	switch (gc->gc_type) {
 	default:
@@ -498,7 +524,7 @@ failed:
 
 /**
  * Add an item for garbage collection, this item and all its sub-items will
- * be freed by vos_gc_run.
+ * be freed by vos_gc_run/pool().
  *
  * NB: this function must be called within pmdk transaction.
  */
@@ -735,7 +761,8 @@ gc_log_pool(struct vos_pool *pool)
  * This function returns when there is nothing to reclaim or consumed all
  * credits. It returns the remainded credits.
  */
-int
+#if VOS_STANDALONE
+static int
 vos_gc_run(int *credits)
 {
 	struct vos_tls	*tls	 = vos_tls_get();
@@ -796,6 +823,7 @@ vos_gc_run(int *credits)
 	*credits = creds;
 	return rc;
 }
+#endif
 
 /**
  * Function for VOS standalone mode, it reclaims all the deleted items.
@@ -841,7 +869,7 @@ vos_gc_pool(daos_handle_t poh, int *credits)
 	if (!pool)
 		return -DER_NO_HDL;
 
-	if (d_list_empty(&pool->vp_gc_link))
+	if (!gc_have_pool(pool))
 		return 0; /* nothing to reclaim for this pool */
 
 	total = *credits;
@@ -852,10 +880,86 @@ vos_gc_pool(daos_handle_t poh, int *credits)
 	}
 	total -= *credits; /* subtract the remained credits */
 
-	if (empty && total != 0) /* did something */
-		gc_log_pool(pool);
+	if (empty) {
+		if (total != 0) /* did something */
+			gc_log_pool(pool);
+		/*
+		 * Recheck since vea_free() called when drain sv/ev record may
+		 * result in yield on transaction end callback.
+		 */
+		if (gc_have_pool(pool))
+			gc_del_pool(pool);
+	}
 
 	return 0;
+}
+
+static inline bool
+vos_gc_yield(bool (*yield_func)(void *arg), void *yield_arg)
+{
+	if (yield_func != NULL)
+		return yield_func(yield_arg);
+
+	bio_yield();
+	return false;
+}
+
+int
+vos_gc_pool_run(daos_handle_t poh, int credits,
+		bool (*yield_func)(void *arg), void *yield_arg)
+{
+	struct vos_pool	*pool = vos_hdl2pool(poh);
+	int		 rc, total = 0;
+
+	D_ASSERT(!daos_handle_is_inval(poh));
+	if (!gc_have_pool(pool))
+		return 0; /* nothing to reclaim for this pool */
+
+	/*
+	 * Pause flushing free extents in VEA aging buffer, otherwise,
+	 * there'll be way more fragments to be processed.
+	 */
+	vos_pool_ctl(poh, VOS_PO_CTL_VEA_PLUG);
+
+	while (1) {
+		int	creds = GC_CREDS_PRIV;
+
+		if (credits > 0 && (credits - total) < creds)
+			creds = credits - total;
+
+		total += creds;
+		rc = vos_gc_pool(poh, &creds);
+		if (rc) {
+			D_ERROR("GC pool failed: %s\n", d_errstr(rc));
+			break;
+		}
+		total -= creds; /* subtract the remainded credits */
+		if (creds != 0)
+			break; /* reclaimed everything */
+
+		if (credits > 0 && total >= credits)
+			break; /* consumed all credits */
+
+		if (vos_gc_yield(yield_func, yield_arg)) {
+			D_DEBUG(DB_TRACE, "GC pool run aborted\n");
+			rc = 1;
+			break;
+		}
+	}
+
+	/* Unplug and make the freed extents available immediately. */
+	vos_pool_ctl(poh, VOS_PO_CTL_VEA_UNPLUG);
+
+	if (total != 0) /* did something */
+		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
+	return rc;
+}
+
+inline bool
+vos_gc_pool_idle(daos_handle_t poh)
+{
+	D_ASSERT(!daos_handle_is_inval(poh));
+	return !gc_have_pool(vos_hdl2pool(poh));
 }
 
 inline void

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	struct smd_dev_info	*dev_info = NULL, *tmp;
 	d_list_t		 dev_list;
 	int			 dev_list_cnt = 0;
+	int			 buflen = 10;
 	int			 i = 0, j;
 	int			 rc = 0;
 
@@ -159,6 +160,15 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		}
 		uuid_unparse_lower(dev_info->sdi_id, resp->devices[i]->uuid);
 
+		D_ALLOC(resp->devices[i]->state, buflen);
+		if (resp->devices[i]->state == NULL) {
+			D_ERROR("Failed to allocate device state");
+			rc = -DER_NOMEM;
+			break;
+		}
+		strncpy(resp->devices[i]->state,
+			smd_state_enum_to_str(dev_info->sdi_state), buflen);
+
 		resp->devices[i]->n_tgt_ids = dev_info->sdi_tgt_cnt;
 		D_ALLOC(resp->devices[i]->tgt_ids,
 			sizeof(int) * dev_info->sdi_tgt_cnt);
@@ -189,6 +199,8 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->uuid);
 				if (resp->devices[i]->tgt_ids != NULL)
 					D_FREE(resp->devices[i]->tgt_ids);
+				if (resp->devices[i]->state != NULL)
+					D_FREE(resp->devices[i]->state);
 				D_FREE(resp->devices[i]);
 			}
 		}
@@ -328,16 +340,8 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 		rc = -DER_NOMEM;
 		goto out;
 	}
-
-	if (dev_info->sdi_state == SMD_DEV_NORMAL)
-		strncpy(resp->dev_state, "NORMAL\n", buflen);
-	else if (dev_info->sdi_state == SMD_DEV_FAULTY)
-		strncpy(resp->dev_state, "FAULTY\n", buflen);
-	else {
-		D_ERROR("Device state cannot be determined\n");
-		rc = -1;
-		goto out;
-	}
+	strncpy(resp->dev_state,
+		smd_state_enum_to_str(dev_info->sdi_state), buflen);
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
@@ -448,7 +452,9 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	ABT_thread_free(&thread);
 
 out:
-	strncpy(resp->dev_state, "FAULTY\n", buflen);
+	dev_info->sdi_state = SMD_DEV_FAULTY;
+	strncpy(resp->dev_state,
+		smd_state_enum_to_str(dev_info->sdi_state), buflen);
 	smd_free_dev_info(dev_info);
 
 	if (rc != 0) {

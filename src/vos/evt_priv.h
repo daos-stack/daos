@@ -113,7 +113,7 @@ struct evt_context {
 #define evt_off2ptr(tcx, offset)			\
 	umem_off2ptr(evt_umm(tcx), offset)
 
-#define EVT_NODE_MAGIC 0xfefef00d
+#define EVT_NODE_MAGIC 0xf00d
 #define EVT_DESC_MAGIC 0xbeefdead
 
 /** Convert an offset to a evtree node descriptor
@@ -389,7 +389,8 @@ evt_hdl2tcx(daos_handle_t toh);
 bool
 evt_move_trace(struct evt_context *tcx);
 
-/** Get a pointer to the rectangle corresponding to an index in a tree node
+/** Read the durable format for the rectangle (or child MBR) at the specified
+ *  index.
  * \param[IN]	tcx	The evtree context
  * \param[IN]	node	The tree node
  * \param[IN]	at	The index in the node entry
@@ -398,10 +399,11 @@ evt_move_trace(struct evt_context *tcx);
  * Returns the rectangle at the index
  */
 void
-evt_node_read_rect_at(struct evt_context *tcx, struct evt_node *node,
+evt_node_rect_read_at(struct evt_context *tcx, struct evt_node *node,
 		      unsigned int at, struct evt_rect *rout);
 
-/** Get a pointer to the rectangle corresponding to an index in a tree node
+/** Read the durable format for the rectangle (or child MBR) at the specified
+ *  index.
  * \param[IN]	tcx	The evtree context
  * \param[IN]	nd_off	The offset of the tree node
  * \param[IN]	at	The index in the node entry
@@ -410,14 +412,14 @@ evt_node_read_rect_at(struct evt_context *tcx, struct evt_node *node,
  * Returns the rectangle at the index
  */
 static inline void
-evt_nd_off_read_rect_at(struct evt_context *tcx, umem_off_t nd_off,
+evt_nd_off_rect_read_at(struct evt_context *tcx, umem_off_t nd_off,
 			unsigned int at, struct evt_rect *rout)
 {
 	struct evt_node	*node;
 
 	node = evt_off2node(tcx, nd_off);
 
-	evt_node_read_rect_at(tcx, node, at, rout);
+	evt_node_rect_read_at(tcx, node, at, rout);
 }
 
 /** Fill an evt_entry from the record at an index in a tree node
@@ -482,6 +484,9 @@ static inline struct evt_node_entry *
 evt_node_entry_at(struct evt_context *tcx, struct evt_node *node,
 		  unsigned int at)
 {
+	/** Intermediate nodes have no entries */
+	D_ASSERT(evt_node_is_leaf(tcx, node));
+
 	return &node->tn_rec[at];
 }
 

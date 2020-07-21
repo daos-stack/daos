@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -37,6 +38,7 @@ import (
 
 // RankSet implements a set of unique ranks in a condensed format.
 type RankSet struct {
+	sync.RWMutex
 	hostlist.HostSet
 }
 
@@ -55,22 +57,46 @@ func fixBrackets(stringRanks string, remove bool) string {
 	return stringRanks
 }
 
-// NewRankSet creates a new HostList with ranks rather than hostnames from the
+// CreateRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
-func NewRankSet(stringRanks string) (*RankSet, error) {
+func CreateRankSet(stringRanks string) (*RankSet, error) {
+	rs := RankSet{}
+
 	if len(stringRanks) > 0 {
 		stringRanks = fixBrackets(stringRanks, false)
-	}
 
-	// add enclosing brackets to input so CreateSet works without hostnames
-	hs, err := hostlist.CreateNumericSet(stringRanks)
-	if err != nil {
-		return nil, err
+		// add enclosing brackets to input so CreateSet works without hostnames
+		hs, err := hostlist.CreateNumericSet(stringRanks)
+		if err != nil {
+			return nil, err
+		}
+		// copying locks ok because original hs is discarded
+		rs.HostSet = *hs
 	}
-	// copying locks ok because original hs is discarded
-	rs := RankSet{HostSet: *hs}
 
 	return &rs, nil
+}
+
+// Add adds rank to an existing RankSet.
+func (rs *RankSet) Add(rank Rank) error {
+	rs.RLock()
+	defer rs.RUnlock()
+
+	var stringRanks string
+	if rs.HostSet.Count() > 0 {
+		stringRanks = fixBrackets(rs.HostSet.String(), true)
+		stringRanks += ","
+	}
+	stringRanks += rank.String()
+
+	newHS, err := hostlist.CreateNumericSet(fixBrackets(stringRanks, false))
+	if err != nil {
+		return err
+	}
+
+	rs.HostSet = *newHS
+
+	return nil
 }
 
 func (rs *RankSet) String() string {
@@ -78,27 +104,26 @@ func (rs *RankSet) String() string {
 }
 
 // Ranks returns a slice of Rank from a RankSet.
-func (rs *RankSet) Ranks() ([]Rank, error) {
+func (rs *RankSet) Ranks() []Rank {
 	var ranks []uint32
-	err := common.ParseNumberList(
+	// error can be safely ignored because DerangedString format is
+	// deterministic
+	common.ParseNumberList(
 		fixBrackets(rs.HostSet.DerangedString(), true),
 		&ranks)
-	if err != nil {
-		return nil, err
-	}
 
-	return RanksFromUint32(ranks), nil
+	return RanksFromUint32(ranks)
 }
 
 // ParseRanks takes a string representation of a list of ranks e.g. 1-4,6 and
 // returns a slice of system.Rank type or error.
 func ParseRanks(stringRanks string) ([]Rank, error) {
-	rs, err := NewRankSet(stringRanks)
+	rs, err := CreateRankSet(stringRanks)
 	if err != nil {
 		return nil, errors.Wrapf(err, "creating rank set from '%s'", stringRanks)
 	}
 
-	return rs.Ranks()
+	return rs.Ranks(), nil
 }
 
 // RankGroups maps a set of ranks to string value (group).

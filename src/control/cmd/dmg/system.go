@@ -30,9 +30,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -72,7 +74,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// rankStateGroups initialises groupings of ranks that are at a particular state.
+// rankStateGroups initializes groupings of ranks that are at a particular state.
 func rankStateGroups(members system.Members) (system.RankGroups, error) {
 	ranksInState := make(map[system.MemberState]*bytes.Buffer)
 	ranksSeen := make(map[system.Rank]struct{})
@@ -91,7 +93,7 @@ func rankStateGroups(members system.Members) (system.RankGroups, error) {
 
 	groups := make(system.RankGroups)
 	for state, ranksStrBuf := range ranksInState {
-		rankSet, err := system.NewRankSet(
+		rankSet, err := system.CreateRankSet(
 			strings.TrimSuffix(ranksStrBuf.String(), ","))
 		if err != nil {
 			return nil, errors.WithMessage(err,
@@ -103,11 +105,16 @@ func rankStateGroups(members system.Members) (system.RankGroups, error) {
 	return groups, nil
 }
 
-func displaySystemQuery(log logging.Logger, members system.Members) error {
+func displaySystemQuery(log logging.Logger, members system.Members, absentRanks *system.RankSet) error {
 	groups, err := rankStateGroups(members)
 	if err != nil {
 		return err
 	}
+
+	if absentRanks.Count() != 0 {
+		groups["Unknown Rank"] = absentRanks
+	}
+
 	out, err := tabulateRankGroups(groups, "Rank", "State")
 	if err != nil {
 		return err
@@ -141,11 +148,7 @@ func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 	log.Info(formatter.Format(table))
 }
 
-func displaySystemQuerySingle(log logging.Logger, members system.Members) error {
-	if len(members) != 1 {
-		return errors.Errorf("expected 1 member in result, got %d", len(members))
-	}
-
+func displaySystemQuerySingle(log logging.Logger, members system.Members) {
 	m := members[0]
 
 	table := []txtfmt.TableRow{
@@ -157,8 +160,33 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 
 	title := fmt.Sprintf("Rank %d", m.Rank)
 	log.Info(txtfmt.FormatEntity(title, table))
+}
 
-	return nil
+// rankListCmd enables rank or host list to be supplied with command to filter
+// which ranks are operated upon.
+type rankListCmd struct {
+	Ranks string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to operate on"`
+	Hosts string `long:"rank-hosts" description:"Hostlist representing hosts whose managed ranks are to be operated on"`
+}
+
+// validateHostsRanks validates rank and host lists have correct format.
+//
+// Populate request with valid list strings.
+func (cmd *rankListCmd) validateHostsRanks() (outHosts *hostlist.HostSet, outRanks *system.RankSet, err error) {
+	outHosts, err = hostlist.CreateSet(cmd.Hosts)
+	if err != nil {
+		return
+	}
+	outRanks, err = system.CreateRankSet(cmd.Ranks)
+	if err != nil {
+		return
+	}
+
+	if outHosts.Count() > 0 && outRanks.Count() > 0 {
+		err = errors.New("--ranks and --rank-hosts options cannot be set together")
+	}
+
+	return
 }
 
 // systemQueryCmd is the struct representing the command to query system status.
@@ -166,20 +194,21 @@ type systemQueryCmd struct {
 	logCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	Verbose bool   `long:"verbose" short:"v" description:"Display more member details"`
-	Ranks   string `long:"ranks" short:"r" description:"Comma separated ranges or individual system ranks to query"`
+	rankListCmd
+	Verbose bool `long:"verbose" short:"v" description:"Display more member details"`
 }
 
 // Execute is run when systemQueryCmd activates
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	ranks, err := system.ParseRanks(cmd.Ranks)
+	hostSet, rankSet, err := cmd.validateHostsRanks()
 	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
+		return err
 	}
+	req := new(control.SystemQueryReq)
+	req.Hosts = *hostSet
+	req.Ranks = *rankSet
 
-	ctx := context.Background()
-	resp, err := control.SystemQuery(ctx, cmd.ctlInvoker,
-		&control.SystemQueryReq{Ranks: ranks})
+	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "System-Query command failed")
 	}
@@ -188,25 +217,29 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return cmd.outputJSON(os.Stdout, resp)
 	}
 
-	cmd.log.Debug("System-Query command succeeded")
-	if len(resp.Members) == 0 {
-		cmd.log.Info("No members in system")
-		return nil
-	}
+	cmd.log.Debugf("System-Query command succeeded, absent hosts: %s, absent ranks: %s",
+		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
-	if len(cmd.Ranks) == 1 {
-		return displaySystemQuerySingle(cmd.log, resp.Members)
-	}
-
-	if cmd.Verbose {
+	switch {
+	case len(resp.Members) == 0:
+		cmd.log.Info("Query matches no members in system.")
+	case len(resp.Members) == 1:
+		displaySystemQuerySingle(cmd.log, resp.Members)
+	case cmd.Verbose:
 		displaySystemQueryVerbose(cmd.log, resp.Members)
-		return nil
+	default:
+		err = displaySystemQuery(cmd.log, resp.Members, &resp.AbsentRanks)
 	}
 
-	return displaySystemQuery(cmd.log, resp.Members)
+	if err != nil || resp.AbsentRanks.Count() == 0 {
+		// report absent hosts xor ranks
+		cmd.log.Info(resp.DisplayAbsentHostsRanks())
+	}
+
+	return err
 }
 
-// rankActionGroups initialises groupings of ranks that return the same results.
+// rankActionGroups initializes groupings of ranks that return the same results.
 func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 	ranksWithResult := make(map[string]*bytes.Buffer)
 	ranksSeen := make(map[system.Rank]struct{})
@@ -235,7 +268,7 @@ func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 
 	groups := make(system.RankGroups)
 	for strResult, ranksStrBuf := range ranksWithResult {
-		rankSet, err := system.NewRankSet(
+		rankSet, err := system.CreateRankSet(
 			strings.TrimSuffix(ranksStrBuf.String(), ","))
 		if err != nil {
 			return nil, errors.WithMessage(err,
@@ -247,14 +280,29 @@ func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 	return groups, nil
 }
 
-func displaySystemAction(log logging.Logger, results system.MemberResults) error {
+func displaySystemAction(log logging.Logger, results system.MemberResults,
+	absentHosts *hostlist.HostSet, absentRanks *system.RankSet) error {
+
 	groups, err := rankActionGroups(results)
 	if err != nil {
 		return err
 	}
+
+	if absentRanks.Count() > 0 {
+		groups[fmt.Sprintf("----%sUnknown Rank", rowFieldSep)] = absentRanks
+	}
+
 	out, err := tabulateRankGroups(groups, "Rank", "Operation", "Result")
 	if err != nil {
 		return errors.Wrap(err, "printing result table")
+	}
+
+	if absentHosts.Count() > 0 {
+		out += fmt.Sprintf("\nUnknown %s: %s",
+			english.Plural(absentHosts.Count(), "host", "hosts"),
+			absentHosts.String())
+	} else {
+		out += "\n"
 	}
 
 	log.Info(out)
@@ -267,26 +315,24 @@ type systemStopCmd struct {
 	logCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	Force bool   `long:"force" description:"Force stop DAOS system members"`
-	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
+	rankListCmd
+	Force bool `long:"force" description:"Force stop DAOS system members"`
 }
 
 // Execute is run when systemStopCmd activates
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	ranks, err := system.ParseRanks(cmd.Ranks)
+	hostSet, rankSet, err := cmd.validateHostsRanks()
 	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
+		return err
 	}
+	req := &control.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
+	req.Hosts = *hostSet
+	req.Ranks = *rankSet
 
-	ctx := context.Background()
-	resp, err := control.SystemStop(ctx, cmd.ctlInvoker, &control.SystemStopReq{
-		Prep:  true,
-		Kill:  true,
-		Force: cmd.Force,
-		Ranks: ranks,
-	})
+	// TODO DAOS-5079: group errors when ranks don't exist
+	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")
 	}
@@ -299,9 +345,11 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 		cmd.log.Debug("System-Stop no results returned")
 		return nil
 	}
-	cmd.log.Debug("System-Stop command succeeded")
+	cmd.log.Debugf("System-Stop command succeeded, absent hosts: %s, absent ranks: %s",
+		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
-	return displaySystemAction(cmd.log, resp.Results)
+	return displaySystemAction(cmd.log, resp.Results,
+		&resp.AbsentHosts, &resp.AbsentRanks)
 }
 
 // systemStartCmd is the struct representing the command to start system.
@@ -309,19 +357,21 @@ type systemStartCmd struct {
 	logCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	Ranks string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
+	rankListCmd
 }
 
 // Execute is run when systemStartCmd activates
 func (cmd *systemStartCmd) Execute(_ []string) error {
-	ranks, err := system.ParseRanks(cmd.Ranks)
+	hostSet, rankSet, err := cmd.validateHostsRanks()
 	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
+		return err
 	}
+	req := new(control.SystemStartReq)
+	req.Hosts = *hostSet
+	req.Ranks = *rankSet
 
-	ctx := context.Background()
-	resp, err := control.SystemStart(ctx, cmd.ctlInvoker,
-		&control.SystemStartReq{Ranks: ranks})
+	// TODO DAOS-5079: group errors when ranks don't exist
+	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "System-Start command failed")
 	}
@@ -334,9 +384,11 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 		cmd.log.Debug("System-Start no results returned")
 		return nil
 	}
-	cmd.log.Debug("System-Start command succeeded")
+	cmd.log.Debugf("System-Start command succeeded, absent hosts: %s, absent ranks: %s",
+		resp.AbsentHosts.String(), resp.AbsentRanks.String())
 
-	return displaySystemAction(cmd.log, resp.Results)
+	return displaySystemAction(cmd.log, resp.Results,
+		&resp.AbsentHosts, &resp.AbsentRanks)
 }
 
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.

@@ -533,68 +533,6 @@ out:
 	return rc;
 }
 
-static int
-crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
-{
-	struct crt_rpc_priv		*rpc_priv;
-	d_rank_t			 rank;
-	struct crt_grp_priv		*grp_priv;
-	struct crt_context		*crt_ctx;
-	int				 ctx_idx;
-	uint32_t			 tag;
-	int				 rc = 0;
-
-	rpc_priv = arg;
-	D_ASSERT(rpc_priv != NULL);
-	rank = rpc_priv->crp_pub.cr_ep.ep_rank;
-	tag = rpc_priv->crp_pub.cr_ep.ep_tag;
-
-	crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	if (rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) {
-		RPC_ERROR(rpc_priv,
-			  "opc: %#x with status of FWD_UNREACH\n",
-			  rpc_priv->crp_pub.cr_opc);
-		/* Valid hg_addr gets passed despite unreachable state */
-		crt_hg_addr_free(&crt_ctx->cc_hg_ctx, hg_addr);
-		D_GOTO(unreach, rc);
-	}
-
-	grp_priv = crt_grp_pub2priv(rpc_priv->crp_pub.cr_ep.ep_grp);
-
-	ctx_idx = crt_ctx->cc_idx;
-
-	rc = crt_grp_lc_addr_insert(grp_priv, crt_ctx, rank, tag, &hg_addr);
-	if (rc != 0) {
-		D_ERROR("crt_grp_lc_addr_insert() failed. rc %d "
-			"grp_priv %p ctx_idx %d, rank: %d, tag %d.\n",
-			rc, grp_priv, ctx_idx, rank, tag);
-		/* Mark as unreachable for crt_context_req_untrack() */
-		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
-		D_GOTO(out, rc);
-	}
-	rpc_priv->crp_hg_addr = hg_addr;
-	rc = crt_req_send_internal(rpc_priv);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_req_send_internal() failed, rc %d\n",
-			  rc);
-		D_GOTO(out, rc);
-	}
-out:
-	if (rc != 0) {
-		crt_context_req_untrack(rpc_priv);
-		crt_rpc_complete(rpc_priv, rc);
-
-		/* Corresponds to cleanup in crt_hg_req_send_cb() */
-		RPC_DECREF(rpc_priv);
-	}
-
-unreach:
-	/* addref in crt_req_hg_addr_lookup */
-	RPC_DECREF(rpc_priv);
-	return rc;
-}
-
 static inline int
 crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 {
@@ -612,7 +550,8 @@ crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	return DER_SUCCESS;
 }
 
-static int
+/* Note: Currently unused function as logic needs to be rewritten */
+int
 crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 			 struct crt_rpc_priv *rpc_priv)
 {
@@ -669,8 +608,17 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 	int				 rc = 0;
 
 	rpc_priv = cb_info->cci_arg;
-	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP);
-	D_ASSERT(rpc_priv->crp_ul_req == cb_info->cci_rpc);
+	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
+		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
+		 rpc_priv->crp_state == RPC_STATE_FWD_UNREACH ||
+		 rpc_priv->crp_state == RPC_STATE_COMPLETED);
+
+	/* Failed uri lookup can complete with cb_info->rpc pointing to
+	 * the original RPC that triggered the lookup if HG_Forward
+	 * fails with mercury errors.
+	 */
+	if (cb_info->cci_rc == DER_SUCCESS)
+		D_ASSERT(rpc_priv->crp_ul_req == cb_info->cci_rpc);
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	rank = tgt_ep->ep_rank;
@@ -687,12 +635,8 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 		if (cb_info->cci_rc == -DER_OOG)
 			D_GOTO(out, rc = -DER_OOG);
 
-		if (rpc_priv->crp_ul_retry++ < CRT_URI_LOOKUP_RETRY_MAX) {
-			rc = crt_req_uri_lookup_retry(grp_priv, rpc_priv);
-			ul_retried = true;
-		} else {
-			rc = cb_info->cci_rc;
-		}
+		/* TODO: Proper selection of new PSR is required */
+		rc = cb_info->cci_rc;
 		D_GOTO(out, rc);
 	}
 
@@ -786,8 +730,10 @@ crt_req_uri_lookup_by_rpc(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 			"request send failed, rc: %d opc: %#x.\n",
 			ul_in->ul_grp_id, ul_in->ul_rank, ul_tgt_ep.ep_rank,
 			rc, rpc_priv->crp_pub.cr_opc);
-		RPC_PUB_DECREF(ul_req); /* rollback addref above */
-		RPC_DECREF(rpc_priv); /* rollback addref above */
+
+		/* Errors will trigger complete_cb that decrefs
+		 * addrefs taken above.
+		 */
 	}
 
 out:
@@ -1044,27 +990,55 @@ out:
 	return rc;
 }
 
+
 /*
  * the case where we have the base URI but don't have the NA address of the tag
+ * TODO: This function will be gone after hg handle cache revamp
  */
 static int
 crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 {
+	hg_addr_t		 hg_addr;
+	hg_return_t		 hg_ret;
 	struct crt_context	*crt_ctx;
 	int			 rc = 0;
 
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	/* decref at crt_req_hg_addr_lookup_cb */
-	RPC_ADDREF(rpc_priv);
 
-	rc = crt_hg_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
-				crt_req_hg_addr_lookup_cb, rpc_priv);
-	if (rc != 0) {
-		D_ERROR("crt_addr_lookup() failed, rc %d, opc: %#x..\n",
-			rc, rpc_priv->crp_pub.cr_opc);
-		/* rollback above addref */
-		RPC_DECREF(rpc_priv);
+	hg_ret = HG_Addr_lookup2(crt_ctx->cc_hg_ctx.chc_hgcla,
+				rpc_priv->crp_tgt_uri, &hg_addr);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Addr_lookup2() failed. uri=%s, hg_ret=%d\n",
+			rpc_priv->crp_tgt_uri, hg_ret);
+		D_GOTO(out, rc = -DER_HG);
 	}
+
+	rc = crt_grp_lc_addr_insert(rpc_priv->crp_grp_priv, crt_ctx,
+				rpc_priv->crp_pub.cr_ep.ep_rank,
+				rpc_priv->crp_pub.cr_ep.ep_tag,
+				&hg_addr);
+	if (rc != 0) {
+		D_ERROR("Failed to insert\n");
+		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
+		D_GOTO(finish_rpc, rc);
+	}
+
+	rpc_priv->crp_hg_addr = hg_addr;
+	rc = crt_req_send_internal(rpc_priv);
+	if (rc != 0) {
+		RPC_ERROR(rpc_priv,
+			  "crt_req_send_internal() failed, rc %d\n",
+			  rc);
+		D_GOTO(finish_rpc, rc);
+	}
+
+finish_rpc:
+	if (rc != 0) {
+		crt_context_req_untrack(rpc_priv);
+		crt_rpc_complete(rpc_priv, rc);
+	}
+
+out:
 	return rc;
 }
 
@@ -1392,15 +1366,15 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 static inline void
 crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 {
-	uint32_t	xid;
+	uint64_t	rpcid;
 
-	xid = atomic_fetch_add(&crt_gdata.cg_xid, 1);
+	rpcid = atomic_fetch_add(&crt_gdata.cg_rpcid, 1);
 
 	rpc_priv->crp_req_hdr.cch_opc = opc;
-	rpc_priv->crp_req_hdr.cch_xid = xid;
+	rpc_priv->crp_req_hdr.cch_rpcid = rpcid;
 
 	rpc_priv->crp_reply_hdr.cch_opc = opc;
-	rpc_priv->crp_reply_hdr.cch_xid = xid;
+	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
 }
 
 int

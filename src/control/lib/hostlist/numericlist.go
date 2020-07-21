@@ -33,12 +33,12 @@ import (
 // and ranges only (no hostname prefixes) from the supplied string representation.
 func CreateNumericList(stringRanges string) (*HostList, error) {
 	for _, r := range stringRanges {
-		if !unicode.IsLetter(r) {
-			continue
+		if unicode.IsLetter(r) {
+			return nil, errors.New("unexpected alphabetic character(s)")
 		}
-		return nil, errors.Errorf(
-			"unexpected alphabetic character(s), got %q",
-			stringRanges)
+		if unicode.IsSpace(r) {
+			return nil, errors.New("unexpected whitespace character(s)")
+		}
 	}
 
 	return parseBracketedHostList(stringRanges, outerRangeSeparators,
@@ -50,7 +50,8 @@ func CreateNumericList(stringRanges string) (*HostList, error) {
 func CreateNumericSet(stringRanges string) (*HostSet, error) {
 	hl, err := CreateNumericList(stringRanges)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err,
+			"creating numeric set from %q", stringRanges)
 	}
 	hl.Uniq()
 

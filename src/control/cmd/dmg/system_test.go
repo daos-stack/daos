@@ -43,10 +43,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with no arguments",
 			"system query",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemQueryReq{
-					Ranks: []Rank{},
-				}),
+				printRequest(t, &control.SystemQueryReq{}),
 			}, " "),
 			nil,
 		},
@@ -54,32 +51,57 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemQueryReq{
-					Ranks: []Rank{0},
-				}),
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"0","Hosts":""}`,
 			}, " "),
 			nil,
 		},
 		{
 			"system query with multiple ranks",
-			"system query --ranks 0,1,4",
+			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemQueryReq{
-					Ranks: []Rank{0, 1, 4},
-				}),
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"[0,2,4-8]","Hosts":""}`,
 			}, " "),
 			nil,
+		},
+		{
+			"system query with bad ranklist",
+			"system query --ranks 0,2,fo,,4-8",
+			"",
+			errors.Errorf("creating numeric set from "),
+		},
+		{
+			"system query with single host",
+			"system query --rank-hosts foo-0",
+			strings.Join([]string{
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"","Hosts":"foo-0"}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system query with multiple hosts",
+			"system query --rank-hosts bar9,foo-[0-100]",
+			strings.Join([]string{
+				`*control.SystemQueryReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system query with bad hostlist",
+			"system query --rank-hosts bar9,foo-[0-100],123",
+			"",
+			errors.New(`invalid hostname "123"`),
+		},
+		{
+			"system query with both hosts and ranks specified",
+			"system query --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
+			"",
+			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
 			"system query verbose",
 			"system query --verbose",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemQueryReq{
-					Ranks: []Rank{},
-				}),
+				printRequest(t, &control.SystemQueryReq{}),
 			}, " "),
 			nil,
 		},
@@ -87,11 +109,9 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with no arguments",
 			"system stop",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStopReq{
-					Prep:  true,
-					Kill:  true,
-					Ranks: []Rank{},
+					Prep: true,
+					Kill: true,
 				}),
 			}, " "),
 			nil,
@@ -100,12 +120,10 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with force",
 			"system stop --force",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.SystemStopReq{
 					Prep:  true,
 					Kill:  true,
 					Force: true,
-					Ranks: []Rank{},
 				}),
 			}, " "),
 			nil,
@@ -114,12 +132,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with single rank",
 			"system stop --ranks 0",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemStopReq{
-					Prep:  true,
-					Kill:  true,
-					Ranks: []Rank{0},
-				}),
+				`*control.SystemStopReq-{"HostList":null,"Ranks":"0","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
 			}, " "),
 			nil,
 		},
@@ -127,23 +140,35 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemStopReq{
-					Prep:  true,
-					Kill:  true,
-					Ranks: []Rank{0, 1, 4},
-				}),
+				`*control.SystemStopReq-{"HostList":null,"Ranks":"[0-1,4]","Hosts":"","Prep":true,"Kill":true,"Force":false}`,
 			}, " "),
 			nil,
+		},
+		{
+			"system stop with multiple hosts",
+			"system stop --rank-hosts bar9,foo-[0-100]",
+			strings.Join([]string{
+				`*control.SystemStopReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","Prep":true,"Kill":true,"Force":false}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system stop with bad hostlist",
+			"system stop --rank-hosts bar9,foo-[0-100],123",
+			"",
+			errors.New(`invalid hostname "123"`),
+		},
+		{
+			"system stop with both hosts and ranks specified",
+			"system stop --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
+			"",
+			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemStartReq{
-					Ranks: []Rank{},
-				}),
+				printRequest(t, &control.SystemStartReq{}),
 			}, " "),
 			nil,
 		},
@@ -151,10 +176,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with single rank",
 			"system start --ranks 0",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemStartReq{
-					Ranks: []Rank{0},
-				}),
+				`*control.SystemStartReq-{"HostList":null,"Ranks":"0","Hosts":""}`,
 			}, " "),
 			nil,
 		},
@@ -162,18 +184,34 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				"ConnectClients",
-				printRequest(t, &control.SystemStartReq{
-					Ranks: []Rank{0, 1, 4},
-				}),
+				`*control.SystemStartReq-{"HostList":null,"Ranks":"[0-1,4]","Hosts":""}`,
 			}, " "),
 			nil,
+		},
+		{
+			"system start with multiple hosts",
+			"system start --rank-hosts bar9,foo-[0-100]",
+			strings.Join([]string{
+				`*control.SystemStartReq-{"HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+			}, " "),
+			nil,
+		},
+		{
+			"system start with bad hostlist",
+			"system start --rank-hosts bar9,foo-[0-100],123",
+			"",
+			errors.New(`invalid hostname "123"`),
+		},
+		{
+			"system start with both hosts and ranks specified",
+			"system start --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
+			"",
+			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.LeaderQueryReq{
 					System: build.DefaultSystemName,
 				}),
@@ -184,7 +222,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools with default config",
 			"system list-pools",
 			strings.Join([]string{
-				"ConnectClients",
 				printRequest(t, &control.ListPoolsReq{
 					System: build.DefaultSystemName,
 				}),

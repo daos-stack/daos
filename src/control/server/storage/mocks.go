@@ -34,8 +34,11 @@ func concat(base string, idx int32) string {
 	return fmt.Sprintf("%s-%d", base, idx)
 }
 
-func getRandIdx() int32 {
+func getRandIdx(n ...int32) int32 {
 	rand.Seed(time.Now().UnixNano())
+	if len(n) > 0 {
+		return rand.Int31n(n[0])
+	}
 	return rand.Int31()
 }
 
@@ -46,7 +49,7 @@ func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
 		tWarn = true
 	}
 	return &NvmeDeviceHealth{
-		Temp:         uint32(getRandIdx()),
+		Temperature:  uint32(getRandIdx(280)),
 		PowerCycles:  uint64(getRandIdx()),
 		PowerOnHours: uint64(getRandIdx()),
 		TempWarn:     tWarn,
@@ -85,6 +88,7 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		SocketID:        idx,
 		PhysicalID:      idx,
 		Capacity:        uint64(idx),
+		UID:             fmt.Sprintf("Device%d", idx),
 	}
 }
 

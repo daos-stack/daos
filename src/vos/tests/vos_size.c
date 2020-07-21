@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/* This generates a summary of struct sizes to be used by vos_estimate.py
+/* This generates a summary of struct sizes to be used by vos_size.py
  * to generate metadata overhead estimates
  */
 #define D_LOGFAC	DD_FAC(tests)
@@ -88,8 +88,9 @@ print_record(FILE *fp, const char *name, const struct daos_tree_overhead *ovhd)
 	int	count = 0;
 
 	fprintf(fp, "  %s:\n", name);
-	fprintf(fp, "    order: %d\n", ovhd->to_node_overhead.no_order);
-	fprintf(fp, "    node_size: %d\n", ovhd->to_node_overhead.no_size);
+	fprintf(fp, "    order: %d\n", ovhd->to_leaf_overhead.no_order);
+	fprintf(fp, "    leaf_node_size: %d\n", ovhd->to_leaf_overhead.no_size);
+	fprintf(fp, "    int_node_size: %d\n", ovhd->to_int_node_size);
 	fprintf(fp, "    record_msize: %d\n", ovhd->to_record_msize);
 	fprintf(fp, "    node_rec_msize: %d\n", ovhd->to_node_rec_msize);
 	fprintf(fp, "    num_dynamic: %d\n", ovhd->to_dyn_count);
@@ -180,7 +181,7 @@ main(int argc, char **argv)
 	int				 index = 0;
 	int				 opt = 0;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc) {
 		printf("Error initializing debug system\n");
 		return rc;

@@ -33,71 +33,25 @@ static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
 	  struct fd_entry *entry, int *errcode)
 {
-	daos_array_iod_t	iod;
-	daos_size_t		array_size;
-	daos_size_t		max_read;
-	daos_range_t		rg;
+	daos_size_t		read_size = 0;
 	d_iov_t			iov = {};
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
-
-	if (entry->fd_dfsoh) {
-		daos_size_t read_size = 0;
-
-		sgl.sg_nr = 1;
-		d_iov_set(&iov, (void *)buff, len);
-		sgl.sg_iovs = &iov;
-		rc = dfs_read(entry->fd_dfs,
-			      entry->fd_dfsoh,
-			      &sgl,
-			      position,
-			      &read_size,
-			      NULL);
-		if (rc) {
-			DFUSE_TRA_INFO(entry, "dfs_read() failed: %d", rc);
-			*errcode = rc;
-			return -1;
-		}
-		return read_size;
-	}
-
-	rc = daos_array_get_size(entry->fd_aoh, DAOS_TX_NONE, &array_size,
-				 NULL);
-	if (rc) {
-		D_ERROR("daos_array_get_size() failed "DF_RC"\n", DP_RC(rc));
-		*errcode = daos_der2errno(rc);
-		return -1;
-	}
-
-	if (position >= array_size)
-		return 0;
-
-	max_read = array_size - position;
-
-	if (max_read < len)
-		len = max_read;
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "%#zx-%#zx",
+		       position, position + len - 1);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
-
-	iod.arr_nr = 1;
-	rg.rg_len = len;
-	rg.rg_idx = position;
-	iod.arr_rgs = &rg;
-
-	rc = daos_array_read(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl,
-			     NULL);
+	rc = dfs_read(entry->fd_dfs, entry->fd_dfsoh, &sgl,
+		      position,	&read_size, NULL);
 	if (rc) {
-		DFUSE_TRA_INFO(entry, "daos_array_read() failed "DF_RC"",
-				DP_RC(rc));
-		*errcode = daos_der2errno(rc);
+		DFUSE_TRA_INFO(entry, "dfs_read() failed: %d", rc);
+		*errcode = rc;
 		return -1;
 	}
-
-	return len;
+	return read_size;
 }
 
 ssize_t ioil_do_pread(char *buff, size_t len, off_t position,

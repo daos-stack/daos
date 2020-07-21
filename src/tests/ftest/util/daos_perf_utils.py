@@ -153,5 +153,4 @@ class DaosPerfCommand(ExecutableCommand):
         self.pause_after_init = FormattedParameter("-w", False)
 
         # Environment variable names to export when running daos_perf
-        self._env_names = [
-            "OFI_INTERFACE", "OFI_PORT", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+        self._env_names = ["D_LOG_FILE"]

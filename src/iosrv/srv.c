@@ -112,8 +112,6 @@ dss_ctx_nr_get(void)
 	return DSS_CTX_NR_TOTAL;
 }
 
-static void dss_gc_ult(void *args);
-
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_IO_XS_NAME_FMT	"daos_io_%d"
 #define DSS_OFFLOAD_XS_NAME_FMT	"daos_off_%d"
@@ -329,12 +327,11 @@ static int
 dss_iv_resp_hdlr(crt_context_t *ctx, void *hdlr_arg,
 		 void (*real_rpc_hdlr)(void *), void *arg)
 {
-	ABT_pool	pool, *pools = arg;
-	int		rc;
+	struct dss_xstream	*dx = (struct dss_xstream *)arg;
+	int			 rc;
 
-	pool = pools[DSS_POOL_IO];
-	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
-			       ABT_THREAD_ATTR_NULL, NULL);
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO], real_rpc_hdlr,
+			       hdlr_arg, ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
 
@@ -342,16 +339,27 @@ static int
 dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	     void (*real_rpc_hdlr)(void *), void *arg)
 {
-	ABT_pool	*pools = arg;
-	ABT_pool	 pool;
-	int		 rc;
+	struct dss_xstream	*dx = (struct dss_xstream *)arg;
+	crt_rpc_t		*rpc = (crt_rpc_t *)hdlr_arg;
+	unsigned int		 mod_id = opc_get_mod_id(rpc->cr_opc);
+	struct dss_module	*module = dss_module_get(mod_id);
+	struct sched_req_attr	 attr = { 0 };
+	int			 rc = -DER_NOSYS;
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
 		return 0;
+	/*
+	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
+	 * will be NULL for this case.
+	 */
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_get_req_attr != NULL)
+		rc = module->sm_mod_ops->dms_get_req_attr(rpc, &attr);
 
-	pool = pools[DSS_POOL_IO];
+	if (rc == 0)
+		return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
 
-	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO], real_rpc_hdlr, rpc,
 			       ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
@@ -378,6 +386,9 @@ static void
 wait_all_exited(struct dss_xstream *dx)
 {
 	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
+
+	sched_stop(dx);
+
 	while (1) {
 		size_t	total_size = 0;
 		int	i;
@@ -461,8 +472,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = crt_context_register_rpc_task(dmi->dmi_ctx, dss_rpc_hdlr,
-						   dss_iv_resp_hdlr,
-						   dx->dx_pools);
+						   dss_iv_resp_hdlr, dx);
 		if (rc != 0) {
 			D_ERROR("failed to register process cb "DF_RC"\n",
 				DP_RC(rc));
@@ -517,14 +527,6 @@ dss_srv_handler(void *arg)
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
 			D_GOTO(tse_fini, rc);
-		}
-
-		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GC],
-				       dss_gc_ult, NULL,
-				       ABT_THREAD_ATTR_NULL, NULL);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("create GC ULT failed: %d\n", rc);
-			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
@@ -1135,7 +1137,7 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 			break;
 		}
 		D_WARN("set rebuild percentage to "DF_U64"\n", value);
-		rc = sched_set_throttle(DSS_POOL_REBUILD, value);
+		rc = sched_set_throttle(SCHED_REQ_MIGRATE, value);
 		break;
 	default:
 		D_ERROR("invalid key_id %d\n", key_id);
@@ -1360,56 +1362,4 @@ dss_dump_ABT_state()
 		 */
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
-}
-
-void
-dss_gc_run(daos_handle_t poh, int credits)
-{
-	struct dss_xstream *dxs	 = dss_current_xstream();
-	int		    total = 0;
-
-	while (1) {
-		int	creds = DSS_GC_CREDS;
-		int	rc;
-
-		if (credits > 0 && (credits - total) < creds)
-			creds = credits - total;
-
-		total += creds;
-		if (daos_handle_is_inval(poh))
-			rc = vos_gc_run(&creds);
-		else
-			rc = vos_gc_pool(poh, &creds);
-
-		if (rc) {
-			D_ERROR("GC run failed: %s\n", d_errstr(rc));
-			break;
-		}
-		total -= creds; /* subtract the remainded credits */
-		if (creds != 0)
-			break; /* reclaimed everything */
-
-		if (credits > 0 && total >= credits)
-			break; /* consumed all credits */
-
-		if (dss_xstream_exiting(dxs))
-			break;
-
-		ABT_thread_yield();
-	}
-
-	if (total != 0) /* did something */
-		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
-}
-
-static void
-dss_gc_ult(void *args)
-{
-	 struct dss_xstream *dxs  = dss_current_xstream();
-
-	 while (!dss_xstream_exiting(dxs)) {
-		/* -1 means GC will run until there is nothing to do */
-		dss_gc_run(DAOS_HDL_INVAL, -1);
-		ABT_thread_yield();
-	 }
 }

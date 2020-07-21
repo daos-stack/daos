@@ -193,18 +193,18 @@ update_read_timestamps(struct vos_ts_set *ts_set, daos_epoch_t epoch,
 	}
 
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_CONT, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
 
 	if (ts_set->ts_init_count == 2) {
-		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
+		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
 		return;
 	}
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+	vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
 	if (ts_set->ts_init_count == 3) {
-		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
+		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
 		return;
 	}
 	for (akey_idx = 0; akey_idx < akey_nr; akey_idx++) {
@@ -212,8 +212,8 @@ update_read_timestamps(struct vos_ts_set *ts_set, daos_epoch_t epoch,
 						  akey_idx);
 		if (entry == NULL)
 			return;
-		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
-		entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
+		vos_ts_rl_update(entry, epoch, ts_set->ts_tx_id);
+		vos_ts_rh_update(entry, epoch, ts_set->ts_tx_id);
 	}
 }
 
@@ -226,6 +226,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
+	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_ts_entry	*entry;
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
@@ -240,7 +241,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
-	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr);
+	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr,
+				 dth ? &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto reset;
 
@@ -252,16 +254,21 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (vos_ts_check_rl_conflict(ts_set, epr.epr_hi))
 		read_conflict = true;
 
-	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	rc = vos_tx_begin(dth, vos_cont2umm(cont));
 	if (rc != 0)
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
-	    dth->dth_dti_cos_done == 0) {
-		vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0, NULL);
-		dth->dth_dti_cos_done = 1;
+	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
+		if (daes == NULL)
+			D_GOTO(abort, rc = -DER_NOMEM);
+
+		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
+					     dth->dth_dti_cos_count,
+					     0, NULL, daes);
+		if (rc <= 0)
+			D_FREE(daes);
 	}
 
 	/* NB: punch always generate a new incarnation of the object */
@@ -282,19 +289,21 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc == 0 && read_conflict)
 		rc = -DER_TX_RESTART;
 
-	if (dth != NULL && rc == 0)
-		rc = vos_dtx_prepared(dth);
+abort:
+	rc = vos_tx_end(dth, vos_cont2umm(cont), rc);
 
-	rc = umem_tx_end(vos_cont2umm(cont), rc);
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 
 reset:
-	if (rc != 0) {
-		vos_dtx_cleanup_dth(dth);
+	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
-	}
+	else if (daes != NULL)
+		vos_dtx_post_handle(cont, daes, dth->dth_dti_cos_count, false);
+
+	D_FREE(daes);
+
 	vos_dth_set(NULL);
 
 	update_read_timestamps(ts_set, epr.epr_hi, akey_nr, rc);
