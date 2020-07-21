@@ -100,8 +100,7 @@ class DmgCommand(DmgCommandBase):
                 settings. Defaults to None, in which case settings
                 must be supplied as command-line parameters.
         """
-        super(DmgCommand, self).__init__(
-            "/run/dmg/*", "dmg", path, yaml_cfg)
+        super(DmgCommand, self).__init__(path, yaml_cfg)
 
         # This attribute stores the CmdResult from the last run() call.
         self.result = None
