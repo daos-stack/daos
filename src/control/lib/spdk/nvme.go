@@ -192,7 +192,8 @@ func (n *Nvme) DiscoverVmd(log logging.Logger) (addrs []string, err error) {
 	pci_device := C.spdk_pci_get_first_device()
 	for pci_device != nil {
 		devType := C.spdk_pci_device_get_type(pci_device)
-		if strings.Compare(C.GoString(devType), "vmd") == 0 {
+		log.Debugf("spdk device type %+v", devType)
+		if devType != nil && strings.Compare(C.GoString(devType), "vmd") == 0 {
 			count += 1
 		}
 

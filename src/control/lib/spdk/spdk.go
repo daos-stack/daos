@@ -87,15 +87,23 @@ func (e *Env) InitSPDKEnv(shmID int, pciWhiteList []string) (err error) {
 	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
 
 	if len(pciWhiteList) != 0 {
-		pciAddrs := make([]C.struct_spdk_pci_addr, len(pciWhiteList))
-		for i := range pciAddrs {
-			rc := C.spdk_pci_addr_parse(&pciAddrs[i],
-				C.CString(pciWhiteList[i]))
+		var tmpAddr *C.struct_spdk_pci_addr
+		structSize := unsafe.Sizeof(*tmpAddr)
+
+		outAddrs := C.malloc(C.ulong(structSize) * C.ulong(len(pciWhiteList)))
+		defer C.free(unsafe.Pointer(outAddrs))
+
+		for i, inAddr := range pciWhiteList {
+			offset := uintptr(i) * structSize
+			tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
+
+			rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr))
 			if err = Rc2err("spdk_pci_addr_parse", rc); err != nil {
 				return
 			}
 		}
-		opts.pci_whitelist = &pciAddrs[0]
+
+		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(outAddrs)
 	}
 
 	rc := C.spdk_env_init(opts)
@@ -107,7 +115,7 @@ func (e *Env) InitSPDKEnv(shmID int, pciWhiteList []string) (err error) {
 }
 
 // InitVMD initializes VMD capability in SPDK
-
+//
 // Enumerate VMD devices and hook them into the SPDK PCI subsystem.
 func (e *Env) InitVMD() (err error) {
 	rc := C.spdk_vmd_init()
