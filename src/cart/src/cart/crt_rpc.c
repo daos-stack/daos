@@ -550,7 +550,8 @@ crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	return DER_SUCCESS;
 }
 
-static int
+/* Note: Currently unused function as logic needs to be rewritten */
+int
 crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
 			 struct crt_rpc_priv *rpc_priv)
 {
@@ -607,8 +608,17 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 	int				 rc = 0;
 
 	rpc_priv = cb_info->cci_arg;
-	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP);
-	D_ASSERT(rpc_priv->crp_ul_req == cb_info->cci_rpc);
+	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
+		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
+		 rpc_priv->crp_state == RPC_STATE_FWD_UNREACH ||
+		 rpc_priv->crp_state == RPC_STATE_COMPLETED);
+
+	/* Failed uri lookup can complete with cb_info->rpc pointing to
+	 * the original RPC that triggered the lookup if HG_Forward
+	 * fails with mercury errors.
+	 */
+	if (cb_info->cci_rc == DER_SUCCESS)
+		D_ASSERT(rpc_priv->crp_ul_req == cb_info->cci_rpc);
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	rank = tgt_ep->ep_rank;
@@ -625,12 +635,8 @@ crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
 		if (cb_info->cci_rc == -DER_OOG)
 			D_GOTO(out, rc = -DER_OOG);
 
-		if (rpc_priv->crp_ul_retry++ < CRT_URI_LOOKUP_RETRY_MAX) {
-			rc = crt_req_uri_lookup_retry(grp_priv, rpc_priv);
-			ul_retried = true;
-		} else {
-			rc = cb_info->cci_rc;
-		}
+		/* TODO: Proper selection of new PSR is required */
+		rc = cb_info->cci_rc;
 		D_GOTO(out, rc);
 	}
 
@@ -724,8 +730,10 @@ crt_req_uri_lookup_by_rpc(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 			"request send failed, rc: %d opc: %#x.\n",
 			ul_in->ul_grp_id, ul_in->ul_rank, ul_tgt_ep.ep_rank,
 			rc, rpc_priv->crp_pub.cr_opc);
-		RPC_PUB_DECREF(ul_req); /* rollback addref above */
-		RPC_DECREF(rpc_priv); /* rollback addref above */
+
+		/* Errors will trigger complete_cb that decrefs
+		 * addrefs taken above.
+		 */
 	}
 
 out:

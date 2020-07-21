@@ -9,12 +9,39 @@ hosts:
     - server-D
   test_clients:
     - client-C
-timeout: 240
+timeout: 300
 server_config:
   name: daos_server
-  servers_per_host: 1
+  servers_per_host: 2
   servers:
     0:
+      targets: 8
+      first_core: 0
+      pinned_numa_node: 0
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      scm_mount: /mnt/daos0
+      # common items below (same in server 0 and server 1)
+      scm_class: ram
+      scm_size: 6
+      nr_xs_helpers: 16
+      log_mask: DEBUG,RPC=ERR,MEM=ERR
+      env_vars:
+        - DAOS_MD_CAP=128
+        - DD_MASK=mgmt,md,dsms,any
+    1:
+      targets: 8
+      first_core: 0
+      pinned_numa_node: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      scm_mount: /mnt/daos1
+      # common items below (same in server 0 and server 1)
+      scm_class: ram
+      scm_size: 6
+      nr_xs_helpers: 16
       log_mask: DEBUG,RPC=ERR,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
@@ -26,7 +53,7 @@ pool:
   createset:
     group: daos_server
   createsvc:
-    svcn: 1
+    svcn: 3
   createsize:
     scm_size: 1073741824
     nvme_size: 8589934592
