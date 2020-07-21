@@ -28,10 +28,15 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // MemberState represents the activity state of DAOS system members.
@@ -180,12 +185,18 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 }
 
 func (sm *Member) String() string {
-	return fmt.Sprintf("%s/%d", sm.Addr, sm.Rank)
+	return fmt.Sprintf("%s/%d/%s", sm.Addr, sm.Rank, sm.State())
 }
 
 // State retrieves member state.
 func (sm *Member) State() MemberState {
 	return sm.state
+}
+
+// WithInfo adds info field and returns updated member.
+func (sm *Member) WithInfo(msg string) *Member {
+	sm.Info = msg
+	return sm
 }
 
 // NewMember returns a reference to a new member struct.
@@ -279,42 +290,49 @@ type Membership struct {
 	members map[Rank]*Member
 }
 
+func (m *Membership) addMember(member *Member) error {
+	if _, found := m.members[member.Rank]; found {
+		return FaultMemberExists(member.Rank)
+	}
+	m.log.Debugf("adding system member: %s", member)
+
+	m.members[member.Rank] = member
+
+	return nil
+}
+
+func (m *Membership) updateMember(member *Member) {
+	old := m.members[member.Rank]
+	m.log.Debugf("updating system member: %s->%s", old, member)
+
+	m.members[member.Rank] = member
+}
+
 // Add adds member to membership, returns member count.
 func (m *Membership) Add(member *Member) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	if _, found := m.members[member.Rank]; found {
-		return -1, FaultMemberExists(member.Rank)
+	if err := m.addMember(member); err != nil {
+		return -1, err
 	}
-
-	m.members[member.Rank] = member
 
 	return len(m.members), nil
 }
 
-// AddOrUpdate adds member to membership or updates member state if member
-// already exists in membership. Returns flag for whether member was created and
-// the previous state if updated.
+// AddOrReplace adds member to membership or replaces member if it exists.
 //
 // Note: this method updates state without checking if state transition is
 //       legal so use with caution.
-func (m *Membership) AddOrUpdate(newMember *Member) (bool, *MemberState) {
+func (m *Membership) AddOrReplace(newMember *Member) {
 	m.Lock()
 	defer m.Unlock()
 
-	oldMember, found := m.members[newMember.Rank]
-	if found {
-		os := oldMember.State()
-		m.members[newMember.Rank].state = newMember.State()
-		m.members[newMember.Rank].Info = newMember.Info
-
-		return false, &os
+	if err := m.addMember(newMember); err == nil {
+		return
 	}
 
-	m.members[newMember.Rank] = newMember
-
-	return true, nil
+	m.updateMember(newMember)
 }
 
 // Remove removes member from membership, idempotent.
@@ -325,29 +343,28 @@ func (m *Membership) Remove(rank Rank) {
 	delete(m.members, rank)
 }
 
+func (m *Membership) getMember(rank Rank) (*Member, error) {
+	if member, found := m.members[rank]; found {
+		return member, nil
+	}
+
+	return nil, FaultMemberMissing(rank)
+}
+
 // Get retrieves member reference from membership based on Rank.
 func (m *Membership) Get(rank Rank) (*Member, error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	member, found := m.members[rank]
-	if !found {
-		return nil, FaultMemberMissing(rank)
-	}
-
-	return member, nil
+	return m.getMember(rank)
 }
 
-// Ranks returns slice of ordered member ranks.
-func (m *Membership) Ranks(rankList ...Rank) (ranks []Rank) {
+// RankList returns slice of all ordered member ranks.
+func (m *Membership) RankList() (ranks []Rank) {
 	m.RLock()
 	defer m.RUnlock()
 
 	for rank := range m.members {
-		if len(rankList) != 0 && !rank.InList(rankList) {
-			continue
-		}
-
 		ranks = append(ranks, rank)
 	}
 
@@ -356,15 +373,14 @@ func (m *Membership) Ranks(rankList ...Rank) (ranks []Rank) {
 	return
 }
 
-// HostRanks returns mapping of control addresses to ranks managed by harness at
-// that address.
-//
-// Filter to include only host keys with any of the provided ranks, if supplied.
-func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
-	m.RLock()
-	defer m.RUnlock()
-
+func (m *Membership) getHostRanks(rankSet *RankSet) map[string][]Rank {
+	var rankList []Rank
 	hostRanks := make(map[string][]Rank)
+
+	if rankSet != nil {
+		rankList = rankSet.Ranks()
+	}
+
 	for _, member := range m.members {
 		addr := member.Addr.String()
 
@@ -384,12 +400,27 @@ func (m *Membership) HostRanks(rankList ...Rank) map[string][]Rank {
 	return hostRanks
 }
 
-// Hosts returns slice of control addresses that contain any of the ranks
+// HostRanks returns mapping of control addresses to ranks managed by harness at
+// that address.
+//
+// Filter to include only host keys with any of the provided ranks, if supplied.
+func (m *Membership) HostRanks(rankSet *RankSet) map[string][]Rank {
+	m.RLock()
+	defer m.RUnlock()
+
+	return m.getHostRanks(rankSet)
+}
+
+// HostList returns slice of control addresses that contain any of the ranks
 // in the input rank list.
 //
-// If input rank list is empty, return all hosts in membership.
-func (m *Membership) Hosts(rankList ...Rank) []string {
-	hostRanks := m.HostRanks(rankList...)
+// If input rank list is empty, return all hosts in membership and ignore ranks
+// that are not in the membership.
+func (m *Membership) HostList(rankSet *RankSet) []string {
+	m.RLock()
+	defer m.RUnlock()
+
+	hostRanks := m.getHostRanks(rankSet)
 	hosts := make([]string, 0, len(hostRanks))
 
 	for host := range hostRanks {
@@ -402,36 +433,40 @@ func (m *Membership) Hosts(rankList ...Rank) []string {
 
 // Members returns slice of references to all system members ordered by rank.
 //
-// Empty rank list implies no filtering/include all.
-func (m *Membership) Members(rankList ...Rank) (ms Members) {
-	ranks := m.Ranks(rankList...)
-
+// Empty rank list implies no filtering/include all and ignore ranks that are
+// not in the membership.
+func (m *Membership) Members(rankSet *RankSet) (members Members) {
 	m.RLock()
 	defer m.RUnlock()
 
-	for _, rank := range ranks {
-		if len(rankList) != 0 && !rank.InList(rankList) {
-			continue
+	if rankSet == nil || rankSet.Count() == 0 {
+		for _, member := range m.members {
+			members = append(members, member)
 		}
-
-		ms = append(ms, m.members[rank])
+	} else {
+		for _, rank := range rankSet.Ranks() {
+			if member, exists := m.members[rank]; exists {
+				members = append(members, member)
+			}
+		}
 	}
+	sort.Slice(members, func(i, j int) bool { return members[i].Rank < members[j].Rank })
 
-	return ms
+	return
 }
 
 // UpdateMemberStates updates member's state according to result state.
 //
-// If ignoreErrored is set, only update member state and info if result is a
-// success (subsequent ping will update member state).
-func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored bool) error {
+// If updateOnFail is false, only update member state and info if result is a
+// success, if true then update state even if result is errored.
+func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool) error {
 	m.Lock()
 	defer m.Unlock()
 
 	for _, result := range results {
-		member, found := m.members[result.Rank]
-		if !found {
-			return FaultMemberMissing(result.Rank)
+		member, err := m.getMember(result.Rank)
+		if err != nil {
+			return err
 		}
 
 		// use opportunity to update host address in result
@@ -440,10 +475,10 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 		}
 
 		// don't update members if:
-		// - result reports an error and ignoreErrored is set or
+		// - result reports an error and updateOnFail is false or
 		// - if transition from current to result state is illegal
 		if result.Errored {
-			if ignoreErrored {
+			if !updateOnFail {
 				continue
 			}
 			if result.State != MemberStateErrored {
@@ -460,6 +495,103 @@ func (m *Membership) UpdateMemberStates(results MemberResults, ignoreErrored boo
 	}
 
 	return nil
+}
+
+// CheckRanks returns rank sets of existing and missing membership ranks from
+// provided rank set string, if empty string is given then return hit rank set
+// containing all ranks in the membership.
+func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	hit, err = CreateRankSet("")
+	if err != nil {
+		return
+	}
+	miss, err = CreateRankSet("")
+	if err != nil {
+		return
+	}
+
+	var rankList []Rank
+	if ranks == "" {
+		rankList = m.RankList()
+	} else {
+		rankList, err = ParseRanks(ranks)
+		if err != nil {
+			return
+		}
+	}
+
+	for _, rank := range rankList {
+		if _, found := m.members[rank]; !found {
+			if err = miss.Add(rank); err != nil {
+				return
+			}
+			continue
+		}
+		if err = hit.Add(rank); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+type resolveFnSig func(string, string) (*net.TCPAddr, error)
+
+// CheckHosts returns set of all ranks on any of the hosts in provided host set
+// string and another slice of all hosts from input hostset string that are
+// missing from the membership.
+func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSig) (*RankSet, *hostlist.HostSet, error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	hostRanks := m.getHostRanks(nil)
+	rs, err := CreateRankSet("")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hs, err := hostlist.CreateSet(hosts)
+	if err != nil {
+		return nil, nil, err
+	}
+	missHS, err := hostlist.CreateSet("")
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, host := range strings.Split(hs.DerangedString(), ",") {
+		origHostString := host
+		if !common.HasPort(host) {
+			host = net.JoinHostPort(host, strconv.Itoa(ctlPort))
+		}
+
+		tcpAddr, resolveErr := resolveFn("tcp", host)
+		if resolveErr != nil {
+			m.log.Debugf("host addr %q didn't resolve: %s", host, resolveErr)
+			if _, err := missHS.Insert(origHostString); err != nil {
+				return nil, nil, err
+			}
+			continue
+		}
+
+		if rankList, exists := hostRanks[tcpAddr.String()]; exists {
+			m.log.Debugf("CheckHosts(): %v ranks found at %s", rankList, origHostString)
+			for _, rank := range rankList {
+				if err = rs.Add(rank); err != nil {
+					return nil, nil, err
+				}
+			}
+			continue
+		}
+
+		if _, err := missHS.Insert(origHostString); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return rs, missHS, nil
 }
 
 // NewMembership returns a reference to a new DAOS system membership.

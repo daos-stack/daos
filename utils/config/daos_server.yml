@@ -102,6 +102,15 @@
 #bdev_exclude: ["0000:81:00.1"]
 #
 #
+## Disable VFIO Driver
+#
+## In some circumstances it may be preferable to force SPDK to use the UIO
+## driver for NVMe device access even though an IOMMU is available. Note
+## that use of the UIO driver requires that DAOS must run as root.
+#
+#disable_vfio: true
+#
+#
 ## Use Hyperthreads
 #
 ## When Hyperthreading is enabled and supported on the system, this parameter
@@ -152,6 +161,12 @@
 #
 ## default: disabled (errors only to control plane log)
 #helper_log_file: /tmp/daos_admin.log
+#
+#
+## Enable daos_firmware (privileged helper) logging.
+#
+## default: disabled (errors only to control plane log)
+#firmware_helper_log_file: /tmp/daos_firmware.log
 #
 #
 ## When per-server definitions exist, auto-allocation of resources is not

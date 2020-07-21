@@ -115,8 +115,8 @@ main(int argc, char **argv)
 		goto syntax_err;
 	}
 
-	ctx = drpc_connect(socket_path);
-	if (ctx == NULL) {
+	rc = drpc_connect(socket_path, &ctx);
+	if (rc != -DER_SUCCESS) {
 		fprintf(stderr, "Bad socket path: %s\n", socket_path);
 		goto syntax_err;
 	}
@@ -124,7 +124,12 @@ main(int argc, char **argv)
 	/* Sequence number is copied from ctx to Drpc Call under the covers */
 	ctx->sequence = sequence_num;
 
-	call = drpc_call_create(ctx, module_id, method_id);
+	rc = drpc_call_create(ctx, module_id, method_id, &call);
+	if (rc != DER_SUCCESS) {
+		fprintf(stderr, "drpc_call_create failed: %d\n", rc);
+		goto cleanup;
+	}
+
 	print_drpc_call(call);
 
 	rc = drpc_call(ctx, R_SYNC, call, &response);

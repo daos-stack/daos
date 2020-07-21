@@ -42,8 +42,16 @@ from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
 from test_utils_pool import TestPool
 
-NO_OF_MAX_CONTAINER = 13034
-
+# Rough maximum number of containers that can be created
+# Determined experimentally with DAOS_MD_CAP=128
+# (ensure metadata.yaml matches)
+# and taking into account vos reserving in vos_space_init():
+#  5% for fragmentation overhead
+#  ~ 1MB for background garbage collection use
+#  ~48MB for background aggregation use
+# 52% of remaining free space set aside for staging log container
+# (installsnapshot RPC handling in raft)
+NO_OF_MAX_CONTAINER = 4464
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -114,7 +122,6 @@ class ObjectMetadata(TestWithServers):
         self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
         return "PASS"
 
-    @skipForTicket("DAOS-1936/DAOS-1946")
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.
 
@@ -127,25 +134,67 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=all,metadata,large,metadatafill,hw
         :avocado: tags=full_regression
         """
+
+        # 3 Phases in nested try/except blocks below
+        # Phase 1: nearly fill pool metadata with container creates
+        #          no DaosApiError expected in this phase (otherwise fail test)
+        #
+        # Phase 2: if Phase 1 passed:
+        #          overload pool metadata with another container create loop
+        #          DaosApiError IS expected here (otherwise fail test)
+        #
+        # Phase 3: if Phase 2 passed:
+        #          clean up all containers created (prove "critical" destroy
+        #          in rdb (and vos) works without cascading nospace errors
+
         self.pool.pool.connect(2)
-        container = DaosContainer(self.context)
 
-        self.log.info("Fillup Metadata....")
-        for _cont in range(NO_OF_MAX_CONTAINER):
-            container.create(self.pool.pool.handle)
-
-        # This should fail with no Metadata space Error.
-        self.log.info("Metadata Overload...")
+        self.log.info("Phase 1: Fillup Metadata (expected to work) ...")
+        container_array = []
         try:
-            for _cont in range(400):
+            # Phase 1 container creates
+            for _cont in range(NO_OF_MAX_CONTAINER):
+                container = DaosContainer(self.context)
                 container.create(self.pool.pool.handle)
-            self.fail("Test expected to fail with a no metadata space error")
+                container_array.append(container)
 
-        except DaosApiError as exe:
-            print(exe, traceback.format_exc())
-            return
+            self.log.info("Phase 1: pass (all container creates successful)")
 
-        self.fail("Test was expected to fail but it passed.\n")
+            # Phase 2: should fail with no Metadata space Error.
+            try:
+                self.log.info("Phase 2: Metadata Overload (expect to fail) ...")
+                for _cont in range(400):
+                    container = DaosContainer(self.context)
+                    container.create(self.pool.pool.handle)
+                    container_array.append(container)
+
+                # Phase 2 failed - stop here
+                self.fail("Phase 2: fail (expected container create failure)")
+
+            # Phase 2 DaosApiError (expected - proceed to Phase 3)
+            except DaosApiError:
+                self.log.info("Phase 2: pass (container create failed as "
+                              "expected)")
+
+                # Phase 3 clean up containers (expected to succeed)
+                try:
+                    self.log.info("Phase 3: Cleaning up containers after "
+                                  "DaosApiError (expected to work)")
+                    for container in container_array:
+                        container.destroy()
+                    self.log.info("Phase 3: pass (containers destroyed "
+                                  "successfully)")
+                    return
+
+                except DaosApiError as exe3:
+                    print(exe3, traceback.format_exc())
+                    self.fail("Phase 3: fail (container destroy error)")
+
+        # Phase 1 got DaosApiError (not expected)
+        except DaosApiError as exe1:
+            print(exe1, traceback.format_exc())
+            self.fail("Phase 1: failure (container creates should have worked)")
+
 
     @avocado.fail_on(DaosApiError)
     def test_metadata_addremove(self):

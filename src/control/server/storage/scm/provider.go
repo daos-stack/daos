@@ -26,12 +26,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/provider/system"
@@ -144,6 +146,8 @@ type (
 		PrepReset(storage.ScmState) (bool, error)
 		GetState() (storage.ScmState, error)
 		GetNamespaces() (storage.ScmNamespaces, error)
+		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
+		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
@@ -172,7 +176,8 @@ type (
 		log     logging.Logger
 		backend Backend
 		sys     SystemProvider
-		fwd     *Forwarder
+		fwd     *AdminForwarder
+		firmwareProvider
 	}
 )
 
@@ -346,12 +351,14 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
 		sys:     sys,
-		fwd:     NewForwarder(log),
+		fwd:     NewAdminForwarder(log),
 	}
+	p.setupFirmwareProvider(log)
+	return p
 }
 
 func (p *Provider) WithForwardingDisabled() *Provider {
@@ -803,4 +810,39 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
+}
+
+func (p *Provider) getRequestedModules(requestedUIDs []string) (storage.ScmModules, error) {
+	modules, err := p.backend.Discover()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(requestedUIDs) == 0 {
+		return modules, nil
+	}
+
+	uniqueUIDs := common.DedupeStringSlice(requestedUIDs)
+	sort.Strings(uniqueUIDs)
+
+	result := make(storage.ScmModules, 0, len(modules))
+	for _, uid := range uniqueUIDs {
+		mod, err := getModule(uid, modules)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mod)
+	}
+
+	return result, nil
+}
+
+func getModule(uid string, modules storage.ScmModules) (*storage.ScmModule, error) {
+	for _, mod := range modules {
+		if mod.UID == uid {
+			return mod, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no module found with UID %q", uid)
 }

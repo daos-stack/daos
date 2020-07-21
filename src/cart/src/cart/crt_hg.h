@@ -129,14 +129,6 @@ struct crt_hg_gdata {
 	hg_class_t		*chg_hgcla; /* HG class */
 };
 
-/* addr lookup completion callback */
-typedef int (*crt_hg_addr_lookup_cb_t)(hg_addr_t addr, void *arg);
-
-struct crt_hg_addr_lookup_cb_args {
-	crt_hg_addr_lookup_cb_t	 al_cb;
-	void			*al_arg;
-};
-
 /* crt_hg.c */
 int crt_hg_init(crt_phy_addr_t *addr, bool server);
 int crt_hg_fini(void);
@@ -150,8 +142,6 @@ int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
 int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
-int crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
-		       crt_hg_addr_lookup_cb_t complete_cb, void *arg);
 int crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr);
 int crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size);
 

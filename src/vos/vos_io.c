@@ -60,7 +60,7 @@ struct vos_io_context {
 	unsigned int		 ic_sgl_at;
 	unsigned int		 ic_iov_at;
 	/** reserved SCM extents */
-	struct vos_rsrvd_scm	 ic_rsrvd_scm;
+	struct vos_rsrvd_scm	*ic_rsrvd_scm;
 	/** reserved offsets for SCM update */
 	umem_off_t		*ic_umoffs;
 	unsigned int		 ic_umoffs_cnt;
@@ -75,7 +75,10 @@ struct vos_io_context {
 	/** flags */
 	unsigned int		 ic_update:1,
 				 ic_size_fetch:1,
-				 ic_save_recx:1;
+				 ic_save_recx:1,
+				 ic_read_ts_only:1,
+				 ic_check_existence:1,
+				 ic_remove:1;
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -113,7 +116,8 @@ vos_ioc2ioh(struct vos_io_context *ioc)
 static struct dcs_csum_info *
 vos_ioc2csum(struct vos_io_context *ioc)
 {
-	if (ioc->iod_csums != NULL)
+	/** is enabled and has csums (might not for punch) */
+	if (ioc->iod_csums != NULL && ioc->iod_csums[ioc->ic_sgl_at].ic_nr > 0)
 		return ioc->iod_csums[ioc->ic_sgl_at].ic_data;
 	return NULL;
 }
@@ -132,16 +136,12 @@ iod_empty_sgl(struct vos_io_context *ioc, unsigned int sgl_at)
 static void
 vos_ioc_reserve_fini(struct vos_io_context *ioc)
 {
-	struct vos_rsrvd_scm *rsrvd_scm = &ioc->ic_rsrvd_scm;
-
-	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
-	D_ASSERT(rsrvd_scm->rs_actv_at == 0);
-
-	if (rsrvd_scm->rs_actv_cnt != 0) {
-		D_FREE(rsrvd_scm->rs_actv);
-		rsrvd_scm->rs_actv = NULL;
+	if (ioc->ic_rsrvd_scm != NULL) {
+		D_ASSERT(ioc->ic_rsrvd_scm->rs_actv_at == 0);
+		D_FREE(ioc->ic_rsrvd_scm);
 	}
 
+	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	if (ioc->ic_umoffs != NULL) {
 		D_FREE(ioc->ic_umoffs);
 		ioc->ic_umoffs = NULL;
@@ -151,8 +151,9 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 static int
 vos_ioc_reserve_init(struct vos_io_context *ioc)
 {
-	struct vos_rsrvd_scm	*rsrvd_scm;
-	int			 i, total_acts = 0;
+	size_t	size;
+	int	total_acts = 0;
+	int	i;
 
 	if (!ioc->ic_update)
 		return 0;
@@ -170,12 +171,13 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 	if (vos_ioc2umm(ioc)->umm_ops->mo_reserve == NULL)
 		return 0;
 
-	rsrvd_scm = &ioc->ic_rsrvd_scm;
-	D_ALLOC_ARRAY(rsrvd_scm->rs_actv, total_acts);
-	if (rsrvd_scm->rs_actv == NULL)
+	size = sizeof(*ioc->ic_rsrvd_scm) +
+		sizeof(struct pobj_action) * total_acts;
+	D_ALLOC(ioc->ic_rsrvd_scm, size);
+	if (ioc->ic_rsrvd_scm == NULL)
 		return -DER_NOMEM;
 
-	rsrvd_scm->rs_actv_cnt = total_acts;
+	ioc->ic_rsrvd_scm->rs_actv_cnt = total_acts;
 	return 0;
 }
 
@@ -204,7 +206,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       daos_epoch_t epoch, uint64_t cond_flags, unsigned int iod_nr,
 	       daos_iod_t *iods, struct dcs_iod_csums *iod_csums,
 	       uint32_t fetch_flags, struct daos_recx_ep_list *shadows,
-	       struct vos_io_context **ioc_pp)
+	       struct dtx_handle *dth, struct vos_io_context **ioc_pp)
 {
 	struct vos_container *cont;
 	struct vos_io_context *ioc = NULL;
@@ -229,8 +231,13 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_cont = vos_hdl2cont(coh);
 	vos_cont_addref(ioc->ic_cont);
 	ioc->ic_update = !read_only;
-	ioc->ic_size_fetch = fetch_flags & VOS_FETCH_SIZE_ONLY;
-	ioc->ic_save_recx = fetch_flags & VOS_FETCH_RECX_LIST;
+	ioc->ic_size_fetch = ((fetch_flags & VOS_FETCH_SIZE_ONLY) != 0);
+	ioc->ic_save_recx = ((fetch_flags & VOS_FETCH_RECX_LIST) != 0);
+	ioc->ic_read_ts_only = ((fetch_flags & VOS_FETCH_SET_TS_ONLY) != 0);
+	ioc->ic_check_existence =
+		((fetch_flags & VOS_FETCH_CHECK_EXISTENCE) != 0);
+	ioc->ic_remove =
+		((cond_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_read_conflict = false;
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
@@ -243,7 +250,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (rc != 0)
 		goto error;
 
-	rc = vos_ts_set_allocate(&ioc->ic_ts_set, cond_flags, iod_nr);
+	rc = vos_ts_set_allocate(&ioc->ic_ts_set, cond_flags, iod_nr,
+				 dth ? &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto error;
 
@@ -263,6 +271,11 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (ioc->ic_biov_csums == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
+	}
+
+	if (ioc->ic_read_ts_only || ioc->ic_check_existence) {
+		*ioc_pp = ioc;
+		return 0;
 	}
 
 	for (i = 0; i < iod_nr; i++) {
@@ -466,7 +479,7 @@ biov_align_lens(struct bio_iov *biov, struct evt_entry *ent, daos_size_t rsize)
  */
 static int
 save_recx(struct vos_io_context *ioc, uint64_t rx_idx, uint64_t rx_nr,
-	  daos_epoch_t ep, int type)
+	  daos_epoch_t ep, uint32_t rec_size, int type)
 {
 	struct daos_recx_ep_list	*recx_list;
 	struct daos_recx_ep		 recx_ep;
@@ -482,6 +495,7 @@ save_recx(struct vos_io_context *ioc, uint64_t rx_idx, uint64_t rx_nr,
 	recx_ep.re_recx.rx_nr = rx_nr;
 	recx_ep.re_ep = ep;
 	recx_ep.re_type = type;
+	recx_ep.re_rec_size = rec_size;
 
 	return daos_recx_ep_add(recx_list, &recx_ep);
 }
@@ -547,7 +561,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		if (holes != 0) {
 			if (with_shadow) {
 				rc = save_recx(ioc, lo - holes, holes,
-					       shadow_ep, DRT_SHADOW);
+					       shadow_ep, ent_array.ea_inob,
+					       DRT_SHADOW);
 				if (rc != 0)
 					goto failed;
 			}
@@ -564,7 +579,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		D_ASSERT(rsize == ent_array.ea_inob);
 
 		if (ioc->ic_save_recx) {
-			rc = save_recx(ioc, lo, nr, ent->en_epoch, DRT_NORMAL);
+			rc = save_recx(ioc, lo, nr, ent->en_epoch,
+				       ent_array.ea_inob, DRT_NORMAL);
 			if (rc != 0)
 				goto failed;
 		}
@@ -597,7 +613,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	if (holes != 0) { /* trailing holes */
 		if (with_shadow) {
 			rc = save_recx(ioc, end - holes, holes, shadow_ep,
-				       DRT_SHADOW);
+				       ent_array.ea_inob, DRT_SHADOW);
 			if (rc != 0)
 				goto failed;
 		}
@@ -684,11 +700,11 @@ akey_fetch_recx_get(daos_recx_t *iod_recx, struct daos_recx_ep_list *shadow,
 		fetch_recx->rx_nr = min((iod_recx->rx_idx + iod_recx->rx_nr),
 					(recx->rx_idx + recx->rx_nr)) -
 				    iod_recx->rx_idx;
+		D_ASSERT(fetch_recx->rx_nr > 0 &&
+			 fetch_recx->rx_nr <= iod_recx->rx_nr);
 		iod_recx->rx_idx += fetch_recx->rx_nr;
 		iod_recx->rx_nr -= fetch_recx->rx_nr;
 		*shadow_ep = recx_ep->re_ep;
-		D_ASSERT(fetch_recx->rx_nr > 0 &&
-			 fetch_recx->rx_nr <= iod_recx->rx_nr);
 		return;
 	}
 
@@ -725,8 +741,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			if (ioc->ic_ts_set &&
-			    ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH)
+			if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
+			    ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH))
 				goto out;
 			D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
 				DP_KEY(&iod->iod_name));
@@ -743,8 +759,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			if (ioc->ic_ts_set &&
-			    ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH)
+			if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
+			    ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH))
 				goto out;
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
@@ -758,6 +774,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		}
 		goto out;
 	}
+
+	if (ioc->ic_read_ts_only || ioc->ic_check_existence)
+		D_GOTO(out, rc = 0);
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
@@ -847,8 +866,8 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			      &toh, ioc->ic_ts_set);
 
 	if (rc == -DER_NONEXIST) {
-		if (ioc->ic_ts_set &&
-		    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK)
+		if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
+		    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK))
 			goto out;
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
@@ -867,8 +886,8 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			if (ioc->ic_ts_set &&
-			    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK)
+			if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
+			    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK))
 				goto out;
 			for (i = 0; i < ioc->ic_iod_nr; i++)
 				iod_empty_sgl(ioc, i);
@@ -925,17 +944,17 @@ update_ts_on_fetch(struct vos_io_context *ioc, int err)
 	 *  both akey timestamps regardless
 	 */
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_CONT, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	vos_ts_rh_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	vos_ts_rh_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 	prev = entry;
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
 
 	if (entry == NULL)
 		goto update_prev;
 	if (ts_set->ts_flags & VOS_OF_COND_DKEY_FETCH)
-		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+		vos_ts_rl_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
+	vos_ts_rh_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 
 	if (entry == prev)
 		return;
@@ -948,14 +967,14 @@ update_ts_on_fetch(struct vos_io_context *ioc, int err)
 		if (entry == NULL)
 			goto update_prev;
 
-		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
-		entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+		vos_ts_rl_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
+		vos_ts_rh_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 	}
 
 	return;
 
 update_prev:
-	prev->te_ts_rl = MAX(prev->te_ts_rl, ioc->ic_epr.epr_hi);
+	vos_ts_rl_update(prev, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 }
 
 int
@@ -973,7 +992,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		DP_UOID(oid), iod_nr, epoch);
 
 	rc = vos_ioc_create(coh, oid, true, epoch, cond_flags, iod_nr, iods,
-			    NULL, fetch_flags, shadows, &ioc);
+			    NULL, fetch_flags, shadows, dth, &ioc);
 	if (rc != 0)
 		return rc;
 
@@ -991,13 +1010,22 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto out;
 
 	if (rc == -DER_NONEXIST) {
-		if (ioc->ic_ts_set &&
-		    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK)
+		if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
+		    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK))
 			goto out;
 		rc = 0;
 		for (i = 0; i < iod_nr; i++)
 			iod_empty_sgl(ioc, i);
 	} else {
+		if (dkey == NULL || dkey->iov_len == 0) {
+			if (ioc->ic_read_ts_only)
+				/* Set read TS on object. */
+				rc = 0;
+			else
+				rc = -DER_INVAL;
+			D_GOTO(out, rc);
+		}
+
 		rc = dkey_fetch(ioc, dkey);
 		if (rc != 0)
 			goto out;
@@ -1008,8 +1036,13 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 out:
 	update_ts_on_fetch(ioc, rc);
 
-	if (rc != 0)
+	if (rc != 0) {
+		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
+		ioc->ic_recx_lists = NULL;
+		if (rc == -DER_NONEXIST && ioc->ic_read_ts_only)
+			rc = 0;
 		return vos_fetch_end(vos_ioc2ioh(ioc), rc);
+	}
 	return 0;
 }
 
@@ -1120,6 +1153,10 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
+
+	if (ioc->ic_remove)
+		return evt_remove_all(toh, &ent.ei_rect.rc_ex, &ioc->ic_epr);
+
 	rc = evt_insert(toh, &ent, NULL);
 
 	return rc;
@@ -1318,8 +1355,9 @@ vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 	if (vos_cont2umm(cont)->umm_ops->mo_reserve != NULL) {
 		struct pobj_action *act;
 
+		D_ASSERT(rsrvd_scm != NULL);
 		D_ASSERT(rsrvd_scm->rs_actv_cnt > rsrvd_scm->rs_actv_at);
-		D_ASSERT(rsrvd_scm->rs_actv != NULL);
+
 		act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
 
 		umoff = umem_reserve(vos_cont2umm(cont), act, size);
@@ -1372,7 +1410,7 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	if (media == DAOS_MEDIA_SCM) {
 		umem_off_t	umoff;
 
-		umoff = vos_reserve_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, size);
+		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size);
 		if (!UMOFF_IS_NULL(umoff)) {
 			ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
 			ioc->ic_umoffs_cnt++;
@@ -1566,11 +1604,11 @@ vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 {
 	int	rc = 0;
 
-	D_ASSERT(rsrvd_scm->rs_actv_at <= rsrvd_scm->rs_actv_cnt);
-	if (rsrvd_scm->rs_actv_at == 0)
+	if (rsrvd_scm == NULL || rsrvd_scm->rs_actv_at == 0)
 		return 0;
 
-	D_ASSERT(rsrvd_scm->rs_actv != NULL);
+	D_ASSERT(rsrvd_scm->rs_actv_at <= rsrvd_scm->rs_actv_cnt);
+
 	if (publish)
 		rc = umem_tx_publish(vos_cont2umm(cont), rsrvd_scm->rs_actv,
 				     rsrvd_scm->rs_actv_at);
@@ -1614,7 +1652,7 @@ update_cancel(struct vos_io_context *ioc)
 
 	/* Cancel SCM reservations or free persistent allocations */
 	if (vos_cont2umm(ioc->ic_cont)->umm_ops->mo_reserve != NULL) {
-		vos_publish_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, false);
+		vos_publish_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, false);
 	} else if (ioc->ic_umoffs_cnt != 0) {
 		struct umem_instance *umem = vos_ioc2umm(ioc);
 		int i;
@@ -1660,18 +1698,18 @@ update_ts_on_update(struct vos_io_context *ioc, int err)
 	}
 
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_CONT, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	vos_ts_rh_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	vos_ts_rh_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 	centry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
 	if (centry == NULL) {
-		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
+		vos_ts_rl_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 		return;
 	}
 	entry = centry;
 	if (ts_set->ts_flags & VOS_COND_DKEY_UPDATE_MASK)
-		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
-	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+		vos_ts_rl_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
+	vos_ts_rh_update(entry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 
 	if ((ts_set->ts_flags & VOS_COND_AKEY_UPDATE_MASK) == 0)
 		return;
@@ -1680,12 +1718,12 @@ update_ts_on_update(struct vos_io_context *ioc, int err)
 		centry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_AKEY,
 						  akey_idx);
 		if (centry == NULL) {
-			entry->te_ts_rl = MAX(entry->te_ts_rl,
-					      ioc->ic_epr.epr_hi);
+			vos_ts_rl_update(entry, ioc->ic_epr.epr_hi,
+					 ts_set->ts_tx_id);
 			continue;
 		}
-		centry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
-		centry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+		vos_ts_rl_update(centry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
+		vos_ts_rh_update(centry, ioc->ic_epr.epr_hi, ts_set->ts_tx_id);
 	}
 }
 
@@ -1717,8 +1755,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	umem = vos_ioc2umm(ioc);
 
-	err = umem_tx_begin(umem, vos_txd_get());
-	if (err)
+	err = vos_tx_begin(dth, umem);
+	if (err != 0)
 		goto out;
 
 	vos_dth_set(dth);
@@ -1746,13 +1784,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
 		ioc->ic_read_conflict = true;
 
-	/* Publish SCM reservations */
-	err = vos_publish_scm(ioc->ic_cont, &ioc->ic_rsrvd_scm, true);
-	if (err) {
-		D_ERROR("Publish SCM failed. "DF_RC"\n", DP_RC(err));
-		goto abort;
-	}
-
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ? dth->dth_op_seq : 1);
 	if (err) {
@@ -1769,23 +1800,36 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 	}
 
-	/* Publish NVMe reservations */
-	err = vos_publish_blocks(ioc->ic_cont, &ioc->ic_blk_exts, true,
-				 VOS_IOS_GENERIC);
+	if (dth != NULL) {
+		struct dtx_rsrvd_uint	*dru;
 
-	if (dth != NULL && err == 0)
-		err = vos_dtx_prepared(dth);
+		D_ASSERT(dth->dth_op_seq >= 1);
+
+		dru = &dth->dth_rsrvds[dth->dth_op_seq - 1];
+		dru->dru_scm = ioc->ic_rsrvd_scm;
+		ioc->ic_rsrvd_scm = NULL;
+
+		D_INIT_LIST_HEAD(&dru->dru_nvme);
+		d_list_splice_init(&ioc->ic_blk_exts, &dru->dru_nvme);
+	} else {
+		/* Publish SCM reservations */
+		err = vos_publish_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, true);
+		if (err == 0)
+			/* Publish NVMe reservations */
+			err = vos_publish_blocks(ioc->ic_cont,
+						 &ioc->ic_blk_exts, true,
+						 VOS_IOS_GENERIC);
+	}
 
 abort:
-	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
+	err = vos_tx_end(dth, umem, err);
+
 out:
-	if (err != 0) {
-		vos_dtx_cleanup_dth(dth);
+	if (err != 0)
 		update_cancel(ioc);
-	} else if (daes != NULL) {
+	else if (daes != NULL)
 		vos_dtx_post_handle(ioc->ic_cont, daes,
 				    dth->dth_dti_cos_count, false);
-	}
 
 	D_FREE(daes);
 
@@ -1813,12 +1857,14 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		"\n", DP_UOID(oid), iod_nr, dth ? dth->dth_epoch :  epoch);
 
 	rc = vos_ioc_create(coh, oid, false, dth ? dth->dth_epoch : epoch,
-			    flags, iod_nr, iods, iods_csums, 0, NULL, &ioc);
+			    flags, iod_nr, iods, iods_csums, 0, NULL, dth,
+			    &ioc);
 	if (rc != 0)
 		return rc;
 
-	rc = vos_space_hold(vos_cont2pool(ioc->ic_cont), dkey, iod_nr, iods,
-			    iods_csums, &ioc->ic_space_held[0]);
+	/* flags may have VOS_OF_CRIT to skip sys/held checks here */
+	rc = vos_space_hold(vos_cont2pool(ioc->ic_cont), flags, dkey, iod_nr,
+			    iods, iods_csums, &ioc->ic_space_held[0]);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Hold space failed. "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
@@ -1912,16 +1958,17 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 }
 
 int
-vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
-	       unsigned int iod_nr, daos_iod_t *iods,
-	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls)
+vos_obj_update_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		  uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
+		  unsigned int iod_nr, daos_iod_t *iods,
+		  struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls,
+		  struct dtx_handle *dth)
 {
 	daos_handle_t ioh;
 	int rc;
 
 	rc = vos_update_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
-			      iods_csums, &ioh, NULL);
+			      iods_csums, &ioh, dth);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
 			DP_RC(rc));
@@ -1935,14 +1982,57 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				DP_RC(rc));
 	}
 
-	rc = vos_update_end(ioh, pm_ver, dkey, rc, NULL);
+	rc = vos_update_end(ioh, pm_ver, dkey, rc, dth);
 	return rc;
 }
 
 int
-vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
-	      daos_iod_t *iods, d_sg_list_t *sgls)
+vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls)
+{
+	return vos_obj_update_ex(coh, oid, epoch, pm_ver, flags, dkey, iod_nr,
+				 iods, iods_csums, sgls, NULL);
+}
+
+int
+vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
+		     const daos_epoch_range_t *epr, const daos_key_t *dkey,
+		     const daos_key_t *akey, const daos_recx_t *recx)
+{
+	struct vos_io_context	*ioc;
+	daos_iod_t		 iod;
+	daos_handle_t		 ioh;
+	int			 rc;
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_recxs = (daos_recx_t *)recx;
+	iod.iod_nr = 1;
+	iod.iod_name = *akey;
+	iod.iod_size = 0;
+
+	rc = vos_update_begin(coh, oid, epr->epr_hi, VOS_OF_REMOVE,
+			      (daos_key_t *)dkey, 1, &iod, NULL, &ioh, NULL);
+	if (rc) {
+		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+			DP_RC(rc));
+		return rc;
+	}
+
+	ioc = vos_ioh2ioc(ioh);
+	/** Set lower bound of epoch range */
+	ioc->ic_epr.epr_lo = epr->epr_lo;
+
+	rc = vos_update_end(ioh, 0 /* don't care */, (daos_key_t *)dkey, rc,
+			    NULL);
+	return rc;
+}
+
+int
+vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+		 daos_iod_t *iods, d_sg_list_t *sgls, struct dtx_handle *dth)
 {
 	daos_handle_t	ioh;
 	bool		size_fetch = (sgls == NULL);
@@ -1950,7 +2040,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int		rc;
 
 	rc = vos_fetch_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
-			     fetch_flags, NULL, &ioh, NULL);
+			     fetch_flags, NULL, &ioh, dth);
 	if (rc) {
 		if (rc == -DER_INPROGRESS)
 			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "
@@ -1985,6 +2075,15 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = vos_fetch_end(ioh, rc);
 	return rc;
+}
+
+int
+vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	      uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+	      daos_iod_t *iods, d_sg_list_t *sgls)
+{
+	return vos_obj_fetch_ex(coh, oid, epoch, flags, dkey, iod_nr, iods,
+				sgls, NULL);
 }
 
 /**

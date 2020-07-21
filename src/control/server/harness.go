@@ -73,6 +73,31 @@ func (h *IOServerHarness) Instances() []*IOServerInstance {
 	return h.instances
 }
 
+// FilterInstancesByRankSet returns harness' IOServerInstances that match any
+// of a list of ranks derived from provided rank set string.
+func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerInstance, error) {
+	h.RLock()
+	defer h.RUnlock()
+
+	rankList, err := system.ParseRanks(ranks)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*IOServerInstance, 0, maxIOServers)
+
+	for _, i := range h.instances {
+		r, err := i.GetRank()
+		if err != nil {
+			return nil, errors.WithMessage(err, "filtering instances by rank")
+		}
+		if r.InList(rankList) {
+			out = append(out, i)
+		}
+	}
+
+	return out, nil
+}
+
 // AddInstance adds a new IOServer instance to be managed.
 func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	if h.isStarted() {

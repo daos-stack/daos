@@ -24,6 +24,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"os/exec"
 	"strconv"
@@ -34,6 +35,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -180,7 +182,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp.Provider = svc.clientNetworkCfg.Provider
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
-
+	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
 	return resp, nil
 }
 
@@ -204,146 +206,285 @@ func checkIsMSReplica(mi *IOServerInstance) error {
 	return nil
 }
 
-// BioHealthQuery implements the method defined for the Management Service.
-func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
-	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
-
-	// Iterate through the list of local I/O server instances, looking for
-	// the first one that successfully fulfills the request. If none succeed,
-	// return an error.
-	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.MethodBioHealth, req)
-		if err != nil {
-			return nil, err
-		}
-
-		resp := &mgmtpb.BioHealthResp{}
-		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
-		}
-
-		if resp.Status == 0 {
-			return resp, nil
-		}
+func queryRank(reqRank uint32, srvRank system.Rank) bool {
+	rr := system.Rank(reqRank)
+	if rr.Equals(system.NilRank) {
+		return true
 	}
-
-	reqID := func() string {
-		if req.DevUuid != "" {
-			return req.DevUuid
-		}
-		return req.TgtId
-	}
-	return nil, errors.Errorf("no rank matched request for %q", reqID())
+	return rr.Equals(srvRank)
 }
 
-// SmdListDevs implements the method defined for the Management Service.
-func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mgmtpb.SmdDevResp, error) {
-	svc.log.Debugf("MgmtSvc.SmdListDevs dispatch, req:%+v\n", *req)
-
-	fullResp := new(mgmtpb.SmdDevResp)
-
-	// Iterate through the list of local I/O server instances, and aggregate
-	// results into a single response.
-	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.MethodSmdDevs, req)
-		if err != nil {
-			return nil, err
-		}
-
-		instResp := new(mgmtpb.SmdDevResp)
-		if err = proto.Unmarshal(dresp.Body, instResp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
-		}
-
-		if instResp.Status != 0 {
-			return instResp, nil
-		}
-
-		fullResp.Devices = append(fullResp.Devices, instResp.Devices...)
+func (svc *mgmtSvc) getBioHealth(ctx context.Context, srv *IOServerInstance, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
+	dresp, err := srv.CallDrpc(drpc.MethodBioHealth, req)
+	if err != nil {
+		return nil, err
 	}
 
-	return fullResp, nil
+	resp := &mgmtpb.BioHealthResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
+	}
+
+	if resp.Status != 0 {
+		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")
+	}
+
+	return resp, nil
 }
 
-// SmdListPools implements the method defined for the Management Service.
-func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*mgmtpb.SmdPoolResp, error) {
-	svc.log.Debugf("MgmtSvc.SmdListPools dispatch, req:%+v\n", *req)
+func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq, resp *mgmtpb.SmdQueryResp) error {
+	for _, srv := range svc.harness.Instances() {
+		if !srv.isReady() {
+			svc.log.Debugf("skipping not-ready instance")
+			continue
+		}
 
-	fullResp := new(mgmtpb.SmdPoolResp)
-
-	// Iterate through the list of local I/O server instances, and aggregate
-	// results into a single response.
-	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.MethodSmdPools, req)
+		srvRank, err := srv.GetRank()
 		if err != nil {
-			return nil, err
+			return err
+		}
+		if !queryRank(req.GetRank(), srvRank) {
+			continue
 		}
 
-		instResp := new(mgmtpb.SmdPoolResp)
-		if err = proto.Unmarshal(dresp.Body, instResp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal SmdListPools response")
+		rResp := new(mgmtpb.SmdQueryResp_RankResp)
+		rResp.Rank = srvRank.Uint32()
+
+		dresp, err := srv.CallDrpc(drpc.MethodSmdDevs, new(mgmtpb.SmdDevReq))
+		if err != nil {
+			return err
 		}
 
-		if instResp.Status != 0 {
-			return instResp, nil
+		rankDevResp := new(mgmtpb.SmdDevResp)
+		if err = proto.Unmarshal(dresp.Body, rankDevResp); err != nil {
+			return errors.Wrap(err, "unmarshal SmdListDevs response")
 		}
 
-		fullResp.Pools = append(fullResp.Pools, instResp.Pools...)
+		if rankDevResp.Status != 0 {
+			return errors.Wrapf(drpc.DaosStatus(rankDevResp.Status), "rank %d ListDevs failed", srvRank)
+		}
+
+		if err := convert.Types(rankDevResp.Devices, &rResp.Devices); err != nil {
+			return errors.Wrap(err, "failed to convert device list")
+		}
+		resp.Ranks = append(resp.Ranks, rResp)
+
+		if req.Uuid != "" {
+			found := false
+			for _, dev := range rResp.Devices {
+				if dev.Uuid == req.Uuid {
+					rResp.Devices = []*mgmtpb.SmdQueryResp_Device{dev}
+					found = true
+					break
+				}
+			}
+			if !found {
+				rResp.Devices = nil
+			}
+		}
+
+		if req.Target != "" {
+			reqTgtId, err := strconv.ParseInt(req.Target, 10, 32)
+			if err != nil {
+				return errors.Errorf("invalid target idx %q", req.Target)
+			}
+
+			found := false
+			for _, dev := range rResp.Devices {
+				for _, tgtId := range dev.TgtIds {
+					if int32(reqTgtId) == tgtId {
+						rResp.Devices = []*mgmtpb.SmdQueryResp_Device{dev}
+						found = true
+						break
+					}
+				}
+			}
+			if !found {
+				rResp.Devices = nil
+			}
+		}
+
+		if !req.IncludeBioHealth {
+			continue
+		}
+
+		for _, dev := range rResp.Devices {
+			dev.Health, err = svc.getBioHealth(ctx, srv, &mgmtpb.BioHealthReq{DevUuid: dev.Uuid})
+			if err != nil {
+				return err
+			}
+		}
 	}
-
-	return fullResp, nil
+	return nil
 }
 
-// DevStateQuery implements the method defined for the Management Service.
-func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
-	svc.log.Debugf("MgmtSvc.DevStateQuery dispatch, req:%+v\n", *req)
+func (svc *mgmtSvc) querySmdPools(ctx context.Context, req *mgmtpb.SmdQueryReq, resp *mgmtpb.SmdQueryResp) error {
+	for _, srv := range svc.harness.Instances() {
+		if !srv.isReady() {
+			svc.log.Debugf("skipping not-ready instance")
+			continue
+		}
 
-	// Iterate through the list of local I/O server instances, looking for
-	// the first one that successfully fulfills the request. If none succeed,
-	// return an error.
-	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.MethodDevStateQuery, req)
+		srvRank, err := srv.GetRank()
 		if err != nil {
-			return nil, err
+			return err
+		}
+		if !queryRank(req.GetRank(), srvRank) {
+			continue
 		}
 
-		resp := &mgmtpb.DevStateResp{}
-		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal DevStateQuery response")
+		rResp := new(mgmtpb.SmdQueryResp_RankResp)
+		rResp.Rank = srvRank.Uint32()
+
+		dresp, err := srv.CallDrpc(drpc.MethodSmdPools, new(mgmtpb.SmdPoolReq))
+		if err != nil {
+			return err
 		}
 
-		if resp.Status == 0 {
-			return resp, nil
+		rankDevResp := new(mgmtpb.SmdPoolResp)
+		if err = proto.Unmarshal(dresp.Body, rankDevResp); err != nil {
+			return errors.Wrap(err, "unmarshal SmdListPools response")
+		}
+
+		if rankDevResp.Status != 0 {
+			return errors.Wrapf(drpc.DaosStatus(rankDevResp.Status), "rank %d ListPools failed", srvRank)
+		}
+
+		if err := convert.Types(rankDevResp.Pools, &rResp.Pools); err != nil {
+			return errors.Wrap(err, "failed to convert pool list")
+		}
+		resp.Ranks = append(resp.Ranks, rResp)
+
+		if req.Uuid != "" {
+			found := false
+			for _, pool := range rResp.Pools {
+				if pool.Uuid == req.Uuid {
+					rResp.Pools = []*mgmtpb.SmdQueryResp_Pool{pool}
+					found = true
+					break
+				}
+			}
+			if !found {
+				rResp.Pools = nil
+			}
 		}
 	}
 
-	return nil, errors.Errorf("no rank matched request for %q", req.DevUuid)
+	return nil
 }
 
-// StorageSetFaulty implements the method defined for the Management Service.
-func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
-	svc.log.Debugf("MgmtSvc.StorageSetFaulty dispatch, req:%+v\n", *req)
+func (svc *mgmtSvc) smdQueryDevice(ctx context.Context, req *mgmtpb.SmdQueryReq) (system.Rank, *mgmtpb.SmdQueryResp_Device, error) {
+	rank := system.NilRank
+	if req.Uuid == "" {
+		return rank, nil, errors.New("empty UUID in device query")
+	}
 
-	// Iterate through the list of local I/O server instances, looking for
-	// the first one that successfully fulfills the request. If none succeed,
-	// return an error.
-	for _, i := range svc.harness.Instances() {
-		dresp, err := i.CallDrpc(drpc.MethodSetFaultyState, req)
-		if err != nil {
-			return nil, err
-		}
+	resp := new(mgmtpb.SmdQueryResp)
+	if err := svc.querySmdDevices(ctx, req, resp); err != nil {
+		return rank, nil, err
+	}
 
-		resp := &mgmtpb.DevStateResp{}
-		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal StorageSetFaulty response")
-		}
-
-		if resp.Status == 0 {
-			return resp, nil
+	for _, rr := range resp.Ranks {
+		switch len(rr.Devices) {
+		case 0:
+			continue
+		case 1:
+			rank = system.Rank(rr.Rank)
+			return rank, rr.Devices[0], nil
+		default:
+			return rank, nil, errors.Errorf("device query on %s matched multiple devices", req.Uuid)
 		}
 	}
 
-	return nil, errors.Errorf("no rank matched request for %q", req.DevUuid)
+	return rank, nil, nil
+}
+
+func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
+	req.Rank = uint32(system.NilRank)
+	rank, device, err := svc.smdQueryDevice(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if device == nil {
+		return nil, errors.Errorf("smdSetFaulty on %s did not match any devices", req.Uuid)
+	}
+
+	srvs, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
+	if err != nil {
+		return nil, err
+	}
+	if len(srvs) == 0 {
+		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
+	}
+
+	svc.log.Debugf("calling set-faulty on rank %d for %s", rank, req.Uuid)
+
+	dresp, err := srvs[0].CallDrpc(drpc.MethodSetFaultyState, &mgmtpb.DevStateReq{
+		DevUuid: req.Uuid,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	dsr := &mgmtpb.DevStateResp{}
+	if err = proto.Unmarshal(dresp.Body, dsr); err != nil {
+		return nil, errors.Wrap(err, "unmarshal StorageSetFaulty response")
+	}
+
+	if dsr.Status != 0 {
+		return nil, errors.Wrap(drpc.DaosStatus(dsr.Status), "smdSetFaulty failed")
+	}
+
+	return &mgmtpb.SmdQueryResp{
+		Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+			{
+				Rank: rank.Uint32(),
+				Devices: []*mgmtpb.SmdQueryResp_Device{
+					{
+						Uuid:  dsr.DevUuid,
+						State: dsr.DevState,
+					},
+				},
+			},
+		},
+	}, nil
+}
+
+func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgmtpb.SmdQueryResp, error) {
+	svc.log.Debugf("MgmtSvc.SmdQuery dispatch, req:%+v\n", *req)
+
+	if !svc.harness.isStarted() {
+		return nil, FaultHarnessNotStarted
+	}
+	if len(svc.harness.readyRanks()) == 0 {
+		return nil, FaultDataPlaneNotStarted
+	}
+
+	if req.SetFaulty {
+		return svc.smdSetFaulty(ctx, req)
+	}
+
+	if req.Uuid != "" && (!req.OmitDevices && !req.OmitPools) {
+		return nil, errors.New("UUID is ambiguous when querying both pools and devices")
+	}
+	if req.Target != "" && req.Rank == uint32(system.NilRank) {
+		return nil, errors.New("Target is invalid without Rank")
+	}
+
+	resp := new(mgmtpb.SmdQueryResp)
+	if !req.OmitDevices {
+		if err := svc.querySmdDevices(ctx, req, resp); err != nil {
+			return nil, err
+		}
+	}
+	if !req.OmitPools {
+		if err := svc.querySmdPools(ctx, req, resp); err != nil {
+			return nil, err
+		}
+	}
+
+	svc.log.Debugf("MgmtSvc.SmdQuery dispatch, resp:%+v\n", *resp)
+	return resp, nil
 }
 
 // ListContainers implements the method defined for the Management Service.

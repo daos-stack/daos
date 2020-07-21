@@ -114,7 +114,7 @@ main(int argc, char **argv)
 	struct daos_llink	*link_ret[3] = {NULL};
 	struct daos_lru_cache	*tcache = NULL;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 
