@@ -431,6 +431,7 @@ enum daos_recx_type {
 struct daos_recx_ep {
 	daos_recx_t	re_recx;
 	daos_epoch_t	re_ep;
+	uint32_t	re_rec_size;
 	uint8_t		re_type;
 };
 
