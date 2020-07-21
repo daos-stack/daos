@@ -126,7 +126,8 @@ class DfuseSparseFile(IorTestBase):
 
         # create large fle and perform write to it so that if goes out of
         # space.
-        sparse_file = self.dfuse.mount_dir.value + "/" + "sparsefile.txt"
+        sparse_file = unicode(self.dfuse.mount_dir.value + "/" +
+                              "sparsefile.txt")
         self.execute_cmd(u"touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
                       os.path.getsize(sparse_file))
@@ -135,26 +136,26 @@ class DfuseSparseFile(IorTestBase):
         file_obj = open(sparse_file, 'r+')
         # set file size to max available nvme size
         file_obj.truncate(self.space_before)
-        self.log.info("File size (in bytes) after truncate:",
+        self.log.info("File size (in bytes) after truncate: %s",
                       os.path.getsize(sparse_file))
         # verifying the file size got set to desired value
         self.assertTrue(os.path.getsize(sparse_file) == self.space_before)
 
         # write to the first byte of the file with char 'A'
-        dd_first_byte = "echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
+        dd_first_byte = u"echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
                         format(sparse_file)
         self.execute_cmd(dd_first_byte)
-        self.log.info("File size (in bytes) after writing first byte:",
+        self.log.info("File size (in bytes) after writing first byte: %s",
                       os.path.getsize(sparse_file))
         # verify file did not got overriten after dd write.
         self.assertTrue(os.path.getsize(sparse_file) == self.space_before)
 
 
         # write to the 1024th byte position of the file
-        dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
+        dd_1024_byte = u"echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
                        bs=1 count=1".format(sparse_file)
         self.execute_cmd(dd_1024_byte)
-        self.log.info("File size (in bytes) after writing first byte:",
+        self.log.info("File size (in bytes) after writing first byte: %s",
                       os.path.getsize(sparse_file))
         # verify file did not got overriten after dd write.
         self.assertTrue(os.path.getsize(sparse_file) == self.space_before)
@@ -168,13 +169,13 @@ class DfuseSparseFile(IorTestBase):
         self.assertTrue(check_first_byte == check_1024th_byte)
 
         # check the middle 1022 bytes if they are filled with zeros
-        check_middle_1022_bytes = "cmp --ignore-initial=1 --bytes=1022 {} {}".\
+        middle_1022_bytes = u"cmp --ignore-initial=1 --bytes=1022 {} {}".\
                                   format(sparse_file, "/dev/zero")
-        self.execute_cmd(check_middle_1022_bytes)
+        self.execute_cmd(middle_1022_bytes)
 
         # read last 512 bytes which should be zeros till end of file.
         ignore_bytes = self.space_before - 512
-        read_till_eof = "cmp --ignore-initial={} {} {}".format(
+        read_till_eof = u"cmp --ignore-initial={} {} {}".format(
             ignore_bytes, sparse_file, "/dev/zero")
         self.execute_cmd(read_till_eof, False)
         # fail the test if the above command is successful.
