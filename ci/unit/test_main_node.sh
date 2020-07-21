@@ -28,7 +28,7 @@ if [ "$WITH_VALGRIND" = "memcheck" ]; then
     # run_test.sh with valgrind memcheck
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
     # Remove DAOS_BASE from memcheck xml results
-    sed -i s:$DAOS_BASE::g results-*-memcheck.xml
+    sed -i "s:$DAOS_BASE::g" results-*-memcheck.xml
     mkdir -p valgrind_memcheck_results
     mv results-*-memcheck.xml valgrind_memcheck_results
 elif [ "$WITH_VALGRIND" = "disabled" ]; then
