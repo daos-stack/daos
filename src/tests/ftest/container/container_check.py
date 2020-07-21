@@ -98,9 +98,9 @@ class DfuseContainerCheck(TestWithServers):
         Use cases:
             Create pool
             Create container of type default
-            Try to mount to dfuse and check the behaviour.
+            Try to mount to dfuse and check the behavior.
             Create container of type POSIX.
-            Try to mount to dfuse and check the behaviour.
+            Try to mount to dfuse and check the behavior.
         :avocado: tags=all,small,full_regression,dfusecontainercheck
         """
         # get test params for cont and pool count
@@ -130,7 +130,7 @@ class DfuseContainerCheck(TestWithServers):
                 # expected to throw CommandFailure exception for non-posix type
                 # container
                 if cont_type == "":
-                    self.log.info("Expected behaviour: Default container type \
+                    self.log.info("Expected behavior: Default container type \
                         is expected to fail on dfuse mount: %s", str(error))
                 # fail the test if exception is caught for POSIX type container
                 elif cont_type == "POSIX":
