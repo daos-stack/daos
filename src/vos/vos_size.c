@@ -185,7 +185,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead)
 	FOREACH_TYPE(DECLARE_TYPE)
 	int rc;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc) {
 		goto exit_0;
 	}

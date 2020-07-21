@@ -172,7 +172,7 @@ class MetaOverhead(object):
             check_key_type(dkey_spec)
             dkey_count = int(dkey_spec.get("count", 1))
             num_pools = self.num_pools
-            full_count = dkey_count / num_pools
+            full_count = dkey_count // num_pools
             partial_count = dkey_count % num_pools
             if full_count == 0:
                 num_pools = partial_count
@@ -230,7 +230,7 @@ class MetaOverhead(object):
             if akey["key"] == "single_value" or size < cont["csum_gran"]:
                 size += csum_size
             else:
-                size += (size / cont["csum_gran"]) * csum_size
+                size += (size // cont["csum_gran"]) * csum_size
                 if value_spec.get("aligned", "Yes") == "No":
                     size += (csum_size * 2)
         akey["count"] += value_spec.get("count", 1) # Number of values
@@ -262,7 +262,7 @@ class MetaOverhead(object):
         if num_values > max_dyn:
             leaf_node_size = self.meta["trees"][key]["leaf_node_size"]
             int_node_size = self.meta["trees"][key]["int_node_size"]
-            tree_nodes = (num_values * 2 + order - 1) / order
+            tree_nodes = (num_values * 2 + order - 1) // order
             return leaf_node_size, int_node_size, tree_nodes
 
         if self.meta["trees"][key]["num_dynamic"] == 0:
@@ -283,7 +283,7 @@ class MetaOverhead(object):
         leaf_size, int_size, tree_nodes = self.get_dynamic(key, num_values)
         rec_overhead = num_values * record_size
         if leaf_size != int_size and tree_nodes != 1:
-            leafs = tree_nodes / 2
+            leafs = tree_nodes // 2
             ints = tree_nodes - leafs
             overhead = leafs * leaf_size + ints * int_size + rec_overhead
         else:
