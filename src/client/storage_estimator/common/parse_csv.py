@@ -26,9 +26,9 @@
 from __future__ import print_function
 import sys
 
-from scm_estimator.explorer import AverageFS
-from scm_estimator.dfs_sb import get_dfs_inode_akey
-from scm_estimator.util import ProcessBase
+from storage_estimator.explorer import AverageFS
+from storage_estimator.dfs_sb import get_dfs_inode_akey
+from storage_estimator.util import ProcessBase
 
 FILE_SIZES = ['4k', '64k', '128k', '256k', '512k', '768k', '1m', '8m', '64m',
               '128m', '1g', '10g', '100g', '250g', '500g', '1t', '10t', '100t']

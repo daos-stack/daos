@@ -1,7 +1,7 @@
-"""Install DAOS SCM Estimador"""
+"""Install DAOS Storage Estimador"""
 
-def install_scm_estimator_module(env, lib_prefix, version):
-    """Install SCM estimador module for the specified python version"""
+def install_storage_estimator_module(env, lib_prefix, version):
+    """Install Storage Estimador module for the specified python version"""
 
     if GetOption("help"):
         return
@@ -9,7 +9,7 @@ def install_scm_estimator_module(env, lib_prefix, version):
     denv = env.Clone()
 
     install_path = lib_prefix + "/python"
-    install_path += version + "/site-packages/scm_estimator"
+    install_path += version + "/site-packages/storage_estimator"
 
     denv.Install(install_path, "common/vos_structures.py")
     denv.Install(install_path, "common/__init__.py")
@@ -24,10 +24,10 @@ def scons():
     Import('env')
 
     denv = env.Clone()
-    denv.Install("$PREFIX/bin/", "vos_scm_estimator.py")
+    denv.Install("$PREFIX/bin/", "daos_storage_estimator.py")
 
-    install_scm_estimator_module(env, '$PREFIX/lib64/', "3")
-    install_scm_estimator_module(env, '$PREFIX/lib64/', "2.7")
+    install_storage_estimator_module(env, '$PREFIX/lib64/', "3")
+    install_storage_estimator_module(env, '$PREFIX/lib64/', "2.7")
 
 if __name__ == "SCons.Script":
     scons()

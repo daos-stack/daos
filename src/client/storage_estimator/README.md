@@ -1,12 +1,12 @@
 
-# SCM/NVMe Estimation Tool
+# Storage Estimation Tool
 
-The vos_scm_estimator.py tool estimates the utilization of the Storage Class Memory (SCM) required for DAOS deployments. DAOS uses the <a href="https://github.com/daos-stack/daos/blob/master/src/vos/README.md">Versioning Object Store (VOS)</a> to keep track of the DAOS objects metadata.
+The daos_storage_estimator.py tool estimates the utilization of the Storage Class Memory (SCM) required for DAOS deployments. DAOS uses the <a href="https://github.com/daos-stack/daos/blob/master/src/vos/README.md">Versioning Object Store (VOS)</a> to keep track of the DAOS objects metadata.
 There are three options to feed the tool with the description of the items that will be stored in the <a href="https://github.com/daos-stack/daos/blob/master/src/client/dfs/README.md">DAOS File system</a>.
 
 ```
-$ vos_scm_estimator.py -h
-usage: vos_scm_estimator.py [-h]
+$ daos_storage_estimator.py -h
+usage: daos_storage_estimator.py [-h]
                             {create_example,explore_fs,read_yaml,read_csv} ...
 
 DAOS estimation tool This CLI is able to estimate the SCM/NVMe ratios
@@ -26,10 +26,10 @@ subcommands:
 
 ## CSV input file
 
-The vos_scm_estimator.py can ingest a csv file with the description of directories, symbolic links and files. The files are divided on buckets of different sizes. <a href="common/tests/test_data.csv">test_data.csv</a> is an example of the csv format.
+The daos_storage_estimator.py can ingest a csv file with the description of directories, symbolic links and files. The files are divided on buckets of different sizes. <a href="common/tests/test_data.csv">test_data.csv</a> is an example of the csv format.
 
 ```
-$ vos_scm_estimator.py read_csv test_data.csv
+$ daos_storage_estimator.py read_csv test_data.csv
 Using DAOS version: 1.1.0
 Total files 55226 files
 Processing 4931 directories
@@ -57,7 +57,7 @@ Total bytes with user data:     156.57 T
 
 ## YAML input file
 
-The vos_scm_estimator.py can process a yaml file with the full description of every supported item that will be stored on the DAOS File System using the Versioning Object Store data structures. In other words, the yaml file has a description of all the akeys and dkeys used to store and represent each item. <a href="common/tests/test_data.yaml">test_data.yaml</a> is an example of the yaml format. It represents the following file structure:
+The daos_storage_estimator.py can process a yaml file with the full description of every supported item that will be stored on the DAOS File System using the Versioning Object Store data structures. In other words, the yaml file has a description of all the akeys and dkeys used to store and represent each item. <a href="common/tests/test_data.yaml">test_data.yaml</a> is an example of the yaml format. It represents the following file structure:
 
 ```
 .
@@ -74,7 +74,7 @@ The vos_scm_estimator.py can process a yaml file with the full description of ev
 And its estimation is:
 
 ```
-$ vos_scm_estimator.py read_yaml src/client/scm_estimator/common/tests/test_data.yaml
+$ daos_storage_estimator.py read_yaml src/client/storage_estimator/common/tests/test_data.yaml
 Using DAOS version: 1.1.0
   Reading VOS structures from current installation
 Metadata totals:
@@ -94,11 +94,11 @@ Total bytes with user data:      13.97 M
 
 ## Reading files and directories
 
-It is possible to measure a given set of files and directories by passing the path to the vos_scm_estimator.py. The tool then, will account and measure all the items under that path.
+It is possible to measure a given set of files and directories by passing the path to the daos_storage_estimator.py. The tool then, will account and measure all the items under that path.
 It is possible to save the a yaml file with the statistics and its representation by using the --output flag and providing a file name.
 
 ```
-$ vos_scm_estimator.py explore_fs /mnt/storage
+$ daos_storage_estimator.py explore_fs /mnt/storage
 Using DAOS version: 1.1.0
 processing path: /mnt/storage
 
@@ -131,7 +131,7 @@ Total bytes with user data:       4.72 G
 To speed up the estimation analysis it is recommended to use the average analysis by adding the -x flag to the command line. The estimation results are similar as shown below
 
 ```
-$ vos_scm_estimator.py explore_fs -x /mnt/storage
+$ daos_storage_estimator.py explore_fs -x /mnt/storage
 Using DAOS version: 1.1.0
 processing path: /mnt/storage
 
@@ -163,11 +163,11 @@ Total bytes with user data:       4.71 G
 
 ## Advanced Usage
 
-It is possible to play around with the assumptions that vos_scm_estimator.py uses. The number of VOS pools and even its internal structures can be changed. First, you need to dump the vos_size.yaml file.
-Then, customizes it. And finally passing it to the vos_scm_estimator.py tool by using -m flag. You can also generate and example of a DFS for your reference.
+It is possible to play around with the assumptions that daos_storage_estimator.py uses. The number of VOS pools and even its internal structures can be changed. First, you need to dump the vos_size.yaml file.
+Then, customizes it. And finally passing it to the daos_storage_estimator.py tool by using -m flag. You can also generate and example of a DFS for your reference.
 
 ```
-$ vos_scm_estimator.py create_example -v
+$ daos_storage_estimator.py create_example -v
 Using DAOS version: 1.1.0
 Vos metadata overhead:
   Reading VOS structures from current installation
@@ -178,7 +178,7 @@ Vos metadata overhead:
 Finally, you can use these files as templates to feed the estimation tool.
 
 ```
-$ vos_scm_estimator.py read_yaml vos_dfs_sample.yaml --meta vos_size.yaml
+$ daos_storage_estimator.py read_yaml vos_dfs_sample.yaml --meta vos_size.yaml
 Using DAOS version: 1.1.0
 Metadata totals:
         pool                :     273.44 K ( 0.00%)

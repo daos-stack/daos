@@ -26,9 +26,9 @@ from __future__ import print_function
 import os
 import yaml
 
-from scm_estimator.dfs_sb import VOS_SIZE, get_dfs_sb_obj
-from scm_estimator.vos_size import MetaOverhead
-from scm_estimator.vos_structures import Containers
+from storage_estimator.dfs_sb import VOS_SIZE, get_dfs_sb_obj
+from storage_estimator.vos_size import MetaOverhead
+from storage_estimator.vos_structures import Containers
 
 
 class CommonBase(object):

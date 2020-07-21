@@ -666,7 +666,7 @@ For reference, key junction points in the flows are:
 
 ## Metadata Overhead
 
-There is a tool available to estimate the metadata overhead. It is described on the <a href="https://github.com/daos-stack/daos/blob/master/src/client/scm_estimator/README.md">scm_estimator</a> section.
+There is a tool available to estimate the metadata overhead. It is described on the <a href="https://github.com/daos-stack/daos/blob/master/src/client/storage_estimator/README.md">storage estimator</a> section.
 
 <a id="81"></a>
 

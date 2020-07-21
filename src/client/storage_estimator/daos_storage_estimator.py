@@ -4,10 +4,10 @@ from __future__ import print_function
 import argparse
 import sys
 
-from scm_estimator.dfs_sb import get_dfs_example, print_daos_version, get_dfs_inode_akey
-from scm_estimator.parse_csv import ProcessCSV
-from scm_estimator.explorer import FileSystemExplorer
-from scm_estimator.util import ProcessBase
+from storage_estimator.dfs_sb import get_dfs_example, print_daos_version, get_dfs_inode_akey
+from storage_estimator.parse_csv import ProcessCSV
+from storage_estimator.explorer import FileSystemExplorer
+from storage_estimator.util import ProcessBase
 
 tool_description = '''DAOS estimation tool
 This CLI is able to estimate the SCM/NVMe ratios

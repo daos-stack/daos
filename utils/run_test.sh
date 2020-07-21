@@ -136,8 +136,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
 
     # Scripts launching tests
-    run_test src/client/scm_estimator/common/tests/scm_estimator.sh \
-        "${SL_PREFIX}"
+    run_test src/client/storage_estimator/common/tests/storage_estimator.sh
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD

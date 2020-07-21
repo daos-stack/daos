@@ -292,7 +292,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_bindir}/dfuse
 %{_bindir}/daos
 %{_bindir}/dfuse_hl
-%{_bindir}/vos_scm_estimator.py
+%{_bindir}/daos_storage_estimator.py
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
@@ -302,14 +302,14 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
-%dir  %{_libdir}/python2.7/site-packages/scm_estimator
+%dir  %{_libdir}/python2.7/site-packages/storage_estimator
 %{_libdir}/python2.7/site-packages/pydaos/*.py
-%{_libdir}/python2.7/site-packages/scm_estimator/*.py
+%{_libdir}/python2.7/site-packages/storage_estimator/*.py
 %if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/*.pyo
-%{_libdir}/python2.7/site-packages/scm_estimator/*.pyc
-%{_libdir}/python2.7/site-packages/scm_estimator/*.pyo
+%{_libdir}/python2.7/site-packages/storage_estimator/*.pyc
+%{_libdir}/python2.7/site-packages/storage_estimator/*.pyo
 %endif
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
@@ -321,14 +321,14 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
-%dir %{_libdir}/python3/site-packages/scm_estimator
+%dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
-%{_libdir}/python3/site-packages/scm_estimator/*.py
+%{_libdir}/python3/site-packages/storage_estimator/*.py
 %if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/*.pyc
 %{_libdir}/python3/site-packages/pydaos/*.pyo
-%{_libdir}/python3/site-packages/scm_estimator/*.pyc
-%{_libdir}/python3/site-packages/scm_estimator/*.pyo
+%{_libdir}/python3/site-packages/storage_estimator/*.pyc
+%{_libdir}/python3/site-packages/storage_estimator/*.pyo
 %endif
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
@@ -371,7 +371,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 
 %changelog
 * Tue Jul 14 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-28
-- Add the vos_scm_estimator.py tool. It merges the functionality of the
+- Add the daos_storage_estimator.py tool. It merges the functionality of the
   former tools vos_size, vos_size.py, vos_size_dfs_sample.py and parse_csv.py.
 
 * Tue Jul 7 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-27

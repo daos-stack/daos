@@ -25,8 +25,8 @@ import unittest
 import yaml
 import os
 
-from scm_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, VosValue, Overhead, ValType, KeyType, VosValueError
-from scm_estimator.explorer import FileSystemExplorer
+from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, VosValue, Overhead, ValType, KeyType, VosValueError
+from storage_estimator.explorer import FileSystemExplorer
 from .util import FileGenerator
 
 

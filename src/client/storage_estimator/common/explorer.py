@@ -26,8 +26,8 @@ import os
 import copy
 import sys
 
-from scm_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, VosValue, Overhead, ValType, KeyType
-from scm_estimator.util import CommonBase
+from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, VosValue, Overhead, ValType, KeyType
+from storage_estimator.util import CommonBase
 
 
 class FileInfo(object):
