@@ -162,7 +162,7 @@ class DfuseSpaceCheck(IorTestBase):
         # get scm space before write
         self.space_before = self.get_nvme_free_space()
 
-        # create large fle and perform write to it so that if goes out of
+        # create large file and perform write to it so that if goes out of
         # space.
         large_file = unicode(self.dfuse.mount_dir.value + "/" + "largefile.txt")
         cmd = u"touch {}".format(large_file)
