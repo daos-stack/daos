@@ -174,7 +174,10 @@ class OSAOfflineDrain(TestWithServers):
         :avocado: tags=all,pr,hw,large,osa,osa_drain,offline_drain
         """
         # Perform drain testing with 1 to 2 pools
-        for pool_num in range(1, 3):
+        # Two pool testing blocked by DAOS-5333.
+        # Once DAOS-5333 is addressed, change 
+        # range from 1,2 to 1,3.
+        for pool_num in range(1, 2):
             self.run_offline_drain_test(pool_num)
         # Perform drain testing : inserting data in pool
         # Bug : DAOS-4946 blocks the following test case.

@@ -200,7 +200,7 @@ class OSAOnlineDrain(TestWithServers):
             output = self.dmg_command.pool_drain(self.pool.uuid,
                                                  rank, t_string)
             self.log.info(output)
-            
+
             fail_count = 0
             while fail_count <= 20:
                 pver_drain = self.get_pool_version()
