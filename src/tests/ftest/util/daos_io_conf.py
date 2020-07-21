@@ -64,7 +64,7 @@ class IoConfGen(ExecutableCommand):
         """Run the daos_run_io_conf command as a foreground process.
 
         Raises:
-            CommandFailure: if there is an error running the command
+            None
 
         """
         command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
@@ -72,10 +72,7 @@ class IoConfGen(ExecutableCommand):
 
         manager = Orterun(command)
         # run daos_run_io_conf Command using Openmpi
-        try:
-            manager.run()
-        except CommandFailure as error:
-            raise CommandFailure(error)
+        manager.run()
 
 def gen_unaligned_io_conf(record_size, filename="testfile"):
     """Generate the data-set file based on record size.
