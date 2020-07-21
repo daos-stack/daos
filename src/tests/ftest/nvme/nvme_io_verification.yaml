@@ -33,19 +33,19 @@ ior:
  daos_destroy: False
  transfersize: !mux
    case1:
-     block_size: 20000000
+     block_size: 30000000
      tsize:
        - 8
        - 1000
        - 200000
        - 1000000
-       - 20000000
+       - 30000000
    case2:
-     block_size: 60000000
+     block_size: 120000000
      tsize:
        - 50000
-       - 1200000
-       - 15000000
+       - 2400000
+       - 30000000
        - 60000000
  ior_sequence:
 #   - [scmsize, nvmesize]
