@@ -175,8 +175,7 @@ class OSAOfflineDrain(TestWithServers):
         """
         # Perform drain testing with 1 to 2 pools
         # Two pool testing blocked by DAOS-5333.
-        # Once DAOS-5333 is addressed, change 
-        # range from 1,2 to 1,3.
+        # Fix range from 1,2 to 1,3
         for pool_num in range(1, 2):
             self.run_offline_drain_test(pool_num)
         # Perform drain testing : inserting data in pool
