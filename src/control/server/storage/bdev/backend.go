@@ -105,13 +105,13 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 		shmID = initShmID[0]
 	}
 
-	var pciWhitelist string
+	var pciWhiteList []string
 	if w.vmdEnabled {
 		// TODO: use devlist to construct opts.pci_whitelist
-		pciWhitelist = "0000:5d:05.5"
+		pciWhiteList = []string{"0000:5d:05.5"}
 	}
 
-	if err := w.InitSPDKEnv(shmID, pciWhitelist); err != nil {
+	if err := w.InitSPDKEnv(shmID, pciWhiteList); err != nil {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 

@@ -73,7 +73,7 @@ func Rc2err(label string, rc C.int) error {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *Env) InitSPDKEnv(shmID int, pciWhitelist string) (err error) {
+func (e *Env) InitSPDKEnv(shmID int, pciWhiteList []string) (err error) {
 	opts := &C.struct_spdk_env_opts{}
 
 	C.spdk_env_opts_init(opts)
@@ -84,11 +84,19 @@ func (e *Env) InitSPDKEnv(shmID int, pciWhitelist string) (err error) {
 	}
 
 	// quiet DPDK EAL logging by setting log level to ERROR
-	envContextString := "--log-level=lib.eal:4"
-	if pciWhitelist != "" {
-		envContextString += " --pci-whitelist=" + pciWhitelist
+	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
+
+	if len(pciWhiteList) != 0 {
+		pciAddrs := make([]C.struct_spdk_pci_addr, len(pciWhiteList))
+		for i := range pciAddrs {
+			rc := C.spdk_pci_addr_parse(&pciAddrs[i],
+				C.CString(pciWhiteList[i]))
+			if err = Rc2err("spdk_pci_addr_parse", rc); err != nil {
+				return
+			}
+		}
+		opts.pci_whitelist = &pciAddrs[0]
 	}
-	opts.env_context = unsafe.Pointer(C.CString(envContextString))
 
 	rc := C.spdk_env_init(opts)
 	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
