@@ -313,6 +313,8 @@ objects_update(d_rank_t rank)
 		ts_oid = dts_oid_gen(ts_class, ofeats, ts_ctx.tsc_mpi_rank);
 		if (ts_class == DAOS_OC_R2S_SPEC_RANK)
 			ts_oid = dts_oid_set_rank(ts_oid, rank);
+		else if (ts_class == DAOS_OC_R1S_SPEC_RANK)
+			ts_oid = dts_oid_set_tgt(ts_oid, ts_ctx.tsc_mpi_rank);
 
 		if (ts_mode == TS_MODE_DAOS || ts_mode == TS_MODE_ECHO) {
 			rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid,
@@ -764,6 +766,8 @@ ts_class_name(void)
 		return "DAOS R3S (full stack, 3 replica)";
 	case OC_RP_4G1:
 		return "DAOS R4S (full stack, 4 replics)";
+	case DAOS_OC_R1S_SPEC_RANK:
+		return "SRANK";
 	}
 }
 
@@ -1047,6 +1051,8 @@ main(int argc, char **argv)
 				ts_class = OC_S1;
 			} else if (!strcasecmp(optarg, "LARGE")) {
 				ts_class = OC_SX;
+			} else if (!strcasecmp(optarg, "SRANK")) {
+				ts_class = DAOS_OC_R1S_SPEC_RANK;
 			} else {
 				if (ts_ctx.tsc_mpi_rank == 0)
 					ts_print_usage();
@@ -1242,6 +1248,7 @@ main(int argc, char **argv)
 			"\tzero copy     : %s\n"
 			"\toverwrite     : %s\n"
 			"\tverify fetch  : %s\n"
+			"\tflat_key	 : %s\n"
 			"\tVOS file      : %s\n",
 			ts_class_name(),
 			(unsigned int)(scm_size >> 20),
@@ -1257,6 +1264,7 @@ main(int argc, char **argv)
 			ts_yes_or_no(ts_zero_copy),
 			ts_yes_or_no(ts_overwrite),
 			ts_yes_or_no(ts_verify_fetch),
+			ts_yes_or_no(ts_flat_obj),
 			ts_mode == TS_MODE_VOS ? ts_pmem_file : "<NULL>");
 	}
 
