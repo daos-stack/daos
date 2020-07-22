@@ -718,7 +718,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
 		RPC_ERROR(rpc_priv,
-			  "timedout due to URI_LOOKUP(rpc_priv %p) to group %s,"
+			  "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
 			  "rank %d through PSR %d timedout\n",
 			  container_of(ul_req, struct crt_rpc_priv, crp_pub),
 			  ul_in->ul_grp_id,
@@ -735,7 +735,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
 		RPC_ERROR(rpc_priv,
-			  "timedout due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s timedout\n",
+			  "failed due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s timedout\n",
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
@@ -745,7 +745,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		break;
 	case RPC_STATE_FWD_UNREACH:
 		RPC_ERROR(rpc_priv,
-			  "timedout due to group %s, rank %d, tgt_uri %s can't reach the target\n",
+			  "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
