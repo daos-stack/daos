@@ -301,6 +301,11 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
     return (DaosObjClientBuilder)super.getBuilder();
   }
 
+  @Override
+  public String toString() {
+    return "DaosObjClient{" + super.toString() + "}";
+  }
+
   public static class DaosObjClientBuilder extends DaosClient.DaosClientBuilder<DaosObjClientBuilder> {
     private boolean shareFsClient;
 
