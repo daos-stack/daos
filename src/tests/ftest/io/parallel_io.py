@@ -23,8 +23,9 @@
 """
 
 import threading
-import os
+import subprocess
 import time
+from getpass import getuser
 import general_utils
 
 from ClusterShell.NodeSet import NodeSet
@@ -120,6 +121,23 @@ class ParallelIo(FioBase, IorTestBase):
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
+    def stat_bfree(self, path):
+        """Get stat bfree
+
+          Args:
+            path (str): path to get free block size of.
+          Returns:
+            integer value of stat free blocks
+        """
+        cmd = "ssh" " {}@{}" " stat -c%a -f {}".format(
+            getuser(), self.hostlist_clients[0], path)
+        try:
+            result = subprocess.check_output(cmd, shell=True)
+        except subprocess.CalledProcessError as err:
+            self.fail("Get free block size method failed with: {}".format(err))
+
+        return int(result)
+
     def statvfs_pool(self, path):
         """Method to obtain free space using statvfs
 
@@ -132,8 +150,8 @@ class ParallelIo(FioBase, IorTestBase):
         """
         statvfs_list = []
         for _, pool in enumerate(self.pool):
-            dfuse_pool_dir = path + "/" + pool.uuid
-            statvfs_info = os.statvfs(dfuse_pool_dir).f_bfree
+            dfuse_pool_dir = str(path + "/" + pool.uuid)
+            statvfs_info = self.stat_bfree(dfuse_pool_dir)
             statvfs_list.append(statvfs_info)
             self.log.info("Statvfs List Output: %s", statvfs_list)
 
@@ -285,11 +303,11 @@ class ParallelIo(FioBase, IorTestBase):
         # using ior. This process of performing io is done in parallel for
         # all containers using threads.
         for pool_count, pool in enumerate(self.pool):
-            dfuse_pool_dir = self.dfuse.mount_dir.value + "/" + pool.uuid
+            dfuse_pool_dir = str(self.dfuse.mount_dir.value + "/" + pool.uuid)
             for counter in range(self.cont_count):
                 cont_num = (pool_count * self.cont_count) + counter
-                dfuse_cont_dir = (dfuse_pool_dir + "/" +
-                                  self.container[cont_num].uuid)
+                dfuse_cont_dir = str(dfuse_pool_dir + "/" +
+                                     self.container[cont_num].uuid)
                 cmd = u"###ls -a {}".format(dfuse_cont_dir)
                 try:
                     # execute bash cmds
@@ -334,7 +352,7 @@ class ParallelIo(FioBase, IorTestBase):
         pfinal = 0
         for count in range(self.cont_count):
             pinitial = pfinal
-            pfinal = pinitial + 5
+            pfinal = pinitial + (self.cont_count / 2)
             del self.container[pinitial:pfinal]
 
         for cont in self.container:
