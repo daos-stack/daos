@@ -44,6 +44,7 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
+int		objclass;
 
 
 /* Create or import a single pool with option to store info in arg->pool
@@ -325,7 +326,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.pool_connect_flags = DAOS_PC_RW;
 		arg->coh = DAOS_HDL_INVAL;
 		arg->cont_open_flags = DAOS_COO_RW;
-
+		arg->objclass = objclass;
 		arg->pool.destroyed = false;
 	}
 

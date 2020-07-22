@@ -1,39 +1,24 @@
-/* Copyright (C) 2016-2020 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
  * This file is part of CaRT. It implements the main group APIs.
@@ -2207,12 +2192,12 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 		}
 
 		if (rank == psr_rank)
-			crt_grp_psr_set(grp_priv, rank, addr_str);
+			crt_grp_psr_set(grp_priv, rank, addr_str, false);
 	}
 
 	/* TODO: PSR selection logic to be changed with CART-688 */
 	if (psr_rank != -1)
-		crt_grp_psr_set(grp_priv, rank, addr_str);
+		crt_grp_psr_set(grp_priv, rank, addr_str, false);
 
 out:
 	if (fp)
@@ -2323,8 +2308,8 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 			if (uri == NULL)
 				break;
 
-			crt_grp_psr_set(grp_priv, psr_rank, uri);
-			D_GOTO(out, rc = 0);
+			rc = crt_grp_psr_set(grp_priv, psr_rank, uri, false);
+			D_GOTO(out, 0);
 		} else if (rc != -DER_EVICTED) {
 			/*
 			 * DER_EVICTED means the psr_rank being evicted then can
@@ -2451,6 +2436,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	uint32_t	new_amount;
 	d_rank_t	*tmp;
 	int		rc = 0;
+	int		ret;
 
 	membs = grp_priv->gp_membs.cgm_list;
 
@@ -2479,9 +2465,11 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		membs->rl_nr = new_amount;
 		for (i = first; i < first + RANK_LIST_REALLOC_SIZE; i++) {
 			membs->rl_ranks[i] = CRT_NO_RANK;
-			grp_add_free_index(
+			rc = grp_add_free_index(
 				&grp_priv->gp_membs.cgm_free_indices,
 				i, true);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(out, 0);
 		}
 
 		index = grp_get_free_index(grp_priv);
@@ -2494,8 +2482,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		rc = crt_swim_rank_add(grp_priv, rank);
 		if (rc) {
 			D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
-			grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
-				   index, false);
+			D_GOTO(out, 0);
 		} else {
 			membs->rl_ranks[index] = rank;
 			grp_priv->gp_size++;
@@ -2506,8 +2493,16 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	}
 
 	/* Regenerate linear list*/
-	grp_regen_linear_list(grp_priv);
+	ret = grp_regen_linear_list(grp_priv);
+	if (ret != 0) {
+		grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
+				   index, false);
+		membs->rl_ranks[index] = CRT_NO_RANK;
+		grp_priv->gp_size--;
+	}
 
+	if (ret != 0 && rc == 0)
+		rc = ret;
 out:
 	return rc;
 }
@@ -2707,8 +2702,7 @@ crt_group_rank_remove_internal(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			grp_add_free_index(
 				&grp_priv->gp_membs.cgm_free_indices,
 				i, false);
-			grp_regen_linear_list(grp_priv);
-			rc = 0;
+			rc = grp_regen_linear_list(grp_priv);
 			break;
 		}
 
@@ -2928,9 +2922,7 @@ crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
 		D_GOTO(out, rc);
 	}
 
-	crt_grp_psr_set(grp_priv, rank, uri);
-	D_FREE(uri);
-
+	rc = crt_grp_psr_set(grp_priv, rank, uri, true);
 out:
 	return rc;
 }
