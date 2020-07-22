@@ -321,7 +321,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 							  symbols[i]);
 					free(symbols);
 				} else {
-					printf(stderr, "backtrace_symbols() returned NULL\n");
+					fprintf(stderr, "backtrace_symbols() returned NULL\n");
 				}
 			}
 		}
