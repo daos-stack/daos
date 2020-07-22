@@ -310,6 +310,9 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 				bt_size = backtrace(bt, 128);
 				if (bt_size >= 128)
 					fprintf(stderr, "backtrace may have been truncated\n");
+				if (bt_size <= 0)
+					fprintf(stderr, "backtrace() returned %d\n",
+						bt_size);
 
 				symbols = backtrace_symbols(bt, bt_size);
 				if (symbols != NULL) {
@@ -317,6 +320,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 						RPC_ERROR(rpc_priv, "%s\n",
 							  symbols[i]);
 					free(symbols);
+				} else {
+					printf(stderr, "backtrace_symbols() returned NULL\n");
 				}
 			}
 		}
