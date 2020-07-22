@@ -147,4 +147,15 @@ public abstract class SharableClient implements ForceCloseable {
    * @throws IOException
    */
   protected abstract void disconnect(boolean force) throws IOException;
+
+  @Override
+  public String toString() {
+    return "SharableClient{" +
+        "poolId='" + poolId + '\'' +
+        ", contId='" + contId + '\'' +
+        ", client=" + client +
+        ", inited=" + inited +
+        ", refCnt=" + refCnt +
+        '}';
+  }
 }

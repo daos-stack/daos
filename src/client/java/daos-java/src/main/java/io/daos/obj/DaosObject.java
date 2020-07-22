@@ -49,7 +49,6 @@ import java.util.List;
  * For key list methods, {@link IOKeyDesc} should be create from this object. You have several choices to specify
  * parameters, like number of keys to list, key length and batch size. By tuning these parameters, you can list dkeys or
  * akeys efficiently with proper amount of resources. See createKD... methods inside this class.
- * //TODO: buffer management
  */
 public class DaosObject {
 
@@ -599,5 +598,13 @@ public class DaosObject {
    */
   public IOKeyDesc createKDWithKlAndBs(String dkey, int keyLen, int batchSize) throws IOException {
     return new IOKeyDesc(dkey, Integer.MAX_VALUE, keyLen, batchSize);
+  }
+
+  @Override
+  public String toString() {
+    return "DaosObject{" +
+        "client=" + client +
+        ", oid=" + oid +
+        '}';
   }
 }

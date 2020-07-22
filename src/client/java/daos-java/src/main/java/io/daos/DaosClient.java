@@ -287,6 +287,13 @@ public class DaosClient implements ForceCloseable {
    */
   private static native void daosFinalize() throws IOException;
 
+  @Override
+  public String toString() {
+    return "DaosClient{" +
+        "inited=" + inited +
+        '}';
+  }
+
   /**
    * A builder to build {@link DaosClient}. A subclass can extend it to build its own client.
    */
