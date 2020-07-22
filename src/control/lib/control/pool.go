@@ -161,7 +161,7 @@ type (
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
 		UUID    string
-		SvcReps []uint32
+		SvcReps []uint32 `json:"Svcreps"`
 	}
 )
 

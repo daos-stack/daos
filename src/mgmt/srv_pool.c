@@ -328,8 +328,9 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	pc_out->pc_rc = rc;
 
 	/* NB: This is a deprecated code path, but we
-	   need to handle it for now until daos_test is
-	   converted to use dmg for pool management. */
+	 * need to handle it for now until daos_test is
+	 * converted to use dmg for pool management.
+	 */
 	if (rc == 0) {
 		rc = pool_create_upcall(pc_in->pc_pool_uuid, pc_out->pc_svc);
 		if (rc != 0) {
@@ -419,8 +420,9 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 	pd_out->pd_rc = rc;
 
 	/* NB: This is a deprecated code path, but we
-	   need to handle it for now until daos_test is
-	   converted to use dmg for pool management. */
+	 * need to handle it for now until daos_test is
+	 * converted to use dmg for pool management.
+	 */
 	if (rc == 0) {
 		rc = pool_destroy_upcall(pd_in->pd_pool_uuid);
 		if (rc != 0) {

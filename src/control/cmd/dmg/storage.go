@@ -92,12 +92,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StoragePrepare(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(os.Stdout, resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
@@ -129,12 +130,13 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	req := &control.StorageScanReq{}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(os.Stdout, resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
@@ -244,14 +246,14 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		return err
 	}
 
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, resp, err)
+	}
+
 	return cmd.printFormatResp(resp)
 }
 
 func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
-	}
-
 	var bld strings.Builder
 	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {

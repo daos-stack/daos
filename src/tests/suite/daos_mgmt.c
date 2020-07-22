@@ -418,7 +418,7 @@ pool_create_and_destroy_retry(void **state)
 	print_message("success\n");
 
 	print_message("destroying pool synchronously ... ");
-	rc = daos_pool_destroy(uuid, arg->group, 1, NULL);
+	rc = daos_json_pool_destroy(uuid, arg->group, 1);
 #if 0 /* see pool_create_cp */
 	assert_int_equal(rc, 0);
 #else

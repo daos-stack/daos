@@ -64,7 +64,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(os.Stdout, resp, err)
 	}
 
 	var bld strings.Builder

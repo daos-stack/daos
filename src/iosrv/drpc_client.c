@@ -290,7 +290,7 @@ pool_list_upcall(const char *group, uint64_t *npools,
 	Drpc__Call			*dreq;
 	Drpc__Response			*dresp;
 	uint8_t				*req;
-	size_t			 	req_size;
+	size_t				req_size;
 	uint64_t			pi = 0;
 	uint64_t			pool_count = 0;
 	uint64_t			avail_npools;

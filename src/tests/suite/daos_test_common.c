@@ -110,10 +110,9 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		print_message("setup: creating pool, SCM size="DF_U64" GB, "
 			      "NVMe size="DF_U64" GB\n",
 			      (outpool->pool_size >> 30), nvme_size >> 30);
-		rc = daos_pool_create(0, arg->uid, arg->gid, arg->group,
-				      NULL, "pmem", outpool->pool_size,
-				      nvme_size, prop, &outpool->svc,
-				      outpool->pool_uuid, NULL);
+		rc = daos_json_pool_create(arg->uid, arg->gid, arg->group,
+					   NULL, outpool->pool_size, nvme_size,
+					   prop, &outpool->svc, outpool->pool_uuid);
 		if (rc)
 			print_message("daos_pool_create failed, rc: %d\n", rc);
 		else
@@ -416,7 +415,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 
 	daos_pool_disconnect(poh, NULL);
 
-	rc = daos_pool_destroy(pool->pool_uuid, arg->group, 1, NULL);
+	rc = daos_json_pool_destroy(pool->pool_uuid, arg->group, 1);
 	if (rc && rc != -DER_TIMEDOUT)
 		print_message("daos_pool_destroy failed, rc: %d\n", rc);
 	if (rc == 0)
@@ -1020,6 +1019,316 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	D_FREE(user);
 	return prop;
 }
+
+#ifndef HAVE_JSON_TOKENER_GET_PARSE_END
+#define json_tokener_get_parse_end(tok) ((tok)->char_offset)
+#endif
+
+/* JSON output handling for dmg command */
+static int
+daos_dmg_json_pipe(const char *dmg_cmd, struct json_object **json_out)
+{
+	struct	json_object	*obj = NULL;
+	char			buf[32768];
+	int			parse_depth = JSON_TOKENER_DEFAULT_DEPTH;
+	json_tokener		*tok;
+	int			ret, rc = 0;
+
+	tok = json_tokener_new_ex(parse_depth);
+	if (tok == NULL) {
+		return -DER_NOMEM;
+	}
+
+	FILE *fp = popen(dmg_cmd, "r");
+
+	if (!fp) {
+		goto out;
+	}
+
+	size_t total_read = 0;
+
+	while ((ret = read(fileno(fp), buf, sizeof(buf))) > 0) {
+		total_read += ret;
+		int start_pos = 0;
+
+		while (start_pos != ret) {
+			obj = json_tokener_parse_ex(tok,
+					&buf[start_pos], ret - start_pos);
+			enum json_tokener_error jerr = json_tokener_get_error(tok);
+			int parse_end = json_tokener_get_parse_end(tok);
+
+			if (obj == NULL && jerr != json_tokener_continue) {
+				char *aterr = &buf[start_pos + parse_end];
+				int fail_off = total_read - ret + start_pos + parse_end;
+
+				D_ERROR("failed at offset %d: %s %c\n",
+					fail_off,
+					json_tokener_error_desc(jerr),
+					aterr[0]);
+				pclose(fp);
+				D_GOTO(out, rc = -DER_INVAL);
+			}
+			if (obj != NULL) {
+				goto out_pclose;
+			}
+		}
+	}
+
+out_pclose:
+	rc = pclose(fp);
+	if (rc != 0) {
+		D_ERROR("%s exited with %d\n", dmg_cmd, rc % 0xFF);
+		rc = -DER_INVAL;
+	}
+out:
+	json_tokener_free(tok);
+
+	D_DEBUG(DB_TEST, "raw output: %s\n", buf);
+	if (obj != NULL) {
+		struct json_object *tmp;
+		if (rc != 0 && json_object_object_get_ex(obj, "Error", &tmp)) {
+			const char *err_str;
+			err_str = json_object_get_string(tmp);
+			D_ERROR("dmg error: %s\n", err_str);
+			*json_out = json_object_get(tmp);
+		} else {
+			if (json_object_object_get_ex(obj, "Response", &tmp))
+				*json_out = json_object_get(tmp);
+		}
+
+		json_object_put(obj);
+	}
+
+	return rc;
+}
+
+static void
+cmd_free_args(char **args, int argcount)
+{
+	int i;
+
+	D_DEBUG(DB_TEST, "freeing %d args\n", argcount);
+
+	for (i = 0; i < argcount; i++) {
+		D_FREE(args[i]);
+	}
+
+	if (argcount)
+		D_FREE(args);
+}
+
+static char **
+cmd_push_arg(char *args[], int *argcount, char *arg)
+{
+	char **tmp;
+
+	if (arg == NULL) {
+		D_ERROR("NULL arg supplied\n");
+		return NULL;
+	}
+
+	D_REALLOC(tmp, args, sizeof(char *) * (*argcount + 1));
+	if (tmp == NULL) {
+		D_FREE(arg);
+		cmd_free_args(args, *argcount);
+		return NULL;
+	}
+
+	tmp[*argcount] = arg;
+	(*argcount)++;
+
+	return tmp;
+}
+
+static char*
+cmd_string(char *cmd, char *args[], int argcount)
+{
+	char		*tmp;
+	char		*cmd_str;
+	size_t		size;
+	int		i;
+
+	size = strlen(cmd);
+	cmd_str = calloc(size, sizeof(char));
+	memcpy(cmd_str, cmd, size);
+
+	for (i = 0; i < argcount; i++) {
+		size += strlen(args[i]);
+		D_REALLOC(tmp, cmd_str, size);
+		if (tmp == NULL)
+			return NULL;
+		strcat(tmp, args[i]);
+		cmd_str = tmp;
+	}
+
+	return cmd_str;
+}
+
+static int
+parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
+{
+	struct json_object	*tmp, *rank;
+	int			n_svcranks;
+	int			i;
+
+	if (json_pool == NULL || pool_info == NULL)
+		return -DER_INVAL;
+
+	if (!json_object_object_get_ex(json_pool, "UUID", &tmp)) {
+		D_ERROR("unable to extract pool UUID from JSON\n");
+		return -DER_INVAL;
+	}
+	const char *uuid_str = json_object_get_string(tmp);
+	uuid_parse(uuid_str, pool_info->mgpi_uuid);
+
+	if (!json_object_object_get_ex(json_pool, "Svcreps", &tmp)) {
+		D_ERROR("unable to parse pool svcreps from JSON\n");
+		return -DER_INVAL;
+	}
+
+	n_svcranks = json_object_array_length(tmp);
+	pool_info->mgpi_svc = d_rank_list_alloc(n_svcranks);
+	if (pool_info->mgpi_svc == NULL) {
+		D_ERROR("failed to allocate rank list\n");
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < n_svcranks; i++) {
+		rank = json_object_array_get_idx(tmp, i);
+		pool_info->mgpi_svc->rl_ranks[i] =
+			json_object_get_int(rank);
+	}
+
+	return 0;
+}
+
+int
+daos_json_pool_create(uid_t uid, gid_t gid, const char *grp,
+		      const d_rank_list_t *tgts,
+		      daos_size_t scm_size, daos_size_t nvme_size,
+		      daos_prop_t *pool_prop, d_rank_list_t *svc,
+		      uuid_t uuid)
+{
+#if 0
+	char			*uid_arg = NULL;
+	char			*gid_arg = NULL;
+	char			*grp_arg = NULL;
+#endif
+	char			*scm_arg = NULL;
+	char			*nvme_arg = NULL;
+	/*char			*svc_arg = NULL;*/
+	int			argcount = 0;
+	char			**args = NULL;
+	daos_mgmt_pool_info_t	pool_info = {};
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	D_ASPRINTF(scm_arg, "-s %"PRIu64"b ", scm_size);
+	if (scm_arg == NULL) {
+		D_ERROR("failed to create scm arg");
+		D_GOTO(out_cmd, rc = -DER_NOMEM);
+	}
+	args = cmd_push_arg(args, &argcount, scm_arg);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (nvme_size > 0) {
+		D_ASPRINTF(nvme_arg, "-n %"PRIu64"b ", nvme_size);
+		if (nvme_arg == NULL) {
+			D_ERROR("failed to create nvme arg");
+			D_GOTO(out_cmd, rc = -DER_NOMEM);
+		}
+		args = cmd_push_arg(args, &argcount, nvme_arg);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	char *cmd_str = cmd_string("dmg -ji pool create ", args, argcount);
+
+	D_DEBUG(DB_TEST, "%s\n", cmd_str);
+
+	rc = daos_dmg_json_pipe(cmd_str, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+	rc = parse_pool_info(dmg_out, &pool_info);
+	if (rc != 0) {
+		D_ERROR("failed to parse pool info\n");
+		goto out_json;
+	}
+
+	uuid_copy(uuid, pool_info.mgpi_uuid);
+	rc = d_rank_list_dup(&svc, pool_info.mgpi_svc);
+	if (rc != 0) {
+		D_ERROR("failed to dup svc rank list\n");
+		goto out_svc;
+	}
+
+out_svc:
+	d_rank_list_free(pool_info.mgpi_svc);
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+out_cmd:
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+daos_json_pool_destroy(const uuid_t uuid, const char *grp, int force)
+{
+	/*char			*grp_arg = NULL;*/
+	char			*uuid_arg = NULL;
+	char			*force_arg = NULL;
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int 			argcount = 0;
+	char 			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	D_ASPRINTF(uuid_arg, "--pool=%s ", uuid_str);
+	if (uuid_arg == NULL) {
+		D_ERROR("failed to create uuid arg");
+		D_GOTO(out_cmd, rc = -DER_NOMEM);
+	}
+	args = cmd_push_arg(args, &argcount, uuid_arg);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (force != 0) {
+		D_ASPRINTF(force_arg, "--force");
+		if (force_arg == NULL) {
+			D_ERROR("failed to create force arg");
+			D_GOTO(out_cmd, rc = -DER_NOMEM);
+		}
+	}
+	args = cmd_push_arg(args, &argcount, force_arg);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	char *cmd_str = cmd_string("dmg -ji pool destroy ", args, argcount);
+
+	D_DEBUG(DB_TEST, "%s\n", cmd_str);
+
+	rc = daos_dmg_json_pipe(cmd_str, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+out_cmd:
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
 
 /* JSON output handling for dmg command */
 static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)

@@ -61,7 +61,7 @@ type (
 	jsonOutputter interface {
 		enableJsonOutput(bool)
 		jsonOutputEnabled() bool
-		outputJSON(io.Writer, interface{}) error
+		outputJSON(io.Writer, interface{}, error) error
 	}
 
 	jsonOutputCmd struct {
@@ -85,14 +85,24 @@ func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
 	return cmd.shouldEmitJSON
 }
 
-func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
-	data, err := json.MarshalIndent(in, "", "  ")
+func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}, cmdErr error) error {
+	errStr := "null"
+	if cmdErr != nil {
+		errStr = cmdErr.Error()
+	}
+	data, err := json.MarshalIndent(struct {
+		Response interface{}
+		Error    string
+	}{in, errStr}, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	_, err = out.Write(append(data, []byte("\n")...))
-	return err
+	if _, err = out.Write(append(data, []byte("\n")...)); err != nil {
+		return err
+	}
+
+	return cmdErr
 }
 
 type cmdLogger interface {

@@ -59,12 +59,13 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	resp, err := control.LeaderQuery(ctx, cmd.ctlInvoker, &control.LeaderQueryReq{
 		System: cmd.config.SystemName,
 	})
-	if err != nil {
-		return errors.Wrap(err, "leader query failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(os.Stdout, resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "leader query failed")
 	}
 
 	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
@@ -181,12 +182,13 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemQuery(ctx, cmd.ctlInvoker,
 		&control.SystemQueryReq{Ranks: ranks})
-	if err != nil {
-		return errors.Wrap(err, "System-Query command failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(os.Stdout, resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "System-Query command failed")
 	}
 
 	cmd.log.Debug("System-Query command succeeded")
@@ -289,12 +291,13 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 		Force: cmd.Force,
 		Ranks: ranks,
 	})
-	if err != nil {
-		return errors.Wrap(err, "System-Stop command failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(os.Stdout, resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "System-Stop command failed")
 	}
 
 	if len(resp.Results) == 0 {
@@ -325,12 +328,13 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStart(ctx, cmd.ctlInvoker,
 		&control.SystemStartReq{Ranks: ranks})
-	if err != nil {
-		return errors.Wrap(err, "System-Start command failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(os.Stdout, resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "System-Start command failed")
 	}
 
 	if len(resp.Results) == 0 {
@@ -372,12 +376,13 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	resp, err := control.ListPools(ctx, cmd.ctlInvoker, &control.ListPoolsReq{
 		System: cmd.config.SystemName,
 	})
-	if err != nil {
-		return errors.Wrap(err, "List-Pools command failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(os.Stdout, resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "List-Pools command failed")
 	}
 
 	if len(resp.Pools) == 0 {
