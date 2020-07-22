@@ -248,7 +248,8 @@ struct dss_drpc_handler {
 };
 
 enum {
-	SCHED_REQ_IO	= 0,
+	SCHED_REQ_UPDATE	= 0,
+	SCHED_REQ_FETCH,
 	SCHED_REQ_GC,
 	SCHED_REQ_MIGRATE,
 	SCHED_REQ_MAX,
@@ -337,11 +338,7 @@ void sched_req_wait(struct sched_request *req, bool abort);
  */
 bool sched_req_is_aborted(struct sched_request *req);
 
-enum {
-	SCHED_SPACE_PRESS_NONE	= 0,
-	SCHED_SPACE_PRESS_LIGHT,
-	SCHED_SPACE_PRESS_SEVERE,
-};
+#define SCHED_SPACE_PRESS_NONE	0
 
 /**
  * Check space pressure of the pool of current sched request.
@@ -456,13 +453,11 @@ enum dss_ult_type {
 	DSS_ULT_RDB,
 	/** rebuild ULT such as scanner/puller, status checker etc. */
 	DSS_ULT_REBUILD,
-	/** aggregation ULT */
-	DSS_ULT_AGGREGATE,
 	/** drpc listener ULT */
 	DSS_ULT_DRPC_LISTENER,
 	/** drpc handler ULT */
 	DSS_ULT_DRPC_HANDLER,
-	/** GC & batched commit ULTs */
+	/** GC & aggregation ULTs */
 	DSS_ULT_GC,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,

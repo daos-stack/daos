@@ -201,8 +201,8 @@ dtx_batched_commit(void *arg)
 				DTX_AGG_THRESHOLD_AGE_UPPER))) {
 			ds_cont_child_get(cont);
 			cont->sc_dtx_aggregating = 1;
-			rc = dss_ult_create(dtx_aggregate, cont,
-				DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
+			rc = dss_ult_create(dtx_aggregate, cont, DSS_ULT_GC,
+					    DSS_TGT_SELF, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
 				ds_cont_child_put(cont);
