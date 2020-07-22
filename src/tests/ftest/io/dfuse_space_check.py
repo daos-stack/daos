@@ -119,8 +119,8 @@ class DfuseSpaceCheck(IorTestBase):
         file_count = 0
         while self.get_nvme_free_space(False) >= self.block_size:
             if 0 in self.ret_code:
-                file_loc = unicode(self.dfuse.mount_dir.value +
-                           "/largefile_{}.txt".format(file_count))
+                file_loc = str(self.dfuse.mount_dir.value +
+                               "/largefile_{}.txt".format(file_count))
                 write_dd_cmd = u"dd if=/dev/zero of={} bs={} count=1".format(
                     file_loc, self.block_size)
                 self.execute_cmd(write_dd_cmd, False, False)
@@ -164,7 +164,7 @@ class DfuseSpaceCheck(IorTestBase):
 
         # create large file and perform write to it so that if goes out of
         # space.
-        large_file = unicode(self.dfuse.mount_dir.value + "/" + "largefile.txt")
+        large_file = str(self.dfuse.mount_dir.value + "/" + "largefile.txt")
         cmd = u"touch {}".format(large_file)
         self.execute_cmd(cmd)
         dd_count = ((self.space_before / self.block_size) + 1)
