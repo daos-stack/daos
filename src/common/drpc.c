@@ -35,26 +35,27 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-static int unixcomm_close(struct unixcomm *handle);
+/* Define a custom allocator so we can log and use fault injection
+ * in the DRPC code.
+ */
 
-static void *drpc_alloc(void *allocator_date, size_t size)
+void *
+daos_drpc_alloc(void *arg, size_t size)
 {
+	struct drpc_alloc *alloc = arg;
 	void *buf;
 
 	D_ALLOC(buf, size);
+	if (!buf)
+		alloc->oom = true;
 	return buf;
 }
 
-static void drpc_free(void *allocater_data, void *pointer)
+void
+daos_drpc_free(void *allocater_data, void *pointer)
 {
 	D_FREE(pointer);
 }
-
-/* Define a custom allocator so we can log and use fault injection
- * in the DPRC code.
- */
-static ProtobufCAllocator alloc = {.alloc = drpc_alloc,
-				   .free = drpc_free};
 
 /**
  * Allocate and initialize a new dRPC call Protobuf structure for a given dRPC
@@ -63,29 +64,36 @@ static ProtobufCAllocator alloc = {.alloc = drpc_alloc,
  * \param	ctx	Active dRPC context
  * \param	module	Module ID for the new call
  * \param	method	Method ID for the new call
+ * \param	callp	Newly allocated Drpc__Call
  *
- * \return	Newly allocated Drpc__Call, or NULL if it couldn't be allocated
+ * \returns	On success returns 0 otherwise returns negative error condition.
  */
-Drpc__Call *
-drpc_call_create(struct drpc *ctx, int32_t module, int32_t method)
+int
+drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
+		 Drpc__Call **callp)
 {
 	Drpc__Call *call;
 
-	if (ctx == NULL) {
+	if (callp)
+		*callp = NULL;
+
+	if (ctx == NULL || callp == NULL) {
 		D_ERROR("Can't build a call from NULL context\n");
-		return NULL;
+		return -DER_INVAL;
 	}
 
 	D_ALLOC_PTR(call);
 	if (call == NULL)
-		return NULL;
+		return -DER_NOMEM;
 
 	drpc__call__init(call);
 	call->sequence = ctx->sequence;
 	call->module = module;
 	call->method = method;
 
-	return call;
+	*callp = call;
+
+	return 0;
 }
 
 /**
@@ -96,7 +104,9 @@ drpc_call_create(struct drpc *ctx, int32_t module, int32_t method)
 void
 drpc_call_free(Drpc__Call *call)
 {
-	drpc__call__free_unpacked(call, &alloc);
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
+
+	drpc__call__free_unpacked(call, &alloc.alloc);
 }
 
 /**
@@ -133,117 +143,9 @@ drpc_response_create(Drpc__Call *call)
 void
 drpc_response_free(Drpc__Response *resp)
 {
-	drpc__response__free_unpacked(resp, &alloc);
-}
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
 
-static struct unixcomm *
-new_unixcomm_socket(int flags)
-{
-	struct unixcomm	*comm;
-
-	D_ALLOC_PTR(comm);
-	if (comm == NULL)
-		return NULL;
-
-	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-	if (comm->fd < 0) {
-		D_ERROR("Failed to open socket, errno=%d\n", errno);
-		D_FREE(comm);
-		return NULL;
-	}
-
-	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
-		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
-			comm->fd, errno);
-		unixcomm_close(comm);
-		return NULL;
-	}
-
-	comm->flags = flags;
-
-	return comm;
-}
-
-static void
-fill_socket_address(const char *sockpath, struct sockaddr_un *address)
-{
-	memset(address, 0, sizeof(struct sockaddr_un));
-
-	address->sun_family = AF_UNIX;
-	strncpy(address->sun_path, sockpath, UNIX_PATH_MAX-1);
-}
-
-static struct unixcomm *
-unixcomm_connect(char *sockaddr, int flags)
-{
-	struct sockaddr_un	address;
-	int			ret;
-	struct unixcomm		*handle = NULL;
-
-	handle = new_unixcomm_socket(flags);
-	if (handle == NULL)
-		return NULL;
-
-	fill_socket_address(sockaddr, &address);
-	ret = connect(handle->fd, (struct sockaddr *) &address,
-			sizeof(address));
-	if (ret < 0) {
-		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
-			address.sun_path, errno, strerror(errno));
-		unixcomm_close(handle);
-		return NULL;
-	}
-
-	return handle;
-}
-
-static struct unixcomm *
-unixcomm_listen(char *sockaddr, int flags)
-{
-	struct sockaddr_un	address;
-	struct unixcomm		*comm;
-
-	comm = new_unixcomm_socket(flags);
-	if (comm == NULL)
-		return NULL;
-
-	fill_socket_address(sockaddr, &address);
-	if (bind(comm->fd, (struct sockaddr *)&address,
-		 sizeof(struct sockaddr_un)) < 0) {
-		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
-			sockaddr, comm->fd, errno);
-		unixcomm_close(comm);
-		return NULL;
-	}
-
-	if (listen(comm->fd, SOMAXCONN) < 0) {
-		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
-			comm->fd, errno);
-		unixcomm_close(comm);
-		return NULL;
-	}
-
-	return comm;
-}
-
-static struct unixcomm *
-unixcomm_accept(struct unixcomm *listener)
-{
-	struct unixcomm *comm;
-
-	D_ALLOC_PTR(comm);
-	if (comm == NULL)
-		return NULL;
-
-	comm->fd = accept(listener->fd, NULL, NULL);
-	if (comm->fd < 0) {
-		D_ERROR("Failed to accept connection on listener fd %d, "
-			"errno=%d\n", listener->fd, errno);
-		D_FREE(comm);
-		return NULL;
-	}
-
-	return comm;
+	drpc__response__free_unpacked(resp, &alloc.alloc);
 }
 
 static int
@@ -266,6 +168,131 @@ unixcomm_close(struct unixcomm *handle)
 	}
 
 	return 0;
+}
+
+static int
+new_unixcomm_socket(int flags, struct unixcomm **newcommp)
+{
+	struct unixcomm	*comm;
+
+	*newcommp = NULL;
+
+	D_ALLOC_PTR(comm);
+	if (comm == NULL)
+		return -DER_NOMEM;
+
+	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+	if (comm->fd < 0) {
+		D_ERROR("Failed to open socket, errno=%d\n", errno);
+		D_FREE(comm);
+		return -DER_MISC;
+	}
+
+	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
+		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
+			comm->fd, errno);
+		unixcomm_close(comm);
+		return -DER_MISC;
+	}
+
+	comm->flags = flags;
+
+	*newcommp = comm;
+
+	return 0;
+}
+
+static void
+fill_socket_address(const char *sockpath, struct sockaddr_un *address)
+{
+	memset(address, 0, sizeof(struct sockaddr_un));
+
+	address->sun_family = AF_UNIX;
+	strncpy(address->sun_path, sockpath, UNIX_PATH_MAX-1);
+}
+
+static int
+unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
+{
+	struct sockaddr_un	address;
+	int			ret;
+	struct unixcomm		*handle = NULL;
+
+	*newcommp = NULL;
+
+	ret = new_unixcomm_socket(flags, &handle);
+	if (ret != 0)
+		return ret;
+
+	fill_socket_address(sockaddr, &address);
+	errno = 0;
+	ret = connect(handle->fd, (struct sockaddr *) &address,
+			sizeof(address));
+	if (ret < 0) {
+		ret = daos_errno2der(ret);
+		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
+			address.sun_path, errno, strerror(errno));
+		unixcomm_close(handle);
+		return ret;
+	}
+
+	*newcommp = handle;
+
+	return 0;
+}
+
+static int
+unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
+{
+	struct sockaddr_un	address;
+	struct unixcomm		*comm;
+	int			ret;
+
+	*newcommp = NULL;
+
+	ret = new_unixcomm_socket(flags, &comm);
+	if (ret != 0)
+		return ret;
+
+	fill_socket_address(sockaddr, &address);
+	if (bind(comm->fd, (struct sockaddr *)&address,
+		 sizeof(struct sockaddr_un)) < 0) {
+		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
+			sockaddr, comm->fd, errno);
+		unixcomm_close(comm);
+		return -DER_MISC;
+	}
+
+	if (listen(comm->fd, SOMAXCONN) < 0) {
+		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
+			comm->fd, errno);
+		unixcomm_close(comm);
+		return -DER_MISC;
+	}
+
+	*newcommp = comm;
+
+	return 0;
+}
+
+static struct unixcomm *
+unixcomm_accept(struct unixcomm *listener)
+{
+	struct unixcomm *comm;
+
+	D_ALLOC_PTR(comm);
+	if (comm == NULL)
+		return NULL;
+
+	comm->fd = accept(listener->fd, NULL, NULL);
+	if (comm->fd < 0) {
+		D_ERROR("Failed to accept connection on listener fd %d, "
+			"errno=%d\n", listener->fd, errno);
+		D_FREE(comm);
+		return NULL;
+	}
+
+	return comm;
 }
 
 static int
@@ -349,15 +376,6 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 	return buf_len;
 }
 
-static Drpc__Response *
-drpc_unmarshal_response(uint8_t *buff, size_t buflen)
-{
-	Drpc__Response *resp;
-
-	resp = drpc__response__unpack(&alloc, buflen, buff);
-	return resp;
-}
-
 /**
  * Issue a call over a drpc channel
  *
@@ -372,13 +390,14 @@ int
 drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 			Drpc__Response **resp)
 {
-	Drpc__Response	*response = NULL;
-	uint8_t		*messagePb;
-	uint8_t		*responseBuf;
-	int		pbLen;
-	ssize_t		sent;
-	ssize_t		recv = 0;
-	int		ret;
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Drpc__Response		*response = NULL;
+	uint8_t			*messagePb;
+	uint8_t			*responseBuf;
+	int			pbLen;
+	ssize_t			sent;
+	ssize_t			recv = 0;
+	int			ret;
 
 	msg->sequence = ctx->sequence++;
 	pbLen = drpc_marshal_call(msg, &messagePb);
@@ -407,8 +426,10 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 		D_FREE(responseBuf);
 		return ret;
 	}
-	response = drpc_unmarshal_response(responseBuf, recv);
+	response = drpc__response__unpack(&alloc.alloc, recv, responseBuf);
 	D_FREE(responseBuf);
+	if (alloc.oom)
+		return -DER_NOMEM;
 	if (!response)
 		return -DER_MISC;
 
@@ -428,28 +449,34 @@ init_drpc_ctx(struct drpc *ctx, struct unixcomm *comm, drpc_handler_t handler)
 /**
  * Connect to a drpc socket server on the given path.
  *
- * \param sockaddr	Path to unix domain socket in the filesystem.
+ * \param[in]  sockaddr	Path to unix domain socket in the filesystem.
+ * \param[out]    drpcp Drpc context representing the connection.
  *
- * \returns		Drpc context representing the connection.
+ * \returns	On success returns 0 otherwise returns negative error condition.
  */
-struct drpc *
-drpc_connect(char *sockaddr)
+int
+drpc_connect(char *sockaddr, struct drpc **drpcp)
 {
 	struct drpc	*ctx;
 	struct unixcomm	*comms;
+	int		ret;
+
+	*drpcp = NULL;
 
 	D_ALLOC_PTR(ctx);
 	if (!ctx)
-		return NULL;
+		return -DER_NOMEM;
 
-	comms = unixcomm_connect(sockaddr, 0);
-	if (!comms) {
+	ret = unixcomm_connect(sockaddr, 0, &comms);
+	if (ret != 0) {
 		D_FREE(ctx);
-		return NULL;
+		return ret;
 	}
 
 	init_drpc_ctx(ctx, comms, NULL);
-	return ctx;
+	*drpcp = ctx;
+
+	return 0;
 }
 
 /**
@@ -468,6 +495,7 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 {
 	struct drpc	*ctx;
 	struct unixcomm *comm;
+	int		rc;
 
 	if (sockaddr == NULL || handler == NULL) {
 		D_ERROR("Bad input, sockaddr=%p, handler=%p\n",
@@ -479,13 +507,14 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 	if (ctx == NULL)
 		return NULL;
 
-	comm = unixcomm_listen(sockaddr, O_NONBLOCK);
-	if (comm == NULL) {
+	rc = unixcomm_listen(sockaddr, O_NONBLOCK, &comm);
+	if (rc != 0) {
 		D_FREE(ctx);
 		return NULL;
 	}
 
 	init_drpc_ctx(ctx, comm, handler);
+
 	return ctx;
 }
 
@@ -562,10 +591,11 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 static int
 get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 {
-	int		rc;
-	uint8_t		*buffer;
-	size_t		buffer_size = UNIXCOMM_MAXMSGSIZE;
-	ssize_t		message_len = 0;
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int			rc;
+	uint8_t			*buffer;
+	size_t			buffer_size = UNIXCOMM_MAXMSGSIZE;
+	ssize_t			message_len = 0;
 
 	D_ALLOC(buffer, buffer_size);
 	if (buffer == NULL)
@@ -573,13 +603,15 @@ get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 
 	rc = unixcomm_recv(ctx->comm, buffer, buffer_size,
 				&message_len);
-	if (rc != DER_SUCCESS) {
+	if (rc != 0) {
 		D_FREE(buffer);
 		return rc;
 	}
 
-	*call = drpc__call__unpack(&alloc, message_len, buffer);
+	*call = drpc__call__unpack(&alloc.alloc, message_len, buffer);
 	D_FREE(buffer);
+	if (alloc.oom)
+		return -DER_NOMEM;
 	if (*call == NULL) {
 		D_ERROR("Couldn't unpack message into Drpc__Call\n");
 		return -DER_PROTO;

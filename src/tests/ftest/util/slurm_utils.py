@@ -30,6 +30,7 @@ import threading
 import re
 
 from general_utils import run_command, DaosTestError
+from ClusterShell.NodeSet import NodeSet
 
 W_LOCK = threading.Lock()
 
@@ -92,6 +93,45 @@ def delete_slurm_partition(name):
     command = "scontrol delete PartitionName={}".format(name)
     result = run_command(command, raise_exception=False)
     return result.exit_status
+
+
+def get_reserved_nodes(reservation, partition):
+    """Get the reserved nodes.
+
+    Args:
+        reservation (str): reservation name
+        partition (str): partition name
+
+    Returns:
+        list: return list of reserved nodes in partition
+
+    """
+    partition_hosts = []
+    hosts = []
+    # Get the partition information
+    cmd = "scontrol show partition {}".format(partition)
+    partition_result = run_command(cmd, raise_exception=False)
+
+    if partition_result:
+        # Get the list of hosts from the reservation information
+        output = partition_result.stdout
+        match = re.search(r"\sNodes=(\S+)", str(output))
+        if match is not None:
+            partition_hosts = list(NodeSet(match.group(1)))
+            print("partition_hosts = {}".format(partition_hosts))
+            # partition hosts exists; continue with valid partition
+            cmd = "scontrol show reservation {}".format(reservation)
+            reservation_result = run_command(cmd, raise_exception=False)
+            if reservation_result:
+                # Get the list of hosts from the reservation information
+                output = reservation_result.stdout
+                match = re.search(r"\sNodes=(\S+)", str(output))
+                if match is not None:
+                    reservation_hosts = list(NodeSet(match.group(1)))
+                    print("reservation_hosts = {}".format(reservation_hosts))
+                    if set(reservation_hosts).issubset(set(partition_hosts)):
+                        hosts = reservation_hosts
+    return hosts
 
 
 def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
@@ -222,7 +262,7 @@ def watch_job(handle, maxwait, test_obj):
     wait_time = 0
     while True:
         state = check_slurm_job(handle)
-        if state in ("PENDING", "RUNNING", "COMPLETING"):
+        if state in ("PENDING", "RUNNING", "COMPLETING", "CONFIGURING"):
             if wait_time > maxwait:
                 state = "MAXWAITREACHED"
                 print("Job {} has timedout after {} secs".format(handle,

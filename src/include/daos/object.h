@@ -342,7 +342,6 @@ int dc_obj_punch_akeys_task(tse_task_t *task);
 int dc_obj_query(tse_task_t *task);
 int dc_obj_query_key(tse_task_t *task);
 int dc_obj_sync(tse_task_t *task);
-int dc_obj_fetch_shard_task(tse_task_t *task);
 int dc_obj_fetch_task(tse_task_t *task);
 int dc_obj_update_task(tse_task_t *task);
 int dc_obj_list_dkey(tse_task_t *task);
@@ -389,6 +388,8 @@ enum daos_io_flags {
 	DIOF_WITH_SPEC_EPOCH	= 0x4,
 	/* The operation is for EC recovering. */
 	DIOF_EC_RECOV		= 0x8,
+	/* The the key existence. */
+	DIOF_CHECK_EXISTENCE	= 0x10,
 };
 
 /**
@@ -430,6 +431,7 @@ enum daos_recx_type {
 struct daos_recx_ep {
 	daos_recx_t	re_recx;
 	daos_epoch_t	re_ep;
+	uint32_t	re_rec_size;
 	uint8_t		re_type;
 };
 

@@ -165,6 +165,14 @@ int
 vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
 
 /**
+ * Cleanup local DTX when local modification failed.
+ *
+ * \param dth	[IN]	The DTX handle.
+ */
+void
+vos_dtx_cleanup(struct dtx_handle *dth);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
@@ -278,6 +286,21 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo);
  */
 int
 vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps);
+
+/**
+ * Set aside additional "system reserved" space in pool SCM and NVMe
+ * (additive to any existing reserved space by vos)
+ *
+ * \param poh		[IN]	Pool open handle
+ * \param space_sys	[IN]	Array of sizes in bytes, indexed by media type
+ *				(DAOS_MEDIA_SCM and DAOS_MEDIA_NVME)
+ *
+ * \return		Zero		: success
+ *			-DER_NO_HDL	: invalid pool handle
+ *			-DER_INVAL	: space_sys is NULL
+ */
+int
+vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys);
 
 /**
  * Create a container within a VOSP
@@ -418,6 +441,35 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
+ * Fetch values for the given keys and their indices.
+ * If output buffer is not provided in \a sgl, then this function returns
+ * the directly accessible addresses of record data, upper layer can directly
+ * read from these addresses (rdma mode).
+ *
+ * TODO: add more detail descriptions for punched or missing records.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	Object ID
+ * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
+ *			is provided by \a iods.
+ * \param flags	[IN]	Fetch flags
+ * \param dkey	[IN]	Distribution key.
+ * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
+ * \param iods	[IN/OUT]
+ *			Array of I/O descriptors. The returned record
+ *			sizes are also stored in this parameter.
+ * \param sgls	[OUT]	Scatter/gather list to store the returned record values
+ *			or value addresses.
+ * \param dth	[IN]	Optional dtx handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+		 daos_iod_t *iods, d_sg_list_t *sgls, struct dtx_handle *dth);
+
+/**
  * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
@@ -450,6 +502,62 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	       unsigned int iod_nr, daos_iod_t *iods,
 	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls);
+
+
+/**
+ * Update records for the specified object.
+ * If input buffer is not provided in \a sgl, then this function returns
+ * the new allocated addresses to store the records, upper layer can
+ * directly write data into these addresses (rdma mode).
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	object ID
+ * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
+ *			range is provided by \a iods (kvl::kv_epr).
+ * \param pm_ver [IN]   Pool map version for this update, which will be
+ *			used during rebuild.
+ * \param flags	[IN]	Update flags
+ * \param dkey	[IN]	Distribution key.
+ * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
+ * \param iods [IN]	Array of I/O descriptors.
+ * \param iods_csums [IN]
+ *			Array of iod_csums (1 for each iod). Will be NULL
+ *			if csums are disabled.
+ * \param sgls	[IN/OUT]
+ *			Scatter/gather list to pass in record value buffers,
+ *			if caller sets the input buffer size only without
+ *			providing input buffers, then VOS will allocate spaces
+ *			for the records and return addresses of them, so upper
+ *			layer stack can transfer data via rdma.
+ * \param dth	[IN]	Optional transaction handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_update_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+		  uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
+		  unsigned int iod_nr, daos_iod_t *iods,
+		  struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls,
+		  struct dtx_handle *dth);
+
+/**
+ * Remove all array values within the specified range.  If the specified
+ * extent and epoch range includes partial extents, the function will
+ * fail and no changes will be made.
+ *
+ * \param[in]	coh	Container open handle
+ * \param[in]	oid	object ID
+ * \param[in]	epr	Epoch range
+ * \param[in]	dkey	Distribution key
+ * \param[in]	akey	Attribute key
+ * \param[in]	recx	Extent range to remove
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
+		     const daos_epoch_range_t *epr, const daos_key_t *dkey,
+		     const daos_key_t *akey, const daos_recx_t *recx);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -490,13 +598,16 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * I/O APIs
  */
 
-/**
- * VOS fetch flags
- * VOS_FETCH_SIZE_ONLY - only query iod_size
- * VOS_FETCH_RECX_LIST - query recx list
- */
-#define VOS_FETCH_SIZE_ONLY	(0x1U << 0)
-#define VOS_FETCH_RECX_LIST	(0x1U << 1)
+enum vos_fetch_flags {
+	/* only query iod_size */
+	VOS_FETCH_SIZE_ONLY		= (1 << 0),
+	/* query recx list */
+	VOS_FETCH_RECX_LIST		= (1 << 1),
+	/* only set read TS */
+	VOS_FETCH_SET_TS_ONLY		= (1 << 2),
+	/* check the target (obj/dkey/akey) existence */
+	VOS_FETCH_CHECK_EXISTENCE	= (1 << 3),
+};
 
 /**
  *
@@ -553,7 +664,7 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * Prepare IO sink buffers for the specified arrays of the given
  * object. The caller can directly use thse buffers for RMA write.
  *
- * The upper layer must explicitly call \a vos_fetch_end to finalise the
+ * The upper layer must explicitly call \a vos_update_end to finalise the
  * ZC I/O and release resources.
  *
  * \param coh	[IN]	Container open handle
@@ -681,12 +792,13 @@ vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
  *			is inherited from that entry.
  *
  * \param ih	[OUT]	Returned iterator handle
+ * \param dth	[IN]	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
-		 daos_handle_t *ih);
+		 daos_handle_t *ih, struct dtx_handle *dth);
 
 /**
  * Release a iterator
@@ -805,6 +917,7 @@ vos_iter_empty(daos_handle_t ih);
  * \param[in]		pre_cb		pre subtree iteration callback
  * \param[in]		post_cb		post subtree iteration callback
  * \param[in]		arg		callback argument
+ * \param[in]		dth		DTX handle
  *
  * \retval		0	iteration complete
  * \retval		> 0	callback return value
@@ -813,7 +926,7 @@ vos_iter_empty(daos_handle_t ih);
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg);
+	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
@@ -853,6 +966,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx	max or min offset in dkey/akey, and the size of the
  *			extent at the offset. If there are no visible array
  *			records, the size in the recx returned will be 0.
+ * \param[in]	dth	Pointer to the DTX handle.
  *
  * \return
  *			0		Success
@@ -863,7 +977,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx);
+		  daos_recx_t *recx, struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.
@@ -910,9 +1024,11 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
-vos_gc_run(int *credits);
-int
-vos_gc_pool(daos_handle_t poh, int *credits);
+vos_gc_pool_run(daos_handle_t poh, int credits,
+		bool (*yield_func)(void *arg), void *yield_arg);
+bool
+vos_gc_pool_idle(daos_handle_t poh);
+
 
 enum vos_cont_opc {
 	VOS_CO_CTL_DUMMY,

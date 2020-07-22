@@ -152,8 +152,18 @@ class WarningsFactory():
            entry['severity'] != 'ERROR':
             entry['severity'] = 'LOW'
         self.issues.append(entry)
+        if self.pending and self.pending[0][0].pid != line.pid:
+            self.reset_pending()
         self.pending.append((line, message))
         self._flush()
+
+    def reset_pending(self):
+        """Reset the pending list
+
+        Should be called before iterating on each new file, so errors
+        from previous files aren't attribured to new files.
+        """
+        self.pending = []
 
     def _flush(self):
         """Write the current list to the json file
@@ -233,14 +243,9 @@ class DaosServer():
         if os.path.exists(self._log_file):
             os.unlink(self._log_file)
 
-        # self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        # Disable this for now, as the filename is logged without a error in
-        # the fault injection testing so it's causing inconsisency in the
-        # errors generated.
-        # self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
-        # self.agent_dir = self._agent_dir.name
+        self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
+        self.agent_dir = self._agent_dir.name
 
-        self.agent_dir = '/tmp/dnt_agent_changeme'
         if not os.path.exists(self.agent_dir):
             os.mkdir(self.agent_dir)
 
@@ -267,10 +272,6 @@ class DaosServer():
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
-        agent_env = os.environ.copy()
-        # DAOS-??? Need to set this for agent
-        agent_env['LD_LIBRARY_PATH'] = os.path.join(self.conf['PREFIX'],
-                                                    'lib64')
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
         self._agent = subprocess.Popen([agent_bin,
@@ -279,7 +280,7 @@ class DaosServer():
                                         '--debug',
                                         '--runtime_dir', self.agent_dir,
                                         '--logfile', '/tmp/dnt_agent.log'],
-                                       env=agent_env)
+                                       env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
         time.sleep(2)
         self.running = True
@@ -389,7 +390,7 @@ class ValgrindHelper():
 
         self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
 
-        cmd = ['valgrind', '--quiet']
+        cmd = ['valgrind', '--quiet', '--fair-sched=yes']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
@@ -497,7 +498,7 @@ class DFuse():
             except subprocess.TimeoutExpired:
                 pass
             total_time += 1
-            if total_time > 30:
+            if total_time > 60:
                 raise Exception('Timeout starting dfuse')
 
     def _close_files(self):
@@ -1067,14 +1068,6 @@ def test_pydaos_kv(server, conf):
 
     daos = import_daos(server, conf)
 
-    file_self = os.path.dirname(os.path.abspath(__file__))
-    mod_dir = os.path.join(file_self,
-                           '../src/client/pydaos')
-    if mod_dir not in sys.path:
-        sys.path.append(mod_dir)
-
-    dbm = __import__('daosdbm')
-
     pools = get_pool_list()
 
     while len(pools) < 1:
@@ -1086,9 +1079,9 @@ def test_pydaos_kv(server, conf):
 
     print(container)
     c_uuid = container.decode().split()[-1]
-    kvg = dbm.daos_named_kv(pool, c_uuid)
+    container = daos.Cont(pool, c_uuid)
 
-    kv = kvg.get_kv_by_name('Dave')
+    kv = container.get_kv_by_name('my_test_kv', create=True)
     kv['a'] = 'a'
     kv['b'] = 'b'
     kv['list'] = pickle.dumps(list(range(1, 100000)))
@@ -1123,6 +1116,10 @@ def test_pydaos_kv(server, conf):
 
     if failed:
         print("That's not good")
+
+    kv = None
+    print('Closing container and opening new one')
+    kv = container.get_kv_by_name('my_test_kv')
 
 def test_alloc_fail(conf):
     """run 'daos' client binary with fault injection
