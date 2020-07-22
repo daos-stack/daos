@@ -65,11 +65,11 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 }
 
 static uint32_t
-ir_rec_hash(struct d_hash_table *htable, d_list_t *link)
+ir_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 {
 	const struct dfuse_inode_record		*ir;
 
-	ir = container_of(link, struct dfuse_inode_record, ir_htl);
+	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 
 	return (uint32_t)ir->ir_id.irid_oid.hi;
 
@@ -88,14 +88,12 @@ ir_free(struct d_hash_table *htable, d_list_t *rlink)
 /* Inode entry hash table operations */
 
 static uint32_t
-ih_rec_hash(struct d_hash_table *htable, d_list_t *link)
+ih_key_hash(struct d_hash_table *htable, const void *key,
+	    unsigned int ksize)
 {
-	const struct dfuse_inode_entry	*ie;
+	const ino_t *ino = key;
 
-	ie = container_of(link, struct dfuse_inode_entry, ie_htl);
-
-	return d_hash_string_u32((const char *)&ie->ie_stat.st_ino,
-				 sizeof(ie->ie_stat.st_ino));
+	return (uint32_t)(*ino);
 }
 
 static bool
@@ -108,6 +106,16 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	return *ino == ie->ie_stat.st_ino;
+}
+
+static uint32_t
+ih_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
+{
+	const struct dfuse_inode_entry	*ie;
+
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	return (uint32_t)ie->ie_stat.st_ino;
 }
 
 static void
@@ -178,6 +186,7 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 
 static d_hash_table_ops_t ie_hops = {
 	.hop_key_cmp		= ih_key_cmp,
+	.hop_key_hash		= ih_key_hash,
 	.hop_rec_hash		= ih_rec_hash,
 	.hop_rec_addref		= ih_addref,
 	.hop_rec_decref		= ih_decref,

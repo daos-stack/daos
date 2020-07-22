@@ -45,6 +45,7 @@
 #include <daos/common.h>
 
 struct daos_llink;
+
 struct daos_llink_ops {
 	/** Mandatory: lru reference free callback */
 	void	 (*lop_free_ref)(struct daos_llink *llink);
@@ -63,8 +64,8 @@ struct daos_llink_ops {
 struct daos_llink {
 	d_list_t		 ll_link;	/**< LRU hash link */
 	d_list_t		 ll_qlink;	/**< Temp link for traverse */
-	unsigned int		 ll_ref:30,	/**< refcount for this ref */
-				 ll_evicted:1;	/**< has been evicted */
+	uint32_t		 ll_ref;	/**< refcount for this ref */
+	uint32_t		 ll_evicted:1;	/**< has been evicted */
 	struct daos_llink_ops	*ll_ops;	/**< ops to maintain refs */
 };
 
@@ -82,12 +83,12 @@ struct daos_lru_cache {
  * Create a DAOS LRU cache
  * This function creates an LRU cache in DRAM
  *
- * \param bits		[IN]	power2(bits) is the size of the LRU cache
- * \feats feats		[IN]	Feature bits for DHASH, see DHASH_FT_*
- * \param ops		[IN]	DAOS LRU callbacks
- * \param lcache	[OUT]	Newly created LRU cache
+ * \param[in]  bits		power2(bits) is the size of the LRU cache
+ * \param[in]  feats		Feature bits for DHASH, see DHASH_FT_*
+ * \param[in]  ops		DAOS LRU callbacks
+ * \param[out] lcache		Newly created LRU cache
  *
- * \return			0 on success and negative on failure.
+ * \return		0 on success and negative on failure.
  */
 int
 daos_lru_cache_create(int bits, uint32_t feats,
@@ -98,7 +99,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
  * Destroy an LRU cache
  * This function destroys and LRU cache
  *
- * \param lcache	[IN]	LRU cache reference
+ * \param[in] lcache		LRU cache reference
  */
 void
 daos_lru_cache_destroy(struct daos_lru_cache *lcache);
@@ -106,12 +107,12 @@ daos_lru_cache_destroy(struct daos_lru_cache *lcache);
 typedef bool (*daos_lru_cond_cb_t)(struct daos_llink *llink, void *arg);
 
 /**
- * Evit LRU items that can match the condition @cond.
+ * Evict LRU items that can match the condition @cond.
  * All items will be evicted if @cond is NULL.
  *
- * \param lcache	[IN]	DAOS LRU cache
- * \param cond		[IN]	the condition callback
- * \param arg		[IN]	arguments for the @cond
+ * \param[in] lcache		DAOS LRU cache
+ * \param[in] cond		the condition callback
+ * \param[in] arg		arguments for the @cond
  */
 void
 daos_lru_cache_evict(struct daos_lru_cache *lcache,
@@ -121,16 +122,16 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
  * Find a ref in the cache \a lcache and take its reference.
  * if reference is not found add it.
  *
- * \param lcache	[IN]	DAOS LRU cache
- * \param key		[IN]	Key to take reference of
- * \param ksize		[IN]	Size of the key
- * \param create_args	[IN]	Optional, arguments required for allocation
+ * \param[in] lcache		DAOS LRU cache
+ * \param[in] key		Key to take reference of
+ * \param[in] ksize		Size of the key
+ * \param[in] create_args	Optional, arguments required for allocation
  *				of LRU item.
  *				If user wants a find-only operation, then NULL
  *				should be passed in. User can pass in any
  *				non-zero value as \a create_args if creation
  *				is required but args is not.
- * \param llink		[OUT]	DAOS LRU link
+ * \param[out] llink		DAOS LRU link
  */
 int
 daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key, unsigned int ksize,
@@ -139,8 +140,8 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key, unsigned int ksize,
 /**
  * Release a reference from the cache
  *
- * \param lcache	[IN]	DAOS LRU cache
- * \param llink		[IN]	DAOS LRU link
+ * \param[in] lcache		DAOS LRU cache
+ * \param[in] llink		DAOS LRU link to be released
  */
 void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink);
@@ -148,7 +149,7 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink);
 /**
  * Flush old items from LRU.
  *
- * \param lcache	[IN]	DAOS LRU cache
+ * \param[in] lcache		DAOS LRU cache
  */
 void
 daos_lru_ref_flush(struct daos_lru_cache *lcache);
@@ -156,8 +157,8 @@ daos_lru_ref_flush(struct daos_lru_cache *lcache);
 /**
  * Evict the item from LRU after releasing the last refcount on it.
  *
- * \param lcache	[IN]	DAOS LRU cache
- * \param llink		[IN]	DAOS LRU item to be evicted.
+ * \param[in] lcache		DAOS LRU cache
+ * \param[in] llink		DAOS LRU item to be evicted
  */
 static inline void
 daos_lru_ref_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
@@ -169,7 +170,7 @@ daos_lru_ref_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
 /**
  * Check if a LRU element has been evicted or not
  *
- * \param llink		[IN]	DAOS LRU item to check
+ * \param[in] llink		DAOS LRU item to check
  */
 static inline bool
 daos_lru_ref_evicted(struct daos_llink *llink)
@@ -177,6 +178,11 @@ daos_lru_ref_evicted(struct daos_llink *llink)
 	return llink->ll_evicted;
 }
 
+/**
+ * Increase a usage reference to the LRU element
+ *
+ * \param[in] llink		DAOS LRU item
+ */
 static inline void
 daos_lru_ref_add(struct daos_llink *llink)
 {

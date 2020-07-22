@@ -852,10 +852,8 @@ d_hash_table_create(uint32_t feats, uint32_t bits, void *priv,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = d_hash_table_create_inplace(feats, bits, priv, hops, htable);
-	if (rc) {
-		D_FREE_PTR(htable);
-		htable = NULL;
-	}
+	if (rc)
+		D_FREE(htable);
 out:
 	*htable_pp = htable;
 	return rc;
@@ -972,7 +970,7 @@ d_hash_table_destroy(struct d_hash_table *htable, bool force)
 	int rc = d_hash_table_destroy_inplace(htable, force);
 
 	if (!rc)
-		D_FREE_PTR(htable);
+		D_FREE(htable);
 	return rc;
 }
 
@@ -1133,8 +1131,7 @@ d_hhash_create(uint32_t feats, uint32_t bits, struct d_hhash **hhash_pp)
 	rc = d_hash_table_create_inplace(feats, bits, NULL, &hh_ops,
 					 &hhash->ch_htable);
 	if (rc) {
-		D_FREE_PTR(hhash);
-		hhash = NULL;
+		D_FREE(hhash);
 		D_GOTO(out, rc);
 	}
 
@@ -1150,7 +1147,7 @@ d_hhash_destroy(struct d_hhash *hhash)
 {
 	d_hash_table_debug(&hhash->ch_htable);
 	d_hash_table_destroy_inplace(&hhash->ch_htable, true);
-	D_FREE_PTR(hhash);
+	D_FREE(hhash);
 }
 
 int

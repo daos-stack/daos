@@ -94,7 +94,8 @@ typedef struct {
 	uint32_t (*hop_key_hash)(struct d_hash_table *htable, const void *key,
 				 unsigned int ksize);
 	/**
-	 * Get the hash of recorded key.
+	 * Mandatory for per bucket locking. Get the hash of recorded key.
+	 * It should return the same hash as hop_key_hash().
 	 *
 	 * \param[in]	htable	hash table
 	 * \param[in]	link	the link to record.
@@ -554,8 +555,8 @@ struct d_hlink_ops {
 
 struct d_rlink {
 	d_list_t		rl_link;
-	uint32_t		rl_ref:30,
-				rl_initialized:1;
+	uint32_t		rl_ref;
+	uint32_t		rl_initialized:1;
 };
 
 struct d_hlink {
