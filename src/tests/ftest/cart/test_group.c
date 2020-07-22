@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,9 @@
  * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
+ */
+/*
+ * This is a simple example of cart rpc group test based on crt API.
  */
 #include <stdio.h>
 #include <stdlib.h>
