@@ -746,6 +746,28 @@ out_lock:
 	return rc;
 }
 
+int
+dc_mgmt_svc_ranks(struct dc_mgmt_sys *sysp, d_rank_list_t **svc_ranks)
+{
+	d_rank_list_t		*ranks;
+	int			i;
+
+	if (sysp == NULL)
+		return -DER_INVAL;
+
+	ranks = d_rank_list_alloc(sysp->sy_npsrs);
+	if (ranks == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < sysp->sy_npsrs; i++) {
+		ranks->rl_ranks[i] = sysp->sy_psrs[i].rank;
+	}
+
+	*svc_ranks = ranks;
+
+	return 0;
+}
+
 /**
  * Attach to system \a name.
  *

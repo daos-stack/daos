@@ -72,5 +72,6 @@ int dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp);
 void dc_mgmt_sys_detach(struct dc_mgmt_sys *sys);
 ssize_t dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap);
 ssize_t dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp);
+int dc_mgmt_svc_ranks(struct dc_mgmt_sys *sys, d_rank_list_t **svc_ranks);
 
 #endif

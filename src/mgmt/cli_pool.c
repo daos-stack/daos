@@ -216,12 +216,10 @@ dc_pool_create(tse_task_t *task)
 	crt_rpc_t		       *rpc_req = NULL;
 	crt_opcode_t			opc;
 	struct mgmt_pool_create_in     *pc_in;
+	d_rank_list_t			*svc_ranks;
 	int				rc;
 
 	if (state == NULL) {
-		d_rank_list_t	ranks;
-		d_rank_t	rank;
-
 		if (args->uuid == NULL || args->dev == NULL ||
 		    strlen(args->dev) == 0) {
 			D_ERROR("Invalid parameter of dev (NULL or empty "
@@ -248,13 +246,14 @@ dc_pool_create(tse_task_t *task)
 		if (rc != 0)
 			goto out_prop;
 
-		rank = 0;
-		ranks.rl_ranks = &rank;
-		ranks.rl_nr = 1;
-		rc = rsvc_client_init(&state->client, &ranks);
+		rc = dc_mgmt_svc_ranks(state->sys, &svc_ranks);
+		if (rc != 0)
+			goto out_prop;
+
+		rc = rsvc_client_init(&state->client, svc_ranks);
 		if (rc != 0) {
 			D_ERROR("failed to initialize rsvc_client %d\n", rc);
-			goto out_grp;
+			goto out_svc_ranks;
 		}
 
 		daos_task_set_priv(task, state);
@@ -307,7 +306,8 @@ out_put_req:
 	crt_req_decref(rpc_req);
 out_client:
 	rsvc_client_fini(&state->client);
-out_grp:
+out_svc_ranks:
+	d_rank_list_free(svc_ranks);
 	dc_mgmt_sys_detach(state->sys);
 out_prop:
 	daos_prop_free(state->prop);
@@ -380,12 +380,10 @@ dc_pool_destroy(tse_task_t *task)
 	crt_rpc_t			*rpc_req;
 	crt_opcode_t			 opc;
 	struct mgmt_pool_destroy_in	*pd_in;
+	d_rank_list_t			*svc_ranks;
 	int				 rc;
 
 	if (state == NULL) {
-		d_rank_list_t	ranks;
-		d_rank_t	rank;
-
 		if (!daos_uuid_valid(args->uuid)) {
 			D_ERROR("Invalid parameter of uuid (NULL).\n");
 			rc = -DER_INVAL;
@@ -403,13 +401,14 @@ dc_pool_destroy(tse_task_t *task)
 		if (rc != 0)
 			goto out_state;
 
-		rank = 0;
-		ranks.rl_ranks = &rank;
-		ranks.rl_nr = 1;
-		rc = rsvc_client_init(&state->client, &ranks);
+		rc = dc_mgmt_svc_ranks(state->sys, &svc_ranks);
+		if (rc != 0)
+			goto out_state;
+
+		rc = rsvc_client_init(&state->client, svc_ranks);
 		if (rc != 0) {
 			D_ERROR("failed to initialize rsvc_client %d\n", rc);
-			goto out_group;
+			goto out_svc_ranks;
 		}
 
 		daos_task_set_priv(task, state);
@@ -457,7 +456,8 @@ out_put_req:
 	crt_req_decref(rpc_req);
 out_client:
 	rsvc_client_fini(&state->client);
-out_group:
+out_svc_ranks:
+	d_rank_list_free(svc_ranks);
 	dc_mgmt_sys_detach(state->sys);
 out_state:
 	D_FREE(state);
@@ -549,6 +549,8 @@ dc_mgmt_list_pools(tse_task_t *task)
 	crt_opcode_t			opc;
 	struct mgmt_list_pools_in      *pc_in;
 	struct mgmt_list_pools_arg	cb_args;
+	struct rsvc_client		svc_client;
+	d_rank_list_t			*svc_ranks;
 	int				rc = 0;
 
 	args = dc_task_get_args(task);
@@ -559,8 +561,27 @@ dc_mgmt_list_pools(tse_task_t *task)
 		D_GOTO(out, rc);
 	}
 
+	rc = dc_mgmt_svc_ranks(cb_args.sys, &svc_ranks);
+	if (rc != 0) {
+		D_ERROR("unable to get service ranks\n");
+		D_GOTO(out, rc);
+	}
+
+	rc = rsvc_client_init(&svc_client, svc_ranks);
+	if (rc != 0) {
+		D_ERROR("unable to init service client\n");
+		D_GOTO(out_svc_ranks, rc);
+	}
+
 	svr_ep.ep_grp = cb_args.sys->sy_group;
-	svr_ep.ep_rank = 0;
+	rc = rsvc_client_choose(&svc_client, &svr_ep);
+	if (rc != 0) {
+		D_ERROR("unable to choose service leader\n");
+		D_GOTO(out_svc_ranks, rc);
+	}
+
+	D_DEBUG(DB_MGMT, "chose rank %d as MS leader\n", svr_ep.ep_rank);
+
 	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	opc = DAOS_RPC_OPCODE(MGMT_LIST_POOLS, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
@@ -614,6 +635,8 @@ out_put_req:
 
 out_grp:
 	dc_mgmt_sys_detach(cb_args.sys);
+out_svc_ranks:
+	d_rank_list_free(svc_ranks);
 out:
 	tse_task_complete(task, rc);
 	return rc;
