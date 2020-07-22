@@ -873,16 +873,48 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 	return 0;
 }
 
+/** Add a recov record to the recov_lists (for singv degraded fetch) */
+static int
+obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
+		       daos_epoch_t epoch,
+		       struct daos_recx_ep_list **recov_lists_ptr)
+{
+	struct daos_recx_ep_list	*recov_lists = *recov_lists_ptr;
+	struct daos_recx_ep_list	*recov_list;
+	struct daos_recx_ep		 recx_ep;
+
+	if (recov_lists == NULL) {
+		D_ALLOC_ARRAY(recov_lists, iod_nr);
+		if (recov_lists == NULL)
+			return -DER_NOMEM;
+		*recov_lists_ptr = recov_lists;
+	}
+
+	/* add one recx with any idx/nr to notify client this singv need to be
+	 * recovered.
+	 */
+	recov_list = &recov_lists[iod_idx];
+	recx_ep.re_recx.rx_idx = 0;
+	recx_ep.re_recx.rx_nr = 1;
+	recx_ep.re_ep = epoch;
+	recx_ep.re_type = DRT_SHADOW;
+	recx_ep.re_rec_size = rec_size;
+
+	return daos_recx_ep_add(recov_list, &recx_ep);
+}
+
 /** Filter and prepare for the sing value EC update/fetch */
-static void
+static int
 obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
-		       bool for_update)
+		       bool for_update, bool deg_fetch,
+		       struct daos_recx_ep_list **recov_lists_ptr)
 {
 	struct daos_oclass_attr		*oca = NULL;
 	daos_iod_t			*iod;
 	struct obj_ec_singv_local	 loc;
 	uint32_t			 tgt_idx;
 	uint32_t			 i;
+	int				 rc = 0;
 
 	tgt_idx = orw->orw_oid.id_shard - orw->orw_start_shard;
 	for (i = 0; i < orw->orw_nr; i++) {
@@ -907,8 +939,15 @@ obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
 			offs[i] = loc.esl_off;
 			if (for_update)
 				iod->iod_size = loc.esl_size;
+			if (deg_fetch)
+				rc = obj_singv_ec_add_recov(orw->orw_nr, i,
+							    iod->iod_size,
+							    orw->orw_epoch,
+							    recov_lists_ptr);
 		}
 	}
+
+	return rc;
 }
 
 /* Call internal method to increment CSUM media error. */
@@ -1117,7 +1156,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	/* Prepare IO descriptor */
 	if (obj_rpc_is_update(rpc)) {
-		obj_singv_ec_rw_filter(orw, iods, offs, true);
+		obj_singv_ec_rw_filter(orw, iods, offs, true, false, NULL);
 		bulk_op = CRT_BULK_GET;
 
 		/** Fault injection - corrupt data from network */
@@ -1176,13 +1215,6 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
-		recov_lists = vos_ioh2recx_list(ioh);
-		if (recov_lists != NULL) {
-			daos_recx_ep_list_set_ep_valid(recov_lists,
-						       orw->orw_nr);
-			orwo->orw_rels.ca_arrays = recov_lists;
-			orwo->orw_rels.ca_count = orw->orw_nr;
-		}
 
 		rc = obj_set_reply_sizes(rpc);
 		if (rc != 0)
@@ -1199,7 +1231,20 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
 			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
 		}
-		obj_singv_ec_rw_filter(orw, iods, offs, false);
+		recov_lists = vos_ioh2recx_list(ioh);
+		rc = obj_singv_ec_rw_filter(orw, iods, offs, false,
+					    ec_deg_fetch, &recov_lists);
+		if (rc != 0) {
+			D_ERROR(DF_UOID" obj_singv_ec_rw_filter failed: "
+				DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
+			goto out;
+		}
+		if (recov_lists != NULL) {
+			daos_recx_ep_list_set_ep_valid(recov_lists,
+						       orw->orw_nr);
+			orwo->orw_rels.ca_arrays = recov_lists;
+			orwo->orw_rels.ca_count = orw->orw_nr;
+		}
 	}
 
 	biod = vos_ioh2desc(ioh);

@@ -627,7 +627,7 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_R3S_SPEC_RANK = 21
     DAOS_OC_EC_K2P1_L32K = 22
     DAOS_OC_EC_K2P2_L32K = 23
-    DAOS_OC_EC_K8P2_L1M = 24
+    DAOS_OC_EC_K4P2_L32K = 24
 
 
 # pylint: disable=no-member

@@ -40,7 +40,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(21)
+#define OBJ_TGT_INLINE_NR	(20)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -665,13 +665,15 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 
 static int
 obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
-		    struct obj_auxi_args *obj_auxi)
+		    struct dc_obj_epoch *epoch, struct obj_auxi_args *obj_auxi)
 {
 	struct obj_reasb_req	*reasb_req = &obj_auxi->reasb_req;
 	daos_obj_id_t		 oid = obj->cob_md.omd_id;
 	struct daos_oclass_attr	*oca;
 	int			 rc = 0;
 
+	if (epoch != NULL)
+		reasb_req->orr_epoch = *epoch;
 	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
 		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n",
 			DP_OID(oid));
@@ -715,50 +717,6 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	}
 
 	return rc;
-}
-
-static int
-obj_ec_get_degrade(struct obj_auxi_args *obj_auxi, uint16_t fail_tgt_idx,
-		   uint32_t *parity_tgt_idx)
-{
-	struct obj_reasb_req	*reasb_req = &obj_auxi->reasb_req;
-	uint16_t		 p = obj_ec_parity_tgt_nr(reasb_req->orr_oca);
-	uint16_t		 k = obj_ec_data_tgt_nr(reasb_req->orr_oca);
-	struct obj_ec_fail_info	*fail_info;
-	uint32_t		*err_list;
-	uint32_t		 nerrs, i;
-	bool			 with_parity = false;
-
-	D_ASSERT(fail_tgt_idx < k + p);
-	fail_info = obj_ec_fail_info_get(reasb_req, true, p);
-	if (fail_info == NULL)
-		return -DER_NOMEM;
-
-	err_list = fail_info->efi_tgt_list;
-	nerrs = fail_info->efi_ntgts;
-	D_ASSERT(nerrs <= p);
-	if (nerrs == p) {
-		D_ERROR("already with %d error targets, not recoverable.\n", p);
-		return -DER_DATA_LOSS;
-	}
-
-	for (i = 0; i < nerrs; i++)
-		D_ASSERT(err_list[i] != fail_tgt_idx);
-
-	err_list[nerrs] = fail_tgt_idx;
-	fail_info->efi_ntgts++;
-	nerrs = fail_info->efi_ntgts;
-
-	for (i = k; i < k + p; i++) {
-		if (!obj_ec_tgt_in_err(err_list, nerrs, i)) {
-			*parity_tgt_idx = i;
-			with_parity = true;
-			break;
-		}
-	}
-	D_ASSERT(with_parity);
-
-	return 0;
 }
 
 bool
@@ -815,8 +773,9 @@ shard_open:
 	}
 
 	if (ec_degrade) {
-		rc = obj_ec_get_degrade(obj_auxi, shard - start_shard,
-					&ec_deg_tgt);
+		rc = obj_ec_get_degrade(&obj_auxi->reasb_req,
+					shard - start_shard, &ec_deg_tgt,
+					false);
 		if (rc) {
 			D_ERROR(DF_OID" obj_ec_get_degrade failed, rc "
 				DF_RC".\n", DP_OID(obj->cob_md.omd_id),
@@ -825,9 +784,13 @@ shard_open:
 		}
 		D_ASSERT(ec_deg_tgt >=
 			 obj_ec_data_tgt_nr(obj_auxi->reasb_req.orr_oca));
-		if (obj_auxi->ec_in_recov) {
-			D_DEBUG(DB_IO, DF_OID" shard %d failed in recovery.\n",
-				DP_OID(obj->cob_md.omd_id), shard);
+		if (obj_auxi->ec_in_recov ||
+		    obj_auxi->reasb_req.orr_singv_only) {
+			D_DEBUG(DB_IO, DF_OID" shard %d failed in recovery(%d) "
+				"or singv fetch(%d).\n",
+				DP_OID(obj->cob_md.omd_id), shard,
+				obj_auxi->ec_in_recov,
+				obj_auxi->reasb_req.orr_singv_only);
 			D_GOTO(out, rc = -DER_BAD_TARGET);
 		}
 		shard = start_shard + ec_deg_tgt;
@@ -2666,8 +2629,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 		fail_info = obj_auxi->reasb_req.orr_fail;
 		new_tgt_fail = obj_auxi->ec_wait_recov &&
 			       task->dt_result == -DER_BAD_TARGET;
-		if (fail_info != NULL && fail_info->efi_nrecx_lists > 0 &&
-		    (task->dt_result == 0 ||  new_tgt_fail)) {
+		if (fail_info != NULL &&
+		    ((obj_auxi->reasb_req.orr_singv_only &&
+		     (task->dt_result == -DER_BAD_TARGET ||
+		      task->dt_result == 0)) ||
+		     (fail_info->efi_nrecx_lists > 0 &&
+		      (task->dt_result == 0 ||  new_tgt_fail)))) {
 			if (obj_auxi->ec_wait_recov && task->dt_result == 0) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
@@ -2958,7 +2925,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;
 
-	rc = obj_rw_req_reassemb(obj, args, obj_auxi);
+	rc = obj_rw_req_reassemb(obj, args, &epoch, obj_auxi);
 	if (rc) {
 		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);
@@ -3082,7 +3049,7 @@ dc_obj_update(tse_task_t *task, struct dc_obj_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
-	rc = obj_rw_req_reassemb(obj, args, obj_auxi);
+	rc = obj_rw_req_reassemb(obj, args, NULL, obj_auxi);
 	if (rc) {
 		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);

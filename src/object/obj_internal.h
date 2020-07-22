@@ -119,6 +119,11 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
+struct dc_obj_epoch {
+	daos_epoch_t	oe_value;
+	bool		oe_uncertain;
+};
+
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -129,6 +134,8 @@ struct dc_object {
  *    it, create oiod/siod to specify each shard/tgt's IO req.
  */
 struct obj_reasb_req {
+	/* epoch for IO (now only used for fetch */
+	struct dc_obj_epoch		 orr_epoch;
 	/* original user input iods/sgls */
 	daos_iod_t			*orr_uiods;
 	d_sg_list_t			*orr_usgls;
@@ -162,7 +169,9 @@ struct obj_reasb_req {
 	/* for iod_size fetched flag */
 					 orr_size_fetched:1,
 	/* only with single target flag */
-					 orr_single_tgt:1;
+					 orr_single_tgt:1,
+	/* only for single-value IO flag */
+					 orr_singv_only:1;
 };
 
 static inline void
@@ -258,11 +267,6 @@ typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			     void *shard_args,
 			     struct daos_shard_tgt *fw_shard_tgts,
 			     uint32_t fw_cnt, tse_task_t *task);
-
-struct dc_obj_epoch {
-	daos_epoch_t	oe_value;
-	bool		oe_uncertain;
-};
 
 /* shard update/punch auxiliary args, must be the first field of
  * shard_rw_args and shard_punch_args.
