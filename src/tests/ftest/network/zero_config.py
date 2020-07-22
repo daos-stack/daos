@@ -203,4 +203,8 @@ class ZeroConfigTest(TestWithServers):
             # Stop the servers
             self.stop_servers()
 
+            # Remove server manger from list so we don't start 2 servers on the
+            # next iteration.
+            self.server_managers.pop()
+
         self.assertEqual(len(err), 0, "{}".format("\n".join(err)))
