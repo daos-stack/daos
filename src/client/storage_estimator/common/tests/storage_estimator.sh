@@ -6,7 +6,7 @@ PROJECT_DIR="${CURRENT_DIR}/../../../../.."
 
 SETUP_FILE=setup_local.sh
 
-pushd ${PROJECT_DIR}
+pushd "${PROJECT_DIR}"
 
 if ! [ -f "${PROJECT_DIR}/utils/sl/${SETUP_FILE}" ]; then
   echo "Error: cannot find ${SETUP_FILE} file"

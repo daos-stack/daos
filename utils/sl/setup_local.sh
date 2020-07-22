@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright (C) 2016-2018 Intel Corporation
 # All rights reserved.
 #
@@ -43,43 +44,43 @@
 # SL_*PREFIX variables to be used by component specific wrapper scripts
 # to setup things like PYTHONPATH, CPATH, LIBRARY_PATH, as needed.
 
-echo $PWD
-VARS_FILE=.build_vars-`uname -s`.sh
+echo "$PWD"
+VARS_FILE=".build_vars-$(uname -s).sh"
 VARS_FILE2=.build_vars.sh
-if [ -f ./${VARS_FILE} ]; then
-  VARS_LOCAL=./${VARS_FILE}
+if [ -f "./${VARS_FILE}" ]; then
+  VARS_LOCAL="./${VARS_FILE}"
 elif [ -f "../${VARS_FILE}" ]; then
-  VARS_LOCAL=../${VARS_FILE}
-elif [ -f ./${VARS_FILE2} ]; then
-  VARS_LOCAL=./${VARS_FILE2}
+  VARS_LOCAL="../${VARS_FILE}"
+elif [ -f "./${VARS_FILE2}" ]; then
+  VARS_LOCAL="./${VARS_FILE2}"
 elif [ -f "../${VARS_FILE2}" ]; then
-  VARS_LOCAL=../${VARS_FILE2}
+  VARS_LOCAL="../${VARS_FILE2}"
 else
   VARS_LOCAL=""
 fi
 
-if [ -z $VARS_LOCAL ]
+if [ -z "${VARS_LOCAL}" ]
 then
-    echo Build vars file $VARS_FILE does not exist
-    echo Cannot continue
+    echo "Build vars file ${VARS_FILE} does not exist"
+    echo "Cannot continue"
     return 1
 fi
 
-echo Build vars file found: $VARS_LOCAL
-. $VARS_LOCAL
+echo "Build vars file found: ${VARS_LOCAL}"
+. ${VARS_LOCAL}
 
-os=`uname`
+os="$(uname)"
 if [ "$os" = "Darwin" ]; then
     if [ -n "$DYLD_LIBRARY_PATH" ]; then
-	export DYLD_LIBRARY_PATH=${SL_LD_LIBRARY_PATH}:$DYLD_LIBRARY_PATH
+	export DYLD_LIBRARY_PATH=${SL_LD_LIBRARY_PATH}:${DYLD_LIBRARY_PATH}
     else
 	export DYLD_LIBRARY_PATH=${SL_LD_LIBRARY_PATH}
     fi
 fi
 
-if [ -z "$SL_PREFIX" ]
+if [ -z "${SL_PREFIX}" ]
 then
-    SL_PREFIX=`pwd`/install
+    SL_PREFIX="$(pwd)/install"
 fi
 
 function export_pythonpath()
@@ -100,11 +101,11 @@ function export_pythonpath()
 
 # look for a valid installation of python
 if [ -x "$(command -v python)" ]; then
-  PYTHON_VERSION=`python -c 'import sys; print(sys.version_info.major)'`
+  PYTHON_VERSION="$(python -c 'import sys; print(sys.version_info.major)')"
   export_pythonpath "${PYTHON_VERSION}"
 # there is still a chance that python3 is installed
 elif [ -x "$(command -v python3)" ]; then
-  PYTHON_VERSION=`python3 -c 'import sys; print(sys.version_info.major)'`
+  PYTHON_VERSION="$(python3 -c 'import sys; print(sys.version_info.major)')"
   export_pythonpath "${PYTHON_VERSION}"
 else
   echo "python not found"
@@ -114,7 +115,7 @@ function in_list()
 {
     this=$1
     shift
-    for dir in $*; do
+    for dir in "$@"; do
         if [ "$dir" == "$this" ]; then
             return 1
         fi
@@ -122,28 +123,38 @@ function in_list()
     return 0
 }
 
-list=`compgen -A variable | grep "SL_.*_PREFIX"`
+function get_old_path()
+{
+  echo $PATH | sed 's/:/ /g'
+}
+
+function create_list()
+{
+  compgen -A variable | grep "SL_.*_PREFIX"
+}
+
+list="$(create_list)"
 # skip the default paths
 added="/ /usr /usr/local"
-old_path=`echo $PATH | sed 's/:/ /g'`
-echo OLD_PATH is $old_path
+old_path="$(get_old_path)"
+echo OLD_PATH is "${old_path}"
 for item in $list; do
-    in_list ${!item} $added
+    in_list "${!item}" "${added}"
     if [ $? -eq 1 ]; then
         continue
     fi
     export ${item}
     added+=" ${!item}"
-    in_list ${!item}/bin $old_path
+    in_list "${!item}/bin" "${old_path}"
     if [ $? -eq 1 ]; then
         continue
     fi
-    if [ -d ${!item}/bin ]; then
+    if [ -d "${!item}/bin" ]; then
         PATH=${!item}/bin:$PATH
     fi
 done
 
-in_list ${SL_PREFIX}/bin $old_path
+in_list "${SL_PREFIX}/bin" "${old_path}"
 if [ $? -eq 0 ]; then
     PATH=$SL_PREFIX/bin:$PATH
 fi
