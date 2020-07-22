@@ -192,8 +192,6 @@ public class IODataDesc {
     resultParsed = true;
   }
 
-  public
-
   /**
    * parse result after JNI call.
    */
