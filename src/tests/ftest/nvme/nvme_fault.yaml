@@ -1,5 +1,3 @@
-server_manager:
-    srv_timeout: 500
 hosts:
   test_servers:
     - server-A
@@ -39,7 +37,7 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 53687091200
+    scm_size: 53687091200 #50GB
     control_method: dmg
 ior:
     clientslots:
@@ -50,9 +48,9 @@ ior:
     iorflags:
         ior_flags: "-w -F -r -R -k -G 1"
         ior_api: DAOS
-        transfer_size: 16777216
+        transfer_size: 16777216 #16M
         objects:
-         RP_3G1:
+         RP_2G1:
           obj_class: "RP_2G1"
 faulttests:
   pool_capacity:

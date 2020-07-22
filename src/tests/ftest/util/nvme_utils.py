@@ -105,7 +105,7 @@ class ServerFillUp(IorTestBase):
         #Get this IOR Parameter from yaml file
         self.ior_flags = self.params.get("ior_flags",
                                          '/run/ior/iorflags/*')
-        self.ior_read_flags = self.params.get("ior_flags",
+        self.ior_read_flags = self.params.get("ior_read_flags",
                                               '/run/ior/iorflags/*', '-r -R')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_transfer_size = str(self.params.get("transfer_size",
@@ -239,12 +239,14 @@ class ServerFillUp(IorTestBase):
 
         return self.get_max_capacity(drive_info)
 
-    def start_ior_thread(self, results, operation='Write'):
+    def start_ior_thread(self, results, operation='WriteRead'):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
             results (queue): queue for returning thread results
-            operation (str): IOR operation for read/write on same container.
+            operation (str): IOR operation for read/write.
+                             Default it will do whatever mention in ior_flags
+                             set.
 
         Returns:
             None
@@ -261,8 +263,18 @@ class ServerFillUp(IorTestBase):
         ior_cmd.api.update(self.ior_apis)
         ior_cmd.transfer_size.update(self.ior_transfer_size)
 
-        #If IOR write calculate the block size based on server % to fill up
-        if 'Write' in operation:
+        #For IOR Read only operation, retrieve the stored container UUID.
+        if 'Read' in operation:
+            ior_cmd.flags.update(self.ior_read_flags)
+            ior_cmd.block_size.update('{}'
+                                      .format(self.container_info
+                                              ["{}{}{}".format(
+                                                  self.ior_daos_oclass,
+                                                  self.ior_apis,
+                                                  self.ior_transfer_size)][1]))
+        #For IOR Other operation, calculate the block size based on server %
+        #to fill up. Store the container UUID for future reading operation.
+        else:
             block_size = self.calculate_ior_block_size()
             ior_cmd.block_size.update('{}'.format(block_size))
             ior_cmd.flags.update(self.ior_flags)
@@ -273,15 +285,6 @@ class ServerFillUp(IorTestBase):
                                         self.ior_apis,
                                         self.ior_transfer_size)] = [str(
                                             uuid.uuid4()), block_size]
-        elif 'Read' in operation:
-            ior_cmd.flags.update(self.ior_read_flags)
-            #Retrieve the container UUID and block size for reading purpose
-            ior_cmd.block_size.update('{}'
-                                      .format(self.container_info
-                                              ["{}{}{}".format(
-                                                  self.ior_daos_oclass,
-                                                  self.ior_apis,
-                                                  self.ior_transfer_size)][1]))
 
         # Define the job manager for the IOR command
         manager = Mpirun(ior_cmd, mpitype="mpich")
@@ -326,14 +329,44 @@ class ServerFillUp(IorTestBase):
             replica_server = _replica[0]
 
         print('Replica Server = {}'.format(replica_server))
+        # Get the NVMe Free size.
         nvme_free_space = self.pool.get_pool_daos_space()["s_free"][1]
+
+        #Get the block size based on the capacity to be filled. For example
+        #If nvme_free_space is 100G and to fill 50% of capacity.
+        #Formula : (107374182400 / 100) * 50.This will give 50% of space to be
+        #filled. Divide with total number of process, 16 process means each
+        #process will write 3.12Gb.last, if there is replica set, For RP_2G1
+        #will divide the individual process size by number of replica.
+        #3.12G (Single process size)/2 (No of Replica) = 1.56G
+        #To fill 50 % of 100GB pool with total 16 process and replica 2, IOR
+        #single process size will be 1.56GB.
         _tmp_block_size = (((nvme_free_space/100)*self.capacity)/self.processes)
         _tmp_block_size = int(_tmp_block_size / int(replica_server))
         block_size = ((_tmp_block_size/int(self.ior_transfer_size))
                       *int(self.ior_transfer_size))
         return block_size
 
-    def set_device_faulty(self):
+    def set_device_faulty(self, server, disk_id):
+        """
+        Set the devices (disk_id) to Faulty and wait for rebuild to complete on
+        given server hostname.
+
+        args:
+            server(string): server hostname where it generate the NVMe fault.
+            disk_id(string): NVMe disk ID where it will be changed to faulty.
+
+        Returns:
+            None
+        """
+        self.dmg.hostlist = server
+        self.dmg.storage_set_faulty(disk_id)
+        # Wait for rebuild to start
+        self.pool.wait_for_rebuild(True)
+        # Wait for rebuild to complete
+        self.pool.wait_for_rebuild(False)
+
+    def set_device_faulty_loop(self):
         """
         Set the devices to Faulty one by one and wait for rebuild to complete.
 
@@ -348,14 +381,7 @@ class ServerFillUp(IorTestBase):
         for num in range(0, self.no_of_servers):
             server = self.hostlist_servers[num]
             for disk_id in range(0, self.no_of_drives):
-                self.dmg.hostlist = server
-                self.dmg.storage_set_faulty(device_ids[server][disk_id])
-
-                # Wait for rebuild to start
-                self.pool.wait_for_rebuild(True)
-
-                # Wait for rebuild to complete
-                self.pool.wait_for_rebuild(False)
+                self.set_device_faulty(server, device_ids[server][disk_id])
 
     def start_ior_load(self):
         """
@@ -404,7 +430,7 @@ class ServerFillUp(IorTestBase):
         if self.set_faulty_device:
             time.sleep(60)
             #Set the device faulty
-            self.set_device_faulty()
+            self.set_device_faulty_loop()
 
         # Wait to finish the thread
         job.join()
