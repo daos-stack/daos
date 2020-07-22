@@ -69,6 +69,8 @@ public class IODataDesc {
 
   private ByteBuf descBuffer;
 
+  private Throwable cause;
+
   private boolean encoded;
 
   private boolean resultParsed;
@@ -105,6 +107,10 @@ public class IODataDesc {
     if (!updateOrFetch) { // for returned actual size and actual record size
       totalDescBufferLen += keyEntries.size() * Constants.ENCODED_LENGTH_EXTENT * 2;
     }
+  }
+
+  public String getDkey() {
+    return dkey;
   }
 
   private String updateOrFetchStr(boolean v) {
@@ -156,6 +162,27 @@ public class IODataDesc {
       }
       encoded = true;
     }
+  }
+
+  /**
+   * if the object update or fetch succeeded.
+   *
+   * @return true or false
+   */
+  public boolean succeeded() {
+    return resultParsed;
+  }
+
+  public Throwable getCause() {
+    return cause;
+  }
+
+  protected void setCause(Throwable de) {
+    cause = de;
+  }
+
+  protected void succeed() {
+    resultParsed = true;
   }
 
   /**
@@ -265,6 +292,7 @@ public class IODataDesc {
   public void release(boolean releaseFetchBuffer) {
     if (descBuffer != null) {
       this.descBuffer.release();
+      descBuffer = null;
     }
     if (releaseFetchBuffer && !updateOrFetch) {
       akeyEntries.forEach(e -> e.releaseFetchDataBuffer());
@@ -475,6 +503,10 @@ public class IODataDesc {
       return 15 + keyBytes.length;
     }
 
+    public String getKey() {
+      return key;
+    }
+
     /**
      * encode entry to the description buffer which will be decoded in native code.<br/>
      *
@@ -507,6 +539,7 @@ public class IODataDesc {
     protected void releaseFetchDataBuffer() {
       if (!updateOrFetch && dataBuffer != null) {
         dataBuffer.release();
+        dataBuffer = null;
       }
     }
 
