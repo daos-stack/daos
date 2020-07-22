@@ -60,6 +60,8 @@ type NVME interface {
 	Cleanup()
 	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
 	CleanLockfiles(logging.Logger, ...string)
+	// Update updates the firmware on a specific PCI address and slot
+	Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) ([]Controller, error)
 }
 
 // Nvme is an NVME interface implementation.

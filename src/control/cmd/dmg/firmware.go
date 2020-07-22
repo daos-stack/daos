@@ -26,6 +26,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -57,12 +58,9 @@ type firmwareQueryCmd struct {
 func (cmd *firmwareQueryCmd) Execute(args []string) error {
 	ctx := context.Background()
 
-	req := &control.FirmwareQueryReq{}
-	if cmd.DeviceType == "nvme" || cmd.DeviceType == "all" {
-		req.NVMe = true
-	}
-	if cmd.DeviceType == "scm" || cmd.DeviceType == "all" {
-		req.SCM = true
+	req := &control.FirmwareQueryReq{
+		SCM:  cmd.isSCMRequested(),
+		NVMe: cmd.isNVMeRequested(),
 	}
 
 	req.SetHostList(cmd.hostlist)
@@ -81,22 +79,44 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.Verbose {
-		if req.SCM {
-			if err := pretty.PrintSCMFirmwareQueryMapVerbose(resp.HostSCMFirmware, &bld); err != nil {
-				return err
-			}
+	printSCMFirmware, printNVMeFirmware := cmd.getDisplayFunctions()
+	if cmd.isSCMRequested() {
+		if err := printSCMFirmware(resp.HostSCMFirmware, &bld); err != nil {
+			return err
 		}
-	} else {
-		if req.SCM {
-			if err := pretty.PrintSCMFirmwareQueryMap(resp.HostSCMFirmware, &bld); err != nil {
-				return err
-			}
+	}
+	if cmd.isNVMeRequested() {
+		if err := printNVMeFirmware(resp.HostNVMeFirmware, &bld); err != nil {
+			return err
 		}
 	}
 	cmd.log.Info(bld.String())
 
 	return resp.Errors()
+}
+
+func (cmd *firmwareQueryCmd) isSCMRequested() bool {
+	return cmd.DeviceType == "scm" || cmd.DeviceType == "all"
+}
+
+func (cmd *firmwareQueryCmd) isNVMeRequested() bool {
+	return cmd.DeviceType == "nvme" || cmd.DeviceType == "all"
+}
+
+type (
+	hostSCMQueryMapPrinter  func(control.HostSCMQueryMap, io.Writer, ...control.PrintConfigOption) error
+	hostNVMeQueryMapPrinter func(control.HostNVMeQueryMap, io.Writer, ...control.PrintConfigOption) error
+)
+
+func (cmd *firmwareQueryCmd) getDisplayFunctions() (hostSCMQueryMapPrinter, hostNVMeQueryMapPrinter) {
+	printSCM := pretty.PrintSCMFirmwareQueryMap
+	printNVMe := pretty.PrintNVMeFirmwareQueryMap
+	if cmd.Verbose {
+		printSCM = pretty.PrintSCMFirmwareQueryMapVerbose
+		printNVMe = pretty.PrintNVMeFirmwareQueryMapVerbose
+	}
+
+	return printSCM, printNVMe
 }
 
 // firmwareUpdateCmd updates the firmware on storage devices on a set of DAOS hosts.
@@ -117,7 +137,7 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 	req := &control.FirmwareUpdateReq{
 		FirmwarePath: cmd.FilePath,
 	}
-	if cmd.DeviceType == "scm" {
+	if cmd.isSCMUpdate() {
 		req.Type = control.DeviceTypeSCM
 	} else {
 		req.Type = control.DeviceTypeNVMe
@@ -138,16 +158,50 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if cmd.Verbose {
-		if err := pretty.PrintSCMFirmwareUpdateMapVerbose(resp.HostSCMResult, &bld); err != nil {
+
+	if cmd.isSCMUpdate() {
+		if err := cmd.printSCMUpdateResult(resp, &bld); err != nil {
 			return err
 		}
 	} else {
-		if err := pretty.PrintSCMFirmwareUpdateMap(resp.HostSCMResult, &bld); err != nil {
+		if err := cmd.printNVMeUpdateResult(resp, &bld); err != nil {
 			return err
 		}
 	}
+
 	cmd.log.Info(bld.String())
 
 	return resp.Errors()
+}
+
+func (cmd *firmwareUpdateCmd) isSCMUpdate() bool {
+	return cmd.DeviceType == "scm"
+}
+
+func (cmd *firmwareUpdateCmd) printSCMUpdateResult(resp *control.FirmwareUpdateResp, out io.Writer) error {
+	if cmd.Verbose {
+		if err := pretty.PrintSCMFirmwareUpdateMapVerbose(resp.HostSCMResult, out); err != nil {
+			return err
+		}
+	} else {
+		if err := pretty.PrintSCMFirmwareUpdateMap(resp.HostSCMResult, out); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (cmd *firmwareUpdateCmd) printNVMeUpdateResult(resp *control.FirmwareUpdateResp, out io.Writer) error {
+	if cmd.Verbose {
+		if err := pretty.PrintNVMeFirmwareUpdateMapVerbose(resp.HostNVMeResult, out); err != nil {
+			return err
+		}
+	} else {
+		if err := pretty.PrintNVMeFirmwareUpdateMap(resp.HostNVMeResult, out); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

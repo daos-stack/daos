@@ -313,3 +313,20 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 func (b *spdkBackend) Reset() error {
 	return b.script.Reset()
 }
+
+func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
+	if err := b.Init(); err != nil {
+		return err
+	}
+
+	_, err := getController(pciAddr, b.binding.controllers)
+	if err != nil {
+		return err
+	}
+
+	if _, err := b.binding.Update(b.log, pciAddr, path, slot); err != nil {
+		return err
+	}
+
+	return nil
+}

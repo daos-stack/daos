@@ -31,6 +31,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -91,17 +92,18 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 	}
 
 	pbResp := new(ctlpb.FirmwareUpdateResp)
-
+	var err error
 	switch pbReq.Type {
 	case ctlpb.FirmwareUpdateReq_SCM:
-		err := svc.updateSCM(pbReq, pbResp)
-		if err != nil {
-			return nil, err
-		}
+		err = svc.updateSCM(pbReq, pbResp)
 	case ctlpb.FirmwareUpdateReq_NVMe:
-		return nil, errors.New("NVMe device update not implemented")
+		err = svc.updateNVMe(pbReq, pbResp)
 	default:
-		return nil, errors.New("unrecognized device type")
+		err = errors.New("unrecognized device type")
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	svc.log.Debug("responding to FirmwareUpdate RPC")
@@ -124,6 +126,25 @@ func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctl
 		}
 		pbRes.Error = res.Error
 		pbResp.ScmResults = append(pbResp.ScmResults, pbRes)
+	}
+	return nil
+}
+
+func (svc *ControlService) updateNVMe(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
+	updateResp, err := svc.bdev.UpdateFirmware(bdev.FirmwareUpdateRequest{
+		FirmwarePath: pbReq.FirmwarePath,
+	})
+	if err != nil {
+		return err
+	}
+
+	pbResp.NvmeResults = make([]*ctlpb.NvmeFirmwareUpdateResp, 0, len(updateResp.Results))
+	for _, res := range updateResp.Results {
+		pbRes := &ctlpb.NvmeFirmwareUpdateResp{
+			PciAddr: res.Device.PciAddr,
+			Error:   res.Error,
+		}
+		pbResp.NvmeResults = append(pbResp.NvmeResults, pbRes)
 	}
 	return nil
 }

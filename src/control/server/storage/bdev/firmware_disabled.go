@@ -20,32 +20,16 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+// +build !firmware
 
-// +build firmware
-
-package main
+package bdev
 
 import (
-	"os"
-
-	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func main() {
-	app := pbin.NewApp().WithAllowedCallers("daos_server")
+// firmwareProvider does nothing if firmware operations are not enabled.
+type firmwareProvider struct{}
 
-	if logPath, set := os.LookupEnv(pbin.DaosFWLogFileEnvVar); set {
-		app = app.WithLogFile(logPath)
-	}
-
-	app.AddHandler(scm.FirmwareQueryMethod, &scmQueryHandler{})
-	app.AddHandler(scm.FirmwareUpdateMethod, &scmUpdateHandler{})
-	app.AddHandler(bdev.FirmwareUpdateMethod, &nvmeUpdateHandler{})
-
-	err := app.Run()
-	if err != nil {
-		os.Exit(1)
-	}
-}
+// setupFirmwareProvider does nothing if firmware operations are not enabled.
+func (p *Provider) setupFirmwareProvider(log logging.Logger) {}

@@ -44,6 +44,7 @@ type (
 		ScanRes       storage.NvmeControllers
 		ScanErr       error
 		vmdEnabled    bool // set through public access methods
+		UpdateErr     error
 	}
 
 	MockBackend struct {
@@ -129,6 +130,10 @@ func (mb *MockBackend) EnableVmd() {
 
 func (mb *MockBackend) IsVmdEnabled() bool {
 	return mb.cfg.vmdEnabled
+}
+
+func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {
+	return mb.cfg.UpdateErr
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {

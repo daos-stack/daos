@@ -160,6 +160,8 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 }
 
 func TestCtlSvc_FirmwareUpdate(t *testing.T) {
+	mockNVMe := storage.MockNvmeControllers(3)
+
 	for name, tc := range map[string]struct {
 		bmbc           *bdev.MockBackendConfig
 		smbc           *scm.MockBackendConfig
@@ -197,12 +199,6 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				Type: ctlpb.FirmwareUpdateReq_DeviceType(0xFFFF),
 			},
 			expErr: errors.New("unrecognized device type"),
-		},
-		"NVMe - not implemented yet": {
-			req: ctlpb.FirmwareUpdateReq{
-				Type: ctlpb.FirmwareUpdateReq_NVMe,
-			},
-			expErr: errors.New("NVMe device update not implemented"),
 		},
 		"SCM - discovery failed": {
 			req: ctlpb.FirmwareUpdateReq{
@@ -275,6 +271,72 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 					{
 						Module: &ctlpb.ScmModule{Uid: "TestUid3"},
 						Error:  "mock update",
+					},
+				},
+			},
+		},
+		"NVMe - scan failed": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_NVMe,
+				FirmwarePath: "/some/path",
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("mock scan failed"),
+			},
+			expErr: errors.New("mock scan failed"),
+		},
+		"NVMe - no devices": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_NVMe,
+				FirmwarePath: "/some/path",
+			},
+			bmbc:   &bdev.MockBackendConfig{},
+			expErr: errors.New("no NVMe device controllers"),
+		},
+		"NVMe - success with devices": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_NVMe,
+				FirmwarePath: "/some/path",
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: mockNVMe,
+			},
+			expResp: &ctlpb.FirmwareUpdateResp{
+				NvmeResults: []*ctlpb.NvmeFirmwareUpdateResp{
+					{
+						PciAddr: mockNVMe[0].PciAddr,
+					},
+					{
+						PciAddr: mockNVMe[1].PciAddr,
+					},
+					{
+						PciAddr: mockNVMe[2].PciAddr,
+					},
+				},
+			},
+		},
+		"NVMe - failure with devices": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_NVMe,
+				FirmwarePath: "/some/path",
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes:   mockNVMe,
+				UpdateErr: errors.New("mock update"),
+			},
+			expResp: &ctlpb.FirmwareUpdateResp{
+				NvmeResults: []*ctlpb.NvmeFirmwareUpdateResp{
+					{
+						PciAddr: mockNVMe[0].PciAddr,
+						Error:   "mock update",
+					},
+					{
+						PciAddr: mockNVMe[1].PciAddr,
+						Error:   "mock update",
+					},
+					{
+						PciAddr: mockNVMe[2].PciAddr,
+						Error:   "mock update",
 					},
 				},
 			},
