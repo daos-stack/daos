@@ -22,7 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-import os
+import subprocess
+from getpass import getuser
 import general_utils
 
 from ClusterShell.NodeSet import NodeSet
@@ -50,6 +51,25 @@ class DfuseSparseFile(IorTestBase):
         finally:
             # Stop the servers and agents
             super(DfuseSparseFile, self).tearDown()
+
+    def get_remote_file_size(self, file_name):
+        """Obtain remote file size.
+
+          Args:
+            file_name (str): name of remote file
+
+          Returns:
+            integer value of file size
+        """
+
+        cmd = "ssh" " {}@{}" " stat -c%s {}".format(
+            getuser(), self.hostlist_clients[0], file_name)
+        try:
+            result = subprocess.check_output(cmd, shell=True)
+        except subprocess.CalledProcessError as err:
+            self.fail("Get remote file size method failed with: {}".format(err))
+
+        return int(result)
 
     def get_nvme_free_space(self, display=True):
         """Display pool free space.
@@ -126,40 +146,40 @@ class DfuseSparseFile(IorTestBase):
 
         # create large fle and perform write to it so that if goes out of
         # space.
-        sparse_file = unicode(self.dfuse.mount_dir.value + "/" +
-                              "sparsefile.txt")
+        sparse_file = str(self.dfuse.mount_dir.value + "/" +
+                          "sparsefile.txt")
         self.execute_cmd(u"touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
-                      os.path.getsize(sparse_file))
-
+                      self.get_remote_file_size(sparse_file))
         # open file
         file_obj = open(sparse_file, 'r+')
         # set file size to max available nvme size
         file_obj.truncate(self.space_before)
         self.log.info("File size (in bytes) after truncate: %s",
-                      os.path.getsize(sparse_file))
+                      self.get_remote_file_size(sparse_file))
         # verifying the file size got set to desired value
-        self.assertTrue(os.path.getsize(sparse_file) == self.space_before)
+        self.assertTrue(
+            self.get_remote_file_size(sparse_file) == self.space_before)
 
         # write to the first byte of the file with char 'A'
         dd_first_byte = u"echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
                         format(sparse_file)
         self.execute_cmd(dd_first_byte)
         self.log.info("File size (in bytes) after writing first byte: %s",
-                      os.path.getsize(sparse_file))
+                      self.get_remote_file_size(sparse_file))
         # verify file did not got overriten after dd write.
-        self.assertTrue(os.path.getsize(sparse_file) == self.space_before)
-
+        self.assertTrue(
+            self.get_remote_file_size(sparse_file) == self.space_before)
 
         # write to the 1024th byte position of the file
         dd_1024_byte = u"echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
                        bs=1 count=1".format(sparse_file)
         self.execute_cmd(dd_1024_byte)
         self.log.info("File size (in bytes) after writing first byte: %s",
-                      os.path.getsize(sparse_file))
+                      self.get_remote_file_size(sparse_file))
         # verify file did not got overriten after dd write.
-        self.assertTrue(os.path.getsize(sparse_file) == self.space_before)
-
+        self.assertTrue(
+            self.get_remote_file_size(sparse_file) == self.space_before)
 
         # Obtainer the value of 1st byte and 1024th bytes in the file and
         # compare their values, they should be same.
