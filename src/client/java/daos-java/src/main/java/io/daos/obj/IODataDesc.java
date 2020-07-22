@@ -67,6 +67,8 @@ public class IODataDesc {
 
   private int totalRequestBufLen;
 
+  private int totalRequestSize;
+
   private ByteBuf descBuffer;
 
   private Throwable cause;
@@ -102,6 +104,7 @@ public class IODataDesc {
             updateOrFetchStr(updateOrFetch));
       }
       totalRequestBufLen += entry.getDescLen();
+      totalRequestSize += entry.getRequestSize();
     }
     totalDescBufferLen += totalRequestBufLen;
     if (!updateOrFetch) { // for returned actual size and actual record size
@@ -111,6 +114,10 @@ public class IODataDesc {
 
   public String getDkey() {
     return dkey;
+  }
+
+  public int getTotalRequestSize() {
+    return totalRequestSize;
   }
 
   private String updateOrFetchStr(boolean v) {
@@ -184,6 +191,8 @@ public class IODataDesc {
   protected void succeed() {
     resultParsed = true;
   }
+
+  public
 
   /**
    * parse result after JNI call.
@@ -541,6 +550,10 @@ public class IODataDesc {
         dataBuffer.release();
         dataBuffer = null;
       }
+    }
+
+    public int getRequestSize() {
+      return dataSize;
     }
 
     @Override
