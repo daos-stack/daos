@@ -206,9 +206,13 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 	memset(recx, 0, sizeof(*recx));
 
 	/* setup dkey */
-	memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
-	d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
-			strlen(cred->tc_dbuf));
+	if (ts_flat_obj) {
+		memcpy(cred->tc_dbuf, dkey, sizeof(uint64_t));
+		d_iov_set(&cred->tc_dkey, cred->tc_dbuf, sizeof(int64_t));
+	} else {
+		memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
+		d_iov_set(&cred->tc_dkey, cred->tc_dbuf, strlen(cred->tc_dbuf));
+	}
 
 	/* setup I/O descriptor */
 	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
@@ -264,6 +268,22 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 	return rc;
 }
 
+static int	*ts_dkeys;
+static int	 ts_dkey_idx;
+
+static void
+dkey_gen_int(char *buf, int rank)
+{
+	uint64_t *ptr = (uint64_t *)buf;
+
+	if (!ts_dkeys)
+		ts_dkeys = dts_rand_iarr_alloc(ts_dkey_p_obj, 0, true);
+
+	*ptr = ts_dkeys[(ts_dkey_idx + rank) % ts_dkey_p_obj];
+	ts_dkey_idx++;
+}
+
+
 static int
 dkey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type, char *dkey,
 		     daos_epoch_t *epoch)
@@ -278,7 +298,10 @@ dkey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type, char *dkey,
 	D_ASSERT(indices != NULL);
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
-		dts_key_gen(akey, DTS_KEY_LEN, "walker");
+		if (ts_flat_obj)
+			dkey_gen_int(dkey, ts_ctx.tsc_mpi_rank);
+		else
+			dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 		for (j = 0; j < ts_recx_p_akey; j++) {
 			rc = akey_update_or_fetch(oh, op_type, dkey, akey,
 						  epoch, indices, j, NULL);
@@ -390,7 +413,11 @@ objects_verify(void)
 		++epoch;
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		for (j = 0; j < ts_dkey_p_obj; j++) {
-			dts_key_gen(dkey, DTS_KEY_LEN, "blade");
+			if (ts_flat_obj)
+				dkey_gen_int(dkey, ts_ctx.tsc_mpi_rank);
+			else
+				dts_key_gen(dkey, DTS_KEY_LEN, "blade");
+
 			for (k = 0; k < ts_akey_p_dkey; k++) {
 				rc = dkey_verify(ts_ohs[i], dkey, &epoch);
 				if (rc != 0)
@@ -441,7 +468,10 @@ objects_fetch(d_rank_t rank)
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			char	 dkey[DTS_KEY_LEN];
 
-			dts_key_gen(dkey, DTS_KEY_LEN, "blade");
+			if (ts_flat_obj)
+				dkey_gen_int(dkey, ts_ctx.tsc_mpi_rank);
+			else
+				dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 			rc = dkey_update_or_fetch(ts_ohs[i], TS_DO_FETCH, dkey,
 						  &epoch);
 			if (rc != 0)

@@ -1331,9 +1331,8 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 {
 	daos_size_t		sgls_size;
 	crt_bulk_perm_t		bulk_perm;
+	int			i, j;
 	int			rc = 0;
-	int			i;
-	int			j;
 
 	if (obj_auxi->io_retry)
 		return 0;
