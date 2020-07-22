@@ -384,9 +384,57 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 					       rpt->rt_rebuild_ver,
 					       tgts, shards,
 					       rpt->rt_tgts_num, myrank);
+	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM) {
+		struct pl_obj_layout *layout = NULL;
+		bool still_needed;
+
+		/*
+		 * Compute placement for the object, then check if the layout
+		 * still includes the current rank. If not, the object can be
+		 * deleted/reclaimed because it is no longer reachable
+		 */
+		rc = pl_obj_place(map, &md, NULL, &layout);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
+						      layout, myrank);
+		if (!still_needed) {
+			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
+				" which is no longer reachable on this rank",
+				DP_UOID(oid));
+			/*
+			 * It's possible this object might still be being
+			 * accessed elsewhere - retry until until it is possible
+			 * to delete
+			 */
+			do {
+				rc = vos_obj_delete(param->ip_hdl, oid);
+				if (rc == -DER_BUSY || rc == -DER_INPROGRESS) {
+					D_DEBUG(DB_REBUILD,
+						"got "DF_RC
+						" error while deleting object "
+						DF_UOID
+						" during reclaim; retrying\n",
+						DP_RC(rc), DP_UOID(oid));
+					ABT_thread_yield();
+				}
+			} while (rc == -DER_BUSY || rc == -DER_INPROGRESS);
+
+			if (rc != 0) {
+				D_ERROR("Failed to delete object "DF_UOID
+					" during reclaim: "DF_RC,
+					DP_UOID(oid), DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		}
+
+		/* Reclaim does not require sending any objects */
+		rebuild_nr = 0;
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
+			 rpt->rt_rebuild_op == RB_OP_RECLAIM ||
 			 rpt->rt_rebuild_op == RB_OP_ADD);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */

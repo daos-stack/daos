@@ -738,10 +738,12 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	D_ASSERT(rebuild_op == RB_OP_FAIL ||
 		 rebuild_op == RB_OP_DRAIN ||
-		 rebuild_op == RB_OP_ADD);
+		 rebuild_op == RB_OP_ADD ||
+		 rebuild_op == RB_OP_RECLAIM);
 	match_status = (rebuild_op == RB_OP_FAIL ? PO_COMP_ST_DOWN :
 			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DRAIN :
-			PO_COMP_ST_UP);
+			rebuild_op == RB_OP_ADD ? PO_COMP_ST_UP :
+			PO_COMP_ST_UPIN); /* RB_OP_RECLAIM */
 
 	if (tgts != NULL && tgts->pti_number > 0) {
 		bool changed = false;
@@ -767,9 +769,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 						target->ta_comp.co_rank);
 			if (dom && dom->do_comp.co_status == match_status) {
 				D_DEBUG(DB_REBUILD, "rebuild %s rank %u/%u\n",
-					rebuild_op == RB_OP_FAIL ? "fail" :
-					rebuild_op == RB_OP_DRAIN ? "drain" :
-					rebuild_op == RB_OP_ADD ? "add" : "???",
+					RB_OP_STR(rebuild_op),
 					target->ta_comp.co_rank,
 					target->ta_comp.co_id);
 			}
@@ -1197,6 +1197,7 @@ done:
 				" UPIN: %d\n", task->dst_tgts.pti_ids[0].pti_id,
 				DP_UUID(task->dst_pool_uuid), rc);
 		}
+		/* No change needed for RB_OP_RECLAIM */
 	}
 iv_stop:
 	/* NB: even if there are some failures, the leader should

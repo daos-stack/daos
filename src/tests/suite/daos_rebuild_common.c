@@ -43,6 +43,7 @@ enum REBUILD_TEST_OP_TYPE {
 	RB_OP_TYPE_FAIL,
 	RB_OP_TYPE_DRAIN,
 	RB_OP_TYPE_ADD,
+	RB_OP_TYPE_RECLAIM,
 };
 
 static void
@@ -131,6 +132,14 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			case RB_OP_TYPE_DRAIN:
 				rebuild_drain_tgt(args, args_cnt, ranks[i],
 						tgts ? tgts[i] : -1);
+				break;
+			case RB_OP_TYPE_RECLAIM:
+				/*
+				 * There is no externally accessible operation
+				 * that triggers reclaim. It is automatically
+				 * scheduled after reintegration or addition
+				 */
+				D_ASSERT(op_type != RB_OP_TYPE_RECLAIM);
 				break;
 			}
 			/* Sleep 5 seconds to make sure the rebuild start */

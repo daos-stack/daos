@@ -41,11 +41,13 @@ typedef enum {
 	RB_OP_FAIL,
 	RB_OP_DRAIN,
 	RB_OP_ADD,
+	RB_OP_RECLAIM,
 } daos_rebuild_opc_t;
 
 #define RB_OP_STR(rb_op) ((rb_op) == RB_OP_FAIL ? "RB_OP_FAIL" : \
 			  (rb_op) == RB_OP_DRAIN ? "RB_OP_DRAIN" : \
 			  (rb_op) == RB_OP_ADD ? "RB_OP_ADD" : \
+			  (rb_op) == RB_OP_RECLAIM ? "RB_OP_RECLAIM" : \
 			  "RB_OP_UNKNOWN")
 
 int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
