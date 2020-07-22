@@ -99,18 +99,20 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		}
 	}
 
-	ratio := 1.00
-	if nvmeBytes > 0 {
-		ratio = float64(scmBytes) / float64(nvmeBytes)
-	}
+	if !c.jsonOutputEnabled() {
+		ratio := 1.00
+		if nvmeBytes > 0 {
+			ratio = float64(scmBytes) / float64(nvmeBytes)
+		}
 
-	if ratio < minScmNvmeRatio {
-		c.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
-			"performance will suffer!\n", ratio*100)
+		if ratio < minScmNvmeRatio {
+			c.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
+				"performance will suffer!\n", ratio*100)
+		}
+		c.log.Infof("Creating DAOS pool with %s SCM and %s NVMe storage "+
+			"(%0.2f %% ratio)\n", humanize.Bytes(scmBytes),
+			humanize.Bytes(nvmeBytes), ratio*100)
 	}
-	c.log.Infof("Creating DAOS pool with %s SCM and %s NVMe storage "+
-		"(%0.2f %% ratio)\n", humanize.Bytes(scmBytes),
-		humanize.Bytes(nvmeBytes), ratio*100)
 
 	var acl *control.AccessControlList
 	if c.ACLFile != "" {

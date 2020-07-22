@@ -224,7 +224,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-		       struct test_pool *opool, daos_prop_t *prop);
+		       struct test_pool *opool);
 int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 

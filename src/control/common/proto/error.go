@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 )
 
@@ -38,6 +39,9 @@ const (
 	// AnnotatedFaultType defines a stable identifier for Faults serialized as gRPC
 	// status metadata.
 	AnnotatedFaultType = "proto.fault.Fault"
+	// AnnotatedDaosStatusType defines an identifier for DaosStatus errors serialized
+	// as gRPC status metadata.
+	AnnotatedDaosStatusType = "proto.drpc.DaosStatus"
 )
 
 // FaultFromMeta converts a map of metadata into a *fault.Fault.
@@ -77,6 +81,19 @@ func AnnotateError(in error) error {
 			return out.Err()
 		}
 	}
+	if s, isStatus := errors.Cause(in).(drpc.DaosStatus); isStatus {
+		out, attachErr := status.New(codes.Internal, s.Error()).
+			WithDetails(&errdetails.ErrorInfo{
+				Reason: AnnotatedDaosStatusType,
+				Domain: "DAOS",
+				Metadata: map[string]string{
+					"Status": strconv.Itoa(int(s)),
+				},
+			})
+		if attachErr == nil {
+			return out.Err()
+		}
+	}
 
 	return in
 }
@@ -98,4 +115,27 @@ func UnwrapFault(st *status.Status) (*fault.Fault, error) {
 		}
 	}
 	return nil, st.Err()
+}
+
+// UnwrapDaosStatus ranges through the status details, looking
+// for the first DaosStatus it can successfully return. Returns
+// the original status as an error if no DaosStatus is unwrapped.
+func UnwrapDaosStatus(st *status.Status) (drpc.DaosStatus, error) {
+	if st == nil {
+		return drpc.DaosSuccess, nil
+	}
+
+	for _, detail := range st.Details() {
+		switch t := detail.(type) {
+		case *errdetails.ErrorInfo:
+			if t.Reason == AnnotatedDaosStatusType {
+				i, err := strconv.Atoi(t.Metadata["Status"])
+				if err != nil {
+					return drpc.DaosMiscError, err
+				}
+				return drpc.DaosStatus(i), nil
+			}
+		}
+	}
+	return drpc.DaosMiscError, st.Err()
 }

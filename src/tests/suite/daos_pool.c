@@ -667,10 +667,9 @@ setup_containers(void **state, daos_size_t nconts)
 	lcarg->tpool.svc.rl_ranks = lcarg->tpool.ranks;
 	lcarg->tpool.pool_size = 1 << 28;	/* 256MB SCM */
 	/* Create the pool */
-	rc = test_setup_pool_create(state, NULL /* ipool */, &lcarg->tpool,
-				    NULL /* prop */);
+	rc = test_setup_pool_create(state, NULL /* ipool */, &lcarg->tpool);
 	if (rc != 0) {
-		print_message("setup: daos_pool_create failed: %d\n", rc);
+		print_message("setup: pool creation failed: %d\n", rc);
 		goto err_free_lcarg;
 	}
 

@@ -58,7 +58,7 @@ int		objclass;
  */
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-	struct test_pool *opool, daos_prop_t *prop)
+		       struct test_pool *opool)
 {
 	test_arg_t		*arg = *state;
 	struct test_pool	*outpool;
@@ -95,12 +95,12 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		}
 
 		/*
-		 * Set the default NVMe partition size to "2 * scm_size", so
+		 * Set the default NVMe partition size to "4 * scm_size", so
 		 * that we need to specify SCM size only for each test case.
 		 *
 		 * Set env POOL_NVME_SIZE to overwrite the default NVMe size.
 		 */
-		nvme_size = outpool->pool_size * 2;
+		nvme_size = outpool->pool_size * 4;
 		env = getenv("POOL_NVME_SIZE");
 		if (env) {
 			size_gb = atoi(env);
@@ -110,12 +110,12 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		print_message("setup: creating pool, SCM size="DF_U64" GB, "
 			      "NVMe size="DF_U64" GB\n",
 			      (outpool->pool_size >> 30), nvme_size >> 30);
-		rc = daos_pool_create(0, arg->uid, arg->gid, arg->group,
-				      NULL, "pmem", outpool->pool_size,
-				      nvme_size, prop, &outpool->svc,
-				      outpool->pool_uuid, NULL);
+		rc = dmg_pool_create(dmg_config_file,
+				     arg->uid, arg->gid, arg->group,
+				     NULL, outpool->pool_size, nvme_size,
+				     &outpool->svc, outpool->pool_uuid);
 		if (rc)
-			print_message("daos_pool_create failed, rc: %d\n", rc);
+			print_message("dmg_pool_create failed, rc: %d\n", rc);
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
 				       DP_UUID(outpool->pool_uuid));
@@ -263,8 +263,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool, NULL /*opool */,
-					      po_prop);
+		return test_setup_pool_create(state, pool, NULL /*opool */);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
@@ -416,9 +415,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 
 	daos_pool_disconnect(poh, NULL);
 
-	rc = daos_pool_destroy(pool->pool_uuid, arg->group, 1, NULL);
+	rc = dmg_pool_destroy(dmg_config_file,
+			      pool->pool_uuid, arg->group, 1);
 	if (rc && rc != -DER_TIMEDOUT)
-		print_message("daos_pool_destroy failed, rc: %d\n", rc);
+		print_message("dmg_pool_destroy failed, rc: %d\n", rc);
 	if (rc == 0)
 		print_message("teardown: destroyed pool "DF_UUIDF"\n",
 			      DP_UUID(pool->pool_uuid));
