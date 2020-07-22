@@ -49,7 +49,13 @@ def human_to_bytes(h_size):
     Returns:
         int: value translated to bytes.
     """
-    units = {"b": 1, "kb": (2**10), "mb": (2**20), "gb": (2**30)}
+    units = {"b": 1,
+             "kb": (2**10),
+             "k": (2**10),
+             "mb": (2**20),
+             "m": (2**20),
+             "gb": (2**30),
+             "g": (2**30)}
     pattern = r"([0-9.]+|[a-zA-Z]+)"
     val, unit = re.findall(pattern, h_size)
 
@@ -58,7 +64,7 @@ def human_to_bytes(h_size):
     if unit.lower() in units:
         val = val * units[unit.lower()]
     else:
-        print("Unit not found! Provide a valid unit i.e: b, kb, mb, gb")
+        print("Unit not found! Provide a valid unit i.e: b,k,kb,m,mb,g,gb")
         val = -1
 
     return val
