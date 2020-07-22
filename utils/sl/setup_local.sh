@@ -123,11 +123,6 @@ function in_list()
     return 0
 }
 
-function get_old_path()
-{
-  echo $PATH | sed 's/:/ /g'
-}
-
 function create_list()
 {
   compgen -A variable | grep "SL_.*_PREFIX"
@@ -136,7 +131,7 @@ function create_list()
 list="$(create_list)"
 # skip the default paths
 added="/ /usr /usr/local"
-old_path="$(get_old_path)"
+old_path="${PATH//:/ }"
 echo OLD_PATH is "${old_path}"
 for item in $list; do
     in_list "${!item}" "${added}"
