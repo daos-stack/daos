@@ -334,6 +334,7 @@ main(int argc, char **argv)
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
 		{"help",	no_argument,		NULL,	'h'},
+		{"object",	required_argument,	NULL,	'X'},
 		{NULL,		0,			NULL,	0}
 	};
 
@@ -395,6 +396,11 @@ main(int argc, char **argv)
 			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
 			if (test_io_dir == NULL)
 				return -1;
+		case 'X':
+			objclass = daos_oclass_name2id(optarg);
+			if (objclass == OC_UNKNOWN)
+				return -1;
+			break;
 		case CHECKSUM_ARG_VAL_TYPE:
 			dt_csum_type = daos_checksum_test_arg2type(optarg);
 			break;

@@ -71,7 +71,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	 * on ds_cont_child purging.
 	 */
 	D_ASSERT(cont->sc_agg_req != NULL);
-	if (sched_req_is_aborted(cont->sc_agg_req))
+	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
 	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
@@ -189,7 +189,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	}
 
 	if (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy() &&
-	    sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
+	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
 		D_DEBUG(DB_EPC, "Pool reclaim strategy is lazy, service is "
 			"busy and no space pressure\n");
 		return false;
@@ -376,9 +376,11 @@ cont_aggregate_ult(void *arg)
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			D_ERROR(DF_CONT": VOS aggregate failed. %d\n",
+			D_ERROR(DF_CONT": VOS aggregate failed. "DF_RC"\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-				rc);
+				DP_RC(rc));
+			/* Sleep 2 seconds when last aggregation failed */
+			msecs = 2ULL * 1000;
 		}
 
 		if (dss_ult_exiting(cont->sc_agg_req))
@@ -404,7 +406,7 @@ cont_start_agg_ult(struct ds_cont_child *cont)
 	if (cont->sc_agg_req != NULL)
 		return 0;
 
-	rc = dss_ult_create(cont_aggregate_ult, cont, DSS_ULT_AGGREGATE,
+	rc = dss_ult_create(cont_aggregate_ult, cont, DSS_ULT_GC,
 			    DSS_TGT_SELF, 0, &agg_ult);
 	if (rc) {
 		D_ERROR(DF_CONT"[%d]: Failed to create aggregation ULT. %d\n",
@@ -968,7 +970,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
 		DP_CONT(child->spc_uuid, co_uuid));
 
 	D_ASSERT(child != NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_IO, &child->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_FETCH, &child->spc_uuid);
 	req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get sched req\n",

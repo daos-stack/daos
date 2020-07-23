@@ -1102,7 +1102,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	uint64_t			 stripe_rec_nr =
 						 obj_ec_stripe_rec_nr(oca);
 	uint64_t			 cell_rec_nr = obj_ec_cell_rec_nr(oca);
-	struct obj_ec_recx		*full_ec_recx;
+	struct obj_ec_recx		*full_ec_recx = NULL;
 	uint32_t			 tidx[OBJ_EC_MAX_M] = {0};
 	uint32_t			 ridx[OBJ_EC_MAX_M] = {0};
 	d_iov_t				 iov_inline[EC_INLINE_IOVS];
@@ -1390,6 +1390,28 @@ out:
 }
 
 int
+obj_ec_encode(struct obj_reasb_req *reasb_req)
+{
+	uint32_t	i;
+	int		rc;
+
+	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
+		rc = obj_ec_recx_encode(reasb_req, reasb_req->orr_oid,
+					&reasb_req->orr_iods[i],
+					&reasb_req->orr_sgls[i],
+					reasb_req->orr_oca,
+					&reasb_req->orr_recxs[i]);
+		if (rc) {
+			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
+				DP_OID(reasb_req->orr_oid), rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+int
 obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 		 struct daos_oclass_attr *oca, struct obj_reasb_req *reasb_req,
 		 bool update)
@@ -1399,6 +1421,8 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 	uint32_t		 iod_nr = args->nr;
 	int			 i, rc = 0;
 
+	reasb_req->orr_oid = oid;
+	reasb_req->orr_iod_nr = iod_nr;
 	if (!reasb_req->orr_size_fetch) {
 		reasb_req->orr_uiods = iods;
 		reasb_req->orr_usgls = sgls;
@@ -1447,14 +1471,6 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 			goto out;
 		}
 
-		rc = obj_ec_recx_encode(reasb_req, oid, &iods[i], &sgls[i], oca,
-					&reasb_req->orr_recxs[i]);
-		if (rc) {
-			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
-				DP_OID(oid), rc);
-			goto out;
-		}
-
 		rc = obj_ec_recx_reasb(&iods[i], &sgls[i], oca, reasb_req, i,
 				       update);
 		if (rc) {
@@ -1462,6 +1478,12 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 				DP_OID(oid), rc);
 			goto out;
 		}
+	}
+
+	rc = obj_ec_encode(reasb_req);
+	if (rc) {
+		D_ERROR(DF_OID" obj_ec_encode failed %d.\n", DP_OID(oid), rc);
+		goto out;
 	}
 
 	for (i = 0; !reasb_req->orr_size_fetched && i < obj_ec_tgt_nr(oca);
@@ -1657,7 +1679,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 				return rc;
 		}
 	}
-	daos_recx_ep_list_set_ep_valid(dst_list, nr);
+	daos_recx_ep_list_set_ep_valid(recov_lists, nr);
 	return 0;
 }
 
@@ -2007,7 +2029,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 			rtask = &fail_info->efi_recov_tasks[tidx++];
 			rtask->ert_iod.iod_name = iod->iod_name;
 			rtask->ert_iod.iod_type = iod->iod_type;
-			rtask->ert_iod.iod_size = iod->iod_size;
+			rtask->ert_iod.iod_size = recx_ep->re_rec_size;
 			rtask->ert_iod.iod_nr = 1;
 			rtask->ert_iod.iod_recxs = &recx_ep->re_recx;
 			rtask->ert_epoch = recx_ep->re_ep;
