@@ -145,6 +145,13 @@ enum obj_rpc_flags {
 	ORF_EPOCH_UNCERTAIN	= (1 << 6),
 	/** Erasure coding degraded fetch flag */
 	ORF_EC_DEGRADED		= (1 << 7),
+	/** The epoch (e.g., orw_epoch for OBJ_RW) is a hint. */
+	ORF_EPOCH_HINT		= (1 << 8),
+	/**
+	 * ENUM without an epoch range. oei_epr.epr_lo is epoch_first;
+	 * oei_epr.epr_hi is epoch.
+	 */
+	ORF_ENUM_WITHOUT_EPR	= (1 << 9),
 };
 
 struct obj_iod_array {
@@ -170,6 +177,7 @@ struct obj_iod_array {
 	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
 	((uuid_t)		(orw_co_uuid)		CRT_VAR) \
 	((uint64_t)		(orw_epoch)		CRT_VAR) \
+	((uint64_t)		(orw_epoch_first)	CRT_VAR) \
 	((uint64_t)		(orw_api_flags)		CRT_VAR) \
 	((uint64_t)		(orw_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(orw_map_ver)		CRT_VAR) \
@@ -188,6 +196,7 @@ struct obj_iod_array {
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \
 	((uint32_t)		(orw_map_version)	CRT_VAR) \
+	((uint64_t)		(orw_epoch)		CRT_VAR) \
 	((daos_size_t)		(orw_iod_sizes)		CRT_ARRAY) \
 	((daos_size_t)		(orw_data_sizes)	CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
@@ -222,6 +231,7 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 #define DAOS_OSEQ_OBJ_KEY_ENUM	/* output fields */		 \
 	((int32_t)		(oeo_ret)		CRT_VAR) \
 	((uint32_t)		(oeo_map_version)	CRT_VAR) \
+	((uint64_t)		(oeo_epoch)		CRT_VAR) \
 	((uint32_t)		(oeo_num)		CRT_VAR) \
 	((uint32_t)		(oeo_padding)		CRT_VAR) \
 	((uint64_t)		(oeo_size)		CRT_VAR) \
@@ -265,6 +275,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((uuid_t)		(okqi_co_uuid)		CRT_VAR) \
 	((daos_unit_oid_t)	(okqi_oid)		CRT_VAR) \
 	((uint64_t)		(okqi_epoch)		CRT_VAR) \
+	((uint64_t)		(okqi_epoch_first)	CRT_VAR) \
 	((uint32_t)		(okqi_map_ver)		CRT_VAR) \
 	((uint32_t)		(okqi_flags)		CRT_VAR) \
 	((uint64_t)		(okqi_api_flags)	CRT_VAR) \
@@ -275,6 +286,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 #define DAOS_OSEQ_OBJ_QUERY_KEY	/* output fields */		 \
 	((int32_t)		(okqo_ret)		CRT_VAR) \
 	((uint32_t)		(okqo_map_version)	CRT_VAR) \
+	((uint64_t)		(okqo_epoch)		CRT_VAR) \
 	((uint32_t)		(okqo_flags)		CRT_VAR) \
 	((uint32_t)		(okqo_pad32_1)		CRT_VAR) \
 	((daos_key_t)		(okqo_dkey)		CRT_VAR) \

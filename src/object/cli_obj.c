@@ -1717,7 +1717,7 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 
 /* check if the obj request is valid */
 static int
-obj_req_valid(tse_task_t *task, void *args, int opc, struct dc_obj_epoch *epoch,
+obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	      uint32_t *pm_ver)
 {
 	struct obj_auxi_args	*obj_auxi;
@@ -1808,6 +1808,15 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dc_obj_epoch *epoch,
 			if (l_args->nr == NULL || *l_args->nr == 0) {
 				D_ERROR("Invalid API parameter.\n");
 				D_GOTO(out, rc = -DER_INVAL);
+			}
+
+			if (opc == DAOS_OBJ_RPC_ENUMERATE &&
+			    daos_handle_is_valid(l_args->th) &&
+			    l_args->eprs != NULL) {
+				D_ERROR("mutually exclusive th and eprs "
+					"specified for listing objects\n");
+				rc = -DER_INVAL;
+				goto out;
 			}
 		}
 
@@ -1991,8 +2000,8 @@ shard_task_abort(tse_task_t *task, void *arg)
 
 static void
 shard_auxi_set_param(struct shard_auxi_args *shard_arg, uint32_t map_ver,
-		     uint32_t shard, uint32_t tgt_id,
-		     struct dc_obj_epoch *epoch, uint16_t ec_tgt_idx)
+		     uint32_t shard, uint32_t tgt_id, struct dtx_epoch *epoch,
+		     uint16_t ec_tgt_idx)
 {
 	shard_arg->epoch = *epoch;
 	shard_arg->shard = shard;
@@ -2002,7 +2011,7 @@ shard_auxi_set_param(struct shard_auxi_args *shard_arg, uint32_t map_ver,
 }
 
 struct shard_task_sched_args {
-	struct dc_obj_epoch	tsa_epoch;
+	struct dtx_epoch	tsa_epoch;
 	bool			tsa_scheded;
 };
 
@@ -2031,8 +2040,8 @@ shard_task_sched(tse_task_t *task, void *arg)
 		target = obj_shard2tgtid(shard_auxi->obj, shard_auxi->shard);
 		if (obj_auxi->req_tgts.ort_srv_disp ||
 		    obj_retry_error(task->dt_result) ||
-		    sched_arg->tsa_epoch.oe_value !=
-		    shard_auxi->epoch.oe_value ||
+		    dtx_epoch_equal(&sched_arg->tsa_epoch,
+				    &shard_auxi->epoch) ||
 		    target != shard_auxi->target) {
 			D_DEBUG(DB_IO, "shard %d, dt_result %d, target %d @ "
 				"map_ver %d, target %d @ last_map_ver %d, "
@@ -2067,7 +2076,7 @@ out:
 }
 
 static void
-obj_shard_task_sched(struct obj_auxi_args *obj_auxi, struct dc_obj_epoch *epoch)
+obj_shard_task_sched(struct obj_auxi_args *obj_auxi, struct dtx_epoch *epoch)
 {
 	struct shard_task_sched_args	sched_arg;
 
@@ -2149,9 +2158,27 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 static int
 shard_io_task(tse_task_t *task)
 {
-	struct shard_auxi_args		*shard_auxi;
+	struct shard_auxi_args	*shard_auxi;
+	daos_handle_t		 th;
+	int			 rc;
 
 	shard_auxi = tse_task_buf_embedded(task, sizeof(*shard_auxi));
+
+	/*
+	 * If this task belongs to a TX, and if the epoch we got earlier
+	 * doesn't contain a "chosen" TX epoch, then we may need to reinit the
+	 * task. (See dc_tx_get_epoch.) Because tse_task_reinit is less
+	 * practical in the middle of a task, we do it here at the beginning of
+	 * shard_io_task.
+	 */
+	th = shard_auxi->obj_auxi->th;
+	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(&shard_auxi->epoch)) {
+		rc = dc_tx_get_epoch(task, th, &shard_auxi->epoch);
+		if (rc == DC_TX_GE_REINIT)
+			return tse_task_reinit(task);
+		else if (rc < 0)
+			return rc;
+	}
 
 	return shard_io(task, shard_auxi);
 }
@@ -2163,7 +2190,7 @@ typedef int (*shard_io_prep_cb_t)(struct shard_auxi_args *shard_auxi,
 
 struct shard_task_reset_arg {
 	struct obj_req_tgts	*req_tgts;
-	struct dc_obj_epoch	 epoch;
+	struct dtx_epoch	 epoch;
 };
 
 static int
@@ -2188,7 +2215,7 @@ shard_task_reset_param(tse_task_t *shard_task, void *arg)
 
 static int
 obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
-	       uint64_t dkey_hash, uint32_t map_ver, struct dc_obj_epoch *epoch,
+	       uint64_t dkey_hash, uint32_t map_ver, struct dtx_epoch *epoch,
 	       shard_io_prep_cb_t io_prep_cb, shard_io_cb_t io_cb,
 	       tse_task_t *obj_task)
 {
@@ -2198,11 +2225,16 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	struct shard_auxi_args	*shard_auxi;
 	struct daos_shard_tgt	*tgt;
 	uint32_t		 i, tgts_nr;
+	bool			 require_shard_task = false;
 	int			 rc = 0;
 
 	tgt = req_tgts->ort_shard_tgts;
 	tgts_nr = req_tgts->ort_srv_disp ? req_tgts->ort_grp_nr :
 		  req_tgts->ort_grp_nr * req_tgts->ort_grp_size;
+
+	/* See shard_io_task. */
+	if (daos_handle_is_valid(obj_auxi->th) && !dtx_epoch_chosen(epoch))
+		require_shard_task = true;
 
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
 	if (obj_auxi->io_retry && obj_auxi->args_initialized &&
@@ -2256,7 +2288,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 					shard_task_reset_param, &reset_arg);
 			}
 			goto task_sched;
-		} else {
+		} else if (!require_shard_task) {
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);
@@ -2270,7 +2302,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	}
 
 	/* if with only one target, need not to create separate shard task */
-	if (tgts_nr == 1) {
+	if (tgts_nr == 1 && !require_shard_task) {
 		shard_auxi = obj_embedded_shard_arg(obj_auxi);
 		D_ASSERT(shard_auxi != NULL);
 		shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
@@ -2922,7 +2954,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	uint8_t                 *tgt_bitmap = NIL_BITMAP;
 	unsigned int		 map_ver = 0;
 	uint64_t		 dkey_hash;
-	struct dc_obj_epoch	 epoch;
+	struct dtx_epoch	 epoch;
 	uint32_t		 shard = 0;
 	int			 rc;
 	uint8_t                  csum_bitmap = 0;
@@ -3052,7 +3084,7 @@ out_task:
 }
 
 int
-dc_obj_update(tse_task_t *task, struct dc_obj_epoch *epoch, uint32_t map_ver,
+dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	      daos_obj_update_t *args)
 {
 	struct obj_auxi_args	*obj_auxi;
@@ -3131,7 +3163,7 @@ int
 dc_obj_update_task(tse_task_t *task)
 {
 	daos_obj_update_t	*args = dc_task_get_args(task);
-	struct dc_obj_epoch	 epoch = {0};
+	struct dtx_epoch	 epoch = {0};
 	unsigned int		 map_ver = 0;
 	int			 rc;
 
@@ -3175,7 +3207,7 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	unsigned int		 map_ver = 0;
 	struct obj_list_arg	 list_args;
 	uint64_t		 dkey_hash;
-	struct dc_obj_epoch	 epoch;
+	struct dtx_epoch	 epoch;
 	int			 shard = -1;
 	int			 rc;
 
@@ -3347,7 +3379,7 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 }
 
 int
-dc_obj_punch(tse_task_t *task, struct dc_obj_epoch *epoch, uint32_t map_ver,
+dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	     enum obj_rpc_opc opc, daos_obj_punch_t *api_args)
 {
 	struct obj_auxi_args	*obj_auxi;
@@ -3401,7 +3433,7 @@ out_task:
 static int
 obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 {
-	struct dc_obj_epoch	 epoch = {0};
+	struct dtx_epoch	 epoch = {0};
 	unsigned int		 map_ver = 0;
 	int			 rc;
 
@@ -3557,10 +3589,23 @@ shard_query_key_task(tse_task_t *task)
 	daos_obj_query_key_t		*api_args;
 	struct dc_object		*obj;
 	struct dc_obj_shard		*obj_shard;
+	daos_handle_t			 th;
+	struct dtx_epoch		*epoch;
 	int				 rc;
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	obj = args->kqa_auxi.obj;
+	th = args->kqa_auxi.obj_auxi->th;
+	epoch = &args->kqa_auxi.epoch;
+
+	/* See the similar shard_io_task. */
+	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
+		rc = dc_tx_get_epoch(task, th, epoch);
+		if (rc == DC_TX_GE_REINIT)
+			return tse_task_reinit(task);
+		else if (rc < 0)
+			return rc;
+	}
 
 	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver,
 			    &obj_shard);
@@ -3576,13 +3621,12 @@ shard_query_key_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->kqa_dkey_hash,
 				 sizeof(args->kqa_dkey_hash));
 	api_args = args->kqa_api_args;
-	rc = dc_obj_shard_query_key(obj_shard, &args->kqa_auxi.epoch,
-				    api_args->flags, obj, api_args->dkey,
-				    api_args->akey, api_args->recx,
-				    args->kqa_coh_uuid, args->kqa_cont_uuid,
-				    &args->kqa_dti,
+	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
+				    api_args->dkey, api_args->akey,
+				    api_args->recx, args->kqa_coh_uuid,
+				    args->kqa_cont_uuid, &args->kqa_dti,
 				    &args->kqa_auxi.obj_auxi->map_ver_reply,
-				    task);
+				    th, task);
 
 	obj_shard_close(obj_shard);
 	return rc;
@@ -3628,7 +3672,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	unsigned int		replicas;
 	unsigned int		map_ver = 0;
 	uint64_t		dkey_hash;
-	struct dc_obj_epoch	epoch;
+	struct dtx_epoch	epoch;
 	struct dtx_id		dti;
 	int			i = 0;
 	int			rc;
@@ -3833,7 +3877,7 @@ dc_obj_sync(tse_task_t *task)
 	struct daos_obj_sync_args	*args;
 	struct obj_auxi_args		*obj_auxi = NULL;
 	struct dc_object		*obj = NULL;
-	struct dc_obj_epoch		 epoch;
+	struct dtx_epoch		 epoch;
 	uint32_t			 map_ver;
 	int				 rc;
 	int				 i;
@@ -3850,7 +3894,8 @@ dc_obj_sync(tse_task_t *task)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
 	epoch.oe_value = args->epoch;
-	epoch.oe_uncertain = false;
+	epoch.oe_first = epoch.oe_value;
+	epoch.oe_flags = 0;
 
 	rc = obj_ptr2pm_ver(obj, &map_ver);
 	if (rc != 0) {

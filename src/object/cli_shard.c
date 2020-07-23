@@ -262,6 +262,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	struct rw_cb_args	*rw_args = arg;
 	struct obj_rw_in	*orw;
 	struct obj_rw_out	*orwo;
+	daos_handle_t		th;
+	struct dtx_epoch	*epoch;
 	daos_iod_t		*iods;
 	uint64_t		*sizes;
 	int			opc;
@@ -298,6 +300,22 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 */
 		D_ERROR("RPC %d failed: %d\n", opc, ret);
 		D_GOTO(out, ret);
+	}
+
+	/*
+	 * orwo->orw_epoch may be set even when the status is nonzero (e.g.,
+	 * -DER_TX_RESTART and -DER_INPROGRESS). If this task is a TX "epoch
+	 * task", we shall call dc_tx_set_epoch.
+	 */
+	th = rw_args->shard_args->api_args->th;
+	epoch = &rw_args->shard_args->auxi.epoch;
+	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
+		rc = dc_tx_set_epoch(task, th, orwo->orw_epoch);
+		if (rc != 0) {
+			D_ERROR("failed to set epoch "DF_U64"\n",
+				orwo->orw_epoch);
+			goto out;
+		}
 	}
 
 	rc = obj_reply_get_status(rw_args->rpc);
@@ -438,6 +456,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			goto out;
 
 	}
+
 out:
 	crt_req_decref(rw_args->rpc);
 	obj_shard_decref(rw_args->dobj);
@@ -505,8 +524,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		}
 	}
 
-	if (auxi->epoch.oe_uncertain)
+	if (auxi->epoch.oe_flags & DTX_EPOCH_UNCERTAIN)
 		flags |= ORF_EPOCH_UNCERTAIN;
+	if (auxi->epoch.oe_flags & DTX_EPOCH_HINT)
+		flags |= ORF_EPOCH_HINT;
 
 	rc = dc_cont_hdl2uuid(shard->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
 	if (rc != 0)
@@ -561,6 +582,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	orw->orw_api_flags = api_args->flags;
 	orw->orw_epoch = auxi->epoch.oe_value;
+	orw->orw_epoch_first = auxi->epoch.oe_first;
 	orw->orw_dkey_hash = args->dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
@@ -739,8 +761,6 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(opi->opi_co_uuid, args->pa_cont_uuid);
 	daos_dti_copy(&opi->opi_dti, &args->pa_dti);
 	opi->opi_flags = args->pa_auxi.flags;
-	if (args->pa_auxi.epoch.oe_uncertain)
-		opi->opi_flags |= ORF_EPOCH_UNCERTAIN;
 	opi->opi_dti_cos.ca_count = 0;
 	opi->opi_dti_cos.ca_arrays = NULL;
 
@@ -776,6 +796,8 @@ struct obj_enum_args {
 	daos_size_t		*eaa_size;
 	unsigned int		*eaa_map_ver;
 	d_iov_t			*csum;
+	struct dtx_epoch	*epoch;
+	daos_handle_t		*th;
 };
 
 /**
@@ -981,8 +1003,19 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	}
 
 	oeo = crt_reply_get(enum_args->rpc);
-	rc = obj_reply_get_status(enum_args->rpc);
 
+	/* See the similar dc_rw_cb. */
+	if (daos_handle_is_valid(*enum_args->th) &&
+	    !dtx_epoch_chosen(enum_args->epoch)) {
+		rc = dc_tx_set_epoch(task, *enum_args->th, oeo->oeo_epoch);
+		if (rc != 0) {
+			D_ERROR("failed to set epoch "DF_U64"\n",
+				oeo->oeo_epoch);
+			goto out;
+		}
+	}
+
+	rc = obj_reply_get_status(enum_args->rpc);
 	if (rc != 0) {
 		if (rc == -DER_KEY2BIG) {
 			D_DEBUG(DB_IO, "key size "DF_U64" too big.\n",
@@ -1120,18 +1153,26 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
 	oei->oei_map_ver	= args->la_auxi.map_ver;
-	if (args->la_auxi.epoch.oe_uncertain)
+	if (args->la_auxi.epoch.oe_flags & DTX_EPOCH_UNCERTAIN)
 		oei->oei_flags |= ORF_EPOCH_UNCERTAIN;
+	if (args->la_auxi.epoch.oe_flags & DTX_EPOCH_HINT)
+		oei->oei_flags |= ORF_EPOCH_HINT;
 	if (obj_args->eprs != NULL && opc == DAOS_OBJ_RPC_ENUMERATE) {
 		oei->oei_epr = *obj_args->eprs;
 		/*
 		 * If an epoch range is specified, we shall not assume any
-		 * epoch uncertainty.
+		 * epoch uncertainty or epoch hint.
 		 */
 		oei->oei_flags &= ~ORF_EPOCH_UNCERTAIN;
+		oei->oei_flags &= ~ORF_EPOCH_HINT;
 	} else {
-		oei->oei_epr.epr_lo = 0;
+		/*
+		 * Note that we reuse oei_epr as "epoch_first" and "epoch" to
+		 * save space.
+		 */
+		oei->oei_epr.epr_lo = args->la_auxi.epoch.oe_first;
 		oei->oei_epr.epr_hi = args->la_auxi.epoch.oe_value;
+		oei->oei_flags |= ORF_ENUM_WITHOUT_EPR;
 	}
 
 	oei->oei_nr		= *obj_args->nr;
@@ -1192,6 +1233,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.csum = obj_args->csum;
 	enum_args.eaa_map_ver = &args->la_auxi.map_ver;
 	enum_args.eaa_recxs = obj_args->recxs;
+	enum_args.epoch = &args->la_auxi.epoch;
+	enum_args.th = &args->la_api_args->th;
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
 	if (rc != 0)
@@ -1229,6 +1272,8 @@ struct obj_query_key_cb_args {
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
 	struct dc_object	*obj;
+	struct dtx_epoch	epoch;
+	daos_handle_t		th;
 };
 
 static int
@@ -1258,6 +1303,18 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	}
 
 	okqo = crt_reply_get(cb_args->rpc);
+
+	/* See the similar dc_rw_cb. */
+	if (daos_handle_is_valid(cb_args->th) &&
+	    !dtx_epoch_chosen(&cb_args->epoch)) {
+		rc = dc_tx_set_epoch(task, cb_args->th, okqo->okqo_epoch);
+		if (rc != 0) {
+			D_ERROR("failed to set epoch "DF_U64"\n",
+				okqo->okqo_epoch);
+			goto out;
+		}
+	}
+
 	rc = obj_reply_get_status(rpc);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -1346,12 +1403,12 @@ out:
 }
 
 int
-dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dc_obj_epoch *epoch,
+dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 		       uint32_t flags, struct dc_object *obj, daos_key_t *dkey,
 		       daos_key_t *akey, daos_recx_t *recx,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       struct dtx_id *dti, unsigned int *map_ver,
-		       tse_task_t *task)
+		       daos_handle_t th, tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
 	struct obj_query_key_in		*okqi;
@@ -1391,6 +1448,8 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dc_obj_epoch *epoch,
 	cb_args.akey	= akey;
 	cb_args.recx	= recx;
 	cb_args.obj	= obj;
+	cb_args.epoch	= *epoch;
+	cb_args.th	= th;
 
 	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args,
 				       sizeof(cb_args));
@@ -1402,14 +1461,17 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dc_obj_epoch *epoch,
 
 	okqi->okqi_map_ver		= *map_ver;
 	okqi->okqi_epoch		= epoch->oe_value;
+	okqi->okqi_epoch_first		= epoch->oe_first;
 	okqi->okqi_api_flags		= flags;
 	okqi->okqi_oid			= oid;
 	if (dkey != NULL)
 		okqi->okqi_dkey		= *dkey;
 	if (akey != NULL)
 		okqi->okqi_akey		= *akey;
-	if (epoch->oe_uncertain)
+	if (epoch->oe_flags & DTX_EPOCH_UNCERTAIN)
 		okqi->okqi_flags	= ORF_EPOCH_UNCERTAIN;
+	if (epoch->oe_flags & DTX_EPOCH_HINT)
+		okqi->okqi_flags	= ORF_EPOCH_HINT;
 	uuid_copy(okqi->okqi_pool_uuid, pool->dp_pool);
 	uuid_copy(okqi->okqi_co_hdl, coh_uuid);
 	uuid_copy(okqi->okqi_co_uuid, cont_uuid);

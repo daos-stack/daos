@@ -224,24 +224,24 @@ check:
 
 /* Return the epoch uncertainty upper bound. */
 static daos_epoch_t
-dtx_epoch_bound(daos_epoch_t epoch, daos_epoch_t epoch_orig, bool uncertain)
+dtx_epoch_bound(struct dtx_epoch *epoch)
 {
 	daos_epoch_t limit;
 
-	if (!uncertain)
+	if (!(epoch->oe_flags & DTX_EPOCH_UNCERTAIN))
 		/*
 		 * We are told that the epoch has no uncertainty, even if it's
 		 * still within the potential uncertainty window.
 		 */
-		return epoch;
+		return epoch->oe_value;
 
-	limit = epoch_orig + crt_hlc_epsilon_get();
-	if (epoch >= limit)
+	limit = epoch->oe_first + crt_hlc_epsilon_get();
+	if (epoch->oe_value >= limit)
 		/*
 		 * The epoch is already out of the potential uncertainty
 		 * window.
 		 */
-		return epoch;
+		return epoch->oe_value;
 
 	return limit;
 }
@@ -250,18 +250,24 @@ dtx_epoch_bound(daos_epoch_t epoch, daos_epoch_t epoch_orig, bool uncertain)
  * Init local dth handle.
  */
 static int
-dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, daos_epoch_t epoch,
-		bool epoch_uncertain, uint16_t sub_modification_cnt,
-		uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-		struct dtx_id *dti_cos, int dti_cos_cnt,
-		struct dtx_memberships *mbs, bool leader,
+dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
+		uint16_t sub_modification_cnt, uint32_t pm_ver,
+		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
+		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, struct dtx_handle *dth)
 {
 	dth->dth_xid = *dti;
 	dth->dth_coh = coh;
-	dth->dth_epoch = epoch;
-	dth->dth_epoch_bound = dtx_epoch_bound(epoch, dti->dti_hlc,
-					       epoch_uncertain);
+
+	if (!dtx_epoch_chosen(epoch)) {
+		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
+			DF_U64" first="DF_U64" flags="DF_X64"\n",
+			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
+			epoch->oe_flags);
+		return -DER_INVAL;
+	}
+	dth->dth_epoch = epoch->oe_value;
+	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 
 	dth->dth_leader_oid = *leader_oid;
 	dth->dth_ver = pm_ver;
@@ -457,8 +463,6 @@ out:
  * \param cont		[IN]	Pointer to the container.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
- * \param epoch_uncertain
- *			[IN]	Epoch is uncertain.
  * \param sub_modification_cnt
  *			[IN]	Sub modifications count
  * \param pm_ver	[IN]	Pool map version for the DTX.
@@ -474,10 +478,10 @@ out:
  */
 int
 dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-		 daos_epoch_t epoch, bool epoch_uncertain,
-		 uint16_t sub_modification_cnt, uint32_t pm_ver,
-		 daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
-		 int dti_cos_cnt, struct daos_shard_tgt *tgts, int tgt_cnt,
+		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
+		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+		 struct dtx_id *dti_cos, int dti_cos_cnt,
+		 struct daos_shard_tgt *tgts, int tgt_cnt,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
@@ -507,10 +511,9 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		return 0;
 
 init:
-	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, epoch_uncertain,
-			     sub_modification_cnt, pm_ver, leader_oid,
-			     dti_cos, dti_cos_cnt, mbs, true,
-			     tgt_cnt == 0 ? true : false, dth);
+	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
+			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
+			     true, tgt_cnt == 0 ? true : false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
 		"dti_cos_cnt %d: "DF_RC"\n",
@@ -755,8 +758,6 @@ out:
  * \param cont		[IN]	Pointer to the container.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
- * \param epoch_uncertain
- *			[IN]	Epoch is uncertain.
  * \param sub_modification_cnt
  *			[IN]	Sub modifications count.
  * \param pm_ver	[IN]	Pool map version for the DTX.
@@ -771,8 +772,8 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t epoch,
-	  bool epoch_uncertain, uint16_t sub_modification_cnt,
+dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt,
 	  struct dtx_memberships *mbs, struct dtx_handle *dth)
@@ -786,9 +787,9 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t epoch,
 		return 0;
 	}
 
-	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, epoch_uncertain,
-			     sub_modification_cnt, pm_ver, leader_oid,
-			     dti_cos, dti_cos_cnt, mbs, false, false, dth);
+	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
+			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
+			     false, false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
 		"dti_cos_cnt %d: "DF_RC"\n",

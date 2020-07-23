@@ -3256,6 +3256,7 @@ io_obj_key_query(void **state)
 	daos_recx_t	recx;
 	uint64_t	dkey_val, akey_val;
 	uint32_t	flags;
+	daos_handle_t	th;
 	int		rc;
 
 	/** open object */
@@ -3339,15 +3340,24 @@ io_obj_key_query(void **state)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
+	/*
+	 * Not essential to this test, opening a TX helps us exercise
+	 * dc_tx_get_epoch through the daos_obj_query_key fanout.
+	 */
+	rc = daos_tx_open(arg->coh, &th, 0, NULL);
+	assert_int_equal(rc, 0);
+
 	flags = 0;
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
-	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx,
-				NULL);
+	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey.iov_buf, 10);
 	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
 	assert_int_equal(recx.rx_idx, 50);
 	assert_int_equal(recx.rx_nr, 1);
+
+	rc = daos_tx_close(th, NULL);
+	assert_int_equal(rc, 0);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);

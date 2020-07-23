@@ -179,27 +179,14 @@ dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 		 d_iov_t *csum)
 {
 	tse_task_t	*task;
-	daos_handle_t	coh, th;
 	int		rc;
 
-	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epr->epr_hi, DAOS_TF_RDONLY, &th);
-	if (rc)
-		return rc;
-
-	rc = dc_obj_list_obj_task_create(oh, th, epr, dkey, akey, size, nr,
-					 kds, sgl, anchor, dkey_anchor,
-					 akey_anchor, true, NULL,
+	rc = dc_obj_list_obj_task_create(oh, DAOS_TX_NONE, epr, dkey, akey,
+					 size, nr, kds, sgl, anchor,
+					 dkey_anchor, akey_anchor, true, NULL,
 					 dsc_scheduler(), csum, &task);
 	if (rc)
 		return rc;
-
-	rc = tse_task_register_comp_cb(task, tx_close_cb, &th, sizeof(th));
-	if (rc) {
-		dc_tx_local_close(th);
-		tse_task_complete(task, rc);
-		return rc;
-	}
 
 	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
 }

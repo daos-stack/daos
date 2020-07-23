@@ -130,7 +130,7 @@ struct dtx_memberships {
 struct dtx_id {
 	/** The uuid of the transaction */
 	uuid_t			dti_uuid;
-	/** The HLC timestamp for the transaction */
+	/** The HLC timestamp (not epoch) of the transaction */
 	uint64_t		dti_hlc;
 };
 
@@ -158,12 +158,6 @@ daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
 }
 
-static inline daos_epoch_t
-daos_dti2epoch(struct dtx_id *dti)
-{
-	return dti->dti_hlc;
-}
-
 #define DF_DTI		DF_UUID"."DF_X64
 #define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
@@ -186,5 +180,32 @@ enum daos_dtx_alb {
 	/* available but with dirty modification or garbage */
 	ALB_AVAILABLE_DIRTY	= 2,
 };
+
+/** Epoch context of a DTX */
+struct dtx_epoch {
+	daos_epoch_t	oe_value;	/**< epoch or epoch hint */
+	daos_epoch_t	oe_first;	/**< first epoch chosen */
+	uint64_t	oe_flags;	/**< DTX_EPOCH_UNCERTAIN, etc. */
+};
+
+/* dtx_epoch.oe_flags */
+#define DTX_EPOCH_UNCERTAIN	(1ULL << 0)	/**< oe_value is uncertain */
+#define DTX_EPOCH_HINT		(1ULL << 1)	/**< oe_value is a hint */
+
+/** Does \a epoch contain a chosen TX epoch? */
+static inline bool
+dtx_epoch_chosen(struct dtx_epoch *epoch)
+{
+	return (!(epoch->oe_flags & DTX_EPOCH_HINT) && epoch->oe_value != 0 &&
+		epoch->oe_value != DAOS_EPOCH_MAX);
+}
+
+/** Are \a and \b equal? */
+static inline bool
+dtx_epoch_equal(struct dtx_epoch *a, struct dtx_epoch *b)
+{
+	return (a->oe_value == b->oe_value && a->oe_first == b->oe_first &&
+		a->oe_flags == b->oe_flags);
+}
 
 #endif /* __DAOS_DTX_H__ */

@@ -150,10 +150,10 @@ int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int
 dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-		 daos_epoch_t epoch, bool epoch_uncertain,
-		 uint16_t sub_modification_cnt, uint32_t pm_ver,
-		 daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
-		 int dti_cos_cnt, struct daos_shard_tgt *tgts, int tgt_cnt,
+		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
+		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+		 struct dtx_id *dti_cos, int dti_cos_cnt,
+		 struct daos_shard_tgt *tgts, int tgt_cnt,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
@@ -165,8 +165,8 @@ typedef int (*dtx_sub_func_t)(struct dtx_leader_handle *dlh, void *arg, int idx,
 			      dtx_sub_comp_cb_t comp_cb);
 
 int
-dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t epoch,
-	  bool epoch_uncertain, uint16_t sub_modification_cnt,
+dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt,
 	  struct dtx_memberships *mbs, struct dtx_handle *dth);
