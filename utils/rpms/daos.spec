@@ -181,16 +181,13 @@ This is the package needed to build software with the DAOS library.
 
 %define conf_dir %{_sysconfdir}/daos
 
-scons %{?_smp_mflags}      \
-      --config=force       \
+scons --config=force       \
       --no-rpath           \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot}
 
 %install
-#scons %{?_smp_mflags}                 \
-#      --config=force                  \
 scons --config=force                  \
       --no-rpath                      \
       --install-sandbox=%{?buildroot} \
