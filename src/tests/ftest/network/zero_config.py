@@ -179,16 +179,16 @@ class ZeroConfigTest(TestWithServers):
             self.add_server_manager(config_file)
             self.configure_manager(
                 "server",
-                self.server_managers[idx],
+                self.server_managers[0],
                 self.hostlist_servers,
                 self.hostfile_servers_slots,
                 self.hostlist_servers)
             self.assertTrue(
-                self.server_managers[idx].set_config_value(
+                self.server_managers[0].set_config_value(
                     "fabric_iface", exp_iface),
                 "Error updating daos_server 'fabric_iface' config opt")
             self.assertTrue(
-                self.server_managers[idx].set_config_value(
+                self.server_managers[0].set_config_value(
                     "pinned_numa_node", idx),
                 "Error updating daos_server 'pinned_numa_node' config opt")
 
