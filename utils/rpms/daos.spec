@@ -184,6 +184,7 @@ This is the package needed to build software with the DAOS library.
 scons %{?_smp_mflags}      \
       --config=force       \
       --no-rpath           \
+      BUILD_TYPE=debug     \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot}
