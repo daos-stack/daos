@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import threading
-import uuid
 import re
 import time
 import os
@@ -30,11 +29,7 @@ import os
 from general_utils import run_task
 from command_utils_base import CommandFailure
 from ior_test_base import IorTestBase
-from write_host_file import write_host_file
 from test_utils_pool import TestPool
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
-from mpio_utils import MpioUtils
 
 try:
     # python 3.x
@@ -99,20 +94,10 @@ class ServerFillUp(IorTestBase):
         self.update_log_file_names()
         # Start the servers and agents
         super(ServerFillUp, self).setUp()
-        # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
-        #Get this IOR Parameter from yaml file
-        self.ior_flags = self.params.get("ior_flags",
-                                         '/run/ior/iorflags/*')
+        self.hostfile_clients = None
         self.ior_read_flags = self.params.get("ior_read_flags",
-                                              '/run/ior/iorflags/*', '-r -R')
-        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_transfer_size = str(self.params.get("transfer_size",
-                                                     '/run/ior/iorflags/*'))
-        self.ior_daos_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*', "SX")
-        self.processes = self.params.get("slots", "/run/ior/clientslots/*")
+                                              '/run/ior/iorflags/*',
+                                              '-F -r -R -G 1')
         #Get the number of daos_io_servers
         self.daos_io_servers = (self.server_managers[0].manager
                                 .job.yaml.server_params)
@@ -143,9 +128,6 @@ class ServerFillUp(IorTestBase):
     def get_nvme_lsblk(self):
         """Get NVMe lsblk from servers.
 
-        Args:
-            None
-
         Returns:
             dict: Dictionary of server mapping with disk ID and size
                   'wolf-A': {'nvme2n1': '1600321314816'}.
@@ -171,9 +153,6 @@ class ServerFillUp(IorTestBase):
 
     def get_nvme_readlink(self):
         """Get NVMe readlink from servers.
-
-        Args:
-            None
 
         Returns:
             dict: Dictionary of server readlink pci mapping with disk ID
@@ -205,9 +184,6 @@ class ServerFillUp(IorTestBase):
 
     def get_server_capacity(self):
         """Get Server Pool NVMe storage capacity.
-
-        Args:
-            None
 
         Returns:
             int: Maximum NVMe storage capacity for pool creation.
@@ -247,79 +223,49 @@ class ServerFillUp(IorTestBase):
             operation (str): IOR operation for read/write.
                              Default it will do whatever mention in ior_flags
                              set.
-
-        Returns:
-            None
         """
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
-
-        # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.daos_oclass.update(self.ior_daos_oclass)
-        ior_cmd.api.update(self.ior_apis)
-        ior_cmd.transfer_size.update(self.ior_transfer_size)
-
-        #For IOR Read only operation, retrieve the stored container UUID.
+        _create_cont = True
+        #For IOR Read only operation, retrieve the stored container UUID
         if 'Read' in operation:
-            ior_cmd.flags.update(self.ior_read_flags)
-            ior_cmd.block_size.update('{}'
-                                      .format(self.container_info
-                                              ["{}{}{}".format(
-                                                  self.ior_daos_oclass,
-                                                  self.ior_apis,
-                                                  self.ior_transfer_size)][1]))
+            _create_cont = False
+            self.ior_cmd.flags.value = self.ior_read_flags
+            self.ior_cmd.daos_cont.value = self.container_info[
+                "{}{}{}".format(self.ior_cmd.daos_oclass.value,
+                                self.ior_cmd.api.value,
+                                self.ior_cmd.transfer_size.value)][0]
+            self.ior_cmd.block_size.value = self.container_info[
+                "{}{}{}".format(self.ior_cmd.daos_oclass.value,
+                                self.ior_cmd.api.value,
+                                self.ior_cmd.transfer_size.value)][1]
         #For IOR Other operation, calculate the block size based on server %
         #to fill up. Store the container UUID for future reading operation.
         else:
             block_size = self.calculate_ior_block_size()
-            ior_cmd.block_size.update('{}'.format(block_size))
-            ior_cmd.flags.update(self.ior_flags)
-            #Store the container UUID and block size used for
-            #reading and verification purpose in future.
-            self.container_info["{}{}{}"
-                                .format(self.ior_daos_oclass,
-                                        self.ior_apis,
-                                        self.ior_transfer_size)] = [str(
-                                            uuid.uuid4()), block_size]
-
-        # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
-        manager.job.daos_cont.update(self.container_info
-                                     ["{}{}{}"
-                                      .format(self.ior_daos_oclass,
-                                              self.ior_apis,
-                                              self.ior_transfer_size)][0])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(self.processes)
-        manager.assign_environment(env, True)
+            self.ior_cmd.block_size.update('{}'.format(block_size))
 
         # run IOR Command
         try:
-            result = manager.run()
-            # Exception does not work so better to verify the proper
-            # completion too.
-            if 'Finished' not in result.stdout:
-                results.put("FAIL")
+            self.run_ior_with_pool(create_cont=_create_cont)
+            results.put("PASS")
         except CommandFailure as _error:
             results.put("FAIL")
+
+        self.container_info["{}{}{}"
+                            .format(self.ior_cmd.daos_oclass.value,
+                                    self.ior_cmd.api.value,
+                                    self.ior_cmd.transfer_size.value)] = [
+                                        self.ior_cmd.daos_cont.value,
+                                        self.ior_cmd.block_size.value]
 
     def calculate_ior_block_size(self):
         """
         Calculate IOR Block size to fill up the Server
 
-        Args:
-            None
-
         Returns:
             block_size(int): IOR Block size
         """
         #Check the replica for IOR object to calculate the correct block size.
-        _replica = re.findall(r'_(.+?)G', self.ior_daos_oclass)
+        _replica = re.findall(r'_(.+?)G', self.ior_cmd.daos_oclass.value)
         if not _replica:
             replica_server = 1
         #This is for EC Parity
@@ -343,8 +289,8 @@ class ServerFillUp(IorTestBase):
         #single process size will be 1.56GB.
         _tmp_block_size = (((nvme_free_space/100)*self.capacity)/self.processes)
         _tmp_block_size = int(_tmp_block_size / int(replica_server))
-        block_size = ((_tmp_block_size/int(self.ior_transfer_size))
-                      *int(self.ior_transfer_size))
+        block_size = ((_tmp_block_size/int(self.ior_cmd.transfer_size.value))
+                      *int(self.ior_cmd.transfer_size.value))
         return block_size
 
     def set_device_faulty(self, server, disk_id):
@@ -355,12 +301,14 @@ class ServerFillUp(IorTestBase):
         args:
             server(string): server hostname where it generate the NVMe fault.
             disk_id(string): NVMe disk ID where it will be changed to faulty.
-
-        Returns:
-            None
         """
         self.dmg.hostlist = server
         self.dmg.storage_set_faulty(disk_id)
+        result = self.dmg.storage_query_device_health(disk_id)
+        #Check if device state changed to FAULTY.
+        if 'State:FAULTY' not in result.stdout:
+            self.fail("device State {} on host {} suppose to be FAULTY"
+                      .format(disk_id, server))
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)
         # Wait for rebuild to complete
@@ -369,9 +317,6 @@ class ServerFillUp(IorTestBase):
     def set_device_faulty_loop(self):
         """
         Set the devices to Faulty one by one and wait for rebuild to complete.
-
-        Returns:
-            None
         """
         #Get the device ids from all servers and try to eject the disks
         device_ids = get_device_ids(self.dmg, self.hostlist_servers)
@@ -387,9 +332,6 @@ class ServerFillUp(IorTestBase):
         """
         Method to Fill up the server. It will get the maximum Storage space and
         create the pool.Fill up the server based on % amount given using IOR.
-
-        Returns:
-            None
         """
         #Method to get the storage capacity.Replace with dmg options in future
         #when it's available. This is time consuming so store the size in
