@@ -27,7 +27,7 @@ from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
-from collections import defaultdict
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
@@ -79,6 +79,8 @@ class DmgCommand(DmgCommandBase):
         self.log.info("--- self.result.stdout ---")
         self.log.info(self.result.stdout)
 
+        data = {}
+
         if verbose:
             vals = re.findall(
                 r"--------\n([a-z0-9-]+)\n--------|"
@@ -89,47 +91,59 @@ class DmgCommand(DmgCommandBase):
             self.log.info("--- Verbose output parse result ---")
             self.log.info(vals)
 
-            data = defaultdict(list)
-            data["host"] = vals[0][0]
-
+            data = {}
+            nodeset = NodeSet(vals[0][0])
+            data[nodeset] = {}
+            data[nodeset]["scm"] = {}
             i = 1
-            while i < len(vals[0]):
+            while i < len(vals):
                 if vals[i][1] == "":
                     break
-                data["scm_namespaces"].append(vals[i][1])
-                data["scm_socket_ids"].append(vals[i][2])
-                data["scm_capacity_vals"].append(vals[i][3])
-                data["scm_capacity_units"].append(vals[i][4])
+                pmem_name = vals[i][1]
+                socket_id = vals[i][2]
+                capacity = "{} {}".format(vals[i][3], vals[i][4])
+                data[nodeset]["scm"][pmem_name] = {}
+                data[nodeset]["scm"][pmem_name]["socket"] = socket_id
+                data[nodeset]["scm"][pmem_name]["capacity"] = capacity
                 i += 1
 
+            data[nodeset]["nvme"] = {}
             while i < len(vals):
-                data["pci_addrs"].append(vals[i][5])
-                data["models"].append("{} {}".format(vals[i][6], vals[i][7]))
-                data["fw_revisions"].append(vals[i][8])
-                data["nvme_socket_ids"].append(vals[i][9])
-                data["nvme_capacity_vals"].append(vals[i][10])
-                data["nvme_capacity_units"].append(vals[i][11])
+                pci_addr = vals[i][5]
+                model = "{} {}".format(vals[i][6], vals[i][7])
+                fw_revision = vals[i][8]
+                socket_id = vals[i][9]
+                capacity = "{} {}".format(vals[i][10], vals[i][11])
+                data[nodeset]["nvme"][pci_addr] = {}
+                data[nodeset]["nvme"][pci_addr]["model"] = socket_id
+                data[nodeset]["nvme"][pci_addr]["fw_revision"] = fw_revision
+                data[nodeset]["nvme"][pci_addr]["socket"] = socket_id
+                data[nodeset]["nvme"][pci_addr]["capacity"] = capacity
                 i += 1
 
-            return data
+        else:
+            vals = re.findall(
+                r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
+                r"[modules|namespaces]+\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
+                r"controller",
+                self.result.stdout)
+            self.log.info("--- Non-verbose output parse result ---")
+            self.log.info(vals)
 
-        # Without verbose.
-        vals = re.findall(
-            r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
-            r"[modules|namespaces]+\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
-            r"controller",
-            self.result.stdout)
-        self.log.info("--- Non-verbose output parse result ---")
-        self.log.info(vals)
-        return {
-            "hosts": vals[0][0],
-            "scm_total_val": vals[0][1],
-            "scm_total_unit": vals[0][2],
-            "namespaces": vals[0][3],
-            "nvme_total_val": vals[0][4],
-            "nvme_total_unit": vals[0][5],
-            "controller": vals[0][6]
-        }
+            data = {}
+            for row in vals:
+                nodeset = NodeSet(row[0])
+                data[nodeset] = {}
+                scm_total = "{} {}".format(row[1], row[2])
+                namespace = row[3]
+                nvme_total = "{} {}".format(row[4], row[5])
+                controller = row[6]
+                data[nodeset]["scm_total"] = scm_total
+                data[nodeset]["namespace"] = namespace
+                data[nodeset]["nvme_total"] = nvme_total
+                data[nodeset]["controller"] = controller
+
+        return data
 
     def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
