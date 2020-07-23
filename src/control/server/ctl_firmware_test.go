@@ -33,10 +33,13 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestCtlSvc_FirmwareQuery(t *testing.T) {
@@ -158,12 +161,31 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 
 func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 	for name, tc := range map[string]struct {
-		bmbc    *bdev.MockBackendConfig
-		smbc    *scm.MockBackendConfig
-		req     ctlpb.FirmwareUpdateReq
-		expErr  error
-		expResp *ctlpb.FirmwareUpdateResp
+		bmbc           *bdev.MockBackendConfig
+		smbc           *scm.MockBackendConfig
+		serversRunning bool
+		noRankServers  bool
+		req            ctlpb.FirmwareUpdateReq
+		expErr         error
+		expResp        *ctlpb.FirmwareUpdateResp
 	}{
+		"IO servers running": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_SCM,
+				FirmwarePath: "/some/path",
+			},
+			serversRunning: true,
+			expErr:         FaultInstancesNotStopped("firmware update", 0),
+		},
+		"IO servers running with no rank": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_SCM,
+				FirmwarePath: "/some/path",
+			},
+			serversRunning: true,
+			noRankServers:  true,
+			expErr:         errors.New("unidentified server rank is running"),
+		},
 		"no path": {
 			req: ctlpb.FirmwareUpdateReq{
 				Type: ctlpb.FirmwareUpdateReq_SCM,
@@ -262,8 +284,22 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			config := emptyMockConfig(t)
-			cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
+			cfg := emptyMockConfig(t)
+			cs := mockControlService(t, log, cfg, tc.bmbc, tc.smbc, nil)
+			for i := 0; i < 2; i++ {
+				runner := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
+					Running: atm.NewBool(tc.serversRunning),
+				}, ioserver.NewConfig())
+				instance := NewIOServerInstance(log, nil, nil, nil, runner)
+				if !tc.noRankServers {
+					instance._superblock = &Superblock{}
+					instance._superblock.ValidRank = true
+					instance._superblock.Rank = system.NewRankPtr(uint32(i))
+				}
+				if err := cs.harness.AddInstance(instance); err != nil {
+					t.Fatal(err)
+				}
+			}
 
 			resp, err := cs.FirmwareUpdate(context.TODO(), &tc.req)
 

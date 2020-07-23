@@ -57,9 +57,9 @@ func fixBrackets(stringRanks string, remove bool) string {
 	return stringRanks
 }
 
-// NewRankSet creates a new HostList with ranks rather than hostnames from the
+// CreateRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
-func NewRankSet(stringRanks string) (*RankSet, error) {
+func CreateRankSet(stringRanks string) (*RankSet, error) {
 	rs := RankSet{}
 
 	if len(stringRanks) > 0 {
@@ -104,27 +104,26 @@ func (rs *RankSet) String() string {
 }
 
 // Ranks returns a slice of Rank from a RankSet.
-func (rs *RankSet) Ranks() ([]Rank, error) {
+func (rs *RankSet) Ranks() []Rank {
 	var ranks []uint32
-	err := common.ParseNumberList(
+	// error can be safely ignored because DerangedString format is
+	// deterministic
+	common.ParseNumberList(
 		fixBrackets(rs.HostSet.DerangedString(), true),
 		&ranks)
-	if err != nil {
-		return nil, err
-	}
 
-	return RanksFromUint32(ranks), nil
+	return RanksFromUint32(ranks)
 }
 
 // ParseRanks takes a string representation of a list of ranks e.g. 1-4,6 and
 // returns a slice of system.Rank type or error.
 func ParseRanks(stringRanks string) ([]Rank, error) {
-	rs, err := NewRankSet(stringRanks)
+	rs, err := CreateRankSet(stringRanks)
 	if err != nil {
 		return nil, errors.Wrapf(err, "creating rank set from '%s'", stringRanks)
 	}
 
-	return rs.Ranks()
+	return rs.Ranks(), nil
 }
 
 // RankGroups maps a set of ranks to string value (group).
