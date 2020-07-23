@@ -497,7 +497,6 @@ pipeline {
                             not { environment name: 'NO_CI_TESTING',
                                   value: 'true' }
                             expression { ! skip_stage('bullseye', true) }
-                            }
                         }
                     }
                     agent {
