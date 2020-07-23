@@ -496,9 +496,7 @@ pipeline {
                         allOf {
                             not { environment name: 'NO_CI_TESTING',
                                   value: 'true' }
-                            expression {
-                                cachedCommitPragma(pragma: 'Skip-bullseye',
-                                                   def_val: 'true') != 'true'
+                            expression { ! skip_stage('bullseye', true) }
                             }
                         }
                     }
@@ -982,10 +980,7 @@ pipeline {
                 stage('Unit test Bullseye') {
                     when {
                       beforeAgent true
-                      expression {
-                          cachedCommitPragma(pragma: 'Skip-bullseye',
-                                             def_val: 'true') != 'true'
-                      }
+                      expression { ! skip_stage('bullseye', true) }
                     }
                     agent {
                         label 'stage_vm1'
@@ -1015,7 +1010,9 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost()
+                            unitTestPost coverage_healthy: [methodCoverage: 40,
+                                                        conditionalCoverge: 20,
+                                                        statementCoverage: 0]
                         }
                     }
                 }

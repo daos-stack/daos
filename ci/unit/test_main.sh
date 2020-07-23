@@ -9,18 +9,14 @@ rm -rf test_results
 mkdir test_results
 
 # Check if this is a Bulleye stage
-USE_BULLSEYE=
-if [ -n "${STAGE_NAME:?}" ]; then
-  case $STAGE_NAME in
-    *Bullseye**)
-      USE_BULLSEYE="true"
-      ;;
-  esac
-fi
+USE_BULLSEYE=false
+case $STAGE_NAME in
+  *Bullseye**)
+  USE_BULLSEYE=true
+  ;;
+esac
 
-: "${BULLSEYE:=}"
-
-if [ -n "$USE_BULLSEYE" ];then
+if $USE_BULLSEYE; then
   rm -rf bullseye
   mkdir -p bullseye
   tar -C bullseye --strip-components=1 -xf bullseye.tar
