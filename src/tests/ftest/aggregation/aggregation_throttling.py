@@ -114,8 +114,8 @@ class DaosAggregationThrottling(IorTestBase):
                                        before_metric and after_metric.
         """
 
-        self.log.info("\n\n%s Performance" %
-                      "Read" if read_write_idx else "Write")
+        self.log.info("\n\n {} Performance".format(
+            "Read" if read_write_idx else "Write"))
 
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)
@@ -123,29 +123,29 @@ class DaosAggregationThrottling(IorTestBase):
 
         max_prev = float(before_metric[read_write_idx][max_mib])
         max_curr = float(after_metric[read_write_idx][max_mib])
-        self.log.info("max_prev = %f, max_curr = %f" % (
+        self.log.info("max_prev = {0}, max_curr = {1}".format(
             max_prev, max_curr))
 
         min_prev = float(before_metric[read_write_idx][min_mib])
         min_curr = float(after_metric[read_write_idx][min_mib])
-        self.log.info("min_prev = %f, min_curr = %f" % (
+        self.log.info("min_prev = {0}, min_curr = {1}".format(
             min_prev, min_curr))
 
         mean_prev = float(before_metric[read_write_idx][mean_mib])
         mean_curr = float(after_metric[read_write_idx][mean_mib])
-        self.log.info("mean_prev = %f, mean_curr = %f" % (
+        self.log.info("mean_prev = {0}, mean_curr = {1}".format(
             mean_prev, mean_curr))
 
         max_perf_diff = (abs(max_prev - max_curr)/max_prev) * 100
         min_perf_diff = (abs(min_prev - min_curr)/min_prev) * 100
         mean_perf_diff = (abs(mean_prev - mean_curr)/mean_prev) * 100
 
-        self.log.info("Max perf diff %f < %f" % (max_perf_diff,
-                                                 expected_perf_diff))
+        self.log.info("Max perf diff {0} < {1}".format(max_perf_diff,
+                                                       expected_perf_diff))
         self.assertTrue(max_perf_diff < expected_perf_diff)
-        self.log.info("Min perf diff %f < %f" % (min_perf_diff,
-                                                 expected_perf_diff))
+        self.log.info("Min perf diff {0} < {1}".format(min_perf_diff,
+                                                       expected_perf_diff))
         self.assertTrue(min_perf_diff < expected_perf_diff)
-        self.log.info("Mean perf diff %f < %f" % (mean_perf_diff,
-                                                  expected_perf_diff))
+        self.log.info("Mean perf diff {0} < {1}".format(mean_perf_diff,
+                                                        expected_perf_diff))
         self.assertTrue(mean_perf_diff < expected_perf_diff)
