@@ -36,11 +36,11 @@ class BasicParameter(object):
     def __init__(self, value, default=None, yaml_key=None):
         """Create a BasicParameter object.
 
-        Normal use includes assigning this object to a attribute name that
+        Normal use includes assigning this object to an attribute name that
         matches the test yaml file key used to assign its value.  If the
         variable name will conflict with another class attribute, e.g. self.log,
-        then the `yaml_key` argument can used to define the test yaml file key
-        independently of the attribute name.
+        then the `yaml_key` argument can be used to define the test yaml file
+        key independently of the attribute name.
 
         Args:
             value (object): initial value for the parameter
@@ -122,11 +122,11 @@ class FormattedParameter(BasicParameter):
     def __init__(self, str_format, default=None, yaml_key=None):
         """Create a FormattedParameter  object.
 
-        Normal use includes assigning this object to a attribute name that
+        Normal use includes assigning this object to an attribute name that
         matches the test yaml file key used to assign its value.  If the
         variable name will conflict with another class attribute, e.g. self.log,
-        then the `yaml_key` argument can used to define the test yaml file key
-        independently of the attribute name.
+        then the `yaml_key` argument can be used to define the test yaml file
+        key independently of the attribute name.
 
         Args:
             str_format (str): format string used to convert the value into an
