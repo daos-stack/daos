@@ -1108,9 +1108,7 @@ pipeline {
                     }
                     post {
                         always {
-                            functional_post_always()
-                            archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+                            functionalTestPost()
                         }
                     } // post
                 } // stage('Functional on Leap 15')
