@@ -60,11 +60,11 @@ def component_repos() {
     return cachedCommitPragma(pragma: 'PR-repos')
 }
 
-def el7_component_repos() {
+String el7_component_repos() {
     return cachedCommitPragma(pragma: 'PR-repos-el7')
 }
 
-def leap15_component_repos() {
+String leap15_component_repos() {
     return cachedCommitPragma(pragma: 'PR-repos-leap15')
 }
 
@@ -85,6 +85,7 @@ String daos_repos(String distro) {
                ' ' + daos_repo()
     }
 }
+
 commit_pragma_cache = [:]
 def cachedCommitPragma(Map config) {
 
@@ -98,10 +99,10 @@ def cachedCommitPragma(Map config) {
 
 }
 
-def daos_packages_version(String distro) {
+String daos_packages_version(String distro) {
     // commit pragma has highest priority
     // TODO: this should actually be determined from the PR-repos artifacts
-    def version = cachedCommitPragma(pragma: 'RPM-test-version')
+    String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
         String dist
         if (distro == "centos7") {
@@ -273,7 +274,7 @@ pipeline {
                                             "--requires utils/rpms/daos.spec " +
                                             "2>/dev/null",
                                     returnStdout: true
-        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'false')
+        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
     }
 
     options {
@@ -755,7 +756,6 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { false }  // disable until we get lmod figured out
                             not { branch 'weekly-testing' }
                             not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
                             expression { ! quickbuild() }
