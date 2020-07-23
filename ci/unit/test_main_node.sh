@@ -24,15 +24,13 @@ sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 cd "$DAOS_BASE"
 if [ "$WITH_VALGRIND" = "memcheck" ]; then
-    echo "run_test_main_node.sh with memcheck"
     # run_test.sh with valgrind memcheck
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh |
+    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
     # Remove DAOS_BASE from memcheck xml results
-    sed -i "s:$DAOS_BASE::g" results-*-memcheck.xml
-    mkdir -p valgrind_memcheck_results
-    mv results-*-memcheck.xml valgrind_memcheck_results
+    if ls test_results/results-*-memcheck.xml 1> /dev/null 2>&1; then
+        sed -i "s:$DAOS_BASE::g" test_results/results-*-memcheck.xml
+    fi
 elif [ "$WITH_VALGRIND" = "disabled" ]; then
-    echo "run_test_main_node.sh unit test"
     # set CMOCKA envs here
     export CMOCKA_MESSAGE_OUTPUT=xml
     export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml

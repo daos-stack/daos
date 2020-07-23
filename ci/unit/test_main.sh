@@ -16,31 +16,20 @@ DAOS_BASE=${SL_PREFIX%/install*}
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-if [ $# -ge 1 ] && [ -n "$1" ]; then
-    if [ "$1" == "memcheck" ]; then
-        echo "memcheck"
-        rm -rf valgrind_memcheck_results
-        WITH_VALGRIND=memcheck
-        # shellcheck disable=SC2029
-        ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
-                 "DAOS_BASE=$DAOS_BASE      \
-                  HOSTNAME=$HOSTNAME        \
-                  HOSTPWD=$PWD              \
-                  SL_PREFIX=$SL_PREFIX      \
-                  WITH_VALGRIND=$WITH_VALGRIND \
-                  $(cat "$mydir/test_main_node.sh")"
-    fi
+rm -rf test_results
+mkdir test_results
+rm -f dnt.*.memcheck.xml nlt-errors.json
+
+if [ "$1" == "memcheck" ]; then
+    WITH_VALGRIND=memcheck
 else
-    echo "normal"
-    rm -rf test_results
-    mkdir test_results
-    rm -f dnt.*.memcheck.xml nlt-errors.json
     WITH_VALGRIND=disabled
-    # shellcheck disable=SC2029
-    ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
-                                         HOSTNAME=$HOSTNAME        \
-                                         HOSTPWD=$PWD              \
-                                         SL_PREFIX=$SL_PREFIX      \
-                                         WITH_VALGRIND=$WITH_VALGRIND \
-                                         $(cat "$mydir/test_main_node.sh")"
 fi
+
+# shellcheck disable=SC2029
+ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
+                                     HOSTNAME=$HOSTNAME        \
+                                     HOSTPWD=$PWD              \
+                                     SL_PREFIX=$SL_PREFIX      \
+                                     WITH_VALGRIND=$WITH_VALGRIND \
+                                     $(cat "$mydir/test_main_node.sh")"
