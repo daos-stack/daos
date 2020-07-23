@@ -47,3 +47,4 @@ pool:
     - ['16', '100G', 'FAIL']    # Low SCM Size
     - ['1G', '200G', 'WARNING'] # SCM Size ratio is less than 1%
     - ['6G', '650G', 'WARNING'] # SCM Size ratio is less than 1%
+    - ['650G', '650G', 'PASS']  # SCM Size ratio should be 100%
