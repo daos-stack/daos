@@ -46,7 +46,7 @@ struct dfuse_info {
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
 	bool				di_foreground;
-	bool				di_no_direct_io;
+	bool				di_direct_io;
 	bool				di_caching;
 	/* List head of dfuse_pool entries */
 	d_list_t			di_dfp_list;

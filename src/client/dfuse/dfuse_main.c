@@ -306,6 +306,7 @@ main(int argc, char **argv)
 	}
 
 	dfuse_info->di_threaded = true;
+	dfuse_info->di_direct_io = true;
 
 	while (1) {
 		c = getopt_long(argc, argv, "s:m:Sfh",
@@ -340,7 +341,7 @@ main(int argc, char **argv)
 			dfuse_info->di_foreground = true;
 			break;
 		case 'D':
-			dfuse_info->di_no_direct_io = true;
+			dfuse_info->di_direct_io = false;
 			break;
 		case 'h':
 			show_help(argv[0]);

@@ -56,7 +56,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
 
-	if (!fs_handle->dpi_info->di_no_direct_io) {
+	if (fs_handle->dpi_info->di_direct_io) {
 		if (ie->ie_dfs->dfs_attr_timeout == 0) {
 			fi_out.direct_io = 1;
 		} else {
