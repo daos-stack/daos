@@ -277,18 +277,27 @@ class VOS_SIZE(BASE_CLASS):
         return data_cstr.value.decode('utf-8')
 
 
+class FREE_DFS_SB(BASE_CLASS):
+    def __init__(self):
+        super(FREE_DFS_SB, self).__init__('libdfs_internal.so')
+
+    def dfs_free_sb_layout(self, data_pointer):
+        self._lib.dfs_free_sb_layout(data_pointer)
+
+
 class DFS_SB(BASE_CLASS):
     def __init__(self):
-        super(DFS_SB, self).__init__('libdfs_internal.so')
+        super(DFS_SB, self).__init__('libdfs.so')
         self._dkey = daos_cref.IOV()
         self._iods = ctypes.pointer(daos_cref.DaosIODescriptor())
         self._akey_count = ctypes.c_int()
         self._dfs_entry_key_size = ctypes.c_int()
         self._dfs_entry_size = ctypes.c_int()
         self._ready = False
+        self._lib_free_sb = FREE_DFS_SB()
 
     def __del__(self):
-        self._lib.dfs_free_sb_layout(ctypes.byref(self._iods))
+        self._lib_free_sb.dfs_free_sb_layout(ctypes.byref(self._iods))
 
     def _dfs_get_sb_layout(self):
         ret = self._lib.dfs_get_sb_layout(
