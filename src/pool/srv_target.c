@@ -130,8 +130,8 @@ gc_ult(void *arg)
 		if (dss_ult_exiting(child->spc_gc_req))
 			break;
 
-		/* Sleep 2 seconds */
-		sched_req_sleep(child->spc_gc_req, 2ULL * 1000);
+		/* It'll be woke up by container destroy or aggregation */
+		sched_req_sleep(child->spc_gc_req, 10ULL * 1000);
 	}
 
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
