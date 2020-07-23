@@ -31,9 +31,18 @@ def doc_only_change() {
     return rc == 1
 }
 
-def skip_stage(String stage, def_val = 'false') {
+def skip_stage(String stage, String def_val) {
     return cachedCommitPragma(pragma: 'Skip-' + stage,
-                              def_val: def_val.toString) == 'true'
+                              def_val: def_val) == 'true'
+}
+
+def skip_stage(String stage, boolean def_val = false) {
+    String value = 'false'
+    if (def_val) {
+        value = 'true'
+    }
+    return cachedCommitPragma(pragma: 'Skip-' + stage,
+                              def_val: value) == 'true'
 }
 
 def quickbuild() {
