@@ -12,7 +12,11 @@ def scons():
     dirs = ['aggregation', 'checksum', 'container', 'control',
             'daos_test', 'data', 'io', 'network', 'nvme',
             'object', 'osa', 'pool', 'rebuild', 'security',
-            'server', 'soak', 'unittest']
+            'server', 'soak', 'unittest', 'cart/corpc  ',
+            'cart/ctl', 'cart/ghost_rank_rpc',
+            'cart/group_test', 'cart/iv', 'cart/no_pmix',
+            'cart/nopmix_launcher', 'cart/rpc',
+            'cart/selftest', 'cart/util']
 
     for sub_dir in dirs:
         env.Install(os.path.join(ftest_install_dir, sub_dir),

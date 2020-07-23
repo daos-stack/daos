@@ -39,7 +39,7 @@ class CartNoPmixLauncherOneNodeTest(Test):
     """
     Runs basic CaRT no_pmix_launcher tests
 
-    :avocado: tags=all,no_pmix_launcher,one_node
+    :avocado: tags=all,all_cart,no_pmix_launcher,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -55,7 +55,7 @@ class CartNoPmixLauncherOneNodeTest(Test):
         """
         Test CaRT NoPmix Launcher
 
-        :avocado: tags=all,no_pmix_launcher,one_node
+        :avocado: tags=all,all_cart,no_pmix_launcher,one_node
         """
 
         cli_bin = self.params.get("cli_bin", '/run/tests/*/')

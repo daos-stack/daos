@@ -37,7 +37,7 @@ class CartRpcTwoNodeTest(Test):
     """
     Runs basic CaRT RPC tests
 
-    :avocado: tags=all,rpc,two_node
+    :avocado: tags=all,all_cart,rpc,two_node
     """
     def setUp(self):
         """ Test setup """
@@ -53,7 +53,7 @@ class CartRpcTwoNodeTest(Test):
         """
         Test CaRT RPC
 
-        :avocado: tags=all,rpc,two_node
+        :avocado: tags=all,all_cart,rpc,two_node
         """
         srvcmd = self.utils.build_cmd(self, self.env, "srv")
         clicmd = self.utils.build_cmd(self, self.env, "cli")

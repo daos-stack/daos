@@ -39,7 +39,7 @@ class GroupTest(Test):
     """
     Runs GroupTests for primary and secondary resizeable groups
 
-    :avocado: tags=all,group_test,one_node,no_pmix
+    :avocado: tags=all,all_cart,group_test,one_node,no_pmix
     """
     def setUp(self):
         """ Test setup """
@@ -55,7 +55,7 @@ class GroupTest(Test):
         """
         Test CaRT NoPmix Launcher
 
-        :avocado: tags=all,group_test,one_node
+        :avocado: tags=all,all_cart,group_test,one_node
         """
 
         log_mask = self.params.get("D_LOG_MASK", "/run/defaultENV/")

@@ -93,7 +93,7 @@ class CartIvOneNodeTest(Test):
     """
     Runs basic CaRT tests on one-node
 
-    :avocado: tags=all,iv,one_node
+    :avocado: tags=all,all_cart,iv,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -217,7 +217,7 @@ class CartIvOneNodeTest(Test):
         """
         Test CaRT IV
 
-        :avocado: tags=all,iv,one_node
+        :avocado: tags=all,all_cart,iv,one_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "srv")

@@ -152,3 +152,6 @@ class ObjFetchBadParam(TestWithServers):
                 print(excep)
                 print(traceback.format_exc())
                 self.fail("Test was expected to get -1003 but it has not.\n")
+
+
+
