@@ -608,11 +608,11 @@ host2
 host1
 -----
   UID:Device1 PhysicalID:1 Capacity:12 KiB Location:(socket:1 memctrlr:2 chan:3 pos:5)
-    Success - The new firmware was staged. A reboot is required to apply.
+    Success - The new firmware was staged. A power cycle is required to apply.
   UID:Device2 PhysicalID:2 Capacity:66 KiB Location:(socket:6 memctrlr:7 chan:8 pos:9)
     Error: test error
   UID:Device3 PhysicalID:3 Capacity:66 KiB Location:(socket:1 memctrlr:2 chan:2 pos:1)
-    Success - The new firmware was staged. A reboot is required to apply.
+    Success - The new firmware was staged. A power cycle is required to apply.
 `,
 		},
 		"multiple hosts": {
@@ -661,12 +661,12 @@ host1
 host1
 -----
   UID:Device1 PhysicalID:1 Capacity:2.0 GiB Location:(socket:1 memctrlr:2 chan:3 pos:5)
-    Success - The new firmware was staged. A reboot is required to apply.
+    Success - The new firmware was staged. A power cycle is required to apply.
 -----
 host2
 -----
   UID:Device2 PhysicalID:2 Capacity:1.0 GiB Location:(socket:6 memctrlr:7 chan:8 pos:9)
-    Success - The new firmware was staged. A reboot is required to apply.
+    Success - The new firmware was staged. A power cycle is required to apply.
   UID:Device3 PhysicalID:3 Capacity:4.0 GiB Location:(socket:1 memctrlr:2 chan:2 pos:1)
     Error: something went wrong
 `,
@@ -750,7 +750,7 @@ Errors:
 -----
 host1
 -----
-  Firmware staged on 2 devices. A reboot is required to apply the update.
+  Firmware staged on 2 devices. A power cycle is required to apply the update.
 `,
 		},
 		"multiple hosts": {
@@ -802,7 +802,7 @@ Errors:
 ---------
 host[1-2]
 ---------
-  Firmware staged on 2 devices. A reboot is required to apply the update.
+  Firmware staged on 2 devices. A power cycle is required to apply the update.
 `,
 		},
 		"no errors": {
@@ -849,7 +849,7 @@ host[1-2]
 ---------
 host[1-2]
 ---------
-  Firmware staged on 3 devices. A reboot is required to apply the update.
+  Firmware staged on 3 devices. A power cycle is required to apply the update.
 `,
 		},
 		"only errors": {
