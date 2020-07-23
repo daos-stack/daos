@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	scmUpdateSuccess = "Success - The new firmware was staged. A reboot is required to apply."
+	scmUpdateSuccess = "Success - The new firmware was staged. A power cycle is required to apply."
 	scmNotFound      = "No SCM devices detected"
 	errorPrefix      = "Error"
 )
@@ -347,7 +347,7 @@ func printCondensedUpdateMap(condensed hostDeviceResultMap, out io.Writer, opts 
 			continue
 		}
 
-		fmt.Fprintf(iw, "Firmware staged on %d devices. A reboot is required to apply the update.\n", len(set.Devices))
+		fmt.Fprintf(iw, "Firmware staged on %d devices. A power cycle is required to apply the update.\n", len(set.Devices))
 	}
 
 	return w.Err
