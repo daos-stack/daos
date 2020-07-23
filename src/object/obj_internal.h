@@ -151,6 +151,10 @@ struct obj_reasb_req {
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
+	/* object ID */
+	daos_obj_id_t			 orr_oid;
+	/* #iods of IO req */
+	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
 	uint32_t			 orr_recov:1,
 	/* for iod_size fetching flag */
