@@ -164,6 +164,7 @@ struct d_log_xstate {
 	struct dlog_fac		*dlog_facs; /**< array of facility */
 	char			*nodename; /**< pointer to our utsname */
 	int			 fac_cnt; /**< # of facilities */
+	int			 log_limit_mb; /**< log limit in mb */
 };
 
 struct d_debug_data {

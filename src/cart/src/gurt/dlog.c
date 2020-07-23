@@ -115,6 +115,7 @@ struct clog_state {
 	struct utsname uts;	/* for hostname, from uname(3) */
 	int stdout_isatty;	/* non-zero if stdout is a tty */
 	int stderr_isatty;	/* non-zero if stderr is a tty */
+	uint64_t log_size_bytes; /* current log size */
 #ifdef DLOG_MUTEX
 	pthread_mutex_t clogmux;	/* protect clog in threaded env */
 #endif
@@ -395,6 +396,11 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (flags == 0)
 		return;
 
+	/* Limit log */
+	if (d_log_xst.log_limit_mb > 0)
+		if ((mst.log_size_bytes >> 20) >= d_log_xst.log_limit_mb)
+			return;
+
 	fac = flags & DLOG_FACMASK;
 	lvl = flags & DLOG_PRIMASK;
 
@@ -510,11 +516,14 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	/*
 	 * log it to the log file
 	 */
-	if (mst.logfd >= 0)
+	if (mst.logfd >= 0) {
 		if (write(mst.logfd, b, tlen) < 0) {
 			dlog_print_err(errno, "write log failed\n");
 			errno = save_errno;
+		} else {
+			mst.log_size_bytes += tlen;
 		}
+	}
 
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;
@@ -604,12 +613,21 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	int	tagblen;
 	char	*newtag, *cp;
 	int	truncate = 0;
+	int	limit_mb = 0;
 	char	*env;
 
 	env = getenv(D_LOG_TRUNCATE_ENV);
 
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
+
+	env = getenv(D_LOG_LIMIT_MB_ENV);
+	if (env != NULL)
+		limit_mb = atoi(env);
+	else
+		limit_mb = 0;
+
+	d_log_xst.log_limit_mb = limit_mb;
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||

@@ -82,6 +82,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_LOG_FILE_APPEND_PID_ENV	"D_LOG_FILE_APPEND_PID"
 
 #define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
+#define D_LOG_LIMIT_MB_ENV		"D_LOG_LIMIT_MB"
 
 /* Enable shadow warning where users use same variable name in nested
  * scope.   This enables use of a variable in the macro below and is
