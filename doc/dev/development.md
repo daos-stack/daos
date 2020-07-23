@@ -7,9 +7,16 @@ only required for development purposes.
 
 ## Building DAOS for Development
 
-Prerequisite when built using --build-deps are installed in component specific
-directories under PREFIX/prereq/$TARGET_TYPE.  Once the submodules have been
-initialized and updated, run the following commands:
+Prerequisite when built using `--build-deps` are installed in component
+specific directories under PREFIX/prereq/$TARGET_TYPE.  Initialize and update
+the git submodules:
+
+```bash
+$ git submodule init
+$ git submodule update
+```
+
+Run the following `scons` command:
 
 ```bash
 $ scons PREFIX=${daos_prefix_path}
