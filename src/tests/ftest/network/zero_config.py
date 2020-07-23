@@ -105,11 +105,10 @@ class ZeroConfigTest(TestWithServers):
         return status
 
     @fail_on(CommandFailure)
-    def verify_client_run(self, server_idx, exp_iface, env):
+    def verify_client_run(self, exp_iface, env):
         """Verify the interface assigned by running a libdaos client.
 
         Args:
-            server_idx (int): server to get config from.
             exp_iface (str): expected interface to check.
             env (bool): add OFI_INTERFACE variable to exported variables of
                 client command.
@@ -135,7 +134,7 @@ class ZeroConfigTest(TestWithServers):
         # Setup the environment and logfile
         logf = "daos_racer_{}_{}.log".format(exp_iface, env)
         daos_racer.set_environment(
-            daos_racer.get_environment(self.server_managers[server_idx], logf))
+            daos_racer.get_environment(self.server_managers[0], logf))
         daos_racer.run()
 
         # Verify output and port count to check what iface CaRT init with.
@@ -197,7 +196,7 @@ class ZeroConfigTest(TestWithServers):
 
             # Verify
             err = []
-            if not self.verify_client_run(idx, exp_iface, env_state):
+            if not self.verify_client_run(exp_iface, env_state):
                 err.append("Failed run with expected dev: {}".format(exp_iface))
 
             # Stop the servers
