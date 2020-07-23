@@ -233,6 +233,13 @@ def _parse_dfs_akey_inode(dfs_entry_key_size, dfs_entry_size):
     return akey
 
 
+class STR_BUFFER(ctypes.Structure):
+    _fields_ = [("status", ctypes.c_int),
+                ("str_len", ctypes.c_size_t),
+                ("buf_len", ctypes.c_size_t),
+                ("cstr", ctypes.c_char_p)]
+
+
 class BASE_CLASS(object):
     def __init__(self, lib_name):
         self._lib = self._load_lib(lib_name)
@@ -257,24 +264,24 @@ class BASE_CLASS(object):
 class VOS_SIZE(BASE_CLASS):
     def __init__(self):
         super(VOS_SIZE, self).__init__('libvos_size.so')
-        self._data_ptr = ctypes.c_char_p(0)
+        self._data = STR_BUFFER()
 
     def __del__(self):
-        self._lib.free_string(self._data_ptr)
+        self._lib.free_string(ctypes.byref(self._data))
 
     def get_vos_size_str(self, alloc_overhead):
         print('  Reading VOS structures from current installation')
-        data_ptr = self._lib.get_vos_structure_sizes_yaml(
-            ctypes.c_int(alloc_overhead))
+        ret = self._lib.get_vos_structure_sizes_yaml(
+            ctypes.c_int(alloc_overhead),
+            ctypes.byref(self._data))
 
-        if self._data_ptr == 0:
+        if ret != 0:
             raise Exception(
-                'failed to retrieve the VOS structure sizes: {0}'.format(data))
+                'failed to retrieve the VOS structure sizes')
 
-        data_cstr = ctypes.c_char_p(data_ptr)
-        self._data_ptr = data_ptr
+        vos_str = ctypes.string_at(self._data.cstr, self._data.str_len)
 
-        return data_cstr.value.decode('utf-8')
+        return vos_str.decode('utf-8')
 
 
 class FREE_DFS_SB(BASE_CLASS):

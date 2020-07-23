@@ -59,15 +59,15 @@
 	} while (0);
 
 #define PRINT_DYNAMIC(name, type, feats)				\
-	print_dynamic(&buf, #name, &name);
+	print_dynamic(buf, #name, &name);
 
 #define PRINT_RECORD(name, type, feats)					\
-	print_record(&buf, #name, &name);
+	print_record(buf, #name, &name);
 
 struct str_buffer {
 	unsigned int status;
-	unsigned int str_size;
-	unsigned int buf_size;
+	size_t str_size;
+	size_t buf_size;
 	char *str;
 };
 
@@ -172,18 +172,24 @@ print_record(struct str_buffer *buf, const char *name,
 }
 
 void
-free_string(char *str)
+free_string(struct str_buffer *buf)
 {
-	if (str != NULL)
-		D_FREE(str);
+	if (buf->str != NULL) {
+		D_FREE(buf->str);
+		buf->status = 0;
+		buf->str_size = 0;
+		buf->buf_size = 0;
+	}
 }
 
-char *
-get_vos_structure_sizes_yaml(int alloc_overhead)
+int
+get_vos_structure_sizes_yaml(int alloc_overhead, struct str_buffer *buf)
 {
-	struct str_buffer buf = {0};
 	FOREACH_TYPE(DECLARE_TYPE)
 	int rc;
+
+	/* clean string buffer */
+	free_string(buf);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc) {
@@ -197,17 +203,17 @@ get_vos_structure_sizes_yaml(int alloc_overhead)
 
 	FOREACH_TYPE(CHECK_CALL)
 
-	wr_str(&buf, "---\n# VOS tree overheads\n"
+	wr_str(buf, "---\n# VOS tree overheads\n"
 		"root: %d\nscm_cutoff: %d\n", vos_pool_get_msize(),
 		vos_pool_get_scm_cutoff());
 
 	FOREACH_TYPE(PRINT_DYNAMIC)
-	wr_str(&buf, "trees:\n");
+	wr_str(buf, "trees:\n");
 	FOREACH_TYPE(PRINT_RECORD)
 
-	if (buf.status != 0) {
-		free_string(buf.str);
-		buf.str = NULL;
+	if (buf->status != 0) {
+		free_string(buf);
+		rc = buf->status;
 		goto exit_2;
 	}
 
@@ -216,5 +222,5 @@ exit_2:
 exit_1:
 	daos_debug_fini();
 exit_0:
-	return buf.str;
+	return rc;
 }
