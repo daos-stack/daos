@@ -61,7 +61,6 @@ class DmgStorageQuery(ControlTestBase):
         if err:
             self.fail("Found device(s) in bad state: {}".format(err))
 
-    @skipForTicket("DAOS-5320")
     def test_dmg_storage_query_devices(self):
         """
         JIRA ID: DAOS-3925
@@ -84,7 +83,6 @@ class DmgStorageQuery(ControlTestBase):
         if self.targets != targets:
             self.fail("Wrong number of targets found: {}".format(targets))
 
-    @skipForTicket("DAOS-5320")
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_pools(self):
         """
@@ -121,7 +119,6 @@ class DmgStorageQuery(ControlTestBase):
         no_pool_info = self.get_pool_info()
         self.assertFalse(no_pool_info, "No pools should be detected.")
 
-    @skipForTicket("DAOS-5320")
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_health(self):
         """
@@ -173,7 +170,6 @@ class DmgStorageQuery(ControlTestBase):
         if err:
             self.fail("Health info not as expected: {}".format(err))
 
-    @skipForTicket("DAOS-5320")
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_state(self):
         """

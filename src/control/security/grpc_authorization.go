@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,13 +65,10 @@ var methodAuthorizations = map[string]Component{
 	"/mgmt.MgmtSvc/PoolEvict":         ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolExtend":        ComponentAdmin,
 	"/mgmt.MgmtSvc/GetAttachInfo":     ComponentAgent,
-	"/mgmt.MgmtSvc/BioHealthQuery":    ComponentAdmin,
-	"/mgmt.MgmtSvc/SmdListDevs":       ComponentAdmin,
-	"/mgmt.MgmtSvc/SmdListPools":      ComponentAdmin,
+	"/mgmt.MgmtSvc/SmdQuery":          ComponentAdmin,
 	"/mgmt.MgmtSvc/ListPools":         ComponentAdmin,
-	"/mgmt.MgmtSvc/DevStateQuery":     ComponentAdmin,
-	"/mgmt.MgmtSvc/StorageSetFaulty":  ComponentAdmin,
 	"/mgmt.MgmtSvc/ListContainers":    ComponentAdmin,
+	"/mgmt.MgmtSvc/ContSetOwner":      ComponentAdmin,
 	"/mgmt.MgmtSvc/PrepShutdownRanks": ComponentServer,
 	"/mgmt.MgmtSvc/StopRanks":         ComponentServer,
 	"/mgmt.MgmtSvc/PingRanks":         ComponentServer,
