@@ -456,8 +456,9 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
 	struct pool_domain      *found_dom;
-	uuid_t		       *uuids;
+	uuid_t			*uuids;
 	uint32_t		num_comps;
+	uint8_t			new_status;
 	bool			updated;
 	int i, rc;
 
@@ -475,16 +476,19 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
 	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
 
-	if (map != NULL)
+	if (map != NULL) {
+		new_status = PO_COMP_ST_NEW;
 		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
 						 PO_COMP_ID_ALL, NULL);
-	else
+	}
+	else {
+		new_status = PO_COMP_ST_UPIN;
 		num_comps = 0;
-
+	}
 	/* fill racks */
 	for (i = 0; i < ndomains; i++) {
 		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
-		map_comp.co_status = PO_COMP_ST_NEW;
+		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
 		map_comp.co_id = i + num_comps;
 		map_comp.co_rank = 0;
@@ -517,7 +521,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 		updated = true;
 		map_comp.co_type = PO_COMP_TP_NODE;
-		map_comp.co_status = PO_COMP_ST_NEW;
+		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
 		map_comp.co_id = (p - uuids) + num_comps;
 		map_comp.co_rank = target_addrs->rl_ranks[i];
@@ -544,7 +548,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 		for (j = 0; j < dss_tgt_nr; j++) {
 			map_comp.co_type = PO_COMP_TP_TARGET;
-			map_comp.co_status = PO_COMP_ST_NEW;
+			map_comp.co_status = new_status;
 			map_comp.co_index = j;
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
 			map_comp.co_rank = target_addrs->rl_ranks[i];
