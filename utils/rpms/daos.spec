@@ -189,8 +189,9 @@ scons %{?_smp_mflags}      \
       PREFIX=%{?buildroot}
 
 %install
-scons %{?_smp_mflags}                 \
-      --config=force                  \
+#scons %{?_smp_mflags}                 \
+#      --config=force                  \
+scons --config=force                  \
       --no-rpath                      \
       --install-sandbox=%{?buildroot} \
       %{?buildroot}%{_prefix}         \
