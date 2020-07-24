@@ -477,7 +477,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
 
 	if (map != NULL) {
-		new_status = PO_COMP_ST_NEW;
+		new_status = PO_COMP_ST_UP;
 		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
 						 PO_COMP_ID_ALL, NULL);
 	}
