@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -118,6 +119,25 @@ public class IODataDesc {
 
   public int getTotalRequestSize() {
     return totalRequestSize;
+  }
+
+  /**
+   * duplicate this object and all its entries.
+   * Do not forget to release this object and its entries.
+   *
+   * @return duplicated IODataDesc
+   * @throws IOException
+   */
+  public IODataDesc duplicate() throws IOException {
+    List<Entry> newEntries = new ArrayList<>(akeyEntries.size());
+    akeyEntries.forEach(e -> {
+      try {
+        newEntries.add(e.duplicate());
+      } catch (IOException ioException) {
+        ioException.printStackTrace();
+      }
+    });
+    return new IODataDesc(dkey, newEntries, updateOrFetch);
   }
 
   private String updateOrFetchStr(boolean v) {
@@ -229,6 +249,14 @@ public class IODataDesc {
 
   public List<Entry> getAkeyEntries() {
     return akeyEntries;
+  }
+
+  public Entry getEntry(int index) {
+    return akeyEntries.get(index);
+  }
+
+  public int numberOfEntries() {
+    return akeyEntries.size();
   }
 
   /**
@@ -543,7 +571,7 @@ public class IODataDesc {
       encoded = true;
     }
 
-    protected void releaseFetchDataBuffer() {
+    public void releaseFetchDataBuffer() {
       if (!updateOrFetch && dataBuffer != null) {
         dataBuffer.release();
         dataBuffer = null;
@@ -552,6 +580,20 @@ public class IODataDesc {
 
     public int getRequestSize() {
       return dataSize;
+    }
+
+    /**
+     * duplicate this object.
+     * Do not forget to release this object.
+     *
+     * @return duplicated Entry
+     * @throws IOException
+     */
+    public Entry duplicate() throws IOException {
+      if (updateOrFetch) {
+        return new Entry(key, type, recordSize, offset, dataBuffer);
+      }
+      return new Entry(key, type, recordSize, offset, dataSize);
     }
 
     @Override
