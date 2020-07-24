@@ -1024,7 +1024,7 @@ pipeline {
                         // test results, and while code coverate is being
                         // added.
                         unitTestPost coverage_healthy: [methodCoverage: 40,
-                                                        conditionalCoverge: 20,
+                                                        conditionalCoverage: 20,
                                                         statementCoverage: 0],
                                      ignore_failure: true
                         }
