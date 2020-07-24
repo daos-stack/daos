@@ -17,9 +17,12 @@ DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-if [ "$1" == "memcheck" ]; then
-    rm -rf run_test_memcheck.sh
-    WITH_VALGRIND=memcheck
+
+if [ $# -ge 1 ] && [ -n "$1" ]; then
+    if [ "$1" == "memcheck" ]; then
+        rm -rf run_test_memcheck.sh
+        WITH_VALGRIND=memcheck
+    fi
 else
     rm -rf run_test.sh vm_test
     WITH_VALGRIND=disabled
