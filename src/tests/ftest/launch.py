@@ -897,7 +897,8 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Create a subdirectory in the avocado logs directory for this test
     daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
     print("Archiving host logs from {} in {}".format(host_list, daos_logs_dir))
-    get_output(["mkdir", daos_logs_dir])
+    os.mkdir(daos_logs_dir)
+    print(get_output(["df", "-h", daos_logs_dir]))
 
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Attempt all of the commands and
@@ -908,7 +909,8 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "rc=0",
         "copied=()",
         "for file in $(ls {}/*.log)".format(logs_dir),
-        "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+        "do ls -sh $file",
+        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_logs_dir),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",

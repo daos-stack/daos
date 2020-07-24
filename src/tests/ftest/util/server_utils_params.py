@@ -343,7 +343,7 @@ class DaosServerYamlParameters(YamlParameters):
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.pinned_numa_node = BasicParameter(None)
-            self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR")
+            self.log_mask = BasicParameter(None, "INFO")
             self.log_file = LogParameter(log_dir, None, "daos_server.log")
 
             # Set extra environment variables for sockets provider
