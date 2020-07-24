@@ -1349,6 +1349,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	if (rc)
 		D_GOTO(failed, rc);
 
+	ioc->ioc_csummer_init = 1;
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
 	if (rc)
@@ -1366,22 +1367,10 @@ failed:
 	return rc;
 }
 
-static bool
-obj_ioc_is_rebuild_container(struct obj_io_context *ioc)
-{
-	if (ioc->ioc_coh == NULL ||
-	    ioc->ioc_coc == NULL ||
-	    ioc->ioc_coc->sc_pool == NULL)
-		return false;
-
-	return is_container_from_srv(ioc->ioc_coc->sc_pool->spc_uuid,
-				    ioc->ioc_coh->sch_uuid);
-}
-
 static void
 obj_ioc_fini(struct obj_io_context *ioc)
 {
-	if (obj_ioc_is_rebuild_container(ioc))
+	if (ioc->ioc_csummer_init)
 		daos_csummer_destroy(&ioc->ioc_coh->sch_csummer);
 
 	if (ioc->ioc_coh != NULL) {
@@ -1456,7 +1445,7 @@ obj_ioc_begin(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	}
 out:
 	dss_rpc_cntr_enter(DSS_RC_OBJ);
-	ioc->ioc_began = true;
+	ioc->ioc_began = 1;
 	return rc;
 }
 
@@ -1465,7 +1454,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_began) {
 		dss_rpc_cntr_exit(DSS_RC_OBJ, !!err);
-		ioc->ioc_began = false;
+		ioc->ioc_began = 0;
 	}
 	obj_ioc_fini(ioc);
 }
