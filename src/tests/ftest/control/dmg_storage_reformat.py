@@ -49,7 +49,7 @@ class DmgStorageReformatTest(ControlTestBase):
 
         # At this point the server has been started, storage has been formatted
         # We need to get the superblock file information
-        scm_mount = self.server_managers[-1].get_config_value("scm_mount")
+        scm_mount = self.server_managers[-1].get_config_value("scm_mount")[0]
         orig_uuid = self.get_superblock_info(
             os.path.join(scm_mount, "superblock"), "uuid")
 

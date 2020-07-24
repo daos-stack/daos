@@ -24,8 +24,7 @@
 import os
 
 from command_utils_base import \
-    BasicParameter, LogParameter, YamlParameters, TransportCredentials, \
-    EnvironmentVariables
+    BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
 
 class DaosServerTransportCredentials(TransportCredentials):
@@ -197,17 +196,20 @@ class DaosServerYamlParameters(YamlParameters):
             name (str): name of the attribute from which to get the value
 
         Returns:
-            object: the object's value referenced by the attribute name
+            object: the object's value referenced by the attribute name.  In the
+                case of a PerServerYamlParameters attribute name, a list of
+                values corresponding to their self.server_params index will be
+                returned.
 
         """
         value = super(DaosServerYamlParameters, self).get_value(name)
 
-        # Look for the value in the per-server configuration parameters.  The
-        # first value found will be returned.
-        index = 0
-        while value is None and index < len(self.server_params):
-            value = self.server_params[index].get_value(name)
-            index += 1
+        # Look for the value in the per-server configuration parameters.  All
+        # values found will be returned in a list.
+        if value is None and self.server_params:
+            value = []
+            for server_params in self.server_params:
+                value.append(server_params.get_value(name))
 
         return value
 
@@ -268,7 +270,6 @@ class DaosServerYamlParameters(YamlParameters):
                 server_params.log_file.update(
                     "".join(log_name),
                     "server_config.server[{}].log_file".format(index))
-
 
     class PerServerYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""

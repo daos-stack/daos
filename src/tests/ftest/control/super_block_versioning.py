@@ -47,7 +47,7 @@ class SuperBlockVersioning(TestWithServers):
         :avocado: tags=all,tiny,pr,ds_versioning,basic
         """
         # Check that the superblock file exists under the scm_mount dir.
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")[0]
         fname = os.path.join(scm_mount, "superblock")
         check_result = check_file_exists(self.hostlist_servers, fname)
         if not check_result[0]:

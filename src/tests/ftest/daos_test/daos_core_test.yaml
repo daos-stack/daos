@@ -48,6 +48,7 @@ daos_tests:
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
+      scalable_endpoint: True
     test_m:
       daos_test: m
       test_name: Management tests

@@ -94,7 +94,7 @@ class CartSelfTest(TestWithServers):
         self.cart_env["CRT_PHY_ADDR_STR"] = \
             self.server_managers[0].get_config_value("provider")
         self.cart_env["OFI_INTERFACE"] = \
-            self.server_managers[0].get_config_value("fabric_iface")
+            self.server_managers[0].get_config_value("fabric_iface")[0]
         self.server_managers[0].manager.assign_environment(self.cart_env, True)
 
         # Start the daos server
