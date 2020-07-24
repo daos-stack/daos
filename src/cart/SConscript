@@ -115,10 +115,10 @@ def scons():
     denv.Requires(cart_lib, [swim_targets, gurt_lib])
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
-    
+
     Default(cart_lib) #DM
     Export('cart_lib', 'cart_targets') #DM
-    
+
     if not env.GetOption('clean') and not env.GetOption('help'):
 
         print("Checking local headers can be included")
