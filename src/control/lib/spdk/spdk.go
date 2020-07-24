@@ -86,25 +86,25 @@ func (e *Env) InitSPDKEnv(shmID int, pciWhiteList []string) (err error) {
 	// quiet DPDK EAL logging by setting log level to ERROR
 	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
 
-	if len(pciWhiteList) != 0 {
-		var tmpAddr *C.struct_spdk_pci_addr
-		structSize := unsafe.Sizeof(*tmpAddr)
-
-		outAddrs := C.malloc(C.ulong(structSize) * C.ulong(len(pciWhiteList)))
-		defer C.free(unsafe.Pointer(outAddrs))
-
-		for i, inAddr := range pciWhiteList {
-			offset := uintptr(i) * structSize
-			tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
-
-			rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr))
-			if err = Rc2err("spdk_pci_addr_parse", rc); err != nil {
-				return
-			}
-		}
-
-		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(outAddrs)
-	}
+	//	if len(pciWhiteList) != 0 {
+	//		var tmpAddr *C.struct_spdk_pci_addr
+	//		structSize := unsafe.Sizeof(*tmpAddr)
+	//
+	//		outAddrs := C.malloc(C.ulong(structSize) * C.ulong(len(pciWhiteList)))
+	//		defer C.free(unsafe.Pointer(outAddrs))
+	//
+	//		for i, inAddr := range pciWhiteList {
+	//			offset := uintptr(i) * structSize
+	//			tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
+	//
+	//			rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr))
+	//			if err = Rc2err("spdk_pci_addr_parse", rc); err != nil {
+	//				return
+	//			}
+	//		}
+	//
+	//		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(outAddrs)
+	//	}
 
 	rc := C.spdk_env_init(opts)
 	if err = Rc2err("spdk_env_opts_init", rc); err != nil {

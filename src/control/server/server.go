@@ -174,7 +174,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
-		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
+		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
 		DisableVFIO:   cfg.DisableVFIO,
 	}
 
@@ -226,6 +226,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		if err != nil {
 			return errors.Wrap(err, "VMD could not be enabled")
 		}
+		log.Debugf("VMD type devices detected: %v", vmdDevs)
 
 		// If VMD devices are going to be used, then need to run a separate
 		// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST

@@ -41,7 +41,6 @@ import "C"
 
 import (
 	"os"
-	"strings"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -181,55 +180,64 @@ func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
 
-// DiscoverVmd discovers NVMe SSD PCIe addresses behind VMD
+//func isVmdDevType(log logging.Logger, dev *C.struct_spdk_pci_device) bool {
+//	defer func() {
+//		if r := recover(); r != nil {
+//			fmt.Printf("Recovering from panic in isVmdDevType, error is: %v \n", r)
+//		}
+//	}()
+//
+//	if dev.internal.removed || dev.internal.pending_removal {
+//		log.Debug("isVmdDevType(): skipping removed or pending removal device")
+//		return false
+//	}
+//
+//	log.Debugf("domain bus dev func, type : %x %x %x %x, %s",
+//		dev.addr.domain, dev.addr.bus, dev.addr.dev, dev.addr._func,
+//		C.GoString(dev._type))
+//	devType := C.spdk_pci_device_get_type(dev)
+//	if strings.Compare(C.GoString(devType), "vmd") == 0 {
+//		log.Debugf("pci device: %+v", dev)
+//		return true
+//	}
+//
+//	return false
+//}
+
+// DiscoverVmd discovers NVMe SSD PCIe addresses behind VMD.
 func (n *Nvme) DiscoverVmd(log logging.Logger) (addrs []string, err error) {
-	var rc C.int
+	ctrlrs, err := processReturn(C.nvme_discover_vmd(),
+		"NVMe DiscoverVmd(): C.nvme_discover_vmd")
 
-	addr_buf := C.malloc(C.sizeof_char * 128)
-	defer C.free(unsafe.Pointer(addr_buf))
+	pciAddrs := pciAddressList(ctrlrs)
+	log.Debugf("discovered backing nvme ssds behind vmd: %v", pciAddrs)
 
-	count := 0
-	pci_device := C.spdk_pci_get_first_device()
-	for pci_device != nil {
-		devType := C.spdk_pci_device_get_type(pci_device)
-		log.Debugf("spdk device type %+v", devType)
-		if devType != nil && strings.Compare(C.GoString(devType), "vmd") == 0 {
-			count += 1
-		}
-
-		pci_device = C.spdk_pci_get_next_device(pci_device)
-	}
-
-	addrs = make([]string, 0, count)
-
-	i := 0
-	pci_device = C.spdk_pci_get_first_device()
-	for pci_device != nil {
-		devType := C.spdk_pci_device_get_type(pci_device)
-
-		if strings.Compare(C.GoString(devType), "vmd") == 0 {
-			rc = C.spdk_pci_addr_fmt((*C.char)(addr_buf), C.sizeof_char*128,
-				&pci_device.addr)
-			if rc != 0 {
-				if err = Rc2err("spdk_pci_addr_fmt", rc); err != nil {
-					continue
-				}
-			}
-
-			if i == count {
-				break
-			}
-			addrs = append(addrs, C.GoString((*C.char)(addr_buf)))
-		}
-
-		pci_device = C.spdk_pci_get_next_device(pci_device)
-		i += 1
-	}
-
-	log.Debugf("discovered nvme ssds behind VMD: %v", addrs)
-
-	return addrs, nil
+	return pciAddrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
+
+//	addrBuf := C.malloc(C.sizeof_char * 128)
+//	defer C.free(unsafe.Pointer(addrBuf))
+//
+//	var rc C.int
+//	for dev := C.spdk_pci_get_first_device(); dev != nil; dev = C.spdk_pci_get_next_device(dev) {
+//		if !isVmdDevType(log, dev) {
+//			continue
+//		}
+//
+//		cs := C.CString("")
+//		rc = C.spdk_pci_addr_fmt(cs, C.sizeof_char*128, &dev.addr)
+//		if err = Rc2err("spdk_pci_addr_fmt", rc); err != nil {
+//			return nil, err
+//		}
+//		log.Debugf("mainstream: %s", C.GoString(cs))
+//		addrs = append(addrs, C.GoString(cs)) //(*C.char)(addrBuf)))
+//		C.free(unsafe.Pointer(cs))
+//	}
+//
+//	log.Debugf("discovered nvme ssds behind VMD: %v", addrs)
+//
+//	return addrs, nil
+//}
 
 // Format device at given pci address, destructive operation!
 //

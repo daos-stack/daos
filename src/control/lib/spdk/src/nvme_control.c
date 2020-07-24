@@ -70,6 +70,12 @@ nvme_discover(void)
 	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs);
 }
 
+struct ret_t *
+nvme_discover_vmd(void)
+{
+	return _discover_vmd(&spdk_nvme_probe, true, &get_dev_health_logs);
+}
+
 static void
 write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 {
@@ -312,7 +318,7 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	/* collect() will allocate and return a new ret structure */
 	clean_ret(ret);
 	free(ret);
-	return collect();
+	return collect(false);
 }
 
 void

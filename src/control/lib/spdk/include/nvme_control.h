@@ -45,6 +45,9 @@ struct format_sequence {
 struct ret_t *
 nvme_discover(void);
 
+struct ret_t *
+nvme_discover_vmd(void);
+
 /**
  * Wipe NVMe controller namespace LBA-0.
  *

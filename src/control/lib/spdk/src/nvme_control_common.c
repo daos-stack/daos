@@ -217,7 +217,32 @@ _discover(prober probe, bool detach, health_getter get_health)
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
-	return collect();
+	return collect(false);
+fail:
+	cleanup(detach);
+	return init_ret(rc);
+}
+
+struct ret_t *
+_discover_vmd(prober probe, bool detach, health_getter get_health)
+{
+	int			 rc;
+
+	/*
+	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
+	 *  for each NVMe controller found, giving our application a choice on
+	 *  whether to attach to each controller.  attach_cb will then be
+	 *  called for each controller after the SPDK NVMe driver has completed
+	 *  initializing the controller we chose to attach.
+	 */
+	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
+	if (rc != 0)
+		goto fail;
+
+	if (!g_controllers || !g_controllers->ctrlr)
+		return init_ret(0); /* no controllers */
+
+	return collect(true);
 fail:
 	cleanup(detach);
 	return init_ret(rc);
@@ -311,7 +336,7 @@ collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 
 void
 _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
-	 socket_id_getter get_socket_id)
+	 socket_id_getter get_socket_id, bool vmd_only)
 {
 	struct ctrlr_entry		       *ctrlr_entry;
 	struct spdk_pci_device		       *pci_dev;
@@ -348,6 +373,13 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 		if (!pci_dev) {
 			rc = -NVMEC_ERR_GET_PCI_DEV;
 			goto fail;
+		}
+
+		if (vmd_only) {
+			if (strcmp(spdk_pci_device_get_type(pci_dev), "vmd") == 0) {
+				free(ctrlr_tmp);
+				continue;
+			}
 		}
 
 		/* populate numa socket id */
@@ -387,13 +419,13 @@ fail:
 }
 
 struct ret_t *
-collect(void)
+collect(bool vmd_only)
 {
 	struct ret_t *ret;
 
 	ret = init_ret(0);
 	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
-		 &spdk_pci_device_get_socket_id);
+		 &spdk_pci_device_get_socket_id, vmd_only);
 
 	return ret;
 }
