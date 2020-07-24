@@ -194,7 +194,7 @@ do {								\
 		"%p addref from zero\n", __ivns);		\
 	__ref = ++__ivns->cii_ref_count;			\
 	D_SPIN_UNLOCK(&__ivns->cii_ref_lock);			\
-	D_DEBUG(DB_ALL, "addref to %d ivns=%p\n",		\
+	D_DEBUG(DB_TRACE, "addref to %d ivns=%p\n",		\
 		 __ref, __ivns);				\
 } while (0)
 
@@ -213,7 +213,7 @@ do {								\
 	__ivns->cii_ref_count -= num;				\
 	__ref = __ivns->cii_ref_count;				\
 	D_SPIN_UNLOCK(&__ivns->cii_ref_lock);			\
-	D_DEBUG(DB_ALL, "decref to %d ivns=%p\n",		\
+	D_DEBUG(DB_TRACE, "decref to %d ivns=%p\n",		\
 		__ref, __ivns);					\
 								\
 	if (__ref == 0)						\
