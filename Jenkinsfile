@@ -1019,9 +1019,14 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost coverage_healthy: [methodCoverage: 40,
+                        // These are only set while dealing with issues
+                        // caused by code coverage instrumentation affecting
+                        // test results, and while code coverate is being
+                        // added.
+                        unitTestPost coverage_healthy: [methodCoverage: 40,
                                                         conditionalCoverge: 20,
-                                                        statementCoverage: 0]
+                                                        statementCoverage: 0],
+                                     ignore_failure: true
                         }
                     }
                 }
