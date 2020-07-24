@@ -33,15 +33,25 @@ class CommandFailure(Exception):
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
 
-    def __init__(self, value, default=None):
+    def __init__(self, value, default=None, yaml_key=None):
         """Create a BasicParameter object.
+
+        Normal use includes assigning this object to a attribute name that
+        matches the test yaml file key used to assign its value.  If the
+        variable name will conflict with another class attribute, e.g. self.log,
+        then the `yaml_key` argument can used to define the test yaml file key
+        independently of the attribute name.
 
         Args:
             value (object): initial value for the parameter
             default (object, optional): default value. Defaults to None.
+            yaml_key (str, optional): the yaml key name to use when finding the
+                value to assign from the test yaml file. Default is None which
+                will use the object's variable name as the yaml key.
         """
         self.value = value if value is not None else default
         self._default = default
+        self._yaml_key = yaml_key
         self.log = getLogger(__name__)
 
     def __str__(self):
@@ -61,6 +71,9 @@ class BasicParameter(object):
             test (Test): avocado Test object to use to read the yaml file
             path (str): yaml path where the name is to be found
         """
+        if self._yaml_key is not None:
+            # Use the yaml key name instead of the variable name
+            name = self._yaml_key
         if hasattr(test, "config") and test.config is not None:
             self.value = test.config.get(name, path, self._default)
         else:
@@ -73,7 +86,7 @@ class BasicParameter(object):
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
                 used to display the update. Defaults to None.
-            append (bool, optional): appemnd/extend/update the current list/dict
+            append (bool, optional): append/extend/update the current list/dict
                 with the provided value.  Defaults to False - override the
                 current value.
         """
@@ -102,51 +115,30 @@ class BasicParameter(object):
         self._default = value
 
 
-class NamedParameter(BasicParameter):
-    # pylint: disable=too-few-public-methods
-    """A class for test parameters whose values are read from a yaml file.
-
-    This is essentially a BasicParameter object whose yaml value is obtained
-    with a different name than the one assigned to the object.
-    """
-
-    def __init__(self, name, value, default=None):
-        """Create a NamedParameter  object.
-
-        Args:
-            name (str): yaml key name
-            value (object): initial value for the parameter
-            default (object): default value for the param
-        """
-        super(NamedParameter, self).__init__(value, default)
-        self._name = name
-
-    def get_yaml_value(self, name, test, path):
-        """Get the value for the parameter from the test case's yaml file.
-
-        Args:
-            name (str): name of the value in the yaml file - not used
-            test (Test): avocado Test object to use to read the yaml file
-            path (str): yaml path where the name is to be found
-        """
-        return super(NamedParameter, self).get_yaml_value(
-            self._name, test, path)
-
-
 class FormattedParameter(BasicParameter):
     # pylint: disable=too-few-public-methods
     """A class for test parameters whose values are read from a yaml file."""
 
-    def __init__(self, str_format, default=None):
+    def __init__(self, str_format, default=None, yaml_key=None):
         """Create a FormattedParameter  object.
+
+        Normal use includes assigning this object to a attribute name that
+        matches the test yaml file key used to assign its value.  If the
+        variable name will conflict with another class attribute, e.g. self.log,
+        then the `yaml_key` argument can used to define the test yaml file key
+        independently of the attribute name.
 
         Args:
             str_format (str): format string used to convert the value into an
                 command line argument string
             default (object): default value for the param
+            yaml_key (str, optional): alternative yaml key name to use when
+                assigning the value from a yaml file. Default is None which
+                will use the object's variable name as the yaml key.
         """
         super(FormattedParameter, self).__init__(default, default)
         self._str_format = str_format
+        self._yaml_key = yaml_key
 
     def __str__(self):
         """Return a FormattedParameter object as a string.
@@ -171,6 +163,19 @@ class FormattedParameter(BasicParameter):
                 parameter = self._str_format.format(self.value)
 
         return parameter
+
+    def get_yaml_value(self, name, test, path):
+        """Get the value for the parameter from the test case's yaml file.
+
+        Args:
+            name (str): name of the value in the yaml file - not used
+            test (Test): avocado Test object to use to read the yaml file
+            path (str): yaml path where the name is to be found
+        """
+        if self._yaml_key is not None:
+            # Use the yaml key name instead of the variable name
+            name = self._yaml_key
+        return super(FormattedParameter, self).get_yaml_value(name, test, path)
 
 
 class LogParameter(FormattedParameter):
@@ -221,7 +226,7 @@ class LogParameter(FormattedParameter):
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
                 used to display the update. Defaults to None.
-            append (bool, optional): appemnd/extend/update the current list/dict
+            append (bool, optional): append/extend/update the current list/dict
                 with the provided value.  Defaults to False - override the
                 current value.
         """
@@ -581,7 +586,7 @@ class EnvironmentVariables(dict):
         """Get the command to export all of the environment variables.
 
         Args:
-            separator (str, optional): export command separtor.
+            separator (str, optional): export command separator.
                 Defaults to ";".
 
         Returns:
