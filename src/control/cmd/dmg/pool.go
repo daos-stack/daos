@@ -29,6 +29,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -141,6 +142,11 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	resp, err := control.PoolCreate(ctx, c.ctlInvoker, req)
+
+	// Gross hack! Test the theory that the CI failures are
+	// due to a race between finishing the pool creation and
+	// connecting to a pool while it's still being set up.
+	time.Sleep(5 * time.Second)
 
 	if c.jsonOutputEnabled() {
 		return c.outputJSON(resp, err)
