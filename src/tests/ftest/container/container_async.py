@@ -21,291 +21,211 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_function
 import traceback
-import uuid
-import threading
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import  DaosContainer, DaosApiError
+from test_utils_container import TestContainer
+from test_utils_base import CallbackHandler
 
-
-# pylint: disable=global-variable-not-assigned, global-statement
-GLOB_SIGNAL = None
-GLOB_RC = -99000000
-
-
-def cb_func(event):
-    """
-    Callback function for asynchronous container functionality.
-    """
-    global GLOB_SIGNAL
-    global GLOB_RC
-
-    GLOB_RC = event.event.ev_error
-    GLOB_SIGNAL.set()
+RC_SUCCESS = 0
 
 
 class ContainerAsync(TestWithServers):
-    """
-    Tests DAOS pool connect permissions (non existing pool handle, bad uuid)
-    and close.
+    """Tests asynchronous container operations.
+
+    Test create, destroy, open, close, and query.
+
+    Negative case tests the above operations with non-existing DaosContainer.
+    Not all operations are tested for the negative case.
 
     :avocado: recursive
     """
 
     def __init__(self, *args, **kwargs):
         super(ContainerAsync, self).__init__(*args, **kwargs)
-        self.container1 = None
-        self.container2 = None
+        self.container = []
 
-    @skipForTicket("DAOS-4106")
     def test_createasync(self):
+        """Test container create for asynchronous mode.
+
+        Test both positive and negative cases. For negative case, RC is -1002,
+        but we just check if it's something other than 0 to make the test
+        robust.
+
+        The negative case is more like a test of the API implementation rather
+        than DAOS itself.
+
+        :avocado: tags=all,small,full_regression,container,cont_create_async
         """
-        Test container create for asynchronous mode.
+        self.add_pool()
+        ph = self.pool.pool.handle
 
-        :avocado: tags=all,small,full_regression,container,createasync
-        """
+        cbh1 = CallbackHandler()
+        cbh2 = CallbackHandler()
+        tc1 = TestContainer(pool=self.pool, cb_handler=cbh1)
+        tc2 = TestContainer(pool=self.pool)
+        self.container.append(tc1)
+        self.container.append(tc2)
 
-        global GLOB_SIGNAL
-        global GLOB_RC
-
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.prepare_pool()
-        poh = self.pool.pool.handle
+        # We can't use TestContainer.create after the pool is destroyed, but we
+        # can't call create which creates the underlying DaosContainer, so
+        # manually instantiate it and set it.
+        tc2.container = DaosContainer(self.pool.context)
 
         try:
-            # Container initialization and creation
-            self.container1 = DaosContainer(self.context)
-            self.container2 = DaosContainer(self.context)
+            self.container[0].create()
+            self.assertEqual(
+                cbh1.ret_code, RC_SUCCESS,
+                "Async create failed! RC = {}".format(cbh1.ret_code))
 
-            GLOB_SIGNAL = threading.Event()
-            self.container1.create(poh=poh, con_uuid=None, cb_func=cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
-                self.fail("RC not as expected in async test")
-            print("RC after successful container create: ", GLOB_RC)
-
-            # Try to recreate container after destroying pool,
-            # this should fail. Checking rc after failure.
+            # Destroy pool and try to create the second container. TestContainer
+            # calls wait, but we're using DaosContainer, so we need to manually
+            # call it.
             self.pool.destroy(1)
-            GLOB_SIGNAL = threading.Event()
-            GLOB_RC = -9900000
-            self.container2.create(poh, None, cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC == 0:
-                self.fail("RC not as expected in async test")
-            print("RC after unsuccessful container create: ", GLOB_RC)
-
+            tc2.container.create(poh=ph, con_uuid=None, cb_func=cbh2.callback)
+            cbh2.wait()
+            self.assertTrue(
+                cbh2.ret_code is not None and cbh2.ret_code != 0,
+                "Async create of non-existing container succeeded!")
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
 
     def test_destroyasync(self):
+        """Test container destroy for asynchronous mode.
+
+        Test only positive case. We don't test negative case because the API is
+        implemented so that it returns the error code before executing the
+        callback function, so if we try it as it is, the test hangs.
+
+        :avocado: tags=all,small,full_regression,container,cont_destroy_async
         """
-        Test container destroy for asynchronous mode.
+        self.add_pool()
 
-        :avocado: tags=all,small,full_regression,container,contdestroyasync
-        """
+        cbh = CallbackHandler()
+        self.container.append(TestContainer(pool=self.pool))
 
-        global GLOB_SIGNAL
-        global GLOB_RC
-
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.prepare_pool()
-        poh = self.pool.pool.handle
+        # We don't need to create asynchronously, so set the CallbackHandler
+        # after creating it.
+        self.container[0].create()
+        self.container[0].cb_handler = cbh
 
         try:
-            # Container initialization and creation
-            self.container1 = DaosContainer(self.context)
-            self.container2 = DaosContainer(self.context)
-
-            self.container1.create(poh)
-
-            GLOB_SIGNAL = threading.Event()
-            self.container1.destroy(1, poh, None, cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
-                self.fail("RC not as expected in async test")
-            print("RC after successful container create: ", GLOB_RC)
-
-            # Try to destroy container again, this should fail, as non-existent.
-            # Checking rc after failure.
-            GLOB_SIGNAL = threading.Event()
-            GLOB_RC = -9900000
-            self.container2.destroy(1, poh, None, cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != -1003:
-                self.fail("RC not as expected in async test")
-            print("RC after container destroy failed:", GLOB_RC)
+            self.container[0].destroy()
+            self.assertEqual(
+                cbh.ret_code, RC_SUCCESS,
+                "Async destroy failed! RC = {}".format(cbh.ret_code))
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
 
     def test_openasync(self):
+        """Test container open for asynchronous mode.
+
+        Test only positive case. We don't test negative case because the API is
+        implemented so that it returns the error code before executing the
+        callback function, so if we try it as it is, the test hangs.
+
+        :avocado: tags=all,small,full_regression,container,cont_open_async
         """
-        Test container open for asynchronous mode.
+        self.add_pool()
 
-        :avocado: tags=all,small,full_regression,container,openasync
-        """
+        cbh = CallbackHandler()
+        self.container.append(TestContainer(pool=self.pool))
 
-        global GLOB_SIGNAL
-        global GLOB_RC
-
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.prepare_pool()
-        poh = self.pool.pool.handle
+        # We don't need to create asynchronously, so set the CallbackHandler
+        # after creating it.
+        self.container[0].create()
+        self.container[0].cb_handler = cbh
 
         try:
-            # Container initialization and creation
-            self.container1 = DaosContainer(self.context)
-            self.container2 = DaosContainer(self.context)
-
-            self.container1.create(poh)
-
-            str_cuuid = self.container1.get_uuid_str()
-            cuuid = uuid.UUID(str_cuuid)
-
-            GLOB_SIGNAL = threading.Event()
-            self.container1.open(poh, cuuid, 2, cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
-                self.fail("RC not as expected in async test")
-            print("RC after successful container create: ", GLOB_RC)
-
-            # Try to open container2, this should fail, as non-existent.
-            # Checking rc after failure.
-            GLOB_SIGNAL = threading.Event()
-            GLOB_RC = -9900000
-            self.container2.open(None, None, None, cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC == 0:
-                self.fail("RC not as expected in async test")
-            print("RC after container destroy failed:", GLOB_RC)
-
-            # cleanup the container
-            self.container1.close()
-            self.container1.destroy()
+            self.container[0].open()
+            self.assertEqual(
+                cbh.ret_code, RC_SUCCESS,
+                "Async open failed! RC = {}".format(cbh.ret_code))
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
 
     def test_closeasync(self):
+        """Test container close for asynchronous mode.
+
+        Test both positive and negative cases.
+
+        :avocado: tags=all,small,full_regression,container,cont_close_async
         """
-        Test container close for asynchronous mode.
+        self.add_pool()
 
-        :avocado: tags=all,small,full_regression,container,closeasync
-        """
+        cbh1 = CallbackHandler()
+        cbh2 = CallbackHandler()
+        tc1 = TestContainer(pool=self.pool)
+        tc2 = TestContainer(pool=self.pool)
+        self.container.append(tc1)
+        self.container.append(tc2)
 
-        global GLOB_SIGNAL
-        global GLOB_RC
+        # We need to open to test close.
+        tc1.create()
+        tc1.open()
+        tc1.cb_handler = cbh1
 
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.prepare_pool()
-        poh = self.pool.pool.handle
+        # We'll test to close the non-existing container, so just instantiate
+        # the underlying DaosContainer and set it.
+        tc2.container = DaosContainer(self.pool.context)
+        tc2.cb_handler = cbh2
 
         try:
-            # Container initialization and creation
-            self.container1 = DaosContainer(self.context)
-            self.container2 = DaosContainer(self.context)
+            tc1.close()
+            self.assertEqual(
+                cbh1.ret_code, RC_SUCCESS,
+                "Async close failed! RC = {}".format(cbh1.ret_code))
 
-            self.container1.create(poh)
-
-            str_cuuid = self.container1.get_uuid_str()
-            cuuid = uuid.UUID(str_cuuid)
-
-            self.container1.open(poh, cuuid, 2)
-
-            GLOB_SIGNAL = threading.Event()
-            self.container1.close(cb_func=cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
-                self.fail("RC not as expected in async test: "
-                          "{0}".format(GLOB_RC))
-            print("RC after successful container create: ", GLOB_RC)
-
-            # Try to open container2, this should fail, as non-existent.
-            # Checking rc after failure.
-            GLOB_SIGNAL = threading.Event()
-            GLOB_RC = -9900000
-            self.container2.close(cb_func=cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC == 0:
-                self.fail("RC not as expected in async test: "
-                          "{0}".format(GLOB_RC))
-            print("RC after container destroy failed:", GLOB_RC)
-
-            # cleanup the container
-            self.container1.destroy()
+            # If we use TestContainer, it'll call the wait for us, but we're
+            # using DaosContainer, so we need to manually call it.
+            tc2.container.close(cb_func=cbh2.callback)
+            cbh2.wait()
+            self.assertTrue(
+                cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
+                "Async close of non-existing container succeeded! " +
+                "RC = {}".format(cbh2.ret_code))
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
 
     def test_queryasync(self):
+        """Test container query for asynchronous mode.
+
+        Test both positive and negative cases.
+
+        :avocado: tags=all,small,full_regression,container,cont_query_async
         """
-        Test container query for asynchronous mode.
+        self.add_pool()
 
-        :avocado: tags=all,small,full_regression,container,queryasync
-        """
+        cbh1 = CallbackHandler()
+        cbh2 = CallbackHandler()
+        tc1 = TestContainer(pool=self.pool)
+        tc2 = TestContainer(pool=self.pool)
+        self.container.append(tc1)
+        self.container.append(tc2)
 
-        global GLOB_SIGNAL
-        global GLOB_RC
+        tc1.create()
+        tc1.cb_handler = cbh1
 
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.prepare_pool()
-        poh = self.pool.pool.handle
+        tc2.container = DaosContainer(self.pool.context)
+        tc2.cb_handler = cbh2
 
         try:
-            # Container initialization and creation
-            self.container1 = DaosContainer(self.context)
-            self.container2 = DaosContainer(self.context)
+            tc1.get_info()
+            self.assertEqual(
+                cbh1.ret_code, RC_SUCCESS,
+                "Async query failed! RC = {}".format(cbh1.ret_code))
 
-            self.container1.create(poh)
-
-            dummy_str_cuuid = self.container1.get_uuid_str()
-
-            # Open container
-            self.container1.open(poh, None, 2, None)
-
-            GLOB_SIGNAL = threading.Event()
-            self.container1.query(cb_func=cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
-                self.fail("RC not as expected in async test: "
-                          "{0}".format(GLOB_RC))
-            print("RC after successful container create: ", GLOB_RC)
-
-            # Close opened container
-            self.container1.close()
-
-            # Try to open container2, this should fail, as non-existent.
-            # Checking rc after failure.
-            GLOB_SIGNAL = threading.Event()
-            GLOB_RC = -9900000
-            self.container2.query(cb_func=cb_func)
-
-            GLOB_SIGNAL.wait()
-            if GLOB_RC == 0:
-                self.fail("RC not as expected in async test: "
-                          "{0}".format(GLOB_RC))
-            print("RC after container destroy failed:", GLOB_RC)
-
-            # cleanup the container
-            self.container1.destroy()
+            tc2.container.query(cb_func=cbh2.callback)
+            cbh2.wait()
+            self.assertTrue(
+                cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
+                "Async query of non-existing container succeeded! " +
+                "RC = {}".format(cbh2.ret_code))
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())

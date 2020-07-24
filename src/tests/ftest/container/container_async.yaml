@@ -3,11 +3,13 @@ hosts:
     - server-A
     - server-B
     - server-C
-timeout: 80
+timeout: 60
 server_config:
   name: daos_server
 pool:
   control_method: dmg
   name: daos_server
-  scm_size: 16777216
+  scm_size: 1G
   mode: 146
+container:
+  control_method: API
