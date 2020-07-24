@@ -1390,6 +1390,28 @@ out:
 }
 
 int
+obj_ec_encode(struct obj_reasb_req *reasb_req)
+{
+	uint32_t	i;
+	int		rc;
+
+	for (i = 0; i < reasb_req->orr_iod_nr; i++) {
+		rc = obj_ec_recx_encode(reasb_req, reasb_req->orr_oid,
+					&reasb_req->orr_iods[i],
+					&reasb_req->orr_sgls[i],
+					reasb_req->orr_oca,
+					&reasb_req->orr_recxs[i]);
+		if (rc) {
+			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
+				DP_OID(reasb_req->orr_oid), rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+int
 obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 		 struct daos_oclass_attr *oca, struct obj_reasb_req *reasb_req,
 		 bool update)
@@ -1399,6 +1421,8 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 	uint32_t		 iod_nr = args->nr;
 	int			 i, rc = 0;
 
+	reasb_req->orr_oid = oid;
+	reasb_req->orr_iod_nr = iod_nr;
 	if (!reasb_req->orr_size_fetch) {
 		reasb_req->orr_uiods = iods;
 		reasb_req->orr_usgls = sgls;
@@ -1447,14 +1471,6 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 			goto out;
 		}
 
-		rc = obj_ec_recx_encode(reasb_req, oid, &iods[i], &sgls[i], oca,
-					&reasb_req->orr_recxs[i]);
-		if (rc) {
-			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
-				DP_OID(oid), rc);
-			goto out;
-		}
-
 		rc = obj_ec_recx_reasb(&iods[i], &sgls[i], oca, reasb_req, i,
 				       update);
 		if (rc) {
@@ -1462,6 +1478,12 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 				DP_OID(oid), rc);
 			goto out;
 		}
+	}
+
+	rc = obj_ec_encode(reasb_req);
+	if (rc) {
+		D_ERROR(DF_OID" obj_ec_encode failed %d.\n", DP_OID(oid), rc);
+		goto out;
 	}
 
 	for (i = 0; !reasb_req->orr_size_fetched && i < obj_ec_tgt_nr(oca);
