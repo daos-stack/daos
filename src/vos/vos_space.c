@@ -33,10 +33,19 @@
 static inline daos_size_t
 get_frag_overhead(daos_size_t tot_size, int media)
 {
-	if (media == DAOS_MEDIA_SCM)
-		return (tot_size * 5) / 100;
-	else
-		return (tot_size * 2) / 100;
+	daos_size_t	min_sz = (2ULL << 30);	/* 2GB */
+	daos_size_t	max_sz = (10ULL << 30);	/* 10GB */
+	daos_size_t	ovhd;
+
+	ovhd = (media == DAOS_MEDIA_SCM) ?
+		(tot_size * 5) / 100 : (tot_size * 2) / 100;
+
+	if (ovhd < min_sz)
+		ovhd = min_sz;
+	else if (ovhd > max_sz)
+		ovhd = max_sz;
+
+	return ovhd;
 }
 
 void

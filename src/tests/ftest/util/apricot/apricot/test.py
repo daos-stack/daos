@@ -138,7 +138,12 @@ class Test(avocadoTest):
     # pylint: enable=invalid-name
 
     def get_test_name(self):
-        """Obtain test name from self.__str__()."""
+        """Obtain the test method name from the Avocado test name.
+
+        Returns:
+            str: name of the test method
+
+        """
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
 
@@ -370,7 +375,7 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             agent_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos agent using a unquie server group name
+                which to start the daos agent using a unique server group name
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
@@ -411,7 +416,7 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             server_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos server using a unquie server group name
+                which to start the daos server using a unique server group name
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos server on all server
                 hosts specified in the test's yaml file.
@@ -795,7 +800,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
                 test yaml file. Defaults to None.
-            create ((bool, optional): should the pool be created. Defaults to
+            create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
@@ -805,8 +810,7 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(
-            self.context, dmg_command=self.server_managers[index].dmg)
+        pool = TestPool(self.context, dmg_command=self.get_dmg_command(index))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
@@ -824,7 +828,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
                 test yaml file. Defaults to None.
-            create ((bool, optional): should the pool be created. Defaults to
+            create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
