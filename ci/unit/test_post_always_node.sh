@@ -5,7 +5,9 @@ set -uex
 cd "$DAOS_BASE"
 mkdir run_test.sh
 mkdir vm_test
-mv nlt-errors.json vm_test/
+if [ -e nlt-errors.json ]; then
+  mv nlt-errors.json vm_test/
+fi
 if ls /tmp/daos*.log > /dev/null; then
   mv /tmp/daos*.log run_test.sh/
 fi
