@@ -552,7 +552,8 @@ int
 dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch);
 
 int
-dc_tx_set_epoch(tse_task_t *task, daos_handle_t th, daos_epoch_t epoch);
+dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
+	     int rep_rc, daos_epoch_t rep_epoch);
 
 int
 dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);

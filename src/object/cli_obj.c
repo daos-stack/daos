@@ -40,7 +40,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(21)
+#define OBJ_TGT_INLINE_NR	(20)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -2288,7 +2288,22 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 					shard_task_reset_param, &reset_arg);
 			}
 			goto task_sched;
-		} else if (!require_shard_task) {
+		} else if (require_shard_task) {
+			/*
+			 * The absence of shard tasks indicates that the epoch
+			 * was already chosen in the previous attempt. In this
+			 * attempt, since an epoch has not been chosen yet, the
+			 * TX must have been restarted between the two
+			 * attempts. This operation, therefore, is no longer
+			 * relevant for the restarted TX.
+			 *
+			 * This is only a temporary workaround; we will prevent
+			 * this case from happening in the first place, by
+			 * aborting and waiting for associated operations when
+			 * restarting a TX.
+			 */
+			return -DER_OP_CANCELED;
+		} else {
 			D_ASSERT(tgts_nr == 1);
 			shard_auxi = obj_embedded_shard_arg(obj_auxi);
 			D_ASSERT(shard_auxi != NULL);

@@ -145,13 +145,11 @@ enum obj_rpc_flags {
 	ORF_EPOCH_UNCERTAIN	= (1 << 6),
 	/** Erasure coding degraded fetch flag */
 	ORF_EC_DEGRADED		= (1 << 7),
-	/** The epoch (e.g., orw_epoch for OBJ_RW) is a hint. */
-	ORF_EPOCH_HINT		= (1 << 8),
 	/**
 	 * ENUM without an epoch range. oei_epr.epr_lo is epoch_first;
 	 * oei_epr.epr_hi is epoch.
 	 */
-	ORF_ENUM_WITHOUT_EPR	= (1 << 9),
+	ORF_ENUM_WITHOUT_EPR	= (1 << 8),
 };
 
 struct obj_iod_array {

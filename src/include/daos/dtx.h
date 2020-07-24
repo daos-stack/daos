@@ -183,21 +183,19 @@ enum daos_dtx_alb {
 
 /** Epoch context of a DTX */
 struct dtx_epoch {
-	daos_epoch_t	oe_value;	/**< epoch or epoch hint */
+	daos_epoch_t	oe_value;	/**< epoch */
 	daos_epoch_t	oe_first;	/**< first epoch chosen */
 	uint64_t	oe_flags;	/**< DTX_EPOCH_UNCERTAIN, etc. */
 };
 
 /* dtx_epoch.oe_flags */
 #define DTX_EPOCH_UNCERTAIN	(1ULL << 0)	/**< oe_value is uncertain */
-#define DTX_EPOCH_HINT		(1ULL << 1)	/**< oe_value is a hint */
 
 /** Does \a epoch contain a chosen TX epoch? */
 static inline bool
 dtx_epoch_chosen(struct dtx_epoch *epoch)
 {
-	return (!(epoch->oe_flags & DTX_EPOCH_HINT) && epoch->oe_value != 0 &&
-		epoch->oe_value != DAOS_EPOCH_MAX);
+	return (epoch->oe_value != 0 && epoch->oe_value != DAOS_EPOCH_MAX);
 }
 
 /** Are \a and \b equal? */

@@ -278,21 +278,27 @@ dc_tx_cleanup(struct dc_tx *tx)
 		  tx->tx_sub_count);
 }
 
-/** Set the epoch of \a th to \a epoch. */
+/**
+ * End a operation associated with transaction \a th.
+ *
+ * \param[in]	task		current task
+ * \param[in]	th		transaction handle
+ * \param[in]	req_epoch	request epoch
+ * \param[in]	rep_rc		reply rc
+ * \param[in]	rep_epoch	reply epoch
+ */
 int
-dc_tx_set_epoch(tse_task_t *task, daos_handle_t th, daos_epoch_t epoch)
+dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
+	     int rep_rc, daos_epoch_t rep_epoch)
 {
 	struct dc_tx	*tx;
 	int		 rc = 0;
 
 	D_ASSERT(task != NULL);
+	D_ASSERT(daos_handle_is_valid(th));
 
-	if (epoch == 0) {
+	if (rep_rc == 0 && (dtx_epoch_chosen(req_epoch) || rep_epoch == 0))
 		return 0;
-	} else if (epoch == DAOS_EPOCH_MAX) {
-		D_ERROR("invalid epoch: DAOS_EPOCH_MAX\n");
-		return -DER_INVAL;
-	}
 
 	tx = dc_tx_hdl2ptr(th);
 	if (tx == NULL) {
@@ -300,28 +306,38 @@ dc_tx_set_epoch(tse_task_t *task, daos_handle_t th, daos_epoch_t epoch)
 			th.cookie);
 		return -DER_NO_HDL;
 	}
-
 	D_MUTEX_LOCK(&tx->tx_lock);
+
 	if (tx->tx_status != TX_OPEN && tx->tx_status != TX_FAILED &&
 	    tx->tx_status != TX_COMMITTING) {
 		D_ERROR("Can't set epoch on non-open/non-failed/non-committing "
 			"TX (%d)\n", tx->tx_status);
 		rc = -DER_NO_PERM;
-	} else if (tx->tx_epoch_task == task) {
+		goto out;
+	}
+
+	/* TODO: Change the TX status according to rep_rc. */
+
+	if (rep_epoch == DAOS_EPOCH_MAX) {
+		D_ERROR("invalid reply epoch: DAOS_EPOCH_MAX\n");
+		rc = -DER_PROTO;
+		goto out;
+	}
+
+	if (tx->tx_epoch_task == task) {
 		D_ASSERT(!dtx_epoch_chosen(&tx->tx_epoch));
-		tx->tx_epoch.oe_value = epoch;
+		tx->tx_epoch.oe_value = rep_epoch;
 		if (tx->tx_epoch.oe_first == 0)
 			tx->tx_epoch.oe_first = tx->tx_epoch.oe_value;
-		tx->tx_epoch.oe_flags &= ~DTX_EPOCH_HINT;
 		D_DEBUG(DB_IO, DF_X64"/%p: set: value="DF_U64" first="DF_U64
 			" flags="DF_X64"\n", th.cookie, task,
 			tx->tx_epoch.oe_value, tx->tx_epoch.oe_first,
 			tx->tx_epoch.oe_flags);
 	}
+
+out:
 	D_MUTEX_UNLOCK(&tx->tx_lock);
-
 	dc_tx_decref(tx);
-
 	return rc;
 }
 
@@ -524,6 +540,12 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 	}
 	D_MUTEX_LOCK(&tx->tx_lock);
 
+	if (tx->tx_status == TX_FAILED) {
+		D_DEBUG(DB_IO, DF_X64"/%p: already failed\n", th.cookie, task);
+		rc = -DER_OP_CANCELED;
+		goto out;
+	}
+
 	if (dtx_epoch_chosen(&tx->tx_epoch)) {
 		/* The TX epoch is chosen before we acquire the lock. */
 		*epoch = tx->tx_epoch;
@@ -541,6 +563,8 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 		if (rc != 0) {
 			D_ERROR("cannot register completion callback: "DF_RC
 				"\n", DP_RC(rc));
+			tse_task_decref(tx->tx_epoch_task);
+			tx->tx_epoch_task = NULL;
 			goto out;
 		}
 		*epoch = tx->tx_epoch;
@@ -989,8 +1013,7 @@ dc_tx_restart(tse_task_t *task)
 		dc_tx_cleanup(tx);
 
 		tx->tx_status = TX_OPEN;
-		if (dtx_epoch_chosen(&tx->tx_epoch))
-			tx->tx_epoch.oe_flags |= DTX_EPOCH_HINT;
+		tx->tx_epoch.oe_value = 0;
 		if (tx->tx_epoch_task != NULL) {
 			tse_task_decref(tx->tx_epoch_task);
 			tx->tx_epoch_task = NULL;

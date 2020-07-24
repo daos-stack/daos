@@ -1467,8 +1467,6 @@ orf_to_dtx_epoch_flags(enum obj_rpc_flags orf_flags)
 
 	if (orf_flags & ORF_EPOCH_UNCERTAIN)
 		flags |= DTX_EPOCH_UNCERTAIN;
-	if (orf_flags & ORF_EPOCH_HINT)
-		flags |= DTX_EPOCH_HINT;
 	return flags;
 }
 
@@ -1630,39 +1628,23 @@ enum process_epoch_rc {
 };
 
 /*
- * Process the epoch state of an incoming operation. If the return value is
- * nonnegative, the epoch state shall contain a chosen epoch. Additionally, if
+ * Process the epoch state of an incoming operation. Once this function
+ * returns, the epoch state shall contain a chosen epoch. Additionally, if
  * the return value is PE_OK_LOCAL, the epoch can be used for local-RDG
  * operations without uncertainty.
  */
 static int
 process_epoch(uint64_t *epoch, uint64_t *epoch_first, uint32_t *flags)
 {
-	if (*flags & ORF_EPOCH_HINT) {
+	if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX)
 		/*
-		 * *epoch is a hint. Synchronize the HLC with the hint and
-		 * choose the current HLC reading as the TX epoch.
-		 */
-		if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX)
-			return -DER_INVAL;
-		*epoch = crt_hlc_get_msg(*epoch);
-		*flags &= ~ORF_EPOCH_HINT;
-	} else if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX) {
-		/*
-		 * *epoch is neither a hint nor a valid epoch. Choose the
-		 * current HLC reading as the TX epoch.
+		 * *epoch is not a chosen TX epoch. Choose the current HLC
+		 * reading as the TX epoch.
 		 */
 		*epoch = crt_hlc_get();
-	} else {
-		/*
-		 * *epoch is already a chosen TX epoch. Synchoronize the HLC
-		 * with the epoch, so that reading the HLC always produces an
-		 * epoch higher than the epochs of the operations completed on
-		 * this server.
-		 */
-		crt_hlc_get_msg(*epoch);
+	else
+		/* *epoch is already a chosen TX epoch. */
 		return PE_OK_REMOTE;
-	}
 
 	/* If this is the first epoch chosen, assign it to *epoch_first. */
 	if (epoch_first != NULL && *epoch_first == 0)
@@ -1714,13 +1696,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&orw->orw_epoch, &orw->orw_epoch_first,
 			   &orw->orw_flags);
-	if (rc < 0) {
-		D_ERROR(DF_UOID": failed to process epoch: "DF_RC"\n",
-			DP_UOID(orw->orw_oid), DP_RC(rc));
-		goto out;
-	} else if (rc == PE_OK_LOCAL) {
+	if (rc == PE_OK_LOCAL)
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
-	}
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle dth = {0};
@@ -1943,13 +1920,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_ENUM_WITHOUT_EPR) {
 		rc = process_epoch(&oei->oei_epr.epr_hi, &oei->oei_epr.epr_lo,
 				   &oei->oei_flags);
-		if (rc < 0) {
-			D_ERROR(DF_UOID": failed to process epoch: "DF_RC"\n",
-				DP_UOID(oei->oei_oid), DP_RC(rc));
-			goto failed;
-		} else if (rc == PE_OK_LOCAL) {
+		if (rc == PE_OK_LOCAL)
 			oei->oei_flags &= ~ORF_EPOCH_UNCERTAIN;
-		}
 	}
 
 	enum_arg->csummer = ioc->ioc_coh->sch_csummer;
@@ -2479,13 +2451,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&opi->opi_epoch, NULL /* epoch_first */,
 			   &opi->opi_flags);
-	if (rc < 0) {
-		D_ERROR(DF_UOID": failed to process epoch: "DF_RC"\n",
-			DP_UOID(opi->opi_oid), DP_RC(rc));
-		goto out;
-	} else if (rc == PE_OK_LOCAL) {
+	if (rc == PE_OK_LOCAL)
 		opi->opi_flags &= ~ORF_EPOCH_UNCERTAIN;
-	}
 
 	version = opi->opi_map_ver;
 	tgts = opi->opi_shard_tgts.ca_arrays;
@@ -2633,13 +2600,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	rc = process_epoch(&okqi->okqi_epoch, &okqi->okqi_epoch_first,
 			   &okqi->okqi_flags);
-	if (rc < 0) {
-		D_ERROR(DF_UOID": failed to process epoch: "DF_RC"\n",
-			DP_UOID(okqi->okqi_oid), DP_RC(rc));
-		goto out;
-	} else if (rc == PE_OK_LOCAL) {
+	if (rc == PE_OK_LOCAL)
 		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
-	}
 
 	dkey = &okqi->okqi_dkey;
 	akey = &okqi->okqi_akey;
