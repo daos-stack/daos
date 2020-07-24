@@ -29,9 +29,7 @@ if [ "$WITH_VALGRIND" = "memcheck" ]; then
     ls
     ls test_results
     # Remove DAOS_BASE from memcheck xml results
-    if ls test_results/results-*-memcheck.xml; then
-        sed -i "s:$DAOS_BASE::g" test_results/results-*-memcheck.xml
-    fi
+    ls -1 test_results/results-*-memcheck.xml | xargs sed -i "s:$DAOS_BASE::g"
 elif [ "$WITH_VALGRIND" = "disabled" ]; then
     # set CMOCKA envs here
     export CMOCKA_MESSAGE_OUTPUT=xml
