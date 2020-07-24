@@ -98,6 +98,10 @@ int main(int argc, char **argv)
 	d_iov_t			iov;
 	int			tag;
 
+#define NUM_EXTRA_CTX 9
+	crt_context_t		extra_ctx[NUM_EXTRA_CTX];
+	pthread_t		extra_thread[NUM_EXTRA_CTX];
+
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	tc_test_init(0, 20, false, true);
 
@@ -139,6 +143,18 @@ int main(int argc, char **argv)
 	rc = pthread_create(&progress_thread, 0,
 				progress_function, &crt_ctx);
 	assert(rc == 0);
+
+	for (i = 0;  i < NUM_EXTRA_CTX; i++) {
+		rc = crt_context_create(&extra_ctx[i]);
+		if (rc != 0) {
+			D_ERROR("crt_context_create(%d) failed; rc=%d\n",
+				i, rc);
+			assert(0);
+		}
+		rc = pthread_create(&extra_thread[i], 0,
+				progress_function, &extra_ctx[i]);
+		assert(rc == 0);
+	}
 
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 	DBG_PRINT("Client starting with cfg_file=%s\n", grp_cfg_file);
@@ -219,6 +235,46 @@ int main(int argc, char **argv)
 		}
 	}
 
+	int extra_ctx_idx = 0;
+
+	DBG_PRINT("--------------------------------\n");
+	DBG_PRINT("Sending over EXTRA CTXs\n");
+	DBG_PRINT("--------------------------------\n");
+	/* Send same rpcs but over other local contexts */
+	for (i = 0; i < rank_list->rl_nr; i++) {
+
+		rank = rank_list->rl_ranks[i];
+
+		for (tag = 0; tag < NUM_SERVER_CTX; tag++) {
+			DBG_PRINT("Sending ping to %d:%d\n", rank, tag);
+
+			server_ep.ep_rank = rank;
+			server_ep.ep_tag = tag;
+			server_ep.ep_grp = grp;
+
+			for (extra_ctx_idx = 0 ; extra_ctx_idx < NUM_EXTRA_CTX;
+				extra_ctx_idx++) {
+				rc = crt_req_create(extra_ctx[extra_ctx_idx],
+						&server_ep,
+						RPC_PING, &rpc);
+				if (rc != 0) {
+					D_ERROR("crt_req_create() err; rc=%d\n",
+						rc);
+					assert(0);
+				}
+
+				input = crt_req_get(rpc);
+				input->tag = tag;
+				input->test_data = iov;
+
+				rc = crt_req_send(rpc, rpc_handle_reply, &sem);
+				tc_sem_timedwait(&sem, 10, __LINE__);
+				DBG_PRINT("Response (ext_ctx=%d) from %d:%d\n",
+					extra_ctx_idx, rank, tag);
+			}
+		}
+	}
+
 	D_FREE(iov.iov_buf);
 
 	/* Send shutdown RPC to each server */
@@ -254,6 +310,9 @@ int main(int argc, char **argv)
 
 	g_do_shutdown = true;
 	pthread_join(progress_thread, NULL);
+
+	for (i = 0; i < NUM_EXTRA_CTX; i++)
+		pthread_join(extra_thread[i], NULL);
 
 	sem_destroy(&sem);
 
