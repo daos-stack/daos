@@ -133,8 +133,13 @@ class ZeroConfigTest(TestWithServers):
 
         # Setup the environment and logfile
         logf = "daos_racer_{}_{}.log".format(exp_iface, env)
-        daos_racer.set_environment(
-            daos_racer.get_environment(self.server_managers[0], logf))
+
+        # Add FI_LOG_LEVEL to get more info on device issues
+        racer_env = daos_racer.get_environment(self.server_managers[0], logf)
+        racer_env["FI_LOG_LEVEL"] = "info"
+        daos_racer.set_environment(racer_env)
+
+        # Run client
         daos_racer.run()
 
         # Verify output and port count to check what iface CaRT init with.
@@ -172,7 +177,9 @@ class ZeroConfigTest(TestWithServers):
         :avocado: tags=all,pr,hw,medium,ib2,zero_config,env_set
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
-        for idx, exp_iface in enumerate(["ib0", "ib1"]):
+        devs = ["ib0", "ib1"]
+        ports = ["31416", "31417"]
+        for idx, (exp_iface, port) in enumerate(zip(devs, ports)):
             # Configure the daos server
             config_file = self.get_config_file(self.server_group, "server")
             self.add_server_manager(config_file)
@@ -186,6 +193,10 @@ class ZeroConfigTest(TestWithServers):
                 self.server_managers[0].set_config_value(
                     "fabric_iface", exp_iface),
                 "Error updating daos_server 'fabric_iface' config opt")
+            self.assertTrue(
+                self.server_managers[0].set_config_value(
+                    "fabric_iface_port", port),
+                "Error updating daos_server 'fabric_iface_port' config opt")
             self.assertTrue(
                 self.server_managers[0].set_config_value(
                     "pinned_numa_node", idx),
