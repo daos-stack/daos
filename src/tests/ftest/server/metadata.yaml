@@ -26,7 +26,7 @@ server_config:
       scm_class: ram
       scm_size: 6
       nr_xs_helpers: 16
-      log_mask: INFO
+      log_mask: DEBUG,RPC=ERR,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
         - DD_MASK=mgmt,md,dsms,any
@@ -42,7 +42,7 @@ server_config:
       scm_class: ram
       scm_size: 6
       nr_xs_helpers: 16
-      log_mask: INFO
+      log_mask: DEBUG,RPC=ERR,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
         - DD_MASK=mgmt,md,dsms,any
