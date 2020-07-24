@@ -636,9 +636,6 @@ class TestPool(TestDaosApiBase):
     def pool_percentage_used(self):
         """Get the pool storage used % for SCM and NVMe.
 
-        Args:
-            None
-
         Returns:
             dict: a dictionary of SCM/NVMe pool space usage in %(float)
         """
