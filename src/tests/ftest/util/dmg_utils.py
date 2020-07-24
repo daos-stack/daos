@@ -115,7 +115,7 @@ class DmgCommand(DmgCommandBase):
                 socket_id = vals[i][9]
                 capacity = "{} {}".format(vals[i][10], vals[i][11])
                 data[nodeset]["nvme"][pci_addr] = {}
-                data[nodeset]["nvme"][pci_addr]["model"] = socket_id
+                data[nodeset]["nvme"][pci_addr]["model"] = model
                 data[nodeset]["nvme"][pci_addr]["fw_revision"] = fw_revision
                 data[nodeset]["nvme"][pci_addr]["socket"] = socket_id
                 data[nodeset]["nvme"][pci_addr]["capacity"] = capacity
