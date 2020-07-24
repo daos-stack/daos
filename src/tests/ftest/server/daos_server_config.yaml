@@ -8,7 +8,6 @@ server_manager:
 timeout: 120
 server_config:
   name: daos_server
-
 # The 'config_val' list is composed of the following values:
 # - name of the config attribute, used to look for the attribute object
 # - test value that will be inserted into the server config for the attribute

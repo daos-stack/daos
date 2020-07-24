@@ -24,24 +24,49 @@
 import os
 
 from command_utils_base import \
-    BasicParameter, LogParameter, YamlParameters, TransportCredentials, \
-    EnvironmentVariables
+    BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
 
 class DaosServerTransportCredentials(TransportCredentials):
     # pylint: disable=too-few-public-methods
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self):
+    def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
         super(DaosServerTransportCredentials, self).__init__(
-            "/run/server_config/transport_config/*", "transport_config")
+            "/run/server_config/transport_config/*",
+            "transport_config", log_dir)
 
         # Additional daos_server transport credential parameters:
         #   - client_cert_dir: <str>, e.g. "".daos/clients"
         #       Location of client certificates [daos_server only]
         #
-        self.client_cert_dir = BasicParameter(None)
+        self.client_cert_dir = LogParameter(log_dir, None, "clients")
+        self.cert = LogParameter(log_dir, None, "server.crt")
+        self.key = LogParameter(log_dir, None, "server.key")
+
+    def get_certificate_data(self, name_list):
+        """Get certificate data.
+
+           Args:
+               name_list (list): list of certificate attribute names.
+
+           Returns:
+               data (dict): a dictionary of parameter directory name keys and
+                   value.
+        """
+
+        # Ensure the client cert directory includes the required certificate
+        name_list.remove("client_cert_dir")
+        data = super(
+            DaosServerTransportCredentials, self).get_certificate_data(
+                name_list)
+        if self.client_cert_dir.value:
+            if self.client_cert_dir.value not in data:
+                data[self.client_cert_dir.value] = ["agent.crt"]
+            else:
+                data[self.client_cert_dir.value].append("agent.crt")
+        return data
 
 
 class DaosServerYamlParameters(YamlParameters):

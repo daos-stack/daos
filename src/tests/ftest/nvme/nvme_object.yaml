@@ -17,24 +17,32 @@ timeouts:
   test_nvme_object_single_pool: 500
   test_nvme_object_multiple_pools: 16000
 server_config:
- name: daos_server
- servers:
-   bdev_class: nvme
-   bdev_list: ["0000:81:00.0","0000:da:00.0"]
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0","0000:da:00.0"]
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 pool:
- createmode:
-  mode: 511
- createset:
-  group: daos_server
- createsize:
-  scm_size: 1000000000
-  size:
-   - 20000000000
-   - 100000000000
-   - 800000000000
- createsvc:
-  svcn: 1
- control_method: dmg
+  createmode:
+    mode: 511
+  createset:
+    group: daos_server
+  createsize:
+    scm_size: 1000000000
+    size:
+      - 20000000000
+      - 100000000000
+      - 800000000000
+  createsvc:
+    svcn: 1
+  control_method: dmg
 container:
   object_qty: 10
   record_size:
