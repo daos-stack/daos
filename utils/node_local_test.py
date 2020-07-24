@@ -1077,14 +1077,6 @@ def test_pydaos_kv(server, conf):
 
     daos = import_daos(server, conf)
 
-    file_self = os.path.dirname(os.path.abspath(__file__))
-    mod_dir = os.path.join(file_self,
-                           '../src/client/pydaos')
-    if mod_dir not in sys.path:
-        sys.path.append(mod_dir)
-
-    dbm = __import__('daosdbm')
-
     pools = get_pool_list()
 
     while len(pools) < 1:
@@ -1096,9 +1088,9 @@ def test_pydaos_kv(server, conf):
 
     print(container)
     c_uuid = container.decode().split()[-1]
-    kvg = dbm.daos_named_kv(pool, c_uuid)
+    container = daos.Cont(pool, c_uuid)
 
-    kv = kvg.get_kv_by_name('Dave')
+    kv = container.get_kv_by_name('my_test_kv', create=True)
     kv['a'] = 'a'
     kv['b'] = 'b'
     kv['list'] = pickle.dumps(list(range(1, 100000)))
@@ -1133,6 +1125,10 @@ def test_pydaos_kv(server, conf):
 
     if failed:
         print("That's not good")
+
+    kv = None
+    print('Closing container and opening new one')
+    kv = container.get_kv_by_name('my_test_kv')
 
 def test_alloc_fail(conf):
     """run 'daos' client binary with fault injection
