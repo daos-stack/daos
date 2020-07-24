@@ -25,18 +25,14 @@ sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 cd "$DAOS_BASE"
 if [ "$WITH_VALGRIND" = "memcheck" ]; then
     ls results-*-memcheck.xml
-    ls test_results/results-*-memcheck.xml
     ls results-*-memcheck.xml | wc
-    ls test_results/results-*-memcheck.xml | wc
     rm results-*-memcheck.xml
-    rm test_results/results-*-memcheck.xml
 
     # run_test.sh with valgrind memcheck
     IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
 
-    ls results-*-memcheck.xml
-    ls test_results/results-*-memcheck.xml
-    ls results-*-memcheck.xml | wc
+    ls results-*-memcheck.xml || true
+    ls test_results/results-*-memcheck.xml || true
     ls test_results/results-*-memcheck.xml | wc
     # Remove DAOS_BASE from memcheck xml results
     find test_results -maxdepth 1 \
