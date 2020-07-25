@@ -25,7 +25,6 @@ from logging import getLogger
 import os
 import yaml
 
-
 class CommandFailure(Exception):
     """Base exception for this module."""
 
@@ -203,9 +202,13 @@ class LogParameter(FormattedParameter):
         initial log file value (just the log file name) to include the directory
         and name for the log file.
         """
-        if self.value is not None:
+        if isinstance(self.value, str):
             name = os.path.basename(self.value)
             self.value = os.path.join(self._directory, name)
+        elif self.value is not None:
+            self.log.info(
+                "Warning: '%s' not added to '%s' due to incompatible type: %s",
+                self._directory, self.value, type(self.value))
 
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
@@ -472,7 +475,7 @@ class YamlParameters(ObjectWithParameters):
 class TransportCredentials(YamlParameters):
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, namespace, title):
+    def __init__(self, namespace, title, log_dir):
         """Initialize a TransportConfig object.
 
         Args:
@@ -481,25 +484,10 @@ class TransportCredentials(YamlParameters):
                 parameters when creating the yaml file. Defaults to None.
         """
         super(TransportCredentials, self).__init__(namespace, None, title)
-
-        # Transport credential parameters:
-        #   - allow_insecure: false|true
-        #       Specify 'false' to bypass loading certificates and use insecure
-        #       communications channels
-        #
-        #   - ca_cert: <file>, e.g. ".daos/daosCA.crt"
-        #       Custom CA Root certificate for generated certs
-        #
-        #   - cert: <file>, e.g. ".daos/daos_agent.crt"
-        #       Agent certificate for use in TLS handshakes
-        #
-        #   - key: <file>, e.g. ".daos/daos_agent.key"
-        #       Key portion of Server Certificate
-        #
-        self.allow_insecure = BasicParameter(True, True)
-        self.ca_cert = BasicParameter(None)
-        self.cert = BasicParameter(None)
-        self.key = BasicParameter(None)
+        default_insecure = str(os.environ.get("DAOS_INSECURE_MODE", True))
+        default_insecure = default_insecure.lower() == "true"
+        self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
+        self.allow_insecure = BasicParameter(None, default_insecure)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -517,6 +505,28 @@ class TransportCredentials(YamlParameters):
             yaml_data["allow_insecure"] = self.allow_insecure.value
 
         return yaml_data
+
+    def get_certificate_data(self, name_list):
+        """Get certificate data by name_list.
+
+        Args:
+            name_list (list): list of certificate attribute names.
+
+        Returns:
+            data (dict): a dictionary of parameter directory name keys and
+                value.
+
+        """
+        data = {}
+        for name in name_list:
+            value = getattr(self, name).value
+            if isinstance(value, str):
+                dir_name, file_name = os.path.split(value)
+                if dir_name not in data:
+                    data[dir_name] = [file_name]
+                else:
+                    data[dir_name].append(file_name)
+        return data
 
 
 class CommonConfig(YamlParameters):
