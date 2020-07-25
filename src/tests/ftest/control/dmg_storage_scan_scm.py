@@ -25,7 +25,6 @@ import os
 
 from general_utils import pcmd
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 
 
 class DmgStorageScanSCMTest(TestWithServers):
@@ -55,9 +54,8 @@ class DmgStorageScanSCMTest(TestWithServers):
         # Use --verbose and obtain the SCM Namespace values such as pmem0,
         # pmem1.
         data = self.get_dmg_command().storage_scan(verbose=True)
-        nodeset = NodeSet(self.hostlist_servers[0])
-        pmem_names = data[nodeset]["scm"].keys()
-        self.log.debug("### pmem_names = " + str(pmem_names))
+        host = self.hostlist_servers[0]
+        pmem_names = data[host]["scm"].keys()
         # Verifies that all namespaces exist under /dev.
         RC_SUCCESS = 0
         for pmem_name in pmem_names:
@@ -68,5 +66,4 @@ class DmgStorageScanSCMTest(TestWithServers):
 
         # Call without verbose and verify the namespace value.
         data = self.get_dmg_command().storage_scan()
-        self.log.debug("### namespace = " + data[nodeset]["namespace"])
-        self.assertEqual(int(data[nodeset]["namespace"]), len(pmem_names))
+        self.assertEqual(int(data[host]["namespace"]), len(pmem_names))

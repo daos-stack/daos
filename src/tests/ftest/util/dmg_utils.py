@@ -27,7 +27,6 @@ from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
-from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
@@ -92,9 +91,9 @@ class DmgCommand(DmgCommandBase):
             self.log.info(vals)
 
             data = {}
-            nodeset = NodeSet(vals[0][0])
-            data[nodeset] = {}
-            data[nodeset]["scm"] = {}
+            host = vals[0][0]
+            data[host] = {}
+            data[host]["scm"] = {}
             i = 1
             while i < len(vals):
                 if vals[i][1] == "":
@@ -102,23 +101,23 @@ class DmgCommand(DmgCommandBase):
                 pmem_name = vals[i][1]
                 socket_id = vals[i][2]
                 capacity = "{} {}".format(vals[i][3], vals[i][4])
-                data[nodeset]["scm"][pmem_name] = {}
-                data[nodeset]["scm"][pmem_name]["socket"] = socket_id
-                data[nodeset]["scm"][pmem_name]["capacity"] = capacity
+                data[host]["scm"][pmem_name] = {}
+                data[host]["scm"][pmem_name]["socket"] = socket_id
+                data[host]["scm"][pmem_name]["capacity"] = capacity
                 i += 1
 
-            data[nodeset]["nvme"] = {}
+            data[host]["nvme"] = {}
             while i < len(vals):
                 pci_addr = vals[i][5]
                 model = "{} {}".format(vals[i][6], vals[i][7])
                 fw_revision = vals[i][8]
                 socket_id = vals[i][9]
                 capacity = "{} {}".format(vals[i][10], vals[i][11])
-                data[nodeset]["nvme"][pci_addr] = {}
-                data[nodeset]["nvme"][pci_addr]["model"] = model
-                data[nodeset]["nvme"][pci_addr]["fw_revision"] = fw_revision
-                data[nodeset]["nvme"][pci_addr]["socket"] = socket_id
-                data[nodeset]["nvme"][pci_addr]["capacity"] = capacity
+                data[host]["nvme"][pci_addr] = {}
+                data[host]["nvme"][pci_addr]["model"] = model
+                data[host]["nvme"][pci_addr]["fw_revision"] = fw_revision
+                data[host]["nvme"][pci_addr]["socket"] = socket_id
+                data[host]["nvme"][pci_addr]["capacity"] = capacity
                 i += 1
 
         else:
@@ -132,16 +131,16 @@ class DmgCommand(DmgCommandBase):
 
             data = {}
             for row in vals:
-                nodeset = NodeSet(row[0])
-                data[nodeset] = {}
+                host = row[0]
+                data[host] = {}
                 scm_total = "{} {}".format(row[1], row[2])
                 namespace = row[3]
                 nvme_total = "{} {}".format(row[4], row[5])
                 controller = row[6]
-                data[nodeset]["scm_total"] = scm_total
-                data[nodeset]["namespace"] = namespace
-                data[nodeset]["nvme_total"] = nvme_total
-                data[nodeset]["controller"] = controller
+                data[host]["scm_total"] = scm_total
+                data[host]["namespace"] = namespace
+                data[host]["nvme_total"] = nvme_total
+                data[host]["controller"] = controller
 
         return data
 
