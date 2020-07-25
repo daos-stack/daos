@@ -16,6 +16,8 @@
 #  Note: New tests should return non-zero if there are any
 #    failures.
 
+set -x
+
 #check for existence of /mnt/daos first:
 failed=0
 failures=()
@@ -80,6 +82,7 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     echo "Running Cmocka tests"
+    VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
         # Tests that do not run valgrind
         run_test src/rdb/raft_tests/raft_tests.py
@@ -100,7 +103,6 @@ if [ -d "/mnt/daos" ]; then
                           --xml-file=test_results/results-%p-memcheck.xml"
         else
             VALGRIND_SUPP=""
-            VALGRIND_CMD=""
         fi
     fi
 
