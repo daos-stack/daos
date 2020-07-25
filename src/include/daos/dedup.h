@@ -35,4 +35,3 @@ dedup_configure_csummer(struct daos_csummer *csummer,
 
 
 #endif /** __DAOS_DEDUP_H */
-

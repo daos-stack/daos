@@ -71,4 +71,4 @@ daos_cont_prop2dedupverify(daos_prop_t *props);
 uint64_t
 daos_cont_prop2dedupsize(daos_prop_t *props);
 
-#endif //__DAOS_M_CONT_PROPS_H__
+#endif /** __DAOS_M_CONT_PROPS_H__ */

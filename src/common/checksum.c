@@ -750,8 +750,8 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 
 		/** setup akey csum  */
 		if (!obj->dcs_skip_key_calc) {
-			ci_set(&iod_csum->ic_akey, NULL, csum_size, csum_size, 1,
-			       CSUM_NO_CHUNK, csum_type);
+			ci_set(&iod_csum->ic_akey, NULL, csum_size, csum_size,
+			       1, CSUM_NO_CHUNK, csum_type);
 			setptr(iod_csum->ic_akey.cs_csum, buf, csum_size, used,
 			       buf_len);
 		}

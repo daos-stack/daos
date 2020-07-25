@@ -1151,7 +1151,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	struct daos_recx_ep_list	*recov_lists = NULL;
 	daos_iod_t			*iods;
 	uint64_t			*offs;
-	struct bio_sglist		*bsgls_dup = NULL; /* for dedup verify */
+	struct bio_sglist		*bsgls_dup = NULL; /* dedup verify */
 	int				err, rc = 0;
 
 	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
@@ -1372,6 +1372,7 @@ post:
 	err = bio_iod_post(biod);
 	if (bsgls_dup != NULL) {
 		int	i;
+
 		for (i = 0; i < orw->orw_nr; i++) {
 			vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
 			bio_sgl_fini(&bsgls_dup[i]);
