@@ -24,6 +24,7 @@
 
 import subprocess
 from getpass import getuser
+import paramiko
 import general_utils
 
 from ClusterShell.NodeSet import NodeSet
@@ -151,10 +152,19 @@ class DfuseSparseFile(IorTestBase):
         self.execute_cmd(u"touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
                       self.get_remote_file_size(sparse_file))
-        # open file
-        file_obj = open(sparse_file, 'r+')
+
+        # create and open a connection on remote node to open file on that
+        # remote node
+        ssh = paramiko.SSHClient()
+        ssh.load_system_host_keys()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(self.hostlist_clients[0], username=getuser())
+        sftp = ssh.open_sftp()
+
+        # open remote file
+        file_obj = sftp.open(sparse_file, 'r+')
         # set file size to max available nvme size
-        file_obj.truncate(self.space_before)
+        sftp.truncate(sparse_file, self.space_before)
         self.log.info("File size (in bytes) after truncate: %s",
                       self.get_remote_file_size(sparse_file))
         # verifying the file size got set to desired value
