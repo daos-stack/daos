@@ -951,17 +951,13 @@ pipeline {
                                             'libipmctl-devel' +
                                             'python36-tabulate' +
                                             qb_inst_rpms,
-                                 valgrind: 'memcheck',
                                  junit_files: ''
                     }
                     post {
                       always {
                           unitTestPost (
-                                     always_script: "ci/unit/test_post_always.sh",
                                      artifacts: ['run_test_memcheck.sh/*'],
-                                     testResults: "",
-                                     valgrind: "memcheck",
-                                     valgrind_pattern: "run_test_memcheck.sh/*memcheck.xml"
+                                     testResults: ""
                                   )
                         }
                     }
