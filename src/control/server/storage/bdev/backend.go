@@ -106,43 +106,43 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 	}
 
 	var pciWhiteList []string
-	if w.vmdEnabled {
-		// TODO: use devlist to construct opts.pci_whitelist
-		pciWhiteList = []string{"0000:5d:05.5"}
-	}
+	//	if w.vmdEnabled {
+	//		// TODO: use devlist to construct opts.pci_whitelist
+	//		pciWhiteList = []string{"0000:5d:05.5"}
+	//	}
 
 	if err := w.InitSPDKEnv(shmID, pciWhiteList); err != nil {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
-	if w.vmdEnabled {
-		log.Debug("spdk init vmd")
+	//	if w.vmdEnabled {
+	//		log.Debug("spdk init vmd")
+	//
+	//		if err := w.InitVMD(); err != nil {
+	//			return errors.Wrap(err, "failed to initialize VMD")
+	//		}
+	//	}
 
-		if err := w.InitVMD(); err != nil {
-			return errors.Wrap(err, "failed to initialize VMD")
-		}
-	}
-
-	cs, err := w.Discover(log)
+	cs, err := w.Discover(log, w.vmdEnabled)
 	if err != nil {
 		return errors.Wrap(err, "failed to discover NVMe")
 	}
 	w.controllers = cs
 
 	// discover backing vmd devs when vmd enabled in config
-	if w.vmdEnabled {
-		vmdDevAddrs, err := w.DiscoverVmd(log)
-		if err != nil {
-			return errors.Wrapf(err, "failed to discover VMD")
-		}
-		log.Debugf("spdk discover vmd: %v", vmdDevAddrs)
-		// add vmd addresses to stored controllers
-		for _, addr := range vmdDevAddrs {
-			w.controllers = append(w.controllers, spdk.Controller{
-				PCIAddr: addr,
-			})
-		}
-	}
+	//	if w.vmdEnabled {
+	//		vmdDevAddrs, err := w.DiscoverVmd(log)
+	//		if err != nil {
+	//			return errors.Wrapf(err, "failed to discover VMD")
+	//		}
+	//		log.Debugf("spdk discover vmd: %v", vmdDevAddrs)
+	//		// add vmd addresses to stored controllers
+	//		for _, addr := range vmdDevAddrs {
+	//			w.controllers = append(w.controllers, spdk.Controller{
+	//				PCIAddr: addr,
+	//			})
+	//		}
+	//	}
 
 	w.initialized = true
 	return nil

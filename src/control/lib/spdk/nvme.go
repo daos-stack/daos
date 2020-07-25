@@ -53,9 +53,9 @@ const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
 // NVME is the interface that provides SPDK NVMe functionality.
 type NVME interface {
 	// Discover NVMe controllers and namespaces, and device health info
-	Discover(logging.Logger) ([]Controller, error)
+	Discover(logging.Logger, bool) ([]Controller, error)
 	// Discover NVMe SSD PCIe addresses behind VMD
-	DiscoverVmd(log logging.Logger) ([]string, error)
+	//DiscoverVmd(log logging.Logger) ([]string, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger, string) error
 	// Cleanup NVMe object references
@@ -171,11 +171,16 @@ func pciAddressList(ctrlrs []Controller) []string {
 // ctrlr_t structs. These are converted and returned as Controller slices
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
-func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
-	ctrlrs, err := processReturn(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
+func (n *Nvme) Discover(log logging.Logger, enableVmd bool) ([]Controller, error) {
+	ctrlrs, err := processReturn(C.nvme_discover(C.bool(enableVmd)),
+		"NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
-	log.Debugf("discovered nvme ssds: %v", pciAddrs)
+	var vmdMsg string
+	if enableVmd {
+		vmdMsg = " with vmd enabled"
+	}
+	log.Debugf("discovered nvme ssds%s: %v", vmdMsg, pciAddrs)
 
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
@@ -205,15 +210,15 @@ func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
 //}
 
 // DiscoverVmd discovers NVMe SSD PCIe addresses behind VMD.
-func (n *Nvme) DiscoverVmd(log logging.Logger) (addrs []string, err error) {
-	ctrlrs, err := processReturn(C.nvme_discover_vmd(),
-		"NVMe DiscoverVmd(): C.nvme_discover_vmd")
-
-	pciAddrs := pciAddressList(ctrlrs)
-	log.Debugf("discovered backing nvme ssds behind vmd: %v", pciAddrs)
-
-	return pciAddrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
-}
+//func (n *Nvme) DiscoverVmd(log logging.Logger) (addrs []string, err error) {
+//	ctrlrs, err := processReturn(C.nvme_discover_vmd(),
+//		"NVMe DiscoverVmd(): C.nvme_discover_vmd")
+//
+//	pciAddrs := pciAddressList(ctrlrs)
+//	log.Debugf("discovered backing nvme ssds behind vmd: %v", pciAddrs)
+//
+//	return pciAddrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
+//}
 
 //	addrBuf := C.malloc(C.sizeof_char * 128)
 //	defer C.free(unsafe.Pointer(addrBuf))

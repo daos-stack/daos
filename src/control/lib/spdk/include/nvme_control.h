@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2018-2019 Intel Corporation.
+* (C) Copyright 2018-2020 Intel Corporation.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -40,13 +40,12 @@ struct format_sequence {
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.
  *
+ * \param init_vmd Enable discovery of NVMe controllers backing a VMD address.
+ *
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
-nvme_discover(void);
-
-struct ret_t *
-nvme_discover_vmd(void);
+nvme_discover(bool);
 
 /**
  * Wipe NVMe controller namespace LBA-0.

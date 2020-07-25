@@ -24,6 +24,7 @@
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
 #include <spdk/env.h>
+#include <spdk/vmd.h>
 
 #include "nvme_control_common.h"
 
@@ -174,11 +175,19 @@ get_controller(struct ctrlr_entry **entry, char *addr)
 }
 
 struct ret_t *
-_discover(prober probe, bool detach, health_getter get_health)
+_discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 {
 	int			 rc;
 	struct ctrlr_entry	*ctrlr_entry;
 	struct dev_health_entry	*health_entry;
+
+	if (init_vmd) {
+		rc = spdk_vmd_init();
+		if (rc) {
+			rc = -NVMEC_ERR_NO_VMD_CTRLRS;
+			goto fail;
+		}
+	}
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -190,6 +199,12 @@ _discover(prober probe, bool detach, health_getter get_health)
 	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
 	if (rc != 0)
 		goto fail;
+
+	/**
+	 * TODO: add fini call when we upgrade SPDK to a version that supports
+	 * if (init_vmd)
+	 * 	spdk_vmd_fini();
+	 */
 
 	if (!g_controllers || !g_controllers->ctrlr)
 		return init_ret(0); /* no controllers */
@@ -217,32 +232,7 @@ _discover(prober probe, bool detach, health_getter get_health)
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
-	return collect(false);
-fail:
-	cleanup(detach);
-	return init_ret(rc);
-}
-
-struct ret_t *
-_discover_vmd(prober probe, bool detach, health_getter get_health)
-{
-	int			 rc;
-
-	/*
-	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
-	 *  for each NVMe controller found, giving our application a choice on
-	 *  whether to attach to each controller.  attach_cb will then be
-	 *  called for each controller after the SPDK NVMe driver has completed
-	 *  initializing the controller we chose to attach.
-	 */
-	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
-	if (rc != 0)
-		goto fail;
-
-	if (!g_controllers || !g_controllers->ctrlr)
-		return init_ret(0); /* no controllers */
-
-	return collect(true);
+	return collect();
 fail:
 	cleanup(detach);
 	return init_ret(rc);
@@ -336,12 +326,12 @@ collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 
 void
 _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
-	 socket_id_getter get_socket_id, bool vmd_only)
+	 socket_id_getter get_socket_id)
 {
 	struct ctrlr_entry		       *ctrlr_entry;
 	struct spdk_pci_device		       *pci_dev;
 	struct ctrlr_t			       *ctrlr_tmp;
-	int					rc;
+	int					rc, written;
 
 	ctrlr_entry = g_controllers;
 
@@ -375,15 +365,16 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			goto fail;
 		}
 
-		if (vmd_only) {
-			if (strcmp(spdk_pci_device_get_type(pci_dev), "vmd") == 0) {
-				free(ctrlr_tmp);
-				continue;
-			}
-		}
-
-		/* populate numa socket id */
+		/* populate numa socket id & pci device type */
 		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
+		written = snprintf(ctrlr_tmp->pci_type,
+				   sizeof(ctrlr_tmp->pci_type), "%s",
+				   spdk_pci_device_get_type(pci_dev));
+		if (written >= sizeof(ctrlr_tmp->pci_type)) {
+			rc = -NVMEC_ERR_CHK_SIZE;
+			free(pci_dev);
+			goto fail;
+		}
 		free(pci_dev);
 
 		/* Alloc linked list of namespaces per controller */
@@ -419,13 +410,13 @@ fail:
 }
 
 struct ret_t *
-collect(bool vmd_only)
+collect(void)
 {
 	struct ret_t *ret;
 
 	ret = init_ret(0);
 	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
-		 &spdk_pci_device_get_socket_id, vmd_only);
+		 &spdk_pci_device_get_socket_id);
 
 	return ret;
 }
