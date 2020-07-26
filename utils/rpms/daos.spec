@@ -196,6 +196,7 @@ scons %{?_smp_mflags}                 \
       --install-sandbox=%{?buildroot} \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
+      BUILD_TYPE=debug                \
       USE_INSTALLED=all               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}
