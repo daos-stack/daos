@@ -2817,6 +2817,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 
 			for (j = 0; j < iod->iod_nr; j++) {
 				daos_recx_t	*recx = &iod->iod_recxs[j];
+
 				if (recx->rx_nr * iod->iod_size >= dedup_th)
 					candidate = true;
 			}

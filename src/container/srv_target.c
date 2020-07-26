@@ -82,7 +82,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 }
 
 int
-ds_get_csum_cont_props(struct cont_props* cont_props,
+ds_get_csum_cont_props(struct cont_props *cont_props,
 		       struct ds_iv_ns *pool_ns, uuid_t cont_uuid)
 {
 	daos_prop_t	*props;
@@ -114,6 +114,7 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	uint32_t		csum_val;
 	int			rc;
 	struct cont_props	*cont_props;
+	bool			dedup_only = false;
 
 	D_ASSERT(cont != NULL);
 	cont_props = &cont->sc_props;
@@ -137,7 +138,6 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	cont->sc_props_fetched = 1;
 
 	csum_val = cont_props->dcp_csum_type;
-	bool dedup_only = false;
 	if (!daos_cont_csum_prop_is_enabled(csum_val)) {
 		dedup_only = true;
 		csum_val = dedup_get_csum_algo(cont_props);

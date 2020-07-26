@@ -1795,9 +1795,8 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 							biov.bi_addr.ba_off;
 			ioc->ic_umoffs_cnt++;
 			return iod_reserve(ioc, &biov);
-		} else {
-			memset(&biov, 0, sizeof(biov));
 		}
+		memset(&biov, 0, sizeof(biov));
 	}
 
 	/*
