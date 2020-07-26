@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -74,16 +73,16 @@ const (
 type bdev struct {
 	templ   string
 	vosEnv  string
-	isEmpty func(storage.BdevConfig) string                 // check no elements
-	isValid func(storage.BdevConfig) string                 // check valid elements
+	isEmpty func(*storage.BdevConfig) string                // check no elements
+	isValid func(*storage.BdevConfig) string                // check valid elements
 	init    func(logging.Logger, *storage.BdevConfig) error // prerequisite actions
 }
 
-func nilValidate(_ storage.BdevConfig) string { return "" }
+func nilValidate(_ *storage.BdevConfig) string { return "" }
 
 func nilInit(_ logging.Logger, _ *storage.BdevConfig) error { return nil }
 
-func isEmptyList(c storage.BdevConfig) string {
+func isEmptyList(c *storage.BdevConfig) string {
 	if len(c.DeviceList) == 0 {
 		return "bdev_list empty " + msgBdevNone
 	}
@@ -91,7 +90,7 @@ func isEmptyList(c storage.BdevConfig) string {
 	return ""
 }
 
-func isEmptyNumber(c storage.BdevConfig) string {
+func isEmptyNumber(c *storage.BdevConfig) string {
 	if c.DeviceCount == 0 {
 		return "bdev_number == 0 " + msgBdevNone
 	}
@@ -99,7 +98,7 @@ func isEmptyNumber(c storage.BdevConfig) string {
 	return ""
 }
 
-func isValidList(c storage.BdevConfig) string {
+func isValidList(c *storage.BdevConfig) string {
 	for i, elem := range c.DeviceList {
 		if elem == "" {
 			return fmt.Sprintf("%s (index %d)", msgBdevEmpty, i)
@@ -109,7 +108,7 @@ func isValidList(c storage.BdevConfig) string {
 	return ""
 }
 
-func isValidSize(c storage.BdevConfig) string {
+func isValidSize(c *storage.BdevConfig) string {
 	if c.FileSize < 1 {
 		return msgBdevBadSize
 	}
@@ -162,6 +161,18 @@ func bdevFileInit(log logging.Logger, c *storage.BdevConfig) error {
 	return nil
 }
 
+// ParsePciAddress returns separated components of BDF format PCI address.
+func ParsePciAddress(addr string) (string, string, string, string, error) {
+	parts := strings.Split(addr, ":")
+	deviceFunc := strings.Split(parts[len(parts)-1], ".")
+	if len(parts) != 3 || len(deviceFunc) != 2 {
+		return "", "", "", "",
+			errors.Errorf("unexpected pci address bdf format: %q", addr)
+	}
+
+	return parts[0], parts[1], deviceFunc[0], deviceFunc[1], nil
+}
+
 // bdevNvmeInit performs any necessary preparation forNVME class bdev config.
 //
 // Augment bdev device list if VMD backing SSD PCI addresses have been added to
@@ -175,40 +186,38 @@ func bdevNvmeInit(log logging.Logger, c *storage.BdevConfig) error {
 	logMsg := fmt.Sprintf("VMD: prepare conf device list, before: %v, vmds: %v",
 		c.VmdDeviceList, c.DeviceList)
 
+	var newDevList []string
 	// Remove VMD addrs from DeviceList and replace with NVMe addrs behind VMD
-	// "$lspci | grep  -i -E "$devaddr.*Volume Management Device|$devaddr.*201d"
-	lspciCmd := exec.Command("lspci")
-
-	for i, dev := range c.DeviceList {
-		// TODO: handle cmd errors
-		// Remove leading "0000:" from device address, since once this device
-		// is unbound the prefix will be gone in lspci.
-		devNoPrefix := strings.TrimPrefix(dev, "0000:")
-		devCmd := fmt.Sprintf("%s.*Volume Management Device|%s.*201d", devNoPrefix, devNoPrefix)
-		vmdCmd := exec.Command("grep", "-i", "-E", devCmd)
-		var cmdOut bytes.Buffer
-		vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
-		vmdCmd.Stdout = &cmdOut
-		_ = lspciCmd.Start()
-		_ = vmdCmd.Run()
-		_ = lspciCmd.Wait()
-		if cmdOut.Len() == 0 {
+	for _, addr := range c.DeviceList {
+		if !common.Includes(c.VmdDeviceList, addr) {
+			newDevList = append(newDevList, addr)
 			continue
 		}
 
-		// fast method since order of DeviceList does not matter
-		c.DeviceList[i] = c.DeviceList[len(c.DeviceList)-1]
-		c.DeviceList[len(c.DeviceList)-1] = ""
-		c.DeviceList = c.DeviceList[:len(c.DeviceList)-1]
+		// build the concatenated form of vmd bdf
+		_, b, d, f, err := ParsePciAddress(addr)
+		if err != nil {
+			return err
+		}
+		prefix := fmt.Sprintf("%02s%02s%02s", b, d, f)
+
+		log.Debugf("looking for prefix %s in vmd list %v", prefix, c.VmdDeviceList)
+		// find backing ssds with matching concat vmd bdf in domain of pci addr
+		for _, vmdDevAddr := range c.VmdDeviceList {
+			domain, _, _, _, err := ParsePciAddress(vmdDevAddr)
+			if err != nil {
+				return err
+			}
+			if domain == prefix {
+				log.Debugf("adding backing device %s", vmdDevAddr)
+				newDevList = append(newDevList, vmdDevAddr)
+				//strings.Replace(vmdDevAddr, prefix, "0000", 1))
+				log.Debugf("new dev list: %v", newDevList)
+			}
+		}
 	}
 
-	// add the new NVMe SSD behind VMD addrs
-	for _, dev := range c.VmdDeviceList {
-		if common.Includes(c.DeviceList, dev) {
-			continue
-		}
-		c.DeviceList = append(c.DeviceList, dev)
-	}
+	c.DeviceList = newDevList
 
 	log.Debug(fmt.Sprintf("%s, after: %v", logMsg, c.DeviceList))
 
@@ -217,7 +226,7 @@ func bdevNvmeInit(log logging.Logger, c *storage.BdevConfig) error {
 
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func genFromTempl(cfg storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
+func genFromTempl(cfg *storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
 	fmt.Printf("generating from template")
 
 	if len(cfg.VmdDeviceList) > 0 {
@@ -237,15 +246,16 @@ func genFromTempl(cfg storage.BdevConfig, templ string) (out bytes.Buffer, err e
 // ClassProvider implements functionality for a given bdev class
 type ClassProvider struct {
 	log     logging.Logger
-	cfg     storage.BdevConfig
+	cfg     *storage.BdevConfig
 	cfgPath string
 	bdev    bdev
 }
 
+// NewClassProvider returns a new ClassProvider reference for given bdev type.
 func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig) (*ClassProvider, error) {
 	p := &ClassProvider{
 		log: log,
-		cfg: *cfg,
+		cfg: cfg,
 	}
 
 	log.Debug("creating new class provider")
@@ -292,12 +302,14 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 	return p, nil
 }
 
+// GenConfigFile generates nvme config file for given bdev type to be consumed
+// by spdk.
 func (p *ClassProvider) GenConfigFile() error {
 	if p.cfgPath == "" {
 		return nil
 	}
 
-	if err := p.bdev.init(p.log, &p.cfg); err != nil {
+	if err := p.bdev.init(p.log, p.cfg); err != nil {
 		return errors.Wrap(err, "bdev device init")
 	}
 

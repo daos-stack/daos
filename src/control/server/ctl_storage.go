@@ -25,7 +25,6 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pkg/errors"
 
@@ -42,14 +41,14 @@ type StorageControlService struct {
 	log             logging.Logger
 	bdev            *bdev.Provider
 	scm             *scm.Provider
-	instanceStorage []ioserver.StorageConfig
+	instanceStorage []*ioserver.StorageConfig
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
 func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.Provider, srvCfgs []*ioserver.Config) *StorageControlService {
-	instanceStorage := []ioserver.StorageConfig{}
+	instanceStorage := []*ioserver.StorageConfig{}
 	for _, srvCfg := range srvCfgs {
-		instanceStorage = append(instanceStorage, srvCfg.Storage)
+		instanceStorage = append(instanceStorage, &srvCfg.Storage)
 	}
 
 	return &StorageControlService{
@@ -58,18 +57,6 @@ func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.
 		scm:             scm,
 		instanceStorage: instanceStorage,
 	}
-}
-
-// parsePciAddress returns separated components of BDF format PCI address.
-func parsePciAddress(addr string) (string, string, string, string, error) {
-	parts := strings.Split(addr, ":")
-	deviceFunc := strings.Split(parts[len(parts)-1], ".")
-	if len(parts) != 3 || len(deviceFunc) != 2 {
-		return "", "", "", "",
-			errors.Errorf("unexpected pci address bdf format: %q", addr)
-	}
-
-	return parts[0], parts[1], deviceFunc[0], deviceFunc[1], nil
 }
 
 // addVmdPciAddrs adds backing SSD PCI addresses behind any VMD addresses to
@@ -84,7 +71,7 @@ func (c *StorageControlService) addVmdPciAddrs(sr *bdev.ScanResponse) error {
 	}
 
 	for _, addr := range c.instanceStorage[0].Bdev.VmdDeviceList {
-		_, b, d, f, err := parsePciAddress(addr)
+		_, b, d, f, err := bdev.ParsePciAddress(addr)
 		if err != nil {
 			return err
 		}
@@ -93,7 +80,7 @@ func (c *StorageControlService) addVmdPciAddrs(sr *bdev.ScanResponse) error {
 	}
 
 	for _, c := range sr.Controllers {
-		domain, _, _, _, err := parsePciAddress(c.PciAddr)
+		domain, _, _, _, err := bdev.ParsePciAddress(c.PciAddr)
 		if err != nil {
 			return err
 		}
