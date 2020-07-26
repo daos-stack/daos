@@ -25,10 +25,10 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -90,18 +90,26 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 	cfg := srv.bdevConfig()
 	results = make(proto.NvmeControllerResults, 0, len(cfg.DeviceList))
 
+	// VMDs are not real SSDs and cannot be formatted.
+	var bdevsToFormat []string
+	for _, dev := range cfg.DeviceList {
+		// TODO: populate list with backing SSDs behind VMD address.
+		if common.Includes(cfg.VmdDeviceList, dev) {
+			continue
+		}
+		bdevsToFormat = append(bdevsToFormat, dev)
+	}
 	// A config with SCM and no block devices is valid.
-	if len(cfg.DeviceList) == 0 {
+	if len(bdevsToFormat) == 0 {
 		return
 	}
 
-	bdevListStr := strings.Join(cfg.DeviceList, ",")
-	srv.log.Infof("Instance %d: starting format of %s block devices (%s)",
-		srvIdx, cfg.Class, bdevListStr)
+	srv.log.Infof("Instance %d: starting format of %s block devices %v",
+		srvIdx, cfg.Class, bdevsToFormat)
 
 	res, err := p.Format(bdev.FormatRequest{
 		Class:      cfg.Class,
-		DeviceList: cfg.DeviceList,
+		DeviceList: bdevsToFormat,
 	})
 	if err != nil {
 		results = append(results,
@@ -125,8 +133,8 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 			srv.newCret(dev, ctlpbStatus, errMsg, infoMsg))
 	}
 
-	srv.log.Infof("Instance %d: finished format of %s block devices (%s)",
-		srvIdx, cfg.Class, bdevListStr)
+	srv.log.Infof("Instance %d: finished format of %s block devices %v",
+		srvIdx, cfg.Class, bdevsToFormat)
 
 	return
 }

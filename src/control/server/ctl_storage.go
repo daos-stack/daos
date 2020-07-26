@@ -24,8 +24,12 @@
 package server
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -56,7 +60,62 @@ func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.
 	}
 }
 
+// parsePciAddress returns separated components of BDF format PCI address.
+func parsePciAddress(addr string) (string, string, string, string, error) {
+	parts := strings.Split(addr, ":")
+	deviceFunc := strings.Split(parts[len(parts)-1], ".")
+	if len(parts) != 3 || len(deviceFunc) != 2 {
+		return "", "", "", "",
+			errors.Errorf("unexpected pci address bdf format: %q", addr)
+	}
+
+	return parts[0], parts[1], deviceFunc[0], deviceFunc[1], nil
+}
+
+// addVmdPciAddrs adds backing SSD PCI addresses behind any VMD addresses to
+// bdev config VmdDeviceList to enable them to be used by the class provider.
+//
+// Select any address that has the compressed VMD address as domain.
+func (c *StorageControlService) addVmdPciAddrs(sr *bdev.ScanResponse) error {
+	var prefixes, toAdd []string
+
+	if len(c.instanceStorage) == 0 {
+		return nil
+	}
+
+	for _, addr := range c.instanceStorage[0].Bdev.VmdDeviceList {
+		_, b, d, f, err := parsePciAddress(addr)
+		if err != nil {
+			return err
+		}
+		// concat bus device func
+		prefixes = append(prefixes, fmt.Sprintf("%02s%02s%02s", b, d, f))
+	}
+
+	for _, c := range sr.Controllers {
+		domain, _, _, _, err := parsePciAddress(c.PciAddr)
+		if err != nil {
+			return err
+		}
+		if common.Includes(prefixes, domain) {
+			toAdd = append(toAdd, c.PciAddr)
+		}
+	}
+
+	for i := range c.instanceStorage {
+		c.instanceStorage[i].Bdev.VmdDeviceList = append(
+			c.instanceStorage[i].Bdev.VmdDeviceList, toAdd...)
+	}
+
+	c.log.Debugf("prefixes: %v, to add: %v, vdl: %v",
+		prefixes, toAdd, c.instanceStorage[0].Bdev.VmdDeviceList)
+
+	return nil
+}
+
 // canAccessBdevs evaluates if any specified Bdevs are not accessible.
+//
+// Specified Bdevs can be VMD addresses.
 func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing []string, ok bool) {
 	getController := func(pciAddr string) *storage.NvmeController {
 		for _, c := range sr.Controllers {
@@ -69,7 +128,9 @@ func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing [
 
 	for _, storageCfg := range c.instanceStorage {
 		for _, pciAddr := range storageCfg.Bdev.GetNvmeDevs() {
-			if getController(pciAddr) == nil {
+			if !common.Includes(storageCfg.Bdev.VmdDeviceList, pciAddr) &&
+				getController(pciAddr) == nil {
+
 				missing = append(missing, pciAddr)
 			}
 		}
@@ -90,6 +151,11 @@ func (c *StorageControlService) Setup() error {
 	missing, ok := c.canAccessBdevs(sr)
 	if !ok {
 		return FaultBdevNotFound(missing)
+	}
+
+	// add vmd backing ssd pci addresses to bdev config
+	if err := c.addVmdPciAddrs(sr); err != nil {
+		return err
 	}
 
 	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {
