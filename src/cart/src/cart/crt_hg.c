@@ -1122,6 +1122,11 @@ out:
 	return hg_ret;
 }
 
+static bool crt_hg_network_error(hg_return_t hg_ret)
+{
+	return (hg_ret == HG_NA_ERROR || hg_ret == HG_PROTOCOL_ERROR);
+}
+
 int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
@@ -1149,8 +1154,18 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 	}
 
-	if (hg_ret == HG_NA_ERROR ||
-		hg_ret == HG_PROTOCOL_ERROR) {
+	/* HG_Forward can return 2 types of errors - network errors and generic
+	 * ones, such as out of memory, bad parameters passed, invalid handle
+	 * etc...
+	 *
+	 * For network errors, we do not want ot return error back to the caller
+	 * of crt_req_send(), but instead we want to invoke completion callback
+	 * manually with 'node unreachable' (DER_UNREACH) error.
+	 *
+	 * HG_NA_ERROR and HG_PROTOCOL_ERROR are both network-level errors
+	 * that can be raised by mercury.
+	 */
+	if (crt_hg_network_error(hg_ret)) {
 		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
