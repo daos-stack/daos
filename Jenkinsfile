@@ -436,47 +436,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'centos7-gcc-build.log',
-                                   failure_artifacts: 'config.log-centos7-gcc'
-                        stash name: 'centos7-gcc-install',
-                              includes: 'install/**'
-                        stash name: 'centos7-gcc-build-vars',
-                              includes: ".build_vars${arch}.*"
-                        stash name: 'centos7-gcc-tests',
-                              includes: '''build/*/*/src/cart/src/utest/test_linkage,
-                                           build/*/*/src/cart/src/utest/test_gurt,
-                                           build/*/*/src/cart/src/utest/utest_hlc,
-                                           build/*/*/src/cart/src/utest/utest_swim,
-                                           build/*/*/src/rdb/raft/src/tests_main,
-                                           build/*/*/src/common/tests/btree_direct,
-                                           build/*/*/src/common/tests/btree,
-                                           build/*/*/src/common/tests/sched,
-                                           build/*/*/src/common/tests/drpc_tests,
-                                           build/*/*/src/common/tests/acl_api_tests,
-                                           build/*/*/src/common/tests/acl_valid_tests,
-                                           build/*/*/src/common/tests/acl_util_tests,
-                                           build/*/*/src/common/tests/acl_principal_tests,
-                                           build/*/*/src/common/tests/acl_real_tests,
-                                           build/*/*/src/common/tests/prop_tests,
-                                           build/*/*/src/iosrv/tests/drpc_progress_tests,
-                                           build/*/*/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
-                                           build/*/*/src/client/api/tests/eq_tests,
-                                           build/*/*/src/iosrv/tests/drpc_handler_tests,
-                                           build/*/*/src/iosrv/tests/drpc_listener_tests,
-                                           build/*/*/src/mgmt/tests/srv_drpc_tests,
-                                           build/*/*/src/security/tests/cli_security_tests,
-                                           build/*/*/src/security/tests/srv_acl_tests,
-                                           build/*/*/src/vos/vea/tests/vea_ut,
-                                           build/*/*/src/common/tests/umem_test,
-                                           build/*/*/src/bio/smd/tests/smd_ut,
-                                           utils/sl/build_info/**,
-                                           src/common/tests/btree.sh,
-                                           src/control/run_go_tests.sh,
-                                           src/rdb/raft_tests/raft_tests.py,
-                                           src/vos/tests/evt_ctl.sh
-                                           src/control/lib/netdetect/netdetect.go'''
+                        sconsBuild parallel_build: parallel_build(),
+                                   test_files: 'ci/test_files_to_stash.txt'
                     }
                     post {
                         always {
@@ -569,11 +530,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   BUILD_TYPE: 'debug',
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'centos7-gcc-debug-build.log',
-                                   failure_artifacts: 'config.log-centos7-gcc-debug'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -618,11 +575,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   BUILD_TYPE: 'release',
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'centos7-gcc-release-build.log',
-                                   failure_artifacts: 'config.log-centos7-gcc-release'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -666,12 +619,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf bandit.xml',
-                                   COMPILER: "clang",
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'centos7-clang-build.log',
-                                   failure_artifacts: 'config.log-centos7-clang'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -713,11 +661,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf bandit.xml',
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'ubuntu20.04-gcc-build.log',
-                                   failure_artifacts: 'config.log-ubuntu20.04-gcc'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -761,12 +705,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf bandit.xml',
-                                   COMPILER: "clang",
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'ubuntu20.04-clang-build.log',
-                                   failure_artifacts: 'config.log-ubuntu20.04-clang'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -808,11 +747,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf bandit.xml',
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'leap15-gcc-build.log',
-                                   failure_artifacts: 'config.log-leap15-gcc'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -854,11 +789,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   COMPILER: "clang",
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'leap15-clang-build.log',
-                                   failure_artifacts: 'config.log-leap15-clang'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -903,13 +834,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf src/rdb/raft/CLinkedListQueue',
-                                   COMPILER: "icc",
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'leap15-icc-build.log',
-                                   TARGET_PREFIX: 'install/opt',
-                                   failure_artifacts: 'config.log-leap15-icc'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -1065,9 +990,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallel_build(),
-                                   clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-centos7-cov'
+                                   parallel_build: parallel_build()
                     }
                     post {
                         success {
@@ -1227,11 +1150,12 @@ pipeline {
                         label 'stage_vm1'
                     }
                     steps {
-                        cloverPost coverage_stashes: ['centos7-covc-unit-cov'],
+                        cloverReportPublish(
+                                   coverage_stashes: ['centos7-covc-unit-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
-                                   ignore_failure: true
+                                   ignore_failure: true)
                     }
                 } // stage('Bullseye Report')
             } // parallel
