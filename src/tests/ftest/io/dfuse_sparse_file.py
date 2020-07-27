@@ -22,13 +22,13 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-import subprocess
+#import subprocess
 from getpass import getuser
 import paramiko
-import general_utils
 
-from ClusterShell.NodeSet import NodeSet
-from command_utils import CommandFailure
+from general_utils import get_remote_file_size
+#from ClusterShell.NodeSet import NodeSet
+#from command_utils import CommandFailure
 from ior_test_base import IorTestBase
 
 
@@ -42,7 +42,7 @@ class DfuseSparseFile(IorTestBase):
         """Initialize a DfuseSparseFile object."""
         super(DfuseSparseFile, self).__init__(*args, **kwargs)
         self.space_before = None
-        self.ret = None
+#        self.ret = None
 
     def tearDown(self):
         """Tear down each test case."""
@@ -52,25 +52,6 @@ class DfuseSparseFile(IorTestBase):
         finally:
             # Stop the servers and agents
             super(DfuseSparseFile, self).tearDown()
-
-    def get_remote_file_size(self, file_name):
-        """Obtain remote file size.
-
-          Args:
-            file_name (str): name of remote file
-
-          Returns:
-            integer value of file size
-        """
-
-        cmd = "ssh" " {}@{}" " stat -c%s {}".format(
-            getuser(), self.hostlist_clients[0], file_name)
-        try:
-            result = subprocess.check_output(cmd, shell=True)
-        except subprocess.CalledProcessError as err:
-            self.fail("Get remote file size method failed with: {}".format(err))
-
-        return int(result)
 
     def get_nvme_free_space(self, display=True):
         """Display pool free space.
@@ -86,36 +67,6 @@ class DfuseSparseFile(IorTestBase):
             self.log.info("Free nvme space: %s", free_space_nvme)
 
         return free_space_nvme
-
-    def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
-        """Execute cmd using general_utils.pcmd
-
-          Args:
-            cmd (str): String command to be executed
-            fail_on_err (bool): Boolean for whether to fail the test if command
-                                execution returns non zero return code.
-            display_output (bool): Boolean for whether to display output.
-        """
-        try:
-            # execute bash cmds
-            self.ret = general_utils.pcmd(
-                self.hostlist_clients, cmd, verbose=display_output, timeout=300)
-            if 0 not in self.ret:
-                error_hosts = NodeSet(
-                    ",".join(
-                        [str(node_set) for code, node_set in
-                         self.ret.items() if code != 0]))
-                if fail_on_err:
-                    raise CommandFailure(
-                        "Error running '{}' on the following "
-                        "hosts: {}".format(cmd, error_hosts))
-
-        # report error if any command fails
-        except CommandFailure as error:
-            self.log.error("DfuseSparseFile Test Failed: %s",
-                           str(error))
-            self.fail("Test was expected to pass but "
-                      "it failed.\n")
 
     def test_dfusesparsefile(self):
         """Jira ID: DAOS-3768
@@ -151,7 +102,8 @@ class DfuseSparseFile(IorTestBase):
                           "sparsefile.txt")
         self.execute_cmd(u"touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
-                      self.get_remote_file_size(sparse_file))
+                      get_remote_file_size(
+                          self.hostlist_clients[0], sparse_file))
 
         # create and open a connection on remote node to open file on that
         # remote node
@@ -166,30 +118,36 @@ class DfuseSparseFile(IorTestBase):
         # set file size to max available nvme size
         sftp.truncate(sparse_file, self.space_before)
         self.log.info("File size (in bytes) after truncate: %s",
-                      self.get_remote_file_size(sparse_file))
+                      get_remote_file_size(
+                          self.hostlist_clients[0], sparse_file))
         # verifying the file size got set to desired value
         self.assertTrue(
-            self.get_remote_file_size(sparse_file) == self.space_before)
+            get_remote_file_size(
+                self.hostlist_clients[0], sparse_file) == self.space_before)
 
         # write to the first byte of the file with char 'A'
         dd_first_byte = u"echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
                         format(sparse_file)
         self.execute_cmd(dd_first_byte)
         self.log.info("File size (in bytes) after writing first byte: %s",
-                      self.get_remote_file_size(sparse_file))
+                      get_remote_file_size(
+                          self.hostlist_clients[0], sparse_file))
         # verify file did not got overriten after dd write.
         self.assertTrue(
-            self.get_remote_file_size(sparse_file) == self.space_before)
+            get_remote_file_size(
+                self.hostlist_clients[0], sparse_file) == self.space_before)
 
         # write to the 1024th byte position of the file
         dd_1024_byte = u"echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
                        bs=1 count=1".format(sparse_file)
         self.execute_cmd(dd_1024_byte)
         self.log.info("File size (in bytes) after writing first byte: %s",
-                      self.get_remote_file_size(sparse_file))
+                      get_remote_file_size(
+                          self.hostlist_clients[0], sparse_file))
         # verify file did not got overriten after dd write.
         self.assertTrue(
-            self.get_remote_file_size(sparse_file) == self.space_before)
+            get_remote_file_size(
+                self.hostlist_clients[0], sparse_file) == self.space_before)
 
         # Obtainer the value of 1st byte and 1024th bytes in the file and
         # compare their values, they should be same.

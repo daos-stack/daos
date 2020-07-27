@@ -31,6 +31,7 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
+from getpass import getuser
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -48,7 +49,6 @@ def human_to_bytes(h_size):
 
     Returns:
         int: value translated to bytes.
-
     """
     units = {"b": 1,
              "kb": (2**10),
@@ -199,13 +199,13 @@ def get_host_data(hosts, command, text, error, timeout=None):
     if len(data) > 1 or 0 not in data:
         # Report the errors
         messages = []
-        for code, host_list in data.items():
+        for code, hosts in data.items():
             if code != 0:
-                output_data = list(task.iter_buffers(host_list))
-                if not output_data:
+                output_data = list(task.iter_buffers(hosts))
+                if len(output_data) == 0:
                     messages.append(
                         "{}: rc={}, command=\"{}\"".format(
-                            NodeSet.fromlist(host_list), code, command))
+                            NodeSet.fromlist(hosts), code, command))
                 else:
                     for output, o_hosts in output_data:
                         lines = str(output).splitlines()
@@ -224,10 +224,10 @@ def get_host_data(hosts, command, text, error, timeout=None):
 
     else:
         # The command completed successfully on all servers.
-        for output, host_list in task.iter_buffers(data[0]):
+        for output, hosts in task.iter_buffers(data[0]):
             # Find the maximum size of the all the devices reported by
             # this group of hosts as only one needs to meet the minimum
-            nodes = NodeSet.fromlist(host_list)
+            nodes = NodeSet.fromlist(hosts)
             try:
                 # The assumption here is that each line of command output
                 # will begin with a number and that for the purposes of
@@ -246,7 +246,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
                         nodes, text, "\n      ".join(str(output).splitlines())))
 
                 # Return an error data set for all of the hosts
-                host_data = {NodeSet.fromlist(host_list): DATA_ERROR}
+                host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
                 break
 
     return host_data
@@ -460,26 +460,6 @@ def check_pool_files(log, hosts, uuid):
     return status
 
 
-def convert_list(value, separator=","):
-    """Convert a list into a separator-separated string of its items.
-
-    Examples:
-        convert_list([1,2,3])        -> '1,2,3'
-        convert_list([1,2,3], " ")   -> '1 2 3'
-        convert_list([1,2,3], ", ")  -> '1, 2, 3'
-
-    Args:
-        value (list): list to convert into a string
-        separator (str, optional): list item separator. Defaults to ",".
-
-    Returns:
-        str: a single string containing all the list items separated by the
-            separator.
-
-    """
-    return separator.join([str(item) for item in value])
-
-
 def stop_processes(hosts, pattern, verbose=True, timeout=60):
     """Stop the processes on each hosts that match the pattern.
 
@@ -580,3 +560,20 @@ def check_uuid_format(uuid):
     """
     pattern = re.compile("([0-9a-fA-F-]+)")
     return bool(len(uuid) == 36 and pattern.match(uuid))
+
+
+def get_remote_file_size(host, file_name):
+    """Obtain remote file size.
+
+      Args:
+        file_name (str): name of remote file
+
+      Returns:
+        integer value of file size
+    """
+
+    cmd = "ssh" " {}@{}" " stat -c%s {}".format(
+        getuser(), host, file_name)
+    result = run_command(cmd)
+
+    return int(result.stdout)
