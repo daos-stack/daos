@@ -1057,7 +1057,8 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
+                                                  functional_rpms +
+                                                  'python36-tabulate'
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1094,7 +1095,8 @@ pipeline {
                                        distro: 'el7',
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
-                                                   ' ' + functional_rpms
+                                                   ' ' + functional_rpms +
+                                                  'python36-tabulate'
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1131,7 +1133,8 @@ pipeline {
                                        distro: 'el7',
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
+                                                  functional_rpms +
+                                                  'python36-tabulate'
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1168,7 +1171,8 @@ pipeline {
                                        distro: 'el7',
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
+                                                  functional_rpms +
+                                                  'python36-tabulate'
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
