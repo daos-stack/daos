@@ -205,10 +205,183 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 }
 
 /*
- * Exclude "tgts" in "map". A new map version is generated only if actual
- * changes have been made. If "tgts_failed" is not NULL, then targets that are
- * not excluded are added to "tgts_failed", whose rank buffer must be at least
- * as large that of "tgts".
+ * Updates a single target by the operation given in opc
+ * If something changed, *version is incremented
+ * Returns 0 on success or if there's nothing to do. -DER_BUSY if the operation
+ * is valid but needs to wait for rebuild to finish, -DER_INVAL if the state
+ * transition is invalid
+ */
+static int
+update_one_tgt(struct pool_map *map, struct pool_target *target,
+	       struct pool_domain *dom, int opc, bool evict_rank,
+	       uint32_t *version) {
+	D_ASSERTF(target->ta_comp.co_status == PO_COMP_ST_UP ||
+		  target->ta_comp.co_status == PO_COMP_ST_UPIN ||
+		  target->ta_comp.co_status == PO_COMP_ST_DOWN ||
+		  target->ta_comp.co_status == PO_COMP_ST_DRAIN ||
+		  target->ta_comp.co_status == PO_COMP_ST_DOWNOUT,
+		  "%u\n", target->ta_comp.co_status);
+
+	switch (opc) {
+	case POOL_EXCLUDE:
+		switch (target->ta_comp.co_status) {
+		case PO_COMP_ST_DOWN:
+		case PO_COMP_ST_DOWNOUT:
+			/* Nothing to do, already excluded */
+			D_INFO("Skip exclude down target (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			break;
+		case PO_COMP_ST_UP:
+		case PO_COMP_ST_UPIN:
+		case PO_COMP_ST_DRAIN:
+			D_DEBUG(DF_DSMS, "change target %u/%u to DOWN %p\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index, map);
+			target->ta_comp.co_status = PO_COMP_ST_DOWN;
+			target->ta_comp.co_fseq = ++(*version);
+
+			D_PRINT("Target (rank %u idx %u) is down.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			if (evict_rank && pool_map_node_status_match(dom,
+				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
+				D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
+					dom->do_comp.co_rank);
+				dom->do_comp.co_status = PO_COMP_ST_DOWN;
+				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
+			}
+			break;
+		}
+		break;
+
+	case POOL_DRAIN:
+		switch (target->ta_comp.co_status) {
+		case PO_COMP_ST_DOWN:
+		case PO_COMP_ST_DRAIN:
+		case PO_COMP_ST_DOWNOUT:
+			/* Nothing to do, already excluded / draining */
+			D_INFO("Skip drain down target (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			break;
+		case PO_COMP_ST_UP:
+			D_ERROR("Can't drain reint target (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			return -DER_BUSY;
+		case PO_COMP_ST_UPIN:
+			D_DEBUG(DF_DSMS, "change target %u/%u to DRAIN %p\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index, map);
+			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
+			target->ta_comp.co_fseq = ++(*version);
+
+			D_PRINT("Target (rank %u idx %u) is draining.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			break;
+		}
+		break;
+
+	case POOL_ADD:
+		switch (target->ta_comp.co_status) {
+		case PO_COMP_ST_UP:
+		case PO_COMP_ST_UPIN:
+			/* Nothing to do, already added */
+			D_INFO("Skip add up target (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			break;
+		case PO_COMP_ST_DOWN:
+		case PO_COMP_ST_DRAIN:
+			D_ERROR("Can't add rebuilding tgt (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			return -DER_BUSY;
+		case PO_COMP_ST_DOWNOUT:
+			D_DEBUG(DF_DSMS, "change target %u/%u to UP %p\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index, map);
+			target->ta_comp.co_status = PO_COMP_ST_UP;
+			target->ta_comp.co_fseq = ++(*version);
+
+			D_PRINT("Target (rank %u idx %u) is added.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			D_DEBUG(DF_DSMS, "change rank %u to UP\n",
+				dom->do_comp.co_rank);
+			dom->do_comp.co_status = PO_COMP_ST_UP;
+			break;
+		}
+		break;
+
+	case POOL_ADD_IN:
+		switch (target->ta_comp.co_status) {
+		case PO_COMP_ST_UPIN:
+			/* Nothing to do, already UPIN */
+			D_INFO("Skip ADD_IN UPIN target (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			break;
+		case PO_COMP_ST_DOWN:
+		case PO_COMP_ST_DRAIN:
+		case PO_COMP_ST_DOWNOUT:
+			D_ERROR("Can't ADD_IN non-up target (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			return -DER_INVAL;
+		case PO_COMP_ST_UP:
+			D_DEBUG(DF_DSMS, "change target %u/%u to UPIN %p\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index, map);
+			target->ta_comp.co_status = PO_COMP_ST_UPIN;
+			(*version)++;
+			break;
+		}
+		break;
+
+	case POOL_EXCLUDE_OUT:
+		switch (target->ta_comp.co_status) {
+		case PO_COMP_ST_DOWNOUT:
+			/* Nothing to do, already DOWNOUT */
+			D_INFO("Skip EXCLUDEOUT DOWNOUT tgt (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			break;
+		case PO_COMP_ST_DRAIN:
+		case PO_COMP_ST_UP:
+		case PO_COMP_ST_UPIN:
+			D_ERROR("Can't EXCLOUT non-down tgt (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			return -DER_INVAL;
+		case PO_COMP_ST_DOWN:
+			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index, map);
+			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+			(*version)++;
+			D_PRINT("Target (rank %u idx %u) is excluded.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+
+			if (evict_rank && pool_map_node_status_match(dom,
+						PO_COMP_ST_DOWNOUT)) {
+				D_DEBUG(DF_DSMS, "change rank %u to DOWNOUT\n",
+					dom->do_comp.co_rank);
+				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
+			}
+		}
+		break;
+	}
+
+	return DER_SUCCESS;
+}
+
+/*
+ * Update "tgts" in "map". A new map version is generated only if actual
+ * changes have been made.
  */
 int
 ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
@@ -240,82 +413,10 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			continue;
 		}
 
-		D_ASSERTF(target->ta_comp.co_status == PO_COMP_ST_UP ||
-			target->ta_comp.co_status == PO_COMP_ST_UPIN ||
-			target->ta_comp.co_status == PO_COMP_ST_DOWN ||
-			target->ta_comp.co_status == PO_COMP_ST_DRAIN ||
-			target->ta_comp.co_status == PO_COMP_ST_DOWNOUT,
-			"%u\n", target->ta_comp.co_status);
-		if (opc == POOL_EXCLUDE &&
-		    target->ta_comp.co_status != PO_COMP_ST_DOWN &&
-		    target->ta_comp.co_status != PO_COMP_ST_DOWNOUT) {
-			D_DEBUG(DF_DSMS, "change target %u/%u to DOWN %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_DOWN;
-			target->ta_comp.co_fseq = ++version;
-
-			D_PRINT("Target (rank %u idx %u) is down.\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			if (evict_rank && pool_map_node_status_match(dom,
-				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
-				D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_DOWN;
-				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
-			}
-		} else if (opc == POOL_DRAIN &&
-			   target->ta_comp.co_status == PO_COMP_ST_UPIN) {
-			D_DEBUG(DF_DSMS, "change target %u/%u to DRAIN %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
-			target->ta_comp.co_fseq = ++version;
-
-			D_PRINT("Target (rank %u idx %u) is draining.\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-		} else if (opc == POOL_ADD &&
-			 target->ta_comp.co_status != PO_COMP_ST_UP &&
-			 target->ta_comp.co_status != PO_COMP_ST_UPIN) {
-			D_DEBUG(DF_DSMS, "change target %u/%u to UP %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_UP;
-			target->ta_comp.co_fseq = ++version;
-
-			D_PRINT("Target (rank %u idx %u) is added.\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-			D_DEBUG(DF_DSMS, "change rank %u to UP\n",
-				dom->do_comp.co_rank);
-			dom->do_comp.co_status = PO_COMP_ST_UP;
-		} else if (opc == POOL_ADD_IN &&
-			   target->ta_comp.co_status == PO_COMP_ST_UP) {
-			D_DEBUG(DF_DSMS, "change target %u/%u to UPIN %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_UPIN;
-			version++;
-		} else if (opc == POOL_EXCLUDE_OUT &&
-			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
-			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-			version++;
-			D_PRINT("Target (rank %u idx %u) is excluded.\n",
-				target->ta_comp.co_rank,
-				target->ta_comp.co_index);
-
-			if (evict_rank && pool_map_node_status_match(dom,
-						PO_COMP_ST_DOWNOUT)) {
-				D_DEBUG(DF_DSMS, "change rank %u to DOWNOUT\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
-			}
-		}
+		rc = update_one_tgt(map, target, dom, opc, evict_rank,
+				    &version);
+		if (rc != 0)
+			return rc;
 	}
 
 	/* Set the version only if actual changes have been made. */
