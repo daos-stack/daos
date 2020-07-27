@@ -151,6 +151,10 @@ struct obj_reasb_req {
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
+	/* object ID */
+	daos_obj_id_t			 orr_oid;
+	/* #iods of IO req */
+	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
 	uint32_t			 orr_recov:1,
 	/* for iod_size fetching flag */
@@ -489,7 +493,8 @@ struct obj_io_context {
 	struct ds_cont_child	*ioc_coc;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
-	bool			 ioc_began;
+	uint32_t		 ioc_began:1,
+				 ioc_csummer_init:1;
 };
 
 struct ds_obj_exec_arg {

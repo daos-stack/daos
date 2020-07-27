@@ -742,4 +742,7 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 	}
 }
 
+/* default debug log file */
+#define DAOS_LOG_DEFAULT	"/tmp/daos.log"
+
 #endif /* __DAOS_COMMON_H__ */
