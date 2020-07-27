@@ -2,6 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
+%global __strip /bin/true
+%global _enable_debug_package 0
+%global debug_package %{nil}
+%global __os_install_post /usr/lib/rpm/brp-compress %{nil}
+
 %global mercury_version 2.0.0~rc1-1%{?dist}
 
 Name:          daos
@@ -190,6 +195,8 @@ scons %{?_smp_mflags}      \
       PREFIX=%{?buildroot}
 
 %install
+export DONT_STRIP=1
+
 scons %{?_smp_mflags}                 \
       --config=force                  \
       --no-rpath                      \
