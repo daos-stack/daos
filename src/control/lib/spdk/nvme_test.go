@@ -141,9 +141,6 @@ func TestDiscover(t *testing.T) {
 		//		if err := se.InitSPDKEnv(tt.shmID); err != nil {
 		//			t.Fatal(err.Error())
 		//		}
-		//		if err := se.InitVMDEnv(); err != nil {
-		//			t.Fatal(err.Error())
-		//		}
 		//
 		//		cs, nss, err := n.Discover()
 		//		if checkFailure(tt.shouldSucceed, err) != nil {

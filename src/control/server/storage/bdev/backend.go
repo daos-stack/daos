@@ -88,8 +88,6 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 }
 
 func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
-	log.Debugf("spdk wrapper init: vmdEnabled: %v", w.vmdEnabled)
-
 	if w.initialized {
 		return nil
 	}
@@ -151,8 +149,6 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 }
 
 func (b *spdkBackend) Init(shmID ...int) error {
-	b.log.Debug("spdk backend init")
-
 	if err := b.binding.init(b.log, shmID...); err != nil {
 		return err
 	}
@@ -162,8 +158,6 @@ func (b *spdkBackend) Init(shmID ...int) error {
 
 // EnableVmd turns on VMD device awareness.
 func (b *spdkBackend) EnableVmd() error {
-	b.log.Debug("spdk backend enable vmd")
-
 	if b.binding.vmdEnabled {
 		return errors.New("EnableVmd(): VMD already enabled")
 	}

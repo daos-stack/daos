@@ -151,10 +151,8 @@ func (p *Provider) Init(req InitRequest) error {
 
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
-	p.log.Debugf("scan request %+v, vmd %v, EnableVmd %v", req, p.IsVmdEnabled(), req.EnableVmd)
 	if p.shouldForward(req) {
 		req.EnableVmd = p.IsVmdEnabled()
-		p.log.Debugf("setting should enable vmd on forwarding request: %+v", req)
 		return p.fwd.Scan(req)
 	}
 	if req.IsForwarded() && req.EnableVmd {

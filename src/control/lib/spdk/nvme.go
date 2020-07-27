@@ -54,8 +54,6 @@ const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
 type NVME interface {
 	// Discover NVMe controllers and namespaces, and device health info
 	Discover(logging.Logger, bool) ([]Controller, error)
-	// Discover NVMe SSD PCIe addresses behind VMD
-	//DiscoverVmd(log logging.Logger) ([]string, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger, string) error
 	// Cleanup NVMe object references
@@ -184,65 +182,6 @@ func (n *Nvme) Discover(log logging.Logger, enableVmd bool) ([]Controller, error
 
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
-
-//func isVmdDevType(log logging.Logger, dev *C.struct_spdk_pci_device) bool {
-//	defer func() {
-//		if r := recover(); r != nil {
-//			fmt.Printf("Recovering from panic in isVmdDevType, error is: %v \n", r)
-//		}
-//	}()
-//
-//	if dev.internal.removed || dev.internal.pending_removal {
-//		log.Debug("isVmdDevType(): skipping removed or pending removal device")
-//		return false
-//	}
-//
-//	log.Debugf("domain bus dev func, type : %x %x %x %x, %s",
-//		dev.addr.domain, dev.addr.bus, dev.addr.dev, dev.addr._func,
-//		C.GoString(dev._type))
-//	devType := C.spdk_pci_device_get_type(dev)
-//	if strings.Compare(C.GoString(devType), "vmd") == 0 {
-//		log.Debugf("pci device: %+v", dev)
-//		return true
-//	}
-//
-//	return false
-//}
-
-// DiscoverVmd discovers NVMe SSD PCIe addresses behind VMD.
-//func (n *Nvme) DiscoverVmd(log logging.Logger) (addrs []string, err error) {
-//	ctrlrs, err := processReturn(C.nvme_discover_vmd(),
-//		"NVMe DiscoverVmd(): C.nvme_discover_vmd")
-//
-//	pciAddrs := pciAddressList(ctrlrs)
-//	log.Debugf("discovered backing nvme ssds behind vmd: %v", pciAddrs)
-//
-//	return pciAddrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
-//}
-
-//	addrBuf := C.malloc(C.sizeof_char * 128)
-//	defer C.free(unsafe.Pointer(addrBuf))
-//
-//	var rc C.int
-//	for dev := C.spdk_pci_get_first_device(); dev != nil; dev = C.spdk_pci_get_next_device(dev) {
-//		if !isVmdDevType(log, dev) {
-//			continue
-//		}
-//
-//		cs := C.CString("")
-//		rc = C.spdk_pci_addr_fmt(cs, C.sizeof_char*128, &dev.addr)
-//		if err = Rc2err("spdk_pci_addr_fmt", rc); err != nil {
-//			return nil, err
-//		}
-//		log.Debugf("mainstream: %s", C.GoString(cs))
-//		addrs = append(addrs, C.GoString(cs)) //(*C.char)(addrBuf)))
-//		C.free(unsafe.Pointer(cs))
-//	}
-//
-//	log.Debugf("discovered nvme ssds behind VMD: %v", addrs)
-//
-//	return addrs, nil
-//}
 
 // Format device at given pci address, destructive operation!
 //

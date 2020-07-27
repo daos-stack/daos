@@ -209,10 +209,7 @@ func bdevNvmeInit(log logging.Logger, c *storage.BdevConfig) error {
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
 func genFromTempl(cfg *storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
-	fmt.Printf("generating from template")
-
 	if len(cfg.VmdDeviceList) > 0 {
-		fmt.Printf("got it")
 		templ = `[VMD]
     Enable True
 
@@ -240,15 +237,12 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 		cfg: cfg,
 	}
 
-	log.Debug("creating new class provider")
 	switch cfg.Class {
 	case storage.BdevClassNone:
 		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilInit}
 	case storage.BdevClassNvme:
-		log.Debug("bdev nvme detected")
 		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, bdevNvmeInit}
 		if len(cfg.VmdDeviceList) > 0 {
-			log.Debug("set vmd vos env")
 			p.bdev.vosEnv = "VMD"
 		}
 	case storage.BdevClassMalloc:
