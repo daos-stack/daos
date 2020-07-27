@@ -20,12 +20,6 @@ rm -rf test_results
 mkdir test_results
 rm -f dnt.*.memcheck.xml nlt-errors.json
 
-if [ "$1" == "memcheck" ]; then
-    WITH_VALGRIND=memcheck
-else
-    WITH_VALGRIND=disabled
-fi
-
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTNAME=$HOSTNAME        \
