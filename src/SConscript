@@ -44,6 +44,7 @@ def scons():
     SConscript('gurt/SConscript')
     SConscript('swim/SConscript')
     SConscript('cart/SConscript')
+    Default('gurt', 'swim', 'cart')
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
@@ -95,7 +96,6 @@ def scons():
             Exit(2)
 
     #Default('gurt', 'swim', 'cart')
-    Default('swim', 'cart')
     print("DEFAULT_TARGETS is", map(str, DEFAULT_TARGETS))
 
 if __name__ == "SCons.Script":
