@@ -1329,6 +1329,8 @@ typedef enum {
 	CRT_PROC_FREE
 } crt_proc_op_t;
 
+#define crt_proc_raw crt_proc_memcpy
+
 /**
  * Get the operation type associated to the proc processor.
  *
@@ -1342,7 +1344,6 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op);
 
 /**
  * Base proc routine using memcpy().
- * Only uses memcpy() / use crt_proc_raw() for encoding raw buffers.
  *
  * \param[in,out] proc         abstract processor object
  * \param[in,out] data         pointer to data
@@ -1451,18 +1452,6 @@ crt_proc_uint64_t(crt_proc_t proc, uint64_t *data);
  */
 int
 crt_proc_bool(crt_proc_t proc, bool *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] buf          pointer to buffer
- * \param[in] buf_size         buffer size
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_raw(crt_proc_t proc, void *buf, size_t buf_size);
 
 /**
  * Generic processing routine.
