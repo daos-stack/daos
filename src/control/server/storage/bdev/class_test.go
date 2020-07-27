@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,8 +82,8 @@ func TestParseBdev(t *testing.T) {
 		},
 		"VMD devices": {
 			bdevClass: storage.BdevClassNvme,
-			bdevList:  []string{"5d0505:01:00.0", "5d0505:03:00.0"},
-			vmdList:   []string{"5d0505:01:00.0", "5d0505:03:00.0"},
+			bdevList:  []string{"0000:5d:05.5"},
+			vmdList:   []string{"0000:5d:05.5", "5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[VMD]`,
 				`    Enable True`,
@@ -103,8 +103,8 @@ func TestParseBdev(t *testing.T) {
 		},
 		"multiple VMD and NVMe controllers": {
 			bdevClass: storage.BdevClassNvme,
-			bdevList:  []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
-			vmdList:   []string{"5d0505:01:00.0", "5d0505:03:00.0"},
+			bdevList:  []string{"0000:81:00.0", "0000:5d:05.5"},
+			vmdList:   []string{"0000:5d:05.5", "5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
 				`[VMD]`,
 				`    Enable True`,

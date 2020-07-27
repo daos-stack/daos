@@ -92,9 +92,9 @@ func (mb *MockBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 		}
 	}
 
-	mockRe := regexp.MustCompile(`^pciAddr-(\d+)$`)
+	mockRe := regexp.MustCompile(`^0000:80:00.(\d+)$`)
 	if match := mockRe.FindStringSubmatch(pciAddr); match != nil {
-		idx, err := strconv.ParseInt(match[1], 10, 32)
+		idx, err := strconv.ParseInt(match[1], 16, 32)
 		if err != nil {
 			return nil, err
 		}

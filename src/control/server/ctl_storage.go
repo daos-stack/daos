@@ -71,20 +71,20 @@ func (c *StorageControlService) addVmdPciAddrs(sr *bdev.ScanResponse) error {
 	}
 
 	for _, addr := range c.instanceStorage[0].Bdev.VmdDeviceList {
-		_, b, d, f, err := bdev.ParsePciAddress(addr)
+		_, b, d, f, err := bdev.ParsePCIAddress(addr)
 		if err != nil {
 			return err
 		}
 		// concat bus device func
-		prefixes = append(prefixes, fmt.Sprintf("%02s%02s%02s", b, d, f))
+		prefixes = append(prefixes, fmt.Sprintf("%02x%02x%02x", b, d, f))
 	}
 
 	for _, c := range sr.Controllers {
-		domain, _, _, _, err := bdev.ParsePciAddress(c.PciAddr)
+		domain, _, _, _, err := bdev.ParsePCIAddress(c.PciAddr)
 		if err != nil {
 			return err
 		}
-		if common.Includes(prefixes, domain) {
+		if common.Includes(prefixes, fmt.Sprintf("%x", domain)) {
 			toAdd = append(toAdd, c.PciAddr)
 		}
 	}

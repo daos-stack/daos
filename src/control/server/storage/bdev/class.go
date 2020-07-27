@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"text/template"
 
@@ -161,30 +160,17 @@ func bdevFileInit(log logging.Logger, c *storage.BdevConfig) error {
 	return nil
 }
 
-// ParsePciAddress returns separated components of BDF format PCI address.
-func ParsePciAddress(addr string) (string, string, string, string, error) {
-	parts := strings.Split(addr, ":")
-	deviceFunc := strings.Split(parts[len(parts)-1], ".")
-	if len(parts) != 3 || len(deviceFunc) != 2 {
-		return "", "", "", "",
-			errors.Errorf("unexpected pci address bdf format: %q", addr)
-	}
-
-	return parts[0], parts[1], deviceFunc[0], deviceFunc[1], nil
-}
-
 // bdevNvmeInit performs any necessary preparation forNVME class bdev config.
 //
 // Augment bdev device list if VMD backing SSD PCI addresses have been added to
 // config.
 func bdevNvmeInit(log logging.Logger, c *storage.BdevConfig) error {
-	log.Debugf("init bdev nvme, vmds: %v", c.VmdDeviceList)
 	if len(c.VmdDeviceList) == 0 {
 		return nil
 	}
 
-	logMsg := fmt.Sprintf("VMD: prepare conf device list, before: %v, vmds: %v",
-		c.VmdDeviceList, c.DeviceList)
+	logMsg := fmt.Sprintf("VMD: prepare NVMe conf device list, before: %v",
+		c.DeviceList)
 
 	var newDevList []string
 	// Remove VMD addrs from DeviceList and replace with NVMe addrs behind VMD
@@ -195,24 +181,20 @@ func bdevNvmeInit(log logging.Logger, c *storage.BdevConfig) error {
 		}
 
 		// build the concatenated form of vmd bdf
-		_, b, d, f, err := ParsePciAddress(addr)
+		_, b, d, f, err := ParsePCIAddress(addr)
 		if err != nil {
 			return err
 		}
-		prefix := fmt.Sprintf("%02s%02s%02s", b, d, f)
+		prefix := fmt.Sprintf("%02x%02x%02x", b, d, f)
 
-		log.Debugf("looking for prefix %s in vmd list %v", prefix, c.VmdDeviceList)
 		// find backing ssds with matching concat vmd bdf in domain of pci addr
 		for _, vmdDevAddr := range c.VmdDeviceList {
-			domain, _, _, _, err := ParsePciAddress(vmdDevAddr)
+			domain, _, _, _, err := ParsePCIAddress(vmdDevAddr)
 			if err != nil {
 				return err
 			}
-			if domain == prefix {
-				log.Debugf("adding backing device %s", vmdDevAddr)
+			if fmt.Sprintf("%x", domain) == prefix {
 				newDevList = append(newDevList, vmdDevAddr)
-				//strings.Replace(vmdDevAddr, prefix, "0000", 1))
-				log.Debugf("new dev list: %v", newDevList)
 			}
 		}
 	}
