@@ -20,6 +20,7 @@ def scons():
 
     # Builders
     SConscript('cart/SConscript')
+    Default('cart')
 
     # util
     SConscript('util/SConscript')

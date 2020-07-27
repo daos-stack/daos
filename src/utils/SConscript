@@ -10,6 +10,7 @@ def scons():
 
     # Build self test
     SConscript('self_test/SConscript')
+    Default('self_test')
 
     # Build crt_launch
     SConscript('crt_launch/SConscript')
