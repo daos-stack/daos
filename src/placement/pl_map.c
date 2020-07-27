@@ -328,7 +328,7 @@ pl_link2map(d_list_t *link)
 	return container_of(link, struct pl_map, pl_link);
 }
 
-static unsigned int
+static uint32_t
 pl_hop_key_hash(struct d_hash_table *htab, const void *key,
 		unsigned int ksize)
 {

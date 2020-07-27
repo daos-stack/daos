@@ -147,6 +147,7 @@ static int
 obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	  uint64_t flags, struct vos_ts_set *ts_set)
 {
+	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont;
 	struct vos_ilog_info	 info;
 	int			 rc;
@@ -161,7 +162,7 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	/* evict it from catch, because future fetch should only see empty
 	 * object (without obj_df)
 	 */
-	vos_obj_evict(obj);
+	vos_obj_evict(occ, obj);
 failed:
 	vos_ilog_fetch_finish(&info);
 	return rc;
