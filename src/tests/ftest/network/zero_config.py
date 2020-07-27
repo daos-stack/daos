@@ -178,7 +178,7 @@ class ZeroConfigTest(TestWithServers):
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
         devs = ["ib0", "ib1"]
-        ports = ["31416", "31417"]
+        ports = [31416, 31417]
         for idx, (exp_iface, port) in enumerate(zip(devs, ports)):
             # Configure the daos server
             config_file = self.get_config_file(self.server_group, "server")
