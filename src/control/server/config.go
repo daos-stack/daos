@@ -72,7 +72,7 @@ type Configuration struct {
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool                      `yaml:"disable_vfio"`
-	UseVmd              bool                      `yaml:"use_vmd"`
+	DisableVMD          bool                      `yaml:"disable_vmd"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`
 	SetHugepages        bool                      `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
@@ -279,9 +279,9 @@ func (c *Configuration) WithDisableVFIO() *Configuration {
 	return c
 }
 
-// WithUseVmd declares intent to use VMD.
-func (c *Configuration) WithUseVmd() *Configuration {
-	c.UseVmd = true
+// WithDisableVMD declares intent to use VMD.
+func (c *Configuration) WithDisableVMD() *Configuration {
+	c.DisableVMD = true
 	return c
 }
 

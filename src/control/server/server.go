@@ -214,7 +214,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Decide whether to use VMD devices.
-	if cfg.UseVmd {
+	if !cfg.DisableVMD {
 		if cfg.DisableVFIO {
 			return errors.New("VMD could not be enabled: VFIO disabled in config (disable_vfio: true)")
 		}
@@ -248,7 +248,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 				cfg.Servers[i].Storage.Bdev.VmdDeviceList, vmdDevs...)
 		}
 	} else {
-		log.Debugf("VMD disabled in config (use_vmd: false)")
+		log.Debugf("VMD disabled in config (disable_vmd: true)")
 	}
 
 	// If this daos_server instance ends up being the MS leader,

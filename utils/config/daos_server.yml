@@ -111,11 +111,12 @@
 #disable_vfio: true
 #
 #
-## Use VMD
+## Disable VMD Usage
 #
-## Attempt to use Volume Management Devices if possible.
+## In some circumstances it may be preferable to not use Intel Volume
+## Management Devices through SPDK even if available.
 #
-#use_vmd: true
+#disable_vmd: true
 #
 #
 ## Use Hyperthreads
