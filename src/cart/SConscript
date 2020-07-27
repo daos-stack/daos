@@ -72,6 +72,9 @@ def macro_expand(target, source, env):
                   % (tgts, grepv, sed_d, h_file))
 # pylint: enable=unused-argument
 
+# Keep versioned libs for now to avoid any conflict with 1.0
+CART_VERSION = "4.8.0"
+
 def scons():
     """Scons function"""
 

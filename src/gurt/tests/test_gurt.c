@@ -823,6 +823,15 @@ test_gurt_hash_op_key_cmp(struct d_hash_table *thtab, d_list_t *link,
 	return !memcmp(tlink->tl_key, key, ksize);
 }
 
+static uint32_t
+test_gurt_hash_op_rec_hash(struct d_hash_table *thtab, d_list_t *link)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+
+	return d_hash_string_u32((const char *)tlink->tl_key,
+				 TEST_GURT_HASH_KEY_LEN);
+}
+
 static void
 test_gurt_hash_op_rec_addref(struct d_hash_table *thtab, d_list_t *link)
 {
@@ -864,7 +873,8 @@ test_gurt_hash_op_rec_free(struct d_hash_table *thtab, d_list_t *link)
 }
 
 static d_hash_table_ops_t th_ops = {
-	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
+	.hop_key_cmp	= test_gurt_hash_op_key_cmp,
+	.hop_rec_hash	= test_gurt_hash_op_rec_hash,
 };
 
 /**
@@ -982,6 +992,7 @@ test_gurt_hash_empty(void **state)
 
 static d_hash_table_ops_t th_ops_ref = {
 	.hop_key_cmp		= test_gurt_hash_op_key_cmp,
+	.hop_rec_hash		= test_gurt_hash_op_rec_hash,
 	.hop_rec_addref		= test_gurt_hash_op_rec_addref,
 	.hop_rec_decref		= test_gurt_hash_op_rec_decref,
 	.hop_rec_ndecref	= test_gurt_hash_op_rec_ndecref,
@@ -1636,6 +1647,7 @@ test_gurt_hash_op_rec_decref_locked(struct d_hash_table *thtab, d_list_t *link)
 
 static d_hash_table_ops_t th_ref_ops = {
 	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
+	.hop_rec_hash	= test_gurt_hash_op_rec_hash,
 	.hop_rec_addref	= test_gurt_hash_op_rec_addref_locked,
 	.hop_rec_decref	= test_gurt_hash_op_rec_decref_locked,
 };
@@ -1755,6 +1767,7 @@ test_gurt_hash_parallel_same_operations(void **state)
 	test_gurt_hash_threaded_same_operations(D_HASH_FT_RWLOCK);
 	test_gurt_hash_threaded_same_operations(D_HASH_FT_RWLOCK
 						| D_HASH_FT_EPHEMERAL);
+	test_gurt_hash_threaded_same_operations(D_HASH_FT_LRU);
 }
 
 static void
@@ -1765,6 +1778,7 @@ test_gurt_hash_parallel_different_operations(void **state)
 	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_RWLOCK);
 	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_RWLOCK
 						      | D_HASH_FT_EPHEMERAL);
+	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_LRU);
 }
 
 static void
@@ -1775,6 +1789,7 @@ test_gurt_hash_parallel_refcounting(void **state)
 	_test_gurt_hash_parallel_refcounting(D_HASH_FT_RWLOCK);
 	_test_gurt_hash_parallel_refcounting(D_HASH_FT_RWLOCK
 					     | D_HASH_FT_EPHEMERAL);
+	_test_gurt_hash_parallel_refcounting(D_HASH_FT_LRU);
 }
 
 struct circular_item {
