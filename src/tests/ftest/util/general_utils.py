@@ -31,6 +31,7 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
+from getpass import getuser
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -580,3 +581,20 @@ def check_uuid_format(uuid):
     """
     pattern = re.compile("([0-9a-fA-F-]+)")
     return bool(len(uuid) == 36 and pattern.match(uuid))
+
+
+def get_remote_file_size(host, file_name):
+    """Obtain remote file size.
+
+      Args:
+        file_name (str): name of remote file
+
+      Returns:
+        integer value of file size
+    """
+
+    cmd = "ssh" " {}@{}" " stat -c%s {}".format(
+        getuser(), host, file_name)
+    result = run_command(cmd)
+
+    return int(result.stdout)
