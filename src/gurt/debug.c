@@ -566,26 +566,14 @@ out:
 int
 d_log_init(void)
 {
-	char	*log_file, *log_file_pid_append;
+	char	*log_file;
 	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 	int	 rc;
-	char     *buffer = NULL;
 
 	log_file = getenv(D_LOG_FILE_ENV);
 	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
 		log_file = NULL;
-	}
-
-	log_file_pid_append = getenv(D_LOG_FILE_APPEND_PID_ENV);
-	if (log_file != NULL && log_file_pid_append != NULL) {
-		if (strcmp(log_file_pid_append, "0") != 0) {
-			/* Append pid to log file. */
-			rc = asprintf(&buffer, "%s%d", log_file, getpid());
-			if (buffer == NULL || rc == -1)
-				D_GOTO(out, rc = -DER_NOMEM);
-			log_file = buffer;
-		}
 	}
 
 	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG);
@@ -596,7 +584,6 @@ d_log_init(void)
 
 	d_log_sync_mask();
 out:
-	free(buffer);
 	return rc;
 }
 
