@@ -530,10 +530,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (cmdname == NULL)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 
-	/* Parse command options. Use goto on any errors here
-	 * since some options may result in resource allocation.
+	/* Parse remaining command-line options (skip resource and command).
+	 * Use goto on any errors here * since some options may result in
+	 * resource allocation.
 	 */
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc - 2, &argv[2], "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
 			D_FREE(ap->sysname);
@@ -702,6 +703,13 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			fprintf(stderr, "unknown option : %d\n", rc);
 			D_GOTO(out_free, rc = RC_PRINT_HELP);
 		}
+	}
+
+	/* unexpected extra arguments not allowed */
+	if (optind < argc - 2) {
+		fprintf(stderr, "unexpected extra argument : '%s'\n",
+			argv[optind + 2]);
+		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
 	cmd_args_print(ap);
