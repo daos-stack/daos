@@ -116,8 +116,8 @@ def scons():
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
 
-    Default(cart_lib) #DM
-    Export('cart_lib', 'cart_targets') #DM
+    Default(cart_lib)
+    Export('cart_lib', 'cart_targets')
 
     if not env.GetOption('clean') and not env.GetOption('help'):
 
@@ -126,17 +126,13 @@ def scons():
         config_env = env.Clone()
         config = Configure(config_env)
         for header in HEADERS:
-            #if not config.CheckHeader(os.path.join('../include', 'cart', header)): #DM
-            if not config.CheckHeader(os.path.join('cart', header)): #DM
+            if not config.CheckHeader(os.path.join('cart', header)):
                 broken_includes = True
         config.Finish()
 
         if broken_includes:
             print("Broken local header files, cannot continue")
             Exit(2)
-
-    #Default(cart_lib) #DM
-    #Export('cart_lib', 'cart_targets') #DM
 
     Export('env', 'prereqs')
 

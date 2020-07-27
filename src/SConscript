@@ -94,7 +94,7 @@ def scons():
             print("Broken local header files, cannot continue")
             Exit(2)
 
-    #Default('gurt', 'swim', 'cart') #DM: Different
+    #Default('gurt', 'swim', 'cart')
 
 if __name__ == "SCons.Script":
     scons()
