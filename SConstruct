@@ -134,7 +134,7 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     if env.get('BUILD_TYPE') == 'debug':
         if env.get("COMPILER") == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
+            env.AppendUnique(CCFLAGS=['-g'])
             env.AppendUnique(CCFLAGS=['-fno-inline'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
