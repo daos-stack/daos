@@ -40,6 +40,10 @@ dfuse_progress_thread(void *arg)
 		rc = sem_wait(&fs_handle->dpi_sem);
 		if (rc != 0) {
 			rc = errno;
+
+			if (rc == EINTR)
+				continue;
+
 			DFUSE_TRA_ERROR(fs_handle,
 					"Error from sem_wait: %d", rc);
 		}
