@@ -203,7 +203,7 @@ _discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 	/**
 	 * TODO: add fini call when we upgrade SPDK to a version that supports
 	 * if (init_vmd)
-	 * 	spdk_vmd_fini();
+	 *   spdk_vmd_fini();
 	 */
 
 	if (!g_controllers || !g_controllers->ctrlr)
