@@ -38,8 +38,8 @@ dump_envariables(void)
 {
 	int	i;
 	char	*val;
-	char	*envars[] = {"CRT_PHY_ADDR_STR", "D_LOG_FILE",
-		"D_LOG_FILE_APPEND_PID", "D_LOG_MASK", "DD_MASK",
+	char	*envars[] = {"CRT_PHY_ADDR_STR", "D_LOG_STDERR_IN_LOG",
+		"D_LOG_FILE", "D_LOG_FILE_APPEND_PID", "D_LOG_MASK", "DD_MASK",
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
