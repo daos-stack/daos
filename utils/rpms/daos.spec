@@ -313,14 +313,14 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/libioil.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
 %{_libdir}/python2.7/site-packages/pydaos/*.py
-%if (0%{?rhel} >= 7 && %_enable_debug_package == 0)
+%if (0%{?rhel} >= 7 && %_enable_debug_package != 0)
 %{_libdir}/python2.7/site-packages/pydaos/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/*.pyo
 %endif
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7 && %_enable_debug_package == 0)
+%if (0%{?rhel} >= 7 && %_enable_debug_package != 0)
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
 %endif
@@ -328,14 +328,14 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
 %{_libdir}/python3/site-packages/pydaos/*.py
-%if (0%{?rhel} >= 7 && %_enable_debug_package == 0)
+%if (0%{?rhel} >= 7 && %_enable_debug_package != 0)
 %{_libdir}/python3/site-packages/pydaos/*.pyc
 %{_libdir}/python3/site-packages/pydaos/*.pyo
 %endif
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7 && %_enable_debug_package == 0)
+%if (0%{?rhel} >= 7 && %_enable_debug_package != 0)
 %{_libdir}/python3/site-packages/pydaos/raw/*.pyc
 %{_libdir}/python3/site-packages/pydaos/raw/*.pyo
 %endif
