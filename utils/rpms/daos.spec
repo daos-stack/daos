@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       28%{?relval}%{?dist}
+Release:       29%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -152,6 +152,7 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: fio
+Requires: hdf5-mpich2-tests-daos-0 >= 1.10.5-10.g07066a381e%{dist}
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -373,6 +374,9 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Tue Jul 28 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-29
+- Add hdf5-tests requirement to the tests subpackage
+
 * Mon Jul 13 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-28
 - Change fuse requirement to fuse3
 - Use Lmod for MPI module loading

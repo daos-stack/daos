@@ -2,7 +2,7 @@
 
 set -uex
 
-sudo yum -y install \
+sudo yum -y install --exclude ompi \
   daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
 
 lmd_src="maldet-current"
