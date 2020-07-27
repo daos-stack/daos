@@ -1030,7 +1030,7 @@ pipeline {
                                      ignore_failure: true
                         }
                     }
-                }
+                } // stage('Unit test Bullseye')
             }
         }
         stage('Test') {
@@ -1214,8 +1214,28 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
-            }
-        }
+            } // parallel
+        } // stage('Test')
+        stage ('Test Report') {
+            parallel {
+                stage('Bullseye Report') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('bullseye', true) }
+                    }
+                    agent {
+                        label 'stage_vm1'
+                    }
+                    steps {
+                        cloverPost coverage_stashes: ['centos7-covc-unit-cov'],
+                                   coverage_healthy: [methodCoverage: 0,
+                                                      conditionalCoverage: 0,
+                                                      statementCoverage: 0],
+                                   ignore_failure: true
+                    }
+                } // stage('Bullseye Report')
+            } // parallel
+        } // stage ('Test Report')
     }
     post {
         unsuccessful {

@@ -38,8 +38,3 @@ export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
 cd "$DAOS_BASE"
 IS_CI=true OLD_CI=false utils/run_test.sh
 ./utils/node_local_test.py all
-
-if [ -n "$BULLSEYE" ]; then
-  ls -l "$COVFILE" || true
-  java -jar bullshtml.jar test_coverage
-fi
