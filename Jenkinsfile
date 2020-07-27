@@ -122,7 +122,7 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio " +
-                       "python36-tabulate"
+                       " python36-tabulate "
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -1059,7 +1059,7 @@ pipeline {
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
                                                   functional_rpms +
-                                                  'python36-tabulate'
+                                                  ' python36-tabulate '
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1097,7 +1097,7 @@ pipeline {
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
                                                    ' ' + functional_rpms +
-                                                  'python36-tabulate'
+                                                  ' python36-tabulate '
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1135,7 +1135,7 @@ pipeline {
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
                                                   functional_rpms +
-                                                  'python36-tabulate'
+                                                  ' python36-tabulate '
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
@@ -1173,7 +1173,7 @@ pipeline {
                                        inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
                                                   functional_rpms +
-                                                  'python36-tabulate'
+                                                  ' python36-tabulate '
                         runTestFunctional stashes: [ 'centos7-gcc-install',
                                                      'centos7-gcc-build-vars' ],
                                           test_rpms: env.TEST_RPMS,
