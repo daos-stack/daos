@@ -85,6 +85,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_modification_cnt = 1;
 
 	dth->dth_op_seq = 1;
+	dth->dth_rsrvd_cnt = 0;
 	dth->dth_oid_cnt = 0;
 	dth->dth_oid_cap = 0;
 	dth->dth_oid_array = NULL;
