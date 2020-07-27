@@ -139,27 +139,27 @@ const (
 	direct = iota
 	sibling
 	bestfit
-	libFabricMajorVersion = 1
-	libFabricMinorVersion = 7
-	allHFIUsed            = -1
-	badAddress            = C.getHFIUnitError
+	libFabricMajorVersion     = 1
+	libFabricMinorVersion     = 7
+	allHFIUsed                = -1
+	badAddress                = C.getHFIUnitError
+	topologyKey           key = 0
 	// ARP protocol hardware identifiers: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
-	Netrom          = 0
-	Ether           = 1
-	Eether          = 2
-	Ax25            = 3
-	Pronet          = 4
-	Chaos           = 5
-	IEEE802         = 6
-	Arcnet          = 7
-	Appletlk        = 8
-	Dlci            = 15
-	Atm             = 19
-	Metricom        = 23
-	IEEE1394        = 24
-	Eui64           = 27
-	Infiniband      = 32
-	topologyKey key = 0
+	Netrom     = 0
+	Ether      = 1
+	Eether     = 2
+	Ax25       = 3
+	Pronet     = 4
+	Chaos      = 5
+	IEEE802    = 6
+	Arcnet     = 7
+	Appletlk   = 8
+	Dlci       = 15
+	Atm        = 19
+	Metricom   = 23
+	IEEE1394   = 24
+	Eui64      = 27
+	Infiniband = 32
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
