@@ -1002,6 +1002,7 @@ pipeline {
                             }
                         }
                         unitTest timeout_time: 60,
+                                 ignore_failure: true
                                  inst_repos: el7_component_repos + ' ' +
                                              component_repos(),
                                  inst_rpms: 'gotestsum openmpi3 ' +
