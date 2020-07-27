@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -62,7 +63,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		provider = cmd.FabricProvider
 	}
 
-	netCtx, err := netdetect.Init()
+	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
 		return err
 	}

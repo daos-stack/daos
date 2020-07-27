@@ -65,7 +65,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
-	netCtx, err := netdetect.Init()
+	netCtx, err := netdetect.Init(context.Background())
 	defer netdetect.CleanUp(netCtx)
 	if err != nil {
 		cmd.log.Errorf("Unable to initialize netdetect services")

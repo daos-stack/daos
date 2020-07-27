@@ -212,28 +212,33 @@ func (da *DeviceAffinity) String() string {
 	return fmt.Sprintf("%s:%s:%s:%d", da.DeviceName, da.CPUSet, da.NodeSet, da.NUMANode)
 }
 
-type NetDetectContext struct {
+type netdetectContext struct {
 	topology      C.hwloc_topology_t
 	numaAware     bool
 	numNUMANodes  int
 	deviceScanCfg DeviceScan
 }
 
-func getContext(ctx context.Context) *NetDetectContext {
-	if ctx != nil {
-		ndc, ok := ctx.Value(topologyKey).(NetDetectContext)
-		if !ok {
-			return nil
-		}
-		return &ndc
+func getContext(ctx context.Context) (*netdetectContext, error) {
+	if ctx == nil {
+		return nil, errors.Errorf("invalid input context")
 	}
-	return nil
+
+	ndc, ok := ctx.Value(topologyKey).(netdetectContext)
+	if !ok || ndc.topology == nil {
+		return nil, errors.Errorf("context not initialized")
+	}
+	return &ndc, nil
 }
 
-func Init() (context.Context, error) {
+func Init(parent context.Context) (context.Context, error) {
 	var err error
 
-	ndc := NetDetectContext{}
+	if parent == nil {
+		parent = context.Background()
+	}
+
+	ndc := netdetectContext{}
 	ndc.topology, err = initLib()
 	if err != nil {
 		return nil, errors.Errorf("unable to initialize netdetect context: %v", err)
@@ -249,13 +254,13 @@ func Init() (context.Context, error) {
 		return nil, err
 	}
 
-	return context.WithValue(context.Background(), topologyKey, ndc), nil
+	return context.WithValue(parent, topologyKey, ndc), nil
 }
 
 // HasNUMA returns true if the topology has NUMA node data
 func HasNUMA(ctx context.Context) bool {
-	ndc := getContext(ctx)
-	if ndc == nil || ndc.topology == nil {
+	ndc, err := getContext(ctx)
+	if err != nil {
 		return false
 	}
 	return ndc.numaAware
@@ -263,8 +268,8 @@ func HasNUMA(ctx context.Context) bool {
 
 // Cleanup releases the hwloc topology resources
 func CleanUp(ctx context.Context) {
-	ndc := getContext(ctx)
-	if ndc == nil || ndc.topology == nil {
+	ndc, err := getContext(ctx)
+	if err != nil {
 		return
 	}
 	cleanUp(ndc.topology)
@@ -566,8 +571,8 @@ func numNUMANodes(topology C.hwloc_topology_t) int {
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
 func GetNUMASocketIDForPid(ctx context.Context, pid int32) (int, error) {
 
-	ndc := getContext(ctx)
-	if ndc == nil || ndc.topology == nil {
+	ndc, err := getContext(ctx)
+	if err != nil {
 		return 0, errors.Errorf("netdetect context was not initialized")
 	}
 
@@ -623,8 +628,8 @@ func getDeviceAliasWithSystemList(ctx context.Context, device string, additional
 
 	log.Debugf("Searching for a device alias for: %s", device)
 
-	ndc := getContext(ctx)
-	if ndc == nil || ndc.topology == nil {
+	ndc, err := getContext(ctx)
+	if err != nil {
 		return "", errors.Errorf("hwloc topology not initialized")
 	}
 
@@ -939,8 +944,8 @@ func ValidateProviderConfig(ctx context.Context, device string, provider string)
 	}
 	defer C.fi_freeinfo(fi)
 
-	ndc := getContext(ctx)
-	if ndc == nil || ndc.topology == nil {
+	ndc, err := getContext(ctx)
+	if err != nil {
 		return errors.New("hwloc topology not initialized")
 	}
 
@@ -1032,8 +1037,8 @@ func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error
 		return errors.New("device required")
 	}
 
-	ndc := getContext(ctx)
-	if ndc == nil || ndc.topology == nil {
+	ndc, err := getContext(ctx)
+	if err != nil {
 		return errors.New("hwloc topology not initialized")
 	}
 
@@ -1144,8 +1149,8 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]Fab
 	}
 	defer C.fi_freeinfo(fi)
 
-	ndc := getContext(ctx)
-	if ndc == nil || ndc.topology == nil {
+	ndc, err := getContext(ctx)
+	if err != nil {
 		return ScanResults, nil
 	}
 

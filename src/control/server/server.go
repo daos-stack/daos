@@ -179,7 +179,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	harness := NewIOServerHarness(log)
 	var netDevClass uint32
 
-	netCtx, err := netdetect.Init()
+	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
 		return err
 	}

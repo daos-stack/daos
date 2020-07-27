@@ -43,7 +43,7 @@ const maxConcurrent = 1000
 func getSocketID(t *testing.T, pid int32, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	netCtx, err := Init()
+	netCtx, err := Init(context.Background())
 	defer CleanUp(netCtx)
 	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
 
@@ -84,7 +84,7 @@ func TestConcurrentGetNUMASocketWithContext(t *testing.T) {
 	_, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	netCtx, err := Init()
+	netCtx, err := Init(context.Background())
 	defer CleanUp(netCtx)
 	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
 

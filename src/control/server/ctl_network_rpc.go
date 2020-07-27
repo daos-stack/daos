@@ -52,7 +52,7 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		provider = req.GetProvider()
 	}
 
-	netCtx, err := netdetect.Init()
+	netCtx, err := netdetect.Init(context.Background())
 	if err != nil {
 		return nil, err
 	}

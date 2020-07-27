@@ -460,7 +460,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
-	netCtx, err := netdetect.Init()
+	netCtx, err := netdetect.Init(context.Background())
 	defer netdetect.CleanUp(netCtx)
 	if err != nil {
 		return err
