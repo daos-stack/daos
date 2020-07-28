@@ -131,10 +131,10 @@ class ParallelIo(FioBase, IorTestBase):
           Returns:
             integer value of stat free blocks
         """
-        cmd = "ssh" " {}@{}" " stat -c%a -f {}".format(
-            getuser(), self.hostlist_clients[0], path)
+        cmd = ["ssh", "{}@{}".format(getuser(), self.hostlist_clients[0]),
+               "stat -c%a -f {}".format(path)]
         try:
-            result = subprocess.check_output(cmd, shell=True)
+            result = subprocess.check_output(cmd)
         except subprocess.CalledProcessError as err:
             self.fail("Get free block size method failed with: {}".format(err))
 
