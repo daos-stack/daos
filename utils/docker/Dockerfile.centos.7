@@ -119,17 +119,18 @@ ARG REPOS=""
 ARG REPO_URL=""
 ARG REPO_EL7=""
 # Need to clean this up later
-RUN if $REPO_URL; then \
-      cversion=$(cut -d ' ' -f4 /etc/centos-release); \
-      version=${cversion%.*};                         \
-      repo="$REPO_URL/repository/centos-${version}-x86_64-group/"; \
-      repo_path="/etc/yum.repos.d/repo.dc.hpdd.intel.com_repository_centos-${version}-x86_64-group_.repo"; \
-      yum --assumeyes install yum-utils; \
-      yum-config-manager --add-repo "${repo}"; \
-      repo_path=$(find /etc/yum.repos.d -name "*centos-${version}*.repo"); \
-      if ! grep repo_gpgcheck "${repo_path}"; then; \
-        printf "\ngpgcheck=0\n" >> "${repo_path}"; \
-      fi; \
+RUN if [ -n "$REPO_URL" ]; then                                             \
+      cversion=$(cut -d ' ' -f4 /etc/centos-release);                       \
+      version=${cversion%.*} ;                                              \
+      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";      \
+      MY_NAME="${MY_REPO#*//}";                                             \
+      MY_NAME="${MY_NAME//\//_}";                                           \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;              \
+      yum --assumeyes install yum-utils;                                    \
       yum-config-manager --assumeyes --quiet --disable base epel extra updates; \
     fi
 RUN if $QUICKBUILD; then                                                      \
