@@ -102,6 +102,7 @@ class DmgCommand(DmgCommandBase):
             ("network", "scan"), provider=provider, all=all_devs)
 
     def storage_scan(self, verbose=False):
+        # pylint: disable=pointless-string-statement
         """Get the result of the dmg storage scan command.
 
         Args:
