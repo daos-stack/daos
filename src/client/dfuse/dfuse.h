@@ -65,11 +65,15 @@ struct dfuse_projection_info {
 	struct dfuse_info		*dpi_info;
 	uint32_t			dpi_max_read;
 	uint32_t			dpi_max_write;
-	/** Hash table of open inodes */
+	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table		dpi_iet;
+	/** Hash table of all known/seen inodes */
 	struct d_hash_table		dpi_irt;
+	/** Next available inode number */
 	ATOMIC uint64_t			dpi_ino_next;
+	/* Event queue for async events */
 	daos_handle_t			dpi_eq;
+	/** Semaphore to signal event waiting for async thread */
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
 	bool				dpi_shutdown;

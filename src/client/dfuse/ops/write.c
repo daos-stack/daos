@@ -90,6 +90,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	if (rc != 0)
 		D_GOTO(err, 0);
 
+	/* Send a message to the async thread to wake it up and poll for events
+	 */
 	sem_post(&fs_handle->dpi_sem);
 	return;
 

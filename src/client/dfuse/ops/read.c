@@ -126,6 +126,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	}
 
 	if (async) {
+		/* Send a message to the async thread to wake it up and poll
+		 * for events
+		 */
 		sem_post(&fs_handle->dpi_sem);
 		return;
 	}
