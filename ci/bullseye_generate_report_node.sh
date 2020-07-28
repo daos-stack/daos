@@ -21,6 +21,8 @@ if [ -e "$DAOS_BASE/test.cov_2" ]; then
   covmerge --no-banner --file "$COVFILE" "$DAOS_BASE"/test.cov_*
 fi
 
+cd "$DAOS_BASE"
+
 if [ -n "$BULLSEYE" ]; then
   ls -l "$COVFILE" || true
   java -jar bullshtml.jar test_coverage

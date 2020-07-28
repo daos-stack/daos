@@ -10,7 +10,6 @@ tar -C bullseye --strip-components=1 -xf bullseye.tar
 # shellcheck disable=SC1091
 source ./.build_vars.sh
 DAOS_BASE=${SL_PREFIX%/install*}
-rm -f dnt.*.memcheck.xml nlt-errors.json
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
