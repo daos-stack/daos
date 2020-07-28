@@ -1203,7 +1203,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		goto out;
 
 	remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx,
-			array_size, myrank, &idx, layout, &remap_list);
+			array_size, myrank, &idx, layout, &remap_list, false);
 out:
 	remap_list_free_all(&remap_list);
 	if (shards_count > SHARDS_ON_STACK_COUNT)
@@ -1312,7 +1312,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
-			array_size, myrank, &idx, layout, &reint_list);
+			array_size, myrank, &idx, layout, &reint_list, false);
 out:
 	remap_list_free_all(&remap_list);
 	remap_list_free_all(&reint_list);

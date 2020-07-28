@@ -437,6 +437,103 @@ drain_object_class(daos_oclass_id_t cid)
 	D_PRINT("\tRebuild with Drain: OK\n");
 }
 
+#define NUM_TO_EXTEND 2
+
+void
+add_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		spare_tgt_ranks[SPARE_MAX_NUM];
+	uint32_t		shard_ids[SPARE_MAX_NUM];
+	uint32_t		po_ver;
+	d_rank_list_t		rank_list;
+	daos_obj_id_t		oid;
+	uuid_t			pl_uuid;
+	struct daos_obj_md	*md_arr;
+	struct daos_obj_md	md = { 0 };
+	struct pl_obj_layout	*layout;
+	struct pl_obj_layout	**org_layout;
+	int			test_num;
+	int			num_new_spares;
+	int			rc, i;
+	uuid_t target_uuids[NUM_TO_EXTEND] = {"e0ab4def", "60fcd487"};
+	int32_t domains[NUM_TO_EXTEND] = {1, 1};
+
+	if (is_max_class_obj(cid))
+		return;
+
+	rank_list.rl_nr = NUM_TO_EXTEND;
+	rank_list.rl_ranks = malloc(sizeof(d_rank_t) * NUM_TO_EXTEND);
+	rank_list.rl_ranks[0] = DOM_NR + 1;
+	rank_list.rl_ranks[1] = DOM_NR + 2;
+
+	uuid_generate(pl_uuid);
+	srand(time(NULL));
+	oid.hi = 5;
+	po_ver = 1;
+
+	D_ALLOC_ARRAY(md_arr, TEST_PER_OC);
+	D_ASSERT(md_arr != NULL);
+	D_ALLOC_ARRAY(org_layout, TEST_PER_OC);
+	D_ASSERT(org_layout != NULL);
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+				   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	for (i = 0; i < TEST_PER_OC; ++i) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+		dc_obj_fetch_md(oid, &md);
+		md.omd_ver = po_ver;
+		md_arr[i] = md;
+	}
+
+	/* Generate layouts for later comparison*/
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		md_arr[test_num].omd_ver = po_ver;
+
+		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&org_layout[test_num]);
+		D_ASSERTF(rc == 0, "rc == %d\n", rc);
+		plt_obj_layout_check(org_layout[test_num], COMPONENT_NR, 0);
+	}
+
+
+	extend_test_pool_map(po_map, NUM_TO_EXTEND, target_uuids, &rank_list,
+			NUM_TO_EXTEND, domains, NULL, NULL, VOS_PER_TARGET);
+
+
+	/* test normal placement for pools currently being extended */
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL, &layout);
+		D_ASSERT(rc == 0);
+
+		num_new_spares = pl_obj_find_addition(pl_map,
+					&md_arr[test_num], NULL, po_ver,
+					spare_tgt_ranks, shard_ids,
+					SPARE_MAX_NUM, -1);
+		D_ASSERT(num_new_spares >= 0);
+
+		plt_obj_add_layout_check(layout, org_layout[test_num],
+					COMPONENT_NR, num_new_spares,
+					spare_tgt_ranks, shard_ids);
+
+		pl_obj_layout_free(layout);
+	}
+
+	/* Cleanup Memory */
+	for (i = 0; i < TEST_PER_OC; ++i)
+		D_FREE(org_layout[i]);
+	D_FREE(org_layout);
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tAddition: OK\n");
+}
+
+
 int
 main(int argc, char **argv)
 {
@@ -467,6 +564,7 @@ main(int argc, char **argv)
 		rebuild_object_class(test_classes[oc_index]);
 		drain_object_class(test_classes[oc_index]);
 		reint_object_class(test_classes[oc_index]);
+		add_object_class(test_classes[oc_index]);
 
 	}
 

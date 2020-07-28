@@ -27,7 +27,7 @@
 #include <daos.h>
 #include "place_obj_common.h"
 #include <daos_obj_class.h>
-
+#include <daos/pool_map.h>
 
 void
 print_layout(struct pl_obj_layout *layout)
@@ -248,6 +248,63 @@ plt_obj_reint_layout_check(struct pl_obj_layout *layout,
 		D_ASSERT(target_set[reint_id] == 2);
 	}
 }
+
+void
+plt_obj_add_layout_check(struct pl_obj_layout *layout,
+		struct pl_obj_layout *org_layout, uint32_t pool_size,
+		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
+		uint32_t *shard_ids)
+{
+	uint32_t	curr_tgt_id;
+	uint32_t	spare_id;
+	uint8_t		*target_set;
+	bool		contains_new_tgt;
+	int		i;
+
+	print_layout(layout);
+	print_layout(org_layout);
+	D_ALLOC_ARRAY(target_set, pool_size);
+	D_ASSERT(target_set != NULL);
+
+	/*
+	 * If org_layout does not contain a target to be reintegrated
+	 * then the layout should be the same as before reintegration
+	 * started
+	 */
+	contains_new_tgt = false;
+	for (i = 0; i < org_layout->ol_nr; ++i) {
+		curr_tgt_id = org_layout->ol_shards[i].po_target;
+		if (curr_tgt_id != -1)
+			target_set[curr_tgt_id] = 1;
+	}
+
+	for (i = 0; i < layout->ol_nr; ++i) {
+		curr_tgt_id = layout->ol_shards[i].po_target;
+		if (curr_tgt_id != -1) {
+			contains_new_tgt = true;
+			target_set[curr_tgt_id] = 2;
+		}
+	}
+
+	if (contains_new_tgt == false || org_layout->ol_nr == layout->ol_nr) {
+		D_ASSERT(plt_obj_layout_match(layout, org_layout));
+		D_ASSERT(num_spares_returned == 0);
+		return;
+	}
+
+	/* Layout should be extended */
+	D_ASSERT(org_layout->ol_nr < layout->ol_nr);
+
+	/* we should have new targets */
+	D_ASSERT(num_spares_returned > 0);
+
+	/* Layout should contain targets returned by rebuild */
+	for (i = 0; i < num_spares_returned; ++i) {
+		spare_id = spare_tgt_ranks[i];
+		D_ASSERT(target_set[spare_id] == 2);
+	}
+}
+
 
 void
 plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
@@ -565,4 +622,49 @@ getObjectClasses(daos_oclass_id_t **oclass_id_pp)
 	}
 
 	return num_oclass;
+}
+
+int
+extend_test_pool_map(struct pool_map *map,
+		uint32_t nnodes, uuid_t target_uuids[],
+		d_rank_list_t *rank_list, uint32_t ndomains,
+		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
+		uint32_t dss_tgt_nr)
+{
+	struct pool_buf	*map_buf;
+	uint32_t	map_version;
+	int		ntargets;
+	int		rc;
+
+	ntargets = nnodes * dss_tgt_nr;
+
+	map_version = pool_map_get_version(map) + 1;
+
+	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
+			ntargets, domains, target_uuids, rank_list, NULL,
+			dss_tgt_nr);
+	D_ASSERT(rc == 0);
+
+	/* Extend the current pool map */
+	rc = pool_map_extend(map, map_version, map_buf);
+	D_ASSERT(rc == 0);
+
+	return rc;
+}
+
+bool
+is_max_class_obj(daos_oclass_id_t cid)
+{
+	struct daos_oclass_attr *oc_attr;
+	daos_obj_id_t oid;
+
+	oid.hi = 5;
+	oid.lo = rand();
+	daos_obj_generate_id(&oid, 0, cid, 0);
+	oc_attr = daos_oclass_attr_find(oid);
+
+	if (oc_attr->ca_grp_nr == DAOS_OBJ_GRP_MAX ||
+	   oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
+		return true;
+	return false;
 }
