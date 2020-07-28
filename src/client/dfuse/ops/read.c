@@ -95,7 +95,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	} else {
 		if (!skip_read) {
 			rc = daos_event_init(&ev->de_ev,
-					fs_handle->dpi_eq, NULL);
+					     fs_handle->dpi_eq, NULL);
 			if (rc != -DER_SUCCESS)
 				D_GOTO(err, rc = daos_der2errno(rc));
 
@@ -116,7 +116,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		ev->de_len = buff_len;
 	} else {
 		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position,
-			&ev->de_len,
+			      &ev->de_len,
 			async ? &ev->de_ev : NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_REPLY_ERR_RAW(oh, req, rc);

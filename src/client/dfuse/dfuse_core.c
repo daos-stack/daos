@@ -29,7 +29,7 @@
 /* Async progress thread.
  *
  * This thread is started at launch time with an event queue and blocks
- * on a semaphore until a asyncronous event is created, at which point
+ * on a semaphore until a asynchronous event is created, at which point
  * the thread wakes up and busy polls in daos_eq_poll() until it's complete.
  */
 static void *
@@ -58,7 +58,7 @@ dfuse_progress_thread(void *arg)
 			return NULL;
 
 		rc = daos_eq_poll(fs_handle->dpi_eq, 1,
-				DAOS_EQ_WAIT,
+				  DAOS_EQ_WAIT,
 				1,
 				&dev);
 
