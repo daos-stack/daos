@@ -95,11 +95,44 @@ static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
 
 static int
+is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
+		     int num_whitelist_devices)
+{
+	int			i;
+	struct spdk_pci_addr    tmp;
+
+	if (spdk_pci_addr_parse(&tmp, pci_addr) != 0) {
+		D_ERROR("Invalid address %s\n", pci_addr);
+		return -DER_INVAL;
+	}
+
+	for (i = 0; i < num_whitelist_devices; i++) {
+		if (spdk_pci_addr_compare(&tmp, &whitelist[i]) == 0) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Add PCI address to spdk_env_opts whitelist, ignoring any duplicates.
+ */
+static int
 opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		  char *traddr)
 {
-	struct spdk_pci_addr *tmp = *list;
-	size_t count = opts->num_pci_addr;
+	int			rc;
+	size_t 			count = opts->num_pci_addr;
+	struct spdk_pci_addr   *tmp = *list;
+
+	rc = is_addr_in_whitelist(traddr, *list, count);
+	if (rc < 0) {
+		return rc;
+	}
+	if (rc == 1) {
+		return 0;
+	}
 
 	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
 	if (tmp == NULL) {

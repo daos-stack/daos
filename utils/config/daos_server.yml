@@ -377,10 +377,8 @@
 #  bdev_class: kdev
 #  bdev_list: [/dev/sdc,/dev/sdd]
 #
-#  # If Volume Management Devices (VMD) are to be used, then the use_vmd flag
-#  # needs to be set. The bdev_class will remain the default "nvme" type,
-#  # and similar to NVMe, bdev_list will include the NVMe SSD address behind
-#  # the VMD. vmd_include also needs to be set to the VMD address in order for
-#  # the BDF address of the NVMe VMD SSD (ie "5d0505:01:00.0") to be parsed.
+#  # If Volume Management Devices (VMD) are to be used, then the disable_vmd
+#  # flag needs to be set to false (default). The bdev_class will remain the
+#  # default "nvme" type, and bdev_list will include the VMD addresses.
 #  bdev_class: nvme
-#  bdev_list: ["0000:82:00.0","5d0505:01:00.0","5d0505:03:00.0"]
+#  bdev_list: ["0000:82:00.0","0000:5d:05.5"]

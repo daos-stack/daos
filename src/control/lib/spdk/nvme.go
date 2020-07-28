@@ -163,7 +163,8 @@ func pciAddressList(ctrlrs []Controller) []string {
 	return pciAddrs
 }
 
-// Discover NVMe devices accessible by SPDK on a given host.
+// Discover NVMe devices, including NVMe devices behind VMDs if enabled,
+// accessible by SPDK on a given host.
 //
 // Calls C.nvme_discover which returns pointers to single linked list of
 // ctrlr_t structs. These are converted and returned as Controller slices

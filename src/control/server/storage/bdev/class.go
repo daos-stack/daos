@@ -169,7 +169,7 @@ func bdevNvmeInit(log logging.Logger, c *storage.BdevConfig) error {
 		return nil
 	}
 
-	logMsg := fmt.Sprintf("VMD: prepare NVMe conf device list, before: %v",
+	logMsg := fmt.Sprintf("VMDs exist, modify NVMe conf device list. Before: %v",
 		c.DeviceList)
 
 	var newDevList []string

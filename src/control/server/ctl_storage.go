@@ -94,8 +94,9 @@ func (c *StorageControlService) addVmdPciAddrs(sr *bdev.ScanResponse) error {
 			c.instanceStorage[i].Bdev.VmdDeviceList, toAdd...)
 	}
 
-	c.log.Debugf("prefixes: %v, to add: %v, vdl: %v",
-		prefixes, toAdd, c.instanceStorage[0].Bdev.VmdDeviceList)
+	if len(toAdd) > 0 {
+		c.log.Debugf("NVMe devices behind VMD: %v", toAdd)
+	}
 
 	return nil
 }
