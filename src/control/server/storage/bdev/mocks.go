@@ -42,6 +42,7 @@ type (
 		FormatErr     error
 		ScanRes       storage.NvmeControllers
 		ScanErr       error
+		vmdEnabled    bool
 	}
 
 	MockBackend struct {
@@ -114,12 +115,12 @@ func (mb *MockBackend) Prepare(_ PrepareRequest) error {
 	return mb.cfg.PrepareErr
 }
 
-func (mb *MockBackend) EnableVmd() error {
-	return nil
+func (mb *MockBackend) EnableVmd() {
+	mb.cfg.vmdEnabled = true
 }
 
 func (mb *MockBackend) IsVmdEnabled() bool {
-	return false
+	return mb.cfg.vmdEnabled
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {

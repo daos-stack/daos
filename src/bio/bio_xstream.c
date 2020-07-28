@@ -154,17 +154,20 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
  * Convert a transport id in the BDF form of "5d0505:01:00.0" or something
  * similar to the VMD address in the form of "0000:5d:05.5" that can be parsed
  * by DPDK.
+ *
+ * \param dst String to be populated as output.
+ * \param src Input bdf.
  */
 static void
-traddr_to_vmd(char *traddr)
+traddr_to_vmd(char *dst, const char *src)
 {
-	char traddr_tmp[20];
-	char vmd_addr[20] = "0000:";
+	char traddr_tmp[SPDK_NVMF_TRADDR_MAX_LEN + 1];
+	char vmd_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1] = "0000:";
 	char addr_split[3];
 	char *ptr;
 	int i, j = 0;
 
-	strncpy(traddr_tmp, traddr, 20);
+	strncpy(traddr_tmp, src, SPDK_NVMF_TRADDR_MAX_LEN);
 	/* Only the first chunk of data from the traddr is useful */
 	ptr = strtok(traddr_tmp, ":");
 	strncpy(traddr_tmp, ptr, 6);
@@ -187,7 +190,7 @@ traddr_to_vmd(char *traddr)
 	addr_split[1] = '\0';
 	strcat(vmd_addr, addr_split);
 
-	strcpy(traddr, vmd_addr);
+	strncpy(dst, vmd_addr, SPDK_NVMF_TRADDR_MAX_LEN);
 }
 
 static int
@@ -217,7 +220,6 @@ populate_whitelist(struct spdk_env_opts *opts)
 		return -DER_INVAL;
 	}
 
-
 	D_ALLOC_PTR(trid);
 	if (trid == NULL)
 		return -DER_NOMEM;
@@ -244,18 +246,14 @@ populate_whitelist(struct spdk_env_opts *opts)
 		}
 
 		if (vmd_enabled) {
-			/*
-			 * TODO: Remove duplicate VMD addr being added to
-			 * whitelist for multiple NVMe SSDs behind the same VMD.
-			 */
 			if (strncmp(trid->traddr, "0", 1) != 0) {
-			/*
-			 * We can assume this is the transport id of the backing
-			 * NVMe SSD behind the VMD. DPDK will not recognize this
-			 * transport ID, instead need to pass the VMD address as
-			 * the whitelist param.
-			 */
-				traddr_to_vmd(trid->traddr);
+				/*
+				 * We can assume this is the transport id of the
+				 * backing NVMe SSD behind the VMD. DPDK will
+				 * not recognize this transport ID, instead need
+				 * to pass VMD address as the whitelist param.
+				 */
+				traddr_to_vmd(trid->traddr, trid->traddr);
 			}
 		}
 

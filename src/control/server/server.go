@@ -214,19 +214,20 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Decide whether to use VMD devices.
-	if !cfg.DisableVMD {
+	if cfg.DisableVMD {
+		log.Debugf("VMD disabled in config (disable_vmd: true)")
+	} else {
 		if cfg.DisableVFIO {
 			return errors.New("VMD could not be enabled: VFIO disabled in config (disable_vfio: true)")
 		}
 		if !iommuDetected() {
-			return errors.New("VMD could not be enabled: IOMMU/VFIO is disabled")
+			return errors.New("VMD could not be enabled: IOMMU/VFIO not enabled")
 		}
 
 		vmdDevs, err := detectVmd()
 		if err != nil {
 			return errors.Wrap(err, "VMD could not be enabled")
 		}
-		log.Debugf("VMD type devices detected: %v", vmdDevs)
 
 		// If VMD devices are going to be used, then need to run a separate
 		// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
@@ -247,8 +248,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			cfg.Servers[i].Storage.Bdev.VmdDeviceList = append(
 				cfg.Servers[i].Storage.Bdev.VmdDeviceList, vmdDevs...)
 		}
-	} else {
-		log.Debugf("VMD disabled in config (disable_vmd: true)")
 	}
 
 	// If this daos_server instance ends up being the MS leader,

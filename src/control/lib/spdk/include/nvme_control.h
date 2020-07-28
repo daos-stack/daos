@@ -45,7 +45,7 @@ struct format_sequence {
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
-nvme_discover(bool);
+nvme_discover(bool init_vmd);
 
 /**
  * Wipe NVMe controller namespace LBA-0.

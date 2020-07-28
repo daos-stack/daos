@@ -153,14 +153,8 @@ func (b *spdkBackend) Init(shmID ...int) error {
 }
 
 // EnableVmd turns on VMD device awareness.
-func (b *spdkBackend) EnableVmd() error {
-	if b.binding.vmdEnabled {
-		return errors.New("EnableVmd(): VMD already enabled")
-	}
-
+func (b *spdkBackend) EnableVmd() {
 	b.binding.vmdEnabled = true
-
-	return nil
 }
 
 func (b *spdkBackend) IsVmdEnabled() bool {
@@ -225,10 +219,6 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 
 	ctrlr, err := getController(pciAddr, b.binding.controllers)
 	if err != nil {
-		if err == FaultPCIAddrNotFound(pciAddr) {
-			return new(storage.NvmeController), nil
-		}
-
 		return nil, err
 	}
 

@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
@@ -95,7 +96,7 @@ type (
 		Prepare(PrepareRequest) error
 		Scan() (storage.NvmeControllers, error)
 		Format(pciAddr string) (*storage.NvmeController, error)
-		EnableVmd() error
+		EnableVmd()
 		IsVmdEnabled() bool
 	}
 
@@ -132,8 +133,8 @@ func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
 }
 
 // EnableVmd turns on VMD device awareness.
-func (p *Provider) EnableVmd() error {
-	return p.backend.EnableVmd()
+func (p *Provider) EnableVmd() {
+	p.backend.EnableVmd()
 }
 
 // IsVmdEnabled returns true if provider is VMD device aware.
