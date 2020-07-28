@@ -2792,7 +2792,6 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
-	daos_prop_free(prop);
 }
 
 static int
@@ -4984,6 +4983,7 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	}
 
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &hdl_uuid, NULL);
+	ds_pool_put(pool);
 	if (rc) {
 		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
 		return false;
