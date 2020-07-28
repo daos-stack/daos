@@ -291,6 +291,11 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 				int bt_size, i;
 				char **symbols;
 
+				/* force log level to DEBUG */
+				rc = d_log_setmasks("DEBUG", -1);
+				if (rc == -1)
+					fprintf(stderr, "unable to force log mask to full DEBUG\n");
+
 				bt_size = backtrace(bt, 128);
 				if (bt_size >= 128)
 					fprintf(stderr, "backtrace may have been truncated\n");
