@@ -229,7 +229,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DOWNOUT:
 			/* Nothing to do, already excluded */
 			D_INFO("Skip exclude down target (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
+			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_UP:
@@ -262,7 +262,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DOWNOUT:
 			/* Nothing to do, already excluded / draining */
 			D_INFO("Skip drain down target (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
+			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_UP:
@@ -290,7 +290,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_UPIN:
 			/* Nothing to do, already added */
 			D_INFO("Skip add up target (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
+			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_DOWN:
@@ -321,7 +321,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_UPIN:
 			/* Nothing to do, already UPIN */
 			D_INFO("Skip ADD_IN UPIN target (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
+			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_DOWN:
@@ -346,7 +346,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DOWNOUT:
 			/* Nothing to do, already DOWNOUT */
 			D_INFO("Skip EXCLUDEOUT DOWNOUT tgt (rank %u idx %u)\n",
-				target->ta_comp.co_rank,
+			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_DRAIN:
