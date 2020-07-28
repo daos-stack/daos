@@ -957,6 +957,7 @@ pipeline {
                       always {
                           unitTestPost (
                                      artifacts: ['run_test_memcheck.sh/*'],
+                                     valgrind: 'memcheck',
                                      testResults: ""
                                   )
                         }
