@@ -197,7 +197,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		struct daos_obj_shard_md *shard_md, uint32_t r_ver,
 		uint32_t *tgt_id, uint32_t *shard_idx,
 		unsigned int array_size, int myrank, int *idx,
-		struct pl_obj_layout *layout, d_list_t *remap_list)
+		struct pl_obj_layout *layout, d_list_t *remap_list,
+		bool fill_addition)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
@@ -211,7 +212,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
 		    f_shard->fs_status == PO_COMP_ST_UP ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
+		    fill_addition == true) {
 			/*
 			 * Target id is used for rw, but rank is used
 			 * for rebuild, perhaps they should be unified.
@@ -480,4 +482,24 @@ out:
 	D_FREE(grp_count);
 	remap_list_free_all(extended_list);
 	return rc;
+}
+
+bool
+is_pool_adding(struct pool_domain *dom)
+{
+	uint32_t child_nr;
+
+	while (dom->do_children && dom->do_comp.co_status != PO_COMP_ST_NEW) {
+		child_nr = dom->do_child_nr;
+		dom = &dom->do_children[child_nr - 1];
+	}
+
+	if (dom->do_comp.co_status == PO_COMP_ST_NEW)
+		return true;
+
+	child_nr = dom->do_target_nr;
+	if (dom->do_targets[child_nr - 1].ta_comp.co_status == PO_COMP_ST_NEW)
+		return true;
+
+	return false;
 }

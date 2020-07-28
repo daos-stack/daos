@@ -193,6 +193,22 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 					       myrank);
 }
 
+int
+pl_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
+		    struct daos_obj_shard_md *shard_md,
+		    uint32_t reint_ver, uint32_t *tgt_rank,
+		    uint32_t *shard_id, unsigned int array_size, int myrank)
+{
+	D_ASSERT(map->pl_ops != NULL);
+
+	if (!map->pl_ops->o_obj_find_addition)
+		return -DER_NOSYS;
+
+	return map->pl_ops->o_obj_find_addition(map, md, shard_md, reint_ver,
+					       tgt_rank, shard_id, array_size,
+					       myrank);
+}
+
 void
 pl_obj_layout_free(struct pl_obj_layout *layout)
 {
