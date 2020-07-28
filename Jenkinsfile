@@ -13,7 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@corci-918d")  _
+@Library(value="pipeline-lib@corci-918d") _
 
 def doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -965,11 +965,10 @@ pipeline {
                                             'libipmctl-devel ' +
                                             'python36-tabulate ' +
                                             qb_inst_rpms_run_test()
-
                     }
                     post {
                       always {
-                            unitTestPost()
+                            unitTestPost valgrind_stash: 'centos7-gcc-unit-valg'
                         }
                     }
                 }
@@ -1252,6 +1251,9 @@ pipeline {
         } // stage ('Test Report')
     }
     post {
+        always {
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
+        }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
         }
