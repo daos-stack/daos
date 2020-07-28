@@ -186,7 +186,7 @@ traddr_to_vmd(char *dst, const char *src)
 	addr_split[2] = '\0';
 	strcat(vmd_addr, addr_split);
 	strcat(vmd_addr, ".");
-	addr_split[0] = traddr_tmp[j+1];
+	addr_split[0] = traddr_tmp[j + 1];
 	addr_split[1] = '\0';
 	strcat(vmd_addr, addr_split);
 
