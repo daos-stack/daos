@@ -79,7 +79,7 @@ wr_str(struct str_buffer *buf, const char *fmt, ...) {
 	va_list ap;
 
 	if (buf == NULL || buf->status != 0) {
-		return -EPERM;
+		return -DER_NO_PERM;
 	}
 
 	if (buf->str == NULL) {
