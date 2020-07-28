@@ -858,8 +858,8 @@ daos_add_target(const uuid_t pool_uuid, const char *grp,
 
 void
 daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		const char *dmg_config, const d_rank_list_t *svc,
-		d_rank_t rank, int tgt_idx)
+		  const char *dmg_config, const d_rank_list_t *svc,
+		  d_rank_t rank, int tgt_idx)
 {
 
 	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config, svc,
