@@ -122,7 +122,7 @@ wr_str(struct str_buffer *buf, const char *fmt, ...) {
 
 static void
 print_dynamic(struct str_buffer *buf, const char *name,
-	const struct daos_tree_overhead *ovhd)
+		const struct daos_tree_overhead *ovhd)
 {
 	int	i;
 

@@ -998,7 +998,7 @@ err:
 
 int
 dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
-	 int *dfs_entry_key_size, int *dfs_entry_size)
+		int *dfs_entry_key_size, int *dfs_entry_size)
 {
 	if (dkey == NULL || akey_count == NULL)
 		return EINVAL;
