@@ -30,6 +30,7 @@ from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
+from general_utils import pcmd
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
@@ -57,6 +58,7 @@ class IorTestBase(TestWithServers):
         self.container = None
         self.lock = None
         self.mpirun = None
+        self.ret = None
 
     def setUp(self):
         """Set up each test case."""
@@ -386,3 +388,33 @@ class IorTestBase(TestWithServers):
             self.fail(
                 "Pool Free Size did not match: actual={}, expected={}".format(
                     actual_pool_size, expected_pool_size))
+
+    def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
+        """Execute cmd using general_utils.pcmd
+
+          Args:
+            cmd (str): String command to be executed
+            fail_on_err (bool): Boolean for whether to fail the test if command
+                                execution returns non zero return code.
+            display_output (bool): Boolean for whether to display output.
+        """
+        try:
+            # execute bash cmds
+            self.ret = pcmd(
+                self.hostlist_clients, cmd, verbose=display_output, timeout=300)
+            if 0 not in self.ret:
+                error_hosts = NodeSet(
+                    ",".join(
+                        [str(node_set) for code, node_set in
+                         self.ret.items() if code != 0]))
+                if fail_on_err:
+                    raise CommandFailure(
+                        "Error running '{}' on the following "
+                        "hosts: {}".format(cmd, error_hosts))
+
+        # report error if any command fails
+        except CommandFailure as error:
+            self.log.error("Test Failed: %s",
+                           str(error))
+            self.fail("Test was expected to pass but "
+                      "it failed.\n")

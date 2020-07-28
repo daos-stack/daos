@@ -38,6 +38,7 @@ from fio_test_base import FioBase
 from ior_test_base import IorTestBase
 
 
+# pylint: disable=too-many-ancestors
 class ParallelIo(FioBase, IorTestBase):
     """Base Parallel IO test class.
 
@@ -78,6 +79,7 @@ class ParallelIo(FioBase, IorTestBase):
         pool.create()
         self.pool.append(pool)
 
+    # pylint: disable=arguments-differ
     def create_cont(self, pool):
         """Create a TestContainer object to be used to create container.
 
@@ -255,7 +257,7 @@ class ParallelIo(FioBase, IorTestBase):
             Record free space using statvfs after write.
             Delete half of the containers from each pool.
             Calculate the expected amount of data to be deleted when
-            containers are destroys.
+            containers are destroyed.
             Record free space after container destroy.
             Loop until either the all space is returned back after aggregation
             completion or exit the loop after trying for 240 secs of wait and
@@ -268,7 +270,6 @@ class ParallelIo(FioBase, IorTestBase):
         threads = []
         pool_threads = []
         cont_threads = []
-        statvfs_info_before = []
         self.pool_count = self.params.get("pool_count", '/run/pool/*')
         self.cont_count = self.params.get("cont_count", '/run/container/*')
         processes = self.params.get("np", '/run/ior/client_processes/*')
@@ -294,7 +295,7 @@ class ParallelIo(FioBase, IorTestBase):
         # be parallelised as different container create could complete at
         # different times and get appeneded in the self.container variable in
         # unorderly manner, causing problems during the write process.
-        for count, pool in enumerate(self.pool):
+        for _, pool in enumerate(self.pool):
             for _ in range(self.cont_count):
                 self.create_cont(pool)
 
@@ -309,24 +310,7 @@ class ParallelIo(FioBase, IorTestBase):
                 dfuse_cont_dir = str(dfuse_pool_dir + "/" +
                                      self.container[cont_num].uuid)
                 cmd = u"###ls -a {}".format(dfuse_cont_dir)
-                try:
-                    # execute bash cmds
-                    ret_code = general_utils.pcmd(
-                        self.hostlist_clients, cmd, timeout=30)
-                    if 0 not in ret_code:
-                        error_hosts = NodeSet(
-                            ",".join(
-                                [str(node_set) for code, node_set in
-                                 ret_code.items() if code != 0]))
-                        raise CommandFailure(
-                            "Error running '{}' on the following "
-                            "hosts: {}".format(cmd, error_hosts))
-                # report error if any command fails
-                except CommandFailure as error:
-                    self.log.error("ParallelIo Test Failed: %s",
-                                   str(error))
-                    self.fail("Test was expected to pass but "
-                              "it failed.\n")
+                self.execute_cmd(cmd)
 
                 # run ior on all containers
                 test_file = dfuse_cont_dir + "/testfile"
