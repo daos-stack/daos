@@ -16,8 +16,10 @@ if [ -n "$BULLSEYE" ]; then
   export PATH="/opt/BullseyeCoverage/bin:$PATH"
 fi
 
-touch "$COVFILE"
-covmerge --no-banner --file "$COVFILE" "$DAOS_BASE"/test.cov_*
+mv "$DAOS_BASE/test.cov_1" "$COVFILE"
+if [ -e "$DAOS_BASE/test.cov_2" ]; then
+  covmerge --no-banner --file "$COVFILE" "$DAOS_BASE"/test.cov_*
+fi
 
 if [ -n "$BULLSEYE" ]; then
   ls -l "$COVFILE" || true
