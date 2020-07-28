@@ -204,8 +204,8 @@ pool_exclude(void **state)
 	print_message("rank 0 excluding rank %u... ", rank);
 	for (idx = 0; idx < arg->pool.svc.rl_nr; idx++) {
 		daos_exclude_target(arg->pool.pool_uuid, arg->group,
-				arg->dmg_config, &arg->pool.svc,
-				arg->pool.svc.rl_ranks[idx], tgt);
+				    arg->dmg_config, &arg->pool.svc,
+				    arg->pool.svc.rl_ranks[idx], tgt);
 	}
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");

@@ -817,8 +817,8 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 
 static void
 daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
-		    const char *grp, const char *dmg_config,
-		    const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+		     const char *grp, const char *dmg_config,
+		     const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
 {
 	char		dmg_cmd[DTS_CFG_MAX];
 	int		rc;
@@ -839,11 +839,11 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 
 void
 daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		 const char *dmg_config, const d_rank_list_t *svc,
-		 d_rank_t rank, int tgt_idx)
+		    const char *dmg_config, const d_rank_list_t *svc,
+		    d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config, svc,
-			rank, tgt_idx);
+			     rank, tgt_idx);
 }
 
 void
@@ -852,7 +852,7 @@ daos_add_target(const uuid_t pool_uuid, const char *grp,
 		d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
-			 rank, tgt_idx);
+			     rank, tgt_idx);
 
 }
 
@@ -863,7 +863,7 @@ daos_drain_target(const uuid_t pool_uuid, const char *grp,
 {
 
 	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config, svc,
-			rank, tgt_idx);
+			     rank, tgt_idx);
 }
 
 void
