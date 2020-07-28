@@ -45,7 +45,8 @@ if [ -f .localenv ]; then
 fi
 
 TEST_TAG_ARG="${1:-quick}"
-TEST_TAG_ARR=($TEST_TAG_ARG)
+mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
+
 TEST_TAG_DIR="/tmp/Functional_${TEST_TAG_ARG// /_}"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
@@ -144,6 +145,8 @@ fi
 
 trap 'set +e; cleanup' EXIT
 
+# doesn't work: mapfile -t CLUSH_ARGS <<< "$CLUSH_ARGS"
+# shellcheck disable=SC2206
 CLUSH_ARGS=($CLUSH_ARGS)
 
 DAOS_BASE=${SL_PREFIX%/install}
@@ -156,7 +159,7 @@ if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
 fi
 echo \\\"/var/tmp/core.%e.%t.%p\\\" > /proc/sys/kernel/core_pattern\"
 rm -f /var/tmp/core.*
-if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
+if [ \"\${HOSTNAME%%.*}\" != \"${nodes[0]}\" ]; then
     if grep /mnt/daos\\  /proc/mounts; then
         sudo umount /mnt/daos
     else
@@ -199,7 +202,7 @@ else
     mkdir -p $DAOS_BASE
     ed <<EOF /etc/fstab
 \\\\\\\$a
-$NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # DAOS_BASE # added by ftest.sh
+$NFS_SERVER:$PWD $DAOS_BASE nfs defaults,vers=3 0 0 # DAOS_BASE # added by ftest.sh
 .
 wq
 EOF
@@ -303,7 +306,6 @@ EOF
 # apply patch for https://github.com/avocado-framework/avocado/pull/3076/
 if ! grep TIMEOUT_TEARDOWN \
     /usr/lib/python2.7/site-packages/avocado/core/runner.py; then
-    sudo yum -y install patch
     sudo patch -p0 -d/ << \"EOF\"
 From d9e5210cd6112b59f7caff98883a9748495c07dd Mon Sep 17 00:00:00 2001
 From: Cleber Rosa <crosa@redhat.com>
@@ -393,18 +395,15 @@ if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
     fi
 fi
 
-# install the debuginfo repo in case we get segfaults
-sudo bash -c \"cat <<\\\"EOF\\\" > /etc/yum.repos.d/CentOS-Debuginfo.repo
-[core-0-debuginfo]
-name=CentOS-7 - Debuginfo
-baseurl=http://debuginfo.centos.org/7/\\\$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
-enabled=0
-EOF\"
-
+# can only process cores on EL7 currently
+if [ $(lsb_release -s -i) = CentOS ]; then
+    process_cores=\"p\"
+else
+    process_cores=\"\"
+fi
 # now run it!
-if ! ./launch.py -crispa -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} \\
+                 ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
