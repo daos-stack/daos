@@ -551,7 +551,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + component_repos() + '"'
                         }
                     }
