@@ -115,8 +115,17 @@ key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	return true;
 }
 
+static uint32_t
+hop_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	return 0;
+}
+
 static d_hash_table_ops_t hash_ops = {
-	hop_key_cmp : key_cmp,
+	hop_key_cmp  : key_cmp,
+	hop_key_init : NULL,
+	hop_key_hash : NULL,
+	hop_rec_hash : hop_rec_hash
 };
 
 static void
