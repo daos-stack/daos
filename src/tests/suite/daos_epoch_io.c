@@ -1247,13 +1247,13 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 			arg->eio_args.op_ec = 1;
 			if ((argc == 3 && strcmp(argv[2], "OC_EC_2P2G1") == 0)
 			    || argc == 2) {
-				print_message("EC obj class OC_EC_2P2G1\n");
-				dts_ec_obj_class = OC_EC_2P2G1;
+				print_message("EC obj class OC_EC_2P2G1_32K\n");
+				dts_ec_obj_class = OC_EC_2P2G1_32K;
 				dts_ec_grp_size = 4;
 			} else if (argc == 3 &&
 				   strcmp(argv[2], "OC_EC_4P2G1") == 0) {
-				print_message("EC obj class OC_EC_4P2G1\n");
-				dts_ec_obj_class = OC_EC_4P2G1;
+				print_message("EC obj class OC_EC_4P2G1_32K\n");
+				dts_ec_obj_class = OC_EC_4P2G1_32K;
 				dts_ec_grp_size = 6;
 			} else {
 				print_message("bad parameter");

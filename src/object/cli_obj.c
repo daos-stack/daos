@@ -40,7 +40,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(22)
+#define OBJ_TGT_INLINE_NR	(21)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -1633,16 +1633,26 @@ static int
 obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 		  bool update, bool size_fetch)
 {
-	int	i;
+	int	i, j;
 	int	rc;
 
 	if (iods == NULL)
 		return -DER_INVAL;
 
 	for (i = 0; i < nr; i++) {
-		if (iods[i].iod_name.iov_buf == NULL)
-			/* XXX checksum & eprs should not be mandatory */
+		if (iods[i].iod_name.iov_buf == NULL) {
+			D_ERROR("Invalid argument of NULL akey\n");
 			return -DER_INVAL;
+		}
+		for (j = 0; j < iods[i].iod_nr; j++) {
+			if (iods[i].iod_recxs != NULL &&
+			   (iods[i].iod_recxs[j].rx_idx & PARITY_INDICATOR)
+			    != 0) {
+				D_ERROR("Invalid IOD, the bit-63 of rx_idx is "
+					"reserved.\n");
+				return -DER_INVAL;
+			}
+		}
 
 		switch (iods[i].iod_type) {
 		default:
@@ -2656,8 +2666,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 		fail_info = obj_auxi->reasb_req.orr_fail;
 		new_tgt_fail = obj_auxi->ec_wait_recov &&
 			       task->dt_result == -DER_BAD_TARGET;
-		if (fail_info != NULL && (task->dt_result == 0 ||
-					  new_tgt_fail)) {
+		if (fail_info != NULL && fail_info->efi_nrecx_lists > 0 &&
+		    (task->dt_result == 0 ||  new_tgt_fail)) {
 			if (obj_auxi->ec_wait_recov && task->dt_result == 0) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 

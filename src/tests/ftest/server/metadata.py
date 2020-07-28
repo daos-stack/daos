@@ -48,8 +48,10 @@ from test_utils_pool import TestPool
 # and taking into account vos reserving in vos_space_init():
 #  5% for fragmentation overhead
 #  ~ 1MB for background garbage collection use
-#  ~40MB for background aggregation use
-NO_OF_MAX_CONTAINER = 9300
+#  ~48MB for background aggregation use
+# 52% of remaining free space set aside for staging log container
+# (installsnapshot RPC handling in raft)
+NO_OF_MAX_CONTAINER = 4464
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.

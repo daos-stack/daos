@@ -495,7 +495,8 @@ daos_hhash_init(void)
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = d_hhash_create(0, D_HHASH_BITS, &daos_ht.dht_hhash);
+	rc = d_hhash_create(D_HASH_FT_GLOCK | D_HASH_FT_LRU, D_HHASH_BITS,
+			    &daos_ht.dht_hhash);
 	if (rc == 0) {
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
@@ -625,6 +626,17 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	}
 
 	return &daos_crt_init_opt;
+}
+
+void
+daos_dti_gen_unique(struct dtx_id *dti)
+{
+	uuid_t uuid;
+
+	uuid_generate(uuid);
+
+	uuid_copy(dti->dti_uuid, uuid);
+	dti->dti_hlc = crt_hlc_get();
 }
 
 void

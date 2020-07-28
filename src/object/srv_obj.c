@@ -1128,8 +1128,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 
 		rc = vos_update_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
-			      orw->orw_epoch,
-			      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
+			      orw->orw_epoch, orw->orw_api_flags,
 			      dkey, orw->orw_nr, iods,
 			      iod_csums, &ioh, dth);
 		if (rc) {
@@ -1143,7 +1142,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bool				 ec_deg_fetch;
 		struct daos_recx_ep_list	*shadows = NULL;
 
-		cond_flags = orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS;
+		cond_flags = orw->orw_api_flags;
 		bulk_op = CRT_BULK_PUT;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
@@ -1350,6 +1349,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	if (rc)
 		D_GOTO(failed, rc);
 
+	ioc->ioc_csummer_init = 1;
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
 	if (rc)
@@ -1367,22 +1367,10 @@ failed:
 	return rc;
 }
 
-static bool
-obj_ioc_is_rebuild_container(struct obj_io_context *ioc)
-{
-	if (ioc->ioc_coh == NULL ||
-	    ioc->ioc_coc == NULL ||
-	    ioc->ioc_coc->sc_pool == NULL)
-		return false;
-
-	return is_container_from_srv(ioc->ioc_coc->sc_pool->spc_uuid,
-				    ioc->ioc_coh->sch_uuid);
-}
-
 static void
 obj_ioc_fini(struct obj_io_context *ioc)
 {
-	if (obj_ioc_is_rebuild_container(ioc))
+	if (ioc->ioc_csummer_init)
 		daos_csummer_destroy(&ioc->ioc_coh->sch_csummer);
 
 	if (ioc->ioc_coh != NULL) {
@@ -1457,7 +1445,7 @@ obj_ioc_begin(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	}
 out:
 	dss_rpc_cntr_enter(DSS_RC_OBJ);
-	ioc->ioc_began = true;
+	ioc->ioc_began = 1;
 	return rc;
 }
 
@@ -1466,7 +1454,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_began) {
 		dss_rpc_cntr_exit(DSS_RC_OBJ, !!err);
-		ioc->ioc_began = false;
+		ioc->ioc_began = 0;
 	}
 	obj_ioc_fini(ioc);
 }
@@ -1915,6 +1903,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		recursive = true;
 		enum_arg->chk_key2big = true;
 		enum_arg->need_punch = true;
+		enum_arg->copy_data_cb = vos_iter_copy;
 	}
 
 	/*
@@ -1942,7 +1931,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, NULL, &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg, &dth);
+	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg,
+			   vos_iterate, &dth);
 
 	/* dss_enum_pack may return 1. */
 	rc_tmp = dtx_end(&dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
@@ -2192,7 +2182,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 	case DAOS_OBJ_RPC_TGT_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
-				   VOS_OF_USE_TIMESTAMPS, NULL, 0, NULL, dth);
+				   0, NULL, 0, NULL, dth);
 		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -2207,7 +2197,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 		dkey = &((daos_key_t *)opi->opi_dkeys.ca_arrays)[0];
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
-				   opi->opi_api_flags | VOS_OF_USE_TIMESTAMPS,
+				   opi->opi_api_flags,
 				   dkey, opi->opi_akeys.ca_count,
 				   opi->opi_akeys.ca_arrays, dth);
 		break;
@@ -2542,9 +2532,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
-			       VOS_USE_TIMESTAMPS | okqi->okqi_api_flags,
-			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
-			       &dth);
+			       okqi->okqi_api_flags, okqi->okqi_epoch, dkey,
+			       akey, &okqo->okqo_recx, &dth);
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
