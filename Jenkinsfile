@@ -121,8 +121,7 @@ el7_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio " +
-                       " python2-tabulate "
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio "
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -918,7 +917,7 @@ pipeline {
                                                   'spdk-devel libfabric-devel '+
                                                   'pmix numactl-devel ' +
                                                   'libipmctl-devel ' +
-						    'python2-tabulate' +
+						    'python36-tabulate' +
                                                   qb_inst_rpms
                         timeout(time:60, unit:'MINUTES') {
                           runTest stashes: [ 'centos7-gcc-tests',
