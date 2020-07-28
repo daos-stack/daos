@@ -66,6 +66,9 @@ RUN yum -y install epel-release; \
 # CaRT specific
 RUN yum -y install python36-paramiko python36-PyYAML rsync valgrind
 
+# CaRT test wrappers specific
+RUN yum -y install python3-tabulate
+
 # Add CaRT user
 ENV USER cart
 ENV PASSWD cart
