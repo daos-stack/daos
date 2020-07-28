@@ -18,14 +18,10 @@ NODE="${NODELIST%%,*}"
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 
-if [ $# -ge 1 ] && [ -n "$1" ]; then
-    if [ "$1" == "memcheck" ]; then
-        rm -rf run_test_memcheck.sh
-        WITH_VALGRIND=memcheck
-    fi
+if [ "$WITH_VALGRIND" == "memcheck" ]; then
+    rm -rf run_test_memcheck.sh
 else
     rm -rf run_test.sh vm_test
-    WITH_VALGRIND=disabled
 fi
 
 # shellcheck disable=SC2029
