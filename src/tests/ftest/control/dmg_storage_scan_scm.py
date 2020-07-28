@@ -66,4 +66,6 @@ class DmgStorageScanSCMTest(TestWithServers):
 
         # Call without verbose and verify the namespace value.
         data = self.get_dmg_command().storage_scan()
-        self.assertEqual(int(data[host]["namespace"]), len(pmem_names))
+        self.assertEqual(
+            data[host]["scm"]["details"],
+            "{} namespaces".format(len(pmem_names)))

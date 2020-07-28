@@ -115,14 +115,34 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage scan command fails.
 
         """
-        # self.set_sub_command("storage")
-        # self.sub_command_class.set_sub_command("scan")
-        # self.sub_command_class.sub_command_class.verbose.value = verbose
-        # self.result = self._get_result()
-
         self.result = self._get_result(("storage", "scan"), verbose=verbose)
-        self.log.info("--- self.result.stdout ---")
-        self.log.info(self.result.stdout)
+
+        # Sample dmg storage scan verbose output. Don't delete this sample
+        # because it helps to develop and debug the regex.
+        """
+        --------
+        wolf-130
+        --------
+        SCM Namespace Socket ID Capacity
+        ------------- --------- --------
+        pmem0         0         3.2 TB
+        pmem1         0         3.2 TB
+
+        NVMe PCI     Model                FW Revision Socket ID Capacity
+        --------     -----                ----------- --------- --------
+        0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+        0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+        0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+        0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+        """
+
+        # Sample dmg storage scan output. Don't delete this sample because it
+        # helps to develop and debug the regex.
+        """
+         Hosts    SCM Total             NVMe Total
+        -----    ---------             ----------
+        wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
+        """
 
         data = {}
 
@@ -133,8 +153,6 @@ class DmgCommand(DmgCommandBase):
                 r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
                 r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
                 r"[ ]+([A-Z]+)[ ]*\n", self.result.stdout)
-            self.log.info("--- Verbose output parse result ---")
-            self.log.info(vals)
 
             data = {}
             host = vals[0][0]
@@ -168,9 +186,8 @@ class DmgCommand(DmgCommandBase):
 
         else:
             vals = re.findall(
-                r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
-                r"[modules|namespaces]+\)\s+([\d.]+)\s+([A-Z]+)\s+\((\d+)\s+"
-                r"controller",
+                r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+"
+                r"\(([\w\s]+)\)\s+([\d.]+)\s+([A-Z]+)\s+\(([\w\s]+)",
                 self.result.stdout)
             self.log.info("--- Non-verbose output parse result ---")
             self.log.info(vals)
@@ -178,15 +195,13 @@ class DmgCommand(DmgCommandBase):
             data = {}
             for row in vals:
                 host = row[0]
-                data[host] = {}
-                scm_total = "{} {}".format(row[1], row[2])
-                namespace = row[3]
-                nvme_total = "{} {}".format(row[4], row[5])
-                controller = row[6]
-                data[host]["scm_total"] = scm_total
-                data[host]["namespace"] = namespace
-                data[host]["nvme_total"] = nvme_total
-                data[host]["controller"] = controller
+                data[host] = {
+                    "scm": {"capacity": None, "details": None},
+                    "nvme": {"capacity": None, "details": None}}
+                data[host]["scm"]["capacity"] = "{} {}".format(row[1], row[2])
+                data[host]["scm"]["details"] = row[3]
+                data[host]["nvme"]["capacity"] = " ".join(row[4:6])
+                data[host]["nvme"]["details"] = row[6]
 
         return data
 
