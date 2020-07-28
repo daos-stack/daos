@@ -104,6 +104,21 @@ obj_lop_cmp_key(const void *key, unsigned int ksize, struct daos_llink *llink)
 	       !memcmp(&lkey->olk_oid, &obj->obj_id, sizeof(obj->obj_id));
 }
 
+static uint32_t
+obj_lop_rec_hash(struct daos_llink *llink)
+{
+	struct obj_lru_key	 lkey;
+	struct vos_object	*obj;
+
+	obj = container_of(llink, struct vos_object, obj_llink);
+
+	/* Create the key for obj cache */
+	lkey.olk_cont = obj->obj_cont;
+	lkey.olk_oid  = obj->obj_id;
+
+	return d_hash_string_u32((const char *)&lkey, sizeof(lkey));
+}
+
 static void
 obj_lop_free(struct daos_llink *llink)
 {
@@ -132,10 +147,11 @@ obj_lop_print_key(void *key, unsigned int ksize)
 }
 
 static struct daos_llink_ops obj_lru_ops = {
-	.lop_free_ref	=  obj_lop_free,
-	.lop_alloc_ref	=  obj_lop_alloc,
-	.lop_cmp_keys	=  obj_lop_cmp_key,
-	.lop_print_key	=  obj_lop_print_key,
+	.lop_free_ref	= obj_lop_free,
+	.lop_alloc_ref	= obj_lop_alloc,
+	.lop_cmp_keys	= obj_lop_cmp_key,
+	.lop_rec_hash	= obj_lop_rec_hash,
+	.lop_print_key	= obj_lop_print_key,
 };
 
 int
@@ -193,7 +209,7 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 	D_ASSERT((occ != NULL) && (obj != NULL));
 
 	if (evict)
-		daos_lru_ref_evict(&obj->obj_llink);
+		daos_lru_ref_evict(occ, &obj->obj_llink);
 
 	daos_lru_ref_release(occ, &obj->obj_llink);
 }
@@ -243,7 +259,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 		/* no one else can hold it */
 		obj->obj_zombie = true;
-		vos_obj_evict(obj);
+		vos_obj_evict(occ, obj);
 		if (obj->obj_df)
 			goto out; /* Ok to delete */
 	}
@@ -365,9 +381,9 @@ failed_2:
 }
 
 void
-vos_obj_evict(struct vos_object *obj)
+vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj)
 {
-	daos_lru_ref_evict(&obj->obj_llink);
+	daos_lru_ref_evict(occ, &obj->obj_llink);
 }
 
 int
@@ -383,7 +399,7 @@ vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), NULL, &lret);
 	if (rc == 0) {
-		daos_lru_ref_evict(lret);
+		daos_lru_ref_evict(occ, lret);
 		daos_lru_ref_release(occ, lret);
 	}
 
