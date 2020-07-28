@@ -67,10 +67,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
             go-dep mscgen python-yaml python3 python3-yaml
 
-# CaRT Test Specific
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            python3-tabulate
-
 # Don't need libsafec-dev and libipmctl-dev
 
 RUN ln -s /usr/bin/cc /bin/cc

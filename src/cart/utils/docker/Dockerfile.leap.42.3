@@ -70,9 +70,6 @@ RUN pip install -U setuptools
 RUN pip install -U wheel
 RUN pip install scons==3.0.1; pip3 install -U "meson<0.45.0"
 
-# For CaRT test wrappers
-RUN pip install python3-tabulate; pip3 install python3-tabulate;
-
 # Add CaRT user
 ENV USER cart
 ENV PASSWD cart

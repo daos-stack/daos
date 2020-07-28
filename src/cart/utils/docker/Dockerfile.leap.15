@@ -76,8 +76,7 @@ RUN update-ca-certificates; \
     pip install --upgrade pip; \
     pip install -U setuptools; \
     pip install -U wheel; \
-    pip install scons==3.0.1; \
-    pip install tabulate
+    pip install scons==3.0.1
 
 # CaRT Specific
 RUN zypper --non-interactive install mscgen rsync valgrind
