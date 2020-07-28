@@ -1010,10 +1010,7 @@ pipeline {
                         // caused by code coverage instrumentation affecting
                         // test results, and while code coverate is being
                         // added.
-                        unitTestPost coverage_healthy: [methodCoverage: 0,
-                                                        conditionalCoverage: 0,
-                                                        statementCoverage: 0],
-                                     ignore_failure: true
+                        unitTestPost ignore_failure: true
                         }
                     }
                 } // stage('Unit test Bullseye')
