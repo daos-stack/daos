@@ -17,7 +17,7 @@ x=0
 while [ "$x" -lt 10 ] &&
   pgrep '(orterun|daos_server|daos_io_server)'; do
   sleep 1
-  let x=$x+1
+  (( x=x+1 ))
 done
 if ! sudo umount /mnt/daos; then
   echo 'Failed to unmount /mnt/daos'

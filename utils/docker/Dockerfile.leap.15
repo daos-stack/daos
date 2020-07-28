@@ -1,15 +1,49 @@
+# Copyright (C) 2018-2020 Intel Corporation
+# All rights reserved.
 #
-# Copyright 2019-2020, Intel Corporation
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted for any purpose (including commercial purposes)
+# provided that the following conditions are met:
 #
-# 'recipe' for Docker to build an image of Leap-based
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions, and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions, and the following disclaimer in the
+#    documentation and/or materials provided with the distribution.
+#
+# 3. In addition, redistributions of modified forms of the source or binary
+#    code must carry prominent notices stating that the original code was
+#    changed and the date of the change.
+#
+#  4. All publications or advertising materials mentioning features or use of
+#     this software are asked, but not required, to acknowledge that it was
+#     developed by Intel Corporation and credit the contributors.
+#
+# 5. Neither the name of Intel Corporation, nor the name of any Contributor
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# 'recipe' for Docker to build an image of centOS-based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM opensuse/leap:15
+FROM opensuse/leap:15.2
 MAINTAINER <daos@daos.groups.io>
 
-# Build arguments can be set via -build-arg
+# Build arguments can be set via --build-arg
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
@@ -28,15 +62,15 @@ RUN zypper --non-interactive --no-gpg-checks refresh; \
            make man meson nasm ninja pandoc patch python2-pip         \
            readline-devel sg3_utils which yasm                        \
            python-devel python3-devel valgrind-devel hwloc-devel      \
-           openmpi3-devel Modules man fuse3-devel patchelf
+           openmpi3-devel man fuse3-devel patchelf scons lua-lmod
+# Monkey-patch MODULEPATH
+RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
+        sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
+    fi
+RUN update-ca-certificates
+RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
 
-RUN update-ca-certificates;    \
-    pip install --upgrade pip; \
-    pip install -U setuptools; \
-    pip install -U wheel;      \
-    pip install scons==3.0.1
-
- run zypper --non-interactive addrepo \
+RUN zypper --non-interactive addrepo \
     https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo; \
     zypper --non-interactive --gpg-auto-import-keys refresh; \
     zypper --non-interactive install -y ipmctl-devel go
@@ -47,9 +81,64 @@ ENV PASSWD daos
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
+# set maven mirror
+RUN mkdir -p /home/$USER/.m2
+
+RUN echo -e "<settings>\n\
+	<mirrors>\n\
+		<mirror>\n\
+			<id>google-maven-central</id>\n\
+			<name>GCS Maven Central mirror</name>\n\
+			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+			<mirrorOf>central</mirrorOf>\n\
+		</mirror>\n\
+	</mirrors>\n\
+</settings>" > /home/$USER/.m2/settings.xml
+
 # Create directory for DAOS backend storage
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
+
+# Dependencies
+# Packages for NVML exist in CentOS, but are
+# unfortunately outdated. The DAOS build system will rebuild those packages.
+ARG JENKINS_URL=""
+ARG QUICKBUILD=false
+ARG QUICKBUILD_DEPS=""
+ARG REPOS=""
+ARG REPO_URL=""
+ARG REPO_LOCAL_LEAP15=""
+ARG REPO_GROUP_LEAP15=""
+RUN if $QUICKBUILD; then                                                                                 \
+        for REPO_LEAP15 in $REPO_LOCAL_LEAP15 $REPO_GROUP_LEAP15; do                                             \
+            MY_REPO="${REPO_URL}${REPO_LEAP15}";                                                                 \
+            MY_NAME="${MY_REPO#*//}";                                                                            \
+            MY_NAME="${MY_NAME//\//_}";                                                                          \
+            zypper --non-interactive addrepo --no-gpgcheck                                                       \
+                   ${MY_REPO} ${MY_NAME};                                                                        \
+        done;                                                                                                    \
+        for repo in $REPOS; do                                                                                   \
+            branch="master";                                                                                     \
+            build_number="lastSuccessfulBuild";                                                                  \
+            if [[ $repo = *@* ]]; then                                                                           \
+                branch="${repo#*@}";                                                                             \
+                repo="${repo%@*}";                                                                               \
+                if [[ $branch = *:* ]]; then                                                                     \
+                    build_number="${branch#*:}";                                                                 \
+                    branch="${branch%:*}";                                                                       \
+                fi;                                                                                              \
+            fi;                                                                                                  \
+            zypper --non-interactive addrepo --no-gpgcheck                                                       \
+                   ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/   \
+                   $repo:$branch:$build_number;                                                                  \
+        done;                                                                                                    \
+        echo "Installing: $QUICKBUILD_DEPS";                                                                     \
+        echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf;                                           \
+        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
+    fi
+
+# force an upgrade to get any newly built RPMs
+ARG CACHEBUST=1
 
 # Switch to new user
 #USER $USER
@@ -57,6 +146,7 @@ WORKDIR /home/$USER
 
 # set NOBUILD to disable git clone & build
 ARG NOBUILD
+
 # Fetch DAOS code
 RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/daos.git; fi
 WORKDIR /home/$USER/daos
