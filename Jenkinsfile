@@ -13,7 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@corci-918d") _
+@Library(value="pipeline-lib@corci-918d")  _
 
 def doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
