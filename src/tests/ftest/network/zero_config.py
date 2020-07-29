@@ -28,6 +28,7 @@ import re
 from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
+from agent_utils import include_local_host
 from command_utils import CommandFailure
 from general_utils import check_file_exists, get_host_data, get_log_file
 
@@ -45,6 +46,7 @@ class ZeroConfigTest(TestWithServers):
     def setUp(self):
         """Set up for zero-config test."""
         self.setup_start_servers = False
+        self.setup_start_agents = False
         super(ZeroConfigTest, self).setUp()
 
     def get_port_cnt(self, hosts, dev, port_counter):
@@ -174,12 +176,23 @@ class ZeroConfigTest(TestWithServers):
             or unset. The test expects that the server will have two interfaces
             available: hfi_0 and hfi_1.
 
-        :avocado: tags=all,pr,hw,medium,ib2,zero_config,env_set
+        :avocado: tags=all,pr,hw,small,zero_config,env_set
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
         devs = ["ib0", "ib1"]
         ports = [31416, 31417]
         for idx, (exp_iface, port) in enumerate(zip(devs, ports)):
+            # Setup the agents
+            self.add_agent_manager()
+            self.configure_manager(
+                "agent",
+                self.agent_managers[0],
+                include_local_host(self.hostlist_clients),
+                self.hostfile_clients_slots)
+
+            # Start agent
+            self.start_agent_managers()
+
             # Configure the daos server
             config_file = self.get_config_file(self.server_group, "server")
             self.add_server_manager(config_file)
@@ -210,11 +223,13 @@ class ZeroConfigTest(TestWithServers):
             if not self.verify_client_run(exp_iface, env_state):
                 err.append("Failed run with expected dev: {}".format(exp_iface))
 
-            # Stop the servers
+            # Stop the agent and server
+            self.stop_agents()
             self.stop_servers()
 
             # Remove server manger from list so we don't start 2 servers on the
             # next iteration.
+            self.agent_managers.pop()
             self.server_managers.pop()
 
         self.assertEqual(len(err), 0, "{}".format("\n".join(err)))
