@@ -1056,6 +1056,9 @@ static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 	parsed_json = json_tokener_parse(content);
 out:
 	fclose(fp);
+	rc = unlink(*filename);
+	if (rc != 0)
+		D_ERROR("unlink %s failed, rc %d", *filename, rc);
 	D_FREE(content);
 	return parsed_json;
 }
