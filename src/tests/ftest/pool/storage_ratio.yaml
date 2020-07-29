@@ -1,6 +1,3 @@
-server_manager:
-    srv_timeout: 500
-hosts:
 hosts:
   test_servers:
     - server-A
