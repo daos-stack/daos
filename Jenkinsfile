@@ -952,8 +952,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
-                                 inst_repos: el7_component_repos() + ' ' +
-                                             component_repos(),
+                                 inst_repos: daos_repos("centos7"),
                                  inst_rpms: 'gotestsum openmpi3 ' +
                                             'hwloc-devel argobots ' +
                                             'fuse3-libs fuse3 ' +
@@ -989,8 +988,7 @@ pipeline {
                         }
                         unitTest timeout_time: 60,
                                  ignore_failure: true,
-                                 inst_repos: el7_component_repos + ' ' +
-                                             component_repos(),
+                                 inst_repos: daos_repos("centos7"),
                                  inst_rpms: 'gotestsum openmpi3 ' +
                                             'hwloc-devel argobots ' +
                                             'fuse3-libs fuse3 ' +
