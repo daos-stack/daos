@@ -199,7 +199,7 @@ class DmgCommand(DmgCommandBase):
                 data[host] = {
                     "scm": {"capacity": None, "details": None},
                     "nvme": {"capacity": None, "details": None}}
-                data[host]["scm"]["capacity"] = "{} {}".format(row[1], row[2])
+                data[host]["scm"]["capacity"] = " ".join(row[1:3])
                 data[host]["scm"]["details"] = row[3]
                 data[host]["nvme"]["capacity"] = " ".join(row[4:6])
                 data[host]["nvme"]["details"] = row[6]
