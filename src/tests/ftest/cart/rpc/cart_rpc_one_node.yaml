@@ -26,7 +26,7 @@ hosts: !mux
 tests: !mux
   proto_np_1:
     name: proto_np_1
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_proto_server -p 4 --name proto_srv_grp --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -36,7 +36,7 @@ tests: !mux
     cli_ppn: "1"
   proto_np_2:
     name: proto_np_2
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_proto_server -p 4 --name proto_srv_grp --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -46,7 +46,7 @@ tests: !mux
     cli_ppn: "1"
   proto_np_3:
     name: proto_np_3
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_proto_server -p 3 --name proto_srv_grp --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -56,7 +56,7 @@ tests: !mux
     cli_ppn: "1"
   test_group:
     name: test_group_basic
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_group_np_srv --name tg_srv_grp --cfg_path=."
     srv_env: "-x D_FI_CONFIG=../etc/fault-inject-cart.yaml"
     srv_ppn: "1"
@@ -66,7 +66,7 @@ tests: !mux
     cli_ppn: "1"
   ep_credits_1:
     name: ep_credits_1
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_ep_cred_server -n epc1_srv_grp -s --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -76,7 +76,7 @@ tests: !mux
     cli_ppn: "1"
   ep_credits_2:
     name: ep_credits_2
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -86,7 +86,7 @@ tests: !mux
     cli_ppn: "1"
   ep_credits_3:
     name: ep_credits_3
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -96,7 +96,7 @@ tests: !mux
     cli_ppn: "1"
   ep_credits_4:
     name: ep_credits_4
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -106,7 +106,7 @@ tests: !mux
     cli_ppn: "1"
   ep_credits_5:
     name: ep_credits_5
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -116,7 +116,7 @@ tests: !mux
     cli_ppn: "1"
   ep_credits_6:
     name: ep_credits_6
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
@@ -126,7 +126,7 @@ tests: !mux
     cli_ppn: "1"
   no_timeout:
     name: no_timeout_basic
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_group_np_srv --name timeout_srv_grp --cfg_path=."
     srv_env: "-x CRT_TIMEOUT=10"
     srv_ppn: "1"

@@ -32,17 +32,17 @@ hosts: !mux
 tests: !mux
   self_np:
     name: self_test_np
-    srv_bin: ../bin/crt_launch
+    srv_bin: ../../../../bin/crt_launch
     srv_arg: "-e tests/test_group_np_srv --name selftest_srv_grp --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
 
-    cli1_bin: ../bin/self_test
+    cli1_bin: ../../../../bin/self_test
     cli1_arg: "--group-name selftest_srv_grp --endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
     cli1_env: ""
     cli1_ppn: "1"
 
-    cli2_bin: ../bin/self_test
+    cli2_bin: ../../../../bin/self_test
     cli2_arg: "--group-name selftest_srv_grp --endpoint 0-1:0 --master-endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
     cli2_env: ""
     cli2_ppn: "1"
