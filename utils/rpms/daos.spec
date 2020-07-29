@@ -78,7 +78,7 @@ BuildRequires: cunit-devel
 BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
-BuildRequires: lua-lmod
+BuildRequires: Modules
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
 %else
