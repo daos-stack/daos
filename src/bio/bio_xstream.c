@@ -123,7 +123,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		  char *traddr)
 {
 	int			rc;
-	size_t 			count = opts->num_pci_addr;
+	size_t			count = opts->num_pci_addr;
 	struct spdk_pci_addr   *tmp = *list;
 
 	rc = is_addr_in_whitelist(traddr, *list, count);
