@@ -1,6 +1,3 @@
-server_manager:
-    srv_timeout: 500
-hosts:
 hosts:
   test_servers:
     - server-A
@@ -39,8 +36,8 @@ pool:
     name: daos_server
     svcn: 1
     control_method: dmg
-    stoage_ratio:
-#   - [scmsize, nvmesize, Expected Result]
+    storage_ratio:
+#   - [scm_size, nvme_size, Expected Result]
     - ['2G', '100G', 'PASS']    # SCM Size ratio is greater than 1%
     - ['7G', '650G', 'PASS']    # SCM Size ratio is greater than 1%
     - ['10G', '1G', 'FAIL']     # Low NVMe Size
