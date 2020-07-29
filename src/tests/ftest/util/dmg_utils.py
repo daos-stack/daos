@@ -587,7 +587,6 @@ def check_system_query_status(stdout_str):
         check = False
     return check
 
-
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.
 
