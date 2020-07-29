@@ -234,7 +234,8 @@ int
 rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 			 int rc_crt, int rc_svc, const struct rsvc_hint *hint)
 {
-	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+	D_DEBUG(DB_MD, DF_CLI" rc_crt:%d rc_svc:%d\n", DP_CLI(client), rc_crt,
+		rc_svc);
 	/*
 	 * Enumerate all cases of <rc_crt, rc_svc, hint>. Keep them at the same
 	 * indentation level, please.
@@ -248,7 +249,7 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		D_DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d\n",
 			ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);
-		return RSVC_CLIENT_RECHOOSE;
+		return RSVC_CLIENT_PROCEED;
 	} else if (rc_svc == -DER_NOTLEADER &&
 		   (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID))) {
 		D_DEBUG(DB_MD, "non-leader reply without hint from rank %u\n",
