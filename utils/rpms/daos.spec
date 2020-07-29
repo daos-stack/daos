@@ -2,16 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%if (0%{?suse_version} >= 1500)
-# until we get an updated mercury build on 15.2
-%global mercury_version 2.0.0~rc1-1.suse.lp151
-%else
 %global mercury_version 2.0.0~rc1-1%{?dist}
-%endif
 
 Name:          daos
 Version:       1.1.0
-Release:       28%{?relval}%{?dist}
+Release:       27%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -35,11 +30,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse3-devel >= 3.4.2
-%if (0%{?suse_version} >= 1500)
-BuildRequires: libprotobuf-c-devel
-%else
 BuildRequires: protobuf-c-devel
-%endif
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
@@ -48,7 +39,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.6.0
+BuildRequires: raft-devel >= 0.6.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -62,7 +53,6 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
-BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -78,7 +68,7 @@ BuildRequires: cunit-devel
 BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
-BuildRequires: lua-lmod
+BuildRequires: Modules
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
 %else
@@ -373,10 +363,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Mon Jul 13 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-28
-- Change fuse requirement to fuse3
-- Use Lmod for MPI module loading
-
 * Tue Jul 7 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-27
 - Update to mercury release 2.0.0~rc1-1
 
@@ -455,7 +441,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 - Remove scons_local as dependency
 
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
-- Bump up go minimum version to 1.12
+- bump up go minimum version to 1.12
 
 * Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
 - daos-server requires daos-client (same version)
