@@ -21,60 +21,100 @@
 """Wrapper for Modules so we can load an MPI before builds or tests"""
 from __future__ import print_function
 import os
-import sys
 import subprocess
-from subprocess import PIPE, Popen
+try:
+    from subprocess import DEVNULL
+except ImportError:
+    DEVNULL = open(os.devnull, "wb")
 from distutils.spawn import find_executable
+import re
 
-class _env_module(): # pylint: disable=invalid-name
+class _env_module():
     """Class for utilizing Modules component to load environment modules"""
     env_module_init = None
-    _mpi_map = {"mpich":['mpi/mpich-x86_64', 'gnu-mpich'],
+    _mpi_map = {"mpich":['mpi/mpich-x86_64', 'mpich'],
                 "openmpi":['mpi/openmpi3-x86_64', 'gnu-openmpi',
                            'mpi/openmpi-x86_64']}
 
     def __init__(self):
         """Load Modules for initializing envirables"""
-        # Leap 15's lmod-lua doesn't include the usual module path
-        # in it's MODULEPATH, for some unknown reason
-        os.environ["MODULEPATH"] = ":".join([os.path.sep +
-                                             os.path.join("usr", "share",
-                                                          "modules"),
-                                             os.path.sep +
-                                             os.path.join("etc",
-                                                          "modulefiles")] +
-                                            os.environ.get("MODULEPATH",
-                                                           "").split(":"))
+        self._module_func = self._init_module_func(lambda *x: False)
         self._module_load = self._init_mpi_module()
 
-    def _module_func(self, command, *arguments): # pylint: disable=no-self-use
-        num_args = len(arguments)
-        cmd = ['/usr/share/lmod/lmod/libexec/lmod', 'python', command]
-        if num_args == 1:
-            cmd += arguments[0].split()
-        else:
-            cmd += list(arguments)
+    @staticmethod
+    def _module_old(*args):
+        """invoke module and save environment"""
+        cmd = ['/usr/bin/modulecmd', 'python']
+
+        for arg in args:
+            cmd.append(arg)
+        output = subprocess.check_output(cmd)
+        # pylint: disable=exec-used
+        exec(output)  #nosec
+        # pylint: enable=exec-used
+
+    @staticmethod
+    def _setup_old(path_init, default_func):
+        if os.environ.get("MODULEPATH", False):
+            return _env_module._module_old
+        if not path_init or not os.path.exists(path_init):
+            return default_func
+        with open(path_init, "r") as pfile:
+            paths = []
+            for line in pfile.readlines():
+                line = re.sub(r"#.*$", "", line.strip()).strip()
+                if line:
+                    paths += line.split(":")
+            os.environ["MODULEPATH"] = ":".join(paths)
+        return _env_module._module_old
+
+    def _init_module_func(self, default_func):
+        """Initialize environment modules"""
+        python_init = None
+        path_init = None
+        for root, _dirs, files in os.walk('/usr/share/Modules'):
+            for fname in files:
+                if not python_init and fname == "python.py":
+                    temp = os.path.join(root, fname)
+                    if "init" in temp:
+                        python_init = temp
+                if not path_init and fname == ".modulespath":
+                    path_init = os.path.join(root, fname)
+                if path_init and python_init:
+                    break
+
+        if python_init is None:
+            return default_func
 
         try:
-            proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
-        except FileNotFoundError:
-            return None, None
+            subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
+                                  stdout=DEVNULL, stderr=DEVNULL)
+        except subprocess.CalledProcessError:
+            return self._setup_old(path_init, default_func)
 
-        stdout, stderr = proc.communicate()
+        tmp_globals = {'os': os, 're': re, 'subprocess': subprocess}
+        tmp_locals = {}
+        try:
+            # if successful, this will define module, a function
+            # that invokes module on the command line
+            # pylint: disable=exec-used
+            exec(open(python_init).read(), tmp_globals, tmp_locals)  #nosec
+            # pylint: enable=exec-used
+        except KeyError:
+            return default_func
 
-        if sys.version_info[0] > 2:
-            ns = {}
-            exec(stdout.decode(), ns) # pylint: disable=exec-used
+        module = tmp_locals.get('module', default_func)
 
-            return ns['_mlstatus'], stderr.decode()
-        else:
-            exec(stdout.decode()) # pylint: disable=exec-used
-
-            return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
-
+        return module
 
     def _init_mpi_module(self):
         """init mpi module function"""
+        try:
+            subprocess.check_call(['/bin/sh', '-l', '-c', 'module -V'],
+                                  stdout=DEVNULL, stderr=DEVNULL)
+        except subprocess.CalledProcessError:
+            # older version of module return -1
+            return self._mpi_module_old
 
         return self._mpi_module
 
@@ -90,16 +130,15 @@ class _env_module(): # pylint: disable=invalid-name
                 unload += value
 
         for to_load in load:
-            if self._module_func('is-loaded', to_load)[0]:
+            if self._module_func('is-loaded', to_load):
                 return True
 
         for to_unload in unload:
-            if self._module_func('is-loaded', to_unload)[0]:
+            if self._module_func('is-loaded', to_unload):
                 self._module_func('unload', to_unload)
 
         for to_load in load:
-            if self._module_func('is-avail', to_load)[0] and \
-               self._module_func('load', to_load)[0]:
+            if self._module_func('load', to_load):
                 print("Loaded %s" % to_load)
                 return True
 
@@ -152,7 +191,7 @@ class _env_module(): # pylint: disable=invalid-name
     def show_avail(self):
         """list available modules"""
         try:
-            if not self._module_func('avail')[0]:
+            if not self._module_func('avail'):
                 print("Modules doesn't appear to be installed")
         except subprocess.CalledProcessError:
             print("Could not invoke module avail")
@@ -162,9 +201,3 @@ def load_mpi(mpi):
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.load_mpi(mpi)
-
-def list_mpis(mpi):
-    """global function to return list of MPIs"""
-    if _env_module.env_module_init is None:
-        _env_module.env_module_init = _env_module()
-    return _env_module._mpi_map[mpi]
