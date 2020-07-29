@@ -36,13 +36,13 @@ server_config:
       # scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: False
 daos_tests:
   num_clients:
     num_clients: 1
