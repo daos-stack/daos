@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * daos iv tree defination.
+ * daos iv tree definition.
  */
 #ifndef __DAOS_SRV_IV_H__
 #define __DAOS_SRV_IV_H__
@@ -30,7 +30,7 @@
 
 /* DAOS iv cache provide a general interface for daos to use cart IV.
  * Each pool has one iv namespace, which is created when the  pool is
- * connected, and destroyed when pool is disconneced. Each DAOS IV
+ * connected, and destroyed when pool is disconnected. Each DAOS IV
  * user will attach its entries to the iv namespace, and each user will
  * have a constant key id to locate its entry.
  */
@@ -191,8 +191,8 @@ typedef int (*ds_iv_ent_destroy_t)(d_sg_list_t *sgl);
  *
  * \param entry [IN]	class entry.
  * \param key [IN]	key to locate the entry.
- * \param src [IN]	source buffer.
  * \param dst [OUT]	destination buffer.
+ * \param src [IN]	source buffer.
  * \param priv [OUT]	private buffer from IV callback.
  *
  * \return		0 if succeeds, error code otherwise.
@@ -283,12 +283,14 @@ int ds_iv_class_unregister(unsigned int class_id);
 enum iv_key {
 	IV_POOL_MAP = 1,
 	IV_POOL_PROP,
+	IV_POOL_CONN,
 	IV_REBUILD,
 	IV_OID,
 	IV_CONT_SNAP,
 	IV_CONT_CAPA,
 	/* Container properties */
 	IV_CONT_PROP,
+	IV_POOL_HDL,
 };
 
 int ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,

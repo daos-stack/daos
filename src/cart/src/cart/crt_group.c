@@ -1,39 +1,24 @@
-/* Copyright (C) 2016-2020 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
  * This file is part of CaRT. It implements the main group APIs.
@@ -77,22 +62,13 @@ crt_li_link2ptr(d_list_t *rlink)
 	return container_of(rlink, struct crt_lookup_item, li_link);
 }
 
-static int
-li_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
-{
-	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
-
-	*key_pp = (void *)&li->li_rank;
-	return sizeof(li->li_rank);
-}
-
 static uint32_t
 li_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return (unsigned int)(*(const uint32_t *)key %
-		(1U << CRT_LOOKUP_CACHE_BITS));
+	return (uint32_t)(*(const uint32_t *)key
+			  & ((1U << CRT_LOOKUP_CACHE_BITS) - 1));
 }
 
 static bool
@@ -106,30 +82,30 @@ li_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	return li->li_rank == *(d_rank_t *)key;
 }
 
+static uint32_t
+li_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct crt_lookup_item *li = crt_li_link2ptr(link);
+
+	return (uint32_t)li->li_rank & ((1U << CRT_LOOKUP_CACHE_BITS) - 1);
+}
+
 static void
 li_op_rec_addref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
 	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
 
 	D_ASSERT(li->li_initialized);
-	D_MUTEX_LOCK(&li->li_mutex);
-	li->li_ref++;
-	D_MUTEX_UNLOCK(&li->li_mutex);
+	atomic_fetch_add(&li->li_ref, 1);
 }
 
 static bool
 li_op_rec_decref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	uint32_t			 ref;
-	struct crt_lookup_item		*li = crt_li_link2ptr(rlink);
+	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
 
 	D_ASSERT(li->li_initialized);
-	D_MUTEX_LOCK(&li->li_mutex);
-	li->li_ref--;
-	ref = li->li_ref;
-	D_MUTEX_UNLOCK(&li->li_mutex);
-
-	return ref == 0;
+	return atomic_fetch_sub(&li->li_ref, 1) == 1;
 }
 
 static void
@@ -139,9 +115,9 @@ li_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t lookup_table_ops = {
-	.hop_key_get		= li_op_key_get,
 	.hop_key_hash		= li_op_key_hash,
 	.hop_key_cmp		= li_op_key_cmp,
+	.hop_rec_hash		= li_op_rec_hash,
 	.hop_rec_addref		= li_op_rec_addref,
 	.hop_rec_decref		= li_op_rec_decref,
 	.hop_rec_free		= li_op_rec_free,
@@ -154,22 +130,13 @@ crt_rm_link2ptr(d_list_t *rlink)
 	return container_of(rlink, struct crt_rank_mapping, rm_link);
 }
 
-static int
-rm_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
-{
-	struct crt_rank_mapping *rm = crt_rm_link2ptr(rlink);
-
-	*key_pp = (void *)&rm->rm_key;
-	return sizeof(rm->rm_key);
-}
-
 static uint32_t
 rm_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return (unsigned int)(*(const uint32_t *)key %
-		(1U << CRT_LOOKUP_CACHE_BITS));
+	return (uint32_t)(*(const uint32_t *)key
+			  & ((1U << CRT_LOOKUP_CACHE_BITS) - 1));
 }
 
 static bool
@@ -183,29 +150,30 @@ rm_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	return rm->rm_key == *(d_rank_t *)key;
 }
 
+static uint32_t
+rm_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct crt_rank_mapping *rm = crt_rm_link2ptr(link);
+
+	return (uint32_t)rm->rm_key & ((1U << CRT_LOOKUP_CACHE_BITS) - 1);
+}
+
 static void
 rm_op_rec_addref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
 	struct crt_rank_mapping *rm = crt_rm_link2ptr(rlink);
 
 	D_ASSERT(rm->rm_initialized);
-	D_MUTEX_LOCK(&rm->rm_mutex);
-	rm->rm_ref++;
-	D_MUTEX_UNLOCK(&rm->rm_mutex);
+	atomic_fetch_add(&rm->rm_ref, 1);
 }
 
 static bool
 rm_op_rec_decref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	uint32_t		ref;
-	struct crt_rank_mapping	*rm = crt_rm_link2ptr(rlink);
+	struct crt_rank_mapping *rm = crt_rm_link2ptr(rlink);
 
 	D_ASSERT(rm->rm_initialized);
-	D_MUTEX_LOCK(&rm->rm_mutex);
-	ref = --rm->rm_ref;
-	D_MUTEX_UNLOCK(&rm->rm_mutex);
-
-	return ref == 0;
+	return atomic_fetch_sub(&rm->rm_ref, 1) == 1;
 }
 
 static void
@@ -215,7 +183,6 @@ crt_rm_destroy(struct crt_rank_mapping *rm)
 	D_ASSERT(rm->rm_ref == 0);
 	D_ASSERT(rm->rm_initialized == 1);
 
-	D_MUTEX_DESTROY(&rm->rm_mutex);
 	D_FREE(rm);
 }
 
@@ -232,22 +199,13 @@ crt_ui_link2ptr(d_list_t *rlink)
 	return container_of(rlink, struct crt_uri_item, ui_link);
 }
 
-static int
-ui_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
-{
-	struct crt_uri_item *ui = crt_ui_link2ptr(rlink);
-
-	*key_pp = (void *)&ui->ui_rank;
-	return sizeof(ui->ui_rank);
-}
-
 static uint32_t
 ui_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return (unsigned int)(*(const uint32_t *)key %
-		(1U << CRT_LOOKUP_CACHE_BITS));
+	return (uint32_t)(*(const uint32_t *)key
+			  & ((1U << CRT_LOOKUP_CACHE_BITS) - 1));
 }
 
 static bool
@@ -261,31 +219,30 @@ ui_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	return ui->ui_rank == *(d_rank_t *)key;
 }
 
+static uint32_t
+ui_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct crt_uri_item *ui = crt_ui_link2ptr(link);
+
+	return (uint32_t)ui->ui_rank & ((1U << CRT_LOOKUP_CACHE_BITS) - 1);
+}
+
 static void
 ui_op_rec_addref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
 	struct crt_uri_item *ui = crt_ui_link2ptr(rlink);
 
 	D_ASSERT(ui->ui_initialized);
-	D_MUTEX_LOCK(&ui->ui_mutex);
-	ui->ui_ref++;
-	D_MUTEX_UNLOCK(&ui->ui_mutex);
+	atomic_fetch_add(&ui->ui_ref, 1);
 }
 
 static bool
 ui_op_rec_decref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	uint32_t		ref;
-	struct crt_uri_item	*ui = crt_ui_link2ptr(rlink);
+	struct crt_uri_item *ui = crt_ui_link2ptr(rlink);
 
 	D_ASSERT(ui->ui_initialized);
-	D_MUTEX_LOCK(&ui->ui_mutex);
-	ui->ui_ref--;
-	ref = ui->ui_ref;
-
-	D_MUTEX_UNLOCK(&ui->ui_mutex);
-
-	return ref == 0;
+	return atomic_fetch_sub(&ui->ui_ref, 1) == 1;
 }
 
 static void
@@ -302,7 +259,6 @@ crt_ui_destroy(struct crt_uri_item *ui)
 			D_FREE(ui->ui_uri[i]);
 	}
 
-	D_MUTEX_DESTROY(&ui->ui_mutex);
 	D_FREE_PTR(ui);
 }
 
@@ -332,7 +288,7 @@ grp_li_uri_get(struct crt_lookup_item *li, int tag)
 	ui = crt_ui_link2ptr(rlink);
 	d_hash_rec_decref(&grp_priv->gp_uri_lookup_cache, rlink);
 
-	return ui->ui_uri[tag];
+	return atomic_load_relaxed(&ui->ui_uri[tag]);
 }
 
 static inline int
@@ -341,6 +297,8 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	struct crt_uri_item	*ui;
 	d_list_t		*rlink;
 	struct crt_grp_priv	*grp_priv;
+	crt_phy_addr_t		nul_str = NULL;
+	crt_phy_addr_t		uri_dup;
 	d_rank_t		rank;
 	int			rc = 0;
 
@@ -351,22 +309,18 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
 		D_ALLOC_PTR(ui);
-		if (!ui) {
-			D_ERROR("Failed to allocate uri item\n");
+		if (!ui)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
 
 		D_INIT_LIST_HEAD(&ui->ui_link);
 		ui->ui_ref = 0;
 		ui->ui_initialized = 1;
-
-		rc = D_MUTEX_INIT(&ui->ui_mutex, NULL);
-		if (rc != 0) {
-			D_FREE_PTR(ui);
-			D_GOTO(exit, rc);
-		}
-
 		ui->ui_rank = li->li_rank;
+		D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
+		if (!ui->ui_uri[tag]) {
+			D_FREE_PTR(ui);
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
 
 		rc = d_hash_rec_insert(&grp_priv->gp_uri_lookup_cache,
 				&rank, sizeof(rank),
@@ -374,26 +328,21 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 				true /* exclusive */);
 		if (rc != 0) {
 			D_ERROR("Entry already present\n");
-			D_MUTEX_DESTROY(&ui->ui_mutex);
+			D_FREE(ui->ui_uri[tag]);
 			D_FREE_PTR(ui);
 			D_GOTO(exit, rc);
 		}
-		D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
-
-		if (!ui->ui_uri[tag]) {
-			d_hash_rec_delete(&grp_priv->gp_uri_lookup_cache,
-					&rank, sizeof(d_rank_t));
-			D_GOTO(exit, rc = -DER_NOMEM);
-		}
 	} else {
 		ui = crt_ui_link2ptr(rlink);
-		if (!ui->ui_uri[tag]) {
-			D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
-		}
-
-		if (!ui->ui_uri[tag]) {
-			D_ERROR("Failed to strndup uri string\n");
-			rc = -DER_NOMEM;
+		if (ui->ui_uri[tag] == NULL) {
+			D_STRNDUP(uri_dup, uri, CRT_ADDR_STR_MAX_LEN);
+			if (uri_dup) {
+				if (!atomic_compare_exchange(&ui->ui_uri[tag],
+							     nul_str, uri_dup))
+					D_FREE(uri_dup);
+			} else {
+				rc = -DER_NOMEM;
+			}
 		}
 
 		d_hash_rec_decref(&grp_priv->gp_uri_lookup_cache, rlink);
@@ -410,18 +359,18 @@ ui_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t uri_lookup_table_ops = {
-	.hop_key_get		= ui_op_key_get,
 	.hop_key_hash		= ui_op_key_hash,
 	.hop_key_cmp		= ui_op_key_cmp,
+	.hop_rec_hash		= ui_op_rec_hash,
 	.hop_rec_addref		= ui_op_rec_addref,
 	.hop_rec_decref		= ui_op_rec_decref,
 	.hop_rec_free		= ui_op_rec_free,
 };
 
 static d_hash_table_ops_t rank_mapping_ops = {
-	.hop_key_get		= rm_op_key_get,
 	.hop_key_hash		= rm_op_key_hash,
 	.hop_key_cmp		= rm_op_key_cmp,
+	.hop_rec_hash		= rm_op_rec_hash,
 	.hop_rec_addref		= rm_op_rec_addref,
 	.hop_rec_decref		= rm_op_rec_decref,
 	.hop_rec_free		= rm_op_rec_free,
@@ -475,6 +424,7 @@ free_htables:
 			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
 	}
 	D_FREE(htables);
+	grp_priv->gp_lookup_cache = NULL;
 
 out:
 	if (rc != 0)
@@ -670,7 +620,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 		rc = grp_lc_uri_insert_internal_locked(grp_priv, ctx_idx, rank,
 						tag, uri);
 		if (rc != 0) {
-			D_ERROR("Insertion failed for ctx_idx=%d\n", ctx_idx);
+			D_ERROR("Insertion failed: rc %d\n", rc);
 			D_GOTO(unlock, rc);
 		}
 	}
@@ -2239,12 +2189,12 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 		}
 
 		if (rank == psr_rank)
-			crt_grp_psr_set(grp_priv, rank, addr_str);
+			crt_grp_psr_set(grp_priv, rank, addr_str, false);
 	}
 
 	/* TODO: PSR selection logic to be changed with CART-688 */
 	if (psr_rank != -1)
-		crt_grp_psr_set(grp_priv, rank, addr_str);
+		crt_grp_psr_set(grp_priv, rank, addr_str, false);
 
 out:
 	if (fp)
@@ -2355,8 +2305,8 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 			if (uri == NULL)
 				break;
 
-			crt_grp_psr_set(grp_priv, psr_rank, uri);
-			D_GOTO(out, rc = 0);
+			rc = crt_grp_psr_set(grp_priv, psr_rank, uri, false);
+			D_GOTO(out, 0);
 		} else if (rc != -DER_EVICTED) {
 			/*
 			 * DER_EVICTED means the psr_rank being evicted then can
@@ -2483,6 +2433,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	uint32_t	new_amount;
 	d_rank_t	*tmp;
 	int		rc = 0;
+	int		ret;
 
 	membs = grp_priv->gp_membs.cgm_list;
 
@@ -2511,9 +2462,11 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		membs->rl_nr = new_amount;
 		for (i = first; i < first + RANK_LIST_REALLOC_SIZE; i++) {
 			membs->rl_ranks[i] = CRT_NO_RANK;
-			grp_add_free_index(
+			rc = grp_add_free_index(
 				&grp_priv->gp_membs.cgm_free_indices,
 				i, true);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(out, 0);
 		}
 
 		index = grp_get_free_index(grp_priv);
@@ -2521,12 +2474,12 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 
 	D_ASSERT(index >= 0);
 
-	if (grp_priv->gp_primary) {
+	/* Do not populate swim entries for views and secondary groups */
+	if (grp_priv->gp_primary && !grp_priv->gp_view) {
 		rc = crt_swim_rank_add(grp_priv, rank);
 		if (rc) {
 			D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
-			grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
-				   index, false);
+			D_GOTO(out, 0);
 		} else {
 			membs->rl_ranks[index] = rank;
 			grp_priv->gp_size++;
@@ -2537,8 +2490,16 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	}
 
 	/* Regenerate linear list*/
-	grp_regen_linear_list(grp_priv);
+	ret = grp_regen_linear_list(grp_priv);
+	if (ret != 0) {
+		grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices,
+				   index, false);
+		membs->rl_ranks[index] = CRT_NO_RANK;
+		grp_priv->gp_size--;
+	}
 
+	if (ret != 0 && rc == 0)
+		rc = ret;
 out:
 	return rc;
 }
@@ -2676,7 +2637,6 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 
 	D_STRNDUP(*uri_str, uri, strlen(uri) + 1);
 	if (!(*uri_str)) {
-		D_ERROR("Failed to allocate uri string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -2739,8 +2699,7 @@ crt_group_rank_remove_internal(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			grp_add_free_index(
 				&grp_priv->gp_membs.cgm_free_indices,
 				i, false);
-			grp_regen_linear_list(grp_priv);
-			rc = 0;
+			rc = grp_regen_linear_list(grp_priv);
 			break;
 		}
 
@@ -2825,7 +2784,7 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank)
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 out:
-	if (rc == 0 && grp_priv->gp_primary)
+	if (rc == 0 && grp_priv->gp_primary && !grp_priv->gp_view)
 		crt_swim_rank_del(grp_priv, rank);
 
 	return rc;
@@ -2887,13 +2846,15 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 	}
 
 	grp_priv->gp_size = 0;
-	grp_priv->gp_self = 0;
+	grp_priv->gp_self = CRT_NO_RANK;
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
 		D_ERROR("grp_priv_init_membs() failed; rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
+
+	grp_priv->gp_view = 1;
 
 	rc = crt_grp_lc_create(grp_priv);
 	if (rc != 0) {
@@ -2958,9 +2919,7 @@ crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
 		D_GOTO(out, rc);
 	}
 
-	crt_grp_psr_set(grp_priv, rank, uri);
-	D_FREE(uri);
-
+	rc = crt_grp_psr_set(grp_priv, rank, uri, true);
 out:
 	return rc;
 }
@@ -3002,7 +2961,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	}
 
 	grp_priv->gp_size = 0;
-	grp_priv->gp_self = 0;
+	grp_priv->gp_self = CRT_NO_RANK;
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
@@ -3032,7 +2991,6 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	/* Record secondary group in the primary group */
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("Failed to allocate entry for group\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -3132,7 +3090,6 @@ static struct crt_rank_mapping *
 crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 {
 	struct crt_rank_mapping *rm;
-	int			rc;
 
 	D_ALLOC_PTR(rm);
 	if (!rm) {
@@ -3141,17 +3098,10 @@ crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 	}
 
 	D_INIT_LIST_HEAD(&rm->rm_link);
-	rm->rm_ref = 0;
-	rm->rm_initialized = 1;
-
-	rc = D_MUTEX_INIT(&rm->rm_mutex, NULL);
-	if (rc != 0) {
-		D_FREE_PTR(rm);
-		D_GOTO(out, rm = NULL);
-	}
-
 	rm->rm_key = key;
 	rm->rm_value = value;
+	rm->rm_ref = 0;
+	rm->rm_initialized = 1;
 
 out:
 	return rm;
@@ -3175,6 +3125,12 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
+	/*
+	 * Set the self rank based on my primary group rank. For simplicity,
+	 * assert that my primary group rank must have been set already, since
+	 * this is always the case with daos_io_server today.
+	 */
+	D_ASSERT(grp_priv->gp_priv_prim->gp_self != CRT_NO_RANK);
 	if (prim_rank == grp_priv->gp_priv_prim->gp_self) {
 		D_DEBUG(DB_ALL, "Setting rank %d as self rank for grp %s\n",
 			sec_rank, grp_priv->gp_pub.cg_grpid);
@@ -3330,7 +3286,6 @@ crt_group_mod_get(d_rank_list_t *grp_membs, d_rank_list_t *mod_membs,
 	/* Array will have at most 'mod_membs' elements */
 	D_ALLOC_ARRAY(idx_to_add, mod_membs->rl_nr);
 	if (!idx_to_add) {
-		D_ERROR("Failed to allocate array\n");
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
 

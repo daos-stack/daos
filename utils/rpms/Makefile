@@ -5,7 +5,7 @@ SOURCE   = $(NAME)-$(VERSION).tar.$(SRC_EXT)
 #https://github.com/rpm-software-management/mock/issues/384
 MOCK_OPTIONS := --disablerepo=sclo*
 
-GIT_SHORT       := $(shell git rev-parse --short HEAD)
+GIT_SHORT       := $(shell git rev-parse --short=8 HEAD)
 GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
 ON_TAG          := $(shell if git diff-index --name-only HEAD^ | grep -q TAG; then \
 	                       echo "true"; else echo "false"; fi)

@@ -28,460 +28,67 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils import \
-    CommandWithParameters, FormattedParameter, CommandFailure, \
-    CommandWithSubCommand
+from command_utils_base import CommandFailure
+from dmg_utils_base import DmgCommandBase
 
 
-class DmgCommand(CommandWithSubCommand):
-    """Defines a object representing a dmg command."""
+class DmgCommand(DmgCommandBase):
+    # pylint: disable=too-many-ancestors,too-many-public-methods
+    """Defines a object representing a dmg command with helper methods."""
 
+    # As the handling of these regular expressions are moved inside their
+    # respective methods, they should be removed from this definition.
     METHOD_REGEX = {
-        "run": r"(.*)",
-        # Sample output of dmg pool list.
-        # wolf-3:10001: connected
-        # Pool UUID                            Svc Replicas
-        # ---------                            ------------
-        # b4a27b5b-688a-4d1e-8c38-363e32eb4f29 1,2,3
-        # Between the first and the second group, use " +"; i.e., one or more
-        # whitespaces. If we use "\s+", it'll pick up the second divider as
-        # UUID since it's made up of hyphens and \s includes new line.
-        "pool_list": r"(?:([0-9a-fA-F-]+) +([0-9,]+))"
+        "run":
+            r"(.*)",
+        "network_scan":
+            r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
+            r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
+        "pool_list":
+            r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
+        "pool_query":
+            r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),\s+disabled=(\d+),"
+            r"\s+leader=(\d+),\s+version=(\d+)|Target\(VOS\)\s+count:"
+            r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+            r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
+            r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+            r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
+        "storage_query_list_pools":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
+            r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
+        "storage_query_list_devices":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|(?:UUID:([a-z0-9-]+)\s+"
+            r"Targets:\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:([A-Z]+))",
+        "storage_query_device_health":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Targets:"
+            r"\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:(\w+)\s+.*\s+|(?:Temp.*|"
+            r"Cont.*Busy Time|Pow.*Cycles|Pow.*Duration|Unsafe.*|Media.*|"
+            r"Read.*|Write.*|Unmap.*|Checksum.*|Err.*Entries|Avail.*|"
+            r"Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9]+)",
+        "storage_query_target_health":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
+            r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)|"
+            r"(?:Read\s+Errors|Write\s+Errors|Unmap\s+Errors|Checksum\s+Errors|"
+            r"Error\s+Log\s+Entries|Media\s+Errors|Temperature|"
+            r"Available\s+Spare|Device\s+Reliability|Read\s+Only|"
+            r"Volatile\s+Memory\s+Backup):\s?([A-Za-z0-9- ]+)",
+        "storage_set_faulty":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
+            r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
+        "system_query":
+            r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+)\s+[A-Za-z]+)",
+        "system_start":
+            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
+        "system_stop":
+            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
     }
 
-    def __init__(self, path):
-        """Create a dmg Command object.
+    def network_scan(self, provider=None, all_devs=False):
+        """Get the result of the dmg network scan command.
 
         Args:
-            path (str): path to the dmg command
-        """
-        super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path)
-
-        self.hostlist = FormattedParameter("-l {}")
-        self.hostfile = FormattedParameter("-f {}")
-        self.configpath = FormattedParameter("-o {}")
-        self.insecure = FormattedParameter("-i", True)
-        self.debug = FormattedParameter("-d", False)
-        self.json = FormattedParameter("-j", False)
-
-    def set_hostlist(self, manager):
-        """Set the dmg hostlist parameter with the daos server/agent info.
-
-        Use the daos server/agent access points port and list of hosts to define
-        the dmg --hostlist command line parameter.
-
-        Args:
-            manager (SubprocessManager): daos server/agent process manager
-        """
-        self.hostlist.update(
-            manager.get_config_value("access_points"), "dmg.hostlist")
-
-    def get_sub_command_class(self):
-        # pylint: disable=redefined-variable-type
-        """Get the dmg sub command object based upon the sub-command."""
-        if self.sub_command.value == "network":
-            self.sub_command_class = self.NetworkSubCommand()
-        elif self.sub_command.value == "pool":
-            self.sub_command_class = self.PoolSubCommand()
-        elif self.sub_command.value == "storage":
-            self.sub_command_class = self.StorageSubCommand()
-        elif self.sub_command.value == "system":
-            self.sub_command_class = self.SystemSubCommand()
-        else:
-            self.sub_command_class = None
-
-    class NetworkSubCommand(CommandWithSubCommand):
-        """Defines an object for the dmg network sub command."""
-
-        def __init__(self):
-            """Create a dmg network subcommand object."""
-            super(DmgCommand.NetworkSubCommand, self).__init__(
-                "/run/dmg/network/*", "network")
-
-        def get_sub_command_class(self):
-            # pylint: disable=redefined-variable-type
-            """Get the dmg network sub command object."""
-            if self.sub_command.value == "scan":
-                self.sub_command_class = self.ScanSubCommand()
-            else:
-                self.sub_command_class = None
-
-        class ScanSubCommand(CommandWithParameters):
-            """Defines an object for the dmg network scan command."""
-
-            def __init__(self):
-                """Create a dmg network scan command object."""
-                super(
-                    DmgCommand.NetworkSubCommand.ScanSubCommand, self).__init__(
-                        "/run/dmg/network/scan/*", "scan")
-                self.provider = FormattedParameter("-p {}", None)
-                self.all = FormattedParameter("-a", False)
-
-    class PoolSubCommand(CommandWithSubCommand):
-        """Defines an object for the dmg pool sub command."""
-
-        def __init__(self):
-            """Create a dmg pool subcommand object."""
-            super(DmgCommand.PoolSubCommand, self).__init__(
-                "/run/dmg/pool/*", "pool")
-
-        def get_sub_command_class(self):
-            # pylint: disable=redefined-variable-type
-            """Get the dmg pool sub command object."""
-            if self.sub_command.value == "create":
-                self.sub_command_class = self.CreateSubCommand()
-            elif self.sub_command.value == "delete-acl":
-                self.sub_command_class = self.DeleteAclSubCommand()
-            elif self.sub_command.value == "destroy":
-                self.sub_command_class = self.DestroySubCommand()
-            elif self.sub_command.value == "get-acl":
-                self.sub_command_class = self.GetAclSubCommand()
-            elif self.sub_command.value == "list":
-                self.sub_command_class = self.ListSubCommand()
-            elif self.sub_command.value == "overwrite-acl":
-                self.sub_command_class = self.OverwriteAclSubCommand()
-            elif self.sub_command.value == "query":
-                self.sub_command_class = self.QuerySubCommand()
-            elif self.sub_command.value == "set-prop":
-                self.sub_command_class = self.SetPropSubCommand()
-            elif self.sub_command.value == "update-acl":
-                self.sub_command_class = self.UpdateAclSubCommand()
-            else:
-                self.sub_command_class = None
-
-        class CreateSubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool create command."""
-
-            def __init__(self):
-                """Create a dmg pool create command object."""
-                super(
-                    DmgCommand.PoolSubCommand.CreateSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/create/*", "create")
-                self.group = FormattedParameter("--group={}", None)
-                self.user = FormattedParameter("--user={}", None)
-                self.acl_file = FormattedParameter("--acl-file={}", None)
-                self.scm_size = FormattedParameter("--scm-size={}", None)
-                self.nvme_size = FormattedParameter("--nvme-size={}", None)
-                self.ranks = FormattedParameter("--ranks={}", None)
-                self.nsvc = FormattedParameter("--nsvc={}", None)
-                self.sys = FormattedParameter("--sys={}", None)
-
-        class DeleteAclSubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool delete-acl command."""
-
-            def __init__(self):
-                """Create a dmg pool delete-acl command object."""
-                super(
-                    DmgCommand.PoolSubCommand.DeleteAclSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/delete-acl/*", "delete-acl")
-                self.pool = FormattedParameter("--pool={}", None)
-                self.principal = FormattedParameter("-p {}", None)
-
-        class DestroySubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool destroy command."""
-
-            def __init__(self):
-                """Create a dmg pool destroy command object."""
-                super(
-                    DmgCommand.PoolSubCommand.DestroySubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/destroy/*", "destroy")
-                self.pool = FormattedParameter("--pool={}", None)
-                self.sys_name = FormattedParameter("--sys-name={}", None)
-                self.force = FormattedParameter("--force", False)
-
-        class GetAclSubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool get-acl command."""
-
-            def __init__(self):
-                """Create a dmg pool get-acl command object."""
-                super(
-                    DmgCommand.PoolSubCommand.GetAclSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/get-acl/*", "get-acl")
-                self.pool = FormattedParameter("--pool={}", None)
-
-        class ListSubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool list command."""
-
-            def __init__(self):
-                """Create a dmg pool list command object."""
-                super(
-                    DmgCommand.PoolSubCommand.ListSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/list/*", "list")
-
-        class OverwriteAclSubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool overwrite-acl command."""
-
-            def __init__(self):
-                """Create a dmg pool overwrite-acl command object."""
-                super(
-                    DmgCommand.PoolSubCommand.OverwriteAclSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/overwrite-acl/*", "overwrite-acl")
-                self.pool = FormattedParameter("--pool={}", None)
-                self.acl_file = FormattedParameter("-a {}", None)
-
-        class QuerySubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool query command."""
-
-            def __init__(self):
-                """Create a dmg pool query command object."""
-                super(
-                    DmgCommand.PoolSubCommand.QuerySubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/query/*", "query")
-                self.pool = FormattedParameter("--pool={}", None)
-
-        class SetPropSubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool set-prop command."""
-
-            def __init__(self):
-                """Create a dmg pool set-prop command object."""
-                super(
-                    DmgCommand.PoolSubCommand.SetPropSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/set-prop/*", "set-prop")
-                self.pool = FormattedParameter("--pool={}", None)
-                self.name = FormattedParameter("--name={}", None)
-                self.value = FormattedParameter("--value={}", None)
-
-        class UpdateAclSubCommand(CommandWithParameters):
-            """Defines an object for the dmg pool update-acl command."""
-
-            def __init__(self):
-                """Create a dmg pool update-acl command object."""
-                super(
-                    DmgCommand.PoolSubCommand.UpdateAclSubCommand,
-                    self).__init__(
-                        "/run/dmg/pool/update-acl/*", "update-acl")
-                self.pool = FormattedParameter("--pool={}", None)
-                self.acl_file = FormattedParameter("-a {}", None)
-                self.entry = FormattedParameter("-e {}", None)
-
-    class StorageSubCommand(CommandWithSubCommand):
-        """Defines an object for the dmg storage sub command."""
-
-        def __init__(self):
-            """Create a dmg storage subcommand object."""
-            super(DmgCommand.StorageSubCommand, self).__init__(
-                "/run/dmg/storage/*", "storage")
-
-        def get_sub_command_class(self):
-            # pylint: disable=redefined-variable-type
-            """Get the dmg storage sub command object."""
-            if self.sub_command.value == "format":
-                self.sub_command_class = self.FormatSubCommand()
-            elif self.sub_command.value == "prepare":
-                self.sub_command_class = self.PrepareSubCommand()
-            elif self.sub_command.value == "query":
-                self.sub_command_class = self.QuerySubCommand()
-            elif self.sub_command.value == "scan":
-                self.sub_command_class = self.ScanSubCommand()
-            elif self.sub_command.value == "set":
-                self.sub_command_class = self.SetSubCommand()
-            else:
-                self.sub_command_class = None
-
-        class FormatSubCommand(CommandWithParameters):
-            """Defines an object for the dmg storage format command."""
-
-            def __init__(self):
-                """Create a dmg storage format command object."""
-                super(
-                    DmgCommand.StorageSubCommand.FormatSubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/format/*", "format")
-                self.reformat = FormattedParameter("--reformat", False)
-
-        class PrepareSubCommand(CommandWithParameters):
-            """Defines an object for the dmg storage format command."""
-
-            def __init__(self):
-                """Create a dmg storage prepare command object."""
-                super(
-                    DmgCommand.StorageSubCommand.PrepareSubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/prepare/*", "prepare")
-                self.pci_whitelist = FormattedParameter("-w {}", None)
-                self.hugepages = FormattedParameter("-p {}", None)
-                self.target_user = FormattedParameter("-u {}", None)
-                self.nvme_only = FormattedParameter("-n", False)
-                self.scm_only = FormattedParameter("-s", False)
-                self.reset = FormattedParameter("--reset", False)
-                self.force = FormattedParameter("-f", False)
-
-        class QuerySubCommand(CommandWithSubCommand):
-            """Defines an object for the dmg query format command."""
-
-            def __init__(self):
-                """Create a dmg storage query command object."""
-                super(
-                    DmgCommand.StorageSubCommand.QuerySubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/query/*", "query")
-
-            def get_sub_command_class(self):
-                # pylint: disable=redefined-variable-type
-                """Get the dmg pool sub command object."""
-                if self.sub_command.value == "blobstore-health":
-                    self.sub_command_class = self.BlobstoreHealthSubCommand()
-                elif self.sub_command.value == "smd":
-                    self.sub_command_class = self.SmdSubCommand()
-                else:
-                    self.sub_command_class = None
-
-            class BlobstoreHealthSubCommand(CommandWithParameters):
-                """Defines a dmg storage query blobstore-health object."""
-
-                def __init__(self):
-                    """Create a dmg storage query blobstore-health object."""
-                    super(
-                        DmgCommand.StorageSubCommand.QuerySubCommand.
-                        BlobstoreHealthSubCommand,
-                        self).__init__(
-                            "/run/dmg/storage/query/blobstore-health/*",
-                            "blobstore-health")
-                    self.devuuid = FormattedParameter("-u {}", None)
-                    self.tgtid = FormattedParameter("-t {}", None)
-
-            class SmdSubCommand(CommandWithParameters):
-                """Defines a dmg storage query smd object."""
-
-                def __init__(self):
-                    """Create a dmg storage query smd object."""
-                    super(
-                        DmgCommand.StorageSubCommand.QuerySubCommand.
-                        SmdSubCommand,
-                        self).__init__(
-                            "/run/dmg/storage/query/smd/*",
-                            "smd")
-                    self.devices = FormattedParameter("-d", False)
-                    self.pools = FormattedParameter("-p", False)
-
-        class ScanSubCommand(CommandWithParameters):
-            """Defines an object for the dmg storage scan command."""
-
-            def __init__(self):
-                """Create a dmg storage scan command object."""
-                super(
-                    DmgCommand.StorageSubCommand.ScanSubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/scan/*", "scan")
-                self.summary = FormattedParameter("-m", False)
-
-        class SetSubCommand(CommandWithParameters):
-            """Defines an object for the dmg storage set command."""
-
-            def __init__(self):
-                """Create a dmg storage set command object."""
-                super(
-                    DmgCommand.StorageSubCommand.SetSubCommand,
-                    self).__init__(
-                        "/run/dmg/storage/set/*", "set")
-                self.nvme_faulty = FormattedParameter("nvme-faulty", False)
-
-    class SystemSubCommand(CommandWithSubCommand):
-        """Defines an object for the dmg system sub command."""
-
-        def __init__(self):
-            """Create a dmg system subcommand object."""
-            super(DmgCommand.SystemSubCommand, self).__init__(
-                "/run/dmg/system/*", "system")
-
-        def get_sub_command_class(self):
-            # pylint: disable=redefined-variable-type
-            """Get the dmg system sub command object."""
-            if self.sub_command.value == "leader-query":
-                self.sub_command_class = self.LeaderQuerySubCommand()
-            elif self.sub_command.value == "list-pools":
-                self.sub_command_class = self.ListPoolsSubCommand()
-            elif self.sub_command.value == "query":
-                self.sub_command_class = self.QuerySubCommand()
-            elif self.sub_command.value == "start":
-                self.sub_command_class = self.StartSubCommand()
-            elif self.sub_command.value == "stop":
-                self.sub_command_class = self.StopSubCommand()
-            else:
-                self.sub_command_class = None
-
-        class LeaderQuerySubCommand(CommandWithParameters):
-            """Defines an object for the dmg system leader-query command."""
-
-            def __init__(self):
-                """Create a dmg system leader-query command object."""
-                super(
-                    DmgCommand.SystemSubCommand.LeaderQuerySubCommand,
-                    self).__init__(
-                        "/run/dmg/system/leader-query/*", "leader-query")
-
-        class ListPoolsSubCommand(CommandWithParameters):
-            """Defines an object for the dmg system list-pools command."""
-
-            def __init__(self):
-                """Create a dmg system list-pools command object."""
-                super(
-                    DmgCommand.SystemSubCommand.ListPoolsSubCommand,
-                    self).__init__(
-                        "/run/dmg/system/list-pools/*", "list-pools")
-
-        class QuerySubCommand(CommandWithParameters):
-            """Defines an object for the dmg system query command."""
-
-            def __init__(self):
-                """Create a dmg system query command object."""
-                super(
-                    DmgCommand.SystemSubCommand.QuerySubCommand,
-                    self).__init__(
-                        "/run/dmg/system/query/*", "query")
-                self.rank = FormattedParameter("--rank={}")
-                self.verbose = FormattedParameter("--verbose", False)
-
-        class StartSubCommand(CommandWithParameters):
-            """Defines an object for the dmg system start command."""
-
-            def __init__(self):
-                """Create a dmg system start command object."""
-                super(
-                    DmgCommand.SystemSubCommand.StartSubCommand,
-                    self).__init__(
-                        "/run/dmg/system/start/*", "start")
-
-        class StopSubCommand(CommandWithParameters):
-            """Defines an object for the dmg system stop command."""
-
-            def __init__(self):
-                """Create a dmg system stop command object."""
-                super(
-                    DmgCommand.SystemSubCommand.StopSubCommand,
-                    self).__init__(
-                        "/run/dmg/system/stop/*", "stop")
-                self.force = FormattedParameter("--force", False)
-
-    def _get_result(self):
-        """Get the result from running the configured dmg command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg command fails.
-
-        """
-        result = None
-        try:
-            result = self.run()
-        except CommandFailure as error:
-            raise CommandFailure("<dmg> command failed: {}".format(error))
-
-        return result
-
-    def storage_scan(self):
-        """Get the result of the dmg storage scan command.
+            provider (str): name of network provider tied to the device
+            all_devs (bool, optional): Show all device info. Defaults to False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -491,12 +98,33 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg storage scan command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("scan")
-        return self._get_result()
+        return self._get_result(
+            ("network", "scan"), provider=provider, all=all_devs)
 
-    def storage_format(self):
+    def storage_scan(self, verbose=False):
+        """Get the result of the dmg storage scan command.
+
+        Args:
+            verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage scan command fails.
+
+        """
+        return self._get_result(("storage", "scan"), verbose=verbose)
+
+    def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
+
+        Args:
+            reformat (bool): always reformat storage, could be destructive.
+                This will create control-plane related metadata i.e. superblock
+                file and reformat if the storage media is available and
+                formattable.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -506,9 +134,7 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg storage format command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("format")
-        return self._get_result()
+        return self._get_result(("storage", "format"), reformat=reformat)
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
@@ -522,16 +148,115 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg storage prepare command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("prepare")
-        self.sub_command_class.sub_command_class.nvme_only.value = nvme
-        self.sub_command_class.sub_command_class.scm_only.value = scm
-        self.sub_command_class.sub_command_class.target_user.value = \
-            getuser() if user is None else user
-        self.sub_command_class.sub_command_class.hugepages.value = hugepages
-        self.sub_command_class.sub_command_class.reset.value = reset
-        self.sub_command_class.sub_command_class.force.value = force
-        return self._get_result()
+        kwargs = {
+            "nvme_only": nvme,
+            "scm_only": scm,
+            "target_user": getuser() if user is None else user,
+            "hugepages": hugepages,
+            "reset": reset,
+            "force": force
+        }
+        return self._get_result(("storage", "prepare"), **kwargs)
+
+    def storage_set_faulty(self, uuid, force=True):
+        """Get the result of the 'dmg storage set nvme-faulty' command.
+
+        Args:
+            uuid (str): Device UUID to query.
+            force (bool, optional): Force setting device state to FAULTY.
+                Defaults to True.
+        """
+        return self._get_result(
+            ("storage", "set", "nvme-faulty"), uuid=uuid, force=force)
+
+    def storage_query_list_devices(self, rank=None, health=False):
+        """Get the result of the 'dmg storage query list-devices' command.
+
+        Args:
+            rank (int, optional): Limit response to devices on this rank.
+                Defaults to None.
+            health (bool, optional): Include device health in response.
+                Defaults to false.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        return self._get_result(
+            ("storage", "query", "list-devices"), rank=rank, health=health)
+
+    def storage_query_list_pools(self, uuid=None, rank=None, verbose=False):
+        """Get the result of the 'dmg storage query list-pools' command.
+
+        Args:
+            uuid (str): Device UUID to query. Defaults to None.
+            rank (int, optional): Limit response to pools on this rank.
+                Defaults to None.
+            verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        return self._get_result(
+            ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
+            verbose=verbose)
+
+    def storage_query_device_health(self, uuid):
+        """Get the result of the 'dmg storage query device-health' command.
+
+        Args:
+            uuid (str): Device UUID to query.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        return self._get_result(
+            ("storage", "query", "device-health"), uuid=uuid)
+
+    def storage_query_target_health(self, rank, tgtid):
+        """Get the result of the 'dmg storage query target-health' command.
+
+        Args:
+            rank (int): Rank hosting target.
+            tgtid (int): Target index to query.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        return self._get_result(
+            ("storage", "query", "target-health"), rank=rank, tgtid=tgtid)
+
+    def storage_query_nvme_health(self):
+        """Get the result of the 'dmg storage query nvme-health' command.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        return self._get_result(("storage", "query", "nvme-health"))
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, group=None, acl_file=None):
@@ -544,7 +269,7 @@ class DmgCommand(CommandWithSubCommand):
         Args:
             scm_size (int): SCM pool size to create.
             uid (object, optional): User ID with privileges. Defaults to None.
-            gid (object, otional): Group ID with privileges. Defaults to None.
+            gid (object, optional): Group ID with privileges. Defaults to None.
             nvme_size (str, optional): NVMe size. Defaults to None.
             target_list (list, optional): a list of storage server unique
                 identifiers (ranks) for the DAOS pool
@@ -555,29 +280,53 @@ class DmgCommand(CommandWithSubCommand):
                 default.
             acl_file (str, optional): ACL file. Defaults to None.
 
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
         Raises:
-            CommandFailure: if the dmg pool create command fails.
+            CommandFailure: if the 'dmg pool create' command fails and
+                self.exit_status_exception is set to True.
+
+        Returns:
+            dict: a dictionary containing the 'uuid' and 'svc' of the new pool
+                successfully extracted form the dmg command result.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("create")
-        self.sub_command_class.sub_command_class.user.value = \
-            getpwuid(uid).pw_name if isinstance(uid, int) else uid
-        self.sub_command_class.sub_command_class.group.value = \
-            getgrgid(gid).gr_name if isinstance(gid, int) else gid
-        self.sub_command_class.sub_command_class.scm_size.value = scm_size
-        self.sub_command_class.sub_command_class.nvme_size.value = nvme_size
+        kwargs = {
+            "user": getpwuid(uid).pw_name if isinstance(uid, int) else uid,
+            "group": getgrgid(gid).gr_name if isinstance(gid, int) else gid,
+            "scm_size": scm_size,
+            "nvme_size": nvme_size,
+            "nsvc": svcn,
+            "sys": group,
+            "acl_file": acl_file
+        }
         if target_list is not None:
-            self.sub_command_class.sub_command_class.ranks.value = ",".join(
-                [str(target) for target in target_list])
-        self.sub_command_class.sub_command_class.nsvc.value = svcn
-        self.sub_command_class.sub_command_class.sys.value = group
-        self.sub_command_class.sub_command_class.acl_file.value = acl_file
-        return self._get_result()
+            kwargs["ranks"] = ",".join([str(target) for target in target_list])
+        self._get_result(("pool", "create"), **kwargs)
+
+        # Extract the new pool UUID and SVC list from the command output
+        data = {}
+        match = re.findall(
+            r"UUID:\s+([A-Za-z0-9-]+),\s+Service replicas:\s+([A-Za-z0-9-]+)",
+            self.result.stdout)
+        if match:
+            data["uuid"] = match[0][0]
+            data["svc"] = match[0][1]
+        return data
+
+    def pool_query(self, pool):
+        """Query a pool with the dmg command.
+
+        Args:
+            uuid (str): Pool UUID to query.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool query command fails.
+
+        """
+        return self._get_result(("pool", "query"), pool=pool)
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.
@@ -594,11 +343,7 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg pool destroy command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("destroy")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.force.value = force
-        return self._get_result()
+        return self._get_result(("pool", "destroy"), pool=pool, force=force)
 
     def pool_get_acl(self, pool):
         """Get the ACL for a given pool.
@@ -614,10 +359,7 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg pool get-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("get-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        return self._get_result()
+        return self._get_result(("pool", "get-acl"), pool=pool)
 
     def pool_update_acl(self, pool, acl_file, entry):
         """Update the acl for a given pool.
@@ -635,12 +377,8 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg pool update-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("update-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.acl_file.value = acl_file
-        self.sub_command_class.sub_command_class.entry.value = entry
-        return self._get_result()
+        return self._get_result(
+            ("pool", "update-acl"), pool=pool, acl_file=acl_file, entry=entry)
 
     def pool_overwrite_acl(self, pool, acl_file):
         """Overwrite the acl for a given pool.
@@ -657,11 +395,8 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg pool overwrite-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("overwrite-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.acl_file.value = acl_file
-        return self._get_result()
+        return self._get_result(
+            ("pool", "overwrite-acl"), pool=pool, acl_file=acl_file)
 
     def pool_delete_acl(self, pool, principal):
         """Delete the acl for a given pool.
@@ -678,11 +413,8 @@ class DmgCommand(CommandWithSubCommand):
             CommandFailure: if the dmg pool delete-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("delete-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.principal.value = principal
-        return self._get_result()
+        return self._get_result(
+            ("pool", "delete-acl"), pool=pool, principal=principal)
 
     def pool_list(self):
         """List pools.
@@ -693,11 +425,148 @@ class DmgCommand(CommandWithSubCommand):
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
-        """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("list")
-        return self._get_result()
 
+        """
+        return self._get_result(("pool", "list"))
+
+    def pool_set_prop(self, pool, name, value):
+        """Set property for a given Pool.
+
+        Args:
+            pool (str): Pool uuid for which property is supposed
+                        to be set.
+            name (str): Property name to be set
+            value (str): Property value to be set
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool set-prop command fails.
+
+        """
+        return self._get_result(
+            ("pool", "set-prop"), pool=pool, name=name, value=value)
+
+    def pool_exclude(self, pool, rank, tgt_idx=None):
+        """Exclude a daos_server from the pool.
+
+        Args:
+            pool (str): Pool uuid.
+            rank (int): Rank of the daos_server to exclude
+            tgt_idx (int): target to be excluded from the pool
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool exclude command fails.
+
+        """
+        return self._get_result(
+            ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+
+    def pool_reintegrate(self, pool, rank, tgt_idx=None):
+        """Reintegrate a daos_server to the pool.
+
+        Args:
+            pool (str): Pool uuid.
+            rank (int): Rank of the daos_server to reintegrate
+            tgt_idx (int): target to be reintegrated to the pool
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool reintegrate command fails.
+
+        """
+        return self._get_result(
+            ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+
+    def system_query(self, rank=None, verbose=True):
+        """Query system to obtain the status of the servers.
+
+        Args:
+            rank: Specify specific rank to obtain it's status
+                  Defaults to None, which means report all available
+                  ranks.
+            verbose (bool): To obtain detailed query report
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
+
+        """
+        return self._get_result(("system", "query"), rank=rank, verbose=verbose)
+
+    def system_start(self):
+        """Start the system.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg system start command fails.
+
+        """
+        return self._get_result(("system", "start"))
+
+    def system_stop(self, force=False):
+        """Stop the system.
+
+        Args:
+            force (bool, optional): whether to force the stop. Defaults to
+                False.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg system stop command fails.
+
+        """
+        return self._get_result(("system", "stop"), force=force)
+
+
+def check_system_query_status(stdout_str):
+    """Check if any server crashed.
+
+    Args:
+        stdout_str (list): list obtained from 'dmg system query -v'
+
+    Returns:
+        bool: True if no server crashed, False otherwise.
+
+    """
+    check = True
+    rank_info = []
+    failed_rank_list = []
+    # iterate to obtain failed rank list
+    for i, _ in enumerate(stdout_str):
+        rank_info.append(stdout_str[i][0])
+        print("rank_info: \n{}".format(rank_info))
+        for items in rank_info:
+            item = items.split()
+            if item[3] in ["Unknown", "Evicted", "Errored", "Unresponsive"]:
+                failed_rank_list.append(items)
+    # if failed rank list is not empty display the failed ranks
+    # and return False
+    if failed_rank_list:
+        for failed_list in failed_rank_list:
+            print("failed_list: {}\n".format(failed_list))
+            out = failed_list.split()
+            print("Rank {} failed with state '{}'".format(out[0], out[3]))
+        check = False
+    return check
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.

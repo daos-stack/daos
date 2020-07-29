@@ -60,6 +60,7 @@ struct ds_pool {
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
 void ds_pool_put(struct ds_pool *pool);
+void ds_pool_get(struct ds_pool *pool);
 
 /*
  * Pool handle object
@@ -88,15 +89,16 @@ void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
  * object I/Os do not need to access global, parent ds_pool objects.
  */
 struct ds_pool_child {
-	d_list_t	spc_list;
-	daos_handle_t	spc_hdl;	/* vos_pool handle */
-	struct ds_pool	*spc_pool;
-	uuid_t		spc_uuid;	/* pool UUID */
-	d_list_t	spc_cont_list;
+	d_list_t		spc_list;
+	daos_handle_t		spc_hdl;	/* vos_pool handle */
+	struct ds_pool		*spc_pool;
+	uuid_t			spc_uuid;	/* pool UUID */
+	struct sched_request	*spc_gc_req;	/* Track GC ULT */
+	d_list_t		spc_cont_list;
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
 	 * vos aggregation can not cross this epoch during rebuild to avoid
-	 * interferring rebuild process.
+	 * interfering rebuild process.
 	 */
 	uint64_t	spc_rebuild_fence;
 
@@ -118,9 +120,11 @@ int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 d_rank_list_t *excluded_list);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
+int ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
+int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
@@ -134,8 +138,10 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
-int ds_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *ranks,
-		uint32_t reint_rank, struct pool_target_id_list *reint_list);
+int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
+				uint32_t rank,
+				struct pool_target_id_list *target_list,
+				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
@@ -185,10 +191,13 @@ int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 int ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
 int ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
 
+int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
+			     uuid_t *cont_hdl_uuid);
+
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
 int ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
-			 uint32_t version, struct pl_obj_layout **plo);
+			 uint32_t version);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
@@ -215,12 +224,18 @@ int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  struct daos_pool_cont_info **containers,
 			  uint64_t *ncontainers);
+
+int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
+			    uint32_t force);
 void
 ds_pool_disable_evict(void);
 void
 ds_pool_enable_evict(void);
 
-int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
-			    uint32_t force);
+int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+		       unsigned int flags, const char *grp,
+		       struct pool_map *map, d_rank_list_t *svc_list,
+		       daos_handle_t *ph);
+int dsc_pool_close(daos_handle_t ph);
 
 #endif /* __DAOS_SRV_POOL_H__ */

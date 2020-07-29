@@ -37,12 +37,12 @@ from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
 from SCons.Variables import ListVariable
+from SCons.Variables import BoolVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import SetOption
 from SCons.Script import Configure
 from SCons.Script import AddOption
-from SCons.Script import Builder
 from SCons.Script import SConscript
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
@@ -56,7 +56,6 @@ try:
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
-import re
 import copy
 if sys.version_info < (3, 0):
 # pylint: disable=import-error
@@ -154,7 +153,7 @@ class MissingDefinition(Exception):
 
 
 class MissingPath(Exception):
-    """Exception raised when user speficies a path that doesn't exist
+    """Exception raised when user specifies a path that doesn't exist
 
     Attributes:
         variable    -- Variable specified
@@ -219,7 +218,7 @@ class MissingSystemLibs(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s has unmet dependancies required for build" % self.component
+        return "%s has unmet dependencies required for build" % self.component
 
 
 class DownloadRequired(Exception):
@@ -311,113 +310,6 @@ def default_libpath():
         pass
     return []
 
-def check_test(target, source, env, mode):
-    """Check the results of the test"""
-    val_str = ""
-    error_str = ""
-    with open(target[0].path, "r") as fobj:
-        for line in fobj.readlines():
-            if re.search("FAILED", line):
-                error_str = """
-Please see %s for the errors and fix
-the issues causing the TESTS to fail.
-""" % target[0].path
-                break
-        fobj.close()
-    if mode in ("memcheck", "helgrind"):
-        from xml.etree import ElementTree
-        for fname in target:
-            if str(fname).endswith(".xml"):
-                with open(str(fname), "r") as xmlfile:
-                    tree = ElementTree.parse(xmlfile)
-                error_types = {}
-                for node in tree.iter('error'):
-                    kind = node.find('./kind')
-                    if kind.text not in error_types:
-                        error_types[kind.text] = 0
-                    error_types[kind.text] += 1
-                if error_types:
-                    val_str += """
-Valgrind %s check failed.  See %s:""" % (mode, str(fname))
-                    for err in error_types:
-                        val_str += "\n%-3d %s errors" % (error_types[err], err)
-    if val_str != "":
-        print("""
-#########################################################%s
-#########################################################
-""" % val_str)
-
-    if error_str:
-        return """
-#########################################################
-Libraries built successfully but some unit TESTS failed.
-%s
-#########################################################
-""" % error_str
-    return None
-
-
-def define_check_test(mode=None):
-    """Define a function to create test checker"""
-    return lambda target, source, env: check_test(target, source, env, mode)
-
-
-def run_test(source, target, env, for_signature, mode=None):
-    """Create test actions."""
-    count = 1
-    sup_dir = os.path.dirname(source[0].srcnode().abspath)
-    sup_file = os.path.join(sup_dir, "%s.sup" % mode)
-    action = ['touch %s' % target[0]]
-    for test in source:
-        valgrind_str = ""
-        if mode in ["memcheck", "helgrind"]:
-            sup = ""
-            if os.path.exists(sup_file):
-                sup = "--suppressions=%s" % sup_file
-            valgrind_str = "valgrind --xml=yes --xml-file=%s " \
-                           "--child-silent-after-fork=yes " \
-                           "%s " % (target[count], sup)
-            if mode == "memcheck":
-                # Memory analysis
-                valgrind_str += "--partial-loads-ok=yes --leak-check=full "
-            elif mode == "helgrind":
-                # Thread analysis
-                valgrind_str += "--tool=helgrind "
-        count += 1
-        action.append("%s%s >> %s" % (valgrind_str,
-                                      str(test),
-                                      target[0]))
-    action.append("cat %s" % target[0])
-    action.append(define_check_test(mode=mode))
-    return action
-
-
-def modify_targets(target, source, env, mode=None):
-    """Emit the target list for the unit test builder"""
-    target = ["test_output"]
-    if mode in ("memcheck", "helgrind"):
-        for src in source:
-            basename = os.path.basename(str(src))
-            xml = "valgrind-%s-%s.xml" % (mode, basename)
-            target.append(xml)
-    return target, source
-
-
-def define_run_test(mode=None):
-    """Define a function to create test actions"""
-    return lambda source, target, env, for_signature: run_test(source,
-                                                               target,
-                                                               env,
-                                                               for_signature,
-                                                               mode)
-
-
-def define_modify_targets(mode=None):
-    """Define a function to create test targets"""
-    return lambda target, source, env: modify_targets(target, source,
-                                                      env, mode)
-
-
 class GitRepoRetriever():
     """Identify a git repository from which to download sources"""
 
@@ -501,9 +393,9 @@ class WebRetriever():
             hexdigest = hashlib.md5(src.read()).hexdigest()
 
         if hexdigest != self.md5:
-            print("Removing exising file %s: md5 %s != %s" % (filename,
-                                                              self.md5,
-                                                              hexdigest))
+            print("Removing existing file %s: md5 %s != %s" % (filename,
+                                                               self.md5,
+                                                               hexdigest))
             os.remove(filename)
             return False
 
@@ -549,7 +441,7 @@ class WebRetriever():
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
             if self.__dry_run:
-                print('Would unpack gziped tar file: %s' % basename)
+                print('Would unpack gzipped tar file: %s' % basename)
                 return
             try:
                 tfile = tarfile.open(basename, 'r:gz')
@@ -678,8 +570,8 @@ class PreReqComponent():
         if self.__env['PLATFORM'] == 'darwin':
             libtoolize = 'glibtoolize'
 
+        self.__dry_run = GetOption('no_exec')
         self.add_options()
-        self.__setup_unit_test_builders()
         self.__env.AddMethod(append_if_supported, "AppendIfSupported")
         self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
                              'BuildMockingUnitTests')
@@ -689,7 +581,7 @@ class PreReqComponent():
         self.__parse_build_deps()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
-        warning_level = GetOption('warning_level')
+        warning_level = self.__env.subst("$WARNING_LEVEL")
         pre_path = GetOption('prepend_path')
         if pre_path:
             old_path = self.__env['ENV']['PATH']
@@ -701,18 +593,32 @@ class PreReqComponent():
         if self.__check_only:
             # This is mostly a no_exec request.
             SetOption('no_exec', True)
-        self.__dry_run = GetOption('no_exec')
         if config_file is None:
             config_file = GetOption('build_config')
 
         RUNNER.initialize(self.__env)
 
-        self.__top_dir = Dir('#').abspath
+        self._setup_user_prefix()
 
-        build_dir_name = '_build.external'
+        self._setup_compiler(warning_level)
+        self.__top_dir = Dir('#').abspath
+        self.add_opts(PathVariable('BUILD_ROOT',
+                                   'Alternative build root dierctory', "build",
+                                   PathVariable.PathIsDirCreate))
+
+        bdir = self._setup_build_type()
+        self.build_type = self.__env.get("BUILD_TYPE")
+        self.__env["BUILD_DIR"] = bdir
+        if not os.path.exists(bdir):
+            os.makedirs(bdir)
+        self.setup_path_var('BUILD_DIR')
+        self.__build_info = BuildInfo()
+        self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
+
+        build_dir_name = os.path.join(self.__env.get("BUILD_ROOT"), "external")
         install_dir = os.path.join(self.__top_dir, 'install')
         if arch:
-            build_dir_name = '_build.external-%s' % arch
+            build_dir_name += '-%s' % arch
             install_dir = os.path.join('install', str(arch))
 
             # Overwrite default file locations to allow multiple builds in the
@@ -720,6 +626,9 @@ class PreReqComponent():
             env.SConsignFile('.sconsign-%s' % arch)
             env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
                         CONFIGURELOG='#/config-%s.log' % arch)
+
+        # Build pre-reqs in sub-dir based on selected build type
+        build_dir_name = os.path.join(build_dir_name, self.build_type)
 
         self.add_opts(PathVariable('ENV_SCRIPT',
                                    "Location of environment script",
@@ -752,36 +661,26 @@ class PreReqComponent():
                                    'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
+        self.add_opts(BoolVariable('FIRMWARE_MGMT',
+                                   'Build in device firmware management.', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
-                      ('PREBUILT_PREFIX',
-                       'Colon separated list of paths to look for prebuilt '
-                       'components.',
-                       None),
-                      ('SRC_PREFIX',
-                       'Colon separated list of paths to look for source '
-                       'of prebuilt components.',
-                       None),
-                      PathVariable('TARGET_PREFIX',
-                                   'Installation root for prebuilt components',
-                                   None, PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
                                    'Location of your GOPATH for the build',
                                    "%s/go" % self.__build_dir,
-                                   PathVariable.PathIsDirCreate),
-                      PathVariable('BUILD_DIR',
-                                   'Location of temporary build files',
-                                   'build', PathVariable.PathIsDirCreate))
+                                   PathVariable.PathIsDirCreate))
         self.setup_path_var('PREFIX')
-        self.setup_path_var('BUILD_DIR')
-        self.setup_path_var('PREBUILT_PREFIX', True)
-        self.setup_path_var('TARGET_PREFIX')
-        self.setup_path_var('SRC_PREFIX', True)
         self.setup_path_var('GOPATH')
-        self.__build_info = BuildInfo()
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
+        self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
+        try:
+            if self.__dry_run:
+                print('Would mkdir -p %s' % self.prereq_prefix)
+            else:
+                os.makedirs(self.prereq_prefix)
+        except:
+            pass
 
-        self._setup_compiler(warning_level)
         self.setup_parallel_build()
 
         self.config_file = config_file
@@ -810,6 +709,28 @@ class PreReqComponent():
         return True
 
 # pylint: enable=too-many-branches
+    def _setup_user_prefix(self):
+        """setup ALT_PREFIX option"""
+        self.add_opts(('ALT_PREFIX',
+                       'Specifies %s separated list of alternative paths to add'
+                       % os.pathsep, None))
+
+    def _setup_build_type(self):
+        """set build type"""
+        self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
+                                   'dev', ['dev', 'debug', 'release'],
+                                   ignorecase=1))
+        self.add_opts(EnumVariable('TARGET_TYPE', "Set the prerequisite type",
+                                   'default',
+                                   ['default', 'dev', 'debug', 'release'],
+                                   ignorecase=1))
+        ttype = self.__env["TARGET_TYPE"]
+        if ttype == "default":
+            ttype = self.__env["BUILD_TYPE"]
+        self.__env["TTYPE_REAL"] = ttype
+
+        return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
+
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
         env = self.__env.Clone(tools=['intelc'])
@@ -899,8 +820,7 @@ class PreReqComponent():
         """Retrieve the Config File"""
         return self.config_file
 
-    @staticmethod
-    def add_options():
+    def add_options(self):
         """Add common options to environment"""
 
         AddOption('--require-optional',
@@ -951,31 +871,11 @@ class PreReqComponent():
                   default='en_US.UTF8',
                   help='locale to use for building. [%default]')
 
-        # This option sets a hint as to if -Werror should be used.
-        AddOption('--warning-level',
-                  dest='warning_level',
-                  type='choice',
-                  choices=['warning', 'error'],
-                  default='error',
-                  help='Treatment for a compiler warning.  ' \
-                       '(warning|error} [error]')
         SetOption("implicit_cache", True)
 
-    def __setup_unit_test_builders(self):
-        """Setup unit test builders for general use"""
-        AddOption('--utest-mode',
-                  dest='utest_mode',
-                  type='choice',
-                  choices=['native', 'memcheck', 'helgrind'],
-                  default='native',
-                  help="Specifies mode for running unit tests. " \
-                       "(native|memcheck|helgrind) [native]")
-
-        mode = GetOption("utest_mode")
-        test_run = Builder(generator=define_run_test(mode),
-                           emitter=define_modify_targets(mode))
-
-        self.__env.Append(BUILDERS={"RunTests": test_run})
+        self.add_opts(EnumVariable('WARNING_LEVEL', "Set default warning level",
+                                   'error', ['warning', 'warn', 'error'],
+                                   ignorecase=1))
 
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""
@@ -998,12 +898,6 @@ class PreReqComponent():
                 value = realpath(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
-
-    def update_src_path(self, name, value):
-        """Update a variable in the default construction environment"""
-        opt_name = '%s_SRC' % name.upper()
-        self.__env[opt_name] = value
-        self.__opts.args[opt_name] = value
 
     def add_opts(self, *variables):
         """Add options to the command line"""
@@ -1073,18 +967,13 @@ class PreReqComponent():
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
-        prebuilt1 = os.path.join(env.subst("$PREBUILT_PREFIX"),
-                                 comp_def.name)
-        # prebuilt2 can be None so add a default
-        prebuilt2 = self.__env.get('{}_PREBUILT'.format(comp_def.name.upper()),
-                                   "/__fake__")
-        prebuilt3 = self.__env.get('{}_PREFIX'.format(comp_def.name.upper()))
+        prebuilt1 = os.path.join(self.prereq_prefix, comp_def.name)
+        prebuilt2 = self.__env.get('{}_PREFIX'.format(comp_def.name.upper()))
 
         if comp_def.src_path and \
            not os.path.exists(comp_def.src_path) and \
            not os.path.exists(prebuilt1) and \
-           not os.path.exists(prebuilt2) and \
-           not os.path.exists(prebuilt3):
+           not os.path.exists(prebuilt2):
             self.save_component_prefix('%s_PREFIX' %
                                        comp_def.name.upper(),
                                        "/usr")
@@ -1178,33 +1067,40 @@ class PreReqComponent():
         """Get the build directory for external components"""
         return self.__build_dir
 
-    def get_prebuilt_path(self, name):
+    def get_prebuilt_path(self, comp, name):
         """Get the path for a prebuilt component"""
         if name in self.__prebuilt_path:
             return self.__prebuilt_path[name]
 
-        opt_name = '%s_PREBUILT' % name.upper()
-        self.add_opts(PathVariable(opt_name,
-                                   'Alternate installation '
-                                   'prefix for %s' % name,
-                                   None, PathVariable.PathIsDir))
-        self.setup_path_var(opt_name)
-        prebuilt = self.__env.get(opt_name)
-        if prebuilt and not os.path.exists(prebuilt):
-            raise MissingPath(opt_name)
+        prebuilt_paths = self.__env.get("ALT_PREFIX")
+        if prebuilt_paths is None:
+            paths = []
+        else:
+            paths = prebuilt_paths.split(os.pathsep)
 
-        if not prebuilt:
-            # check the global prebuilt area
-            prebuilt_path = self.__env.get('PREBUILT_PREFIX')
-            if prebuilt_path:
-                for path in prebuilt_path.split(os.pathsep):
-                    prebuilt = os.path.join(path, name)
-                    if os.path.exists(prebuilt):
-                        break
-                    prebuilt = None
+        for path in paths:
+            ipath = os.path.join(path, "include")
+            if not os.path.exists(ipath):
+                ipath = None
+            lpath = None
+            for lib in ['lib64', 'lib']:
+                lpath = os.path.join(path, lib)
+                if not os.path.exists(lpath):
+                    lpath = None
+            if ipath is None and lpath is None:
+                continue
+            env = self.__env.Clone()
+            if ipath:
+                env.AppendUnique(CPPPATH=[ipath])
+            if lpath:
+                env.AppendUnique(LIBPATH=[lpath])
+            if not comp.has_missing_targets(env):
+                self.__prebuilt_path[name] = path
+                return path
 
-        self.__prebuilt_path[name] = prebuilt
-        return prebuilt
+        self.__prebuilt_path[name] = None
+
+        return None
 
     def get_defined_components(self):
         """Get a list of all defined component names"""
@@ -1213,6 +1109,10 @@ class PreReqComponent():
     def get_defined(self):
         """Get a dictionary of defined components"""
         return copy.copy(self.__defined)
+
+    def get_component(self, name):
+        """Get a component definition"""
+        return self.__defined[name]
 
     def save_component_prefix(self, var, value):
         """Save the component prefix in the environment and
@@ -1228,13 +1128,11 @@ class PreReqComponent():
         if prebuilt_path:
             self.save_component_prefix(comp_prefix, prebuilt_path)
             return (prebuilt_path, prefix)
-        target_prefix = self.__env.get('TARGET_PREFIX')
-        if target_prefix:
-            target_prefix = os.path.join(target_prefix, name)
-            self.save_component_prefix(comp_prefix, target_prefix)
-            return (target_prefix, prefix)
-        self.save_component_prefix(comp_prefix, prefix)
-        return (prefix, prefix)
+
+        target_prefix = os.path.join(self.prereq_prefix, name)
+        self.save_component_prefix(comp_prefix, target_prefix)
+
+        return (target_prefix, prefix)
 
     def get_src_build_dir(self):
         """Get the location of a temporary directory for hosting
@@ -1245,28 +1143,7 @@ class PreReqComponent():
         """Get the location of the sources for an external component"""
         if name in self.__src_path:
             return self.__src_path[name]
-        opt_name = '%s_SRC' % name.upper()
-        default_src_path = os.path.join(self.__build_dir, name)
-        self.add_opts(PathVariable(opt_name,
-                                   'Alternate path for %s source' % name,
-                                   default_src_path, PathVariable.PathAccept))
-        self.setup_path_var(opt_name)
-
-        src_path = self.__env.get(opt_name)
-        if src_path != default_src_path and not os.path.exists(src_path):
-            if not self.__dry_run:
-                raise MissingPath(opt_name)
-
-        if src_path == default_src_path:
-            # check the global source area
-            src_path_var = self.__env.get('SRC_PREFIX')
-            if src_path_var:
-                for path in src_path_var.split(os.pathsep):
-                    new_src_path = os.path.join(path, name)
-                    if os.path.exists(new_src_path):
-                        src_path = new_src_path
-                        self.update_src_path(name, src_path)
-                        break
+        src_path = os.path.join(self.__build_dir, name)
 
         self.__src_path[name] = src_path
         return src_path
@@ -1282,14 +1159,15 @@ class PreReqComponent():
             return None
         return self.configs.get(section, name)
 
-    def load_config(self, comp, src_opt):
+    def load_config(self, comp, path):
         """If the component has a config file to load, load it"""
         config_path = self.get_config("configs", comp)
         if config_path is None:
             return
-        full_path = self.__env.subst("$%s/%s" % (src_opt, config_path))
+        full_path = "%s/%s" % (path, config_path)
         print("Reading config file for %s from %s" % (comp, full_path))
         self.configs.read(full_path)
+
 # pylint: enable=too-many-public-methods
 
 class _Component():
@@ -1311,6 +1189,7 @@ class _Component():
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
         out_of_src_build -- Build from a different directory if set to True
+        patch_rpath -- Add appropriate relative rpaths to binaries
     """
 
     def __init__(self,
@@ -1325,6 +1204,7 @@ class _Component():
         self.use_installed = use_installed
         self.build_path = None
         self.prebuilt_path = None
+        self.patch_rpath = kw.get("patch_rpath", [])
         self.src_path = None
         self.prefix = None
         self.component_prefix = None
@@ -1334,6 +1214,8 @@ class _Component():
         self.libs_cc = kw.get("libs_cc", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
+        if self.patch_rpath:
+            self.required_progs.append("patchelf")
         self.defines = kw.get("defines", [])
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
@@ -1348,8 +1230,6 @@ class _Component():
         self.lib_path.extend(kw.get("extra_lib_path", []))
         self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
-        self.src_opt = '%s_SRC' % name.upper()
-        self.prebuilt_opt = '%s_PREBUILT' % name.upper()
         self.crc_file = os.path.join(self.prereqs.get_build_dir(),
                                      '_%s.crc' % self.name)
         self.patch_path = self.prereqs.get_build_dir()
@@ -1398,19 +1278,10 @@ class _Component():
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
-        patches = self.resolve_patches()
         if self.src_exists():
-            self.prereqs.update_src_path(self.name, self.src_path)
             print('Using existing sources at %s for %s' \
                 % (self.src_path, self.name))
-            if self.prereqs.build_deps:
-                for patch in patches:
-                    # Apply patch to existing source.
-                    print("Applying patch %s" % (patch))
-                    commands = ['patch -p 1 -N -t < %s ; if [ $? -gt 1 ]; then '
-                                'false; else true; fi;' % (patch)]
-                    if not RUNNER.run_commands(commands, subdir=self.src_path):
-                        raise BuildFailure(patch)
+            # NB: Don't apply patches to existing sources
             return
 
         if not self.retriever:
@@ -1424,48 +1295,9 @@ class _Component():
 
         print('Downloading source for %s' % self.name)
         self._delete_old_file(self.crc_file)
+        patches = self.resolve_patches()
         self.retriever.get(self.src_path, commit_sha=commit_sha,
                            patches=patches, branch=branch)
-
-        self.prereqs.update_src_path(self.name, self.src_path)
-
-    def calculate_crc(self):
-        """Calculate a CRC on the sources to detect changes"""
-        new_crc = ''
-        if not self.src_path:
-            return new_crc
-        for (root, _, files) in os.walk(self.src_path):
-            for fname in files:
-                (_, ext) = os.path.splitext(fname)
-
-                # not fool proof but may be good enough
-
-                if ext in ['.c',
-                           '.h',
-                           '.cpp',
-                           '.cc',
-                           '.hpp',
-                           '.ac',
-                           '.in',
-                           '.py']:
-                    with open(os.path.join(root, fname), 'rb') as src:
-                        src_read = src.read()
-                        md5 = hashlib.md5(src_read)
-                        new_crc += md5.hexdigest()
-        return new_crc
-
-    def has_changes(self):
-        """Check the sources for changes since the last build"""
-
-        old_crc = ''
-        try:
-            with open(self.crc_file, 'r') as crcfile:
-                old_crc = crcfile.read()
-        except IOError:
-            pass
-        if old_crc == '':
-            return True
-        return False
 
     def has_missing_system_deps(self, env):
         """Check for required system libs"""
@@ -1602,12 +1434,10 @@ class _Component():
 
     def configure(self):
         """Setup paths for a required component"""
-        self.prereqs.setup_path_var(self.src_opt)
-        self.prereqs.setup_path_var(self.prebuilt_opt)
         if not self.retriever:
             self.prebuilt_path = "/usr"
         else:
-            self.prebuilt_path = self.prereqs.get_prebuilt_path(self.name)
+            self.prebuilt_path = self.prereqs.get_prebuilt_path(self, self.name)
 
         (self.component_prefix, self.prefix) = \
             self.prereqs.get_prefixes(self.name, self.prebuilt_path)
@@ -1648,7 +1478,8 @@ class _Component():
                 if not os.path.exists(full_path):
                     continue
                 lib_paths.append(full_path)
-                env.AppendUnique(RPATH=[full_path])
+                # will adjust this to be a relative rpath later
+                env.AppendUnique(RPATH_FULL=[full_path])
 
             # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
             # and this allows LD_LIBRARY_PATH to override RPATH
@@ -1713,10 +1544,9 @@ class _Component():
             has_changes = False
         if self.name in self.prereqs.installed:
             has_changes = False
+        if self.component_prefix and os.path.exists(self.component_prefix):
+            has_changes = False
 
-        if self.src_exists():
-            self.get()
-            has_changes = self.has_changes()
         return has_changes
 
     def _check_prereqs_build_deps(self):
@@ -1727,14 +1557,55 @@ class _Component():
             else:
                 raise BuildRequired(self.name)
 
-    def _update_crc_file(self):
-        """update the crc"""
-        new_crc = self.calculate_crc()
-        if self.__dry_run:
-            print('Would create a new crc file % s' % self.crc_file)
-        else:
-            with open(self.crc_file, 'w') as crcfile:
-                crcfile.write(new_crc)
+    def patch_rpaths(self):
+        """Run patchelf binary to add relative rpaths"""
+        rpath = ["$$ORIGIN"]
+        norigin = []
+        comp_path = self.component_prefix
+        if not comp_path or comp_path.startswith("/usr"):
+            return
+        if not os.path.exists(comp_path):
+            return
+
+        for libdir in ['lib64', 'lib']:
+            path = os.path.join(comp_path, libdir)
+            if os.path.exists(path):
+                norigin.append(os.path.normpath(path))
+                break
+
+        for prereq in self.requires:
+            rootpath = os.path.join(comp_path, '..', prereq)
+            if not os.path.exists(rootpath):
+                comp = self.prereqs.get_component(prereq)
+                subpath = comp.component_prefix
+                if subpath and not subpath.startswith("/usr"):
+                    for libdir in ['lib64', 'lib']:
+                        lpath = os.path.join(subpath, libdir)
+                        if not os.path.exists(lpath):
+                            continue
+                        rpath.append(lpath)
+                continue
+
+            for libdir in ['lib64', 'lib']:
+                path = os.path.join(rootpath, libdir)
+                if not os.path.exists(path):
+                    continue
+                rpath.append("$$ORIGIN/../../%s/%s" % (prereq, libdir))
+                norigin.append(os.path.normpath(path))
+                break
+
+        rpath += norigin
+        for folder in self.patch_rpath:
+            path = os.path.join(comp_path, folder)
+            files = os.listdir(path)
+            for lib in files:
+                if not lib.endswith(".so"):
+                    continue
+                full_lib = os.path.join(path, lib)
+                cmd = "patchelf --set-rpath '%s' %s" % (":".join(rpath),
+                                                        full_lib)
+                if not RUNNER.run_commands([cmd]):
+                    print("Skipped patching %s" % full_lib)
 
     def build(self, env, needed_libs):
         """Build the component, if necessary
@@ -1759,14 +1630,14 @@ class _Component():
         # to be built first time scons is invoked.
         has_changes = self._has_changes()
 
-        if changes or has_changes or self.has_missing_targets(envcopy):
+        if has_changes or self.has_missing_targets(envcopy):
 
             self._check_prereqs_build_deps()
 
             if not self.src_exists():
                 self.get()
 
-            self.prereqs.load_config(self.name, self.src_opt)
+            self.prereqs.load_config(self.name, self.src_path)
 
             if self.requires:
                 changes = self.prereqs.require(envcopy, *self.requires,
@@ -1777,7 +1648,7 @@ class _Component():
                 raise MissingSystemLibs(self.name)
 
             changes = True
-            if has_changes and self.out_of_src_build:
+            if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)
             if not RUNNER.run_commands(self.build_commands,
                                        subdir=self.build_path):
@@ -1787,9 +1658,10 @@ class _Component():
         if self.requires:
             self.prereqs.require(envcopy, *self.requires, needed_libs=None)
         self.set_environment(envcopy, self.libs)
+        if changes:
+            self.patch_rpaths()
         if self.has_missing_targets(envcopy) and not self.__dry_run:
             raise MissingTargets(self.name, None)
-        self._update_crc_file()
         return changes
 
 __all__ = ["GitRepoRetriever", "WebRetriever",

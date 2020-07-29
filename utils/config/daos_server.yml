@@ -1,7 +1,7 @@
 ## DAOS server configuration file.
 #
 ## Location of this configuration file is determined by first checking for the
-## path specified through the -f option of the daos_server command line.
+## path specified through the -o option of the daos_server command line.
 ## Otherwise, /etc/daos_server.conf is used.
 #
 #
@@ -39,13 +39,13 @@
 #  allow_insecure: false
 #
 #  # Location where daos_server will look for Client certificates
-#  client_cert_dir: .daos/clients
+#  client_cert_dir: /etc/daos/certs/clients
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: .daos/daosCA.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt
 #  # Server certificate for use in TLS handshakes
-#  cert: .daos/daos_server.crt
+#  cert: /etc/daos/certs/server.crt
 #  # Key portion of Server Certificate
-#  key: .daos/daos_server.key
+#  key: /etc/daos/certs/server.key
 #
 #
 ## Fault domain path
@@ -102,6 +102,15 @@
 #bdev_exclude: ["0000:81:00.1"]
 #
 #
+## Disable VFIO Driver
+#
+## In some circumstances it may be preferable to force SPDK to use the UIO
+## driver for NVMe device access even though an IOMMU is available. Note
+## that use of the UIO driver requires that DAOS must run as root.
+#
+#disable_vfio: true
+#
+#
 ## Use Hyperthreads
 #
 ## When Hyperthreading is enabled and supported on the system, this parameter
@@ -152,6 +161,12 @@
 #
 ## default: disabled (errors only to control plane log)
 #helper_log_file: /tmp/daos_admin.log
+#
+#
+## Enable daos_firmware (privileged helper) logging.
+#
+## default: disabled (errors only to control plane log)
+#firmware_helper_log_file: /tmp/daos_firmware.log
 #
 #
 ## When per-server definitions exist, auto-allocation of resources is not

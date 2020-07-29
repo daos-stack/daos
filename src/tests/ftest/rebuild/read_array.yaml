@@ -7,8 +7,6 @@ hosts:
     - server-E
   test_clients:
     - client-F
-  server_count: 5
-  client_count: 1
 timeout: 240
 server_config:
   name: daos_server

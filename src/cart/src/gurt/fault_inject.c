@@ -1,39 +1,24 @@
-/* Copyright (C) 2018-2019 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
  * This file is part of gurt, it implements the fault injection feature.
@@ -43,8 +28,6 @@
 /** max length of argument string in the yaml config file */
 #define FI_CONFIG_ARG_STR_MAX_LEN 4096
 
-#define FI_MAX_FAULT_ID 8192
-
 /* (1 << D_FA_TABLE_BITS) is the number of buckets of fa hash table */
 #define D_FA_TABLE_BITS		(13)
 
@@ -52,9 +35,7 @@
 #include <gurt/hash.h>
 #include "fi.h"
 
-
 struct d_fault_attr_t *d_fault_attr_mem;
-int d_fault_id_mem;
 
 static struct d_fault_attr *
 fa_link2ptr(d_list_t *rlink)
@@ -72,6 +53,15 @@ fa_op_key_cmp(struct d_hash_table *htab, d_list_t *rlink, const void *key,
 	D_ASSERT(ksize == sizeof(uint32_t));
 
 	return fa_ptr->fa_attr.fa_id == *(uint32_t *)key;
+}
+
+static uint32_t
+fa_op_rec_hash(struct d_hash_table *htab, d_list_t *link)
+{
+	struct d_fault_attr *fa_ptr = fa_link2ptr(link);
+
+	return d_hash_string_u32((const char *)&fa_ptr->fa_attr.fa_id,
+				 sizeof(fa_ptr->fa_attr.fa_id));
 }
 
 static void
@@ -101,6 +91,7 @@ fa_op_rec_decref(struct d_hash_table *htab, d_list_t *rlink)
 
 static d_hash_table_ops_t fa_table_ops = {
 	.hop_key_cmp	= fa_op_key_cmp,
+	.hop_rec_hash	= fa_op_rec_hash,
 	.hop_rec_decref	= fa_op_rec_decref,
 	.hop_rec_free	= fa_op_rec_free,
 };
@@ -113,7 +104,7 @@ struct d_fi_gdata_t {
 };
 
 /**
- * global swith for fault injection. zero globally turns off fault injection,
+ * global switch for fault injection. zero globally turns off fault injection,
  * non-zero turns on fault injection
  */
 unsigned int			d_fault_inject;
@@ -133,12 +124,6 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 	struct d_fault_attr	 *rec = NULL;
 	d_list_t		 *rlink = NULL;
 	int			  rc = DER_SUCCESS;
-
-	if (fault_id > FI_MAX_FAULT_ID) {
-		D_ERROR("fault_id (%u) out of range [0, %d]\n", fault_id,
-			FI_MAX_FAULT_ID);
-		return -DER_INVAL;
-	}
 
 	D_ALLOC_PTR(new_rec);
 	if (new_rec == NULL)
@@ -312,7 +297,7 @@ one_fault_attr_parse(yaml_parser_t *parser)
 
 		key_str = (char *) first.data.scalar.value;
 		val_str = (const char *) second.data.scalar.value;
-		val = strtoul(val_str, NULL, 10);
+		val = strtoul(val_str, NULL, 0);
 		if (!strcmp(key_str, id)) {
 			D_DEBUG(DB_ALL, "id: %lu\n", val);
 			attr.fa_id = val;
@@ -508,7 +493,7 @@ d_fault_inject_init(void)
 
 	yaml_rc = yaml_parser_initialize(&parser);
 	if (yaml_rc != 1) {
-		D_ERROR("Failed to intialize yaml parser. rc: %d\n", yaml_rc);
+		D_ERROR("Failed to initialize yaml parser. rc: %d\n", yaml_rc);
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
@@ -564,12 +549,10 @@ d_fault_inject_init(void)
 		D_GOTO(out, rc);
 	}
 
-	d_fault_id_mem = 0;
-	d_fault_attr_mem = d_fault_attr_lookup(d_fault_id_mem);
-	if (!d_fault_attr_mem) {
-		D_ERROR("d_fault_attr_lookup(%d) failed.\n", d_fault_id_mem);
-		D_GOTO(out, rc = -DER_MISC);
-	}
+	/* Register D_ALLOC() hook as fault ID zero, but do not check
+	 * for failure as it will fail if no config file is provided
+	 */
+	d_fault_attr_mem = d_fault_attr_lookup(0);
 
 out:
 	if (fp)
@@ -627,6 +610,14 @@ d_fi_initialized()
 	return d_fi_gdata.dfg_inited == 1;
 }
 
+bool
+d_fault_inject_is_enabled(void)
+{
+	if (d_fault_inject)
+		return true;
+	return false;
+}
+
 /**
  * based on the state of fault_id, decide if a fault should be injected
  *
@@ -635,7 +626,7 @@ d_fi_initialized()
  * \return                   true if should inject fault, false if should not
  *                           inject fault
  *
- *                           support injecting X faults in Y occurances
+ *                           support injecting X faults in Y occurrences
  */
 bool
 d_should_fail(struct d_fault_attr_t *fault_attr)
@@ -643,7 +634,7 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 	bool			 rc = true;
 
 	if (!d_fi_initialized()) {
-		D_ERROR("fault injectiont not initalized.\n");
+		D_ERROR("fault injection not initialized.\n");
 		return false;
 	}
 
@@ -651,10 +642,8 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 	 * based on the state of fault_attr, decide if a fault should
 	 * be injected
 	 */
-	if (!fault_attr) {
-		D_DEBUG(DB_ALL, "fault_attr is NULL.\n");
+	if (!fault_attr)
 		return false;
-	}
 
 	D_SPIN_LOCK(&fault_attr->fa_lock);
 	if (fault_attr->fa_probability_x == 0)

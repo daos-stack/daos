@@ -1,39 +1,24 @@
-/* Copyright (C) 2016-2020 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
  * This file is part of CaRT. It implements the main interfaces to mercury.
@@ -282,54 +267,6 @@ out:
 	return rc;
 }
 
-static hg_return_t
-crt_hg_addr_lookup_cb(const struct hg_cb_info *hg_cbinfo)
-{
-	struct crt_hg_addr_lookup_cb_args	*cb_args = NULL;
-	crt_hg_addr_lookup_cb_t			 comp_cb;
-	hg_return_t				 rc = HG_SUCCESS;
-
-	cb_args = hg_cbinfo->arg;
-	comp_cb = cb_args->al_cb;
-
-	rc = comp_cb(hg_cbinfo->info.lookup.addr, cb_args->al_arg);
-	if (rc != 0)
-		rc = HG_OTHER_ERROR;
-
-	D_FREE_PTR(cb_args);
-
-	return rc;
-}
-
-/*
- * lookup the NA address of name, fill in the na address in the rpc_priv
- * structure and in the lookup cache of rpc_priv.
- */
-int
-crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
-		   crt_hg_addr_lookup_cb_t complete_cb, void *arg)
-{
-	struct crt_hg_addr_lookup_cb_args	*cb_args;
-	int					 rc = 0;
-
-
-	D_ALLOC_PTR(cb_args);
-	if (cb_args == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	cb_args->al_cb = complete_cb;
-	cb_args->al_arg = arg;
-	rc = HG_Addr_lookup(hg_ctx->chc_hgctx, crt_hg_addr_lookup_cb,
-			    cb_args, name, HG_OP_ID_IGNORE);
-	if (rc != HG_SUCCESS) {
-		D_FREE(cb_args);
-		D_ERROR("HG_Addr_lookup() failed.\n");
-		rc = -DER_HG;
-	}
-
-out:
-	return rc;
-}
 
 int
 crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
@@ -520,7 +457,6 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		D_GOTO(out, rc);
 
 	init_info.na_init_info.progress_mode = 0;
-	init_info.na_init_info.max_contexts = 1;
 	if (crt_gdata.cg_share_na == false)
 		/* one context per NA class */
 		init_info.na_init_info.max_contexts = 1;
@@ -1186,6 +1122,11 @@ out:
 	return hg_ret;
 }
 
+static bool crt_hg_network_error(hg_return_t hg_ret)
+{
+	return (hg_ret == HG_NA_ERROR || hg_ret == HG_PROTOCOL_ERROR);
+}
+
 int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
@@ -1213,7 +1154,18 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 	}
 
-	if (hg_ret == HG_NA_ERROR) {
+	/* HG_Forward can return 2 types of errors - network errors and generic
+	 * ones, such as out of memory, bad parameters passed, invalid handle
+	 * etc...
+	 *
+	 * For network errors, we do not want ot return error back to the caller
+	 * of crt_req_send(), but instead we want to invoke completion callback
+	 * manually with 'node unreachable' (DER_UNREACH) error.
+	 *
+	 * HG_NA_ERROR and HG_PROTOCOL_ERROR are both network-level errors
+	 * that can be raised by mercury.
+	 */
+	if (crt_hg_network_error(hg_ret)) {
 		if (!crt_req_timedout(rpc_priv)) {
 			/* error will be reported to the completion callback in
 			 * crt_req_timeout_hdlr()
@@ -1325,41 +1277,14 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	rpc_priv->crp_reply_pending = 0;
 }
 
-static int
-crt_hg_trigger(struct crt_hg_context *hg_ctx)
-{
-	hg_context_t		*hg_context;
-	hg_return_t		hg_ret = HG_SUCCESS;
-	unsigned int		count = 0;
-
-	D_ASSERT(hg_ctx != NULL);
-	hg_context = hg_ctx->chc_hgctx;
-
-	do {
-		hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
-	} while (hg_ret == HG_SUCCESS && count > 0);
-
-	if (hg_ret != HG_TIMEOUT) {
-		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
-		return -DER_HG;
-	}
-
-	return 0;
-}
-
 int
 crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 {
 	hg_context_t		*hg_context;
-	hg_class_t		*hg_class;
-	hg_return_t		hg_ret = HG_SUCCESS;
 	unsigned int		hg_timeout;
-	int			rc;
+	unsigned int		total = 256;
 
-	D_ASSERT(hg_ctx != NULL);
 	hg_context = hg_ctx->chc_hgctx;
-	hg_class = hg_ctx->chc_hgcla;
-	D_ASSERT(hg_context != NULL && hg_class != NULL);
 
 	/**
 	 * Mercury only supports milli-second timeout and uses an unsigned int
@@ -1369,24 +1294,43 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	else
 		hg_timeout = timeout / 1000;
 
-	rc = crt_hg_trigger(hg_ctx);
-	if (rc != 0)
-		return rc;
+	do {
+		hg_return_t     hg_ret = HG_SUCCESS;
+		int             rc = 0;
+		unsigned int count = 0;
 
-	/** progress RPC execution */
-	hg_ret = HG_Progress(hg_context, hg_timeout);
-	if (hg_ret == HG_TIMEOUT)
-		D_GOTO(out, rc = -DER_TIMEDOUT);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
+		/** progress RPC execution */
+		hg_ret = HG_Progress(hg_context, hg_timeout);
+		if (hg_ret == HG_TIMEOUT) {
+			rc = -DER_TIMEDOUT;
+		} else if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
+			return -DER_HG;
+		}
 
-	/* some RPCs have progressed, call Trigger again */
-	rc = crt_hg_trigger(hg_ctx);
+		/** some RPCs have progressed, call Trigger */
+		hg_ret = HG_Trigger(hg_context, 0, total, &count);
+		if (hg_ret == HG_TIMEOUT) {
+			/** nothing to trigger */
+			return rc;
+		} else if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
+			return -DER_HG;
+		}
 
-out:
-	return rc;
+		if (count == 0 || rc)
+			/** nothing to trigger */
+			return rc;
+
+		/**
+		 * continue network progress and callback processing, but w/o
+		 * waiting this time
+		 */
+		total -= count;
+		hg_timeout = 0;
+	} while (total > 0);
+
+	return 0;
 }
 
 #define CRT_HG_IOVN_STACK	(8)

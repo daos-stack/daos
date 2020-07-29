@@ -25,82 +25,89 @@ package control
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// SystemStopReq contains the inputs for the system stop command.
-type SystemStopReq struct {
-	unaryRequest
-	msRequest
-	Prep  bool
-	Kill  bool
-	Ranks []system.Rank
-	Force bool
+type sysRequest struct {
+	Ranks system.RankSet
+	Hosts hostlist.HostSet
 }
 
-// SystemStopResp contains the request response.
-type SystemStopResp struct {
-	Results system.MemberResults
+type sysResponse struct {
+	AbsentRanks system.RankSet
+	AbsentHosts hostlist.HostSet
 }
 
-// SystemStop will perform a controlled shutdown of DAOS system and a list
-// of remaining system members on failure.
-func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq) (*SystemStopResp, error) {
-	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, &ctlpb.SystemStopReq{
-			Prep:  req.Prep,
-			Kill:  req.Kill,
-			Force: req.Force,
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
-	})
-
-	rpcClient.Debugf("DAOS system stop request: %s", req)
-
-	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+func (sr *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
+	ahs, err := hostlist.CreateSet(inHosts)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	ars, err := system.CreateRankSet(inRanks)
+	if err != nil {
+		return err
+	}
+	sr.AbsentHosts = *ahs
+	sr.AbsentRanks = *ars
 
-	resp := new(SystemStopResp)
-	return resp, convertMSResponse(ur, resp)
+	return nil
 }
 
-// SystemStartReq contains the inputs for the system start request.
-type SystemStartReq struct {
+func (sr *sysResponse) DisplayAbsentHostsRanks() string {
+	switch {
+	case sr.AbsentHosts.Count() > 0:
+		return fmt.Sprintf("\nUnknown %s: %s",
+			english.Plural(sr.AbsentHosts.Count(), "host", "hosts"),
+			sr.AbsentHosts.String())
+	case sr.AbsentRanks.Count() > 0:
+		return fmt.Sprintf("\nUnknown %s: %s",
+			english.Plural(sr.AbsentRanks.Count(), "rank", "ranks"),
+			sr.AbsentRanks.String())
+	default:
+		return ""
+	}
+}
+
+// SystemJoinReq contains the inputs for the system join request.
+type SystemJoinReq struct {
 	unaryRequest
 	msRequest
-	Ranks []system.Rank
 }
 
-// SystemStartResp contains the request response.
-type SystemStartResp struct {
+// SystemJoinResp contains the request response.
+type SystemJoinResp struct {
 	Results system.MemberResults // resulting from harness starts
 }
 
-// SystemStart will perform a start after a controlled shutdown of DAOS system.
-func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartReq) (*SystemStartResp, error) {
+// SystemJoin will attempt to join a new member to the DAOS system.
+//
+// TODO: replace the method in mgmt_client.go with this one
+func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq) (*SystemJoinResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, &ctlpb.SystemStartReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).Join(ctx, &mgmtpb.JoinReq{})
 	})
-
-	rpcClient.Debugf("DAOS system start request: %s", req)
+	rpcClient.Debugf("DAOS system join request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := new(SystemStartResp)
+	resp := new(SystemJoinResp)
 	return resp, convertMSResponse(ur, resp)
 }
 
@@ -108,22 +115,53 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 type SystemQueryReq struct {
 	unaryRequest
 	msRequest
-	Ranks []system.Rank
+	sysRequest
 }
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
+	sysResponse
 	Members system.Members
 }
 
-// SystemQuery requests DAOS system status.
-func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryReq) (*SystemQueryResp, error) {
-	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).SystemQuery(ctx, &ctlpb.SystemQueryReq{
-			Ranks: system.RanksToUint32(req.Ranks),
-		})
-	})
+// UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
+func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
+	type Alias SystemQueryResp
+	aux := &struct {
+		AbsentHosts string
+		AbsentRanks string
+		*Alias
+	}{
+		Alias: (*Alias)(resp),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if err := resp.getAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
+		return err
+	}
 
+	return nil
+}
+
+// SystemQuery requests DAOS system status.
+//
+// Handles MS requests sent from management client app e.g. 'dmg' and calls into
+// mgmt_system.go method of the same name. The triggered method uses the control
+// API to fanout to (selection or all) gRPC servers listening as part of the
+// DAOS system and retrieve results from the selected ranks hosted there.
+func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryReq) (*SystemQueryResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := new(ctlpb.SystemQueryReq)
+	pbReq.Hosts = req.Hosts.String()
+	pbReq.Ranks = req.Ranks.String()
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemQuery(ctx, pbReq)
+	})
 	rpcClient.Debugf("DAOS system query request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -135,6 +173,293 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	return resp, convertMSResponse(ur, resp)
 }
 
+// SystemStartReq contains the inputs for the system start request.
+type SystemStartReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+}
+
+// SystemStartResp contains the request response.
+type SystemStartResp struct {
+	sysResponse
+	Results system.MemberResults // resulting from harness starts
+}
+
+// UnmarshalJSON unpacks JSON message into SystemStartResp struct.
+func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
+	type Alias SystemStartResp
+	aux := &struct {
+		AbsentHosts string
+		AbsentRanks string
+		*Alias
+	}{
+		Alias: (*Alias)(resp),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if err := resp.getAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SystemStart will perform a start after a controlled shutdown of DAOS system.
+//
+// Handles MS requests sent from management client app e.g. 'dmg' and calls into
+// mgmt_system.go method of the same name. The triggered method uses the control
+// API to fanout to (selection or all) gRPC servers listening as part of the
+// DAOS system and retrieve results from the selected ranks hosted there.
+func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartReq) (*SystemStartResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := new(ctlpb.SystemStartReq)
+	pbReq.Hosts = req.Hosts.String()
+	pbReq.Ranks = req.Ranks.String()
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemStart(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system start request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemStartResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemStopReq contains the inputs for the system stop command.
+type SystemStopReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+	Prep  bool
+	Kill  bool
+	Force bool
+}
+
+// SystemStopResp contains the request response.
+type SystemStopResp struct {
+	sysResponse
+	Results system.MemberResults
+}
+
+// UnmarshalJSON unpacks JSON message into SystemStopResp struct.
+func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
+	type Alias SystemStopResp
+	aux := &struct {
+		AbsentHosts string
+		AbsentRanks string
+		*Alias
+	}{
+		Alias: (*Alias)(resp),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if err := resp.getAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SystemStop will perform a two-phase controlled shutdown of DAOS system and a
+// list of remaining system members on failure.
+//
+// Handles MS requests sent from management client app e.g. 'dmg' and calls into
+// mgmt_system.go method of the same name. The triggered method uses the control
+// API to fanout to (selection or all) gRPC servers listening as part of the
+// DAOS system and retrieve results from the selected ranks hosted there.
+func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq) (*SystemStopResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := new(ctlpb.SystemStopReq)
+	pbReq.Hosts = req.Hosts.String()
+	pbReq.Ranks = req.Ranks.String()
+	pbReq.Prep = req.Prep
+	pbReq.Kill = req.Kill
+	pbReq.Force = req.Force
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemStop(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system stop request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemStopResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// getResetHostErrors maps rank error messages to hosts that experience them.
+func getResetRankErrors(results system.MemberResults) (map[string][]string, []string, error) {
+	rankErrors := make(map[string][]string) // hosts that experience a specific rank err
+	hosts := make(map[string]struct{})
+	for _, result := range results {
+		if result.Addr == "" {
+			return nil, nil,
+				errors.Errorf("host address missing for rank %d result", result.Rank)
+		}
+		if !result.Errored {
+			hosts[result.Addr] = struct{}{}
+			continue
+		}
+		if result.Msg == "" {
+			result.Msg = "error message missing for rank result"
+		}
+
+		rankErrors[result.Msg] = append(rankErrors[result.Msg], result.Addr)
+	}
+
+	goodHosts := make([]string, 0) // hosts that have >0 successful rank results
+	for host := range hosts {
+		goodHosts = append(goodHosts, host)
+	}
+
+	return rankErrors, goodHosts, nil
+}
+
+// SystemResetFormatReq contains the inputs for the request.
+type SystemResetFormatReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+}
+
+// SystemResetFormatResp contains the request response.
+type SystemResetFormatResp struct {
+	sysResponse
+	Results system.MemberResults
+}
+
+// UnmarshalJSON unpacks JSON message into SystemResetFormatResp struct.
+func (resp *SystemResetFormatResp) UnmarshalJSON(data []byte) error {
+	type Alias SystemResetFormatResp
+	aux := &struct {
+		AbsentHosts string
+		AbsentRanks string
+		*Alias
+	}{
+		Alias: (*Alias)(resp),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if err := resp.getAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SystemReformat will reformat and start rank after a controlled shutdown of DAOS system.
+//
+// First phase trigger format reset on each rank in membership registry, if
+// successful, putting selected harness managed instances in "awaiting format"
+// state (but not proceeding to starting the io_server process runner).
+//
+// Second phase is to perform storage format on each host which, if successful,
+// will reformat storage, un-block "awaiting format" state and start the
+// io_server process. SystemReformat() will only return when relevant io_server
+// processes are running and ready.
+//
+// This method handles request sent from management client app e.g. 'dmg'.
+//
+// The SystemResetFormat and StorageFormat control API requests are sent to
+// mgmt_system.go method of the same name. The triggered method uses the control
+// API to fanout to (selection or all) gRPC servers listening as part of the
+// DAOS system and retrieve results from the selected ranks hosted there.
+func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *SystemResetFormatReq) (*StorageFormatResp, error) {
+	if resetReq == nil {
+		return nil, errors.Errorf("nil %T request", resetReq)
+	}
+
+	pbReq := new(ctlpb.SystemResetFormatReq)
+	pbReq.Hosts = resetReq.Hosts.String()
+	pbReq.Ranks = resetReq.Ranks.String()
+
+	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system-reset-format request: %s", resetReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, resetReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// MS response will contain collated results for all ranks
+	resetResp := new(SystemResetFormatResp)
+	if err = convertMSResponse(ur, resetResp); err != nil {
+		return nil, errors.WithMessage(err, "converting MS to reformat resp")
+	}
+
+	resetRankErrors, hostList, err := getResetRankErrors(resetResp.Results)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resetRankErrors) > 0 || resetResp.AbsentHosts.Count() > 0 ||
+		resetResp.AbsentRanks.Count() > 0 {
+
+		reformatResp := new(StorageFormatResp)
+
+		if resetResp.AbsentHosts.Count() > 0 {
+			hostList := strings.Split(resetResp.AbsentHosts.DerangedString(), ",")
+			for _, addr := range hostList {
+				reformatResp.HostErrorsResp.addHostError(addr,
+					errors.New("unknown host"))
+			}
+		}
+
+		if resetResp.AbsentRanks.Count() > 0 {
+			reformatResp.HostErrorsResp.addHostError("0.0.0.0",
+				errors.Errorf("%s unknown: %s",
+					english.Plural(resetResp.AbsentRanks.Count(),
+						"rank", "ranks"),
+					resetResp.AbsentRanks.String()))
+		}
+
+		// create "X ranks failed: err..." error entries for each host address
+		// a single host maybe associated with multiple error entries in HEM
+		for msg, addrs := range resetRankErrors {
+			hostOccurrences := make(map[string]int)
+			for _, addr := range addrs {
+				hostOccurrences[addr]++
+			}
+			for addr, occurrences := range hostOccurrences {
+				err := errors.Errorf("%s failed: %s",
+					english.Plural(occurrences, "rank", "ranks"), msg)
+				reformatResp.HostErrorsResp.addHostError(addr, err)
+			}
+		}
+
+		return reformatResp, nil
+	}
+
+	// all requested ranks in AwaitFormat state, trigger format
+	formatReq := &StorageFormatReq{Reformat: true}
+	formatReq.SetHostList(hostList)
+
+	rpcClient.Debugf("DAOS storage-format request: %s", formatReq)
+
+	return StorageFormat(ctx, rpcClient, formatReq)
+}
+
+// LeaderQueryReq contains the inputs for the leader query request.
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
@@ -156,7 +481,6 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 			System: req.System,
 		})
 	})
-
 	rpcClient.Debugf("DAOS system leader-query request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -190,7 +514,6 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			Sys: req.System,
 		})
 	})
-
 	rpcClient.Debugf("DAOS system list-pools request: %s", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -200,4 +523,169 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 	resp := new(ListPoolsResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+// RanksReq contains the parameters for a system ranks request.
+type RanksReq struct {
+	unaryRequest
+	Ranks string
+	Force bool
+}
+
+// RanksResp contains the response from a system ranks request.
+type RanksResp struct {
+	HostErrorsResp // record unresponsive hosts
+	RankResults    system.MemberResults
+}
+
+// addHostResponse is responsible for validating the given HostResponse
+// and adding it's results to the RanksResp.
+func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
+	pbResp, ok := hr.Message.(*mgmtpb.RanksResp)
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
+	}
+
+	memberResults := make(system.MemberResults, 0)
+	if err := convert.Types(pbResp.GetResults(), &memberResults); err != nil {
+		if srr.HostErrors == nil {
+			srr.HostErrors = make(HostErrorsMap)
+		}
+		return srr.HostErrors.Add(hr.Addr, err)
+	}
+
+	srr.RankResults = append(srr.RankResults, memberResults...)
+
+	return
+}
+
+// invokeRPCFanout invokes unary RPC across all hosts provided in the request
+// parameter and unpacks host responses and errors into a RanksResp,
+// returning RanksResp's reference.
+func invokeRPCFanout(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	rr := new(RanksResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := rr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := rr.addHostResponse(hostResp); err != nil {
+			return nil, err
+		}
+	}
+
+	return rr, nil
+}
+
+// PrepShutdownRanks concurrently performs prep shutdown ranks across all hosts
+// supplied in the request's hostlist.
+//
+// This is called from method of the same name in server/ctl_system.go with a
+// populated host list in the request parameter and blocks until all results
+// (successful or otherwise) are received after invoking fan-out.
+// Returns a single response structure containing results generated with
+// request responses from each selected rank.
+func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PrepShutdownRanks(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %+v", req)
+
+	return invokeRPCFanout(ctx, rpcClient, req)
+}
+
+// StopRanks concurrently performs stop ranks across all hosts supplied in the
+// request's hostlist.
+//
+// This is called from method of the same name in server/ctl_system.go with a
+// populated host list in the request parameter and blocks until all results
+// (successful or otherwise) are received after invoking fan-out.
+// Returns a single response structure containing results generated with
+// request responses from each selected rank.
+func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).StopRanks(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system stop-ranks request: %+v", req)
+
+	return invokeRPCFanout(ctx, rpcClient, req)
+}
+
+// ResetFormatRanks concurrently resets format state on ranks across all hosts
+// supplied in the request's hostlist.
+//
+// This is called from SystemResetFormat in server/ctl_system.go with a
+// populated host list in the request parameter and blocks until all results
+// (successful or otherwise) are received after invoking fan-out.
+// Returns a single response structure containing results generated with
+// request responses from each selected rank.
+func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ResetFormatRanks(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system reset-format-ranks request: %+v", req)
+
+	return invokeRPCFanout(ctx, rpcClient, req)
+}
+
+// StartRanks concurrently performs start ranks across all hosts
+// supplied in the request's hostlist.
+//
+// This is called from SystemStart in server/ctl_system.go with a
+// populated host list in the request parameter and blocks until all results
+// (successful or otherwise) are received after invoking fan-out.
+// Returns a single response structure containing results generated with
+// request responses from each selected rank.
+func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).StartRanks(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system start-ranks request: %+v", req)
+
+	return invokeRPCFanout(ctx, rpcClient, req)
+}
+
+// PingRanks concurrently performs ping on ranks across all hosts
+// supplied in the request's hostlist.
+//
+// This is called from SystemQuery in server/ctl_system.go with a
+// populated host list in the request parameter and blocks until all results
+// (successful or otherwise) are received after invoking fan-out.
+// Returns a single response structure containing results generated with
+// request responses from each selected rank.
+func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
+	pbReq := new(mgmtpb.RanksReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PingRanks(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system ping-ranks request: %+v", req)
+
+	return invokeRPCFanout(ctx, rpcClient, req)
 }

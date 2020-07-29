@@ -1,0 +1,40 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+  test_clients:
+    - client-C
+timeout: 400
+server_config:
+  name: daos_server
+  servers:
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+pool:
+  mode: 146
+  name: daos_server
+  scm_size: 1000000000
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+  cont_count: 10
+fio:
+  names:
+    - global
+    - test
+  global:
+    ioengine: 'libaio'
+    thread: 1
+    group_reporting: 1
+    direct: 1
+    verify: 'crc64'
+    iodepth: 16
+    blocksize: '1M'
+    size: '10M'
+    rw: 'rw'
+  test:
+    numjobs: 1
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"

@@ -2,10 +2,15 @@
 
 cwd=$(dirname "$0")
 DAOS_DIR=${DAOS_DIR:-$(cd "$cwd/../../.." && echo "$PWD")}
-BTR=$DAOS_DIR/build/src/common/tests/btree
+source "${DAOS_DIR}/.build_vars.sh"
+BTR=${SL_BUILD_DIR}/src/common/tests/btree
 VCMD=()
-if [ "$USE_VALGRIND" = "yes" ]; then
-    VCMD=("valgrind" "--tool=pmemcheck")
+if [ "$USE_VALGRIND" = "memcheck" ]; then
+    VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
+          --suppressions=${VALGRIND_SUPP} --xml=yes \
+          --xml-file=memcheck-results-%p.xml"
+elif [ "$USE_VALGRIND" = "pmemcheck" ]; then
+    VCMD="valgrind --tool=pmemcheck"
 fi
 
 ORDER=${ORDER:-3}
@@ -32,6 +37,7 @@ EOF
 
 PERF=""
 UINT=""
+test_conf_pre=""
 while [ $# -gt 0 ]; do
     case "$1" in
     -s)
@@ -42,25 +48,29 @@ while [ $# -gt 0 ]; do
             print_help
         fi
         shift
+        test_conf_pre="${test_conf_pre} keys=${BAT_NUM}"
         ;;
     dyn)
         DYN="-t"
         shift
+        test_conf_pre="${test_conf_pre} dyn"
         ;;
     perf)
         shift
         PERF="on"
+        test_conf_pre="${test_conf_pre} perf"
         ;;
     ukey)
         shift
         UINT="+"
+        test_conf_pre="${test_conf_pre} ukey"
         ;;
     direct)
-        BTR=$DAOS_DIR/build/src/common/tests/btree_direct
+        BTR=${SL_BUILD_DIR}/src/common/tests/btree_direct
         KEYS=${KEYS:-"delta,lambda,kappa,omega,beta,alpha,epsilon"}
         RECORDS=${RECORDS:-"omega:loaded,delta:that,kappa:dice,beta:knows,epsilon:the,lambda:are,alpha:Everybody"}
-
         shift
+        test_conf_pre="${test_conf_pre} direct"
         ;;
     *)
         echo "Unknown option $1"
@@ -75,23 +85,22 @@ set -e
 gen_test_conf_string()
 {
         name=""
-        [ ! -z "$1" ] && name="${name}_IDIR=$1"
-        [ ! -z "$2" ] && name="${name}_IPL=$2"
-        [ ! -z "$3" ] && name="${name}_PMEM=$3"
+        [ -n "$1" ] && name="${name} inplace"
+        [ -n "$2" ] && name="${name} pmem"
         echo "$name"
 }
 
 run_test()
 {
     printf "\nOptions: IPL='%s' IDIR='%s' PMEM='%s'\n" "$IPL" "$IDIR" "$PMEM"
-    if [ -z ${PERF} ]; then
+    test_conf=$(gen_test_conf_string "${IPL}" "${PMEM}")
 
-        test_conf=$(gen_test_conf_string "${IDIR}" "${IPL}" "${PMEM}")
+    if [ -z ${PERF} ]; then
 
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
-        "${VCMD[@]}" "$BTR" \
-        --start-test "BTR030_functional_test_${test_conf}" \
+        eval "${VCMD[@]}" "$BTR" --start-test \
+        "btree functional ${test_conf_pre} ${test_conf} iterate=${IDIR}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
@@ -110,8 +119,8 @@ run_test()
         -D
 
         echo "B+tree batch operations test..."
-        "${VCMD[@]}" "$BTR" \
-        --start-test "BTR031_batch_operations_test_${test_conf}" \
+        eval "${VCMD[@]}" "$BTR" \
+        --start-test "btree batch operations ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
@@ -119,15 +128,15 @@ run_test()
         -D
 
         echo "B+tree drain test..."
-        "${VCMD[@]}" "$BTR" \
-        --start-test "BTR032_drain_test_${test_conf}" \
+        eval "${VCMD[@]}" "$BTR" \
+        --start-test "btree drain ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
-        "${VCMD[@]}" "$BTR" \
-        --start-test "BTR033_performance_test_${test_conf}" \
+        eval "${VCMD[@]}" "$BTR" \
+        --start-test "btree performance ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D

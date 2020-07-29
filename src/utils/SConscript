@@ -1,22 +1,19 @@
 """Build DAOS utilities"""
 import daos_build
+Import('env')
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
     denv = env.Clone()
+    # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
     daos_extra_files = denv.Object('daos_hdlr.c')
 
-    dmg_old = daos_build.program(denv, 'dmg_old', 'dmg.c', LIBS=libs)
-    dcont = daos_build.program(denv, 'dcont', 'dcont.c', LIBS=libs)
     daos = daos_build.program(denv, 'daos',
                               ['daos.c', daos_extra_files], LIBS=libs)
-    denv.Install('$PREFIX/bin/', dmg_old)
-    denv.Install('$PREFIX/bin/', dcont)
     denv.Install('$PREFIX/bin/', daos)
 
 if __name__ == "SCons.Script":

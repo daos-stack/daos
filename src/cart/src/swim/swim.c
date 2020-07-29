@@ -1,47 +1,100 @@
-/* Copyright (c) 2016 UChicago Argonne, LLC
- * Copyright (C) 2018-2019 Intel Corporation
- * All rights reserved.
+/*
+ * Copyright (c) 2016 UChicago Argonne, LLC
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- * 4. All publications or advertising materials mentioning features or use of
- *    this software are asked, but not required, to acknowledge that it was
- *    developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 #define D_LOGFAC	DD_FAC(swim)
 
 #include "swim_internal.h"
 #include <assert.h>
 
-static uint64_t swim_ping_timeout = SWIM_PING_TIMEOUT;
+static uint64_t swim_prot_period_len;
+static uint64_t swim_suspect_timeout;
+static uint64_t swim_ping_timeout;
+
+static inline uint64_t
+swim_prot_period_len_default(void)
+{
+	unsigned int val = SWIM_PROTOCOL_PERIOD_LEN;
+
+	d_getenv_int("SWIM_PROTOCOL_PERIOD_LEN", &val);
+	return val;
+}
+
+static inline uint64_t
+swim_suspect_timeout_default(void)
+{
+	unsigned int val = SWIM_SUSPECT_TIMEOUT;
+
+	d_getenv_int("SWIM_SUSPECT_TIMEOUT", &val);
+	return val;
+}
+
+static inline uint64_t
+swim_ping_timeout_default(void)
+{
+	unsigned int val = SWIM_PING_TIMEOUT;
+
+	d_getenv_int("SWIM_PING_TIMEOUT", &val);
+	return val;
+}
+
+void
+swim_period_set(uint64_t val)
+{
+	D_DEBUG(DB_TRACE, "swim_prot_period_len set as %lu\n", val);
+	swim_prot_period_len = val;
+}
+
+uint64_t
+swim_period_get(void)
+{
+	return swim_prot_period_len;
+}
+
+void
+swim_suspect_timeout_set(uint64_t val)
+{
+	D_DEBUG(DB_TRACE, "swim_suspect_timeout set as %lu\n", val);
+	swim_suspect_timeout = val;
+}
+
+uint64_t
+swim_suspect_timeout_get(void)
+{
+	return swim_suspect_timeout;
+}
+
+void
+swim_ping_timeout_set(uint64_t val)
+{
+	D_DEBUG(DB_TRACE, "swim_ping_timeout set as %lu\n", val);
+	swim_ping_timeout = val;
+}
+
+uint64_t
+swim_ping_timeout_get(void)
+{
+	return swim_ping_timeout;
+}
 
 static inline void
 swim_dump_updates(swim_id_t self_id, swim_id_t from, swim_id_t to,
@@ -52,7 +105,7 @@ swim_dump_updates(swim_id_t self_id, swim_id_t from, swim_id_t to,
 	size_t msg_size, i;
 	int rc;
 
-	if (!D_LOG_ENABLED(DLOG_INFO))
+	if (!D_LOG_ENABLED(DLOG_DBG))
 		return;
 
 	fp = open_memstream(&msg, &msg_size);
@@ -227,10 +280,11 @@ update:
 		if (item->si_id == id) {
 			/* remove this member from suspect list */
 			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
-			if (swim_ping_timeout < SWIM_PROTOCOL_PERIOD_LEN) {
-				swim_ping_timeout += SWIM_PING_TIMEOUT;
+			if (swim_ping_timeout_get() < swim_period_get()) {
+				swim_ping_timeout_set(swim_ping_timeout_get() +
+						      SWIM_PING_TIMEOUT);
 				SWIM_INFO("%lu: increase ping timeout to %lu\n",
-					  ctx->sc_self, swim_ping_timeout);
+					 ctx->sc_self, swim_ping_timeout_get());
 			}
 			D_FREE(item);
 			break;
@@ -293,7 +347,7 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from,
 	int rc;
 
 	/* if there is no suspicion timeout, just kill the member */
-	if (SWIM_SUSPECT_TIMEOUT == 0)
+	if (swim_suspect_timeout_get() == 0)
 		return swim_member_dead(ctx, from, id, nr);
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
@@ -324,7 +378,7 @@ search:
 		D_GOTO(out, rc = -ENOMEM);
 	item->si_id = id;
 	item->si_from = from;
-	item->u.si_deadline = swim_now_ms() + SWIM_SUSPECT_TIMEOUT;
+	item->u.si_deadline = swim_now_ms() + swim_suspect_timeout_get();
 	TAILQ_INSERT_TAIL(&ctx->sc_suspects, item, si_link);
 
 update:
@@ -362,7 +416,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now)
 				from = item->si_from;
 
 				item->si_from = self_id;
-				item->u.si_deadline += swim_ping_timeout;
+				item->u.si_deadline += swim_ping_timeout_get();
 
 				D_ALLOC_PTR(item);
 				if (item == NULL)
@@ -520,6 +574,11 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	/* delay the first ping until all things will be initialized */
 	ctx->sc_next_tick_time = swim_now_ms() + 10 * SWIM_PROTOCOL_PERIOD_LEN;
 
+	/* set global tunable defaults */
+	swim_prot_period_len = swim_prot_period_len_default();
+	swim_suspect_timeout = swim_suspect_timeout_default();
+	swim_ping_timeout    = swim_ping_timeout_default();
+
 out:
 	return ctx;
 }
@@ -637,7 +696,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 		case SCS_BEGIN:
 			if (now > ctx->sc_next_tick_time) {
 				ctx->sc_next_tick_time = now
-						     + SWIM_PROTOCOL_PERIOD_LEN;
+							 + swim_period_get();
 
 				id_target = ctx->sc_target;
 				id_sendto = ctx->sc_target;
@@ -649,7 +708,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					  target_state.sms_incarnation);
 
 				ctx->sc_dping_deadline = now
-							+ swim_ping_timeout;
+						      + swim_ping_timeout_get();
 				ctx_state = SCS_DPINGED;
 			}
 			break;
@@ -729,7 +788,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				item = TAILQ_FIRST(&ctx->sc_subgroup);
 				if (item == NULL) {
 					ctx->sc_iping_deadline = now
-							+ 2 * swim_ping_timeout;
+						  + 2 * swim_ping_timeout_get();
 					ctx_state = SCS_IPINGED;
 				}
 				break;
@@ -763,7 +822,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 	}
 	rc = (now > end) ? -ETIMEDOUT : -EINTR;
 out:
-	ctx->sc_expect_progress_time = now + SWIM_PROTOCOL_PERIOD_LEN / 2;
+	ctx->sc_expect_progress_time = now + swim_period_get() / 2;
 out_err:
 	return rc;
 }
@@ -928,7 +987,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				item->si_id   = to;
 				item->si_from = from;
 				item->u.si_deadline = swim_now_ms()
-						    + swim_ping_timeout;
+						      + swim_ping_timeout_get();
 				TAILQ_INSERT_TAIL(&ctx->sc_ipings, item,
 						  si_link);
 				SWIM_INFO("%lu: iping %lu => %lu\n",

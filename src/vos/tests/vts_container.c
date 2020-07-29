@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ co_ops_run(void **state)
 					printf("UUID clear did not work\n");
 				break;
 			default:
-				fail_msg("Unkown Ops!\n");
+				fail_msg("Unknown Ops!\n");
 				break;
 			}
 			assert_int_equal(ret, 0);
@@ -246,7 +246,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = arg->poh;
 
-	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &ih);
+	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &ih, NULL);
 	if (rc != 0) {
 		print_error("Failed to prepare co iterator\n");
 		return rc;
@@ -374,9 +374,12 @@ static const struct CMUnitTest vos_co_tests[] = {
 };
 
 int
-run_co_test(void)
+run_co_test(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS container tests",
+	char	test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "VOS container tests %s", cfg);
+	return cmocka_run_group_tests_name(test_name,
 					   vos_co_tests,
 					   setup, teardown);
 }

@@ -24,94 +24,15 @@
 from __future__ import print_function
 
 import os
-from apricot import TestWithServers
-from daos_utils import DaosCommand
-from dmg_utils import DmgCommand
-import dmg_utils
 import random
 import grp
 import re
-from general_utils import pcmd
+from apricot import TestWithServers
+from daos_utils import DaosCommand
+import agent_utils as agu
+import security_test_base as secTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
-
-
-def acl_entry(usergroup, name, permission):
-    """Create a daos acl entry for the specified user or group and permission.
-
-    Args:
-        usergroup (str): user or group.
-        name (str): user or group name to be created.
-        permission (str): permission to be created.
-
-    Return:
-        str: daos pool acl entry.
-
-    """
-    if permission == "random":
-        permission = random.choice(PERMISSIONS)
-    if permission == "nonexist":
-        return ""
-    if "group" in usergroup:
-        entry = "A:G:" + name + "@:" + permission
-    else:
-        entry = "A::" + name + "@:" + permission
-    return entry
-
-
-def acl_principal(usergroup, name):
-    """Create a daos ace principal for the specified user or group.
-
-    Args:
-        usergroup (str): user or group.
-        name (str): user or group name to be created.
-
-    Return:
-        str: daos pool acl entry.
-
-    """
-    if "group" in usergroup:
-        entry = "g:" + name + "@"
-    else:
-        entry = "u:" + name + "@"
-    return entry
-
-
-def add_del_user(hosts, ba_cmd, user):
-    """Add or delete the daos user and group on host by sudo command.
-
-    Args:
-        hosts (list): list of host.
-        ba_cmd (str): linux bash command to create user or group.
-        user (str): user or group name to be created or cleaned.
-
-    Return:
-        none.
-
-    """
-    bash_cmd = os.path.join("/usr/sbin", ba_cmd)
-    homedir = ""
-    if "usermod" not in ba_cmd and "user" in ba_cmd:
-        homedir = "-r"
-    cmd = " ".join(("sudo", bash_cmd, homedir, user))
-    print("     =Clients/hosts {0}, exec cmd: {1}".format(hosts, cmd))
-    pcmd(hosts, cmd, False)
-
-
-def create_acl_file(file_name, permissions):
-    """Create a acl_file with permissions.
-
-    Args:
-        file_name (str): file name.
-        permissions (str): daos acl permission list.
-
-    Return:
-        none.
-
-    """
-    acl_file = open(file_name, "w")
-    acl_file.write("\n".join(permissions))
-    acl_file.close()
 
 
 class PoolSecurityTestBase(TestWithServers):
@@ -291,12 +212,13 @@ class PoolSecurityTestBase(TestWithServers):
         for uid in range(num_user):
             username = user_prefix + "_tester_" + str(uid + 1)
             new_user = "A::" + username + "@:" + PERMISSIONS[uid % 4]
-            add_del_user(self.hostlist_clients, "useradd", username)
+            secTestBase.add_del_user(self.hostlist_clients, "useradd", username)
             user_list.append(new_user)
         for gid in range(num_group):
             groupname = user_prefix + "_testGrp_" + str(gid + 1)
             new_group = "A:G:" + groupname + "@:" + PERMISSIONS[(gid + 2) % 4]
-            add_del_user(self.hostlist_clients, "groupadd", groupname)
+            secTestBase.add_del_user(self.hostlist_clients, "groupadd",
+                                     groupname)
             group_list.append(new_group)
         permission_list = group_list + user_list + current_user_acl
         random.shuffle(permission_list)
@@ -318,10 +240,11 @@ class PoolSecurityTestBase(TestWithServers):
         user_prefix = self.params.get("user_prefix", "/run/pool_acl/*")
         for uid in range(num_user):
             username = user_prefix + "_tester_" + str(uid + 1)
-            add_del_user(self.hostlist_clients, "userdel", username)
+            secTestBase.add_del_user(self.hostlist_clients, "userdel", username)
         for gid in range(num_group):
             groupname = user_prefix + "_testGrp_" + str(gid + 1)
-            add_del_user(self.hostlist_clients, "groupdel", groupname)
+            secTestBase.add_del_user(self.hostlist_clients, "groupdel",
+                                     groupname)
 
     def verify_pool_acl_prim_sec_groups(self, pool_acl_list, acl_file, uuid,
                                         svc):
@@ -355,10 +278,10 @@ class PoolSecurityTestBase(TestWithServers):
             "sg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
         l_group = grp.getgrgid(os.getegid())[0]
         for group in sec_group:
-            add_del_user(self.hostlist_clients, "groupadd", group)
+            secTestBase.add_del_user(self.hostlist_clients, "groupadd", group)
         cmd = "usermod -G " + ",".join(sec_group)
         self.log.info("  (8-1)verify_pool_acl_prim_sec_groups, cmd= %s", cmd)
-        add_del_user(self.hostlist_clients, cmd, l_group)
+        secTestBase.add_del_user(self.hostlist_clients, cmd, l_group)
 
         self.log.info(
             "  (8-2)Before update sec_group permission, pool_acl_list= %s",
@@ -366,18 +289,21 @@ class PoolSecurityTestBase(TestWithServers):
         for group, permission in zip(sec_group, sec_group_perm):
             if permission == "none":
                 permission = ""
-            n_acl = acl_entry("group", group, permission)
+            n_acl = secTestBase.acl_entry("group", group, permission,
+                                          PERMISSIONS)
             pool_acl_list.append(n_acl)
 
         self.log.info(
             "  (8-3)After update sec_group permission, pool_acl_list= %s",
             pool_acl_list)
         self.log.info("      pool acl_file= %s", acl_file)
-        create_acl_file(acl_file, pool_acl_list)
+        secTestBase.create_acl_file(acl_file, pool_acl_list)
 
         # modify primary-group permission for secondary-group test
-        grp_entry = acl_entry("group", current_group, primary_grp_perm)
-        new_grp_entry = acl_entry("group", current_group, "")
+        grp_entry = secTestBase.acl_entry("group", current_group,
+                                          primary_grp_perm, PERMISSIONS)
+        new_grp_entry = secTestBase.acl_entry("group", current_group, "",
+                                              PERMISSIONS)
         self.modify_acl_file_entry(acl_file, grp_entry, new_grp_entry)
 
         # dmg pool overwrite-acl --pool <uuid> --acl-file <file>
@@ -392,13 +318,13 @@ class PoolSecurityTestBase(TestWithServers):
         self.verify_pool_readwrite(svc, uuid, "read", expect=exp_read)
 
         # Verify pool write operation
-        # daos continer create --pool <uuid>
-        self.log.info("  (8-7)Verify pool write by: daos continer create pool")
+        # daos container create --pool <uuid>
+        self.log.info("  (8-7)Verify pool write by: daos container create pool")
         exp_write = sec_group_rw[1]
         self.verify_pool_readwrite(svc, uuid, "write", expect=exp_write)
 
         for group in sec_group:
-            add_del_user(self.hostlist_clients, "groupdel", group)
+            secTestBase.add_del_user(self.hostlist_clients, "groupdel", group)
 
     def pool_acl_verification(self, current_user_acl, read, write,
                               secondary_grp_test=False):
@@ -431,6 +357,7 @@ class PoolSecurityTestBase(TestWithServers):
         acl_file = os.path.join(self.tmp, get_acl_file)
         num_user = self.params.get("num_user", "/run/pool_acl/*")
         num_group = self.params.get("num_group", "/run/pool_acl/*")
+        self.hostlist_clients = agu.include_local_host(self.hostlist_clients)
 
         # (2)Generate acl file with permissions
         self.log.info("  (1)Generate acl file with user/group permissions")
@@ -441,25 +368,21 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (3)Create a pool with acl
         self.dmg.exit_status_exception = False
-        result = self.dmg.pool_create(scm_size, acl_file=acl_file)
+        data = self.dmg.pool_create(scm_size, acl_file=acl_file)
         self.dmg.exit_status_exception = True
         self.log.info("  (2)dmg= %s", self.dmg)
         self.log.info("  (3)Create a pool with acl")
 
         # (4)Verify the pool create status
-        self.log.info("  (4)dmg.run() result=\n%s", result)
-        if "ERR" not in result.stderr:
-            uuid, svc = \
-                dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-        else:
+        self.log.info("  (4)dmg.run() result=\n%s", self.dmg.result)
+        if "ERR" in self.dmg.result.stderr:
             self.fail("##(4)Unable to parse pool uuid and svc.")
 
         # (5)Get the pool's acl list
         #    dmg pool get-acl --pool <UUID>
         self.log.info("  (5)Get a pool's acl list by: "
                       "dmg pool get-acl --pool --hostlist")
-        pool_acl_list = self.get_pool_acl_list(uuid)
+        pool_acl_list = self.get_pool_acl_list(data["uuid"])
         self.log.info(
             "   pool original permission_list: %s", permission_list)
         self.log.info(
@@ -468,28 +391,30 @@ class PoolSecurityTestBase(TestWithServers):
         # (6)Verify pool acl ace update and delete
         self.log.info("  (6)Verify update and delete of pool's acl entry.")
         tmp_ace = "daos_ci_test_new"
-        new_entrys = [acl_entry("user", tmp_ace, ""),
-                      acl_entry("group", tmp_ace, "")]
-        acl_principals = [acl_principal("user", tmp_ace),
-                          acl_principal("group", tmp_ace)]
-        for new_entry in new_entrys:
-            self.update_pool_acl_entry(uuid, "update", new_entry)
+        new_entries = [secTestBase.acl_entry("user", tmp_ace, "", PERMISSIONS),
+                       secTestBase.acl_entry("group", tmp_ace, "", PERMISSIONS)]
+        acl_principals = [secTestBase.acl_principal("user", tmp_ace),
+                          secTestBase.acl_principal("group", tmp_ace)]
+        for new_entry in new_entries:
+            self.update_pool_acl_entry(data["uuid"], "update", new_entry)
         for principal in acl_principals:
-            self.update_pool_acl_entry(uuid, "delete", principal)
+            self.update_pool_acl_entry(data["uuid"], "delete", principal)
 
         # (7)Verify pool read operation
         #    daos pool query --pool <uuid>
         self.log.info("  (7)Verify pool read by: daos pool query --pool")
-        self.verify_pool_readwrite(svc, uuid, "read", expect=read)
+        self.verify_pool_readwrite(
+            data["svc"], data["uuid"], "read", expect=read)
 
         # (8)Verify pool write operation
-        #    daos continer create --pool <uuid>
-        self.log.info("  (8)Verify pool write by: daos continer create --pool")
-        self.verify_pool_readwrite(svc, uuid, "write", expect=write)
+        #    daos container create --pool <uuid>
+        self.log.info("  (8)Verify pool write by: daos container create --pool")
+        self.verify_pool_readwrite(
+            data["svc"], data["uuid"], "write", expect=write)
         if secondary_grp_test:
             self.log.info("  (8-0)Verifying verify_pool_acl_prim_sec_groups")
             self.verify_pool_acl_prim_sec_groups(
-                pool_acl_list, acl_file, uuid, svc)
+                pool_acl_list, acl_file, data["uuid"], data["svc"])
 
         # (9)Cleanup user and destroy pool
         self.log.info("  (9)Cleanup users and groups")

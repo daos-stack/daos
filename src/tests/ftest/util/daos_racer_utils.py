@@ -21,11 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
-from apricot import get_log_file
-from command_utils import \
-    CommandFailure, BasicParameter, FormattedParameter, ExecutableCommand, \
-    EnvironmentVariables
+from command_utils_base import \
+    CommandFailure, BasicParameter, FormattedParameter
+from command_utils import ExecutableCommand
 from general_utils import pcmd
 
 
@@ -56,7 +54,7 @@ class DaosRacerCommand(ExecutableCommand):
         # daos_racer command.  The values for these names are populated by the
         # get_environment() method and added to command line by the
         # set_environment() method.
-        self._env_names = ["OFI_INTERFACE", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+        self._env_names = ["D_LOG_FILE"]
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -71,42 +69,25 @@ class DaosRacerCommand(ExecutableCommand):
         """
         return self.get_attribute_names(FormattedParameter)
 
-    def get_environment(self, manager):
+    def get_environment(self, manager, log_file=None):
         """Get the environment variables to export for the daos_racer command.
 
         Args:
-            manager (ServerManager): the job manager used to start daos_server
-                from which the server config values can be obtained to set the
-                required environment variables.
+            manager (DaosServerManager): the job manager used to start
+                daos_server from which the server config values can be obtained
+                to set the required environment variables.
 
         Returns:
             EnvironmentVariables: a dictionary of environment variable names and
                 values to export prior to running daos_racer
 
         """
-        env = EnvironmentVariables()
+        env = super(DaosRacerCommand, self).get_environment(manager, log_file)
         env["OMPI_MCA_btl_openib_warn_default_gid_prefix"] = "0"
         env["OMPI_MCA_btl"] = "tcp,self"
         env["OMPI_MCA_oob"] = "tcp"
         env["OMPI_MCA_pml"] = "ob1"
-        for name in self._env_names:
-            if name == "D_LOG_FILE":
-                value = get_log_file("daos.log")
-            else:
-                value = manager.get_environment_value(name)
-            env[name] = value
-
         return env
-
-    def set_environment(self, env):
-        """Set the environment variables to export prior to running daos_racer.
-
-        Args:
-            env (EnvironmentVariables): a dictionary of environment variable
-                names and values to export prior to running daos_racer
-        """
-        # Include exports prior to the daos_racer command
-        self._pre_command = env.get_export_str()
 
     def run(self):
         """Run the daos_racer command remotely.

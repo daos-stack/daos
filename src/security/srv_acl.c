@@ -178,26 +178,30 @@ out:
 	return rc;
 }
 
-static Drpc__Call *
-new_validation_request(struct drpc *ctx, d_iov_t *creds)
+static int
+new_validation_request(struct drpc *ctx, d_iov_t *creds, Drpc__Call **callp)
 {
 	uint8_t			*body;
 	size_t			len;
 	Drpc__Call		*request;
 	Auth__ValidateCredReq	req = AUTH__VALIDATE_CRED_REQ__INIT;
 	Auth__Credential	*cred;
+	int			rc;
 
-	request = drpc_call_create(ctx,
-			DRPC_MODULE_SEC,
-			DRPC_METHOD_SEC_VALIDATE_CREDS);
-	if (request == NULL)
-		return NULL;
+	*callp = NULL;
+
+	rc = drpc_call_create(ctx,
+			      DRPC_MODULE_SEC,
+			      DRPC_METHOD_SEC_VALIDATE_CREDS,
+			      &request);
+	if (rc != DER_SUCCESS)
+		return rc;
 
 	cred = auth__credential__unpack(NULL, creds->iov_buf_len,
 					creds->iov_buf);
 	if (cred == NULL) {
 		drpc_call_free(request);
-		return NULL;
+		return -DER_NOMEM;
 	}
 	req.cred = cred;
 
@@ -206,14 +210,16 @@ new_validation_request(struct drpc *ctx, d_iov_t *creds)
 	if (body == NULL) {
 		drpc_call_free(request);
 		auth__credential__free_unpacked(cred, NULL);
-		return NULL;
+		return -DER_NOMEM;
 	}
 	auth__validate_cred_req__pack(&req, body);
 	request->body.len = len;
 	request->body.data = body;
 
 	auth__credential__free_unpacked(cred, NULL);
-	return request;
+
+	*callp = request;
+	return DER_SUCCESS;
 }
 
 static int
@@ -223,16 +229,16 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 	Drpc__Call	*request;
 	int		rc;
 
-	server_socket = drpc_connect(ds_sec_server_socket_path);
-	if (server_socket == NULL) {
+	rc = drpc_connect(ds_sec_server_socket_path, &server_socket);
+	if (rc != -DER_SUCCESS) {
 		D_ERROR("Couldn't connect to daos_server socket\n");
-		return -DER_BADPATH;
+		return rc;
 	}
 
-	request = new_validation_request(server_socket, creds);
-	if (request == NULL) {
+	rc  = new_validation_request(server_socket, creds, &request);
+	if (rc != DER_SUCCESS) {
 		drpc_close(server_socket);
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	rc = drpc_call(server_socket, R_SYNC, request, response);
@@ -780,4 +786,13 @@ ds_sec_get_rebuild_cont_capabilities(void)
 	 * Internally generated rebuild container handles can read data
 	 */
 	return CONT_CAPA_READ_DATA;
+}
+
+uint64_t
+ds_sec_get_admin_cont_capabilities(void)
+{
+	/*
+	 * Internally generated admin container handles can do everything.
+	 */
+	return CONT_CAPAS_ALL;
 }

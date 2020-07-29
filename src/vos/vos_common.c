@@ -34,11 +34,13 @@
 #include <vos_internal.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
+#include <daos_srv/vos.h>
 
+struct bio_xs_context	*vsa_xsctxt_inst;
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static bool vsa_nvme_init;
-static struct vos_tls	*standalone_tls;
+struct vos_tls	*standalone_tls;
 
 struct vos_tls *
 vos_tls_get(void)
@@ -54,6 +56,37 @@ vos_tls_get(void)
 	return tls;
 #endif /* VOS_STANDALONE */
 }
+
+#ifdef VOS_STANDALONE
+int
+vos_profile_start(char *path, int avg)
+{
+	struct daos_profile *dp;
+	int rc;
+
+	if (standalone_tls == NULL)
+		return 0;
+
+	rc = daos_profile_init(&dp, path, avg, 0, 0);
+	if (rc)
+		return rc;
+
+	standalone_tls->vtl_dp = dp;
+	return 0;
+}
+
+void
+vos_profile_stop()
+{
+	if (standalone_tls == NULL || standalone_tls->vtl_dp == NULL)
+		return;
+
+	daos_profile_dump(standalone_tls->vtl_dp);
+	daos_profile_destroy(standalone_tls->vtl_dp);
+	standalone_tls->vtl_dp = NULL;
+}
+
+#endif
 
 /**
  * Object cache based on mode of instantiation
@@ -88,6 +121,108 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 				blk_off, blk_cnt, DP_RC(rc));
 	}
 	return rc;
+}
+
+static int
+vos_tx_publish(struct dtx_handle *dth, int err)
+{
+	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
+	struct dtx_rsrvd_uint	*dru;
+	int			 rc;
+	int			 i;
+
+again:
+	for (i = 0, rc = 0;
+	     i < dth->dth_rsrvd_cnt && (rc == 0 || err != 0); i++) {
+		dru = &dth->dth_rsrvds[i];
+		rc = vos_publish_scm(cont, dru->dru_scm, err == 0);
+
+		/* FIXME: Currently, vos_publish_blocks() will release
+		 *	  reserved information in 'dru_nvme_list' from
+		 *	  DRAM. So if vos_publish_blocks() failed, the
+		 *	  reserve information in DRAM for those former
+		 *	  published ones cannot be rollback. That will
+		 *	  cause space leaking before in-memory reserve
+		 *	  information synced with persistent allocation
+		 *	  heap until the server restart.
+		 *
+		 *	  It is not fatal, will be handled later.
+		 */
+		if (rc == 0 || err != 0)
+			rc = vos_publish_blocks(cont, &dru->dru_nvme,
+						err == 0, VOS_IOS_GENERIC);
+		if (err != 0)
+			D_FREE(dru->dru_scm);
+	}
+
+	/* Some publish failed, cancel all. */
+	if (err == 0 && rc != 0) {
+		err = rc;
+		goto again;
+	}
+
+	return err;
+}
+
+int
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
+{
+	int	rc;
+
+	if (dth == NULL)
+		return umem_tx_begin(umm, vos_txd_get());
+
+	if (dth->dth_local_tx_started)
+		return 0;
+
+	rc = umem_tx_begin(umm, vos_txd_get());
+	if (rc == 0)
+		dth->dth_local_tx_started = 1;
+
+	return rc;
+}
+
+int
+vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err)
+{
+	if (dth == NULL)
+		return umem_tx_end(umm, err);
+
+	if (!dth->dth_local_tx_started)
+		return err;
+
+	/* Not the last modification. */
+	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq)
+		return 0;
+
+	dth->dth_local_tx_started = 0;
+
+	if (err == 0)
+		err = vos_dtx_prepared(dth);
+
+	err = vos_tx_publish(dth, err);
+	if (err != 0) {
+		vos_dtx_cleanup(dth);
+
+		return umem_tx_abort(umm, err);
+	}
+
+	err = umem_tx_commit(umm);
+	if (err == 0) {
+		int	i;
+
+		for (i = 0; i < dth->dth_modification_cnt; i++) {
+			struct dtx_rsrvd_uint	*dru = &dth->dth_rsrvds[i];
+
+			D_FREE(dru->dru_scm);
+		}
+	} else {
+		/* Aborted case. */
+		vos_tx_publish(dth, -DER_CANCELED);
+		vos_dtx_cleanup(dth);
+	}
+
+	return err;
 }
 
 /**
@@ -127,11 +262,11 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
-		D_ERROR("Error in createing object cache\n");
+		D_ERROR("Error in creating object cache\n");
 		return rc;
 	}
 
-	rc = d_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
+	rc = d_uhash_create(D_HASH_FT_NOLOCK, VOS_POOL_HHASH_BITS,
 			    &imem_inst->vis_pool_hhash);
 	if (rc) {
 		D_ERROR("Error in creating POOL ref hash: "DF_RC"\n",
@@ -139,8 +274,8 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		goto failed;
 	}
 
-	rc = d_uhash_create(D_HASH_FT_EPHEMERAL, VOS_CONT_HHASH_BITS,
-			    &imem_inst->vis_cont_hhash);
+	rc = d_uhash_create(D_HASH_FT_NOLOCK | D_HASH_FT_EPHEMERAL,
+			    VOS_CONT_HHASH_BITS, &imem_inst->vis_cont_hhash);
 	if (rc) {
 		D_ERROR("Error in creating CONT ref hash: "DF_RC"\n",
 			DP_RC(rc));
@@ -197,7 +332,6 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls = data;
 
-	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
 	vos_ts_table_free(&tls->vtl_ts_table);
@@ -231,12 +365,6 @@ vos_mod_init(void)
 	rc = vos_dtx_table_register();
 	if (rc) {
 		D_ERROR("DTX btree initialization error\n");
-		return rc;
-	}
-
-	rc = vos_dtx_cos_register();
-	if (rc != 0) {
-		D_ERROR("DTX CoS btree initialization error\n");
 		return rc;
 	}
 

@@ -29,7 +29,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
@@ -37,6 +36,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -241,126 +241,593 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_SmdListDevs(t *testing.T) {
+func TestServer_MgmtSvc_SmdQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
-		setupAP   bool
-		numIO     int
-		req       *mgmtpb.SmdDevReq
-		junkResp  bool
-		drpcResps []proto.Message
-		expResp   *mgmtpb.SmdDevResp
-		expErr    error
+		setupAP        bool
+		req            *mgmtpb.SmdQueryReq
+		junkResp       bool
+		drpcResps      map[int][]*mockDrpcResponse
+		harnessStopped bool
+		ioStopped      bool
+		expResp        *mgmtpb.SmdQueryResp
+		expErr         error
 	}{
 		"dRPC send fails": {
-			req: &mgmtpb.SmdDevReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.SmdDevResp{},
+			req: &mgmtpb.SmdQueryReq{},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					&mockDrpcResponse{
+						Message: &mgmtpb.SmdQueryReq{},
+						Error:   errors.New("send failure"),
+					},
+				},
 			},
 			expErr: errors.New("send failure"),
 		},
 		"dRPC resp fails": {
-			req:      &mgmtpb.SmdDevReq{},
+			req:      &mgmtpb.SmdQueryReq{},
 			junkResp: true,
 			expErr:   errors.New("unmarshal"),
 		},
-		"successful query (single instance)": {
-			numIO: 1,
-			req:   &mgmtpb.SmdDevReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.SmdDevResp{
-					Devices: []*mgmtpb.SmdDevResp_Device{
-						{
-							Uuid:   "test-uuid",
-							TgtIds: []int32{0, 1, 2},
+		"set-faulty": {
+			req: &mgmtpb.SmdQueryReq{
+				SetFaulty: true,
+				Uuid:      common.MockUUID(),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(),
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.DevStateResp{
+							DevUuid:  common.MockUUID(),
+							DevState: "FAULTY",
 						},
 					},
 				},
 			},
-			expResp: &mgmtpb.SmdDevResp{
-				Devices: []*mgmtpb.SmdDevResp_Device{
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
 					{
-						Uuid:   "test-uuid",
-						TgtIds: []int32{0, 1, 2},
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid:  common.MockUUID(),
+								State: "FAULTY",
+							},
+						},
 					},
 				},
 			},
 		},
-		"successful query (dual instance)": {
-			numIO: 2,
-			req:   &mgmtpb.SmdDevReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.SmdDevResp{
-					Devices: []*mgmtpb.SmdDevResp_Device{
-						{
-							Uuid:   "test-uuid",
-							TgtIds: []int32{0, 1, 2},
+		"set-faulty (DAOS Failure)": {
+			req: &mgmtpb.SmdQueryReq{
+				SetFaulty: true,
+				Uuid:      common.MockUUID(),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(),
+								},
+							},
 						},
 					},
-				},
-				&mgmtpb.SmdDevResp{
-					Devices: []*mgmtpb.SmdDevResp_Device{
-						{
-							Uuid:   "test-uuid2",
-							TgtIds: []int32{3, 4, 5},
+					{
+						Message: &mgmtpb.DevStateResp{
+							Status: int32(drpc.DaosInvalidInput),
 						},
 					},
 				},
 			},
-			expResp: &mgmtpb.SmdDevResp{
-				Devices: []*mgmtpb.SmdDevResp_Device{
+			expErr: drpc.DaosInvalidInput,
+		},
+		"list-pools": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitDevices: true,
+				Rank:        uint32(system.NilRank),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
 					{
-						Uuid:   "test-uuid",
-						TgtIds: []int32{0, 1, 2},
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(),
+								},
+							},
+						},
 					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
 					{
-						Uuid:   "test-uuid2",
-						TgtIds: []int32{3, 4, 5},
+						Pools: []*mgmtpb.SmdQueryResp_Pool{
+							{
+								Uuid: common.MockUUID(),
+							},
+						},
 					},
 				},
 			},
 		},
-		"failed query (dual instance)": {
-			numIO: 2,
-			req:   &mgmtpb.SmdDevReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.SmdDevResp{
-					Status: -1,
+		"list-pools (filter by rank)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitDevices: true,
+				Rank:        1,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
 				},
-				&mgmtpb.SmdDevResp{
-					Devices: []*mgmtpb.SmdDevResp_Device{
-						{
-							Uuid:   "test-uuid2",
-							TgtIds: []int32{3, 4, 5},
+				1: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(1),
+								},
+							},
 						},
 					},
 				},
 			},
-			expResp: &mgmtpb.SmdDevResp{
-				Status: -1,
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Rank: 1,
+						Pools: []*mgmtpb.SmdQueryResp_Pool{
+							{
+								Uuid: common.MockUUID(1),
+							},
+						},
+					},
+				},
 			},
+		},
+		"list-pools (filter by uuid)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitDevices: true,
+				Rank:        uint32(system.NilRank),
+				Uuid:        common.MockUUID(1),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(1),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{},
+					{
+						Rank: 1,
+						Pools: []*mgmtpb.SmdQueryResp_Pool{
+							{
+								Uuid: common.MockUUID(1),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-pools (DAOS Failure)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitDevices: true,
+				Rank:        uint32(system.NilRank),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Status: int32(drpc.DaosBusy),
+						},
+					},
+				},
+			},
+			expErr: drpc.DaosBusy,
+		},
+		"list-devices": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools: true,
+				Rank:      uint32(system.NilRank),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid: common.MockUUID(),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-devices (filter by rank)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools: true,
+				Rank:      1,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(1),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Rank: 1,
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid: common.MockUUID(1),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-devices (filter by uuid)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools: true,
+				Rank:      uint32(system.NilRank),
+				Uuid:      common.MockUUID(1),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(1),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{},
+					{
+						Rank: 1,
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid: common.MockUUID(1),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-devices (DAOS Failure)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools: true,
+				Rank:      uint32(system.NilRank),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Status: int32(drpc.DaosBusy),
+						},
+					},
+				},
+			},
+			expErr: drpc.DaosBusy,
+		},
+		"device-health": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(system.NilRank),
+				Uuid:             common.MockUUID(1),
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid:  common.MockUUID(1),
+									State: "FAULTY",
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.BioHealthResp{
+							Temperature: 1000000,
+							TempWarn:    true,
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{},
+					{
+						Rank: 1,
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid:  common.MockUUID(1),
+								State: "FAULTY",
+								Health: &mgmtpb.BioHealthResp{
+									Temperature: 1000000,
+									TempWarn:    true,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"device-health (DAOS Failure)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(system.NilRank),
+				Uuid:             common.MockUUID(1),
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid:  common.MockUUID(1),
+									State: "FAULTY",
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.BioHealthResp{
+							Status: int32(drpc.DaosFreeMemError),
+						},
+					},
+				},
+			},
+			expErr: drpc.DaosFreeMemError,
+		},
+		"target-health": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             1,
+				Target:           "0",
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid:   common.MockUUID(1),
+									TgtIds: []int32{0},
+									State:  "FAULTY",
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.BioHealthResp{
+							Temperature: 1000000,
+							TempWarn:    true,
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Rank: 1,
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid:   common.MockUUID(1),
+								TgtIds: []int32{0},
+								State:  "FAULTY",
+								Health: &mgmtpb.BioHealthResp{
+									Temperature: 1000000,
+									TempWarn:    true,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"target-health (bad target)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             0,
+				Target:           "eleventy",
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+			},
+			expErr: errors.New("invalid"),
+		},
+		"target-health (missing rank)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(system.NilRank),
+				Target:           "0",
+				IncludeBioHealth: true,
+			},
+			expErr: errors.New("invalid"),
+		},
+		"ambiguous UUID": {
+			req: &mgmtpb.SmdQueryReq{
+				Rank: uint32(system.NilRank),
+				Uuid: common.MockUUID(),
+			},
+			expErr: errors.New("ambiguous"),
+		},
+		"harness not started": {
+			req:            &mgmtpb.SmdQueryReq{},
+			harnessStopped: true,
+			expErr:         FaultHarnessNotStarted,
+		},
+		"i/o servers not started": {
+			req:       &mgmtpb.SmdQueryReq{},
+			ioStopped: true,
+			expErr:    FaultDataPlaneNotStarted,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIOServers
-			if tc.numIO > 0 {
-				ioserverCount = tc.numIO
+			ioserverCount := len(tc.drpcResps)
+			if ioserverCount == 0 {
+				ioserverCount = 1
 			}
-			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			svc := newTestMgmtSvcMulti(t, log, ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				cfg := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
 				} else if len(tc.drpcResps) > i {
-					rb, _ := proto.Marshal(tc.drpcResps[i])
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+					for _, mock := range tc.drpcResps[i] {
+						cfg.setSendMsgResponseList(t, mock)
+					}
 				}
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
+			if tc.harnessStopped {
+				svc.harness.started.SetFalse()
+			}
+			if tc.ioStopped {
+				for _, srv := range svc.harness.instances {
+					srv.ready.SetFalse()
+				}
+			}
 
-			gotResp, gotErr := svc.SmdListDevs(context.TODO(), tc.req)
+			gotResp, gotErr := svc.SmdQuery(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -373,471 +840,85 @@ func TestMgmtSvc_SmdListDevs(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_SmdListPools(t *testing.T) {
-	for name, tc := range map[string]struct {
-		setupAP   bool
-		numIO     int
-		req       *mgmtpb.SmdPoolReq
-		junkResp  bool
-		drpcResps []proto.Message
-		expResp   *mgmtpb.SmdPoolResp
-		expErr    error
-	}{
-		"dRPC send fails": {
-			req: &mgmtpb.SmdPoolReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.SmdPoolResp{},
-			},
-			expErr: errors.New("send failure"),
-		},
-		"dRPC resp fails": {
-			req:      &mgmtpb.SmdPoolReq{},
-			junkResp: true,
-			expErr:   errors.New("unmarshal"),
-		},
-		"successful query (single instance)": {
-			numIO: 1,
-			req:   &mgmtpb.SmdPoolReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.SmdPoolResp{
-					Pools: []*mgmtpb.SmdPoolResp_Pool{
-						{
-							Uuid:   "test-uuid",
-							TgtIds: []int32{0, 1, 2},
-						},
-					},
-				},
-			},
-			expResp: &mgmtpb.SmdPoolResp{
-				Pools: []*mgmtpb.SmdPoolResp_Pool{
-					{
-						Uuid:   "test-uuid",
-						TgtIds: []int32{0, 1, 2},
-					},
-				},
-			},
-		},
-		"successful query (dual instance)": {
-			numIO: 2,
-			req:   &mgmtpb.SmdPoolReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.SmdPoolResp{
-					Pools: []*mgmtpb.SmdPoolResp_Pool{
-						{
-							Uuid:   "test-uuid",
-							TgtIds: []int32{0, 1, 2},
-						},
-					},
-				},
-				&mgmtpb.SmdPoolResp{
-					Pools: []*mgmtpb.SmdPoolResp_Pool{
-						{
-							Uuid:   "test-uuid2",
-							TgtIds: []int32{3, 4, 5},
-						},
-					},
-				},
-			},
-			expResp: &mgmtpb.SmdPoolResp{
-				Pools: []*mgmtpb.SmdPoolResp_Pool{
-					{
-						Uuid:   "test-uuid",
-						TgtIds: []int32{0, 1, 2},
-					},
-					{
-						Uuid:   "test-uuid2",
-						TgtIds: []int32{3, 4, 5},
-					},
-				},
-			},
-		},
-		"failed query (dual instance)": {
-			numIO: 2,
-			req:   &mgmtpb.SmdPoolReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.SmdPoolResp{
-					Status: -1,
-				},
-				&mgmtpb.SmdPoolResp{
-					Pools: []*mgmtpb.SmdPoolResp_Pool{
-						{
-							Uuid:   "test-uuid2",
-							TgtIds: []int32{3, 4, 5},
-						},
-					},
-				},
-			},
-			expResp: &mgmtpb.SmdPoolResp{
-				Status: -1,
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			ioserverCount := maxIOServers
-			if tc.numIO > 0 {
-				ioserverCount = tc.numIO
-			}
-			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
-			for i, srv := range svc.harness.instances {
-				cfg := new(mockDrpcClientConfig)
-				if tc.junkResp {
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
-				} else if len(tc.drpcResps) > i {
-					rb, _ := proto.Marshal(tc.drpcResps[i])
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
-				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-			}
-
-			gotResp, gotErr := svc.SmdListPools(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
-			}
-		})
+func newTestContSetOwnerReq() *mgmtpb.ContSetOwnerReq {
+	return &mgmtpb.ContSetOwnerReq{
+		ContUUID:   "contUUID",
+		PoolUUID:   "poolUUID",
+		Owneruser:  "user@",
+		Ownergroup: "group@",
 	}
 }
 
-func TestMgmtSvc_BioHealthQuery(t *testing.T) {
-	for name, tc := range map[string]struct {
-		setupAP   bool
-		numIO     int
-		req       *mgmtpb.BioHealthReq
-		junkResp  bool
-		drpcResps []proto.Message
-		expResp   *mgmtpb.BioHealthResp
-		expErr    error
-	}{
-		"dRPC resp fails": {
-			req:      &mgmtpb.BioHealthReq{},
-			junkResp: true,
-			expErr:   errors.New("unmarshal"),
-		},
-		"successful query (single instance)": {
-			numIO: 1,
-			req:   &mgmtpb.BioHealthReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.BioHealthResp{
-					DevUuid: "test-uuid",
-				},
-			},
-			expResp: &mgmtpb.BioHealthResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"successful query (dual instance; first succeeds)": {
-			numIO: 2,
-			req:   &mgmtpb.BioHealthReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.BioHealthResp{
-					DevUuid: "test-uuid",
-				},
-				&mgmtpb.BioHealthResp{
-					Status: -1,
-				},
-			},
-			expResp: &mgmtpb.BioHealthResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"successful query (dual instance; second succeeds)": {
-			numIO: 2,
-			req:   &mgmtpb.BioHealthReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.BioHealthResp{
-					Status: -1,
-				},
-				&mgmtpb.BioHealthResp{
-					DevUuid: "test-uuid",
-				},
-			},
-			expResp: &mgmtpb.BioHealthResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"failed query (dual instance; uuid)": {
-			numIO: 2,
-			req:   &mgmtpb.BioHealthReq{DevUuid: "fnord"},
-			drpcResps: []proto.Message{
-				&mgmtpb.BioHealthResp{
-					Status: -1,
-				},
-				&mgmtpb.BioHealthResp{
-					Status: -1,
-				},
-			},
-			expResp: &mgmtpb.BioHealthResp{
-				Status: -1,
-			},
-			expErr: errors.New("no rank matched"),
-		},
-		"failed query (dual instance; tgt)": {
-			numIO: 2,
-			req:   &mgmtpb.BioHealthReq{TgtId: "banana"},
-			drpcResps: []proto.Message{
-				&mgmtpb.BioHealthResp{
-					Status: -1,
-				},
-				&mgmtpb.BioHealthResp{
-					Status: -1,
-				},
-			},
-			expResp: &mgmtpb.BioHealthResp{
-				Status: -1,
-			},
-			expErr: errors.New("no rank matched"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+func TestContSetOwner_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIOServers
-			if tc.numIO > 0 {
-				ioserverCount = tc.numIO
-			}
-			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
-			for i, srv := range svc.harness.instances {
-				cfg := new(mockDrpcClientConfig)
-				if tc.junkResp {
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
-				} else if len(tc.drpcResps) > i {
-					rb, _ := proto.Marshal(tc.drpcResps[i])
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
-				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-			}
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
-			gotResp, gotErr := svc.BioHealthQuery(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
-			}
-		})
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
 	}
+
+	common.CmpErr(t, FaultHarnessNotStarted, err)
 }
 
-func TestMgmtSvc_DevStateQuery(t *testing.T) {
-	for name, tc := range map[string]struct {
-		setupAP   bool
-		numIO     int
-		req       *mgmtpb.DevStateReq
-		junkResp  bool
-		drpcResps []proto.Message
-		expResp   *mgmtpb.DevStateResp
-		expErr    error
-	}{
-		"dRPC resp fails": {
-			req:      &mgmtpb.DevStateReq{},
-			junkResp: true,
-			expErr:   errors.New("unmarshal"),
-		},
-		"successful query (single instance)": {
-			numIO: 1,
-			req:   &mgmtpb.DevStateReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.DevStateResp{
-					DevUuid: "test-uuid",
-				},
-			},
-			expResp: &mgmtpb.DevStateResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"successful query (dual instance; first succeeds)": {
-			numIO: 2,
-			req:   &mgmtpb.DevStateReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.DevStateResp{
-					DevUuid: "test-uuid",
-				},
-				&mgmtpb.DevStateResp{
-					Status: -1,
-				},
-			},
-			expResp: &mgmtpb.DevStateResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"successful query (dual instance; second succeeds)": {
-			numIO: 2,
-			req:   &mgmtpb.DevStateReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.DevStateResp{
-					Status: -1,
-				},
-				&mgmtpb.DevStateResp{
-					DevUuid: "test-uuid",
-				},
-			},
-			expResp: &mgmtpb.DevStateResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"failed query (dual instance)": {
-			numIO: 2,
-			req:   &mgmtpb.DevStateReq{DevUuid: "fnord"},
-			drpcResps: []proto.Message{
-				&mgmtpb.DevStateResp{
-					Status: -1,
-				},
-				&mgmtpb.DevStateResp{
-					Status: -1,
-				},
-			},
-			expResp: &mgmtpb.DevStateResp{
-				Status: -1,
-			},
-			expErr: errors.New("no rank matched"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+func TestContSetOwner_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIOServers
-			if tc.numIO > 0 {
-				ioserverCount = tc.numIO
-			}
-			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
-			for i, srv := range svc.harness.instances {
-				cfg := new(mockDrpcClientConfig)
-				if tc.junkResp {
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
-				} else if len(tc.drpcResps) > i {
-					rb, _ := proto.Marshal(tc.drpcResps[i])
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
-				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-			}
+	svc := newTestMgmtSvc(log)
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
 
-			gotResp, gotErr := svc.DevStateQuery(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
-			}
-		})
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
 	}
+
+	common.CmpErr(t, expectedErr, err)
 }
 
-func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
-	for name, tc := range map[string]struct {
-		setupAP   bool
-		numIO     int
-		req       *mgmtpb.DevStateReq
-		junkResp  bool
-		drpcResps []proto.Message
-		expResp   *mgmtpb.DevStateResp
-		expErr    error
-	}{
-		"dRPC resp fails": {
-			req:      &mgmtpb.DevStateReq{},
-			junkResp: true,
-			expErr:   errors.New("unmarshal"),
-		},
-		"successful query (single instance)": {
-			numIO: 1,
-			req:   &mgmtpb.DevStateReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.DevStateResp{
-					DevUuid: "test-uuid",
-				},
-			},
-			expResp: &mgmtpb.DevStateResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"successful query (dual instance; first succeeds)": {
-			numIO: 2,
-			req:   &mgmtpb.DevStateReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.DevStateResp{
-					DevUuid: "test-uuid",
-				},
-				&mgmtpb.DevStateResp{
-					Status: -1,
-				},
-			},
-			expResp: &mgmtpb.DevStateResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"successful query (dual instance; second succeeds)": {
-			numIO: 2,
-			req:   &mgmtpb.DevStateReq{},
-			drpcResps: []proto.Message{
-				&mgmtpb.DevStateResp{
-					Status: -1,
-				},
-				&mgmtpb.DevStateResp{
-					DevUuid: "test-uuid",
-				},
-			},
-			expResp: &mgmtpb.DevStateResp{
-				DevUuid: "test-uuid",
-			},
-		},
-		"failed query (dual instance)": {
-			numIO: 2,
-			req:   &mgmtpb.DevStateReq{DevUuid: "fnord"},
-			drpcResps: []proto.Message{
-				&mgmtpb.DevStateResp{
-					Status: -1,
-				},
-				&mgmtpb.DevStateResp{
-					Status: -1,
-				},
-			},
-			expResp: &mgmtpb.DevStateResp{
-				Status: -1,
-			},
-			expErr: errors.New("no rank matched"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+func TestContSetOwner_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIOServers
-			if tc.numIO > 0 {
-				ioserverCount = tc.numIO
-			}
-			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
-			for i, srv := range svc.harness.instances {
-				cfg := new(mockDrpcClientConfig)
-				if tc.junkResp {
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
-				} else if len(tc.drpcResps) > i {
-					rb, _ := proto.Marshal(tc.drpcResps[i])
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
-				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-			}
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := makeBadBytes(16)
 
-			gotResp, gotErr := svc.StorageSetFaulty(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
+	setupMockDrpcClientBytes(svc, badBytes, nil)
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
-			}
-		})
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("unmarshal"), err)
+}
+
+func TestContSetOwner_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.ContSetOwnerResp{
+		Status: 0,
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }

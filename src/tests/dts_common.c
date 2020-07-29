@@ -50,7 +50,7 @@ enum {
 	DTS_INIT_MODULE,	/* modules have been loaded */
 	DTS_INIT_POOL,		/* pool has been created */
 	DTS_INIT_CONT,		/* container has been created */
-	DTS_INIT_CREDITS,	/* I/O credits have been initalized */
+	DTS_INIT_CREDITS,	/* I/O credits have been initialized */
 };
 
 /**
@@ -333,6 +333,12 @@ cont_fini(struct dts_context *tsc)
 	 */
 }
 
+bool
+dts_is_async(struct dts_context *tsc)
+{
+	return !daos_handle_is_inval(tsc->tsc_eqh);
+}
+
 /* see comments in dts_common.h */
 int
 dts_ctx_init(struct dts_context *tsc)
@@ -340,7 +346,7 @@ dts_ctx_init(struct dts_context *tsc)
 	int	rc;
 
 	tsc->tsc_init = DTS_INIT_NONE;
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;

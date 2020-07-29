@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,17 +148,18 @@ pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 	struct umem_tx_stage_item	*txi, *txi_arr;
 	unsigned int			 i, num = *cnt;
 
+	if (num == 0)
+		return;
+
 	/* @vec & @cnt could be changed by other ULT while txi_fn yielding */
-	if (num > 0) {
-		D_ALLOC_ARRAY(txi_arr, num);
-		if (txi_arr == NULL) {
-			D_ERROR("Failed to allocate txi array\n");
-			return;
-		}
-		memcpy(txi_arr, vec, sizeof(*txi) * num);
-		*cnt = 0;
-		memset(vec, 0, sizeof(*txi) * num);
+	D_ALLOC_ARRAY(txi_arr, num);
+	if (txi_arr == NULL) {
+		D_ERROR("Failed to allocate txi array\n");
+		return;
 	}
+	memcpy(txi_arr, vec, sizeof(*txi) * num);
+	*cnt = 0;
+	memset(vec, 0, sizeof(*txi) * num);
 
 	for (i = 0; i < num; i++) {
 		txi = &txi_arr[i];
@@ -170,8 +171,7 @@ pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 		txi->txi_fn(txi->txi_data, noop);
 	}
 
-	if (num > 0)
-		D_FREE(txi_arr);
+	D_FREE(txi_arr);
 }
 
 /*
@@ -380,7 +380,7 @@ umem_tx_errno(int err)
 	return daos_errno2der(err);
 }
 
-/* volatile memroy operations */
+/* volatile memory operations */
 
 static int
 vmem_free(struct umem_instance *umm, umem_off_t umoff)
@@ -512,7 +512,7 @@ set_offsets(struct umem_instance *umm)
  * Instantiate a memory class \a umm by attributes in \a uma
  *
  * \param uma [IN]	Memory attributes to instantiate the memory class.
- * \param umm [OUT]	The instantiated memroy class.
+ * \param umm [OUT]	The instantiated memory class.
  */
 int
 umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
@@ -542,6 +542,8 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_pool		= uma->uma_pool;
 	umm->umm_nospc_rc	= umc->umc_id == UMEM_CLASS_VMEM ?
 		-DER_NOMEM : -DER_NOSPACE;
+	memcpy(umm->umm_slabs, uma->uma_slabs,
+	       sizeof(struct pobj_alloc_class_desc) * UMM_SLABS_CNT);
 
 	set_offsets(umm);
 	return 0;

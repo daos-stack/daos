@@ -31,7 +31,7 @@
 #include <daos/dtx.h>
 
 /**
- * Initialise a scatter/gather list, create an array to store @nr iovecs.
+ * Initialize a scatter/gather list, create an array to store @nr iovecs.
  */
 int
 daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
@@ -56,7 +56,7 @@ daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 {
 	int	i;
 
-	if (sgl->sg_iovs == NULL)
+	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return;
 
 	for (i = 0; free_iovs && i < sgl->sg_nr; i++) {
@@ -147,10 +147,17 @@ daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src)
 
 int
 daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
-		       int src_nr)
+			int src_nr)
 {
 	return daos_sgls_copy_internal(dst, dst_nr, src, src_nr, true, true,
 				       false);
+}
+
+int
+daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src, int src_nr)
+{
+	return daos_sgls_copy_internal(dst, dst_nr, src, src_nr, true, false,
+				       true);
 }
 
 int
@@ -216,6 +223,28 @@ daos_sgls_buf_size(d_sg_list_t *sgls, int nr)
 	return size;
 }
 
+int
+daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size)
+{
+	char	*new_buf;
+
+	if (sgl == NULL || sgl->sg_iovs == NULL)
+		return 0;
+
+	D_ASSERT(sgl->sg_nr > idx);
+	if (sgl->sg_iovs[idx].iov_buf_len >= new_size)
+		return 0;
+
+	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf, new_size);
+	if (new_buf == NULL)
+		return -DER_NOMEM;
+
+	sgl->sg_iovs[idx].iov_buf = new_buf;
+	sgl->sg_iovs[idx].iov_buf_len = new_size;
+
+	return 0;
+}
+
 /**
  * Query the size of packed sgls, if the \a buf_size != NULL then will set its
  * value as buffer size as well.
@@ -244,53 +273,66 @@ daos_sgls_packed_size(d_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 
 	return size;
 }
+
 bool
-daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-			size_t buf_len_req,
-			uint8_t **buf, size_t *buf_len)
+daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
+		   daos_size_t buf_len_req, uint8_t **p_buf, size_t *p_buf_len)
 {
+	daos_size_t buf_len = 0;
+	daos_size_t len;
+
+	if (p_buf_len != NULL)
+	*p_buf_len = 0;
+
 	if (idx->iov_idx >= sgl->sg_nr)
 		return true; /** no data in sgl to get bytes from */
 
-	D_ASSERT(idx->iov_offset < sgl->sg_iovs[idx->iov_idx].iov_len);
+	len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
+		sgl->sg_iovs[idx->iov_idx].iov_len;
+
+	D_ASSERT(idx->iov_offset < len);
 	/** Point to current idx */
-	*buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
+	if (p_buf != NULL)
+		*p_buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
 
 	/**
 	 * Determine how many bytes to be used from buf by using
 	 * minimum between requested bytes and bytes left in IOV buffer
 	 */
-	*buf_len = MIN(buf_len_req,
-		       sgl->sg_iovs[idx->iov_idx].iov_len - idx->iov_offset);
+	buf_len = MIN(buf_len_req, len - idx->iov_offset);
 
 	/** Increment index */
-	idx->iov_offset += *buf_len;
+	idx->iov_offset += buf_len;
 
 	/** If end of iov was reached, go to next iov */
-	if (idx->iov_offset == sgl->sg_iovs[idx->iov_idx].iov_len) {
+	if (idx->iov_offset == len) {
 		idx->iov_idx++;
 		idx->iov_offset = 0;
 	}
+
+	if (p_buf_len != NULL)
+		*p_buf_len = buf_len;
 
 	return idx->iov_idx == sgl->sg_nr;
 }
 
 int
-daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-		       size_t requested_bytes,
-		       daos_sgl_process_cb process_cb, void *cb_args)
+daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
+		   size_t requested_bytes, daos_sgl_process_cb process_cb,
+		   void *cb_args)
 {
 	uint8_t		*buf = NULL;
 	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
 
-	/**
-	 * loop until all bytes are consumed, the end of the sgl is reached,
-	 *  or an error occurs
+	/*
+	 * loop until all bytes are consumed, the end of the sgl is reached, or
+	 * an error occurs
 	 */
 	while (requested_bytes > 0 && !end && !rc) {
-		end = daos_sgl_get_bytes(sgl, idx, requested_bytes, &buf, &len);
+		end = daos_sgl_get_bytes(sgl, check_buf, idx, requested_bytes,
+					 &buf, &len);
 		requested_bytes -= len;
 		if (process_cb != NULL)
 			rc = process_cb(buf, len, cb_args);
@@ -327,6 +369,10 @@ daos_str_trimwhite(char *str)
 int
 daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 {
+	if (src == NULL || src->iov_buf == NULL)
+		return 0;
+	D_ASSERT(src->iov_buf_len > 0);
+
 	D_ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
 		return -DER_NOMEM;
@@ -340,7 +386,7 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 void
 daos_iov_free(d_iov_t *iov)
 {
-	if (iov->iov_buf == NULL)
+	if (iov == NULL || iov->iov_buf == NULL)
 		return;
 	D_ASSERT(iov->iov_buf_len > 0);
 
@@ -362,6 +408,14 @@ daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2)
 		return false;
 
 	return !memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len);
+}
+
+void
+daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len)
+{
+	D_ASSERT(iov->iov_len + buf_len <= iov->iov_buf_len);
+	memcpy(iov->iov_buf + iov->iov_len, buf, buf_len);
+	iov->iov_len += buf_len;
 }
 
 d_rank_list_t *
@@ -441,7 +495,8 @@ daos_hhash_init(void)
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = d_hhash_create(D_HHASH_BITS, &daos_ht.dht_hhash);
+	rc = d_hhash_create(D_HASH_FT_GLOCK | D_HASH_FT_LRU, D_HHASH_BITS,
+			    &daos_ht.dht_hhash);
 	if (rc == 0) {
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
@@ -571,6 +626,17 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	}
 
 	return &daos_crt_init_opt;
+}
+
+void
+daos_dti_gen_unique(struct dtx_id *dti)
+{
+	uuid_t uuid;
+
+	uuid_generate(uuid);
+
+	uuid_copy(dti->dti_uuid, uuid);
+	dti->dti_hlc = crt_hlc_get();
 }
 
 void

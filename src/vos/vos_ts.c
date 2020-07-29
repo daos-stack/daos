@@ -74,23 +74,29 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 			neg_info = info - 1;
 		}
 		lrua_lookup(parent_info->ti_array, entry->te_parent_ptr,
-			    (void **)&parent);
+			    &parent);
 		if (neg_info == NULL) {
 			other = parent;
 		} else if (parent != NULL) {
 			idx = &parent->te_miss_idx[entry->te_hash_idx];
-			lrua_lookup(neg_info->ti_array, idx, (void **)&other);
+			lrua_lookup(neg_info->ti_array, idx, &other);
 		}
 	}
 
 	if (other == NULL) {
-		ts_table->tt_ts_rl = MAX(ts_table->tt_ts_rl, entry->te_ts_rl);
-		ts_table->tt_ts_rh = MAX(ts_table->tt_ts_rh, entry->te_ts_rh);
+		if (entry->te_ts_rl > ts_table->tt_ts_rl) {
+			ts_table->tt_ts_rl = entry->te_ts_rl;
+			uuid_copy(ts_table->tt_tx_rl, entry->te_tx_rl);
+		}
+		if (entry->te_ts_rh > ts_table->tt_ts_rh) {
+			ts_table->tt_ts_rh = entry->te_ts_rh;
+			uuid_copy(ts_table->tt_tx_rh, entry->te_tx_rh);
+		}
 		return true;
 	}
 
-	other->te_ts_rl = MAX(other->te_ts_rl, entry->te_ts_rl);
-	other->te_ts_rh = MAX(other->te_ts_rh, entry->te_ts_rh);
+	vos_ts_rl_update(other, entry->te_ts_rl, entry->te_tx_rl);
+	vos_ts_rh_update(other, entry->te_ts_rh, entry->te_tx_rh);
 
 	return true;
 }
@@ -178,6 +184,8 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 
 	ts_table->tt_ts_rl = vos_start_epoch;
 	ts_table->tt_ts_rh = vos_start_epoch;
+	uuid_clear(ts_table->tt_tx_rl);
+	uuid_clear(ts_table->tt_tx_rh);
 	miss_cursor = ts_table->tt_misses;
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++) {
 		info = &ts_table->tt_type_info[i];
@@ -206,8 +214,8 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 			miss_cursor += info->ti_count * miss_size;
 		}
 
-		rc = lrua_array_alloc(&info->ti_array, info->ti_count,
-				      sizeof(struct vos_ts_entry), &lru_cbs,
+		rc = lrua_array_alloc(&info->ti_array, info->ti_count, 1,
+				      sizeof(struct vos_ts_entry), 0, &lru_cbs,
 				      info);
 		if (rc != 0)
 			goto cleanup;
@@ -251,27 +259,32 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 	struct vos_ts_entry	*entry;
 	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
 	uint32_t		*neg_idx;
+	int			 rc;
 
-	entry = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx,
-			   true);
+	rc = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx, &entry);
+	D_ASSERT(rc == 0); /** autoeviction and no allocation */
 
 	if (parent == NULL) {
 		/** Use global timestamps for the type to initialize it */
 		entry->te_ts_rl = ts_table->tt_ts_rl;
 		entry->te_ts_rh = ts_table->tt_ts_rh;
+		uuid_copy(entry->te_tx_rl, ts_table->tt_tx_rl);
+		uuid_copy(entry->te_tx_rh, ts_table->tt_tx_rh);
 		entry->te_parent_ptr = NULL;
 	} else {
 		entry->te_parent_ptr = parent->te_record_ptr;
 		if ((type & 1) == 0) { /* positive entry */
 			neg_idx = &parent->te_miss_idx[hash_idx];
 			lrua_lookup(parent->te_info->ti_array, neg_idx,
-				    (void **)&ts_source);
+				    &ts_source);
 		}
 		if (ts_source == NULL) /* for negative and uncached entries */
 			ts_source = parent;
 
 		entry->te_ts_rl = ts_source->te_ts_rl;
 		entry->te_ts_rh = ts_source->te_ts_rh;
+		uuid_copy(entry->te_tx_rl, ts_source->te_tx_rl);
+		uuid_copy(entry->te_tx_rh, ts_source->te_tx_rh);
 	}
 
 	/** Set the lower bounds for the entry */
@@ -288,13 +301,13 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
-		    uint32_t akey_nr)
+		    uint32_t akey_nr, uuid_t *tx_id)
 {
 	uint32_t	size;
 	uint64_t	array_size;
 
 	*ts_set = NULL;
-	if ((flags & VOS_OF_USE_TIMESTAMPS) == 0)
+	if (tx_id == NULL)
 		return 0;
 
 	size = 3 + akey_nr;
@@ -306,6 +319,7 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 
 	(*ts_set)->ts_flags = flags;
 	(*ts_set)->ts_set_size = size;
+	uuid_copy((*ts_set)->ts_tx_id, *tx_id);
 
 	return 0;
 }

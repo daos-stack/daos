@@ -58,7 +58,7 @@ main(int argc, char **argv)
 	uint32_t                 reint_tgts[SPARE_MAX_NUM];
 
 	po_ver = 1;
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 
@@ -84,17 +84,17 @@ main(int argc, char **argv)
 	/* initial placement when all nodes alive */
 	daos_obj_generate_id(&oid, 0, OC_RP_4G2, 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
-	plt_obj_place(oid, &lo_1, pl_map);
-	plt_obj_layout_check(lo_1, COMPONENT_NR);
+	plt_obj_place(oid, &lo_1, pl_map, true);
+	plt_obj_layout_check(lo_1, COMPONENT_NR, 0);
 
 	/* test plt_obj_place when some/all shards failed */
 	D_PRINT("\ntest to fail all shards  and new placement ...\n");
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
 		plt_fail_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 			     pl_debug_msg);
-	plt_obj_place(oid, &lo_2, pl_map);
-	plt_obj_layout_check(lo_2, COMPONENT_NR);
-	D_ASSERT(!pt_obj_layout_match(lo_1, lo_2, DOM_NR));
+	plt_obj_place(oid, &lo_2, pl_map, true);
+	plt_obj_layout_check(lo_2, COMPONENT_NR, 0);
+	D_ASSERT(!plt_obj_layout_match(lo_1, lo_2));
 	D_PRINT("spare target candidate:");
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++) {
 		spare_tgt_candidate[i] = lo_2->ol_shards[i].po_target;
@@ -104,11 +104,11 @@ main(int argc, char **argv)
 
 	D_PRINT("\ntest to add back all failed shards and new placement ...\n");
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
-		plt_add_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
+		plt_reint_tgt_up(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 			    pl_debug_msg);
-	plt_obj_place(oid, &lo_3, pl_map);
-	plt_obj_layout_check(lo_3, COMPONENT_NR);
-	D_ASSERT(pt_obj_layout_match(lo_1, lo_3, DOM_NR));
+	plt_obj_place(oid, &lo_3, pl_map, true);
+	plt_obj_layout_check(lo_3, COMPONENT_NR, 0);
+	D_ASSERT(plt_obj_layout_match(lo_1, lo_3));
 
 	/* test pl_obj_find_rebuild */
 	D_PRINT("\ntest pl_obj_find_rebuild to get correct spare tagets ...\n");

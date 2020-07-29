@@ -10,6 +10,14 @@ hosts:
 timeout: 1500
 server_config:
   name: daos_server
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 pool:
   mode: 146
   name: daos_server
@@ -18,6 +26,7 @@ pool:
   control_method: dmg
 container:
   type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 mdtest:
   client_processes:
     np_8:

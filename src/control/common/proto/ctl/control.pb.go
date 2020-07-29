@@ -29,26 +29,26 @@ func init() {
 }
 
 var fileDescriptor_0c5120591600887d = []byte{
-	// 291 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x92, 0xdf, 0x4a, 0xf3, 0x40,
-	0x10, 0xc5, 0xfb, 0xf1, 0x89, 0xc2, 0x6a, 0xbc, 0x98, 0xc6, 0x2a, 0xb9, 0xec, 0x03, 0x04, 0xd1,
-	0x0b, 0xc1, 0x2b, 0xa1, 0xd2, 0x0b, 0x51, 0xa9, 0xcd, 0x03, 0xc8, 0xba, 0x0e, 0x25, 0x98, 0x64,
-	0xd3, 0xd9, 0x69, 0x25, 0x8f, 0xe1, 0x1b, 0xcb, 0xfe, 0xa9, 0x6e, 0x4c, 0x2f, 0xe7, 0x37, 0xe7,
-	0xcc, 0x61, 0x76, 0x56, 0x24, 0x4a, 0x37, 0x4c, 0xba, 0xca, 0x5b, 0xd2, 0xac, 0xe1, 0xbf, 0xe2,
-	0x2a, 0x4b, 0x0c, 0x6b, 0x92, 0x2b, 0xf4, 0x2c, 0x83, 0x06, 0xf9, 0x53, 0xd3, 0xc7, 0xab, 0x51,
-	0xb2, 0x09, 0xec, 0xc4, 0x74, 0x86, 0xb1, 0xf6, 0xd5, 0xd5, 0xd7, 0x81, 0x38, 0x7a, 0x5a, 0xd5,
-	0x3c, 0xe3, 0x0a, 0x66, 0xe2, 0xb4, 0xf0, 0xf6, 0x05, 0x61, 0x2b, 0x09, 0x61, 0x92, 0x2b, 0xae,
-	0xf2, 0x3e, 0x5c, 0xe2, 0x3a, 0x3b, 0xdf, 0xcb, 0x4d, 0x3b, 0x1d, 0xc1, 0xad, 0x38, 0x0e, 0xbc,
-	0x50, 0xb2, 0x81, 0x71, 0xac, 0xb4, 0xc4, 0xda, 0xd3, 0x21, 0x74, 0xde, 0x3b, 0x91, 0x04, 0x38,
-	0xd7, 0x54, 0x4b, 0x86, 0xb3, 0x58, 0xe8, 0x99, 0xf5, 0x4f, 0xf6, 0xe1, 0x9f, 0x74, 0xb7, 0xde,
-	0xcb, 0x06, 0xa9, 0xdb, 0xa5, 0xff, 0x92, 0x28, 0x3d, 0x86, 0xce, 0x7b, 0x23, 0x84, 0x87, 0x05,
-	0xeb, 0x16, 0x20, 0x52, 0x59, 0x60, 0x9d, 0xe3, 0x01, 0xeb, 0x87, 0x16, 0x2c, 0x89, 0xa1, 0xaf,
-	0x92, 0xc4, 0x7f, 0x43, 0x03, 0x74, 0xde, 0x07, 0x91, 0x3e, 0xfb, 0x1b, 0x3d, 0x96, 0x86, 0x17,
-	0xa4, 0xb7, 0xe5, 0x3b, 0x92, 0x81, 0x0b, 0xa7, 0xdf, 0xd5, 0xb6, 0xb7, 0xc4, 0xf5, 0x06, 0x0d,
-	0x87, 0xe5, 0xfb, 0x9d, 0xb6, 0xea, 0xa6, 0x23, 0x98, 0x0b, 0x08, 0xb3, 0xec, 0x9b, 0xde, 0xe3,
-	0xb6, 0x54, 0x68, 0xc2, 0x0d, 0x7d, 0x15, 0x0e, 0xe0, 0xe6, 0xa4, 0x03, 0xee, 0xa6, 0x5c, 0xfe,
-	0x7b, 0x3b, 0x74, 0x5f, 0xe3, 0xfa, 0x3b, 0x00, 0x00, 0xff, 0xff, 0x62, 0xe7, 0x39, 0x50, 0x61,
-	0x02, 0x00, 0x00,
+	// 297 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0xd2, 0xcd, 0x4a, 0xc4, 0x30,
+	0x10, 0x07, 0x70, 0x41, 0x54, 0x88, 0xb6, 0x60, 0x56, 0x57, 0xec, 0xd1, 0x07, 0xe8, 0x41, 0x0f,
+	0x82, 0x27, 0xa1, 0xb0, 0x27, 0x15, 0xdd, 0xe2, 0x03, 0xc4, 0x1a, 0x17, 0xb1, 0x6d, 0xe2, 0x64,
+	0x64, 0xd9, 0x97, 0xf0, 0x99, 0x25, 0x5f, 0x76, 0xd2, 0xed, 0x1e, 0xf3, 0xdb, 0xf9, 0x67, 0x36,
+	0xd3, 0x61, 0x59, 0xa3, 0x7a, 0x04, 0xd5, 0x96, 0x1a, 0x14, 0x2a, 0xbe, 0xdf, 0x60, 0x5b, 0x64,
+	0x06, 0x15, 0x88, 0x95, 0xf4, 0x56, 0x64, 0xbd, 0xc4, 0xb5, 0x82, 0xaf, 0x70, 0x3c, 0x31, 0x1b,
+	0x83, 0xb2, 0x0b, 0xa7, 0xfc, 0xe3, 0x13, 0xba, 0xb5, 0x80, 0x50, 0x7c, 0xfd, 0x7b, 0xc0, 0x8e,
+	0x1e, 0x57, 0x1d, 0x56, 0xd8, 0xf2, 0x8a, 0xe5, 0xb5, 0xbf, 0xe9, 0x19, 0xa4, 0x16, 0x20, 0xf9,
+	0xbc, 0x6c, 0xb0, 0x2d, 0x53, 0x5c, 0xca, 0xef, 0xe2, 0x62, 0xd2, 0x8d, 0xbe, 0xda, 0xe3, 0x77,
+	0xec, 0x38, 0x78, 0xdd, 0x88, 0x9e, 0xcf, 0x68, 0xa5, 0x15, 0x1b, 0x3f, 0xdb, 0x46, 0x97, 0xbd,
+	0x67, 0x59, 0xc0, 0x85, 0x82, 0x4e, 0x20, 0x3f, 0xa7, 0x85, 0xde, 0x6c, 0x7e, 0x3e, 0xc5, 0xff,
+	0xdd, 0xdd, 0x73, 0x5f, 0x7e, 0x24, 0x6c, 0x62, 0xf7, 0x41, 0x48, 0x77, 0x8a, 0x2e, 0x7b, 0xcb,
+	0x98, 0xc7, 0x1a, 0x95, 0xe6, 0x9c, 0x54, 0x59, 0xb0, 0xc9, 0xd9, 0x96, 0xb9, 0xe0, 0x03, 0x3b,
+	0xf5, 0xb6, 0x94, 0x46, 0x62, 0xf8, 0xeb, 0x97, 0xa4, 0x96, 0xb8, 0xbd, 0xa6, 0xd8, 0xf5, 0x53,
+	0xfa, 0x84, 0x1a, 0x05, 0x20, 0x4f, 0x7b, 0x0a, 0xc0, 0xf1, 0x13, 0x02, 0xc6, 0xec, 0x93, 0xff,
+	0xf8, 0x64, 0xf8, 0x44, 0x86, 0x6c, 0x82, 0x71, 0xf8, 0x8b, 0xb0, 0x1b, 0x7e, 0x78, 0x7e, 0xf8,
+	0x89, 0x0d, 0xc3, 0x1f, 0xb1, 0xbb, 0xa1, 0x62, 0x79, 0xe4, 0x57, 0xfd, 0x2e, 0x30, 0xee, 0x4f,
+	0x8a, 0xc3, 0xfe, 0x8c, 0xdd, 0x5e, 0xf2, 0x76, 0xe8, 0xf6, 0xf2, 0xe6, 0x2f, 0x00, 0x00, 0xff,
+	0xff, 0x35, 0x43, 0x60, 0xc7, 0xe9, 0x02, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -73,12 +73,16 @@ type MgmtCtlClient interface {
 	SystemQuery(ctx context.Context, in *SystemQueryReq, opts ...grpc.CallOption) (*SystemQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
 	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
+	// ResetFormat DAOS system (restart data-plane instances)
+	SystemResetFormat(ctx context.Context, in *SystemResetFormatReq, opts ...grpc.CallOption) (*SystemResetFormatResp, error)
 	// Start DAOS system (restart data-plane instances)
 	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
-	// Retrieve a list of supported fabric providers
-	NetworkListProviders(ctx context.Context, in *ProviderListRequest, opts ...grpc.CallOption) (*ProviderListReply, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
-	NetworkScanDevices(ctx context.Context, in *DeviceScanRequest, opts ...grpc.CallOption) (MgmtCtl_NetworkScanDevicesClient, error)
+	NetworkScan(ctx context.Context, in *NetworkScanReq, opts ...grpc.CallOption) (*NetworkScanResp, error)
+	// Retrieve firmware details from storage devices on server
+	FirmwareQuery(ctx context.Context, in *FirmwareQueryReq, opts ...grpc.CallOption) (*FirmwareQueryResp, error)
+	// Update firmware on storage devices on server
+	FirmwareUpdate(ctx context.Context, in *FirmwareUpdateReq, opts ...grpc.CallOption) (*FirmwareUpdateResp, error)
 }
 
 type mgmtCtlClient struct {
@@ -134,6 +138,15 @@ func (c *mgmtCtlClient) SystemStop(ctx context.Context, in *SystemStopReq, opts 
 	return out, nil
 }
 
+func (c *mgmtCtlClient) SystemResetFormat(ctx context.Context, in *SystemResetFormatReq, opts ...grpc.CallOption) (*SystemResetFormatResp, error) {
+	out := new(SystemResetFormatResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/SystemResetFormat", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtCtlClient) SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error) {
 	out := new(SystemStartResp)
 	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/SystemStart", in, out, opts...)
@@ -143,45 +156,31 @@ func (c *mgmtCtlClient) SystemStart(ctx context.Context, in *SystemStartReq, opt
 	return out, nil
 }
 
-func (c *mgmtCtlClient) NetworkListProviders(ctx context.Context, in *ProviderListRequest, opts ...grpc.CallOption) (*ProviderListReply, error) {
-	out := new(ProviderListReply)
-	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/NetworkListProviders", in, out, opts...)
+func (c *mgmtCtlClient) NetworkScan(ctx context.Context, in *NetworkScanReq, opts ...grpc.CallOption) (*NetworkScanResp, error) {
+	out := new(NetworkScanResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/NetworkScan", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *mgmtCtlClient) NetworkScanDevices(ctx context.Context, in *DeviceScanRequest, opts ...grpc.CallOption) (MgmtCtl_NetworkScanDevicesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[0], "/ctl.MgmtCtl/NetworkScanDevices", opts...)
+func (c *mgmtCtlClient) FirmwareQuery(ctx context.Context, in *FirmwareQueryReq, opts ...grpc.CallOption) (*FirmwareQueryResp, error) {
+	out := new(FirmwareQueryResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/FirmwareQuery", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtCtlNetworkScanDevicesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
+	return out, nil
 }
 
-type MgmtCtl_NetworkScanDevicesClient interface {
-	Recv() (*DeviceScanReply, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlNetworkScanDevicesClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlNetworkScanDevicesClient) Recv() (*DeviceScanReply, error) {
-	m := new(DeviceScanReply)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
+func (c *mgmtCtlClient) FirmwareUpdate(ctx context.Context, in *FirmwareUpdateReq, opts ...grpc.CallOption) (*FirmwareUpdateResp, error) {
+	out := new(FirmwareUpdateResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/FirmwareUpdate", in, out, opts...)
+	if err != nil {
 		return nil, err
 	}
-	return m, nil
+	return out, nil
 }
 
 // MgmtCtlServer is the server API for MgmtCtl service.
@@ -196,12 +195,16 @@ type MgmtCtlServer interface {
 	SystemQuery(context.Context, *SystemQueryReq) (*SystemQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
 	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)
+	// ResetFormat DAOS system (restart data-plane instances)
+	SystemResetFormat(context.Context, *SystemResetFormatReq) (*SystemResetFormatResp, error)
 	// Start DAOS system (restart data-plane instances)
 	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
-	// Retrieve a list of supported fabric providers
-	NetworkListProviders(context.Context, *ProviderListRequest) (*ProviderListReply, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
-	NetworkScanDevices(*DeviceScanRequest, MgmtCtl_NetworkScanDevicesServer) error
+	NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error)
+	// Retrieve firmware details from storage devices on server
+	FirmwareQuery(context.Context, *FirmwareQueryReq) (*FirmwareQueryResp, error)
+	// Update firmware on storage devices on server
+	FirmwareUpdate(context.Context, *FirmwareUpdateReq) (*FirmwareUpdateResp, error)
 }
 
 // UnimplementedMgmtCtlServer can be embedded to have forward compatible implementations.
@@ -223,14 +226,20 @@ func (*UnimplementedMgmtCtlServer) SystemQuery(ctx context.Context, req *SystemQ
 func (*UnimplementedMgmtCtlServer) SystemStop(ctx context.Context, req *SystemStopReq) (*SystemStopResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemStop not implemented")
 }
+func (*UnimplementedMgmtCtlServer) SystemResetFormat(ctx context.Context, req *SystemResetFormatReq) (*SystemResetFormatResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemResetFormat not implemented")
+}
 func (*UnimplementedMgmtCtlServer) SystemStart(ctx context.Context, req *SystemStartReq) (*SystemStartResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemStart not implemented")
 }
-func (*UnimplementedMgmtCtlServer) NetworkListProviders(ctx context.Context, req *ProviderListRequest) (*ProviderListReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method NetworkListProviders not implemented")
+func (*UnimplementedMgmtCtlServer) NetworkScan(ctx context.Context, req *NetworkScanReq) (*NetworkScanResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NetworkScan not implemented")
 }
-func (*UnimplementedMgmtCtlServer) NetworkScanDevices(req *DeviceScanRequest, srv MgmtCtl_NetworkScanDevicesServer) error {
-	return status.Errorf(codes.Unimplemented, "method NetworkScanDevices not implemented")
+func (*UnimplementedMgmtCtlServer) FirmwareQuery(ctx context.Context, req *FirmwareQueryReq) (*FirmwareQueryResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FirmwareQuery not implemented")
+}
+func (*UnimplementedMgmtCtlServer) FirmwareUpdate(ctx context.Context, req *FirmwareUpdateReq) (*FirmwareUpdateResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FirmwareUpdate not implemented")
 }
 
 func RegisterMgmtCtlServer(s *grpc.Server, srv MgmtCtlServer) {
@@ -327,6 +336,24 @@ func _MgmtCtl_SystemStop_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtCtl_SystemResetFormat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemResetFormatReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).SystemResetFormat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/SystemResetFormat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).SystemResetFormat(ctx, req.(*SystemResetFormatReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtCtl_SystemStart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemStartReq)
 	if err := dec(in); err != nil {
@@ -345,43 +372,58 @@ func _MgmtCtl_SystemStart_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtCtl_NetworkListProviders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ProviderListRequest)
+func _MgmtCtl_NetworkScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NetworkScanReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MgmtCtlServer).NetworkListProviders(ctx, in)
+		return srv.(MgmtCtlServer).NetworkScan(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ctl.MgmtCtl/NetworkListProviders",
+		FullMethod: "/ctl.MgmtCtl/NetworkScan",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtCtlServer).NetworkListProviders(ctx, req.(*ProviderListRequest))
+		return srv.(MgmtCtlServer).NetworkScan(ctx, req.(*NetworkScanReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtCtl_NetworkScanDevices_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(DeviceScanRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func _MgmtCtl_FirmwareQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FirmwareQueryReq)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	return srv.(MgmtCtlServer).NetworkScanDevices(m, &mgmtCtlNetworkScanDevicesServer{stream})
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).FirmwareQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/FirmwareQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).FirmwareQuery(ctx, req.(*FirmwareQueryReq))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-type MgmtCtl_NetworkScanDevicesServer interface {
-	Send(*DeviceScanReply) error
-	grpc.ServerStream
-}
-
-type mgmtCtlNetworkScanDevicesServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlNetworkScanDevicesServer) Send(m *DeviceScanReply) error {
-	return x.ServerStream.SendMsg(m)
+func _MgmtCtl_FirmwareUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FirmwareUpdateReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).FirmwareUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/FirmwareUpdate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).FirmwareUpdate(ctx, req.(*FirmwareUpdateReq))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
@@ -409,20 +451,26 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtCtl_SystemStop_Handler,
 		},
 		{
+			MethodName: "SystemResetFormat",
+			Handler:    _MgmtCtl_SystemResetFormat_Handler,
+		},
+		{
 			MethodName: "SystemStart",
 			Handler:    _MgmtCtl_SystemStart_Handler,
 		},
 		{
-			MethodName: "NetworkListProviders",
-			Handler:    _MgmtCtl_NetworkListProviders_Handler,
+			MethodName: "NetworkScan",
+			Handler:    _MgmtCtl_NetworkScan_Handler,
 		},
-	},
-	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "NetworkScanDevices",
-			Handler:       _MgmtCtl_NetworkScanDevices_Handler,
-			ServerStreams: true,
+			MethodName: "FirmwareQuery",
+			Handler:    _MgmtCtl_FirmwareQuery_Handler,
+		},
+		{
+			MethodName: "FirmwareUpdate",
+			Handler:    _MgmtCtl_FirmwareUpdate_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "control.proto",
 }

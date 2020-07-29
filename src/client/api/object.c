@@ -131,8 +131,8 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
-daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
-	       d_rank_list_t *ranks, daos_event_t *ev)
+daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
+	       daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
@@ -160,10 +160,10 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev)
 {
 	tse_task_t	*task;
-	int		rc;
+	int		 rc;
 
-	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, iods, sgls,
-				      maps, ev, NULL, &task);
+	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, 0, iods,
+				      sgls, maps, NULL, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -282,4 +282,51 @@ daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch)
 	D_FREE(epochs_p);
 	daos_obj_close(oh, NULL);
 	return rc;
+}
+
+int
+daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors)
+{
+	struct daos_obj_layout	*layout;
+	int			rc;
+
+	if (nr == NULL)
+		return -DER_INVAL;
+
+	rc = dc_obj_layout_get(oh, &layout);
+	if (rc)
+		return rc;
+
+	/** TBD - support more than per shard iteration */
+	if (*nr != 0 && *nr != layout->ol_nr) {
+		D_ERROR("For now, num anchors should be the same as what is"
+			" reported as optimal\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	*nr = layout->ol_nr;
+
+	if (anchors) {
+		uint32_t i;
+
+		for (i = 0; i < layout->ol_nr; i++) {
+			daos_anchor_set_zero(&anchors[i]);
+			dc_obj_shard2anchor(&anchors[i], i);
+			daos_anchor_set_flags(&anchors[i], DIOF_TO_SPEC_SHARD);
+		}
+	}
+out:
+	daos_obj_layout_free(layout);
+	return rc;
+}
+
+int
+daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor)
+{
+	/** TBD - support more than per shard iteration */
+	daos_anchor_set_zero(anchor);
+	dc_obj_shard2anchor(anchor, index);
+	daos_anchor_set_flags(anchor, DIOF_TO_SPEC_SHARD);
+
+	return 0;
 }

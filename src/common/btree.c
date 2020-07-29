@@ -606,7 +606,12 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 	struct btr_node		*nd;
 	umem_off_t		 nd_off;
 
-	nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+	if (btr_ops(tcx)->to_node_alloc != NULL)
+		nd_off = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins,
+						     btr_node_size(tcx));
+	else
+		nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+
 	if (UMOFF_IS_NULL(nd_off))
 		return btr_umm(tcx)->umm_nospc_rc;
 
@@ -2264,7 +2269,7 @@ btr_node_del_leaf(struct btr_context *tcx,
  * direction. In addition, caller should guarantee the child being deleted
  * is already empty.
  *
- * NB: This function may leave the node in an intermeidate state if it only
+ * NB: This function may leave the node in an intermediate state if it only
  * has one key (and two children). In this case, after returning from this
  * function, caller should either grab a child from a sibling node, or move
  * the only child of this node to a sibling node, then free this node.
@@ -2559,7 +2564,7 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 
 	if (cur_nd->tn_keyn > 1) {
 		/* OK to delete record without doing any extra work */
-		D_DEBUG(DB_TRACE, "Straightaway deletion, no rebalance.\n");
+		D_DEBUG(DB_TRACE, "Straight away deletion, no rebalance.\n");
 		sib_off	= BTR_NODE_NULL;
 		sib_on_right	= false; /* whatever... */
 
@@ -3314,12 +3319,12 @@ dbtree_destroy(daos_handle_t toh, void *args)
 
 /**
  * This function drains key/values from the tree, each time it deletes a KV
- * pair, it consumes a @credits, which is input paramter of this function.
+ * pair, it consumes a @credits, which is input parameter of this function.
  * It returns if all input credits are consumed, or the tree is empty, in
  * the later case, it also destroys the btree.
  *
  * \param toh		[IN]	 Tree open handle.
- * \param credis	[IN/OUT] Input and returned drain credits
+ * \param credits	[IN/OUT] Input and returned drain credits
  * \param args		[IN]	 user parameter for btr_ops_t::to_rec_free
  * \param destroy	[OUT]	 Tree is empty and destroyed
  */
@@ -3358,7 +3363,7 @@ failed:
 /**** Iterator APIs *********************************************************/
 
 /**
- * Initialise iterator.
+ * Initialize iterator.
  *
  * \param toh		[IN]	Tree open handle
  * \param options	[IN]	Options for the iterator.
@@ -3670,7 +3675,7 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 
 /**
  * Delete the record pointed by the current iterating cursor. This function
- * will reset interator before return, it means that caller should call
+ * will reset iterator before return, it means that caller should call
  * dbtree_iter_probe() again to reinitialize the iterator.
  *
  * \param ih		[IN]	Iterator open handle.
@@ -3811,7 +3816,7 @@ out:
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 
 /**
- * Intialise a tree instance from a registerd tree class.
+ * Initialize a tree instance from a registered tree class.
  */
 static int
 btr_class_init(umem_off_t root_off, struct btr_root *root,
@@ -3957,9 +3962,10 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);
 	ovhd->to_node_rec_msize = btr_size;
 
-	ovhd->to_node_overhead.no_order = tree_order;
-	ovhd->to_node_overhead.no_size = alloc_overhead +
+	ovhd->to_leaf_overhead.no_order = tree_order;
+	ovhd->to_leaf_overhead.no_size = alloc_overhead +
 		sizeof(struct btr_node) + btr_size * tree_order;
+	ovhd->to_int_node_size = ovhd->to_leaf_overhead.no_size;
 
 	order_idx = 0;
 

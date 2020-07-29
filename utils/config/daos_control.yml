@@ -1,0 +1,39 @@
+# DAOS control configuration file.
+#
+# Location of this configuration file is determined by first checking for the
+# path specified through the -o option of the dmg command line.
+# Otherwise, etc/daos_control.yml is used.
+#
+# Section describing the control configuration
+#
+# Although not supported for now, one might want to connect to multiple
+# DAOS installations from the same node in the future.
+#
+# Specify the associated DAOS systems.
+# Name must match name specified in the daos_server.yml file on the server.
+#
+# default: daos_server
+#name: daos
+
+# Default destination port to use if port not specified in host list addresses.
+# default: 10001
+#port: 10001
+
+# Hostlist
+# comma separated list of addresses <ipv4addr/hostname:port>
+# default: ['localhost:10001']
+#hostlist: ['localhost:10001']
+
+## Transport Credentials Specifying certificates to secure communications
+
+#transport_config:
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
+#  allow_insecure: false
+#
+#  # Custom CA Root certificate for generated certs
+#  ca_cert: /etc/daos/certs/daosCA.crt
+#  # Admin certificate for use in TLS handshakes
+#  cert: /etc/daos/certs/admin.crt
+#  # Key portion of Admin Certificate
+#  key: /etc/daos/certs/admin.key

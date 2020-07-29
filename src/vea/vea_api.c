@@ -229,7 +229,7 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	D_ASSERT(vsip != NULL);
 
 	if (md->vsd_magic != VEA_MAGIC) {
-		D_DEBUG(DB_IO, "load unformated blob\n");
+		D_DEBUG(DB_IO, "load unformatted blob\n");
 		return -DER_UNINIT;
 	}
 
@@ -363,6 +363,10 @@ migrate:
 done:
 	D_ASSERT(resrvd->vre_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(resrvd->vre_blk_cnt == blk_cnt);
+
+	D_ASSERT(vsi->vsi_stat[STAT_FREE_BLKS] >= blk_cnt);
+	vsi->vsi_stat[STAT_FREE_BLKS] -= blk_cnt;
+
 	/* Update hint offset */
 	hint_update(hint, resrvd->vre_blk_off + blk_cnt,
 		    &resrvd->vre_hint_seq);
@@ -672,8 +676,9 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 	if (attr == NULL && stat == NULL)
 		return -DER_INVAL;
 
-	/* Trigger free extents migration */
-	migrate_free_exts(vsi, false);
+	/* Trigger free extents migration only for slow query */
+	if (stat != NULL)
+		migrate_free_exts(vsi, false);
 
 	if (attr != NULL) {
 		struct vea_space_df *vsd = vsi->vsi_md;
@@ -683,6 +688,7 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 		attr->va_hdr_blks = vsd->vsd_hdr_blks;
 		attr->va_large_thresh = vsi->vsi_class.vfc_large_thresh;
 		attr->va_tot_blks = vsd->vsd_tot_blks;
+		attr->va_free_blks = vsi->vsi_stat[STAT_FREE_BLKS];
 	}
 
 	if (stat != NULL) {

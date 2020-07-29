@@ -37,7 +37,7 @@ message ScmModule {
 	uint32 socketid = 4;		// The socket id attached to module.
 	uint32 physicalid = 5;		// The physical id of the module.
 	uint64 capacity = 6;		// The capacity of the module.
-	//string uid = 1; // The uid of the module.
+	string uid = 7;			// The uid of the module.
 	//string handle = 3; // The device handle of the module.
 	//string serial = 8; // The serial number of the module.
 	//string fwrev = 10; // The firmware revision of the module.
@@ -71,6 +71,7 @@ message ScmModuleResult {
 message ScmMountResult {
 	string mntpoint = 1;		// Path where device or tmpfs is mounted
 	ResponseState state = 2;	// state of current operation
+	uint32 instanceidx = 3;		// Index of IO server instance
 }
 
 message PrepareScmReq {

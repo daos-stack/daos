@@ -33,7 +33,7 @@
 #include "obj_internal.h"
 
 /**
- * Swtich of enable DTX or not, enabled by default.
+ * Switch of enable DTX or not, enabled by default.
  */
 static int
 obj_mod_init(void)
@@ -118,8 +118,34 @@ struct dss_module_key obj_module_key = {
 	.dmk_fini = obj_tls_fini,
 };
 
+static int
+obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
+{
+	if (obj_rpc_is_update(rpc)) {
+		struct obj_rw_in	*orw = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE,
+				    &orw->orw_pool_uuid);
+	} else if (obj_rpc_is_fetch(rpc)) {
+		struct obj_rw_in	*orw = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_FETCH,
+				    &orw->orw_pool_uuid);
+	} else if (obj_rpc_is_migrate(rpc)) {
+		struct obj_migrate_in	*omi = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_MIGRATE,
+				    &omi->om_pool_uuid);
+	} else {
+		/* Other requests will not be queued, see dss_rpc_hdlr() */
+		return -DER_NOSYS;
+	}
+
+	return 0;
+}
+
 static struct dss_module_ops ds_obj_mod_ops = {
-	.dms_abt_pool_choose_cb = NULL,
+	.dms_get_req_attr = obj_get_req_attr,
 };
 
 struct dss_module obj_module =  {

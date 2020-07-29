@@ -59,6 +59,18 @@ void
 ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void
+ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
 ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void
@@ -103,5 +115,8 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void
 ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 #endif /* __MGMT_DRPC_INTERNAL_H__ */

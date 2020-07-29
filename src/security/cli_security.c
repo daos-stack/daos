@@ -67,23 +67,24 @@ request_credentials_via_drpc(Drpc__Response **response)
 	int		rc;
 
 	if (dc_agent_sockpath == NULL) {
-		D_ERROR("DAOS Socket Path is Unitialized\n");
+		D_ERROR("DAOS Socket Path is Uninitialized\n");
 		return -DER_UNINIT;
 	}
 
-	agent_socket = drpc_connect(dc_agent_sockpath);
-	if (agent_socket == NULL) {
-		D_ERROR("Can't connect to agent socket\n");
-		return -DER_BADPATH;
+	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Can't connect to agent socket " DF_RC "\n", DP_RC(rc));
+		return rc;
 	}
 
-	request = drpc_call_create(agent_socket,
-			DRPC_MODULE_SEC_AGENT,
-			DRPC_METHOD_SEC_AGENT_REQUEST_CREDS);
-	if (request == NULL) {
-		D_ERROR("Couldn't allocate dRPC call\n");
+	rc = drpc_call_create(agent_socket,
+			      DRPC_MODULE_SEC_AGENT,
+			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
+			      &request);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Couldn't allocate dRPC call " DF_RC "\n", DP_RC(rc));
 		drpc_close(agent_socket);
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	rc = drpc_call(agent_socket, R_SYNC, request, response);

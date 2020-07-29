@@ -58,7 +58,55 @@ message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
 }
 
-// PoolReintegrateReq supplies pool identifier and force flag.
+// PoolEvictReq supplies pool identifier.
+message PoolEvictReq {
+	string uuid = 1; // uuid of pool to evict
+	string sys = 2; // DAOS system identifier
+}
+
+// PoolEvictResp returns resultant state of evict operation.
+message PoolEvictResp {
+	int32 status = 1; // DAOS error code
+}
+
+// PoolExcludeReq supplies pool identifier, rank, and target_idxs.
+message PoolExcludeReq {
+	string uuid = 1; // uuid of pool to add target up to
+	uint32 rank = 2; // target to move to the up state
+	repeated uint32 targetidx = 3; // target ranks
+}
+
+// PoolExcludeResp returns resultant state of Exclude operation.
+message PoolExcludeResp {
+	int32 status = 1; // DAOS error code
+}
+
+// PoolDrainReq supplies pool identifier, rank, and target_idxs.
+message PoolDrainReq {
+	string uuid = 1; // uuid of pool to add target up to
+	uint32 rank = 2; // rank to move to the up state
+	repeated uint32 targetidx = 3; // rank targets
+}
+
+// PoolDrainResp returns resultant state of Drain operation.
+message PoolDrainResp {
+	int32 status = 1; // DAOS error code
+}
+
+// PoolExtendReq supplies pool identifier and rank list.
+message PoolExtendReq {
+	string uuid = 1; // uuid of pool to add target up to
+	repeated uint32 ranks = 2; // ranks
+	uint64 scmbytes = 3; // SCM size in bytes
+	uint64 nvmebytes = 4; // NVMe size in bytes
+}
+
+// PoolExtendResp returns resultant state of Extend operation.
+message PoolExtendResp {
+	int32 status = 1; // DAOS error code
+}
+
+// PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
 message PoolReintegrateReq {
 	string uuid = 1; // uuid of pool to add target up to
 	uint32 rank = 2; // target to move to the up state
@@ -163,5 +211,8 @@ message PoolQueryResp {
 	PoolRebuildStatus rebuild = 6; // pool rebuild status
 	StorageUsageStats scm = 7; // SCM storage usage stats
 	StorageUsageStats nvme = 8; // NVMe storage usage stats
+	uint32 totalnodes = 9; // total nodes in pool
+	uint32 version = 10; // latest pool map version
+	uint32 leader = 11; // current raft leader
 }
 

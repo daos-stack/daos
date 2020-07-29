@@ -26,10 +26,10 @@ from __future__ import print_function
 import re
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers, get_log_file
+from apricot import TestWithServers
 from test_utils_pool import TestPool
 from fio_utils import FioCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
 
@@ -57,7 +57,7 @@ class FioBase(TestWithServers):
         # Start the servers and agents
         super(FioBase, self).setUp()
 
-        # initialise daos_cmd
+        # initialize daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
 
         # Get the parameters for Fio
@@ -99,7 +99,7 @@ class FioBase(TestWithServers):
 
         # Extract the container UUID from the daos container create output
         cont_uuid = re.findall(
-            "created\s+container\s+([0-9a-f-]+)", result.stdout)
+            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
         if not cont_uuid:
             self.fail(
                 "Error obtaining the container uuid from: {}".format(
@@ -109,14 +109,13 @@ class FioBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
-                           log_file=get_log_file(self.client_log),
-                           dfuse_env=self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
         self.dfuse.set_dfuse_cont_param(self._create_cont())
+        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         try:
             # start dfuse
@@ -128,8 +127,14 @@ class FioBase(TestWithServers):
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 
-    def execute_fio(self):
-        """Runner method for Fio."""
+    def execute_fio(self, directory=None, stop_dfuse=True):
+        """Runner method for Fio.
+
+        Args:
+            directory (str): path for fio run dir
+            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this
+                               method.
+        """
         # Create a pool if one does not already exist
         if self.pool is None:
             self._create_pool()
@@ -140,15 +145,20 @@ class FioBase(TestWithServers):
             # Uncomment below two lines once DAOS-3355 is resolved
             # self.pool.connect()
             # self.create_cont()
-            self._start_dfuse()
-            self.fio_cmd.update(
-                "global", "directory", self.dfuse.mount_dir.value,
-                "fio --name=global --directory")
+            if directory:
+                self.fio_cmd.update(
+                    "global", "directory", directory,
+                    "fio --name=global --directory")
+            else:
+                self._start_dfuse()
+                self.fio_cmd.update(
+                    "global", "directory", self.dfuse.mount_dir.value,
+                    "fio --name=global --directory")
 
         # Run Fio
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
 
-        if self.dfuse:
+        if stop_dfuse and self.dfuse:
             self.dfuse.stop()
             self.dfuse = None

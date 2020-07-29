@@ -122,7 +122,7 @@ dc_hdl2pool(daos_handle_t poh)
 	return container_of(hlink, struct dc_pool, dp_hlink);
 }
 
-static void
+void
 dc_pool_hdl_link(struct dc_pool *pool)
 {
 	daos_hhash_link_insert(&pool->dp_hlink, DAOS_HTYPE_POOL);
@@ -146,8 +146,8 @@ flags_are_valid(unsigned int flags)
 /* default number of components in pool map */
 #define DC_POOL_DEFAULT_COMPONENTS_NR 128
 
-static struct dc_pool *
-pool_alloc(unsigned int nr)
+struct dc_pool *
+dc_pool_alloc(unsigned int nr)
 {
 	struct dc_pool *pool;
 	int rc = 0;
@@ -155,7 +155,6 @@ pool_alloc(unsigned int nr)
 	/** allocate and fill in pool connection */
 	D_ALLOC_PTR(pool);
 	if (pool == NULL) {
-		D_ERROR("failed to allocate pool connection\n");
 		return NULL;
 	}
 
@@ -186,9 +185,9 @@ failed:
 }
 
 /* Assume dp_map_lock is locked before calling this function */
-static int
-pool_map_update(struct dc_pool *pool, struct pool_map *map,
-		unsigned int map_version, bool connect)
+int
+dc_pool_map_update(struct dc_pool *pool, struct pool_map *map,
+		   unsigned int map_version, bool connect)
 {
 	int rc;
 
@@ -255,7 +254,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
-	rc = pool_map_update(pool, map, map_version, connect);
+	rc = dc_pool_map_update(pool, map, map_version, connect);
 	if (rc)
 		D_GOTO(out_unlock, rc);
 
@@ -391,72 +390,6 @@ out:
 }
 
 int
-dc_pool_local_close(daos_handle_t ph)
-{
-	struct dc_pool	*pool;
-
-	pool = dc_hdl2pool(ph);
-	if (pool == NULL)
-		return 0;
-
-	pl_map_disconnect(pool->dp_pool);
-	dc_pool_put(pool);
-	return 0;
-}
-
-int
-dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
-		   unsigned int flags, const char *grp,
-		   struct pool_map *map, d_rank_list_t *svc_list,
-		   daos_handle_t *ph)
-{
-	struct dc_pool	*pool;
-	int		rc = 0;
-
-	if (!daos_handle_is_inval(*ph)) {
-		pool = dc_hdl2pool(*ph);
-		if (pool != NULL)
-			D_GOTO(out, rc = 0);
-	}
-
-	/** allocate and fill in pool connection */
-	pool = pool_alloc(pool_map_comp_cnt(map));
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_DEBUG(DB_TRACE, "after alloc "DF_UUIDF"\n", DP_UUID(pool_uuid));
-	uuid_copy(pool->dp_pool, pool_uuid);
-	uuid_copy(pool->dp_pool_hdl, pool_hdl_uuid);
-	pool->dp_capas = flags;
-
-	/** attach to the server group and initialize rsvc_client */
-	rc = dc_mgmt_sys_attach(NULL, &pool->dp_sys);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	D_ASSERT(svc_list != NULL);
-	rc = rsvc_client_init(&pool->dp_client, svc_list);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	D_DEBUG(DB_TRACE, "before update "DF_UUIDF"\n", DP_UUID(pool_uuid));
-	rc = pool_map_update(pool, map, pool_map_get_version(map), true);
-	if (rc)
-		D_GOTO(out, rc);
-
-	D_DEBUG(DF_DSMC, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
-		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
-
-	dc_pool_hdl_link(pool);
-	dc_pool2hdl(pool, ph);
-out:
-	if (pool != NULL)
-		dc_pool_put(pool);
-
-	return rc;
-}
-
-int
 dc_pool_update_map(daos_handle_t ph, struct pool_map *map)
 {
 	struct dc_pool	*pool;
@@ -470,7 +403,7 @@ dc_pool_update_map(daos_handle_t ph, struct pool_map *map)
 		D_GOTO(out, rc = 0); /* nothing to do */
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
-	rc = pool_map_update(pool, map, pool_map_get_version(map), false);
+	rc = dc_pool_map_update(pool, map, pool_map_get_version(map), false);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 out:
 	if (pool)
@@ -500,7 +433,7 @@ dc_pool_connect(tse_task_t *task)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
-		pool = pool_alloc(DC_POOL_DEFAULT_COMPONENTS_NR);
+		pool = dc_pool_alloc(DC_POOL_DEFAULT_COMPONENTS_NR);
 		if (pool == NULL)
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		uuid_copy(pool->dp_pool, args->uuid);
@@ -894,7 +827,7 @@ out_pool:
 	dc_pool_put(pool);
 out:
 	if (rc != 0)
-		D_ERROR("dc_pool_l2g failed, rc: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -935,7 +868,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	D_ASSERT(map_buf != NULL);
 
 	/** allocate and fill in pool connection */
-	pool = pool_alloc(pool_glob->dpg_map_pb_nr);
+	pool = dc_pool_alloc(pool_glob->dpg_map_pb_nr);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -980,7 +913,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 
 out:
 	if (rc != 0)
-		D_ERROR("dc_pool_g2l failed, rc: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 	if (pool != NULL)
 		dc_pool_put(pool);
 	return rc;
@@ -1015,7 +948,7 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 
 	rc = dc_pool_g2l(pool_glob, glob.iov_len, poh);
 	if (rc != 0)
-		D_ERROR("dc_pool_g2l failed, rc: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 
 out:
 	return rc;
@@ -1108,8 +1041,6 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	if (state == NULL) {
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
-			D_ERROR(DF_UUID": failed to allocate state\n",
-				DP_UUID(args->uuid));
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
@@ -1208,6 +1139,16 @@ dc_pool_add(tse_task_t *task)
 	args = dc_task_get_args(task);
 
 	return dc_pool_update_internal(task, args, POOL_ADD);
+}
+
+int
+dc_pool_drain(tse_task_t *task)
+{
+	daos_pool_update_t *args;
+
+	args = dc_task_get_args(task);
+
+	return dc_pool_update_internal(task, args, POOL_DRAIN);
 }
 
 int
@@ -1606,8 +1547,6 @@ dc_pool_evict(tse_task_t *task)
 
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
-			D_ERROR(DF_UUID": failed to allocate state\n",
-				DP_UUID(args->uuid));
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
@@ -1680,9 +1619,7 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 		return -DER_NO_HDL;
 	}
 
-	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
-	*map_ver = pool_map_get_version(pool->dp_map);
-	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+	*map_ver = dc_pool_get_version(pool);
 	dc_pool_put(pool);
 
 	return 0;
@@ -2218,7 +2155,6 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 	if (state == NULL) {
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
-			D_ERROR("Failed to allocate state\n");
 			return -DER_NOMEM;
 		}
 		rc = dc_mgmt_sys_attach(group, &state->scs_sys);

@@ -29,9 +29,6 @@
 #include <limits.h>
 #include <daos/common.h>
 
-/* default debug log file */
-#define DAOS_LOG_DEFAULT	"/tmp/daos.log"
-
 #define DAOS_DBG_MAX_LEN	(32)
 #define DAOS_FAC_MAX_LEN	(128)
 
@@ -146,7 +143,8 @@ daos_debug_fini(void)
 int
 daos_debug_init(char *logfile)
 {
-	int		rc;
+	int	flags = DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG;
+	int	rc;
 
 	D_MUTEX_LOCK(&dd_lock);
 	if (dd_ref > 0) {
@@ -155,15 +153,15 @@ daos_debug_init(char *logfile)
 		return 0;
 	}
 
-	if (getenv(D_LOG_FILE_ENV)) /* honor the env variable first */
-		logfile = getenv(D_LOG_FILE_ENV);
-	else if (logfile == NULL)
-		logfile = DAOS_LOG_DEFAULT;
+	/* honor the env variable first */
+	logfile = getenv(D_LOG_FILE_ENV);
+	if (logfile == NULL || strlen(logfile) == 0) {
+		flags |= DLOG_FLV_STDOUT;
+		logfile = NULL;
+	}
 
 
-	rc = d_log_init_adv("DAOS", logfile,
-			    DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG,
-			    DLOG_INFO, DLOG_CRIT);
+	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));
@@ -194,7 +192,7 @@ daos_debug_init(char *logfile)
 
 	rc = daos_fail_init();
 	if (rc) {
-		D_PRINT_ERR("Failed to init DAOS fail injection: "DF_RC"\n",
+		D_PRINT_ERR("Failed to init DAOS fault injection: "DF_RC"\n",
 			DP_RC(rc));
 		goto failed_unlock;
 	}
@@ -226,6 +224,7 @@ DP_UUID(const void *uuid)
 	return buf;
 }
 
+#ifndef DAOS_BUILD_RELEASE
 #define DF_KEY_MAX		8
 #define DF_KEY_STR_SIZE		64
 
@@ -263,3 +262,5 @@ daos_key2str(daos_key_t *key)
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
 	return buf;
 }
+#endif
+

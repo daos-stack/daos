@@ -24,6 +24,7 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 
 import enum
 import uuid
+import pickle
 import sys
 
 # pylint: disable=no-name-in-module
@@ -35,13 +36,23 @@ else:
 
 from . import DAOS_MAGIC
 from . import PyDError
-from . import dc
+from . import DaosClient
 
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
+
+class KvNotFound(Exception):
+    """Raised by get_kv_by_name if KV does not exist"""
+
+    def __init__(self, name):
+        self.name = name
+        super().__init__(self)
+
+    def __str__(self):
+        return "Failed to create '{}'".format(self.name)
 
 class ObjID(object):
     """
@@ -102,6 +113,7 @@ class Cont(object):
         print pool and container UUIDs
     """
     def __init__(self, puuid=None, cuuid=None, path=None, svc='0'):
+        self._dc = DaosClient()
         self.coh = None
         if path is None and (puuid is None or cuuid is None):
             raise PyDError("invalid pool or container UUID",
@@ -120,7 +132,6 @@ class Cont(object):
             raise PyDError("failed to access container", ret)
         self.poh = poh
         self.coh = coh
-        self._dc = dc
 
     def __del__(self):
         if not self.coh:
@@ -154,6 +165,30 @@ class Cont(object):
         oid = ObjID(hi, lo)
         return KVObj(self.coh, oid, self)
 
+    def get_kv_by_name(self, name, root=None, create=False):
+        """Return KV by name.
+
+        Allow selection of root (or parent) container, and
+        optionally create kv if not found"""
+
+        if not root:
+            root = self.rootkv()
+        if name in root:
+            object_data = pickle.loads(root[name])
+            return self.kv(object_data['oid'])
+
+        if not create:
+            raise KvNotFound(name)
+
+        new_kv = self.newkv()
+        # Create a new entry in the root kv, where the entry
+        # itself is a dict, and the 'oid' entry is the object
+        # of the new, referenced kv.  This allows for future
+        # expansion of the definition without changing
+        # existing containers.
+        root[name] = pickle.dumps({'oid': new_kv.oid})
+        return new_kv
+
     def __str__(self):
         return '{}@{}'.format(self.cuuid, self.puuid)
 
@@ -161,6 +196,7 @@ class _Obj(object):
     oh = None
 
     def __init__(self, coh, oid, cont):
+        self._dc = DaosClient()
         self.oid = oid
         # Set self.oh to Null here so it's defined in __dell__ if there's
         # a problem with the obj_open() call.
@@ -193,6 +229,7 @@ class KVIter():
     """Iterator class for KVOjb"""
 
     def __init__(self, kv):
+        self._dc = DaosClient()
         self._entries = []
         self._nr = 256
         self._size = 4096 # optimized for 16-char strings

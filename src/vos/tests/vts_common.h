@@ -114,18 +114,25 @@ struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
 /**
  * VOS test suite run tests
  */
-int run_pool_test(void);
-int run_co_test(void);
-int run_discard_tests(void);
-int run_aggregate_tests(bool slow);
-int run_dtx_tests(void);
-int run_gc_tests(void);
-int run_pm_tests(void);
-int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators);
-int run_ts_tests(void);
+int run_pool_test(const char *cfg);
+int run_co_test(const char *cfg);
+int run_discard_tests(const char *cfg);
+int run_aggregate_tests(bool slow, const char *cfg);
+int run_dtx_tests(const char *cfg);
+int run_gc_tests(const char *cfg);
+int run_pm_tests(const char *cfg);
+int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators,
+		const char *cfg);
+int run_ts_tests(const char *cfg);
 
-int run_ilog_tests(void);
-int run_csum_extent_tests(void);
-int run_mvcc_tests(void);
+int run_ilog_tests(const char *cfg);
+int run_csum_extent_tests(const char *cfg);
+int run_mvcc_tests(const char *cfg);
+
+void
+vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
+	      uint64_t dkey_hash, struct dtx_handle **dthp);
+void
+vts_dtx_end(struct dtx_handle *dth);
 
 #endif

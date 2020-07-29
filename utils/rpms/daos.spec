@@ -2,11 +2,16 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
+%if (0%{?suse_version} >= 1500)
+# until we get an updated mercury build on 15.2
+%global mercury_version 2.0.0~rc1-1.suse.lp151
+%else
+%global mercury_version 2.0.0~rc1-1%{?dist}
+%endif
 
 Name:          daos
 Version:       1.1.0
-Release:       10%{?relval}%{?dist}
+Release:       28%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -29,16 +34,21 @@ BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: libabt-devel >= 1.0rc1
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
-BuildRequires: fuse-devel >= 3.4.2
+BuildRequires: fuse3-devel >= 3.4.2
+%if (0%{?suse_version} >= 1500)
+BuildRequires: libprotobuf-c-devel
+%else
 BuildRequires: protobuf-c-devel
+%endif
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
+BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
+BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel <= 0.5.0
-BuildRequires: hwloc-devel
+BuildRequires: raft-devel = 0.6.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -52,6 +62,7 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
+BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -67,7 +78,7 @@ BuildRequires: cunit-devel
 BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
-BuildRequires: Modules
+BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
 %else
@@ -83,7 +94,6 @@ BuildRequires: libpsm_infinipath1
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1, libpmemobj1
 %endif
-Requires: fuse >= 3.4.2
 Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -124,6 +134,14 @@ Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
+Requires: fuse3 >= 3.4.2
+%if (0%{?suse_version} >= 1500)
+Requires: libfuse3-3 >= 3.4.2
+%else
+# because our repo has a deprecated fuse-3.x RPM, make sure we don't
+# get it when fuse3 Requires: /etc/fuse.conf
+Requires: fuse < 3, fuse3-libs >= 3.4.2
+%endif
 %systemd_requires
 
 %description client
@@ -150,6 +168,17 @@ This is the package needed to run the DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
 %endif
+Requires: libuuid-devel
+Requires: libyaml-devel
+Requires: boost-devel
+# Pin mercury to exact version during development
+#Requires: mercury-devel < 2.0.0a1
+# we ideally want to set this minimum version however it seems to confuse yum:
+# https://github.com/rpm-software-management/yum/issues/124
+#Requires: mercury >= 2.0.0~a1
+Requires: mercury-devel = %{mercury_version}
+Requires: openpa-devel
+Requires: hwloc-devel
 Summary: The DAOS development libraries and headers
 
 %description devel
@@ -159,22 +188,20 @@ This is the package needed to build software with the DAOS library.
 %setup -q
 
 %build
-# remove rpathing from the build
-rpath_files="utils/daos_build.py"
-rpath_files+=" $(find . -name SConscript)"
-sed -i -e '/AppendUnique(RPATH=.*)/d' $rpath_files
 
 %define conf_dir %{_sysconfdir}/daos
 
-scons %{?no_smp_mflags}    \
+scons %{?_smp_mflags}      \
       --config=force       \
+      --no-rpath           \
       USE_INSTALLED=all    \
       CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot}
 
 %install
-scons %{?no_smp_mflags}               \
+scons %{?_smp_mflags}                 \
       --config=force                  \
+      --no-rpath                      \
       --install-sandbox=%{?buildroot} \
       %{?buildroot}%{_prefix}         \
       %{?buildroot}%{conf_dir}        \
@@ -188,9 +215,11 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
+mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
+getent passwd daos_server >/dev/null || useradd -M daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -221,13 +250,14 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/ring_pl_map
 %{_bindir}/pl_bench
 %{_bindir}/rdbt
+%{_bindir}/vos_size_dfs_sample.py
 %{_bindir}/vos_size.py
+%{_libdir}/libdfs_internal.so
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
 %{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
-%{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %{_libdir}/libdaos_common.so
 # TODO: this should move from daos_srv to daos
@@ -240,6 +270,11 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 
 %files server
 %config(noreplace) %{conf_dir}/daos_server.yml
+%dir %{conf_dir}/certs
+%attr(0700,daos_server,daos_server) %{conf_dir}/certs
+%dir %{conf_dir}/certs/clients
+%attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
+%attr(0664,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
@@ -267,9 +302,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
-%{_bindir}/dmg_old
-%{_bindir}/daosctl
-%{_bindir}/dcont
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
@@ -310,7 +342,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %endif
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
-%config(noreplace) %{conf_dir}/daos.yml
+%config(noreplace) %{conf_dir}/daos_control.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
@@ -341,6 +373,66 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Mon Jul 13 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-28
+- Change fuse requirement to fuse3
+- Use Lmod for MPI module loading
+
+* Tue Jul 7 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-27
+- Update to mercury release 2.0.0~rc1-1
+
+* Sun Jun 28 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-26
+- Add the vos_size_dfs_sample.py tool. It is used to generate dynamically
+  the vos_dfs_sample.yaml file using the real DFS super block data.
+
+* Tue Jun 23 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-25
+- Add -no-rpath option and use it for rpm build rather than modifying
+  SCons files in place
+
+* Tue Jun 16 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-24
+- Modify RPATH removal snippet to replace line with pass as some lines
+  can't be removed without breaking the code
+
+* Fri Jun 05 2020 Ryon Jensen <ryon.jensen@intel.com> - 1.1.0-23
+- Add libisa-l_crypto dependency
+
+* Fri Jun 05 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-22
+- Change server systemd run-as user to daos_server in unit file
+
+* Thu Jun 04 2020 Hua Kuang <hua.kuang@intel.com> - 1.1.0-21
+- Remove dmg_old from DAOS RPM package
+
+* Thu May 28 2020 Tom Nabarro <tom.nabarro@intel.com> - 1.1.0-20
+- Create daos group to run as in systemd unit file
+
+* Tue May 26 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-19
+- Enable parallel building with _smp_mflags
+
+* Fri May 15 2020 Kenneth Cain <kenneth.c.cain@intel.com> - 1.1.0-18
+- Require raft-devel >= 0.6.0 that adds new API raft_election_start()
+
+* Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-17
+- Add cart-devel's Requires to daos-devel as they were forgotten
+  during the cart merge
+
+* Thu May 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-16
+- Fix fuse3-libs -> libfuse3 for SLES/Leap 15
+
+* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-15
+- Use new properly pre-release tagged mercury RPM
+
+* Thu Apr 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-14
+- Move fuse dependencies to the client subpackage
+
+* Mon Apr 27 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-13
+- Rename /etc/daos.yml -> /etc/daos_control.yml
+
+* Thu Apr 16 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-12
+- Use distro fuse
+
+* Fri Apr 10 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 1.1.0-11
+- Update to mercury 4871023 to pick na_ofi.c race condition fix for
+  "No route to host" errors.
+
 * Sun Apr 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-10
 - Clean up spdk dependencies
 
@@ -360,10 +452,10 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 - Remove cart as an external dependence
 
 * Mon Mar 23 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-4
-- Remove scons_local as depedency
+- Remove scons_local as dependency
 
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
-- bump up go minimum version to 1.12
+- Bump up go minimum version to 1.12
 
 * Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
 - daos-server requires daos-client (same version)

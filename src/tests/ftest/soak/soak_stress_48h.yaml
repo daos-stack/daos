@@ -1,0 +1,156 @@
+hosts:
+# servers if no server partition is defined
+    test_servers:
+        - server-A
+        - server-B
+        - server-C
+        - server-D
+# servers if a server partition is defined
+    # server_partition: daos_server
+    client_partition: daos_client
+orterun:
+    allow_run_as_root: True
+# include Cluster specific slurm params
+srun:
+    reservation:
+srun_params:
+    reservation:
+# This timeout must be longer than the test_timeout param (+15minutes)
+# 48 hour test
+timeout: 48H15M
+setup:
+    start_servers: True
+    start_agents: True
+dmg:
+    insecure: True
+server_config:
+    name: daos_server
+    provider: ofi+sockets
+    control_log_mask: INFO
+    control_log_file: daos_control0.log
+    servers:
+        log_mask: ERR
+        fabric_iface: ib0
+        fabric_iface_port: 31416
+        log_mask: ERR
+        log_file: daos_io0.log
+        # Storage definitions for AEP and NVMe
+        scm_mount: /mnt/daos0
+        scm_class: dcpm
+        scm_list: [/dev/pmem0]
+        bdev_class: nvme
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        env_vars:
+            - FI_UNIVERSE_SIZE=2048
+# pool_params - attributes of the pools to create; Currently only create one
+pool_ior:
+    mode: 146
+    name: daos_server
+    scm_size: 200000000000
+    nvme_size: 300000000000
+    svcn: 1
+    control_method: dmg
+pool_fio:
+    mode: 146
+    name: daos_server
+    scm_size: 100000000000
+    nvme_size: 200000000000
+    svcn: 1
+    control_method: dmg
+pool_reserved:
+    mode: 511
+    name: daos_server
+    scm_size: 3000000000
+    nvme_size: 50000000000
+    control_method: dmg
+container_reserved:
+    akey_size: 5
+    dkey_size: 5
+    data_size: 4096
+    object_qty: 20
+    record_qty: 1
+    record_size: 100
+    array_size: 1
+# test_params - Defines the type of test to run and how long it runs
+#               It also defines how many pools and jobs to create
+#               name:                The name of the Avocado testcase
+#               test_timeout:        The overall timeout in hours
+#               test_iteration:      values 1 or -1; -1 is used to cause the
+#                                    IOR -T x to end cmd.  i = 100000000
+#                                    (does not seem to work)
+#               nodesperjob:         slurm -N param; -1 indicates all nodes
+#                                    in -partition
+#               poollist:            defines pools to create for jobs
+#               joblist:             defines workload per slurm scripts
+#               harasserlist:        defines the harassers to run in test
+soak_stress:
+    name: soak_stress
+    # stress test timeout in hours
+    test_timeout: 48
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 30
+    nodesperjob:
+        - -1
+        - 2
+        - 4
+    # used for performance benchmarks
+    taskspernode:
+        - 1
+        - 16
+        - 32
+    poollist:
+        - pool_ior
+        - pool_fio
+    joblist:
+        - ior_stress
+        - fio_stress
+# Commandline parameters
+# Benchmark and application params
+# IOR params -a DAOS and -a MPIIO
+# sequential
+ior_stress:
+    api:
+        - DAOS
+        - MPIIO
+    test_file: daos:testFile
+    flags: -v -w -W -r -R
+    block_size:
+        - '64M'
+        - '4M'
+        - '32M'
+    repetitions: 5
+    transfer_size:
+        - '4k'
+        - '128k'
+        - '1m'
+        - '512K'
+        - '64k'
+    daos_oclass:
+        - "SX"
+fio_stress:
+  names:
+    - global
+    - test
+  global:
+    directory: "/tmp/daos_dfuse"
+    ioengine: 'libaio'
+    thread: 1
+    group_reporting: 1
+    direct: 1
+    verify: 'crc64'
+    iodepth: 16
+  test:
+    numjobs: 16
+  soak:
+    blocksize:
+        - '64K'
+        - '1M'
+    size:
+        - '500M'
+        - '1G'
+    rw:
+        - 'rw'
+        - 'randrw'
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
+

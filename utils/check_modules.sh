@@ -51,13 +51,16 @@ if [ -z "$*" ]; then
   flist="-c utils/daos_build.py -s SConstruct"
   # Exclude raft and utils/sl
   scripts=$(find . -name SConscript | grep -v -e utils/sl -e raft \
-          -e _build.external | sort)
+          -e build/external | sort)
   for file in $scripts; do
     flist+=" -s $file "
   done
   # the functional test code
-  flist+=$(find src/tests/ftest/ -name \*.py | sort)
-  flist+=$(find src/client/pydaos/ -name \*.py | sort)
+  flist+=" $(find src/tests/ftest/ -name \*.py | sort)"
+  flist+=" $(find src/client/pydaos/ -name \*.py | sort)"
+  flist+=" $(find src/client/dfuse/test/ -name \*.py | sort)"
+  flist+=" $(find src/cart/ -name \*.py | sort)"
+  flist+=" $(find utils/ -name \*.py | sort)"
 else
   flist=$*
 fi

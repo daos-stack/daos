@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		inode->ie_parent = ie->ie_parent;
 		strncpy(inode->ie_name, ie->ie_name, NAME_MAX+1);
 
-		atomic_fetch_sub(&ie->ie_ref, 1);
+		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
 		ie->ie_root = 0;
 		ie_close(fs_handle, ie);
@@ -145,8 +145,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		return rc;
 
 	rc = duns_parse_attr(&str[0], str_len, &dattr);
-	if (rc != -DER_SUCCESS)
-		return daos_der2errno(rc);
+	if (rc)
+		return rc;
 
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
 		return ENOTSUP;
@@ -256,7 +256,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
 
-	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
+	rc = dfuse_lookup_inode(fs_handle, dfs, NULL,
 				&ie->ie_stat.st_ino);
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
@@ -343,7 +343,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	if (S_ISDIR(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);

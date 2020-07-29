@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"sort"
 
+	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
@@ -56,7 +57,7 @@ type (
 )
 
 type HostErrorsResp struct {
-	HostErrors HostErrorsMap
+	HostErrors HostErrorsMap `json:"host_errors"`
 }
 
 func (her *HostErrorsResp) addHostError(hostAddr string, hostErr error) error {
@@ -72,21 +73,38 @@ func (her *HostErrorsResp) getHostErrors() HostErrorsMap {
 
 func (her *HostErrorsResp) Errors() error {
 	if len(her.HostErrors) > 0 {
-		return errors.Errorf("%d hosts had errors", len(her.HostErrors))
+		errCount := 0
+		for _, hes := range her.HostErrors {
+			errCount += hes.HostSet.Count()
+		}
+
+		return errors.Errorf("%s had errors",
+			english.Plural(errCount, "host", "hosts"))
 	}
 	return nil
 }
 
+// HostErrorSet preserves the original hostError used
+// to create the map key.
+type HostErrorSet struct {
+	HostSet   *hostlist.HostSet
+	HostError error
+}
+
 // HostErrorsMap provides a mapping from error strings to a set of
 // hosts to which the error applies.
-type HostErrorsMap map[string]*hostlist.HostSet
+type HostErrorsMap map[string]*HostErrorSet
 
 // MarshalJSON implements a custom marshaller to include
 // the hostset as a ranged string.
 func (hem HostErrorsMap) MarshalJSON() ([]byte, error) {
 	out := make(map[string]string)
-	for k, v := range hem {
-		out[k] = v.RangedString()
+	for k, hes := range hem {
+		// quick sanity check to prevent panics
+		if hes == nil || hes.HostSet == nil {
+			return nil, errors.New("nil hostErrorSet or hostSet")
+		}
+		out[k] = hes.HostSet.RangedString()
 	}
 	return json.Marshal(out)
 }
@@ -99,18 +117,24 @@ func (hem HostErrorsMap) Add(hostAddr string, hostErr error) (err error) {
 
 	errStr := hostErr.Error() // stringify the error as map key
 	if _, exists := hem[errStr]; !exists {
-		hem[errStr], err = hostlist.CreateSet(hostAddr)
+		hes := &HostErrorSet{
+			HostError: hostErr,
+		}
+		hes.HostSet, err = hostlist.CreateSet(hostAddr)
+		if err == nil {
+			hem[errStr] = hes
+		}
 		return
 	}
-	_, err = hem[errStr].Insert(hostAddr)
+	_, err = hem[errStr].HostSet.Insert(hostAddr)
 	return
 }
 
 // Keys returns a stable sorted slice of the errors map keys.
 func (hem HostErrorsMap) Keys() []string {
 	setToKeys := make(map[string]map[string]struct{})
-	for errStr, set := range hem {
-		rs := set.RangedString()
+	for errStr, hes := range hem {
+		rs := hes.HostSet.RangedString()
 		if _, exists := setToKeys[rs]; !exists {
 			setToKeys[rs] = make(map[string]struct{})
 		}

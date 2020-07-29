@@ -23,8 +23,9 @@
 """
 
 from avocado.utils import process
-from apricot import TestWithServers, get_log_file
+from apricot import TestWithServers
 from env_modules import load_mpi
+from general_utils import get_log_file
 
 
 class DaosCoreBase(TestWithServers):
@@ -62,10 +63,13 @@ class DaosCoreBase(TestWithServers):
         scm_size = self.params.get("scm_size", '/run/pool/*')
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
 
-        cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -{} {}".format(
-            self.orterun, self.client_mca, num_clients,
-            get_log_file(self.client_log), self.daos_test, num_replicas,
-            subtest, args)
+        cmd = "{} {} -n {} -x D_LOG_FILE={} \
+            -x D_LOG_MASK=DEBUG -x DD_MASK=mgmt,io,md,epc,rebuild \
+            {} -s {} -n {} {}".format(self.orterun, self.client_mca,
+                                      num_clients,
+                                      get_log_file(self.client_log),
+                                      self.daos_test, num_replicas,
+                                      subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"

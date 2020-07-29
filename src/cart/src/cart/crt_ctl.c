@@ -1,39 +1,24 @@
-/* Copyright (C) 2018 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
  * This file is part of CaRT. It implements the server side of the cart_ctl
@@ -41,6 +26,7 @@
  */
 
 #include "crt_internal.h"
+#include <gurt/atomic.h>
 
 #define MAX_HOSTNAME_SIZE 1024
 
@@ -78,69 +64,46 @@ out:
 static int
 crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
 {
-	struct crt_uri_item	*ui;
-	int			*idx;
+	crt_phy_addr_t		 uri;
 	struct crt_uri_cache	*uri_cache = arg;
-	int			 i;
+	struct crt_uri_item	*ui;
+	uint32_t		*idx;
+	uint32_t		 i;
 	int			 rc = 0;
 
 	D_ASSERT(rlink != NULL);
 	D_ASSERT(arg != NULL);
 
 	ui = crt_ui_link2ptr(rlink);
-
-	D_MUTEX_LOCK(&ui->ui_mutex);
-
 	idx = &uri_cache->idx;
-
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (ui->ui_uri[i] == NULL)
+		uri = atomic_load_relaxed(&ui->ui_uri[i]);
+		if (uri == NULL)
 			continue;
+
+		if (*idx >= uri_cache->max_count) {
+			D_ERROR("grp_cache index %u out of range [0, %u].\n",
+				*idx, uri_cache->max_count);
+			D_GOTO(out, rc = -DER_OVERFLOW);
+		}
 
 		uri_cache->grp_cache[*idx].gc_rank = ui->ui_rank;
 		uri_cache->grp_cache[*idx].gc_tag = i;
-		uri_cache->grp_cache[*idx].gc_uri = ui->ui_uri[i];
+		uri_cache->grp_cache[*idx].gc_uri = uri;
 
 		*idx += 1;
 	}
 
-	D_MUTEX_UNLOCK(&ui->ui_mutex);
-
-	return rc;
-}
-
-static int
-crt_ctl_get_uri_cache_size_cb(d_list_t *rlink, void *arg)
-{
-	struct crt_uri_item	*ui;
-	uint32_t		*nuri = arg;
-	int			 i;
-	int			 rc = 0;
-
-	D_ASSERT(rlink != NULL);
-	D_ASSERT(arg != NULL);
-
-	ui = crt_ui_link2ptr(rlink);
-
-	D_MUTEX_LOCK(&ui->ui_mutex);
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (ui->ui_uri[i] == NULL)
-			continue;
-
-		*nuri += 1;
-	}
-	D_MUTEX_UNLOCK(&ui->ui_mutex);
-
+out:
 	return rc;
 }
 
 void
 crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req)
 {
+	struct crt_uri_cache			 uri_cache = {0};
 	struct crt_ctl_get_uri_cache_out	*out_args;
 	struct crt_grp_priv			*grp_priv = NULL;
-	uint32_t				 nuri = 0;
-	struct crt_uri_cache			 uri_cache = {0};
 	int					 rc = 0;
 
 	D_ASSERTF(crt_is_service(), "Must be called in a service process\n");
@@ -154,12 +117,9 @@ crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = d_hash_table_traverse(&grp_priv->gp_uri_lookup_cache,
-				   crt_ctl_get_uri_cache_size_cb, &nuri);
-	if (rc != 0)
-		D_GOTO(out, 0);
-
-	D_ALLOC_ARRAY(uri_cache.grp_cache, nuri);
+	/* calculate max possible count of grp_cache items */
+	uri_cache.max_count = grp_priv->gp_size * CRT_SRV_CONTEXT_NUM;
+	D_ALLOC_ARRAY(uri_cache.grp_cache, uri_cache.max_count);
 	if (uri_cache.grp_cache == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -167,12 +127,12 @@ crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req)
 
 	rc = d_hash_table_traverse(&grp_priv->gp_uri_lookup_cache,
 				   crt_ctl_fill_buffer_cb, &uri_cache);
-	if (rc != 0)
+	if (rc != 0 && rc != -DER_OVERFLOW)
 		D_GOTO(out, 0);
 
 	out_args->cguc_grp_cache.ca_arrays = uri_cache.grp_cache;
-	out_args->cguc_grp_cache.ca_count  = nuri;
-
+	out_args->cguc_grp_cache.ca_count  = uri_cache.idx; /* actual count */
+	rc = 0;
 out:
 	out_args->cguc_rc = rc;
 	rc = crt_reply_send(rpc_req);
@@ -284,10 +244,10 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 		str_size = CRT_ADDR_STR_MAX_LEN;
 		rc = 0;
 
-		pthread_mutex_lock(&ctx->cc_mutex);
+		D_MUTEX_LOCK(&ctx->cc_mutex);
 		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, addr_str,
 				     &str_size);
-		pthread_mutex_unlock(&ctx->cc_mutex);
+		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
 		if (rc != 0) {
 			D_ERROR("context (idx %d), crt_hg_get_addr failed rc: "

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,7 @@ public class DaosIOException extends IOException {
 
   /**
    * Constructor with msg, errorCode and daosMsg.
+   *
    * @param msg
    * error message
    * @param errorCode
@@ -97,6 +98,7 @@ public class DaosIOException extends IOException {
 
   /**
    * Constructor with msg, errorCode and cause.
+   *
    * @param msg
    * error message
    * @param errorCode
@@ -111,7 +113,8 @@ public class DaosIOException extends IOException {
 
   /**
    * get error code.
-   * @return
+   *
+   * @return error code
    */
   public int getErrorCode() {
     return errorCode;
@@ -119,7 +122,8 @@ public class DaosIOException extends IOException {
 
   /**
    * get message.
-   * @return
+   *
+   * @return message string
    */
   @Override
   public String getMessage() {
@@ -128,7 +132,8 @@ public class DaosIOException extends IOException {
 
   /**
    * get localized message.
-   * @return
+   *
+   * @return localized string
    */
   @Override
   public String getLocalizedMessage() {
@@ -137,6 +142,7 @@ public class DaosIOException extends IOException {
 
   /**
    * exception in string.
+   *
    * @return string
    */
   @Override
@@ -144,6 +150,7 @@ public class DaosIOException extends IOException {
     if (parsedMsg != null) {
       return parsedMsg;
     }
+    boolean needSuperMsg = false;
     StringBuilder sb = new StringBuilder(super.getMessage());
     sb.append(" error code: ");
     if (errorCode == Integer.MIN_VALUE) {
@@ -151,10 +158,14 @@ public class DaosIOException extends IOException {
     } else {
       sb.append(errorCode);
       if (errorCode < Constants.CUSTOM_ERROR_BASE) {
+        needSuperMsg = true;
         daosMsg = errorMap.get(errorCode);
       }
     }
     sb.append(" error msg: ").append(daosMsg == null ? "" : daosMsg);
+    if (needSuperMsg && super.getMessage() != null) {
+      sb.append(". more msg: ").append(super.getMessage());
+    }
     parsedMsg = sb.toString();
     return parsedMsg;
   }

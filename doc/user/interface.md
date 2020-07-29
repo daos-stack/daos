@@ -9,9 +9,7 @@ available under src/tests.
 ## DAOS API Reference
 
 libdaos is written in C and uses Doxygen comments that are added to C header
-files.
-
-\[TODO] Generate Doxygen document and add a link here.
+files. The Doxygen documentation is available [here](api/index.html).
 
 ## Python Bindings
 
@@ -22,7 +20,7 @@ provides the DAOS python to python users.
 
 [pydaos](https://github.com/daos-stack/daos/blob/master/src/client/pydaos/pydaos_core.py)
 provides a native DAOS python interface exported by a C module. It integrates
-the DAOS key-value store API with python dictionnaries. Only strings are
+the DAOS key-value store API with python dictionaries. Only strings are
 supported for both the key and value for now.
 
 Key-value pair can be inserted/looked up once at a time (see put/get) or

@@ -65,7 +65,7 @@ again:
 					 &dova->size, &dova->num, dova->kds,
 					 &dova->list_sgl, &dova->anchor,
 					 &dova->dkey_anchor, &dova->akey_anchor,
-					 true, NULL, NULL, &task);
+					 true, NULL, NULL, NULL, &task);
 	if (rc != 0)
 		return rc;
 
@@ -106,6 +106,7 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 	struct dc_obj_verify_cursor	*cursor = &dova->cursor;
 	daos_iod_t			*iod = &cursor->iod;
 	tse_task_t			*task;
+	uint32_t			 shard;
 	size_t				 size;
 	int				 rc;
 
@@ -134,10 +135,10 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 	dova->fetch_sgl.sg_nr_out = 1;
 	dova->fetch_sgl.sg_iovs = &dova->fetch_iov;
 
-	rc = dc_obj_fetch_shard_task_create(dova->oh, dova->th,
-		DIOF_TO_SPEC_SHARD, dc_obj_anchor2shard(&dova->dkey_anchor),
-		&cursor->dkey, 1, iod, &dova->fetch_sgl, NULL, NULL, NULL,
-		&task);
+	shard = dc_obj_anchor2shard(&dova->dkey_anchor);
+	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &cursor->dkey, 1,
+				      DIOF_TO_SPEC_SHARD, iod, &dova->fetch_sgl,
+				      NULL, &shard, NULL, NULL, &task);
 	if (rc == 0)
 		rc = dc_task_schedule(task, true);
 
@@ -653,9 +654,11 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	int		rc = 0;
 	int		i;
 
-	rc = dc_tx_local_open(obj->cob_coh, epoch, &th);
-	if (rc != 0)
+	rc = dc_tx_local_open(obj->cob_coh, epoch, DAOS_TF_RDONLY, &th);
+	if (rc != 0) {
+		D_ERROR("dc_tx_local-open failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
 	for (i = 0; i < reps; i++) {
 		struct dc_obj_verify_cursor	*cursor = &dova[i].cursor;
@@ -673,14 +676,17 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 
 		memset(cursor, 0, sizeof(*cursor));
 		/* We merge the recxs if they can be merged.
-		 * So always signle IOD.
+		 * So always single IOD.
 		 */
 		cursor->iod.iod_nr = 1;
 		cursor->iod.iod_recxs = &cursor->recx;
 
 		rc = dc_obj_verify_list(&dova[i]);
-		if (rc < 0)
+		if (rc < 0) {
+			D_ERROR("Failed to verify object list: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
+		}
 	}
 
 	rc = dc_obj_verify_check_existence(dova, oid, start, reps);
@@ -690,15 +696,21 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	do {
 		for (i = 0; i < reps; i++) {
 			rc = dc_obj_verify_move_cursor(&dova[i], oid);
-			if (rc != 0)
+			if (rc != 0) {
+				D_ERROR("Failed to verify cursor: "DF_RC"\n",
+					DP_RC(rc));
 				goto out;
+			}
 		}
 
 		for (i = 1; i < reps; i++) {
 			rc = dc_obj_verify_cmp(&dova[0], &dova[i],
 					       oid, reps, start, start + i);
-			if (rc != 0)
+			if (rc != 0) {
+				D_ERROR("Failed to verify cmp: "DF_RC"\n",
+					DP_RC(rc));
 				goto out;
+			}
 		}
 	} while (dova[0].cursor.type != OBJ_ITER_NONE);
 

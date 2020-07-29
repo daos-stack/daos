@@ -118,8 +118,6 @@ sched_ult2pool(int ult_type)
 		return DSS_POOL_IO;
 	case DSS_ULT_REBUILD:
 		return DSS_POOL_REBUILD;
-	case DSS_ULT_AGGREGATE:
-		return DSS_POOL_AGGREGATE;
 	case DSS_ULT_GC:
 		return DSS_POOL_GC;
 	default:
@@ -144,7 +142,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	int				tid;
 
 	if (ops == NULL || args == NULL || ops->co_func == NULL) {
-		D_DEBUG(DB_MD, "mandatory args mising dss_collective_reduce");
+		D_DEBUG(DB_MD, "mandatory args missing dss_collective_reduce");
 		return -DER_INVAL;
 	}
 
@@ -399,7 +397,6 @@ sched_ult2xs(int ult_type, int tgt_id)
 	case DSS_ULT_DRPC_LISTENER:
 		return 1;
 	case DSS_ULT_REBUILD:
-	case DSS_ULT_AGGREGATE:
 	case DSS_ULT_GC:
 		return DSS_MAIN_XS_ID(tgt_id);
 	default:

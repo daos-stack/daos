@@ -7,49 +7,62 @@ only required for development purposes.
 
 ## Building DAOS for Development
 
-For development, it is recommended to build and install each dependency in a
-unique subdirectory. The DAOS build system supports this through the
-TARGET\_PREFIX variable. Once the submodules have been initialized and updated,
-run the following commands:
+Prerequisite when built using --build-deps are installed in component specific
+directories under PREFIX/prereq/$TARGET_TYPE.  Once the submodules have been
+initialized and updated, run the following commands:
 
 ```bash
 $ scons PREFIX=${daos_prefix_path}
-      TARGET_PREFIX=${daos_prefix_path}/opt install
+      install
       --build-deps=yes
       --config=force
 ```
 
-Installing the components into seperate directories allow upgrading the
+Installing the components into separate directories allow upgrading the
 components individually by replacing --build-deps=yes with
 --update-prereq={component\_name}. This requires a change to the environment
 configuration from before. For automated environment setup, source
 utils/sl/utils/setup_local.sh.
 
-```bash
-ARGOBOTS=${daos_prefix_path}/opt/argobots
-CART=${daos_prefix_path}/opt/cart
-FIO=${daos_prefix_path}/opt/fio
-FUSE=${daos_prefix_path}/opt/fuse
-ISAL=${daos_prefix_path}/opt/isal
-MERCURY=${daos_prefix_path}/opt/mercury
-OFI=${daos_prefix_path}/opt/ofi
-OPENPA=${daos_prefix_path}/opt/openpa
-PMDK=${daos_prefix_path}/opt/pmdk
-PROTOBUFC=${daos_prefix_path}/opt/protobufc
-SPDK=${daos_prefix_path}/opt/spdk
+The install path should be relocatable with the exception that daos_admin
+will not be able to find the new location of daos and dependencies. All other
+libraries and binaries should work without any change due to relative
+paths.  Editing the .build-vars.sh file to replace the old with the new can
+restore the capability of setup_local.sh to automate path setup.
 
+To run daos_server, either the rpath in daos_admin needs to be patched to
+the new installation location of spdk and isal or LD_LIBRARY_PATH needs to
+be set.  This can be done using SL_SPDK_PREFIX and SL_ISAL_PREFIX set when
+sourcing setup_local.sh.   This can also be done with the following commands
 
-PATH=$CART/bin/:${daos_prefix_path}/bin/:$PATH
+```
+source utils/sl/setup_local.sh
+sudo -E utils/setup_daos_admin.sh [path to new location of daos]
 ```
 
-With this approach, DAOS would get built using the prebuilt dependencies in
-${daos_prefix_path}/opt, and required options are saved for future compilations.
+This script is intended only for developer setup of daos_admin.
+
+With this approach, DAOS gets built using the prebuilt dependencies in
+${daos_prefix_path}/prereq, and required options are saved for future compilations.
 So, after the first time, during development, only "scons --config=force" and
 "scons --config=force install" would suffice for compiling changes to DAOS
 source code.
 
 If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on
-the scons command line.   This option is also saved for future com pilations.
+the scons command line.   This option is also saved for future compilations.
+
+Additionally, users can specify BUILD_TYPE=[dev|release|debug] and scons will
+save the intermediate build for the various BUILD_TYPE, COMPILER, and TARGET_TYPE
+options so a user can switch between options without a full rebuild and thus
+with minimal cost.   By default, TARGET_TYPE is set to 'default' which means
+it uses the BUILD_TYPE setting.  To avoid rebuilding prerequisites for every
+BUILD_TYPE setting, TARGET_TYPE can be explicitly set to a BUILD_TYPE setting
+to always use that set of prerequisites.  These settings are stored in daos.conf
+so setting the values on subsequent builds is not necessary.
+
+If needed, ALT_PREFIX can be set to a colon separated prefix path where to
+look for already built components.  If set, the build will check these
+paths for components before proceeding to build.
 
 ## Go dependencies
 
@@ -144,9 +157,7 @@ you may try relocating the repo to /var/tmp/ in order to build and install from 
 
 - [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.11.4. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
 - [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.3. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
-- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) v1.3.4. **Must match the proto version in
-src/control/go.mod.** Install the specific version using GIT_TAG instructions
-[here](https://github.com/golang/protobuf/blob/master/README.md).
+- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) is the version specified in [go.mod](https://github.com/daos-stack/daos/blob/master/src/control/go.mod). This plugin is automatically installed by the Makefile in $DAOSREPO/src/proto.
 
 ### Compiling Protobuf Files
 

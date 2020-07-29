@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,6 +117,7 @@ pool_hop_free(struct d_ulink *hlink)
 	int		 rc;
 
 	D_ASSERT(pool->vp_opened == 0);
+	D_ASSERT(!gc_have_pool(pool));
 
 	if (pool->vp_io_ctxt != NULL) {
 		rc = bio_ioctxt_close(pool->vp_io_ctxt);
@@ -289,7 +290,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	pool_df = vos_pool_pop2df(ph);
 
-	/* If the file is fallocated seperately we need the fallocated size
+	/* If the file is fallocated separately we need the fallocated size
 	 * for setting in the root object.
 	 */
 	if (!scm_sz) {
@@ -396,7 +397,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 
 	uuid_copy(ukey.uuid, uuid);
 	while (1) {
-		struct vos_pool	*pool;
+		struct vos_pool	*pool = NULL;
 
 		rc = pool_lookup(&ukey, &pool);
 		if (rc) {
@@ -405,6 +406,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 			break;
 		}
 
+		D_ASSERT(pool != NULL);
 		pool->vp_dying = 1;
 		if (gc_have_pool(pool)) {
 			/* still pinned by GC, un-pin it because there is no
@@ -498,6 +500,92 @@ exit:
 	return rc;
 }
 
+static int
+set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
+{
+	struct daos_tree_overhead	ovhd = { 0 };
+	int				tclass, *size, rc;
+
+	if (id == VOS_SLAB_OBJ_DF) {
+		slab->unit_size = sizeof(struct vos_obj_df);
+		goto done;
+	}
+
+	size = &ovhd.to_leaf_overhead.no_size;
+
+	switch (id) {
+	case VOS_SLAB_OBJ_NODE:
+		tclass = VOS_TC_OBJECT;
+		break;
+	case VOS_SLAB_KEY_NODE:
+		tclass = VOS_TC_DKEY;
+		break;
+	case VOS_SLAB_SV_NODE:
+		tclass = VOS_TC_SV;
+		break;
+	case VOS_SLAB_EVT_NODE:
+		tclass = VOS_TC_ARRAY;
+		break;
+	case VOS_SLAB_EVT_NODE_SM:
+		tclass = VOS_TC_ARRAY;
+		size = &ovhd.to_int_node_size;
+		break;
+	case VOS_SLAB_EVT_DESC:
+		tclass = VOS_TC_ARRAY;
+		size = &ovhd.to_record_msize;
+		break;
+	default:
+		D_ERROR("Invalid slab ID: %d\n", id);
+		return -DER_INVAL;
+	}
+
+	rc = vos_tree_get_overhead(0, tclass, 0, &ovhd);
+	if (rc)
+		return rc;
+
+	slab->unit_size = *size;
+done:
+	D_ASSERT(slab->unit_size > 0);
+	D_DEBUG(DB_MGMT, "Slab ID:%d, Size:%lu\n", id, slab->unit_size);
+
+	slab->alignment = 0;
+	slab->units_per_block = 1000;
+	slab->header_type = POBJ_HEADER_NONE;
+
+	return 0;
+}
+
+static int
+vos_register_slabs(struct umem_attr *uma)
+{
+	struct pobj_alloc_class_desc	*slab;
+	int				 i, rc;
+
+	D_ASSERT(uma->uma_pool != NULL);
+	for (i = 0; i < VOS_SLAB_MAX; i++) {
+		slab = &uma->uma_slabs[i];
+
+		D_ASSERT(slab->class_id == 0);
+		rc = set_slab_prop(i, slab);
+		if (rc) {
+			D_ERROR("Failed to get unit size %d. rc:%d\n", i, rc);
+			return rc;
+		}
+
+		rc = pmemobj_ctl_set(uma->uma_pool, "heap.alloc_class.new.desc",
+				     slab);
+		if (rc) {
+			D_ERROR("Failed to register VOS slab %d. rc:%d\n",
+				i, rc);
+			rc = umem_tx_errno(rc);
+			return rc;
+		}
+		D_ASSERT(slab->class_id != 0);
+	}
+
+	return 0;
+}
+
 /**
  * Open a Versioning Object Storage Pool (VOSP), load its root object
  * and other internal data structures.
@@ -507,7 +595,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool_df	*pool_df;
-	struct vos_pool		*pool;
+	struct vos_pool		*pool = NULL;
 	struct umem_attr	*uma;
 	struct d_uuid		 ukey;
 	int			 rc, enabled = 1;
@@ -523,6 +611,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
+		D_ASSERT(pool != NULL);
 		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
 		pool->vp_opened++;
@@ -545,6 +634,12 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
 			DP_UUID(uuid), pmemobj_errormsg());
 		D_GOTO(failed, rc = -DER_NO_HDL);
+	}
+
+	rc = vos_register_slabs(uma);
+	if (rc) {
+		D_ERROR("Register slabs failed. rc:%d\n", rc);
+		D_GOTO(failed, rc);
 	}
 
 	/* initialize a umem instance for later btree operations */
@@ -623,9 +718,9 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
-	/* NB: probably should call gc_add_pool to clean up garbages left
-	 * behind by crash.
-	 */
+	vos_space_sys_init(pool);
+	/* Ensure GC is triggered after server restart */
+	gc_add_pool(pool);
 	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
 	return 0;
 failed:
@@ -652,7 +747,11 @@ vos_pool_close(daos_handle_t poh)
 
 	D_ASSERT(pool->vp_opened > 0);
 	pool->vp_opened--;
-	if (pool->vp_opened == 0)
+
+	/* If the last reference is holding by GC */
+	if (pool->vp_opened == 1 && gc_have_pool(pool))
+		gc_del_pool(pool);
+	else if (pool->vp_opened == 0)
 		vos_pool_hash_del(pool);
 
 	vos_pool_decref(pool); /* -1 for myself */
@@ -667,9 +766,6 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 {
 	struct vos_pool		*pool;
 	struct vos_pool_df	*pool_df;
-	daos_size_t		 scm_used;
-	struct vea_attr		*attr;
-	struct vea_stat		*stat;
 	int			 rc;
 
 	pool = vos_hdl2pool(poh);
@@ -679,54 +775,45 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	pool_df = pool->vp_pool_df;
 
 	D_ASSERT(pinfo != NULL);
-	attr = &pinfo->pif_vea_attr;
-	stat = &pinfo->pif_vea_stat;
-	pinfo->pif_scm_sz = pool_df->pd_scm_sz;
-	pinfo->pif_nvme_sz = pool_df->pd_nvme_sz;
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
 	pinfo->pif_gc_stat = pool->vp_gc_stat;
 
-	/* query SCM free space */
-	rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
-			     "stats.heap.curr_allocated", &scm_used);
-	if (rc) {
-		D_ERROR("Failed to get SCM usage. "DF_RC"\n", DP_RC(rc));
-		return umem_tx_errno(rc);
-	}
+	rc = vos_space_query(pool, &pinfo->pif_space, true);
+	if (rc)
+		D_ERROR("Query pool "DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
+	return rc;
+}
 
-	/*
-	 * FIXME: pmemobj_ctl_get() sometimes return an insane large
-	 * value, I suspect it's a PMDK defect. Let's ignore the error
-	 * and return success for this moment.
-	 */
-	if (pinfo->pif_scm_sz < scm_used) {
-		D_CRIT("scm_sz:"DF_U64" < scm_used:"DF_U64"\n",
-		       pinfo->pif_scm_sz, scm_used);
-		pinfo->pif_scm_free = 0;
-	} else {
-		pinfo->pif_scm_free = pinfo->pif_scm_sz - scm_used;
-	}
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
+{
+	struct vos_pool	*pool = NULL;
+	struct d_uuid	 ukey;
+	int		 rc;
 
-	/* NVMe isn't configured for this VOS */
-	if (pool->vp_vea_info == NULL) {
-		pinfo->pif_nvme_free = 0;
-		memset(attr, 0, sizeof(*attr));
-		return 0;
-	}
-
-	/* query NVMe free space */
-	rc = vea_query(pool->vp_vea_info, attr, stat);
-	if (rc) {
-		D_ERROR("Failed to get NVMe usage. "DF_RC"\n", DP_RC(rc));
+	uuid_copy(ukey.uuid, pool_id);
+	rc = pool_lookup(&ukey, &pool);
+	if (rc)
 		return rc;
-	}
-	D_ASSERT(attr->va_blk_sz != 0);
-	pinfo->pif_nvme_free = attr->va_blk_sz * stat->vs_free_persistent;
-	D_ASSERTF(pinfo->pif_nvme_free <= pinfo->pif_nvme_sz,
-		  "nvme_free:"DF_U64", nvme_sz:"DF_U64", blk_sz:%u\n",
-		  pinfo->pif_nvme_free, pinfo->pif_nvme_sz, attr->va_blk_sz);
 
-	return 0;
+	D_ASSERT(pool != NULL);
+	rc = vos_space_query(pool, vps, false);
+	vos_pool_decref(pool);
+	return rc;
+}
+
+int
+vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
+{
+	struct vos_pool	*pool = vos_hdl2pool(poh);
+
+	if (pool == NULL)
+		return -DER_NO_HDL;
+	if (space_sys == NULL)
+		return -DER_INVAL;
+
+	return vos_space_sys_set(pool, space_sys);
 }
 
 int

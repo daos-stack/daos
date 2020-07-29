@@ -32,6 +32,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -74,9 +75,9 @@ func PrintWithHostPorts() PrintConfigOption {
 	}
 }
 
-// getPrintConfig is a helper that returns a format configuration
+// GetPrintConfig is a helper that returns a format configuration
 // for a format function.
-func getPrintConfig(opts ...PrintConfigOption) *PrintConfig {
+func GetPrintConfig(opts ...PrintConfigOption) *PrintConfig {
 	cfg := &PrintConfig{}
 	*cfg = *defaultPrintConfig
 	for _, opt := range opts {
@@ -89,7 +90,7 @@ func getPrintConfig(opts ...PrintConfigOption) *PrintConfig {
 // host strings according to the format configuration.
 func GetPrintHosts(in string, opts ...PrintConfigOption) string {
 	var out []string
-	fc := getPrintConfig(opts...)
+	fc := GetPrintConfig(opts...)
 
 	for _, hostStr := range strings.Split(in, ",") {
 		if fc.ShowHostPorts {
@@ -123,9 +124,16 @@ func PrintHostErrorsMap(hem HostErrorsMap, out io.Writer, opts ...PrintConfigOpt
 	table := []txtfmt.TableRow{}
 
 	for _, errStr := range hem.Keys() {
-		errHosts := GetPrintHosts(hem[errStr].RangedString(), opts...)
+		errHosts := GetPrintHosts(hem[errStr].HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{setTitle: errHosts}
-		row[errTitle] = errStr
+
+		// Unpack the root cause error. If it's a fault,
+		// just print the description.
+		hostErr := errors.Cause(hem[errStr].HostError)
+		row[errTitle] = hostErr.Error()
+		if f, ok := hostErr.(*fault.Fault); ok {
+			row[errTitle] = f.Description
+		}
 
 		table = append(table, row)
 	}
@@ -307,7 +315,7 @@ func PrintHostStorageMap(hsm HostStorageMap, out io.Writer, opts ...PrintConfigO
 	if len(hsm) == 0 {
 		return nil
 	}
-	fc := getPrintConfig(opts...)
+	fc := GetPrintConfig(opts...)
 
 	if fc.Verbose {
 		return printHostStorageMapVerbose(hsm, out, opts...)
@@ -418,7 +426,7 @@ func PrintStorageFormatMap(hsm HostStorageMap, out io.Writer, opts ...PrintConfi
 	if len(hsm) == 0 {
 		return nil
 	}
-	fc := getPrintConfig(opts...)
+	fc := GetPrintConfig(opts...)
 
 	if fc.Verbose {
 		return printStorageFormatMapVerbose(hsm, out, opts...)

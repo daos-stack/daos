@@ -91,10 +91,15 @@ struct failed_shard {
 
 void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
+void
+reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		struct pool_target *tgt, bool for_reint);
+
+int
+remap_insert_copy_one(d_list_t *remap_list, struct failed_shard *original);
 
 void
 remap_list_free_all(d_list_t *remap_list);
@@ -124,5 +129,8 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 		    struct pool_map *pl_poolmap);
+
+int
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 #endif /* __PL_MAP_H__ */

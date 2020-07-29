@@ -1,39 +1,24 @@
-/* Copyright (C) 2016-2020 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
  * This file is part of CaRT. It gives out the internal data structure of group.
@@ -42,6 +27,7 @@
 #ifndef __CRT_GROUP_H__
 #define __CRT_GROUP_H__
 
+#include <gurt/atomic.h>
 #include "crt_swim.h"
 
 
@@ -115,6 +101,8 @@ struct crt_grp_priv {
 	 * logical self rank in this group, only valid for local group.
 	 * the gp_membs->rl_ranks[gp_self] is its rank number in primary group.
 	 * For primary group, gp_self == gp_membs->rl_ranks[gp_self].
+	 * If gp_self is CRT_NO_RANK, it usually means the group version is not
+	 * up to date.
 	 */
 	d_rank_t		 gp_self;
 	/* PSR rank in attached group */
@@ -134,7 +122,8 @@ struct crt_grp_priv {
 	struct d_hash_table	 gp_s2p_table;
 
 	/* set of variables only valid in primary service groups */
-	uint32_t		 gp_primary:1; /* flag of primary group */
+	uint32_t		 gp_primary:1, /* flag of primary group */
+				 gp_view:1; /* flag to indicate it is a view */
 
 	/* group reference count */
 	uint32_t		 gp_refcount;
@@ -175,13 +164,15 @@ grp_priv_set_membs(struct crt_grp_priv *priv, d_rank_list_t *list)
 static inline int
 grp_priv_init_membs(struct crt_grp_priv *priv, int size)
 {
+	D_INIT_LIST_HEAD(&priv->gp_membs.cgm_free_indices);
 	priv->gp_membs.cgm_list = d_rank_list_alloc(size);
 
 	if (!priv->gp_membs.cgm_list)
 		return -DER_NOMEM;
 
-	D_INIT_LIST_HEAD(&priv->gp_membs.cgm_free_indices);
 	priv->gp_membs.cgm_linear_list = d_rank_list_alloc(0);
+	if (!priv->gp_membs.cgm_linear_list)
+		return -DER_NOMEM;
 
 	return 0;
 }
@@ -213,10 +204,8 @@ struct crt_rank_mapping {
 	d_rank_t	rm_key;
 	d_rank_t	rm_value;
 
-	uint32_t	rm_ref;
-	uint32_t	rm_initialized;
-
-	pthread_mutex_t	rm_mutex;
+	ATOMIC uint32_t	rm_ref;
+	uint32_t	rm_initialized:1;
 };
 
 /* uri info for each remote rank */
@@ -226,7 +215,7 @@ struct crt_uri_item {
 
 	/* URI string for each remote tag */
 	/* TODO: in phase2 change this to hash table */
-	crt_phy_addr_t	ui_uri[CRT_SRV_CONTEXT_NUM];
+	ATOMIC crt_phy_addr_t ui_uri[CRT_SRV_CONTEXT_NUM];
 
 	/* Primary rank; for secondary groups only  */
 	d_rank_t	ui_pri_rank;
@@ -235,13 +224,10 @@ struct crt_uri_item {
 	d_rank_t	ui_rank;
 
 	/* reference count */
-	uint32_t	ui_ref;
+	ATOMIC uint32_t	ui_ref;
 
 	/* flag indicating whether initialized */
-	uint32_t	ui_initialized;
-
-	/* mutex for protection of ui_ref */
-	pthread_mutex_t ui_mutex;
+	uint32_t	ui_initialized:1;
 };
 
 /* lookup cache item for one target */
@@ -256,7 +242,7 @@ struct crt_lookup_item {
 	hg_addr_t		 li_tag_addr[CRT_SRV_CONTEXT_NUM];
 
 	/* reference count */
-	uint32_t		 li_ref;
+	ATOMIC uint32_t		 li_ref;
 	uint32_t		 li_initialized:1;
 	pthread_mutex_t		 li_mutex;
 };
@@ -368,18 +354,27 @@ out:
 	return rc;
 }
 
-static inline void
+static inline int
 crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
-		crt_phy_addr_t psr_addr)
+		crt_phy_addr_t psr_addr, bool steal)
 {
+	int rc = 0;
+
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	D_FREE(grp_priv->gp_psr_phy_addr);
 	grp_priv->gp_psr_rank = psr_rank;
-	D_STRNDUP(grp_priv->gp_psr_phy_addr, psr_addr,
-		CRT_ADDR_STR_MAX_LEN);
+	if (steal) {
+		grp_priv->gp_psr_phy_addr = psr_addr;
+	} else {
+		D_STRNDUP(grp_priv->gp_psr_phy_addr, psr_addr,
+			CRT_ADDR_STR_MAX_LEN);
+		if (grp_priv->gp_psr_phy_addr == NULL)
+			rc = -DER_NOMEM;
+	}
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
 		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
+	return rc;
 }
 
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);

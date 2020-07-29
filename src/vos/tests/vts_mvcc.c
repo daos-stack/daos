@@ -69,7 +69,7 @@ enum write_type {
 	W_NE,	/* become nonempty */
 	W_E,	/* become empty */
 
-	W_COUNT,	/* nubmer of write types */
+	W_COUNT,	/* number of write types */
 	W_NIL		/* not applicable */
 };
 
@@ -184,6 +184,32 @@ set_value(int i, char *path, d_iov_t *value)
 }
 
 static int
+tx_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	  uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+	  daos_iod_t *iod, d_sg_list_t *sgl)
+{
+	struct dtx_handle	*dth;
+	struct dtx_id		 xid;
+	int			 rc;
+
+	vts_dtx_begin(&oid, coh, epoch, 0, &dth);
+	rc = vos_obj_update_ex(coh, oid, epoch, 0 /* pm_ver */, flags,
+			       dkey, iod_nr, iod, NULL /* iods_csums */,
+			       sgl, dth);
+	xid = dth->dth_xid;
+	vts_dtx_end(dth);
+
+	if (rc == 0) {
+		int err;
+
+		err = vos_dtx_commit(coh, &xid, 1, NULL);
+		assert_int_equal(err, 1);
+	}
+
+	return rc;
+}
+
+static int
 update_with_flags(struct io_test_args *arg, char *path, daos_epoch_t epoch,
 		  uint64_t flags)
 {
@@ -213,10 +239,8 @@ update_with_flags(struct io_test_args *arg, char *path, daos_epoch_t epoch,
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &value;
 
-	flags |= VOS_OF_USE_TIMESTAMPS;
-
-	return vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch, 0 /* pm_ver */,
-			      flags, &dkey, 1 /* iod_nr */, &iod, NULL, &sgl);
+	return tx_update(arg->ctx.tc_co_hdl, oid, epoch, flags, &dkey,
+			 1 /* iod_nr */, &iod, &sgl);
 }
 
 static int
@@ -250,6 +274,31 @@ update_ane_f(struct io_test_args *arg, char *path, daos_epoch_t epoch)
 }
 
 static int
+tx_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	 uint64_t flags, daos_key_t *dkey, unsigned int akey_nr,
+	 daos_key_t *akeys)
+{
+	struct dtx_handle	*dth;
+	struct dtx_id		 xid;
+	int			 rc;
+
+	vts_dtx_begin(&oid, coh, epoch, 0, &dth);
+	rc = vos_obj_punch(coh, oid, epoch, 0 /* pm_ver */, flags, dkey,
+			   akey_nr, akeys, dth);
+	xid = dth->dth_xid;
+	vts_dtx_end(dth);
+
+	if (rc == 0) {
+		int err;
+
+		err = vos_dtx_commit(coh, &xid, 1, NULL);
+		assert_int_equal(err, 1);
+	}
+
+	return rc;
+}
+
+static int
 puncho_with_flags(struct io_test_args *arg, char *path, daos_epoch_t epoch,
 		  uint64_t flags)
 {
@@ -258,11 +307,8 @@ puncho_with_flags(struct io_test_args *arg, char *path, daos_epoch_t epoch,
 
 	set_oid(mvcc_arg->i, path, &oid);
 
-	flags |= VOS_OF_USE_TIMESTAMPS;
-
-	return vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0 /* pm_ver */,
-			     flags, NULL /* dkey */, 0 /* akey_nr */,
-			     NULL /* akeys */, NULL /* dth */);
+	return tx_punch(arg->ctx.tc_co_hdl, oid, epoch, flags, NULL /* dkey */,
+			0 /* akey_nr */, NULL /* akeys */);
 }
 
 static int
@@ -289,11 +335,8 @@ punchd_with_flags(struct io_test_args *arg, char *path, daos_epoch_t epoch,
 	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 
-	flags |= VOS_OF_USE_TIMESTAMPS;
-
-	return vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0 /* pm_ver */,
-			     flags, &dkey, 0 /* akey_nr */, NULL /* akeys */,
-			     NULL /* dth */);
+	return tx_punch(arg->ctx.tc_co_hdl, oid, epoch, flags, &dkey,
+			0 /* akey_nr */, NULL /* akeys */);
 }
 
 static int
@@ -323,11 +366,8 @@ puncha_with_flags(struct io_test_args *arg, char *path, daos_epoch_t epoch,
 	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
 
-	flags |= VOS_OF_USE_TIMESTAMPS;
-
-	return vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0 /* pm_ver */,
-			     flags, &dkey, 1 /* akey_nr */, &akey,
-			     NULL /* dth */);
+	return tx_punch(arg->ctx.tc_co_hdl, oid, epoch, flags, &dkey,
+			1 /* akey_nr */, &akey);
 }
 
 static int
@@ -469,8 +509,8 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 
 		memcpy(pp, rp, strlen(rp));
 		print_message("  update(%s, "DF_U64") before %s(%s, "
-			      DF_U64"): ", pp, re, r->o_name, rp, re);
-		rc = update_f(arg, pp, re);
+			      DF_U64"): ", pp, re - 1, r->o_name, rp, re);
+		rc = update_f(arg, pp, re - 1);
 		print_message("%d\n", rc);
 		if (rc != 0) {
 			nfailed++;
@@ -492,7 +532,7 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	}
 
 	if (re >= we)
-		expected_wrc = -DER_AGAIN;
+		expected_wrc = -DER_TX_RESTART;
 	if (is_rw(w)) {
 		bool e;
 
@@ -653,12 +693,17 @@ teardown_mvcc(void **state)
 }
 
 int
-run_mvcc_tests(void)
+run_mvcc_tests(const char *cfg)
 {
+	char	test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "VOS MVCC Tests %s", cfg);
+
 	if (getenv("DAOS_IO_BYPASS")) {
 		print_message("Skipping MVCC tests: DAOS_IO_BYPASS is set\n");
 		return 0;
 	}
-	return cmocka_run_group_tests_name("VOS MVCC Tests", mvcc_tests,
+
+	return cmocka_run_group_tests_name(test_name, mvcc_tests,
 					   setup_mvcc, teardown_mvcc);
 }

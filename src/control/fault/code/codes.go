@@ -87,7 +87,8 @@ const (
 	BdevUnknown Code = iota + 300
 	BdevFormatUnknownClass
 	BdevFormatFailure
-	BdevFormatBadPciAddress
+	BdevBadPCIAddress
+	BdevPCIAddressNotFound
 
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
@@ -127,6 +128,8 @@ const (
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
+	ServerConfigInvalidNetDevClass
+	ServerVfioDisabled
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

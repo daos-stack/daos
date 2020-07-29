@@ -1,39 +1,24 @@
-/* Copyright (C) 2016-2019 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
  * This file is part of CaRT. It implements the CaRT context related APIs.
@@ -51,24 +36,14 @@ epi_link2ptr(d_list_t *rlink)
 	return container_of(rlink, struct crt_ep_inflight, epi_link);
 }
 
-static int
-epi_op_key_get(struct d_hash_table *hhtab, d_list_t *rlink, void **key_pp)
-{
-	struct crt_ep_inflight *epi = epi_link2ptr(rlink);
-
-	/* TODO: use global rank */
-	*key_pp = (void *)&epi->epi_ep.ep_rank;
-	return sizeof(epi->epi_ep.ep_rank);
-}
-
 static uint32_t
 epi_op_key_hash(struct d_hash_table *hhtab, const void *key,
 		unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(d_rank_t));
 
-	return (unsigned int)(*(const uint32_t *)key %
-		(1U << CRT_EPI_TABLE_BITS));
+	return (uint32_t)(*(const uint32_t *)key
+			 & ((1U << CRT_EPI_TABLE_BITS) - 1));
 }
 
 static bool
@@ -81,6 +56,15 @@ epi_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
 	/* TODO: use global rank */
 
 	return epi->epi_ep.ep_rank == *(d_rank_t *)key;
+}
+
+static uint32_t
+epi_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct crt_ep_inflight *epi = epi_link2ptr(link);
+
+	return (uint32_t)epi->epi_ep.ep_rank
+			& ((1U << CRT_EPI_TABLE_BITS) - 1);
 }
 
 static void
@@ -105,9 +89,9 @@ epi_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t epi_table_ops = {
-	.hop_key_get		= epi_op_key_get,
 	.hop_key_hash		= epi_op_key_hash,
 	.hop_key_cmp		= epi_op_key_cmp,
+	.hop_rec_hash		= epi_op_rec_hash,
 	.hop_rec_addref		= epi_op_rec_addref,
 	.hop_rec_decref		= epi_op_rec_decref,
 	.hop_rec_free		= epi_op_rec_free,
@@ -259,7 +243,7 @@ out:
 
 int
 crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
-			      void *arg)
+			      crt_rpc_task_t iv_resp_cb, void *arg)
 {
 	struct crt_context *crt_ctx = ctx;
 
@@ -270,6 +254,7 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 	}
 
 	crt_ctx->cc_rpc_cb = process_cb;
+	crt_ctx->cc_iv_resp_cb = iv_resp_cb;
 	crt_ctx->cc_rpc_cb_arg = arg;
 	return 0;
 }
@@ -406,7 +391,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 			wait = 0;
 		} else {
 			D_MUTEX_UNLOCK(&ctx->cc_mutex);
-			rc = crt_progress(ctx, 1, NULL, NULL);
+			rc = crt_progress(ctx, 1);
 			D_MUTEX_LOCK(&ctx->cc_mutex);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("crt_progress failed, rc %d.\n", rc);
@@ -463,10 +448,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		/* Flush SWIM RPC already sent */
-		rc = crt_context_flush(crt_ctx, CRT_SWIM_RPC_TIMEOUT);
+		rc = crt_context_flush(crt_ctx, crt_swim_rpc_timeout);
 		if (rc)
 			/* give a chance to other threads to complete */
-			sleep(CRT_SWIM_RPC_TIMEOUT);
+			usleep(1000); /* 1ms */
 		D_MUTEX_LOCK(&ctx->cc_mutex);
 	}
 
@@ -521,7 +506,7 @@ crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
 		ts_deadline = d_timeus_secdiff(timeout);
 
 	do {
-		rc = crt_progress(crt_ctx, 1, NULL, NULL);
+		rc = crt_progress(crt_ctx, 1);
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress() failed, rc: %d\n", rc);
 			break;
@@ -662,7 +647,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	}
 	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
 	    rpc_priv->crp_state == RPC_STATE_COMPLETED) {
-		RPC_TRACE(DB_NET, rpc_priv, "state %#x, not reseting timer.\n",
+		RPC_TRACE(DB_NET, rpc_priv, "state %#x, not resetting timer.\n",
 			  rpc_priv->crp_state);
 		return false;
 	}
@@ -717,7 +702,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
 		RPC_ERROR(rpc_priv,
-			  "timedout due to URI_LOOKUP(rpc_priv %p) to group %s,"
+			  "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
 			  "rank %d through PSR %d timedout\n",
 			  container_of(ul_req, struct crt_rpc_priv, crp_pub),
 			  ul_in->ul_grp_id,
@@ -734,7 +719,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
 		RPC_ERROR(rpc_priv,
-			  "timedout due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s timedout\n",
+			  "failed due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s timedout\n",
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
@@ -744,7 +729,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		break;
 	case RPC_STATE_FWD_UNREACH:
 		RPC_ERROR(rpc_priv,
-			  "timedout due to group %s, rank %d, tgt_uri %s can't reach the target\n",
+			  "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
@@ -1212,8 +1197,8 @@ crt_exec_progress_cb(struct crt_context *ctx)
 }
 
 int
-crt_progress(crt_context_t crt_ctx, int64_t timeout,
-	     crt_progress_cond_cb_t cond_cb, void *arg)
+crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
+		  crt_progress_cond_cb_t cond_cb, void *arg)
 {
 	struct crt_context	*ctx;
 	int64_t			 hg_timeout;
@@ -1222,60 +1207,26 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	int			 rc = 0;
 
 	/** validate input parameters */
-	if (crt_ctx == CRT_CONTEXT_NULL) {
-		D_ERROR("invalid parameter (NULL crt_ctx).\n");
-		D_GOTO(out, rc = -DER_INVAL);
+	if (unlikely(crt_ctx == CRT_CONTEXT_NULL || cond_cb == NULL)) {
+		D_ERROR("invalid parameter (%p)\n", cond_cb);
+		return -DER_INVAL;
 	}
 
 	/**
 	 * Invoke the callback once first, in case the condition is met before
 	 * calling progress
 	 */
-	if (cond_cb) {
-		/** execute callback */
-		rc = cond_cb(arg);
-		if (rc > 0)
-			/** exit as per the callback request */
-			D_GOTO(out, rc = 0);
-		if (rc < 0)
-			/**
-			 * something wrong happened during the callback
-			 * execution
-			 */
-			D_GOTO(out, rc);
-	}
+	rc = cond_cb(arg);
+	if (rc > 0)
+		/** exit as per the callback request */
+		return 0;
+	if (unlikely(rc < 0))
+		/** something wrong happened during the callback execution */
+		return rc;
 
 	ctx = crt_ctx;
-	if (timeout == 0 || cond_cb == NULL) { /** fast path */
-		crt_context_timeout_check(ctx);
-		crt_exec_progress_cb(ctx);
-
-		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
-		if (rc && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
-			D_GOTO(out, rc);
-		}
-
-		if (cond_cb) {
-			int ret;
-
-			/**
-			 * Don't clobber rc which might be set to
-			 * -DER_TIMEDOUT
-			 */
-			ret = cond_cb(arg);
-			/** be careful with return code */
-			if (ret > 0)
-				D_GOTO(out, rc = 0);
-			if (ret < 0)
-				D_GOTO(out, rc = ret);
-		}
-
-		D_GOTO(out, rc);
-	}
 
 	/** Progress with callback and non-null timeout */
-	D_ASSERT(timeout != 0);
 	if (timeout < 0) {
 		/**
 		 * For infinite timeout, use a mercury timeout of 1 ms to avoid
@@ -1283,6 +1234,8 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 		 * crt_hg_progress() behind our back
 		 */
 		hg_timeout = 1000;
+	} else if (timeout == 0) {
+		hg_timeout = 0;
 	} else { /** timeout > 0 */
 		now = d_timeus_secdiff(0);
 		end = now + timeout;
@@ -1293,37 +1246,89 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 			hg_timeout = timeout;
 	}
 
-	while (true) {
+	/**
+	 * Call progress once before processing timeouts in case
+	 * any replies are pending in the queue
+	 */
+	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+		D_ERROR("crt_hg_progress failed with %d\n", rc);
+		return rc;
+	}
+
+	/** loop until callback returns non-null value */
+	while ((rc = cond_cb(arg)) == 0) {
 		crt_context_timeout_check(ctx);
 		crt_exec_progress_cb(ctx);
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
-		if (rc && rc != -DER_TIMEDOUT) {
+		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
 			D_ERROR("crt_hg_progress failed with %d\n", rc);
-			D_GOTO(out, rc = 0);
+			return rc;
 		}
 
-		/** execute callback */
-		rc = cond_cb(arg);
-		if (rc > 0)
-			D_GOTO(out, rc = 0);
-		if (rc < 0)
-			D_GOTO(out, rc);
+		/** check for timeout */
+		if (timeout < 0)
+			continue;
 
-		/** check for timeout, if not infinite */
-		if (timeout > 0) {
-			now = d_timeus_secdiff(0);
-			if (now >= end) {
-				rc = -DER_TIMEDOUT;
+		now = d_timeus_secdiff(0);
+		if (timeout == 0 || now >= end) {
+			/** try callback one last time just in case */
+			rc = cond_cb(arg);
+			if (unlikely(rc != 0))
 				break;
-			}
-			if (end - now > 1000 * 1000)
-				hg_timeout = 1000 * 1000;
-			else
-				hg_timeout = end - now;
+			return -DER_TIMEDOUT;
 		}
+
+		/** adjust timeout */
+		if (end - now > 1000 * 1000)
+			hg_timeout = 1000 * 1000;
+		else
+			hg_timeout = end - now;
 	}
-out:
+
+	if (rc > 0)
+		rc = 0;
+
+	return rc;
+}
+
+int
+crt_progress(crt_context_t crt_ctx, int64_t timeout)
+{
+	struct crt_context	*ctx;
+	int			 rc = 0;
+
+	/** validate input parameters */
+	if (unlikely(crt_ctx == CRT_CONTEXT_NULL)) {
+		D_ERROR("invalid parameter (NULL crt_ctx).\n");
+		return -DER_INVAL;
+	}
+
+	ctx = crt_ctx;
+
+	/**
+	 * call progress once w/o any timeout before processing timed out
+	 * requests in case any replies are pending in the queue
+	 */
+	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT))
+		D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+
+	/**
+	 * process timeout and progress callback after this initial call to
+	 * progress
+	 */
+	crt_context_timeout_check(ctx);
+	crt_exec_progress_cb(ctx);
+
+	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
+		/** call progress once again with the real timeout */
+		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT))
+			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+	}
+
 	return rc;
 }
 
@@ -1394,7 +1399,7 @@ out:
 int
 crt_register_timeout_cb(crt_timeout_cb cb, void *arg)
 {
-	/* TODO: save the function pointer somewhere for retreival later on */
+	/* TODO: save the function pointer somewhere for retrieval later on */
 	struct crt_timeout_cb_priv	*timeout_cb_priv = NULL;
 	int				 rc = 0;
 

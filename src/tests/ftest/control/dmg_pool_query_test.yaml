@@ -1,0 +1,79 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+timeout: 200
+server_config:
+  name: daos_server
+  port: 10001
+  servers:
+    targets: 8
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
+pool:
+  control_method: dmg
+  mode: 146
+  scm_size: "16GB"
+  nvme_size: "32GB"
+  name: daos_server
+
+ior:
+  flags: "-k -w -r"
+  transfer_size: "64M"
+  block_size: "2G"
+  daos_destroy: False
+
+exp_vals:
+  pool_info: ['8', '0', '0', '1']
+  target_cnt: ['8']
+  scm_info: ['16 GB', '16 GB', '2.0 GB', '2.0 GB', '2.0 GB']
+  nvme_info: ['32 GB', '32 GB', '4.0 GB', '4.0 GB', '4.0 GB']
+  rebuild_info: ['0', '0']
+
+pool_uuids:
+  uuids:
+    -
+      #alpha_upper
+      - "WWWWWWWW-YYYY-ZZZZ-VVVV-AAAAABBCCDDE"
+      - "FAIL"
+    -
+      # alpha_lower
+      - "eeeeeeee-ffff-gggg-hhhh-iiiiiiiiiiii"
+      - "FAIL"
+    -
+      # alphanumeric
+      - "aaaa1111-b2b2-c3c3-d4d4-e5e5e5e5e5e5"
+      - "FAIL"
+    -
+      # numeric_01
+      - "111-222-333-444-555"
+      - "FAIL"
+    -
+      # numeric_02
+      - "0-0-0-0-0"
+      - "FAIL"
+    -
+      # random
+      - "991d211c-ed28-4b6b-8e50-5f7103b36cb9"
+      - "FAIL"
+    -
+      # special_chars
+      - "! @#$%^&*()_+{}|:<>?-=[];,./"
+      - "FAIL"
+    -
+      # special_aplanumeric_chars
+      - "abc-=*12----1@3c-4%DE-&5_,0+.k"
+      - "FAIL"

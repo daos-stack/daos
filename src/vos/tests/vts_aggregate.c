@@ -41,8 +41,8 @@ static bool slow_test;
 
 static void
 update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
-	     char *dkey, char *akey, daos_iod_type_t type, daos_size_t iod_size,
-	     daos_recx_t *recx, char *buf)
+	     uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
+	     daos_size_t iod_size, daos_recx_t *recx, char *buf)
 {
 	daos_iod_t	iod = { 0 };
 	d_sg_list_t	sgl = { 0 };
@@ -86,7 +86,8 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 			arg->ta_flags |= TF_ZERO_COPY;
 	}
 
-	rc = io_test_obj_update(arg, epoch, &dkey_iov, &iod, &sgl, NULL, true);
+	rc = io_test_obj_update(arg, epoch, flags, &dkey_iov, &iod, &sgl, NULL,
+				true);
 	assert_int_equal(rc, 0);
 
 	daos_sgl_fini(&sgl, false);
@@ -95,8 +96,8 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 static void
 fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
-	    char *dkey, char *akey, daos_iod_type_t type, daos_size_t iod_size,
-	    daos_recx_t *recx, char *buf)
+	    uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
+	    daos_size_t iod_size, daos_recx_t *recx, char *buf)
 {
 	daos_iod_t	iod = { 0 };
 	d_sg_list_t	sgl = { 0 };
@@ -135,7 +136,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rand() % 2 == 0)
 		arg->ta_flags |= TF_ZERO_COPY;
 
-	rc = io_test_obj_fetch(arg, epoch, &dkey_iov, &iod, &sgl, true);
+	rc = io_test_obj_fetch(arg, epoch, flags, &dkey_iov, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 	assert_true(iod.iod_size == 0 || iod.iod_size == iod_size);
 
@@ -195,7 +196,7 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 		VOS_ITER_SINGLE : VOS_ITER_RECX;
 
 	rc = vos_iterate(&iter_param, iter_type, false, &anchors,
-			 counting_cb, NULL, &nr);
+			 counting_cb, NULL, &nr, NULL);
 	assert_int_equal(rc, 0);
 
 	return nr;
@@ -291,7 +292,7 @@ generate_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 
 	view_epoch = ds->td_discard ? (epr_a->epr_lo - 1) : epr_a->epr_hi;
 
-	fetch_value(arg, oid, view_epoch, dkey, akey, ds->td_type,
+	fetch_value(arg, oid, view_epoch, 0, dkey, akey, ds->td_type,
 		    ds->td_iod_size, &recx, ds->td_expected_view);
 }
 
@@ -321,7 +322,7 @@ verify_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	D_ALLOC(buf_f, view_len);
 	assert_non_null(buf_f);
 
-	fetch_value(arg, oid, epr_a->epr_hi, dkey, akey, ds->td_type,
+	fetch_value(arg, oid, epr_a->epr_hi, 0, dkey, akey, ds->td_type,
 		    ds->td_iod_size, &recx, buf_f);
 
 	assert_memory_equal(buf_f, ds->td_expected_view, view_len);
@@ -355,7 +356,7 @@ generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	for (i = 0; i < nr; i++) {
 		dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
-		update_value(arg, oid, 1, dkey, akey, DAOS_IOD_SINGLE,
+		update_value(arg, oid, 1, 0, dkey, akey, DAOS_IOD_SINGLE,
 			     10, NULL, buf_u);
 	}
 	D_FREE(buf_u);
@@ -408,7 +409,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 			recx_idx++;
 		}
 
-		update_value(arg, oid, epoch, dkey, akey, ds->td_type,
+		update_value(arg, oid, epoch, 0, dkey, akey, ds->td_type,
 			     ds->td_iod_size, recx_p, buf_u);
 		arg->ta_flags &= ~TF_PUNCH;
 	}
@@ -420,10 +421,10 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		    "Discard" : "Aggregate", epr_a->epr_lo, epr_a->epr_hi);
 
 	if (ds->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
+		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
-				   ds_csum_agg_recalc);
+				   ds_csum_agg_recalc, NULL, NULL);
 	if (rc != -DER_CSUM) {
 		assert_int_equal(rc, 0);
 		verify_view(arg, oid, dkey, akey, ds);
@@ -579,7 +580,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 			ds->td_upd_epr.epr_lo = epoch;
 		ds->td_upd_epr.epr_hi = epoch;
 
-		update_value(arg, oid, epoch, dkey, akey, ds->td_type,
+		update_value(arg, oid, epoch, 0, dkey, akey, ds->td_type,
 			     ds->td_iod_size, recx_p, buf_u);
 		arg->ta_flags &= ~TF_PUNCH;
 
@@ -592,9 +593,9 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		    "Discard" : "Aggregate");
 
 	if (ds_sample->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
+		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1084,7 +1085,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 	arg->ta_flags = TF_USE_VAL;
 
 	if (first != AGG_NONE) {
-		update_value(arg, oid, epr.epr_lo++, dkey, akey,
+		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey,
 			     record_type, sizeof(first_val), &recx,
 			     &first_val);
 		if (first == AGG_PUNCH) {
@@ -1103,14 +1104,14 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 			do_punch(arg, type, oid, epoch++, dkey, akey);
 			continue;
 		}
-		update_value(arg, oid, epoch++, dkey, akey,
+		update_value(arg, oid, epoch++, 0, dkey, akey,
 			     record_type, sizeof(middle_val), &recx,
 			     &middle_val);
 		middle_epoch = epoch;
 	}
 
 	if (last == AGG_UPDATE) {
-		update_value(arg, oid, epoch++, dkey, akey, record_type,
+		update_value(arg, oid, epoch++, 0, dkey, akey, record_type,
 			     sizeof(last_val), &recx, &last_val);
 	}
 
@@ -1119,9 +1120,10 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 
 	for (i = 0; i < 2; i++) {
 		if (discard)
-			rc = vos_discard(arg->ctx.tc_co_hdl, &epr);
+			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
+					   NULL, NULL);
 
 		assert_int_equal(rc, 0);
 
@@ -1130,14 +1132,14 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 			 * should exist because it's outside of the epr.
 			 */
 			fetch_val = 0;
-			fetch_value(arg, oid, 1, dkey, akey, record_type,
+			fetch_value(arg, oid, 1, 0, dkey, akey, record_type,
 				    sizeof(first_val), &recx, &fetch_val);
 			assert_int_equal(fetch_val, first_val);
 			/* Reading at "snapshot" should also work except for
 			 * punch, it will be gone.
 			 */
 			fetch_val = 0;
-			fetch_value(arg, oid, epr.epr_lo, dkey, akey,
+			fetch_value(arg, oid, epr.epr_lo, 0, dkey, akey,
 				    record_type, sizeof(first_val), &recx,
 				    &fetch_val);
 			assert_int_equal(fetch_val,
@@ -1151,7 +1153,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		fetch_val = 0;
 		if (first == AGG_UPDATE && discard)
 			expected = first_val;
-		fetch_value(arg, oid, middle_epoch, dkey, akey, record_type,
+		fetch_value(arg, oid, middle_epoch, 0, dkey, akey, record_type,
 			    sizeof(middle_val), &recx, &fetch_val);
 		assert_int_equal(fetch_val, expected);
 
@@ -1159,7 +1161,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		 * discard
 		 */
 		fetch_val = 0;
-		fetch_value(arg, oid, epr.epr_hi, dkey, akey, record_type,
+		fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, record_type,
 			    sizeof(last_val), &recx, &fetch_val);
 		expected = last_val;
 		if (discard) {
@@ -1691,14 +1693,15 @@ aggregate_13(void **state)
 static void
 print_space_info(vos_pool_info_t *pi, char *desc)
 {
-	struct vea_attr	*attr = &pi->pif_vea_attr;
-	struct vea_stat	*stat = &pi->pif_vea_stat;
+	struct vos_pool_space	*vps = &pi->pif_space;
+	struct vea_attr		*attr = &pi->pif_space.vps_vea_attr;
+	struct vea_stat		*stat = &pi->pif_space.vps_vea_stat;
 
 	VERBOSE_MSG("== Pool space information: %s ==\n", desc);
 	VERBOSE_MSG("  Total bytes: SCM["DF_U64"], NVMe["DF_U64"]\n",
-		    pi->pif_scm_sz, pi->pif_nvme_sz);
+		    SCM_TOTAL(vps), NVME_TOTAL(vps));
 	VERBOSE_MSG("  Free bytes : SCM["DF_U64"], NVMe["DF_U64"]\n",
-		    pi->pif_scm_free, pi->pif_nvme_free);
+		    SCM_FREE(vps), NVME_FREE(vps));
 
 	/* NVMe isn't enabled */
 	if (attr->va_tot_blks == 0)
@@ -1743,7 +1746,7 @@ fill_cont(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 		if ((rand() % 10) > 7 && written != 0)
 			arg->ta_flags |= TF_PUNCH;
 
-		update_value(arg, oid, *epc_hi, dkey, akey, DAOS_IOD_ARRAY,
+		update_value(arg, oid, *epc_hi, 0, dkey, akey, DAOS_IOD_ARRAY,
 			     iod_size, &recx, buf_u);
 		(*epc_hi)++;
 		if (arg->ta_flags & TF_PUNCH)
@@ -1764,6 +1767,7 @@ aggregate_14(void **state)
 {
 	struct io_test_args	*arg = *state;
 	vos_pool_info_t		 pool_info;
+	struct vos_pool_space	*vps = &pool_info.pif_space;
 	daos_epoch_t		 epc_hi = 1;
 	daos_epoch_range_t	 epr;
 	daos_size_t		 fill_size;
@@ -1776,7 +1780,7 @@ aggregate_14(void **state)
 	assert_int_equal(rc, 0);
 	print_space_info(&pool_info, "INIT");
 
-	fill_size = pool_info.pif_nvme_free ? : pool_info.pif_scm_free;
+	fill_size = NVME_FREE(vps) ? : SCM_FREE(vps);
 	assert_true(fill_size > 0);
 
 	if (slow_test) {
@@ -1809,7 +1813,7 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -1931,6 +1935,102 @@ aggregate_21(void **state)
 	daos_fail_loc_set(0);
 }
 
+static void
+aggregate_22(void **state)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid;
+	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
+	char			 akey[UPDATE_AKEY_SIZE] = { 0 };
+	char			 akey2[UPDATE_AKEY_SIZE] = { 0 };
+	char			 akey3[UPDATE_AKEY_SIZE] = { 0 };
+	char			 akey4[UPDATE_AKEY_SIZE] = { 0 };
+	daos_recx_t		 recx;
+	daos_epoch_range_t	 epr;
+	daos_epoch_t		 epoch = 100;
+	char			 buf_u[16];
+	int			 rc;
+
+	oid = dts_unit_oid_gen(0, 0, 0);
+
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+	dts_key_gen(akey2, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+	dts_key_gen(akey3, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+	dts_key_gen(akey4, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+	recx.rx_idx = 0;
+	recx.rx_nr = 1;
+
+	epr.epr_lo = 0;
+
+	memset(buf_u, 'x', sizeof(buf_u));
+
+	update_value(arg, oid, epoch++, 0, dkey, akey, DAOS_IOD_ARRAY,
+		     sizeof(buf_u), &recx, buf_u);
+	update_value(arg, oid, epoch++, 0, dkey, akey2, DAOS_IOD_SINGLE,
+		     sizeof(buf_u), &recx, buf_u);
+	arg->ta_flags |= TF_PUNCH;
+	update_value(arg, oid, epoch++, 0, dkey, akey3, DAOS_IOD_ARRAY,
+		     sizeof(buf_u), &recx, buf_u);
+	update_value(arg, oid, epoch++, 0, dkey, akey4, DAOS_IOD_SINGLE,
+		     sizeof(buf_u), &recx, buf_u);
+
+	fetch_value(arg, oid, epoch++,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey,
+		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
+	fetch_value(arg, oid, epoch++,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey2,
+		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
+	memset(buf_u, 0, sizeof(buf_u));
+	fetch_value(arg, oid, epoch++,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey3,
+		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
+	fetch_value(arg, oid, epoch++,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey4,
+		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
+
+	update_value(arg, oid, epoch++, 0, dkey, akey, DAOS_IOD_ARRAY,
+		     sizeof(buf_u), &recx, buf_u);
+	update_value(arg, oid, epoch++, 0, dkey, akey2, DAOS_IOD_SINGLE,
+		     sizeof(buf_u), &recx, buf_u);
+
+	epr.epr_hi = epoch++;
+
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	fetch_value(arg, oid, epoch++,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey,
+		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
+	fetch_value(arg, oid, epoch++,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey2,
+		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
+	fetch_value(arg, oid, epoch++,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey3,
+		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
+	fetch_value(arg, oid, epoch++,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey4,
+		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
+
+	arg->ta_flags &= TF_PUNCH;
+
+	memset(buf_u, 'x', sizeof(buf_u));
+
+	/* Also check conditional updates still work */
+	update_value(arg, oid, epoch++,
+		     VOS_OF_COND_DKEY_UPDATE, dkey,
+		     akey, DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
+	update_value(arg, oid, epoch++,
+		     VOS_OF_COND_AKEY_UPDATE, dkey,
+		     akey2, DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
+	update_value(arg, oid, epoch++,
+		     VOS_OF_COND_AKEY_UPDATE, dkey,
+		     akey3, DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
+	update_value(arg, oid, epoch++,
+		     VOS_OF_COND_DKEY_UPDATE, dkey,
+		     akey4, DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
+}
+
 
 static int
 agg_tst_teardown(void **state)
@@ -2015,20 +2115,29 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_20, NULL, agg_tst_teardown },
 	{ "VOS421: Aggregate EV with random punch, small flush threshold, csum",
 	  aggregate_21, NULL, agg_tst_teardown },
+	{ "VOS422: Conditional fetch before and after aggregation is same",
+	  aggregate_22, NULL, agg_tst_teardown },
 };
 
 int
-run_discard_tests(void)
+run_discard_tests(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS Discard Test", discard_tests,
+	char	test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "VOS Discard Tests %s", cfg);
+	return cmocka_run_group_tests_name(test_name, discard_tests,
 					   setup_io, teardown_io);
 }
 
 int
-run_aggregate_tests(bool slow)
+run_aggregate_tests(bool slow, const char *cfg)
 {
+	char	test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "VOS Aggregate Tests %s", cfg);
+
 	slow_test = slow;
-	return cmocka_run_group_tests_name("VOS Aggregate Test",
+	return cmocka_run_group_tests_name(test_name,
 					   aggregate_tests, setup_io,
 					   teardown_io);
 }

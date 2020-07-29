@@ -33,7 +33,7 @@
 #define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */
 /*
  * Period to query raw device health stats, auto detect faulty and transition
- * device state. 60 seconds by default. Once FAULTY state has occured, reduce
+ * device state. 60 seconds by default. Once FAULTY state has occurred, reduce
  * monitor period to something more reasonable like 10 seconds.
  */
 #define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
@@ -106,7 +106,7 @@ struct bio_blobstore {
 	ABT_cond		 bb_barrier;
 	struct spdk_blob_store	*bb_bs;
 	/*
-	 * The xstream resposible for blobstore load/unload, monitor
+	 * The xstream responsible for blobstore load/unload, monitor
 	 * and faulty/reint reaction.
 	 */
 	struct bio_xs_context	*bb_owner_xs;

@@ -1,39 +1,24 @@
-/* Copyright (C) 2016-2020 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 
 /**
@@ -123,7 +108,7 @@ crt_context_create(crt_context_t *crt_ctx);
  *
  * This is an optional function.
  *
- * The precendence order of timeouts:
+ * The precedence order of timeouts:
  * - crt_req_set_timeout()
  * - crt_context_set_timeout()
  * - CRT_TIMEOUT environment variable
@@ -218,25 +203,47 @@ int
 crt_finalize(void);
 
 /**
- * Progress CRT transport layer.
+ * Progress RPC execution on a cart context \a crt_ctx for at most \a timeout
+ * micro-seconds.
+ * The progress call returns when the timeout is reached or any completion has
+ * occurred.
  *
- * \param[in] crt_ctx          CRT transport context
+ * \param[in] crt_ctx          cart context
  * \param[in] timeout          how long is caller going to wait (micro-second)
- *                             if \a timeout > 0 when there is no operation to
- *                             progress. Can return when one or more operation
- *                             progressed.
- *                             zero means no waiting and -1 waits indefinitely.
- * \param[in] cond_cb          optional progress condition callback.
- *                             CRT internally calls this function, when it
- *                             returns non-zero then stops the progressing or
- *                             waiting and returns.
- * \param[in] arg              argument to cond_cb.
+ *                             at most for a completion to occur.
+ *                             Can return when one or more operation progressed.
+ *                             zero means no waiting.
  *
- * \return                     DER_SUCCESS on success, negative value if error
+ * \return                     DER_SUCCESS on success
+ *                             -DER_TIMEDOUT if exited after timeout has expired
+ *                             negative value if other internal error
  */
 int
-crt_progress(crt_context_t crt_ctx, int64_t timeout,
-	     crt_progress_cond_cb_t cond_cb, void *arg);
+crt_progress(crt_context_t crt_ctx, int64_t timeout);
+
+/**
+ * Progress RPC execution on a cart context with a callback function.
+ * The callback function is regularly called internally. The progress call
+ * returns when the callback returns a non-zero value or when the timeout
+ * expires.
+ *
+ * \param[in] crt_ctx          cart context
+ * \param[in] timeout          how long is the caller going to wait in
+ *                             micro-second.
+ *                             zero means no waiting and -1 waits indefinitely.
+ * \param[in] cond_cb          progress condition callback.
+ *                             cart internally calls this function, when it
+ *                             returns non-zero then stops the progressing or
+ *                             waiting and returns.
+ * \param[in] arg              optional argument to cond_cb.
+ *
+ * \return                     DER_SUCCESS on success
+ *                             -DER_TIMEDOUT if exited after timeout has expired
+ *                             negative value if internal and \a conb_cb error
+ */
+int
+crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
+		  crt_progress_cond_cb_t cond_cb, void *arg);
 
 /**
  * Create an RPC request.
@@ -447,6 +454,16 @@ uint64_t
 crt_hlc_get(void);
 
 /**
+ * Sync HLC with remote message and return current HLC timestamp.
+ *
+ * \param[in] msg              remote HLC timestamp
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+crt_hlc_get_msg(uint64_t msg);
+
+/**
  * Return the second timestamp of hlc.
  *
  * \param[in] hlc              HLC timestamp
@@ -455,6 +472,26 @@ crt_hlc_get(void);
  */
 uint64_t
 crt_hlc2sec(uint64_t hlc);
+
+/**
+ * Set the maximum system clock offset.
+ *
+ * This is the maximum offset believed to be observable between the physical
+ * clocks behind any two HLCs in the system. The format of the value represent
+ * a nonnegative diff between two HLC timestamps.
+ *
+ * \param[in] epsilon          Nonnegative HLC duration
+ */
+void
+crt_hlc_epsilon_set(uint64_t epsilon);
+
+/**
+ * Get the maximum system clock offset. See crt_hlc_set_epsilon's API doc.
+ *
+ * \return                     Nonnegative HLC duration
+ */
+uint64_t
+crt_hlc_epsilon_get(void);
 
 /**
  * Abort an RPC request.
@@ -732,13 +769,14 @@ typedef int (*crt_rpc_task_t) (crt_context_t *ctx, void *rpc_hdlr_arg,
  *
  * \param[in] crt_ctx          The context to be registered.
  * \param[in] rpc_cb           The RPC process callback.
+ * \param[in] iv_reps_cb       The IV response callback.
  * \param[in] arg              The argument for RPC process callback.
  *
  * \return                     DER_SUCCESS on success, negative value if error.
  */
 int
-crt_context_register_rpc_task(crt_context_t crt_ctx,
-			      crt_rpc_task_t rpc_cb, void *arg);
+crt_context_register_rpc_task(crt_context_t crt_ctx, crt_rpc_task_t rpc_cb,
+			      crt_rpc_task_t iv_resp_cb, void *arg);
 
 /**
  * Dynamically register an RPC with features at server-side.
@@ -1119,7 +1157,7 @@ int
 crt_group_config_save(crt_group_t *grp, bool forall);
 
 /**
- * Remove the attach info file for the sepcified group.
+ * Remove the attach info file for the specified group.
  *
  * \param[in] grp              Primary service group attach info to delete,
  *                             NULL indicates local primary group.
@@ -1160,7 +1198,7 @@ crt_group_rank_p2s(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  *
  * \param[in] subgrp           CRT subgroup handle. subgrp must be local, i.e.
  *                             not created by crt_group_attach()
- * \param[in] rank_in          rank number witin grp.
+ * \param[in] rank_in          rank number within grp.
  * \param[out] rank_out        the result rank number of the conversion.
  */
 int
@@ -1172,17 +1210,19 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  *
  * \param[in] crt_ctx          CRT context
  * \param[in] grp              CRT group for the collective RPC
- * \param[in] filter_ranks     optional excluded or exclusive ranks. the RPC
+ * \param[in] filter_ranks     optional filter ranks. By default, the RPC
  *                             will be delivered to all members in the group
- *                             except or exclusively to those in ranks.
- *                             the ranks are numbered in primary group.
+ *                             except those in \a filter_ranks. If \a flags
+ *                             includes CRT_RPC_FLAG_FILTER_INVERT, the RPC
+ *                             will be delivered to \a filter_ranks only.
+ *                             The ranks are numbered in primary group.
  * \param[in] opc              unique opcode for the RPC
  * \param[in] co_bulk_hdl      collective bulk handle
  * \param[in] priv             A private pointer associated with the request
  *                             will be passed to crt_corpc_ops::co_aggregate as
  *                             2nd parameter.
  * \param[in] flags            collective RPC flags:
- *                             CRT_RPC_FLAG_EXCLUSIVE to send exclusively to
+ *                             CRT_RPC_FLAG_FILTER_INVERT to send only to
  *                             \a filter_ranks.
  * \param[in] tree_topo        tree topology for the collective propagation,
  *                             can be calculated by crt_tree_topo().
@@ -1289,6 +1329,8 @@ typedef enum {
 	CRT_PROC_FREE
 } crt_proc_op_t;
 
+#define crt_proc_raw crt_proc_memcpy
+
 /**
  * Get the operation type associated to the proc processor.
  *
@@ -1302,7 +1344,6 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op);
 
 /**
  * Base proc routine using memcpy().
- * Only uses memcpy() / use crt_proc_raw() for encoding raw buffers.
  *
  * \param[in,out] proc         abstract processor object
  * \param[in,out] data         pointer to data
@@ -1411,18 +1452,6 @@ crt_proc_uint64_t(crt_proc_t proc, uint64_t *data);
  */
 int
 crt_proc_bool(crt_proc_t proc, bool *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] buf          pointer to buffer
- * \param[in] buf_size         buffer size
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_raw(crt_proc_t proc, void *buf, size_t buf_size);
 
 /**
  * Generic processing routine.
@@ -1792,7 +1821,7 @@ int crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list);
 
 /**
  * Create local group view and return a handle to a group.
- * This call is only supported for cliens.
+ * This call is only supported for clients.
  *
  * \param[in] grp_id            Group id to create
  * \param[out] ret_grp          Returned group handle
@@ -1804,7 +1833,7 @@ int crt_group_view_create(crt_group_id_t grpid, crt_group_t **ret_grp);
 
 /**
  * Destroy group handle previously created by \a crt_Group_view_create
- * This call is only suppoted for clients
+ * This call is only supported for clients
  *
  * \param[in] grp               Group handle to destroy
  *

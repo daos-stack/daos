@@ -76,7 +76,7 @@ struct bio_nvme_data {
 	ABT_cond		 bd_barrier;
 	/* SPDK bdev type */
 	int			 bd_bdev_class;
-	/* How many xstreams has intialized NVMe context */
+	/* How many xstreams has initialized NVMe context */
 	int			 bd_xstream_cnt;
 	/* The thread responsible for SPDK bdevs init/fini */
 	struct spdk_thread	*bd_init_thread;
@@ -203,6 +203,9 @@ bio_spdk_env_init(void)
 
 	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 		opts.shm_id = nvme_glb.bd_shm_id;
+
+	/* quiet DPDK logging by setting level to ERROR */
+	opts.env_context = "--log-level=lib.eal:4";
 
 	rc = spdk_env_init(&opts);
 	if (opts.pci_whitelist != NULL)
@@ -448,18 +451,10 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 void
 xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
 {
-	int rc;
-
+	D_ASSERT(inflights != NULL);
 	/* Wait for the completion callback done */
-	if (inflights != NULL) {
-		while (*inflights != 0)
-			bio_nvme_poll(ctxt);
-	}
-
-	/* Continue to drain all msgs in the msg ring */
-	do {
-		rc = bio_nvme_poll(ctxt);
-	} while (rc > 0);
+	while (*inflights != 0)
+		bio_nvme_poll(ctxt);
 }
 
 int
@@ -854,7 +849,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	D_DEBUG(DB_MGMT, "Get dev "DF_UUID" mapped to tgt %d.\n",
 		DP_UUID(dev_info->sdi_id), tgt_id);
 
-	/* Iterate thru device list to find matching dev */
+	/* Iterate through device list to find matching dev */
 	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
 		if (uuid_compare(d_bdev->bb_uuid, dev_info->sdi_id) == 0) {
 			found = true;
@@ -1005,7 +1000,15 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 
 	if (ctxt->bxc_thread != NULL) {
-		xs_poll_completion(ctxt, NULL);
+		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d",
+			ctxt->bxc_tgt_id);
+
+		while (!spdk_thread_is_idle(ctxt->bxc_thread))
+			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
+
+		D_DEBUG(DB_MGMT, "SPDK thread finalized, tgt_id:%d",
+			ctxt->bxc_tgt_id);
+
 		spdk_thread_exit(ctxt->bxc_thread);
 		ctxt->bxc_thread = NULL;
 	}
@@ -1090,6 +1093,11 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 			xs_poll_completion(ctxt, &cp_arg.cca_inflights);
 			goto out;
 		}
+
+		/* Continue poll until no more events */
+		while (spdk_thread_poll(ctxt->bxc_thread, 0, 0) > 0)
+			;
+		D_DEBUG(DB_MGMT, "SPDK bdev initialized, tgt_id:%d", tgt_id);
 
 		nvme_glb.bd_init_thread = ctxt->bxc_thread;
 		rc = init_bio_bdevs(ctxt);

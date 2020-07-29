@@ -1,39 +1,24 @@
-/* Copyright (C) 2016-2019 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
  * This file is part of CaRT. It gives out the data types internally used by
@@ -72,7 +57,7 @@ struct crt_corpc_hdr {
 	d_string_t		 coh_grpid;
 	/* collective bulk handle */
 	crt_bulk_t		 coh_bulk_hdl;
-	/* optional excluded or exclusive ranks */
+	/* optional filter ranks (see crt_corpc_req_create) */
 	d_rank_list_t		*coh_filter_ranks;
 	/* optional inline ranks, for example piggyback the group members */
 	d_rank_list_t		*coh_inline_ranks;
@@ -97,8 +82,8 @@ struct crt_common_hdr {
 	d_rank_t	cch_src_rank;
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
-	/* Transfer id */
-	uint32_t	cch_xid;
+	/* RPC id */
+	uint64_t	cch_rpcid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -119,7 +104,7 @@ typedef enum {
 /* corpc info to track the tree topo and child RPCs info */
 struct crt_corpc_info {
 	struct crt_grp_priv	*co_grp_priv;
-	/* excluded or exclusive ranks */
+	/* filter ranks (see crt_corpc_req_create) */
 	d_rank_list_t		*co_filter_ranks;
 	uint32_t		 co_grp_ver;
 	uint32_t		 co_tree_topo;
@@ -200,7 +185,7 @@ struct crt_rpc_priv {
 				crp_have_ep:1,
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
-				/* 1 if RPC is succesfully put on the wire */
+				/* 1 if RPC is successfully put on the wire */
 				crp_on_wire:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
@@ -211,6 +196,9 @@ struct crt_rpc_priv {
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
+
+#define CRT_PROTO_INTERNAL_VERSION 1
+#define CRT_PROTO_FI_VERSION 0
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -275,21 +263,39 @@ struct crt_rpc_priv {
 		crt_hdlr_ctl_get_pid, NULL),				\
 	X(CRT_OPC_PROTO_QUERY,						\
 		0, &CQF_crt_proto_query,				\
-		crt_hdlr_proto_query, NULL),				\
+		crt_hdlr_proto_query, NULL)
+
+#define CRT_FI_RPCS_LIST						\
 	X(CRT_OPC_CTL_FI_TOGGLE,					\
 		0, &CQF_crt_ctl_fi_toggle,				\
 		crt_hdlr_ctl_fi_toggle, NULL),				\
 	X(CRT_OPC_CTL_FI_SET_ATTR,					\
 		0, &CQF_crt_ctl_fi_attr_set,				\
-		crt_hdlr_ctl_fi_attr_set, NULL)
+		crt_hdlr_ctl_fi_attr_set, NULL),			\
+	X(CRT_OPC_CTL_LOG_SET,						\
+		0, &CQF_crt_ctl_log_set,				\
+		crt_hdlr_ctl_log_set, NULL),				\
+	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
+		0, &CQF_crt_ctl_log_add_msg,				\
+		crt_hdlr_ctl_log_add_msg, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
 enum {
-	__FIRST  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE, 0, 0) - 1,
+	__FIRST_INTERNAL  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE,
+					CRT_PROTO_INTERNAL_VERSION, 0) - 1,
 	CRT_INTERNAL_RPCS_LIST,
+};
+
+#define CRT_OPC_FI_BASE		0xF1000000UL
+
+/* CRT internal opcode definitions, must be 0xFF00xxxx.*/
+enum {
+	__FIRST_FI  = CRT_PROTO_OPC(CRT_OPC_FI_BASE,
+				CRT_PROTO_FI_VERSION, 0) - 1,
+	CRT_FI_RPCS_LIST,
 };
 
 #undef X
@@ -514,6 +520,23 @@ CRT_RPC_DECLARE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
 
 CRT_RPC_DECLARE(crt_ctl_fi_toggle,
 		CRT_ISEQ_CTL_FI_TOGGLE, CRT_OSEQ_CTL_FI_TOGGLE)
+
+#define CRT_ISEQ_CTL_LOG_SET		/* input fields */	\
+	((d_string_t)		(log_mask)	CRT_VAR)
+
+#define CRT_OSEQ_CTL_LOG_SET		/* output fields */	\
+	((int32_t)		(rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
+
+#define CRT_ISEQ_CTL_LOG_ADD_MSG	/* input fields */	\
+	((d_string_t)		(log_msg)	CRT_VAR)
+
+#define CRT_OSEQ_CTL_LOG_ADD_MSG	/* output fields */	\
+	((int32_t)		(rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
+		CRT_OSEQ_CTL_LOG_ADD_MSG)
 
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public
