@@ -1024,11 +1024,11 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 /* JSON output handling for dmg command */
 static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 {
-	long int  size = 0;
-	char *content = NULL;
-	char *filename = "/tmp/daos_dmg.json";
-	struct json_object *parsed_json;
-	int	  rc;
+	long	int  size = 0;
+	char	*content = NULL;
+	char	*filename = "/tmp/daos_dmg.json";
+	struct	json_object *parsed_json = NULL;
+	int	rc;
 
 	FILE *fp = fopen(filename, "w+");
 
@@ -1050,16 +1050,13 @@ static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 
 	if (fread(content, size, 1, fp) != 1) {
 		print_message("failed to read content of %s\n", filename);
-		fclose(fp);
-		free(content);
-		return NULL;
+		goto out;
 	}
-	fclose(fp);
 
 	parsed_json = json_tokener_parse(content);
-
-	free(content);
-
+out:
+	fclose(fp);
+	D_FREE(content);
 	return parsed_json;
 }
 

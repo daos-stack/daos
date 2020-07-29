@@ -23,14 +23,11 @@ BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
 %if (0%{?rhel} >= 7)
+BuildRequires: argobots-devel >= 1.0rc1
 BuildRequires: json-c-devel
 %else
-BuildRequires: libjson-c-devel
-%endif
-%if (0%{?rhel} >= 7)
-BuildRequires: argobots-devel >= 1.0rc1
-%else
 BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libjson-c-devel
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse3-devel >= 3.4.2
