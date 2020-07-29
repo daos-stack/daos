@@ -1118,7 +1118,8 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 		if (pools[i].mgpi_svc == NULL)
 			pools[i].mgpi_svc = d_rank_list_alloc(rl_nr);
 		print_message("pool uuid "DF_UUIDF" rl_nr %d\n",
-			      DP_UUID(pools[i].mgpi_uuid), pools[i].mgpi_svc->rl_nr);
+			      DP_UUID(pools[i].mgpi_uuid),
+			      pools[i].mgpi_svc->rl_nr);
 
 		for (j = 0; j < pools[i].mgpi_svc->rl_nr; j++) {
 			rank = json_object_array_get_idx(rep_ranks, j);
