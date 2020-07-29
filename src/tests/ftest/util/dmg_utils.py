@@ -36,6 +36,46 @@ class DmgCommand(DmgCommandBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a dmg command with helper methods."""
 
+    # As the handling of these regular expressions are moved inside their
+    # respective methods, they should be removed from this definition.
+    METHOD_REGEX = {
+        "run":
+            r"(.*)",
+        "network_scan":
+            r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
+            r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
+        "pool_list":
+            r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
+        "storage_query_list_pools":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
+            r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
+        "storage_query_list_devices":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|(?:UUID:([a-z0-9-]+)\s+"
+            r"Targets:\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:([A-Z]+))",
+        "storage_query_device_health":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Targets:"
+            r"\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:(\w+)\s+.*\s+|(?:Temp.*|"
+            r"Cont.*Busy Time|Pow.*Cycles|Pow.*Duration|Unsafe.*|Media.*|"
+            r"Read.*|Write.*|Unmap.*|Checksum.*|Err.*Entries|Avail.*|"
+            r"Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9]+)",
+        "storage_query_target_health":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
+            r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)|"
+            r"(?:Read\s+Errors|Write\s+Errors|Unmap\s+Errors|Checksum\s+Errors|"
+            r"Error\s+Log\s+Entries|Media\s+Errors|Temperature|"
+            r"Available\s+Spare|Device\s+Reliability|Read\s+Only|"
+            r"Volatile\s+Memory\s+Backup):\s?([A-Za-z0-9- ]+)",
+        "storage_set_faulty":
+            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
+            r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
+        "system_query":
+            r"(\d\s+([0-9a-fA-F-]+)\s+([0-9.]+)\s+[A-Za-z]+)",
+        "system_start":
+            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
+        "system_stop":
+            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
+    }
+
     def network_scan(self, provider=None, all_devs=False):
         """Get the result of the dmg network scan command.
 
@@ -51,11 +91,8 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage scan command fails.
 
         """
-        self.set_sub_command("network")
-        self.sub_command_class.set_sub_command("scan")
-        self.sub_command_class.sub_command_class.provider.value = provider
-        self.sub_command_class.sub_command_class.all.value = all_devs
-        return self._get_result()
+        return self._get_result(
+            ("network", "scan"), provider=provider, all=all_devs)
 
     def storage_scan(self, verbose=False):
         """Get the result of the dmg storage scan command.
@@ -71,10 +108,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage scan command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("scan")
-        self.sub_command_class.sub_command_class.verbose.value = verbose
-        return self._get_result()
+        return self._get_result(("storage", "scan"), verbose=verbose)
 
     def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
@@ -93,10 +127,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage format command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("format")
-        self.sub_command_class.sub_command_class.reformat.value = reformat
-        return self._get_result()
+        return self._get_result(("storage", "format"), reformat=reformat)
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
@@ -110,16 +141,15 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage prepare command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("prepare")
-        self.sub_command_class.sub_command_class.nvme_only.value = nvme
-        self.sub_command_class.sub_command_class.scm_only.value = scm
-        self.sub_command_class.sub_command_class.target_user.value = \
-            getuser() if user is None else user
-        self.sub_command_class.sub_command_class.hugepages.value = hugepages
-        self.sub_command_class.sub_command_class.reset.value = reset
-        self.sub_command_class.sub_command_class.force.value = force
-        return self._get_result()
+        kwargs = {
+            "nvme_only": nvme,
+            "scm_only": scm,
+            "target_user": getuser() if user is None else user,
+            "hugepages": hugepages,
+            "reset": reset,
+            "force": force
+        }
+        return self._get_result(("storage", "prepare"), **kwargs)
 
     def storage_set_faulty(self, uuid, force=True):
         """Get the result of the 'dmg storage set nvme-faulty' command.
@@ -129,14 +159,8 @@ class DmgCommand(DmgCommandBase):
             force (bool, optional): Force setting device state to FAULTY.
                 Defaults to True.
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("set")
-        self.sub_command_class.sub_command_class.set_sub_command("nvme-faulty")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.uuid.value = uuid
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.force.value = force
-        return self._get_result()
+        return self._get_result(
+            ("storage", "set", "nvme-faulty"), uuid=uuid, force=force)
 
     def storage_query_list_devices(self, rank=None, health=False):
         """Get the result of the 'dmg storage query list-devices' command.
@@ -155,14 +179,8 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage prepare command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.set_sub_command("list-devices")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.rank.value = rank
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.health.value = health
-        return self._get_result()
+        return self._get_result(
+            ("storage", "query", "list-devices"), rank=rank, health=health)
 
     def storage_query_list_pools(self, uuid=None, rank=None, verbose=False):
         """Get the result of the 'dmg storage query list-pools' command.
@@ -181,16 +199,9 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage prepare command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.set_sub_command("list-pools")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.uuid.value = uuid
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.rank.value = rank
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.verbose.value = verbose
-        return self._get_result()
+        return self._get_result(
+            ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
+            verbose=verbose)
 
     def storage_query_device_health(self, uuid):
         """Get the result of the 'dmg storage query device-health' command.
@@ -206,13 +217,8 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage prepare command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class. \
-            sub_command_class.set_sub_command("device-health")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.uuid.value = uuid
-        return self._get_result()
+        return self._get_result(
+            ("storage", "query", "device-health"), uuid=uuid)
 
     def storage_query_target_health(self, rank, tgtid):
         """Get the result of the 'dmg storage query target-health' command.
@@ -229,15 +235,8 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage prepare command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class. \
-            sub_command_class.set_sub_command("device-health")
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.rank.value = rank
-        self.sub_command_class. \
-            sub_command_class.sub_command_class.tgtid.value = tgtid
-        return self._get_result()
+        return self._get_result(
+            ("storage", "query", "target-health"), rank=rank, tgtid=tgtid)
 
     def storage_query_nvme_health(self):
         """Get the result of the 'dmg storage query nvme-health' command.
@@ -250,11 +249,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage prepare command fails.
 
         """
-        self.set_sub_command("storage")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class. \
-            sub_command_class.set_sub_command("nvme-health")
-        return self._get_result()
+        return self._get_result(("storage", "query", "nvme-health"))
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, group=None, acl_file=None):
@@ -278,29 +273,37 @@ class DmgCommand(DmgCommandBase):
                 default.
             acl_file (str, optional): ACL file. Defaults to None.
 
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
         Raises:
-            CommandFailure: if the dmg pool create command fails.
+            CommandFailure: if the 'dmg pool create' command fails and
+                self.exit_status_exception is set to True.
+
+        Returns:
+            dict: a dictionary containing the 'uuid' and 'svc' of the new pool
+                successfully extracted form the dmg command result.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("create")
-        self.sub_command_class.sub_command_class.user.value = \
-            getpwuid(uid).pw_name if isinstance(uid, int) else uid
-        self.sub_command_class.sub_command_class.group.value = \
-            getgrgid(gid).gr_name if isinstance(gid, int) else gid
-        self.sub_command_class.sub_command_class.scm_size.value = scm_size
-        self.sub_command_class.sub_command_class.nvme_size.value = nvme_size
+        kwargs = {
+            "user": getpwuid(uid).pw_name if isinstance(uid, int) else uid,
+            "group": getgrgid(gid).gr_name if isinstance(gid, int) else gid,
+            "scm_size": scm_size,
+            "nvme_size": nvme_size,
+            "nsvc": svcn,
+            "sys": group,
+            "acl_file": acl_file
+        }
         if target_list is not None:
-            self.sub_command_class.sub_command_class.ranks.value = ",".join(
-                [str(target) for target in target_list])
-        self.sub_command_class.sub_command_class.nsvc.value = svcn
-        self.sub_command_class.sub_command_class.sys.value = group
-        self.sub_command_class.sub_command_class.acl_file.value = acl_file
-        return self._get_result()
+            kwargs["ranks"] = ",".join([str(target) for target in target_list])
+        self._get_result(("pool", "create"), **kwargs)
+
+        # Extract the new pool UUID and SVC list from the command output
+        data = {}
+        match = re.findall(
+            r"UUID:\s+([A-Za-z0-9-]+),\s+Service replicas:\s+([A-Za-z0-9-]+)",
+            self.result.stdout)
+        if match:
+            data["uuid"] = match[0][0]
+            data["svc"] = match[0][1]
+        return data
 
     def pool_query(self, pool):
         """Query a pool with the dmg command.
@@ -308,18 +311,111 @@ class DmgCommand(DmgCommandBase):
         Args:
             uuid (str): Pool UUID to query.
 
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
         Raises:
             CommandFailure: if the dmg pool query command fails.
 
+        Returns:
+            dict: a dictionary containing the pool information when successfully
+                extracted form the dmg command result.
+
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        return self._get_result()
+        self._get_result(("pool", "query"), pool=pool)
+
+        # Extract the new pool information from the command output.
+        # Sample output:
+        #   Pool <A>, ntarget=<B>, disabled=<C>, leader=<D>, version=<E>
+        #   Pool space info:
+        #   - Target(VOS) count:<F>
+        #   - SCM:
+        #     Total size: <G>
+        #     Free: <H>, min:<I>, max:<J>, mean:<K>
+        #   - NVMe:
+        #     Total size: <L>
+        #     Free: <M>, min:<N>, max:<O>, mean:<P>
+        #   Rebuild <Q>, <R> objs, <S> recs
+        #
+        # This yields the following tuple of tuples when run through the regex:
+        #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '')
+        #   1: ('', '', '', '', '', <F>, '', '', '', '', '', '', '')
+        #   2: ('', '', '', '', '', '', <G>, <H>, <I>, <J>, <K>, '', '')
+        #   3: ('', '', '', '', '', '', <L>, <M>, <N>, <O>, <P>, '', '')
+        #   4: ('', '', '', '', '', '', '', '', '', '', <Q>, <R>, <S>)
+        #
+        # This method will convert the regex result into the following dict:
+        #   data = {
+        #       "uuid": <A>,
+        #       "ntarget": <B>,
+        #       "disabled": <C>,
+        #       "leader": <D>,
+        #       "version": <E>,
+        #       "target_count": <F>,
+        #       "scm": {
+        #           "total": <G>,
+        #           "free": <H>,
+        #           "free_min": <I>,
+        #           "free_max": <J>,
+        #           "free_mean": <K>
+        #       },
+        #       "nvme": {
+        #           "total": <L>,
+        #           "free": <M>,
+        #           "free_min": <N>,
+        #           "free_max": <O>,
+        #           "free_mean": <P>
+        #       },
+        #       "rebuild": {
+        #           "state": <Q>
+        #           "objects": <R>
+        #           "records": <S>
+        #       }
+        #   }
+        #
+        data = {}
+        match = re.findall(
+            r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),\s+disabled=(\d+),"
+            r"\s+leader=(\d+),\s+version=(\d+)|Target\(VOS\)\s+count:"
+            r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
+            r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
+            r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
+            r"|Rebuild\s+(\w+),\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
+            self.result.stdout)
+        if match:
+            # Mapping of the pool data entries to the match[0] indices
+            pool_map = {
+                "uuid": 0,
+                "ntarget": 1,
+                "disabled": 2,
+                "leader": 3,
+                "version": 4
+            }
+            # Mapping of the pool space entries to the match[2|3] indices
+            space_map = {
+                "total": 6,
+                "free": 7,
+                "free_min": 8,
+                "free_max": 9,
+                "free_mean": 10
+            }
+            # Mapping of the 2nd indices mappings to the 1st match indices
+            map_values = {
+                0: pool_map,
+                1: {"target_count": 5},
+                2: space_map,
+                3: space_map,
+                4: {"state": 10, "objects": 11, "records": 12}
+            }
+            for index_1, match_list in enumerate(match):
+                if index_1 in map_values:
+                    for key, index_2 in map_values[index_1].items():
+                        if index_1 == 2:
+                            data["scm"][key] = match_list[index_2]
+                        elif index_1 == 3:
+                            data["nvme"][key] = match_list[index_2]
+                        elif index_1 == 4:
+                            data["rebuild"][key] = match_list[index_2]
+                        else:
+                            data[key] = match_list[index_2]
+        return data
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.
@@ -336,11 +432,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool destroy command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("destroy")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.force.value = force
-        return self._get_result()
+        return self._get_result(("pool", "destroy"), pool=pool, force=force)
 
     def pool_get_acl(self, pool):
         """Get the ACL for a given pool.
@@ -356,10 +448,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool get-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("get-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        return self._get_result()
+        return self._get_result(("pool", "get-acl"), pool=pool)
 
     def pool_update_acl(self, pool, acl_file, entry):
         """Update the acl for a given pool.
@@ -377,12 +466,8 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool update-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("update-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.acl_file.value = acl_file
-        self.sub_command_class.sub_command_class.entry.value = entry
-        return self._get_result()
+        return self._get_result(
+            ("pool", "update-acl"), pool=pool, acl_file=acl_file, entry=entry)
 
     def pool_overwrite_acl(self, pool, acl_file):
         """Overwrite the acl for a given pool.
@@ -399,11 +484,8 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool overwrite-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("overwrite-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.acl_file.value = acl_file
-        return self._get_result()
+        return self._get_result(
+            ("pool", "overwrite-acl"), pool=pool, acl_file=acl_file)
 
     def pool_delete_acl(self, pool, principal):
         """Delete the acl for a given pool.
@@ -420,11 +502,8 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool delete-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("delete-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.principal.value = principal
-        return self._get_result()
+        return self._get_result(
+            ("pool", "delete-acl"), pool=pool, principal=principal)
 
     def pool_list(self):
         """List pools.
@@ -437,9 +516,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool delete-acl command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("list")
-        return self._get_result()
+        return self._get_result(("pool", "list"))
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.
@@ -458,14 +535,10 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool set-prop command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("set-prop")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.name.value = name
-        self.sub_command_class.sub_command_class.value.value = value
-        return self._get_result()
+        return self._get_result(
+            ("pool", "set-prop"), pool=pool, name=name, value=value)
 
-    def pool_exclude(self, pool_uuid, rank, tgt_idx=None):
+    def pool_exclude(self, pool, rank, tgt_idx=None):
         """Exclude a daos_server from the pool.
 
         Args:
@@ -481,14 +554,10 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool exclude command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("exclude")
-        self.sub_command_class.sub_command_class.pool.value = pool_uuid
-        self.sub_command_class.sub_command_class.rank.value = rank
-        self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
-        return self._get_result()
+        return self._get_result(
+            ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def pool_reintegrate(self, pool_uuid, rank, tgt_idx=None):
+    def pool_reintegrate(self, pool, rank, tgt_idx=None):
         """Reintegrate a daos_server to the pool.
 
         Args:
@@ -504,15 +573,11 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool reintegrate command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("reintegrate")
-        self.sub_command_class.sub_command_class.pool.value = pool_uuid
-        self.sub_command_class.sub_command_class.rank.value = rank
-        self.sub_command_class.sub_command_class.tgt_idx.value = tgt_idx
-        return self._get_result()
+        return self._get_result(
+            ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
     def system_query(self, rank=None, verbose=True):
-        """Query System to know status of servers
+        """Query system to obtain the status of the servers.
 
         Args:
             rank: Specify specific rank to obtain it's status
@@ -526,13 +591,9 @@ class DmgCommand(DmgCommandBase):
 
         Raises:
             CommandFailure: if the dmg storage prepare command fails.
-        """
 
-        self.set_sub_command("system")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.rank.value = rank
-        self.sub_command_class.sub_command_class.verbose.value = verbose
-        return self._get_result()
+        """
+        return self._get_result(("system", "query"), rank=rank, verbose=verbose)
 
     def system_start(self):
         """Start the system.
@@ -545,9 +606,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system start command fails.
 
         """
-        self.set_sub_command("system")
-        self.sub_command_class.set_sub_command("start")
-        return self._get_result()
+        return self._get_result(("system", "start"))
 
     def system_stop(self, force=False):
         """Stop the system.
@@ -564,10 +623,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system stop command fails.
 
         """
-        self.set_sub_command("system")
-        self.sub_command_class.set_sub_command("stop")
-        self.sub_command_class.sub_command_class.force.value = force
-        return self._get_result()
+        return self._get_result(("system", "stop"), force=force)
 
 
 def check_system_query_status(stdout_str):
@@ -600,7 +656,6 @@ def check_system_query_status(stdout_str):
             print("Rank {} failed with state '{}'".format(out[0], out[3]))
         check = False
     return check
-
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.

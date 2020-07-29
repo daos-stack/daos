@@ -35,8 +35,6 @@ from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
-
 
 class PoolSpace(object):
     # pylint: disable=too-few-public-methods
@@ -125,7 +123,6 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.uuid = None
         self.info = None
-        self.cmd_output = None
         self.svc_ranks = None
         self.connected = False
         self.dmg = dmg_command
@@ -186,12 +183,7 @@ class TestPool(TestDaosApiBase):
         elif self.control_method.value == self.USE_DMG and self.dmg:
             # Create a pool with the dmg command
             self._log_method("dmg.pool_create", kwargs)
-            result = self.dmg.pool_create(**kwargs)
-            # self.cmd_output to keep the actual stdout of dmg command for
-            # checking the negative/warning message.
-            self.cmd_output = result.stdout
-            uuid, svc = get_pool_uuid_service_replicas_from_stdout(
-                result.stdout)
+            data = self.dmg.pool_create(**kwargs)
 
             # Populate the empty DaosPool object with the properties of the pool
             # created with dmg pool create.
@@ -201,14 +193,14 @@ class TestPool(TestDaosApiBase):
             # Convert the string of service replicas from the dmg command output
             # into an ctype array for the DaosPool object using the same
             # technique used in DaosPool.create().
-            service_replicas = [int(value) for value in svc.split(",")]
+            service_replicas = [int(value) for value in data["svc"].split(",")]
             rank_t = ctypes.c_uint * len(service_replicas)
             rank = rank_t(*list([svc for svc in service_replicas]))
             rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
             self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
 
             # Set UUID and attached to the DaosPool object
-            self.pool.set_uuid_str(uuid)
+            self.pool.set_uuid_str(data["uuid"])
             self.pool.attached = 1
 
         elif self.control_method.value == self.USE_DMG:
@@ -361,69 +353,29 @@ class TestPool(TestDaosApiBase):
             if self.control_method.value == self.USE_DMG and self.dmg:
                 kwargs = {"pool": self.uuid}
                 self._log_method("dmg.pool_query", kwargs)
-                data = self.dmg.get_output("pool_query", **kwargs)
-                # When called through get_output() the 'dmg pool query' output
-                # is returned as a tuple of tuples after running through the
-                # regex.
-                #
-                # For example, running the regex against this output:
-                #   Pool <A>, ntarget=<B>, disabled=<C>, leader=<D>, version=<E>
-                #   Pool space info:
-                #   - Target(VOS) count:<F>
-                #   - SCM:
-                #     Total size: <G>
-                #     Free: <H>, min:<I>, max:<J>, mean:<K>
-                #   - NVMe:
-                #     Total size: <L>
-                #     Free: <M>, min:<N>, max:<O>, mean:<P>
-                #   Rebuild idle, <Q> objs, <R> recs
-                #
-                # Yields this tuple of tuples:
-                #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '')
-                #   1: ('', '', '', '', '', <F>, '', '', '', '', '', '', '')
-                #   2: ('', '', '', '', '', '', <G>, <H>, <I>, <J>, <K>, '', '')
-                #   3: ('', '', '', '', '', '', <L>, <M>, <N>, <O>, <P>, '', '')
-                #   4: ('', '', '', '', '', '', '', '', '', '', '', <Q>, <R>)
-                #
-                # Mapping of the PoolInfo args to the data[0] indices
-                pool_map = {
-                    "uuid": 0,
-                    "ntarget": 1,
-                    "disabled": 2,
-                    "leader": 3,
-                    "version": 4
-                }
-                # Mapping of the PoolSpace args to the data[2|3] indices
-                space_map = {
-                    "total": 6,
-                    "free": 7,
-                    "free_min": 8,
-                    "free_max": 9,
-                    "free_mean": 10
-                }
-                # Mapping of the 2nd indices maps to the 1st data indices
-                map_values = [
-                    pool_map,
-                    {"target_count": 5},
-                    space_map,
-                    space_map
-                ]
-
-                # Define self.pool to a non-ctype version of PoolInfo
-                kwargs = {}
-                for index_1, data_index_1 in enumerate(data):
-                    if index_1 < len(map_values):
-                        ps_kwargs = {}
-                        for key, index_2 in map_values[index_1].items():
-                            if index_1 in (0, 1):
-                                kwargs[key] = data_index_1[index_2]
-                            else:
-                                ps_kwargs[key] = data_index_1[index_2]
-                        if index_1 == 2:
-                            kwargs["scm"] = PoolSpace(**ps_kwargs)
-                        elif index_1 == 3:
-                            kwargs["nvme"] = PoolSpace(**ps_kwargs)
-                self.info = PoolInfo(**kwargs)
+                data = self.dmg.pool_query(**kwargs)
+                self.info = PoolInfo(
+                    uuid=data["uuid"],
+                    ntarget=data["ntarget"],
+                    disabled=data["disabled"],
+                    leader=data["leader"],
+                    version=data["version"],
+                    target_count=data["target_count"],
+                    scm=PoolSpace(
+                        total=data["scm"]["total"],
+                        free=data["scm"]["free"],
+                        free_min=data["scm"]["free_min"],
+                        free_max=data["scm"]["free_max"],
+                        free_mean=data["scm"]["free_mean"]
+                    ),
+                    nvme=PoolSpace(
+                        total=data["scm"]["total"],
+                        free=data["scm"]["free"],
+                        free_min=data["scm"]["free_min"],
+                        free_max=data["scm"]["free_max"],
+                        free_mean=data["scm"]["free_mean"]
+                    )
+                )
 
             elif self.control_method.value == self.USE_DMG:
                 raise CommandFailure("Error: Undefined dmg command")

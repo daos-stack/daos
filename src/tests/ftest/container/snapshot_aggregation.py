@@ -47,55 +47,6 @@ class SnapshotAggregation(IorTestBase):
         self.free_space["SCM"].append(self.pool.info.scm.free)
         self.free_space["NVMe"].append(self.pool.info.nvme.free)
 
-        # pool_query = self.dmg.get_output("pool_query", pool=self.pool.uuid)
-        # # When called through get_output() the 'dmg pool query' output is
-        # # returned as a tuple of tuples after running through the regex.
-        # #
-        # # For example, running the regex against this output:
-        # #   Pool <A>, ntarget=<B>, disabled=<C>, leader=<D>, version=<E>
-        # #   Pool space info:
-        # #   - Target(VOS) count:<F>
-        # #   - SCM:
-        # #     Total size: <G>
-        # #     Free: <H>, min:<I>, max:<J>, mean:<K>
-        # #   - NVMe:
-        # #     Total size: <L>
-        # #     Free: <M>, min:<N>, max:<O>, mean:<P>
-        # #   Rebuild idle, <Q> objs, <R> recs
-        # #
-        # # Yields this tuple of tuples:
-        # #   [0]: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '')
-        # #   [1]: ('', '', '', '', '', <F>, '', '', '', '', '', '', '')
-        # #   [2]: ('', '', '', '', '', '', <G>, <H>, <I>, <J>, <K>, '', '')
-        # #   [3]: ('', '', '', '', '', '', <L>, <M>, <N>, <O>, <P>, '', '')
-        # #   [4]: ('', '', '', '', '', '', '', '', '', '', '', <Q>, <R>)
-        # #
-        # # For this test we want the SCM and NVMe Free space: <H> and <M>.
-
-        # for index, value in enumerate(pool_query):
-        #     self.log.info("  [%s]: %s", index, value)
-        #     for index2, value2 in enumerate(value):
-        #         self.log.info("    [%s]: %s", index2, value2)
-
-        # try:
-        #     free_scm = pool_query[2][7].split(" ")
-        #     free_nvme = pool_query[3][7].split(" ")
-        # except IndexError as error:
-        #     self.fail(
-        #         "Error obtaining SCM and NVMe free space from dmg pool "
-        #         "query: {}".format(error))
-
-        # # Since sizes are not guaranteed to be in the same units, we'll use the
-        # # Bytes class to be able to compare items.  As such, units like 'MB'
-        # # need to be provided as 'M'.
-        # try:
-        #     self.free_space["SCM"].append(Bytes(free_scm[0], free_scm[1][0]))
-        #     self.free_space["NVMe"].append(Bytes(free_nvme[0], free_nvme[1][0]))
-        # except IndexError as error:
-        #     self.fail(
-        #         "Error assigning SCM and NVMe free space from '{}' and '{}', "
-        #         "respectively: {}".format(free_scm, free_nvme, error))
-
     def test_snapshot_aggregation(self):
         """JIRA ID: DAOS-3751.
 

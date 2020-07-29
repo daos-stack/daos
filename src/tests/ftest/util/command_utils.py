@@ -26,12 +26,13 @@ from importlib import import_module
 import re
 import time
 import signal
+import os
 
 from avocado.utils import process
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, EnvironmentVariables
+    CommandFailure, BasicParameter, ObjectWithParameters, \
+    CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError
 
@@ -386,8 +387,8 @@ class CommandWithSubCommand(ExecutableCommand):
         #       <sub_command>:
         #           <sub_command>_sub_command: <sub_command_sub_command>
         #
-        self.sub_command = NamedParameter(
-            "{}_sub_command".format(self._command), None)
+        self.sub_command = BasicParameter(
+            None, yaml_key="{}_sub_command".format(self._command))
 
         # Define the class to represent the active sub-command and it's specific
         # parameters.  Multiple sub-commands may be available, but only one can
@@ -402,6 +403,14 @@ class CommandWithSubCommand(ExecutableCommand):
         self.sub_command_class = None
 
         # Define an attribute to store the CmdResult from the last run() call.
+        # A CmdResult object has the following properties:
+        #   command         - command string
+        #   exit_status     - exit_status of the command
+        #   stdout          - the stdout
+        #   stderr          - the stderr
+        #   duration        - command execution time
+        #   interrupted     - whether the command completed within timeout
+        #   pid             - command's pid
         self.result = None
 
     def get_param_names(self):
@@ -712,21 +721,59 @@ class YamlCommand(SubProcessCommand):
 
         return value
 
-    def _get_result(self):
-        """Generate the yaml config if defined, then call the parent method.
+    def run(self):
+        """Run the command and assign the 'result' attribute.
 
-        Returns:
-            CmdResult: an avocado CmdResult object containing the command
-                information, e.g. exit status, stdout, stderr, etc.
+        Ensure the yaml file is updated with the current attributes before
+        executing the command.
 
         Raises:
-            CommandFailure: if the command fails.
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
 
         """
         if self.yaml:
             self.create_yaml_file()
+        return super(YamlCommand, self).run()
 
-        return super(YamlCommand, self)._get_result()
+    def copy_certificates(self, source, hosts):
+        """Copy certificates files from the source to the destination hosts.
+
+        Args:
+            source (str): source of the certificate files.
+            hosts (list): list of the destination hosts.
+        """
+        yaml = self.yaml
+        while isinstance(yaml, YamlParameters):
+            if hasattr(yaml, "get_certificate_data"):
+                data = yaml.get_certificate_data(
+                    yaml.get_attribute_names(LogParameter))
+                for name in data:
+                    run_command(
+                        "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
+                            ",".join(hosts), name))
+                    for file_name in data[name]:
+                        src_file = os.path.join(source, file_name)
+                        dst_file = os.path.join(name, file_name)
+                        result = run_command(
+                            "clush -S -v -w {} --copy {} --dest {}".format(
+                                ",".join(hosts), src_file, dst_file),
+                            raise_exception=False)
+                        if result.exit_status != 0:
+                            self.log.info(
+                                "WARNING: failure copying '%s' to '%s' on %s",
+                                src_file, dst_file, hosts)
+
+                    # debug to list copy of cert files
+                    run_command(
+                        "clush -S -v -w {} /usr/bin/ls -la {}".format(
+                            ",".join(hosts), name))
+            yaml = yaml.other_params
 
 
 class SubprocessManager(object):

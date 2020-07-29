@@ -1,40 +1,26 @@
-/* Copyright (C) 2016-2019 Intel Corporation
- * All rights reserved.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. 8F-30005.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+/**
  * This file tests macros in GURT
  */
 #ifndef TEST_OLD_ERROR
@@ -836,6 +822,15 @@ test_gurt_hash_op_key_cmp(struct d_hash_table *thtab, d_list_t *link,
 	return !memcmp(tlink->tl_key, key, ksize);
 }
 
+static uint32_t
+test_gurt_hash_op_rec_hash(struct d_hash_table *thtab, d_list_t *link)
+{
+	struct test_hash_entry *tlink = test_gurt_hash_link2ptr(link);
+
+	return d_hash_string_u32((const char *)tlink->tl_key,
+				 TEST_GURT_HASH_KEY_LEN);
+}
+
 static void
 test_gurt_hash_op_rec_addref(struct d_hash_table *thtab, d_list_t *link)
 {
@@ -877,7 +872,8 @@ test_gurt_hash_op_rec_free(struct d_hash_table *thtab, d_list_t *link)
 }
 
 static d_hash_table_ops_t th_ops = {
-	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
+	.hop_key_cmp	= test_gurt_hash_op_key_cmp,
+	.hop_rec_hash	= test_gurt_hash_op_rec_hash,
 };
 
 /**
@@ -995,6 +991,7 @@ test_gurt_hash_empty(void **state)
 
 static d_hash_table_ops_t th_ops_ref = {
 	.hop_key_cmp		= test_gurt_hash_op_key_cmp,
+	.hop_rec_hash		= test_gurt_hash_op_rec_hash,
 	.hop_rec_addref		= test_gurt_hash_op_rec_addref,
 	.hop_rec_decref		= test_gurt_hash_op_rec_decref,
 	.hop_rec_ndecref	= test_gurt_hash_op_rec_ndecref,
@@ -1649,6 +1646,7 @@ test_gurt_hash_op_rec_decref_locked(struct d_hash_table *thtab, d_list_t *link)
 
 static d_hash_table_ops_t th_ref_ops = {
 	.hop_key_cmp    = test_gurt_hash_op_key_cmp,
+	.hop_rec_hash	= test_gurt_hash_op_rec_hash,
 	.hop_rec_addref	= test_gurt_hash_op_rec_addref_locked,
 	.hop_rec_decref	= test_gurt_hash_op_rec_decref_locked,
 };
@@ -1768,6 +1766,7 @@ test_gurt_hash_parallel_same_operations(void **state)
 	test_gurt_hash_threaded_same_operations(D_HASH_FT_RWLOCK);
 	test_gurt_hash_threaded_same_operations(D_HASH_FT_RWLOCK
 						| D_HASH_FT_EPHEMERAL);
+	test_gurt_hash_threaded_same_operations(D_HASH_FT_LRU);
 }
 
 static void
@@ -1778,6 +1777,7 @@ test_gurt_hash_parallel_different_operations(void **state)
 	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_RWLOCK);
 	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_RWLOCK
 						      | D_HASH_FT_EPHEMERAL);
+	test_gurt_hash_threaded_concurrent_operations(D_HASH_FT_LRU);
 }
 
 static void
@@ -1788,6 +1788,7 @@ test_gurt_hash_parallel_refcounting(void **state)
 	_test_gurt_hash_parallel_refcounting(D_HASH_FT_RWLOCK);
 	_test_gurt_hash_parallel_refcounting(D_HASH_FT_RWLOCK
 					     | D_HASH_FT_EPHEMERAL);
+	_test_gurt_hash_parallel_refcounting(D_HASH_FT_LRU);
 }
 
 struct circular_item {

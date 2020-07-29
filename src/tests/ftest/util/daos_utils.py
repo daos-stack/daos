@@ -21,11 +21,11 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from command_utils_base import CommandFailure
 from daos_utils_base import DaosCommandBase
 
 
 class DaosCommand(DaosCommandBase):
+    # pylint: disable=too-many-ancestors
     """Defines a object representing a daos command."""
 
     METHOD_REGEX = {
@@ -103,13 +103,8 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.sys.value = sys
-        return self._get_result()
+        return self._get_result(
+            ("pool", "query"), pool=pool, sys_name=sys_name, svc=svc, sys=sys)
 
     def container_create(self, pool, sys_name=None, svc=None, cont=None,
                          path=None, cont_type=None, oclass=None,
@@ -143,19 +138,10 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container create command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("create")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.path.value = path
-        self.sub_command_class.sub_command_class.type.value = cont_type
-        self.sub_command_class.sub_command_class.oclass.value = oclass
-        self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
-        self.sub_command_class.sub_command_class.properties.value = properties
-        self.sub_command_class.sub_command_class.acl_file.value = acl_file
-        return self._get_result()
+        return self._get_result(
+            ("container", "create"), pool=pool, sys_name=sys_name, svc=svc,
+            cont=cont, path=path, type=cont_type, oclass=oclass,
+            chunk_size=chunk_size, properties=properties, acl_file=acl_file)
 
     def container_destroy(self, pool, svc, cont, force=None, sys_name=None):
         """Destroy a container.
@@ -177,14 +163,9 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container destroy command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("destroy")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.force.value = force
-        return self._get_result()
+        return self._get_result(
+            ("container", "destroy"), pool=pool, sys_name=sys_name, svc=svc,
+            cont=cont, force=force)
 
     def container_get_acl(self, pool, svc, cont,
                           verbose=False, outfile=None):
@@ -205,14 +186,9 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container get-acl command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("get-acl")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.verbose.value = verbose
-        self.sub_command_class.sub_command_class.outfile.value = outfile
-        return self._get_result()
+        return self._get_result(
+            ("container", "get-acl"), pool=pool, svc=svc, cont=cont,
+            verbose=verbose, outfile=outfile)
 
     def pool_list_cont(self, pool, svc, sys_name=None):
         """List containers in the given pool.
@@ -231,12 +207,8 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("list-containers")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        return self._get_result()
+        return self._get_result(
+            ("pool", "list-containers"), pool=pool, svc=svc, sys_name=sys_name)
 
     def pool_set_attr(self, pool, attr, value, svc):
         """Set pool attribute.
@@ -255,13 +227,8 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("set-attr")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.attr.value = attr
-        self.sub_command_class.sub_command_class.value.value = value
-        self.sub_command_class.sub_command_class.svc.value = svc
-        return self._get_result()
+        return self._get_result(
+            ("pool", "set-attr"), pool=pool, svc=svc, attr=attr, value=value)
 
     def pool_get_attr(self, pool, attr, svc):
         """Set pool attribute.
@@ -279,12 +246,8 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("get-attr")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.attr.value = attr
-        self.sub_command_class.sub_command_class.svc.value = svc
-        return self._get_result()
+        return self._get_result(
+            ("pool", "get-attr"), pool=pool, svc=svc, attr=attr)
 
     def pool_list_attrs(self, pool, svc):
         """List pool attributes.
@@ -301,11 +264,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("pool")
-        self.sub_command_class.set_sub_command("list-attrs")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.svc.value = svc
-        return self._get_result()
+        return self._get_result(("pool", "list-attrs"), pool=pool, svc=svc)
 
     def container_query(self, pool, cont, svc=None, sys_name=None):
         """Query a container.
@@ -326,13 +285,9 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("query")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        return self._get_result()
+        return self._get_result(
+            ("container", "query"), pool=pool, svc=svc, cont=cont,
+            sys_name=sys_name)
 
     def container_set_attr(
             self, pool, cont, attr, val, svc=None, sys_name=None):
@@ -356,15 +311,9 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("set-attr")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.attr.value = attr
-        self.sub_command_class.sub_command_class.value.value = val
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        return self._get_result()
+        return self._get_result(
+            ("container", "set-attr"), pool=pool, svc=svc, cont=cont,
+            sys_name=sys_name, attr=attr, value=val)
 
     def container_get_attr(self, pool, cont, attr, svc=None, sys_name=None):
         """Call daos container get-attr.
@@ -386,14 +335,9 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("get-attr")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.attr.value = attr
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        return self._get_result()
+        return self._get_result(
+            ("container", "get-attr"), pool=pool, svc=svc, cont=cont,
+            sys_name=sys_name, attr=attr)
 
     def container_list_attrs(self, pool, cont, svc=None, sys_name=None):
         """Call daos container list-attrs.
@@ -414,16 +358,12 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("list-attrs")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        return self._get_result()
+        return self._get_result(
+            ("container", "list-attrs"), pool=pool, svc=svc, cont=cont,
+            sys_name=sys_name)
 
-    def container_create_snap(self, pool, cont, snap=None, epoch=None, svc=None,
-                              sys_name=None):
+    def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
+                              svc=None, sys_name=None):
         """Call daos container create-snap.
 
         Args:
@@ -444,15 +384,9 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("create-snap")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.snap.value = snap
-        self.sub_command_class.sub_command_class.epc.value = epoch
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        return self._get_result()
+        return self._get_result(
+            ("container", "create-snap"), pool=pool, svc=svc, cont=cont,
+            sys_name=sys_name, snap=snap_name, epc=epoch, )
 
     def container_destroy_snap(self, pool, cont, snap_name=None, epoch=None,
                                svc=None, sys_name=None):
@@ -476,12 +410,6 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
-        self.set_sub_command("container")
-        self.sub_command_class.set_sub_command("destroy-snap")
-        self.sub_command_class.sub_command_class.pool.value = pool
-        self.sub_command_class.sub_command_class.cont.value = cont
-        self.sub_command_class.sub_command_class.snap.value = snap_name
-        self.sub_command_class.sub_command_class.epc.value = epoch
-        self.sub_command_class.sub_command_class.svc.value = svc
-        self.sub_command_class.sub_command_class.sys_name.value = sys_name
-        return self._get_result()
+        return self._get_result(
+            ("container", "destroy-snap"), pool=pool, svc=svc, cont=cont,
+            sys_name=sys_name, snap=snap_name, epc=epoch, )
