@@ -84,8 +84,8 @@ class DaosCoreBase(TestWithServers):
                 # passing in the full 'env_vars_list' list.
                 manager.set_config_value("env_vars", env_vars_list[0])
 
-            # Start the servers
-            super(DaosCoreBase, self).start_server_managers()
+        # Start the servers
+        super(DaosCoreBase, self).start_server_managers()
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
