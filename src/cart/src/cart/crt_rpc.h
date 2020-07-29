@@ -206,61 +206,61 @@ struct crt_rpc_priv {
 #define CRT_INTERNAL_RPCS_LIST						\
 	X(CRT_OPC_URI_LOOKUP,						\
 		0, &CQF_crt_uri_lookup,					\
-		crt_hdlr_uri_lookup, NULL),				\
+		crt_hdlr_uri_lookup, NULL)				\
 	X(CRT_OPC_SELF_TEST_BOTH_EMPTY,					\
 		0, NULL,						\
-		crt_self_test_msg_handler, NULL),			\
+		crt_self_test_msg_handler, NULL)			\
 	X(CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,				\
 		0, &CQF_crt_st_send_id_reply_iov,			\
-		crt_self_test_msg_handler, NULL),			\
+		crt_self_test_msg_handler, NULL)			\
 	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,			\
 		0, &CQF_crt_st_send_iov_reply_empty,			\
-		crt_self_test_msg_handler, NULL),			\
+		crt_self_test_msg_handler, NULL)			\
 	X(CRT_OPC_SELF_TEST_BOTH_IOV,					\
 		0, &CQF_crt_st_both_iov,				\
-		crt_self_test_msg_handler, NULL),			\
+		crt_self_test_msg_handler, NULL)			\
 	X(CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,			\
 		0, &CQF_crt_st_send_bulk_reply_iov,			\
-		crt_self_test_msg_handler, NULL),			\
+		crt_self_test_msg_handler, NULL)			\
 	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,			\
 		0, &CQF_crt_st_send_iov_reply_bulk,			\
-		crt_self_test_msg_handler, NULL),			\
+		crt_self_test_msg_handler, NULL)			\
 	X(CRT_OPC_SELF_TEST_BOTH_BULK,					\
 		0, &CQF_crt_st_both_bulk,				\
-		crt_self_test_msg_handler, NULL),			\
+		crt_self_test_msg_handler, NULL)			\
 	X(CRT_OPC_SELF_TEST_OPEN_SESSION,				\
 		0, &CQF_crt_st_open_session,				\
-		crt_self_test_open_session_handler, NULL),		\
+		crt_self_test_open_session_handler, NULL)		\
 	X(CRT_OPC_SELF_TEST_CLOSE_SESSION,				\
 		0, &CQF_crt_st_close_session,				\
-		crt_self_test_close_session_handler, NULL),		\
+		crt_self_test_close_session_handler, NULL)		\
 	X(CRT_OPC_SELF_TEST_START,					\
 		0, &CQF_crt_st_start,					\
-		crt_self_test_start_handler, NULL),			\
+		crt_self_test_start_handler, NULL)			\
 	X(CRT_OPC_SELF_TEST_STATUS_REQ,					\
 		0, &CQF_crt_st_status_req,				\
-		crt_self_test_status_req_handler, NULL),		\
+		crt_self_test_status_req_handler, NULL)			\
 	X(CRT_OPC_IV_FETCH,						\
 		0, &CQF_crt_iv_fetch,					\
-		crt_hdlr_iv_fetch, NULL),				\
+		crt_hdlr_iv_fetch, NULL)				\
 	X(CRT_OPC_IV_UPDATE,						\
 		0, &CQF_crt_iv_update,					\
-		crt_hdlr_iv_update, NULL),				\
+		crt_hdlr_iv_update, NULL)				\
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
-		crt_hdlr_iv_sync, &crt_iv_sync_co_ops),			\
+		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)			\
 	X(CRT_OPC_CTL_GET_URI_CACHE,					\
 		0, &CQF_crt_ctl_get_uri_cache,				\
-		crt_hdlr_ctl_get_uri_cache, NULL),			\
+		crt_hdlr_ctl_get_uri_cache, NULL)			\
 	X(CRT_OPC_CTL_LS,						\
 		0, &CQF_crt_ctl_ep_ls,					\
-		crt_hdlr_ctl_ls, NULL),					\
+		crt_hdlr_ctl_ls, NULL)					\
 	X(CRT_OPC_CTL_GET_HOSTNAME,					\
 		0, &CQF_crt_ctl_get_host,				\
-		crt_hdlr_ctl_get_hostname, NULL),			\
+		crt_hdlr_ctl_get_hostname, NULL)			\
 	X(CRT_OPC_CTL_GET_PID,						\
 		0, &CQF_crt_ctl_get_pid,				\
-		crt_hdlr_ctl_get_pid, NULL),				\
+		crt_hdlr_ctl_get_pid, NULL)				\
 	X(CRT_OPC_PROTO_QUERY,						\
 		0, &CQF_crt_proto_query,				\
 		crt_hdlr_proto_query, NULL)
@@ -268,25 +268,25 @@ struct crt_rpc_priv {
 #define CRT_FI_RPCS_LIST						\
 	X(CRT_OPC_CTL_FI_TOGGLE,					\
 		0, &CQF_crt_ctl_fi_toggle,				\
-		crt_hdlr_ctl_fi_toggle, NULL),				\
+		crt_hdlr_ctl_fi_toggle, NULL)				\
 	X(CRT_OPC_CTL_FI_SET_ATTR,					\
 		0, &CQF_crt_ctl_fi_attr_set,				\
-		crt_hdlr_ctl_fi_attr_set, NULL),			\
+		crt_hdlr_ctl_fi_attr_set, NULL)				\
 	X(CRT_OPC_CTL_LOG_SET,						\
 		0, &CQF_crt_ctl_log_set,				\
-		crt_hdlr_ctl_log_set, NULL),				\
+		crt_hdlr_ctl_log_set, NULL)				\
 	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
 		0, &CQF_crt_ctl_log_add_msg,				\
 		crt_hdlr_ctl_log_add_msg, NULL)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a
+#define X(a, b, c, d, e) a,
 
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
 enum {
 	__FIRST_INTERNAL  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE,
 					CRT_PROTO_INTERNAL_VERSION, 0) - 1,
-	CRT_INTERNAL_RPCS_LIST,
+	CRT_INTERNAL_RPCS_LIST
 };
 
 #define CRT_OPC_FI_BASE		0xF1000000UL
@@ -295,10 +295,12 @@ enum {
 enum {
 	__FIRST_FI  = CRT_PROTO_OPC(CRT_OPC_FI_BASE,
 				CRT_PROTO_FI_VERSION, 0) - 1,
-	CRT_FI_RPCS_LIST,
+	CRT_FI_RPCS_LIST
 };
 
 #undef X
+
+char *crt_get_rpc_name(crt_opcode_t opc);
 
 #define CRT_SEQ_GRP_CACHE					 \
 	((d_rank_t)		(gc_rank)		CRT_VAR) \
@@ -314,6 +316,7 @@ CRT_GEN_STRUCT(crt_grp_cache, CRT_SEQ_GRP_CACHE)
 
 #define CRT_OSEQ_URI_LOOKUP	/* output fields */		 \
 	((crt_phy_addr_t)	(ul_uri)		CRT_VAR) \
+	((uint32_t)		(ul_tag)		CRT_VAR) \
 	((int32_t)		(ul_rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(crt_uri_lookup, CRT_ISEQ_URI_LOOKUP, CRT_OSEQ_URI_LOOKUP)
