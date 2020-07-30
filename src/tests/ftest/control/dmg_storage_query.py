@@ -41,11 +41,10 @@ class DmgStorageQuery(ControlTestBase):
     """
 
     def setUp(self):
-        """Set up for dmg storage query."""
+        "Set up for dmg storage query."
         super(DmgStorageQuery, self).setUp()
-        self.bdev_list = self.server_managers[-1].get_config_value(
-            "bdev_list")[0]
-        self.targets = self.server_managers[-1].get_config_value("targets")[0]
+        self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
+        self.targets = self.server_managers[-1].get_config_value("targets")
 
     def check_dev_state(self, devs_info, state):
         """Check the state of the device.
