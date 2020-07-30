@@ -4960,6 +4960,7 @@ is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid)
 	}
 
 	rc = ds_pool_iv_srv_hdl_fetch(pool, NULL, &hdl_uuid);
+	ds_pool_put(pool);
 	if (rc) {
 		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
 		return false;
