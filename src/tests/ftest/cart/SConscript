@@ -41,7 +41,7 @@ def scons():
 
     Import('env')
 
-    env.Replace(CRT_TSTDIR="$PREFIX/lib/cart/TESTING")
+    env.Replace(CRT_TSTDIR="$PREFIX/lib/daos/TESTING")
 
     # move the test files (.py) to the TESTING scrpits directory
     env.Install("$CRT_TSTDIR", Glob("launch.py"))
