@@ -388,45 +388,44 @@ class DaosServerManager(SubprocessManager):
         Args:
             verbose (bool, optional): display clean commands. Defaults to True.
         """
-        clean_commands = []
+        clean_cmds = []
         for server_params in self.manager.job.yaml.server_params:
-            for scm_mount in server_params.get_value("scm_mount"):
-                self.log.info("Cleaning up the %s directory.", str(scm_mount))
+            scm_mount = server_params.get_value("scm_mount")
+            self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
-                # Remove the superblocks
-                cmd = "rm -fr {}/*".format(scm_mount)
-                if cmd not in clean_commands:
-                    clean_commands.append(cmd)
+            # Remove the superblocks
+            cmd = "rm -fr {}/*".format(scm_mount)
+            if cmd not in clean_cmds:
+                clean_cmds.append(cmd)
 
-                # Dismount the scm mount point
-                cmd = "while sudo umount {}; do continue; done".format(
-                    scm_mount)
-                if cmd not in clean_commands:
-                    clean_commands.append(cmd)
+            # Dismount the scm mount point
+            cmd = "while sudo umount {}; do continue; done".format(scm_mount)
+            if cmd not in clean_cmds:
+                clean_cmds.append(cmd)
 
             if self.manager.job.using_dcpm:
-                for scm_list in server_params.get_value("scm_list"):
-                    if isinstance(scm_list, list):
-                        self.log.info(
-                            "Cleaning up the following device(s): %s.",
-                            ", ".join(scm_list))
-                        # Umount and wipefs the dcpm device
-                        cmd_list = [
-                            "for dev in {}".format(" ".join(scm_list)),
-                            "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
-                            "if [ ! -z $mount ]",
-                            "then while sudo umount $mount",
-                            "do continue",
-                            "done",
-                            "fi",
-                            "sudo wipefs -a $dev",
-                            "done"
-                        ]
-                        cmd = "; ".join(cmd_list)
-                        if cmd not in clean_commands:
-                            clean_commands.append(cmd)
+                scm_list = server_params.get_value("scm_list")
+                if isinstance(scm_list, list):
+                    self.log.info(
+                        "Cleaning up the following device(s): %s.",
+                        ", ".join(scm_list))
+                    # Umount and wipefs the dcpm device
+                    cmd_list = [
+                        "for dev in {}".format(" ".join(scm_list)),
+                        "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
+                        "if [ ! -z $mount ]",
+                        "then while sudo umount $mount",
+                        "do continue",
+                        "done",
+                        "fi",
+                        "sudo wipefs -a $dev",
+                        "done"
+                    ]
+                    cmd = "; ".join(cmd_list)
+                    if cmd not in clean_cmds:
+                        clean_cmds.append(cmd)
 
-        pcmd(self._hosts, "; ".join(clean_commands), verbose)
+        pcmd(self._hosts, "; ".join(clean_cmds), verbose)
 
     def prepare_storage(self, user, using_dcpm=None, using_nvme=None):
         """Prepare the server storage.
