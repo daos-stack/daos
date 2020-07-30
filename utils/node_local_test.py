@@ -1102,7 +1102,9 @@ def test_pydaos_kv(server, conf):
 
     data['no-key'] = None
 
+    kv.value_size = 32
     kv.bget(data, value_size=16)
+    print("Default get value size %d", kv.value_size)
     print("Second iteration")
     failed = False
     for key in data:
