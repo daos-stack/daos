@@ -290,13 +290,14 @@ class DaosPool(object):
                                             self))
             thread.start()
 
-    def tgt_add(self, rank_list, tgt=-1, cb_func=None):
-        """Add a set of storage targets to a pool.
+    def tgt_reint(self, rank_list, tgt=-1, cb_func=None):
+        """Reintegrate a set of storage targets to a pool that had previously
+           failed.
 
         Args:
             rank_list:  server rank
             tl_tgts:    Xstream targets on rank(server)
-                        Default -1 it means it will add all targets on the rank
+                        Default -1 means it will reint all targets on the rank
             cb_func:    Command to run non-blocking mode if it's True
         """
         tl_ranks = DaosPool.__pylist_to_array(rank_list)
@@ -304,13 +305,13 @@ class DaosPool(object):
         tl_nr = ctypes.c_uint32(1)
         c_tgts = ctypes.pointer(
             daos_cref.DTgtList(tl_ranks, ctypes.pointer(tl_tgts), tl_nr))
-        func = self.context.get_function("add-target")
+        func = self.context.get_function("reint-target")
 
         if cb_func is None:
             ret = func(self.uuid, self.group, ctypes.byref(self.svc),
                        ctypes.byref(c_tgts), None)
             if ret != 0:
-                raise DaosApiError("Pool tgt_add returned non-zero. RC: {0}"
+                raise DaosApiError("Pool tgt_reint returned non-zero. RC: {0}"
                                    .format(ret))
         else:
             event = daos_cref.DaosEvent()
@@ -2270,7 +2271,7 @@ class DaosContext(object):
                                    mode=ctypes.DEFAULT_MODE)
         # Note: action-subject format
         self.ftable = {
-            'add-target':      self.libdaos.daos_pool_add_tgt,
+            'reint-target':    self.libdaos.daos_pool_reint_tgt,
             'close-cont':      self.libdaos.daos_cont_close,
             'close-obj':       self.libdaos.daos_obj_close,
             'close-tx':        self.libdaos.daos_tx_close,

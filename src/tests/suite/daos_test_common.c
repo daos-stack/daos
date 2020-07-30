@@ -847,13 +847,12 @@ daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 }
 
 void
-daos_add_target(const uuid_t pool_uuid, const char *grp,
-		const char *dmg_config, const d_rank_list_t *svc,
-		d_rank_t rank, int tgt_idx)
+daos_reint_target(const uuid_t pool_uuid, const char *grp,
+		  const char *dmg_config, const d_rank_list_t *svc,
+		  d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
 			     rank, tgt_idx);
-
 }
 
 void
@@ -879,7 +878,7 @@ daos_add_server(const uuid_t pool_uuid, const char *grp,
 		const char *dmg_config, const d_rank_list_t *svc,
 		d_rank_t rank)
 {
-	daos_add_target(pool_uuid, grp, dmg_config, svc, rank, -1);
+	daos_reint_target(pool_uuid, grp, dmg_config, svc, rank, -1);
 }
 
 void

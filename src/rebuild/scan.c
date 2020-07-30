@@ -138,8 +138,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->shards, arg->count,
-				       /* Clear containers for add/reint */
-				       rpt->rt_rebuild_op == RB_OP_ADD);
+				       /* Clear containers for reint */
+				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -379,15 +379,21 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 						 rpt->rt_rebuild_ver,
 						 tgts, shards,
 						 rpt->rt_tgts_num, -1);
-	} else if (rpt->rt_rebuild_op == RB_OP_ADD) {
+	} else if (rpt->rt_rebuild_op == RB_OP_REINT) {
 		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
 					       rpt->rt_rebuild_ver,
 					       tgts, shards,
 					       rpt->rt_tgts_num, myrank);
+	} else if (rpt->rt_rebuild_op == RB_OP_EXTEND) {
+		rebuild_nr = pl_obj_find_addition(map, &md, NULL,
+					          rpt->rt_rebuild_ver,
+					          tgts, shards,
+					          rpt->rt_tgts_num, myrank);
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
-			 rpt->rt_rebuild_op == RB_OP_ADD);
+			 rpt->rt_rebuild_op == RB_OP_REINT ||
+			 rpt->rt_rebuild_op == RB_OP_EXTEND);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
@@ -492,9 +498,11 @@ rebuild_scanner(void *data)
 	struct umem_attr		uma;
 	int				rc;
 
-	if (is_current_tgt_unavail(rpt) ||
-	   (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
-	    rpt->rt_rebuild_op == RB_OP_DRAIN)) {
+	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT |
+				      PO_COMP_ST_DOWN |
+				      PO_COMP_ST_NEW) ||
+	    (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
+	     rpt->rt_rebuild_op == RB_OP_DRAIN)) {
 		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n",
 			DP_UUID(rpt->rt_pool_uuid));
 		return 0;

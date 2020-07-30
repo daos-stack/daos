@@ -416,7 +416,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rc = ds_pool_tgt_map_update(pool,
 			src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 			&src_iv->piv_map.piv_pool_buf : NULL,
-			src_iv->piv_pool_map_ver);
+			true, src_iv->piv_pool_map_ver);
 		if (rc)
 			return rc;
 
@@ -481,7 +481,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rc = ds_pool_tgt_map_update(pool,
 				src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 				&src_iv->piv_map.piv_pool_buf : NULL,
-				src_iv->piv_pool_map_ver);
+				true, src_iv->piv_pool_map_ver);
 	else if (entry->iv_class->iv_class_id == IV_POOL_HDL)
 		rc = ds_cont_tgt_open(src_iv->piv_pool_uuid,
 				      src_iv->piv_hdl.pih_cont_hdl, NULL, 0,
@@ -524,7 +524,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	ds_pool_iv_ns_update(pool, v->piv_master_rank);
 
-	rc = ds_pool_tgt_map_update(pool, map_buf, v->piv_pool_map_ver);
+	rc = ds_pool_tgt_map_update(pool, map_buf, true, v->piv_pool_map_ver);
 
 	ds_pool_put(pool);
 	return rc;

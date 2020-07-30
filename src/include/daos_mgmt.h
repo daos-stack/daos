@@ -180,13 +180,13 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
 		 d_rank_list_t *failed, daos_event_t *ev);
 
 /**
- * add a set of storage targets from a pool.
+ * reintegrate a set of storage targets from a pool.
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param svc	[IN]	list of pool service ranks
- * \param tgts	[IN]	Target array to be added from the pool.  If
- *			tl_tgts = -1, it means it will add all targets
+ * \param tgts	[IN]	Target array to be reintegrated from the pool.  If
+ *			tl_tgts = -1, it means it will reintegrate all targets
  *			on the rank.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
@@ -199,9 +199,9 @@ daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
  *			-DER_NO_PERM	Permission denied
  */
 int
-daos_pool_add_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
-		  daos_event_t *ev);
+daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
+		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    daos_event_t *ev);
 
 /**
  * drain a set of storage targets from a pool.
@@ -224,8 +224,8 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
-		  daos_event_t *ev);
+		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    daos_event_t *ev);
 
 
 /**

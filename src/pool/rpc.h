@@ -73,7 +73,7 @@
 	X(POOL_EVICT,							\
 		0, &CQF_pool_evict,					\
 		ds_pool_evict_handler, NULL),				\
-	X(POOL_ADD,							\
+	X(POOL_REINT,							\
 		0, &CQF_pool_add,					\
 		ds_pool_update_handler, NULL),				\
 	X(POOL_ADD_IN,							\

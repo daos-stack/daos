@@ -1008,14 +1008,14 @@ update_child_map(void *data)
 
 int
 ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
-		       unsigned int map_version)
+		       bool activate, unsigned int map_version)
 {
 	struct pool_map *map = NULL;
 	bool		update_map = false;
 	int		rc = 0;
 
 	if (buf != NULL) {
-		rc = pool_map_create(buf, map_version, &map);
+		rc = pool_map_create(buf, map_version, activate, &map);
 		if (rc != 0) {
 			D_ERROR(DF_UUID" failed to create pool map: "DF_RC"\n",
 				DP_UUID(pool->sp_uuid), DP_RC(rc));

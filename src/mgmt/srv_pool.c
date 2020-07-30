@@ -749,8 +749,6 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
 		D_GOTO(out, rc);
 	}
 
-	/* TODO: Need to make pool service aware of new rank UUIDs */
-
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
@@ -763,7 +761,7 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
 	for (i = 0; i < ntargets; ++i)
 		doms[i] = 1;
 
-	rc = ds_pool_add(pool_uuid, ntargets, tgt_uuids, rank_list,
+	rc = ds_pool_extend(pool_uuid, ntargets, tgt_uuids, rank_list,
 			    ARRAY_SIZE(doms), doms, ranks);
 
 	d_rank_list_free(ranks);

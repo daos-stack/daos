@@ -135,9 +135,9 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 }
 
 int
-daos_pool_add_tgt(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
-		  daos_event_t *ev)
+daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
+		    const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		    daos_event_t *ev)
 {
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
@@ -146,7 +146,7 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 	if (!daos_uuid_valid(uuid))
 		return -DER_INVAL;
 
-	rc = dc_task_create(dc_pool_add, NULL, ev, &task);
+	rc = dc_task_create(dc_pool_reint, NULL, ev, &task);
 	if (rc)
 		return rc;
 
