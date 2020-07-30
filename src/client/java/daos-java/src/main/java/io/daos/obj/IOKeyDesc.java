@@ -162,10 +162,10 @@ public class IOKeyDesc {
    * @return bytebuf
    */
   protected ByteBuf getDescBuffer() {
-    if (!encoded) {
-      throw new IllegalStateException("not encoded yet");
+    if (encoded) {
+      return descBuffer;
     }
-    return descBuffer;
+    throw new IllegalStateException("not encoded yet");
   }
 
   /**
@@ -175,10 +175,10 @@ public class IOKeyDesc {
    * @return bytebuf
    */
   protected ByteBuf getAnchorBuffer() {
-    if (!encoded) {
-      throw new IllegalStateException("not encoded yet");
+    if (encoded) {
+      return anchorBuffer;
     }
-    return anchorBuffer;
+    throw new IllegalStateException("not encoded yet");
   }
 
   /**
@@ -188,10 +188,10 @@ public class IOKeyDesc {
    * @return
    */
   protected ByteBuf getKeyBuffer() {
-    if (!encoded) {
-      throw new IllegalStateException("not encoded yet");
+    if (encoded) {
+      return keyBuffer;
     }
-    return keyBuffer;
+    throw new IllegalStateException("not encoded yet");
   }
 
   public String getDkey() {
@@ -219,18 +219,19 @@ public class IOKeyDesc {
    * encode dkey, if any, to descBuffer and encode status to anchor buffer.
    */
   public void encode() {
-    if (resultParsed) {
-      throw new IllegalStateException("result is parsed. cannot encode again");
-    }
-    if (!encoded) {
-      descBuffer.clear();
-      descBuffer.writeInt(0); // reserve for actual number of keys returned
-      if ((!continued) && dkeyBytes != null) {
-        descBuffer.writeShort(dkeyBytes.length);
-        descBuffer.writeBytes(dkeyBytes);
+    if (!resultParsed) {
+      if (!encoded) {
+        descBuffer.clear();
+        descBuffer.writeInt(0); // reserve for actual number of keys returned
+        if ((!continued) && dkeyBytes != null) {
+          descBuffer.writeShort(dkeyBytes.length);
+          descBuffer.writeBytes(dkeyBytes);
+        }
+        encoded = true;
       }
-      encoded = true;
+      return;
     }
+    throw new IllegalStateException("result is parsed. cannot encode again");
   }
 
   private void resizeKeyBuffer() {

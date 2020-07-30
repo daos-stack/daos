@@ -177,18 +177,19 @@ public class IODataDesc {
    * encode entries data to Data Buffer.
    */
   public void encode() {
-    if (resultParsed) {
-      throw new IllegalStateException("result is parsed. cannot encode again");
-    }
-    if (!encoded) {
-      this.descBuffer = BufferAllocator.objBufWithNativeOrder(getDescBufferLen());
-      descBuffer.writeShort(dkeyBytes.length);
-      descBuffer.writeBytes(dkeyBytes);
-      for (Entry entry : akeyEntries) {
-        entry.encode(descBuffer);
+    if (!resultParsed) {
+      if (!encoded) {
+        this.descBuffer = BufferAllocator.objBufWithNativeOrder(getDescBufferLen());
+        descBuffer.writeShort(dkeyBytes.length);
+        descBuffer.writeBytes(dkeyBytes);
+        for (Entry entry : akeyEntries) {
+          entry.encode(descBuffer);
+        }
+        encoded = true;
       }
-      encoded = true;
+      return;
     }
+    throw new IllegalStateException("result is parsed. cannot encode again");
   }
 
   /**
@@ -216,21 +217,24 @@ public class IODataDesc {
    * parse result after JNI call.
    */
   protected void parseResult() {
-    if (updateOrFetch) {
-      throw new UnsupportedOperationException("only support for fetch");
-    }
-    if (!resultParsed) {
-      // update actual size
-      int idx = getRequestBufLen();
-      descBuffer.writerIndex(descBuffer.capacity());
-      for (IODataDesc.Entry entry : getAkeyEntries()) {
-        descBuffer.readerIndex(idx);
-        entry.setActualSize(descBuffer.readInt());
-        entry.setActualRecSize(descBuffer.readInt());
-        idx += 2 * Constants.ENCODED_LENGTH_EXTENT;
+    if (!updateOrFetch) {
+      if (!resultParsed) {
+        // update actual size
+        int idx = getRequestBufLen();
+        descBuffer.writerIndex(descBuffer.capacity());
+        for (IODataDesc.Entry entry : getAkeyEntries()) {
+          descBuffer.readerIndex(idx);
+          entry.setActualSize(descBuffer.readInt());
+          entry.setActualRecSize(descBuffer.readInt());
+          ByteBuf dataBuffer = entry.dataBuffer;
+          dataBuffer.writerIndex(dataBuffer.readerIndex() + entry.actualSize);
+          idx += 2 * Constants.ENCODED_LENGTH_EXTENT;
+        }
+        resultParsed = true;
       }
-      resultParsed = true;
+      return;
     }
+    throw new UnsupportedOperationException("only support for fetch");
   }
 
   /**
@@ -241,10 +245,10 @@ public class IODataDesc {
    * @return ByteBuf
    */
   protected ByteBuf getDescBuffer() {
-    if (!encoded) {
-      throw new IllegalStateException("not encoded yet");
+    if (encoded) {
+      return descBuffer;
     }
-    return descBuffer;
+    throw new IllegalStateException("not encoded yet");
   }
 
   public List<Entry> getAkeyEntries() {
@@ -469,10 +473,10 @@ public class IODataDesc {
      * @return actual data size returned
      */
     public int getActualSize() {
-      if (updateOrFetch) {
-        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      if (!updateOrFetch) {
+        return actualSize;
       }
-      return actualSize;
+      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
     }
 
     /**
@@ -481,10 +485,11 @@ public class IODataDesc {
      * @param actualSize
      */
     public void setActualSize(int actualSize) {
-      if (updateOrFetch) {
-        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      if (!updateOrFetch) {
+        this.actualSize = actualSize;
+        return;
       }
-      this.actualSize = actualSize;
+      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
     }
 
     /**
@@ -493,10 +498,10 @@ public class IODataDesc {
      * @return record size
      */
     public int getActualRecSize() {
-      if (updateOrFetch) {
-        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      if (!updateOrFetch) {
+        return actualRecSize;
       }
-      return actualRecSize;
+      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
     }
 
     /**
@@ -505,10 +510,11 @@ public class IODataDesc {
      * @param actualRecSize
      */
     public void setActualRecSize(int actualRecSize) {
-      if (updateOrFetch) {
-        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      if (!updateOrFetch) {
+        this.actualRecSize = actualRecSize;
+        return;
       }
-      this.actualRecSize = actualRecSize;
+      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
     }
 
     /**
@@ -518,11 +524,10 @@ public class IODataDesc {
      * @return data buffer with writerIndex set to existing readerIndex + actual data size
      */
     public ByteBuf getFetchedData() {
-      if (updateOrFetch) {
-        throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      if (!updateOrFetch) {
+        return dataBuffer;
       }
-      dataBuffer.writerIndex(dataBuffer.readerIndex() + actualSize);
-      return dataBuffer;
+      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
     }
 
     /**
