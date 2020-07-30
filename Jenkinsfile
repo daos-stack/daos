@@ -55,6 +55,11 @@ def functional_post_always() {
              returnStatus: true)
 }
 
+def get_daos_packages() {
+    stage_info = parseStageInfo()
+    return get_daos_packages(stage_info['target'])
+}
+
 def get_daos_packages(String distro) {
 
     def pkgs
@@ -83,6 +88,24 @@ def el7_daos_repos() {
     return el7_component_repos + ' ' + component_repos() + ' ' + daos_repo()
 }
 
+def leap15_daos_repos() {
+    return leap15_component_repos + ' ' + component_repos() + ' ' + daos_repo()
+}
+
+def daos_repos() {
+    stage_info = parseStageInfo()
+    return daos_repos(stage_info['target'])
+}
+
+def daos_repos(String distro) {
+    if (distro == 'centos7') {
+        return el7_daos_repos()
+    }
+    if (distro == 'leap15') {
+        return leap15_daos_repos()
+    }
+}
+
 commit_pragma_cache = [:]
 def cachedCommitPragma(Map config) {
 
@@ -94,6 +117,11 @@ def cachedCommitPragma(Map config) {
 
     return commit_pragma_cache[config['pragma']]
 
+}
+
+def daos_package_version() {
+    stage_info = parseStageInfo()
+    return daos_package_version(stage_info['target'])
 }
 
 def daos_packages_version(String distro) {
@@ -132,6 +160,7 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 
 def qb_inst_rpms = ""
 el7_component_repos = ""
+leap15_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
@@ -892,7 +921,7 @@ pipeline {
                             }
                         }
                         unitTest timeout_time: 60,
-                                 inst_repos: daos_repos("centos7"),
+                                 inst_repos: daos_repos(),
                                  inst_rpms: 'gotestsum openmpi3 ' +
                                             'hwloc-devel argobots ' +
                                             'fuse3-libs fuse3 ' +
@@ -928,7 +957,7 @@ pipeline {
                         }
                         unitTest timeout_time: 60,
                                  ignore_failure: true,
-                                 inst_repos: daos_repos("centos7"),
+                                 inst_repos: daos_repos(),
                                  inst_rpms: 'gotestsum openmpi3 ' +
                                             'hwloc-devel argobots ' +
                                             'fuse3-libs fuse3 ' +
@@ -1005,8 +1034,8 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') +
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: get_daos_packages() +
                                                   ' ' + functional_rpms
                     }
                     post {
@@ -1029,8 +1058,8 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') +
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: get_daos_packages() +
                                                   ' ' + functional_rpms
                     }
                     post {
@@ -1053,8 +1082,8 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        functionalTest inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') +
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: get_daos_packages() +
                                                   ' ' + functional_rpms
                    }
                     post {
@@ -1077,8 +1106,8 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        functionalTest inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') +
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: get_daos_packages() +
                                                   ' ' + functional_rpms
                     }
                     post {
@@ -1102,8 +1131,8 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        testRpm inst_repos: el7_daos_repos(),
-                                daos_pkg_version: daos_packages_version("centos7")
+                        testRpm inst_repos: daos_repos(),
+                                daos_pkg_version: daos_packages_version()
                    }
                 } // stage('Test CentOS 7 RPMs')
                 stage('Scan CentOS 7 RPMs') {
@@ -1120,8 +1149,8 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        testRpm inst_repos: el7_daos_repos(),
-                                daos_pkg_version: daos_packages_version("centos7"),
+                        testRpm inst_repos: daos_repos(),
+                                daos_pkg_version: daos_packages_version(),
                                 inst_rpms: 'clamav clamav-devel',
                                 test_script: 'ci/rpm/scan_daos.sh',
                                 junit_files: 'maldetect.xml'
