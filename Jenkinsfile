@@ -1047,7 +1047,7 @@ pipeline {
                                             'pmix numactl-devel ' +
                                             'libipmctl-devel' +
                                             'python36-tabulate' +
-                                            qb_inst_rpms_run_test()
+                                            qb_inst_rpms_run_test(),
                                  junit_files: ''
                     }
                     post {
