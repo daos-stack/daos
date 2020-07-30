@@ -1045,15 +1045,16 @@ pipeline {
                                             'libpmemobj protobuf-c ' +
                                             'spdk-devel libfabric-devel '+
                                             'pmix numactl-devel ' +
-                                            'libipmctl-devel' +
-                                            'python36-tabulate' +
+                                            'libipmctl-devel ' +
+                                            'python36-tabulate ' +
                                             qb_inst_rpms_run_test(),
                                  junit_files: ''
+
                     }
                     post {
                       always {
                           unitTestPost (
-                                     artifacts: ['run_test_memcheck.sh/*'],
+                                     artifacts: ['run_test_memcheck.sh/*']
                                   )
                         }
                     }
