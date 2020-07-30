@@ -3,7 +3,7 @@
 def install_storage_estimator_module(env, lib_prefix, version):
     """Install Storage Estimador module for the specified python version"""
 
-    if GetOption("help"):
+    if GetOption('help') or GetOption('clean'):
         return
 
     denv = env.Clone()
@@ -21,13 +21,16 @@ def install_storage_estimator_module(env, lib_prefix, version):
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     denv = env.Clone()
     denv.Install("$PREFIX/bin/", "daos_storage_estimator.py")
 
     install_storage_estimator_module(env, '$PREFIX/lib64/', "3")
-    install_storage_estimator_module(env, '$PREFIX/lib64/', "2.7")
+
+    if prereqs.check_component('python27_devel'):
+        install_storage_estimator_module(env, '$PREFIX/lib64/', "2.7")
+
 
 if __name__ == "SCons.Script":
     scons()

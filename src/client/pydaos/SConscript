@@ -4,7 +4,7 @@ import daos_build
 def build_shim_module(env, lib_prefix, version):
     """Build PyDAOS shim module for the specified python version"""
 
-    if GetOption('help'):
+    if GetOption('help') or GetOption('clean'):
         return
 
     new_env = env.Clone()
@@ -51,10 +51,13 @@ def build_shim_module(env, lib_prefix, version):
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     build_shim_module(env, '$PREFIX/lib64/', "3")
-    build_shim_module(env, '$PREFIX/lib64/', "2.7")
+
+    if prereqs.check_component('python27_devel'):
+        build_shim_module(env, '$PREFIX/lib64/', "2.7")
+
 
 if __name__ == "SCons.Script":
     scons()
