@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <cmocka.h>
 #include <daos/common.h>
 #include <daos/object.h>
 #include <daos/tests_lib.h>
@@ -132,6 +133,22 @@ int run_mvcc_tests(const char *cfg);
 void
 vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	      uint64_t dkey_hash, struct dtx_handle **dthp);
+static inline void
+vts_dtx_begin_ex(const daos_unit_oid_t *oid, daos_handle_t coh,
+		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t nmods,
+		 struct dtx_handle **dthp)
+{
+	struct dtx_handle	*dth;
+
+	vts_dtx_begin(oid, coh, epoch, dkey_hash, dthp);
+
+	dth = *dthp;
+
+	dth->dth_modification_cnt = nmods;
+	D_ALLOC_ARRAY(dth->dth_rsrvds, nmods);
+	assert_ptr_not_equal(dth->dth_rsrvds, NULL);
+}
+
 void
 vts_dtx_end(struct dtx_handle *dth);
 

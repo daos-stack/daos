@@ -478,9 +478,9 @@ ts_find_rect(void **state)
 {
 	struct evt_entry	*ent;
 	char			*val;
+	struct evt_filter	 filter = {0};
 	bio_addr_t		 addr;
 	struct evt_rect		 rect;
-	daos_epoch_range_t	 epr;
 	struct evt_entry_array	 ent_array;
 	int			 rc;
 	bool			 should_pass;
@@ -496,10 +496,11 @@ ts_find_rect(void **state)
 
 	D_PRINT("Search rectangle "DF_RECT"\n", DP_RECT(&rect));
 
-	epr.epr_lo = 0;
-	epr.epr_hi = rect.rc_epc;
+	filter.fr_epr.epr_lo = 0;
+	filter.fr_epr.epr_hi = rect.rc_epc;
+	filter.fr_ex = rect.rc_ex;
 	evt_ent_array_init(&ent_array);
-	rc = evt_find(ts_toh, &epr, &rect.rc_ex, &ent_array);
+	rc = evt_find(ts_toh, &filter, &ent_array);
 	if (rc != 0)
 		D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
 
@@ -1365,8 +1366,7 @@ test_evt_find_internal(void **state)
 	daos_handle_t		 toh;
 	struct evt_entry_in	 entry = {0};
 	struct evt_entry	 *ent;
-	struct evt_extent	 extent;
-	daos_epoch_range_t	 epr;
+	struct evt_filter	 filter = {0};
 	struct evt_entry_array	 ent_array;
 	bio_addr_t		 addr;
 	int			 rc;
@@ -1422,13 +1422,13 @@ test_evt_find_internal(void **state)
 	 * you get deadbeef, d (2-records). Covered records
 	 * should be exposed on each deletes
 	 */
-	epr.epr_lo = 0;
+	filter.fr_epr.epr_lo = 0;
 	for (epoch = NUM_EPOCHS; epoch > 0; epoch--) {
-		extent.ex_lo = epoch-1;
-		extent.ex_hi = epoch+9;
-		epr.epr_hi = epoch;
+		filter.fr_ex.ex_lo = epoch-1;
+		filter.fr_ex.ex_hi = epoch+9;
+		filter.fr_epr.epr_hi = epoch;
 		evt_ent_array_init(&ent_array);
-		rc = evt_find(toh, &epr, &extent, &ent_array);
+		rc = evt_find(toh, &filter, &ent_array);
 		if (rc != 0)
 			D_FATAL("Find rect failed "DF_RC"\n", DP_RC(rc));
 		evt_ent_array_for_each(ent, &ent_array) {
@@ -1467,8 +1467,8 @@ test_evt_find_internal(void **state)
 		}
 		/* Delete the last visible record */
 		entry.ei_rect.rc_ex.ex_lo = epoch;
-		entry.ei_rect.rc_ex.ex_hi = extent.ex_hi;
-		entry.ei_rect.rc_epc = epr.epr_hi;
+		entry.ei_rect.rc_ex.ex_hi = filter.fr_ex.ex_hi;
+		entry.ei_rect.rc_epc = filter.fr_epr.epr_hi;
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
 		assert_int_equal(rc, 0);
 		rc = utest_check_mem_decrease(arg->ta_utx);
@@ -1621,8 +1621,7 @@ test_evt_various_data_size_internal(void **state)
 	struct evt_entry_array	 ent_array;
 	struct evt_entry	 *ent;
 	bio_addr_t		 addr;
-	struct evt_extent	 extent;
-	daos_epoch_range_t	 epr;
+	struct evt_filter	 filter = {0};
 	int			 iteration = 0;
 
 	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
@@ -1635,7 +1634,6 @@ test_evt_various_data_size_internal(void **state)
 		D_PRINT("Data Size: %ld\n", data_size);
 		D_ALLOC(data, data_size);
 		strcpy(data, "EVTree: Out of Memory");
-		epr.epr_lo = 0;
 		/* Loop does the following : evt_insert,
 		* evt_find (first epoch) and evt_delete (random deletes)
 		* till out of space condition
@@ -1672,10 +1670,10 @@ test_evt_various_data_size_internal(void **state)
 			assert_int_equal(rc, 0);
 			if (epoch == 1) {
 				evt_ent_array_init(&ent_array);
-				extent.ex_lo = epoch;
-				extent.ex_hi = epoch + data_size;
-				epr.epr_hi = epoch;
-				rc = evt_find(toh, &epr, &extent, &ent_array);
+				filter.fr_ex.ex_lo = epoch;
+				filter.fr_ex.ex_hi = epoch + data_size;
+				filter.fr_epr.epr_hi = epoch;
+				rc = evt_find(toh, &filter, &ent_array);
 				if (rc != 0)
 					D_FATAL("Find rect failed "DF_RC"\n",
 						DP_RC(rc));
@@ -2120,7 +2118,8 @@ test_evt_outer_punch(void **state)
 	filter.fr_ex.ex_lo = 0;
 	filter.fr_ex.ex_hi = NUM_EPOCHS * NUM_EXTENTS;
 	filter.fr_epr.epr_lo = 0;
-	filter.fr_punch = NUM_EPOCHS - 1;
+	filter.fr_punch_epc = NUM_EPOCHS - 1;
+	filter.fr_punch_minor_epc = EVT_MINOR_EPC_MAX;
 	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_COVERED,
 			      &filter, &ih);

@@ -1487,6 +1487,149 @@ small_sgl(void **state)
 	assert_int_equal(rc, -DER_REC2BIG);
 }
 
+static void
+minor_epoch_punch(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	daos_epoch_t		epoch = 2000;
+	struct dtx_handle	*dth;
+	struct dtx_id		 xid;
+	const char		*expected = "xxxxxLonelyWorld";
+	const char		*sexpected = "xxxxx";
+	const char		*first = "Hello";
+	const char		*second = "LonelyWorld";
+	char			buf[32] = {0};
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* Set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	rex.rx_idx = 0;
+	rex.rx_nr = strlen(first);
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_name = akey;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	/* Allocate memory for the scatter-gather list */
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
+
+	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 3, &dth);
+
+	/* Write the first value */
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
+			    0 /* epoch comes from dth */, 0, 0, &dkey, 1, &iod,
+			    NULL, &sgl, dth);
+	if (rc != 0)
+		goto tx_end;
+
+	/* Punch the akey */
+	dth->dth_op_seq = 2;
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid,
+			   0 /* epoch comes from dth */, 0, 0, &dkey, 1, &akey,
+			   dth);
+	if (rc != 0)
+		goto tx_end;
+
+	/* Do next update */
+	dth->dth_op_seq = 3;
+	rex.rx_idx = rex.rx_nr;
+	rex.rx_nr = strlen(second);
+	d_iov_set(&sgl.sg_iovs[0], (void *)second, strlen(second));
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
+			    0 /* epoch comes from dth */, 0, 0, &dkey, 1, &iod,
+			    NULL, &sgl, dth);
+tx_end:
+	xid = dth->dth_xid;
+	vts_dtx_end(dth);
+	assert_int_equal(rc, 0);
+
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert_int_equal(rc, 1);
+
+	/* Now read back original # of bytes */
+	rex.rx_idx = 0;
+	rex.rx_nr = strlen(expected);
+	memset(buf, 'x', sizeof(buf));
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(expected));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1,
+			   &iod, &sgl);
+	assert_int_equal(rc, 0);
+
+	assert_memory_equal(buf, expected, strlen(expected));
+
+	/* Now repeat the test for single value */
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = strlen(first);
+	iod.iod_name = akey;
+	iod.iod_recxs = NULL;
+	iod.iod_nr = 1;
+
+	/* Allocate memory for the scatter-gather list */
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
+
+	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 2, &dth);
+
+	/* Write the first value */
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
+			    0 /* epoch comes from dth */, 0, 0, &dkey, 1, &iod,
+			    NULL, &sgl, dth);
+	if (rc != 0)
+		goto tx_end2;
+
+	/* Punch the akey */
+	dth->dth_op_seq = 2;
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid,
+			   0 /* epoch comes from dth */, 0, 0, &dkey, 1, &akey,
+			   dth);
+tx_end2:
+	xid = dth->dth_xid;
+	vts_dtx_end(dth);
+	assert_int_equal(rc, 0);
+
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert_int_equal(rc, 1);
+
+	/* Now read back original # of bytes */
+	iod.iod_size = 0;
+	memset(buf, 'x', sizeof(buf));
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1,
+			   &iod, &sgl);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(iod.iod_size, 0);
+	assert_memory_equal(buf, sexpected, strlen(sexpected));
+
+	daos_sgl_fini(&sgl, false);
+}
 
 static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS800: VOS punch model array set/get size",
@@ -1509,6 +1652,7 @@ static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS809: Small SGL test", small_sgl, NULL, NULL },
 	{ "VOS810: Conditionals test", cond_test, NULL, NULL },
 	{ "VOS811: Test vos_obj_array_remove", remove_test, NULL, NULL },
+	{ "VOS812: Minor epoch punch", minor_epoch_punch, NULL, NULL },
 };
 
 int

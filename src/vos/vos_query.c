@@ -38,7 +38,7 @@
 struct open_query {
 	struct vos_object	*qt_obj;
 	daos_epoch_range_t	 qt_epr;
-	daos_epoch_t		 qt_punch;
+	struct vos_punch_record	 qt_punch;
 	struct vos_ilog_info	 qt_info;
 	struct btr_root		*qt_dkey_root;
 	daos_handle_t		 qt_dkey_toh;
@@ -59,7 +59,8 @@ check_key(struct open_query *query, struct vos_krec_df *krec)
 	rc = vos_ilog_fetch(vos_obj2umm(query->qt_obj),
 			    vos_cont2hdl(query->qt_obj->obj_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, query->qt_punch, NULL, &query->qt_info);
+			    epr.epr_hi, &query->qt_punch, NULL,
+			    &query->qt_info);
 	if (rc != 0)
 		return rc;
 
@@ -83,7 +84,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	d_iov_t			 riov;
 	struct dcs_csum_info	 csum;
 	daos_epoch_range_t	 epr = query->qt_epr;
-	daos_epoch_t		 punch = query->qt_punch;
+	struct vos_punch_record	 punch = query->qt_punch;
 	int			 rc = 0;
 	int			 fini_rc;
 	int			 opc;
@@ -173,7 +174,8 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 
 	filter.fr_ex.ex_lo = 0;
 	filter.fr_ex.ex_hi = ~(uint64_t)0;
-	filter.fr_punch = query->qt_punch;
+	filter.fr_punch_epc = query->qt_punch.pr_epc;
+	filter.fr_punch_minor_epc = query->qt_punch.pr_minor_epc;
 	filter.fr_epr = query->qt_epr;
 
 
@@ -295,7 +297,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	struct vos_object	*obj;
 	struct open_query	 query;
 	daos_epoch_range_t	 dkey_epr;
-	daos_epoch_t		 dkey_punch;
+	struct vos_punch_record	 dkey_punch;
 	daos_anchor_t		 dkey_anchor;
 	daos_anchor_t		 akey_anchor;
 	daos_ofeat_t		 obj_feats;

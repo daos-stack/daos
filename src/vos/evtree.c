@@ -684,8 +684,13 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	d_list_t		*current;
 	d_list_t		*next;
 	bool			 insert;
-	daos_epoch_t		 punched_epoch = filter ? filter->fr_punch : 0;
+	struct vos_punch_record	 punched = {0};
 	int			 rc = 0;
+
+	if (filter) {
+		punched.pr_epc = filter->fr_punch_epc;
+		punched.pr_minor_epc = filter->fr_punch_minor_epc;
+	}
 
 	D_INIT_LIST_HEAD(&covered);
 	*num_visible = 0;
@@ -698,9 +703,12 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	evt_ent_array_for_each(this_ent, ent_array) {
 		next = evt_array_entry2link(this_ent);
 
-		if (punched_epoch >= this_ent->en_epoch) {
-			this_ent->en_visibility = EVT_COVERED;
-			continue;
+		if (punched.pr_epc >= this_ent->en_epoch) {
+			if (punched.pr_epc > this_ent->en_epoch ||
+			    punched.pr_minor_epc >= this_ent->en_minor_epc) {
+				this_ent->en_visibility = EVT_COVERED;
+				continue;
+			}
 		}
 
 		evt_array_entry2le(this_ent)->le_prev = NULL;
@@ -830,13 +838,18 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	int			 num_visible;
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER"\n",
+		DP_FILTER(filter));
 	if (ent_array->ea_ent_nr == 0)
 		return 0;
 
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);
 		num_visible = 0;
-		if (filter && filter->fr_punch >= ent->en_epoch) {
+		if (filter &&
+		    (filter->fr_punch_epc > ent->en_epoch ||
+		     (filter->fr_punch_epc == ent->en_epoch &&
+		      filter->fr_punch_minor_epc >= ent->en_minor_epc))) {
 			ent->en_visibility = EVT_COVERED;
 		} else {
 			num_visible = 1;
@@ -1920,12 +1933,15 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 {
 	struct evt_entry	*ent;
 	struct evt_entry_in	 hole;
-	daos_epoch_range_t	 epr = {0, entry->ei_rect.rc_epc};
+	struct evt_filter	 filter = {0};
 	struct evt_entry_array	 ent_array;
 	int			 rc = 0;
 
+	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
+	filter.fr_ex = entry->ei_rect.rc_ex;
+
 	evt_ent_array_init(&ent_array);
-	rc = evt_find(toh, &epr, &entry->ei_rect.rc_ex, &ent_array);
+	rc = evt_find(toh, &filter, &ent_array);
 	if (rc != 0)
 		goto done;
 
@@ -1989,7 +2005,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
 	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
-	filter.fr_punch = 0;
+	filter.fr_punch_epc = 0;
+	filter.fr_punch_minor_epc = 0;
 	/* Phase-1: Check for overwrite */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
 				&filter, &entry->ei_rect, &ent_array);
@@ -2304,32 +2321,28 @@ struct evt_max_rect {
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
-	 const struct evt_extent *extent,
+evt_find(daos_handle_t toh, const struct evt_filter *filter,
 	 struct evt_entry_array *ent_array)
 {
 	struct evt_context	*tcx;
-	struct evt_filter	 filter;
 	struct evt_rect		 rect;
 	int			 rc;
 
-	D_ASSERT(epr != NULL || extent != NULL);
+	D_ASSERT(filter != NULL);
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
 	evt_ent_array_init(ent_array);
-	rect.rc_ex = filter.fr_ex = *extent;
-	filter.fr_epr = *epr;
-	filter.fr_punch = 0;
-	rect.rc_epc = epr->epr_hi;
+	rect.rc_ex = filter->fr_ex;
+	rect.rc_epc = filter->fr_epr.epr_hi;
 	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
-				&filter, &rect, ent_array);
+				filter, &rect, ent_array);
 	if (rc == 0)
-		rc = evt_ent_array_sort(tcx, ent_array, NULL, EVT_VISIBLE);
+		rc = evt_ent_array_sort(tcx, ent_array, filter, EVT_VISIBLE);
 	if (rc != 0)
 		evt_ent_array_fini(ent_array);
 	return rc;
@@ -3173,7 +3186,7 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 		    struct evt_entry *ent, bool in_tx)
 {
 	struct evt_entry_array	 ent_array;
-	struct evt_filter	 filter;
+	struct evt_filter	 filter = {0};
 	int			 rc;
 
 	/* NB: This function presently only supports exact match on extent. */
@@ -3182,7 +3195,6 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
-	filter.fr_punch = 0;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
 				&filter, rect, &ent_array);
 	if (rc != 0)
@@ -3235,7 +3247,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	struct evt_context	*tcx;
 	struct evt_entry	*entry;
 	struct evt_entry_array	 ent_array;
-	struct evt_filter	 filter;
+	struct evt_filter	 filter = {0};
 	int			 rc;
 	struct evt_rect		 rect;
 
@@ -3251,7 +3263,6 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 
 	filter.fr_ex = rect.rc_ex;
 	filter.fr_epr = *epr;
-	filter.fr_punch = 0;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
 				&filter, &rect, &ent_array);
 	if (rc != 0) {

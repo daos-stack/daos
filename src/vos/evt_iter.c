@@ -95,7 +95,8 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 	iter->it_filter.fr_ex.ex_lo = 0;
 	iter->it_filter.fr_epr.epr_lo = 0;
 	iter->it_filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
-	iter->it_filter.fr_punch = 0;
+	iter->it_filter.fr_punch_epc = 0;
+	iter->it_filter.fr_punch_minor_epc = 0;
 	if (filter)
 		iter->it_filter = *filter;
  out:
@@ -606,11 +607,14 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 		evt_entry_fill(tcx, node, trace->tr_at, NULL,
 			       evt_iter_intent(iter), entry);
 
-	/* There is no visibility flag for sorted entries but go ahead and set it
-	 * EVT_COVERED if user has specified a punch epoch in the filter
+	/* There is no visibility flag for unsorted entries but go ahead and
+	 * set it EVT_COVERED if user has specified a punch epoch in the filter
 	 */
-	if (entry->en_epoch <= iter->it_filter.fr_punch)
-		entry->en_visibility = EVT_COVERED;
+	if (entry->en_epoch <= iter->it_filter.fr_punch_epc) {
+		if (entry->en_epoch < iter->it_filter.fr_punch_epc ||
+		    entry->en_minor_epc < iter->it_filter.fr_punch_minor_epc)
+			entry->en_visibility = EVT_COVERED;
+	}
 set_anchor:
 	*inob = tcx->tc_inob;
 

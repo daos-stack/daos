@@ -809,7 +809,7 @@ struct vos_iter_info {
 	d_iov_t			*ii_akey; /* conditional akey */
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
-	daos_epoch_t		 ii_punched;
+	struct vos_punch_record	 ii_punched;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -887,7 +887,7 @@ struct vos_obj_iter {
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** highest epoch where parent obj/key was punched */
-	daos_epoch_t		 it_punched;
+	struct vos_punch_record	 it_punched;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
 	/* reference on the object */
