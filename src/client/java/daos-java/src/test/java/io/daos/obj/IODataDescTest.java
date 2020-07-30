@@ -226,43 +226,61 @@ public class IODataDescTest {
   @Test
   public void testGetDataWhenFetch() throws Exception {
     // single value
-    ByteBuf descBuffer  = BufferAllocator.objBufWithNativeOrder(30);
+    IODataDesc desc = null;
     try {
       IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.SINGLE, 10,
           0, 10);
-      entry.encode(descBuffer);
-      Assert.assertEquals(19, descBuffer.writerIndex());
-      entry.setActualSize(10);
+      List<IODataDesc.Entry> entries = new ArrayList<>();
+      entries.add(entry);
+      desc = new IODataDesc("dkey", entries,false);
+      desc.encode();
+      Assert.assertEquals(25, desc.getDescBuffer().writerIndex());
+      ByteBuf descBuf = desc.getDescBuffer();
+      descBuf.writeInt(8);
+      descBuf.writeInt(8);
+      desc.parseResult();
       // read to byte array
       ByteBuf buf = entry.getFetchedData();
       Assert.assertEquals(0, buf.readerIndex());
-      Assert.assertEquals(10, buf.writerIndex());
+      Assert.assertEquals(8, buf.writerIndex());
     } finally {
-      descBuffer.release();
+      if (desc != null) {
+        desc.release();
+      }
     }
     // array value
-    descBuffer  = BufferAllocator.objBufWithNativeOrder(30);
     try {
       IODataDesc.Entry entry = new IODataDesc.Entry("akey", IODataDesc.IodType.ARRAY, 10,
           0, 30);
-      entry.encode(descBuffer);
-      Assert.assertEquals(27, descBuffer.writerIndex());
-      descBuffer.readerIndex(0);
-      Assert.assertEquals(4, descBuffer.readShort());
+      List<IODataDesc.Entry> entries = new ArrayList<>();
+      entries.add(entry);
+      desc = new IODataDesc("dkey", entries,false);
+      desc.encode();
+      ByteBuf descBuf = desc.getDescBuffer();
+      Assert.assertEquals(33, descBuf.writerIndex());
+      descBuf.readerIndex(0);
+      Assert.assertEquals(4, descBuf.readShort());
       byte keyBytes[] = new byte[4];
-      descBuffer.readBytes(keyBytes);
+      descBuf.readBytes(keyBytes);
+      Assert.assertTrue(Arrays.equals("dkey".getBytes(Constants.KEY_CHARSET), keyBytes));
+      Assert.assertEquals(4, descBuf.readShort());
+      descBuf.readBytes(keyBytes);
       Assert.assertTrue(Arrays.equals("akey".getBytes(Constants.KEY_CHARSET), keyBytes));
-      Assert.assertEquals(IODataDesc.IodType.ARRAY.getValue(), descBuffer.readByte());
-      Assert.assertEquals(10, descBuffer.readInt());
-      Assert.assertEquals(0, descBuffer.readInt());
-      Assert.assertEquals(3, descBuffer.readInt());
-      entry.setActualSize(30);
-      // read to byte array
+      Assert.assertEquals(IODataDesc.IodType.ARRAY.getValue(), descBuf.readByte());
+      Assert.assertEquals(10, descBuf.readInt());
+      Assert.assertEquals(0, descBuf.readInt());
+      Assert.assertEquals(3, descBuf.readInt());
+      // parse
+      descBuf.writeInt(30);
+      descBuf.writeInt(10);
+      desc.parseResult();
       ByteBuf buf = entry.getFetchedData();
       Assert.assertEquals(0, buf.readerIndex());
       Assert.assertEquals(30, buf.writerIndex());
     } finally {
-      descBuffer.release();
+      if (desc != null) {
+        desc.release();
+      }
     }
   }
 }
