@@ -404,7 +404,7 @@ class IorTestBase(TestWithServers):
                 error_hosts = NodeSet(
                     ",".join(
                         [str(node_set) for code, node_set in
-                          ret.items() if code != 0]))
+                         ret.items() if code != 0]))
                 if fail_on_err:
                     raise CommandFailure(
                         "Error running '{}' on the following "

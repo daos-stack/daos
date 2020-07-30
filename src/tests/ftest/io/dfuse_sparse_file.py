@@ -29,6 +29,7 @@ from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
 
 
+# pylint: disable=too-many-ancestors
 class DfuseSparseFile(IorTestBase):
     """Dfuse Sparse File base class
 
@@ -134,8 +135,8 @@ class DfuseSparseFile(IorTestBase):
         ignore_bytes = self.space_before - 512
         read_till_eof = u"cmp --ignore-initial={} {} {}".format(
             ignore_bytes, sparse_file, "/dev/zero")
-        self.execute_cmd(read_till_eof, False)
+#        self.execute_cmd(read_till_eof, False)
         # fail the test if the above command is successful.
-        if 0 in self.ret:
+        if 0 in self.execute_cmd(read_till_eof, False):
             self.fail("read_till_eof command was supposed to fail. "
                       "But it completed successfully.")
