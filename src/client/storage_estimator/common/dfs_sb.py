@@ -267,7 +267,7 @@ class VOS_SIZE(BASE_CLASS):
         self._data = STR_BUFFER()
 
     def __del__(self):
-        self._lib.free_string(ctypes.byref(self._data))
+        self._lib.d_free_string(ctypes.byref(self._data))
 
     def get_vos_size_str(self, alloc_overhead):
         print('  Reading VOS structures from current installation')

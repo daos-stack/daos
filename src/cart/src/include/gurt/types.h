@@ -97,6 +97,20 @@ typedef struct {
 	d_iov_t		*sg_iovs;
 } d_sg_list_t;
 
+/**
+ * c string buffer
+ */
+typedef struct {
+	/** c string status */
+	unsigned int status;
+	/** c string size */
+	size_t str_size;
+	/** buffer size */
+	size_t buf_size;
+	/** c string buffer address */
+	char *str;
+} d_string_buffer_t;
+
 static inline void
 d_iov_set(d_iov_t *iov, void *buf, size_t size)
 {

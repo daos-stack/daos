@@ -28,7 +28,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <errno.h>
 #include <getopt.h>
 #include <daos/debug.h>
@@ -64,64 +63,8 @@
 #define PRINT_RECORD(name, type, feats)					\
 	print_record(buf, #name, &name);
 
-struct str_buffer {
-	unsigned int status;
-	size_t str_size;
-	size_t buf_size;
-	char *str;
-};
-
-static int
-wr_str(struct str_buffer *buf, const char *fmt, ...) {
-	int n;
-	int size = 64;
-	char *new_buf;
-	va_list ap;
-
-	if (buf == NULL || buf->status != 0) {
-		return -DER_NO_PERM;
-	}
-
-	if (buf->str == NULL) {
-		D_ALLOC(buf->str, size);
-		if (buf->str == NULL) {
-			buf->status = -DER_NOMEM;
-			return -DER_NOMEM;
-		}
-		buf->str_size = 0;
-		buf->buf_size = size;
-	}
-
-	while (1) {
-		va_start(ap, fmt);
-		size = buf->buf_size - buf->str_size;
-		n = vsnprintf(buf->str + buf->str_size, size, fmt, ap);
-		va_end(ap);
-
-		if (n < 0) {
-			buf->status = -DER_TRUNC;
-			return -DER_TRUNC;
-		}
-
-		if ((buf->str_size + n) < buf->buf_size) {
-			buf->str_size += n;
-			return n;
-		}
-
-		size = buf->buf_size * 2;
-		D_REALLOC(new_buf, buf->str, size);
-		if (new_buf == NULL) {
-			buf->status = -DER_NOMEM;
-			return -DER_NOMEM;
-		}
-
-		buf->str = new_buf;
-		buf->buf_size = size;
-	}
-}
-
 static void
-print_dynamic(struct str_buffer *buf, const char *name,
+print_dynamic(d_string_buffer_t *buf, const char *name,
 	      const struct daos_tree_overhead *ovhd)
 {
 	int	i;
@@ -130,66 +73,62 @@ print_dynamic(struct str_buffer *buf, const char *name,
 		return;
 
 	for (i = 0; i < ovhd->to_dyn_count; i++) {
-		wr_str(buf, "%s_%d_key: &%s_%d\n", name,
-			ovhd->to_dyn_overhead[i].no_order, name,
+		d_write_string_buffer(buf, "%s_%d_key: &%s_%d\n", name,
+				      ovhd->to_dyn_overhead[i].no_order, name,
 			ovhd->to_dyn_overhead[i].no_order);
-		wr_str(buf, "  order: %d\n", ovhd->to_dyn_overhead[i].no_order);
-		wr_str(buf, "  size: %d\n", ovhd->to_dyn_overhead[i].no_size);
+		d_write_string_buffer(buf, "  order: %d\n",
+				      ovhd->to_dyn_overhead[i].no_order);
+		d_write_string_buffer(buf, "  size: %d\n",
+				      ovhd->to_dyn_overhead[i].no_size);
 	}
 }
 
 static void
-print_record(struct str_buffer *buf, const char *name,
+print_record(d_string_buffer_t *buf, const char *name,
 	const struct daos_tree_overhead *ovhd)
 {
 	int	i;
 	int	count = 0;
 
-	wr_str(buf, "  %s:\n", name);
-	wr_str(buf, "    order: %d\n", ovhd->to_leaf_overhead.no_order);
-	wr_str(buf, "    leaf_node_size: %d\n", ovhd->to_leaf_overhead.no_size);
-	wr_str(buf, "    int_node_size: %d\n", ovhd->to_int_node_size);
-	wr_str(buf, "    record_msize: %d\n", ovhd->to_record_msize);
-	wr_str(buf, "    node_rec_msize: %d\n", ovhd->to_node_rec_msize);
-	wr_str(buf, "    num_dynamic: %d\n", ovhd->to_dyn_count);
+	d_write_string_buffer(buf, "  %s:\n", name);
+	d_write_string_buffer(buf, "    order: %d\n",
+		ovhd->to_leaf_overhead.no_order);
+	d_write_string_buffer(buf, "    leaf_node_size: %d\n",
+		ovhd->to_leaf_overhead.no_size);
+	d_write_string_buffer(buf, "    int_node_size: %d\n",
+		ovhd->to_int_node_size);
+	d_write_string_buffer(buf, "    record_msize: %d\n",
+		ovhd->to_record_msize);
+	d_write_string_buffer(buf, "    node_rec_msize: %d\n",
+		ovhd->to_node_rec_msize);
+	d_write_string_buffer(buf, "    num_dynamic: %d\n", ovhd->to_dyn_count);
 	if (ovhd->to_dyn_count == 0)
 		return;
 
-	wr_str(buf, "    dynamic: [\n      ");
+	d_write_string_buffer(buf, "    dynamic: [\n      ");
 	for (i = 0; i < ovhd->to_dyn_count; i++) {
-		count += wr_str(buf, "*%s_%d", name,
+		count += d_write_string_buffer(buf, "*%s_%d", name,
 				 ovhd->to_dyn_overhead[i].no_order);
 		if (i == (ovhd->to_dyn_count - 1))
 			continue;
 		if (count > 40) {
 			count = 0;
-			wr_str(buf, ",\n      ");
+			d_write_string_buffer(buf, ",\n      ");
 		} else {
-			count += wr_str(buf, ", ");
+			count += d_write_string_buffer(buf, ", ");
 		}
 	}
-	wr_str(buf, "\n    ]\n");
-}
-
-void
-free_string(struct str_buffer *buf)
-{
-	if (buf->str != NULL) {
-		D_FREE(buf->str);
-		buf->status = 0;
-		buf->str_size = 0;
-		buf->buf_size = 0;
-	}
+	d_write_string_buffer(buf, "\n    ]\n");
 }
 
 int
-get_vos_structure_sizes_yaml(int alloc_overhead, struct str_buffer *buf)
+get_vos_structure_sizes_yaml(int alloc_overhead, d_string_buffer_t *buf)
 {
 	FOREACH_TYPE(DECLARE_TYPE)
 	int rc;
 
 	/* clean string buffer */
-	free_string(buf);
+	d_free_string(buf);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc) {
@@ -203,16 +142,16 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct str_buffer *buf)
 
 	FOREACH_TYPE(CHECK_CALL)
 
-	wr_str(buf, "---\n# VOS tree overheads\n"
+	d_write_string_buffer(buf, "---\n# VOS tree overheads\n"
 		"root: %d\nscm_cutoff: %d\n", vos_pool_get_msize(),
 		vos_pool_get_scm_cutoff());
 
 	FOREACH_TYPE(PRINT_DYNAMIC)
-	wr_str(buf, "trees:\n");
+	d_write_string_buffer(buf, "trees:\n");
 	FOREACH_TYPE(PRINT_RECORD)
 
 	if (buf->status != 0) {
-		free_string(buf);
+		d_free_string(buf);
 		rc = buf->status;
 		goto exit_2;
 	}

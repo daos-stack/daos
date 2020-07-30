@@ -26,6 +26,7 @@
  */
 #define D_LOGFAC	DD_FAC(misc)
 
+#include <stdarg.h>
 #include <gurt/common.h>
 
 int
@@ -565,4 +566,89 @@ void d_getenv_int(const char *env, unsigned *int_val)
 	value = atoi(env_val);
 	D_DEBUG(DB_TRACE, "d_getenv_int(), get ENV %s as %d.\n", env, value);
 	*int_val = value;
+}
+
+/**
+ * Write formatted data to d_string_buffer_t
+ *
+ * Create a string with the same text that would be created by printf(). The
+ * result string is stored as a C string in a buffer pointed by buf. The
+ * d_string_buffer_t internal buffer grows as text is written.
+ *
+ * \param buf	[IN/OUT] string object where the formatted string will
+ *			 be stored. Subsecute write operations to the same
+ *			 string object will be append at the end of the
+ *			 buffer.
+ * \param format [IN]	 this is the string that contains the text to be
+ *			 written to d_string_buffer_t. Please refer to the
+ *			 printf() documentation for full details of how to
+  *			 use the format tags.
+ * \return             0 on success, errno code on failure.
+ */
+int
+d_write_string_buffer(d_string_buffer_t *buf, const char *format, ...)
+{
+	int n;
+	int size = 64;
+	char *new_buf;
+	va_list ap;
+
+	if (buf == NULL || buf->status != 0) {
+		return -DER_NO_PERM;
+	}
+
+	if (buf->str == NULL) {
+		D_ALLOC(buf->str, size);
+		if (buf->str == NULL) {
+			buf->status = -DER_NOMEM;
+			return -DER_NOMEM;
+		}
+		buf->str_size = 0;
+		buf->buf_size = size;
+	}
+
+	while (1) {
+		va_start(ap, format);
+		size = buf->buf_size - buf->str_size;
+		n = vsnprintf(buf->str + buf->str_size, size, format, ap);
+		va_end(ap);
+
+		if (n < 0) {
+			buf->status = -DER_TRUNC;
+			return -DER_TRUNC;
+		}
+
+		if ((buf->str_size + n) < buf->buf_size) {
+			buf->str_size += n;
+			return n;
+		}
+
+		size = buf->buf_size * 2;
+		D_REALLOC(new_buf, buf->str, size);
+		if (new_buf == NULL) {
+			buf->status = -DER_NOMEM;
+			return -DER_NOMEM;
+		}
+
+		buf->str = new_buf;
+		buf->buf_size = size;
+	}
+}
+
+/** Deallocate the memory used by d_string_buffer_t
+ *
+ * The d_string_buffer_t internal buffer is deallocated, and stats are reseted.
+ *
+ * \param buf [IN] string object to be cleaned.
+ */
+void
+d_free_string(d_string_buffer_t *buf)
+{
+	if (buf->str != NULL) {
+		D_FREE(buf->str);
+		buf->str = NULL;
+		buf->status = 0;
+		buf->str_size = 0;
+		buf->buf_size = 0;
+	}
 }
