@@ -26,12 +26,13 @@ from importlib import import_module
 import re
 import time
 import signal
+import os
 
 from avocado.utils import process
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, EnvironmentVariables
+    CommandFailure, BasicParameter, ObjectWithParameters, \
+    CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
     run_command, DaosTestError
 
@@ -157,7 +158,7 @@ class ExecutableCommand(CommandWithParameters):
             self._process = process.SubProcess(**kwargs)
             self._process.start()
 
-            # Deterime if the command has launched correctly using its
+            # Determine if the command has launched correctly using its
             # check_subprocess_status() method.
             if not self.check_subprocess_status(self._process):
                 msg = "Command '{}' did not launch correctly".format(self)
@@ -316,6 +317,7 @@ class ExecutableCommand(CommandWithParameters):
         Returns:
             list: a list of strings obtained from the method's output parsed
                 through its regex
+
         """
         if regex_method not in self.METHOD_REGEX:
             raise CommandFailure(
@@ -385,8 +387,8 @@ class CommandWithSubCommand(ExecutableCommand):
         #       <sub_command>:
         #           <sub_command>_sub_command: <sub_command_sub_command>
         #
-        self.sub_command = NamedParameter(
-            "{}_sub_command".format(self._command), None)
+        self.sub_command = BasicParameter(
+            None, yaml_key="{}_sub_command".format(self._command))
 
         # Define the class to represent the active sub-command and it's specific
         # parameters.  Multiple sub-commands may be available, but only one can
@@ -399,6 +401,17 @@ class CommandWithSubCommand(ExecutableCommand):
         # method (including a simple str object).
         #
         self.sub_command_class = None
+
+        # Define an attribute to store the CmdResult from the last run() call.
+        # A CmdResult object has the following properties:
+        #   command         - command string
+        #   exit_status     - exit_status of the command
+        #   stdout          - the stdout
+        #   stderr          - the stderr
+        #   duration        - command execution time
+        #   interrupted     - whether the command completed within timeout
+        #   pid             - command's pid
+        self.result = None
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
@@ -467,25 +480,64 @@ class CommandWithSubCommand(ExecutableCommand):
         self.sub_command.value = value
         self.get_sub_command_class()
 
-    def _get_result(self):
-        """Get the result from running the configured command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the command
-                information, e.g. exit status, stdout, stderr, etc.
+    def run(self):
+        """Run the command and assign the 'result' attribute.
 
         Raises:
-            CommandFailure: if the command fails.
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
 
         """
-        result = None
         try:
-            result = self.run()
+            self.result = super(CommandWithSubCommand, self).run()
         except CommandFailure as error:
             raise CommandFailure(
                 "<{}> command failed: {}".format(self.command, error))
+        return self.result
 
-        return result
+    def _get_result(self, sub_command_list=None, **kwargs):
+        """Get the result from running the command with the defined arguments.
+
+        The optional sub_command_list and kwargs are used to define the command
+        that will be executed.  If they are excluded, the commnad will be run as
+        it currently defined.
+
+        Note: the returned CmdResult is also stored in the self.result
+        attribute as part of the self.run() call.
+
+        Args:
+            sub_command_list (list, optional): a list of sub commands used to
+                define the command to execute. Defaults to None, which will run
+                the command as it is currently defined.
+
+        Raises:
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
+
+        """
+        # Set the subcommands
+        this_command = self
+        if sub_command_list is not None:
+            for sub_command in sub_command_list:
+                this_command.set_sub_command(sub_command)
+                this_command = this_command.sub_command_class
+
+        # Set the sub-command arguments
+        for name, value in kwargs.items():
+            getattr(this_command, name).value = value
+
+        # Issue the command and store the command result
+        return self.run()
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -669,21 +721,59 @@ class YamlCommand(SubProcessCommand):
 
         return value
 
-    def _get_result(self):
-        """Generate the yaml config if defined, then call the parent method.
+    def run(self):
+        """Run the command and assign the 'result' attribute.
 
-        Returns:
-            CmdResult: an avocado CmdResult object containing the command
-                information, e.g. exit status, stdout, stderr, etc.
+        Ensure the yaml file is updated with the current attributes before
+        executing the command.
 
         Raises:
-            CommandFailure: if the command fails.
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
 
         """
         if self.yaml:
             self.create_yaml_file()
+        return super(YamlCommand, self).run()
 
-        return super(YamlCommand, self)._get_result()
+    def copy_certificates(self, source, hosts):
+        """Copy certificates files from the source to the destination hosts.
+
+        Args:
+            source (str): source of the certificate files.
+            hosts (list): list of the destination hosts.
+        """
+        yaml = self.yaml
+        while isinstance(yaml, YamlParameters):
+            if hasattr(yaml, "get_certificate_data"):
+                data = yaml.get_certificate_data(
+                    yaml.get_attribute_names(LogParameter))
+                for name in data:
+                    run_command(
+                        "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
+                            ",".join(hosts), name))
+                    for file_name in data[name]:
+                        src_file = os.path.join(source, file_name)
+                        dst_file = os.path.join(name, file_name)
+                        result = run_command(
+                            "clush -S -v -w {} --copy {} --dest {}".format(
+                                ",".join(hosts), src_file, dst_file),
+                            raise_exception=False)
+                        if result.exit_status != 0:
+                            self.log.info(
+                                "WARNING: failure copying '%s' to '%s' on %s",
+                                src_file, dst_file, hosts)
+
+                    # debug to list copy of cert files
+                    run_command(
+                        "clush -S -v -w {} /usr/bin/ls -la {}".format(
+                            ",".join(hosts), name))
+            yaml = yaml.other_params
 
 
 class SubprocessManager(object):

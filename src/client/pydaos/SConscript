@@ -41,7 +41,6 @@ def build_shim_module(env, lib_prefix, version):
     # install new wrappers too
     new_env.Install(install_path, "__init__.py")
     new_env.Install(install_path, "pydaos_core.py")
-    new_env.Install(install_path, 'dbm_daos.py')
     # install raw wrappers
     install_path += "/raw"
     new_env.Install(install_path, "raw/__init__.py")

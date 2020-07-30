@@ -987,7 +987,7 @@ public class DaosUns {
         "   -Dlayout=, optional, filesystem layout. Default is POSIX. [POSIX|HDF5].\n" +
         "   -Dobject_type=, optional, file object type. Default is OC_SX. [enums from DaosObjectType]. " +
         "use the \"util -Dop=list-object-types\" command to list all object types.\n" +
-        "   -Dchunk_size=, optional, file chunck size. Default is 0 which lets DAOS decides (1MB for now).\n" +
+        "   -Dchunk_size=, optional, file chunk size. Default is 0 which lets DAOS decides (1MB for now).\n" +
         "   -Don_lustre=, optional, on lustre file system? Default is false. [true|false]\n" +
         "   -Dranks=, optional, pool ranks. Default is 0.\n" +
         "   -Dserver_group=, optional, DAOS server group. Default is daos_server.\n" +

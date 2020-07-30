@@ -43,7 +43,7 @@ import daos_build
 Import('prereqs', 'env')
 
 # Keep versioned libs for now to avoid any conflict with 1.0
-CART_VERSION = "4.7.0"
+CART_VERSION = "4.8.0"
 
 def scons():
     """Scons function"""

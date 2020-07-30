@@ -34,40 +34,40 @@ import (
 
 func TestSystem_RankSet(t *testing.T) {
 	for name, tc := range map[string]struct {
-		startList string
-		addRanks  []Rank
-		expOut    string
-		expCount  int
-		expRanks  []Rank
-		expErr    error
+		ranks    string
+		addRanks []Rank
+		expOut   string
+		expCount int
+		expRanks []Rank
+		expErr   error
 	}{
 		"empty start list": {
-			startList: "",
-			expOut:    "",
-			expCount:  0,
-			expRanks:  []Rank{},
+			ranks:    "",
+			expOut:   "",
+			expCount: 0,
+			expRanks: []Rank{},
 		},
-		"complex with suffixes": {
-			startList: "node2-1,node1-2.suffix1,node1-[45,47].suffix2,node3,node1-3",
-			expErr:    errors.New("unexpected alphabetic character(s)"),
+		"invalid with hostnames": {
+			ranks:  "node2-1,node1-2.suffix1,node1-[45,47].suffix2,node3,node1-3",
+			expErr: errors.New("unexpected alphabetic character(s)"),
 		},
 		"simple ranged rank list": {
-			startList: "0-10",
-			expOut:    "0-10",
-			expCount:  11,
-			expRanks:  []Rank{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			ranks:    "0-10",
+			expOut:   "0-10",
+			expCount: 11,
+			expRanks: []Rank{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 		},
 		"deranged rank list": {
-			startList: "1,2,3,5,6,8,10,10,1",
-			expOut:    "1-3,5-6,8,10",
-			expCount:  7,
-			expRanks:  []Rank{1, 2, 3, 5, 6, 8, 10},
+			ranks:    "1,2,3,5,6,8,10,10,1",
+			expOut:   "1-3,5-6,8,10",
+			expCount: 7,
+			expRanks: []Rank{1, 2, 3, 5, 6, 8, 10},
 		},
 		"ranged rank list": {
-			startList: "2,3,10-19,0-9",
-			addRanks:  []Rank{30, 32},
-			expOut:    "0-19,30,32",
-			expCount:  22,
+			ranks:    "2,3,10-19,0-9",
+			addRanks: []Rank{30, 32},
+			expOut:   "0-19,30,32",
+			expCount: 22,
 			expRanks: []Rank{
 				0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
 				10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
@@ -75,15 +75,19 @@ func TestSystem_RankSet(t *testing.T) {
 			},
 		},
 		"adding to empty list": {
-			startList: "",
-			addRanks:  []Rank{30, 32},
-			expOut:    "30,32",
-			expCount:  2,
-			expRanks:  []Rank{30, 32},
+			ranks:    "",
+			addRanks: []Rank{30, 32},
+			expOut:   "30,32",
+			expCount: 2,
+			expRanks: []Rank{30, 32},
+		},
+		"invalid list with spaces": {
+			ranks:  "1, 5",
+			expErr: errors.New("unexpected whitespace character(s)"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rs, gotErr := NewRankSet(tc.startList)
+			rs, gotErr := CreateRankSet(tc.ranks)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -103,7 +107,7 @@ func TestSystem_RankSet(t *testing.T) {
 				t.Fatalf("\nexpected count to be %d; got %d", tc.expCount, gotCount)
 			}
 
-			ranks, gotErr := rs.Ranks()
+			ranks := rs.Ranks()
 			if diff := cmp.Diff(tc.expRanks, ranks); diff != "" {
 				t.Fatalf("unexpected ranks (-want, +got):\n%s\n", diff)
 			}

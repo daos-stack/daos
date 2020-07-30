@@ -216,6 +216,9 @@ def set_test_environment(args):
         os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
+    # Assign the default value for transport configuration insecure mode
+    os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)
+
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
     if python_path is None or python_path == "":
@@ -231,7 +234,6 @@ def set_test_environment(args):
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
-
 
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
@@ -528,7 +530,7 @@ def get_nvme_replacement(args):
     # Get a list of NVMe devices from each specified server host
     host_list = args.test_servers.split(",")
     command_list = [
-        "/usr/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
+        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
         command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
     command = " | ".join(command_list)
@@ -686,7 +688,6 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                 # Keep track of any placeholders without a replacement value
                 display(args, "  - Missing:   {}".format(key))
                 missing_replacements.append(key)
-
         if missing_replacements:
             # Report an error for all of the placeholders w/o a replacement
             print(
@@ -711,6 +712,14 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     # Return the untouched or modified yaml file
     return yaml_file
 
+def generate_certs():
+    """Generate the certificates for the test."""
+    daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
+    certs_dir = os.path.join(daos_test_log_dir, "daosCA")
+    subprocess.call(["/usr/bin/rm", "-rf", certs_dir])
+    subprocess.call(
+        ["../../../../lib64/daos/certgen/gen_certificates.sh",
+         daos_test_log_dir])
 
 def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
@@ -888,7 +897,8 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Create a subdirectory in the avocado logs directory for this test
     daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
     print("Archiving host logs from {} in {}".format(host_list, daos_logs_dir))
-    get_output(["mkdir", daos_logs_dir])
+    os.mkdir(daos_logs_dir)
+    print(get_output(["df", "-h", daos_logs_dir]))
 
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Attempt all of the commands and
@@ -899,7 +909,8 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "rc=0",
         "copied=()",
         "for file in $(ls {}/*.log)".format(logs_dir),
-        "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+        "do ls -sh $file",
+        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_logs_dir),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
@@ -1128,7 +1139,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             pattern (str): the fnmatch/glob pattern of core files to
                            run gdb on
         """
-        import magic # pylint: disable=import-outside-toplevel
+        import magic # pylint: disable=import-error
 
         for corefile in cores:
             if not fnmatch.fnmatch(corefile, pattern):
@@ -1284,6 +1295,10 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
+        "-ins", "--insecure_mode",
+        action="store_true",
+        help="Launch test with insecure-mode")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -1334,6 +1349,9 @@ def main():
     test_files = get_test_files(test_list, args, tmp_dir)
     if args.modify:
         exit(0)
+
+    # Generate certificate files
+    generate_certs()
 
     # Run all the tests
     status = run_tests(test_files, tag_filter, args)
