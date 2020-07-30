@@ -347,7 +347,6 @@ class DmgCommand(DmgCommandBase):
         #       "ntarget": <B>,
         #       "disabled": <C>,
         #       "leader": <D>,
-        #       "version": <E>,
         #       "target_count": <F>,
         #       "scm": {
         #           "total": <G>,
@@ -364,8 +363,9 @@ class DmgCommand(DmgCommandBase):
         #           "free_mean": <P>
         #       },
         #       "rebuild": {
-        #           "state": <Q>
-        #           "objects": <R>
+        #           "version": <E>,
+        #           "state": <Q>,
+        #           "objects": <R>,
         #           "records": <S>
         #       }
         #   }
@@ -396,7 +396,7 @@ class DmgCommand(DmgCommandBase):
                 "free_max": 9,
                 "free_mean": 10
             }
-            # Mapping of the 2nd indices mappings to the 1st match indices
+            # Mapping of the second indices mappings to the first match indices
             map_values = {
                 0: pool_map,
                 1: {"target_count": 5},
@@ -412,6 +412,8 @@ class DmgCommand(DmgCommandBase):
                         elif index_1 == 3:
                             data["nvme"][key] = match_list[index_2]
                         elif index_1 == 4:
+                            data["rebuild"][key] = match_list[index_2]
+                        elif index_1 == 0 and key == "version":
                             data["rebuild"][key] = match_list[index_2]
                         else:
                             data[key] = match_list[index_2]

@@ -101,7 +101,7 @@ class SnapshotAggregation(IorTestBase):
         # Delete the snapshot.
         daos.container_destroy_snap(
             pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont=self.container.uuid, epc=snapshot)
+            cont=self.container.uuid, epoch=snapshot)
 
         # Watch for aggregation to start & finish.
 

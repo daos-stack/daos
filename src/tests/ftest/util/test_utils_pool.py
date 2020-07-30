@@ -29,11 +29,29 @@ from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
-from bytes_utils import Bytes
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
                         daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
+
+
+class RebuildStatus(object):
+    # pylint: disable=too-few-public-methods
+    """Stores the pool rebuild status from a dmg pool query."""
+
+    def __init__(self, status, objects, records, version):
+        """Initialize a RebuildStatus object.
+
+        Args:
+            status (str): pool rebuild status
+            objects (str): number of rebuilt objects
+            records (str): number of rebuilt records
+            version (str): pool rebuild version
+        """
+        self.status = status
+        self.objects = objects
+        self.records = records
+        self.version = version
 
 
 class PoolSpace(object):
@@ -44,11 +62,11 @@ class PoolSpace(object):
         """Initialize a PoolSpace object.
 
         Args:
-            total (Bytes): total size
-            free (Bytes): free size
-            free_min (Bytes): minimum free size
-            free_max (Bytes): maximum free size
-            free_mean (Bytes): mean free size
+            total (str): total size
+            free (str): free size
+            free_min (str): minimum free size
+            free_max (str): maximum free size
+            free_mean (str): mean free size
         """
         self.total = total
         self.free = free
@@ -62,7 +80,7 @@ class PoolInfo(object):
     """Stores the pool information from a dmg pool query."""
 
     def __init__(self, uuid, ntarget, disabled, leader, version, target_count,
-                 scm, nvme):
+                 scm, nvme, rebuild):
         """Initialize a PoolInfo object.
 
         Args:
@@ -74,6 +92,7 @@ class PoolInfo(object):
             target_count (int): number of VOS targets
             scm (PoolSpace): the SCM pool space information
             nvme (PoolSpace): the NVMe pool space information
+            rebuild (RebuildStatus): the pool rebuild status information
         """
         self.uuid = uuid
         self.ntarget = ntarget
@@ -83,6 +102,7 @@ class PoolInfo(object):
         self.target_count = target_count
         self.scm = scm
         self.nvme = nvme
+        self.rebuild = rebuild
 
 
 class TestPool(TestDaosApiBase):
@@ -354,27 +374,14 @@ class TestPool(TestDaosApiBase):
                 kwargs = {"pool": self.uuid}
                 self._log_method("dmg.pool_query", kwargs)
                 data = self.dmg.pool_query(**kwargs)
+                scm_data = data.pop("scm", {})
+                nvme_data = data.pop("nvme", {})
+                rebuild_data = data.pop("rebuild", {})
                 self.info = PoolInfo(
-                    uuid=data["uuid"],
-                    ntarget=data["ntarget"],
-                    disabled=data["disabled"],
-                    leader=data["leader"],
-                    version=data["version"],
-                    target_count=data["target_count"],
-                    scm=PoolSpace(
-                        total=data["scm"]["total"],
-                        free=data["scm"]["free"],
-                        free_min=data["scm"]["free_min"],
-                        free_max=data["scm"]["free_max"],
-                        free_mean=data["scm"]["free_mean"]
-                    ),
-                    nvme=PoolSpace(
-                        total=data["scm"]["total"],
-                        free=data["scm"]["free"],
-                        free_min=data["scm"]["free_min"],
-                        free_max=data["scm"]["free_max"],
-                        free_mean=data["scm"]["free_mean"]
-                    )
+                    scm=PoolSpace(**scm_data),
+                    nvme=PoolSpace(**nvme_data),
+                    rebuild=RebuildStatus(**rebuild_data),
+                    **data
                 )
 
             elif self.control_method.value == self.USE_DMG:
