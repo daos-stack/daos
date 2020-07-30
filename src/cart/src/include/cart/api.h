@@ -478,7 +478,8 @@ crt_hlc2sec(uint64_t hlc);
  *
  * This is the maximum offset believed to be observable between the physical
  * clocks behind any two HLCs in the system. The format of the value represent
- * a nonnegative diff between two HLC timestamps.
+ * a nonnegative diff between two HLC timestamps. The value is rounded up to
+ * the HLC physical resolution.
  *
  * \param[in] epsilon          Nonnegative HLC duration
  */
@@ -492,6 +493,17 @@ crt_hlc_epsilon_set(uint64_t epsilon);
  */
 uint64_t
 crt_hlc_epsilon_get(void);
+
+/**
+ * Get the upper bound of the HLC timestamp of an event happened before
+ * (through out of band communication) the event at \a hlc.
+ * 
+ * \param[in] hlc              HLC timestamp
+ * 
+ * \return                     Upper bound HLC timestamp
+ */
+uint64_t
+crt_hlc_epsilon_get_bound(uint64_t hlc);
 
 /**
  * Abort an RPC request.
