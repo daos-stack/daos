@@ -70,7 +70,7 @@ def scons():
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
     prereqs.require(tenv, 'crypto', 'mercury')
 
-    tests_dir = os.path.join("$PREFIX", 'lib', 'cart', 'TESTING', 'tests')
+    tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:
         target = daos_build.test(tenv, test, install_off='../../../../')
