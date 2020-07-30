@@ -189,6 +189,7 @@ ds_rsvc_put(struct ds_rsvc *svc)
 }
 
 static struct d_hash_table rsvc_hash;
+static ABT_mutex	   rsvc_hash_lock;
 
 static struct ds_rsvc *
 rsvc_obj(d_list_t *rlink)
@@ -244,15 +245,25 @@ static d_hash_table_ops_t rsvc_hash_ops = {
 static int
 rsvc_hash_init(void)
 {
-	return d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
+	int rc;
+
+	rc = ABT_mutex_create(&rsvc_hash_lock);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
 					   NULL /* priv */, &rsvc_hash_ops,
 					   &rsvc_hash);
+	if (rc != 0)
+		ABT_mutex_free(&rsvc_hash_lock);
+	return rc;
 }
 
 static void
 rsvc_hash_fini(void)
 {
 	d_hash_table_destroy_inplace(&rsvc_hash, true /* force */);
+	ABT_mutex_free(&rsvc_hash_lock);
 }
 
 /**
@@ -269,7 +280,9 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 	d_list_t       *entry;
 	bool		nonexist = false;
 
+	ABT_mutex_lock(rsvc_hash_lock);
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
+	ABT_mutex_unlock(rsvc_hash_lock);
 	if (entry == NULL) {
 		char	       *path;
 		struct stat	buf;
@@ -573,7 +586,9 @@ rsvc_stopper(void *arg)
 {
 	struct ds_rsvc *svc = arg;
 
+	ABT_mutex_lock(rsvc_hash_lock);
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
+	ABT_mutex_unlock(rsvc_hash_lock);
 	stop(svc, false /* destroy */);
 }
 
@@ -743,7 +758,9 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		db_uuid = db_uuid_buf;
 	}
 
+	ABT_mutex_lock(rsvc_hash_lock);
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
+	ABT_mutex_unlock(rsvc_hash_lock);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
 		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name,
@@ -760,8 +777,10 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	if (rc != 0)
 		goto out;
 
+	ABT_mutex_lock(rsvc_hash_lock);
 	rc = d_hash_rec_insert(&rsvc_hash, svc->s_id.iov_buf, svc->s_id.iov_len,
 			       &svc->s_entry, true /* exclusive */);
+	ABT_mutex_unlock(rsvc_hash_lock);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, "%s: insert: "DF_RC"\n", svc->s_name, DP_RC(rc));
 		stop(svc, create /* destroy */);
@@ -839,7 +858,9 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 	rc = ds_rsvc_lookup(class, id, &svc);
 	if (rc != 0)
 		return -DER_ALREADY;
+	ABT_mutex_lock(rsvc_hash_lock);
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
+	ABT_mutex_unlock(rsvc_hash_lock);
 	rc = stop(svc, destroy);
 	if (!rc && destroy)
 		rc = rsvc_class(class)->sc_delete_uuid(id);
@@ -899,7 +920,9 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
 
 	D_INIT_LIST_HEAD(&arg.saa_list);
 	arg.saa_class = class;
+	ABT_mutex_lock(rsvc_hash_lock);
 	rc = d_hash_table_traverse(&rsvc_hash, stop_all_cb, &arg);
+	ABT_mutex_unlock(rsvc_hash_lock);
 
 	/* Wait for the stopper ULTs to return. */
 	d_list_for_each_entry_safe(ult, ult_tmp, &arg.saa_list, su_entry) {
@@ -936,7 +959,9 @@ ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 	/* Drop our leader reference to allow the service to step down. */
 	put_leader(svc);
 
+	ABT_mutex_lock(rsvc_hash_lock);
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
+	ABT_mutex_unlock(rsvc_hash_lock);
 
 	return stop(svc, false /* destroy */);
 }
