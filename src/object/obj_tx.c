@@ -94,6 +94,7 @@ struct dc_tx {
 	d_list_t		 tx_sub_reqs;
 	/** Transaction flags (DAOS_TF_RDONLY, DAOS_TF_ZERO_COPY, etc.) */
 	uint64_t		 tx_flags;
+	uint32_t		 tx_local:1; /* Local TX. */
 	/** The sub requests count */
 	uint32_t		 tx_sub_count;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
@@ -346,10 +347,6 @@ dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
 
 	D_MUTEX_LOCK(&tx->tx_lock);
 
-	/* For RDONLY TX, not check pool map version to force restart TX. */
-	if (tx->tx_pm_ver == 0 || tx->tx_flags & DAOS_TF_RDONLY)
-		D_GOTO(out, rc = 0);
-
 	pm_ver = dc_pool_get_version(tx->tx_pool);
 
 	if (tx->tx_pm_ver != pm_ver) {
@@ -357,12 +354,16 @@ dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
 			  "Pool map version is reverted from %u to %u\n",
 			  tx->tx_pm_ver, pm_ver);
 
+		/* For external or RW TX, if pool map is stale, restart it. */
+		if (tx->tx_pm_ver != 0 &&
+		    (!tx->tx_local || !(tx->tx_flags & DAOS_TF_RDONLY))) {
+			tx->tx_status = TX_FAILED;
+			rc = -DER_TX_RESTART;
+		}
+
 		tx->tx_pm_ver = pm_ver;
-		tx->tx_status = TX_FAILED;
-		rc = -DER_TX_RESTART;
 	}
 
-out:
 	if (rc != 0 || ptx == NULL) {
 		D_MUTEX_UNLOCK(&tx->tx_lock);
 		dc_tx_decref(tx);
@@ -897,8 +898,10 @@ dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch, uint32_t flags,
 	int		 rc;
 
 	rc = dc_tx_alloc(coh, epoch, flags, &tx);
-	if (rc == 0)
+	if (rc == 0) {
 		*th = dc_tx_ptr2hdl(tx);
+		tx->tx_local = 1;
+	}
 
 	return rc;
 }
