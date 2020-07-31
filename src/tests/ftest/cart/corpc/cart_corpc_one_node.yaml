@@ -7,7 +7,7 @@ defaultENV:
   D_LOG_MASK: "ERR"
   CRT_PHY_ADDR_STR: "ofi+sockets"
   OFI_INTERFACE: "eth0"
-  srv_CRT_CTX_NUM: "16"
+  test_servers_CRT_CTX_NUM: "16"
 env_CRT_CTX_SHARE_ADDR: !mux
   sep:
     env: sep
@@ -18,24 +18,24 @@ env_CRT_CTX_SHARE_ADDR: !mux
 hosts: !mux
   hosts_1:
     config: one_node
-    srv:
+    test_servers:
       - boro-A
 tests: !mux
   corpc_prefwd:
     name: corpc_prefwd
-    srv_bin: ../../../../bin/crt_launch
-    srv_arg: "-e tests/test_corpc_prefwd"
-    srv_env: ""
-    srv_ppn: "5"
+    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_arg: "-e tests/test_corpc_prefwd"
+    test_servers_env: ""
+    test_servers_ppn: "5"
   corpc_exclusive:
     name: corpc_exclusive
-    srv_bin: ../../../../bin/crt_launch
-    srv_arg: "-e tests/test_corpc_exclusive"
-    srv_env: ""
-    srv_ppn: "5"
+    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_arg: "-e tests/test_corpc_exclusive"
+    test_servers_env: ""
+    test_servers_ppn: "5"
   corpc_errors:
     name: corpc_errors
-    srv_bin: ../../../../bin/crt_launch
-    srv_arg: "-e tests/no_pmix_corpc_errors"
-    srv_env: ""
-    srv_ppn: "8"
+    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_arg: "-e tests/no_pmix_corpc_errors"
+    test_servers_env: ""
+    test_servers_ppn: "8"

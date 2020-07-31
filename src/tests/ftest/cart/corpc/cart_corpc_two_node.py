@@ -56,7 +56,7 @@ class CartCoRpcTwoNodeTest(Test):
         :avocado: tags=all,all_cart,pr,corpc,two_node
         """
 
-        cmd = self.utils.build_cmd(self, self.env, "srv")
+        cmd = self.utils.build_cmd(self, self.env, "test_servers")
 
         self.utils.launch_test(self, cmd)
 

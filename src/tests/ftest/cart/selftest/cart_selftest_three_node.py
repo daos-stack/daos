@@ -56,7 +56,7 @@ class CartSelfThreeNodeTest(Test):
         :avocado: tags=all,all_cart,pr,selftest,three_node
         """
 
-        srvcmd = self.utils.build_cmd(self, self.env, "srv")
+        srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)

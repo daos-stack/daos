@@ -63,7 +63,7 @@ class GroupTest(Test):
                                           "/run/defaultENV/")
         ofi_interface = self.params.get("OFI_INTERFACE", "/run/defaultENV/")
 
-        srv_cmd = self.utils.build_cmd(self, self.env, "srv")
+        srv_cmd = self.utils.build_cmd(self, self.env, "test_servers")
 
         cmd = srv_cmd
         self.utils.launch_test(self, cmd)

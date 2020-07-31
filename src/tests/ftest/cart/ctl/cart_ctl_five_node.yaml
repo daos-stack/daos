@@ -7,7 +7,7 @@ defaultENV:
   D_LOG_MASK: "DEBUG,MEM=ERR"
   CRT_PHY_ADDR_STR: "ofi+sockets"
   OFI_INTERFACE: "eth0"
-  srv_CRT_CTX_NUM: "0"
+  test_servers_CRT_CTX_NUM: "0"
   cli1_CRT_CTX_NUM: "0"
   cli2_CRT_CTX_NUM: "0"
 env_CRT_CTX_SHARE_ADDR: !mux
@@ -17,7 +17,7 @@ env_CRT_CTX_SHARE_ADDR: !mux
 hosts: !mux
   hosts_1:
     config: five_node
-    srv:
+    test_servers:
       - boro-A
       - boro-B
       - boro-C
@@ -30,10 +30,10 @@ hosts: !mux
 tests: !mux
   ctl:
     name: ctl_basic
-    srv_bin: ../../../../bin/crt_launch
-    srv_arg: "-e tests/test_group_np_srv --name server_grp --cfg_path=/tmp"
-    srv_env: ""
-    srv_ppn: "1"
+    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_arg: "-e tests/test_group_np_srv --name server_grp --cfg_path=/tmp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
 
     cli1_bin: ../../../../bin/cart_ctl
     cli1_arg: "get_uri_cache --group-name server_grp --rank 0,2-3,4 --cfg_path=/tmp"

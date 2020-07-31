@@ -55,8 +55,8 @@ class CartRpcOneNodeTest(Test):
 
         :avocado: tags=all,all_cart,pr,rpc,one_node
         """
-        srvcmd = self.utils.build_cmd(self, self.env, "srv")
-        clicmd = self.utils.build_cmd(self, self.env, "cli")
+        srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients")
 
         self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
         self.utils.log_check(self)

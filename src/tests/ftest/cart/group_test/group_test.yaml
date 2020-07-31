@@ -9,16 +9,16 @@ defaultENV:
 hosts: !mux
   hosts_1:
     config: one_node
-    srv:
+    test_servers:
       - boro-A
 tests: !mux
   group_test:
     name: group_test
-    srv_bin: ../../../../bin/crt_launch
-    srv_arg: "-e tests/no_pmix_group_test"
-    srv_ppn: "8"
+    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_arg: "-e tests/no_pmix_group_test"
+    test_servers_ppn: "8"
   version_test:
     name: group_version_test
-    srv_bin: ../../../../bin/crt_launch
-    srv_arg: "-e tests/no_pmix_group_version"
-    srv_ppn: "8"
+    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_arg: "-e tests/no_pmix_group_version"
+    test_servers_ppn: "8"
