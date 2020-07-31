@@ -683,7 +683,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		return 0;
 
 	/** XXX possible re-order/merge for both replica and EC */
-	if (!daos_oclass_is_ec(oid, &oca))
+	if (!daos_oclass_is_ec(oid, &oca) || obj_auxi->spec_shard)
 		return 0;
 
 	if (!obj_auxi->req_reasbed) {
@@ -2958,13 +2958,6 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;
 
-	rc = obj_rw_req_reassemb(obj, args, obj_auxi);
-	if (rc) {
-		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
-			DP_OID(obj->cob_md.omd_id), rc);
-		goto out_task;
-	}
-
 	dkey_hash = obj_dkey2hash(args->dkey);
 
 	if (args->extra_arg == NULL &&
@@ -2972,6 +2965,14 @@ dc_obj_fetch_task(tse_task_t *task)
 		args->extra_flags |= DIOF_TO_SPEC_SHARD;
 
 	obj_auxi->spec_shard = (args->extra_flags & DIOF_TO_SPEC_SHARD) != 0;
+
+	rc = obj_rw_req_reassemb(obj, args, obj_auxi);
+	if (rc) {
+		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
+			DP_OID(obj->cob_md.omd_id), rc);
+		goto out_task;
+	}
+
 	if (obj_auxi->spec_shard) {
 		D_ASSERT(!obj_auxi->to_leader);
 
