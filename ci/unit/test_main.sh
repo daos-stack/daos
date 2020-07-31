@@ -20,8 +20,6 @@ rm -rf test_results
 mkdir test_results
 rm -f dnt.*.memcheck.xml nlt-errors.json
 
-env
-echo $WITH_VALGRIND
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTNAME=$HOSTNAME        \
