@@ -605,7 +605,11 @@ public class IODataDesc {
     public String toString() {
       StringBuilder sb = new StringBuilder();
       sb.append(updateOrFetch ? "update " : "fetch ").append("entry: ");
-      sb.append(key).append(type).append(recordSize).append(offset).append(dataSize);
+      sb.append(key).append('|')
+        .append(type).append('|')
+        .append(recordSize).append('|')
+        .append(offset).append('|')
+        .append(dataSize);
       return sb.toString();
     }
   }
