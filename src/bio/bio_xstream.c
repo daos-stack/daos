@@ -123,7 +123,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		  char *traddr)
 {
 	int			rc;
-	size_t 			count = opts->num_pci_addr;
+	size_t			count = opts->num_pci_addr;
 	struct spdk_pci_addr   *tmp = *list;
 
 	rc = is_addr_in_whitelist(traddr, *list, count);
@@ -158,39 +158,43 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
  * \param dst String to be populated as output.
  * \param src Input bdf.
  */
-static void
+static int
 traddr_to_vmd(char *dst, const char *src)
 {
 	char traddr_tmp[SPDK_NVMF_TRADDR_MAX_LEN + 1];
 	char vmd_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1] = "0000:";
-	char addr_split[3];
 	char *ptr;
-	int i, j = 0;
+	const char ch = ':';
+	int position, iteration;
 
 	strncpy(traddr_tmp, src, SPDK_NVMF_TRADDR_MAX_LEN);
 	/* Only the first chunk of data from the traddr is useful */
-	ptr = strtok(traddr_tmp, ":");
-	strncpy(traddr_tmp, ptr, 6);
-
-	for (i = 0; i < 2; i++) {
-		addr_split[i] = traddr_tmp[j];
-		j++;
+	ptr = strchr(traddr_tmp, ch);
+	if (ptr == NULL) {
+		D_ERROR("Transport id not vaild\n");
+		return -DER_INVAL;
 	}
-	addr_split[2] = '\0';
-	strcat(vmd_addr, addr_split);
-	strcat(vmd_addr, ":");
-	for (i = 0; i < 2; i++) {
-		addr_split[i] = traddr_tmp[j];
-		j++;
-	}
-	addr_split[2] = '\0';
-	strcat(vmd_addr, addr_split);
-	strcat(vmd_addr, ".");
-	addr_split[0] = traddr_tmp[j + 1];
-	addr_split[1] = '\0';
-	strcat(vmd_addr, addr_split);
+	position = ptr - traddr_tmp;
+	traddr_tmp[position] = '\0';
 
+	ptr = traddr_tmp;
+	iteration = 0;
+	while (*ptr != '\0') {
+		strncat(vmd_addr, ptr, 2);
+		if (iteration != 0) {
+			strcat(vmd_addr, ".");
+			ptr = ptr + 3;
+			strncat(vmd_addr, ptr, 1);
+			break;
+		} else {
+			strcat(vmd_addr, ":");
+			ptr = ptr + 2;
+		}
+		iteration++;
+	}
 	strncpy(dst, vmd_addr, SPDK_NVMF_TRADDR_MAX_LEN);
+
+	return 0;
 }
 
 static int
@@ -253,7 +257,12 @@ populate_whitelist(struct spdk_env_opts *opts)
 				 * not recognize this transport ID, instead need
 				 * to pass VMD address as the whitelist param.
 				 */
-				traddr_to_vmd(trid->traddr, trid->traddr);
+				rc = traddr_to_vmd(trid->traddr, trid->traddr);
+				if (rc < 0) {
+					D_ERROR("Invalid traddr=%s\n", trid->traddr);
+					rc = -DER_INVAL;
+					break;
+				}
 			}
 		}
 
@@ -325,6 +334,12 @@ bio_spdk_env_init(void)
 				DP_RC(rc));
 			return rc;
 		}
+
+		/**
+		 * TODO spdk_vmd_hotplug_monitor() will need to be called
+		 * periodically on 'init' xstream to monitor VMD hotremove/
+		 * hotplug events.
+		 */
 	}
 
 	spdk_unaffinitize_thread();
