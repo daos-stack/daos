@@ -24,14 +24,11 @@
 package server
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"os/user"
 	"strings"
@@ -90,46 +87,6 @@ func iommuDetected() bool {
 	return len(dmars) > 0
 }
 
-// detectVmd returns whether VMD devices have been found and a slice of VMD
-// PCI addresses if found.
-func detectVmd() ([]string, error) {
-	// Check available VMD devices with command:
-	// "$lspci | grep  -i -E "201d | Volume Management Device"
-	lspciCmd := exec.Command("lspci")
-	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
-	var cmdOut bytes.Buffer
-
-	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
-	vmdCmd.Stdout = &cmdOut
-	_ = lspciCmd.Start()
-	_ = vmdCmd.Run()
-	_ = lspciCmd.Wait()
-
-	if cmdOut.Len() == 0 {
-		return nil, errors.New("no vmd devices found")
-	}
-
-	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
-	vmdAddrs := make([]string, 0, vmdCount)
-
-	i := 0
-	scanner := bufio.NewScanner(&cmdOut)
-	for scanner.Scan() {
-		if i == vmdCount {
-			break
-		}
-		s := strings.Split(scanner.Text(), " ")
-		vmdAddrs = append(vmdAddrs, strings.TrimSpace(s[0]))
-		i += 1
-	}
-
-	if len(vmdAddrs) == 0 {
-		return nil, errors.New("error parsing cmd output")
-	}
-
-	return vmdAddrs, nil
-}
-
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	err := cfg.Validate(log)
@@ -169,6 +126,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to lookup current user")
 	}
 
+	iommuDisabled := !iommuDetected()
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
@@ -176,6 +134,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		TargetUser:    runningUser.Username,
 		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
 		DisableVFIO:   cfg.DisableVFIO,
+		DisableVMD:    cfg.DisableVMD || cfg.DisableVFIO || iommuDisabled,
+		// TODO: pass vmd include/white list
 	}
 
 	if cfgHasBdev(cfg) {
@@ -190,15 +150,19 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 				return FaultVfioDisabled
 			}
 
-			if !iommuDetected() {
+			if iommuDisabled {
 				return FaultIommuDisabled
 			}
 		}
 	}
 
 	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	if _, err := bdevProvider.Prepare(prepReq); err != nil {
+	prepResp, err := bdevProvider.Prepare(prepReq)
+	if err != nil {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+	}
+	if prepResp.VmdDetected {
+		bdevProvider.EnableVmd()
 	}
 
 	hugePages, err := getHugePageInfo()
@@ -210,43 +174,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// Double-check that we got the requested number of huge pages after prepare.
 		if hugePages.Free < prepReq.HugePageCount {
 			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-		}
-	}
-
-	// Decide whether to use VMD devices.
-	if cfg.DisableVMD {
-		log.Debugf("VMD disabled in config (disable_vmd: true)")
-	} else {
-		if cfg.DisableVFIO {
-			return errors.New("VMD could not be enabled: VFIO disabled in config (disable_vfio: true)")
-		}
-		if !iommuDetected() {
-			return errors.New("VMD could not be enabled: IOMMU/VFIO not enabled")
-		}
-
-		vmdDevs, err := detectVmd()
-		if err != nil {
-			return errors.Wrap(err, "VMD could not be enabled")
-		}
-
-		// If VMD devices are going to be used, then need to run a separate
-		// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
-		prepReqVmd := bdev.PrepareRequest{
-			PCIWhitelist:  strings.Join(vmdDevs, " "),
-			SkipReset:     true,
-			HugePageCount: prepReq.HugePageCount,
-			TargetUser:    prepReq.TargetUser,
-		}
-		log.Debugf("VMD enabled, automatic prepare req: %+v", prepReqVmd)
-
-		if _, err := bdevProvider.Prepare(prepReqVmd); err != nil {
-			log.Errorf("automatic NVMe prepare for VMD failed (check configuration?)\n%s", err)
-		}
-
-		bdevProvider.EnableVmd()
-		for i := range cfg.Servers {
-			cfg.Servers[i].Storage.Bdev.VmdDeviceList = append(
-				cfg.Servers[i].Storage.Bdev.VmdDeviceList, vmdDevs...)
 		}
 	}
 
@@ -289,6 +216,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// Use a stable identifier that's easy to construct elsewhere if we don't
 		// have access to the instance configuration.
 		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
+		// Indicate whether VMD devices have been detected and can be used.
+		srvCfg.Storage.Bdev.VmdEnabled = prepResp.VmdDetected
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {

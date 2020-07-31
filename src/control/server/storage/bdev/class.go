@@ -160,62 +160,9 @@ func bdevFileInit(log logging.Logger, c *storage.BdevConfig) error {
 	return nil
 }
 
-// bdevNvmeInit performs any necessary preparation forNVME class bdev config.
-//
-// Augment bdev device list if VMD backing SSD PCI addresses have been added to
-// config.
-func bdevNvmeInit(log logging.Logger, c *storage.BdevConfig) error {
-	if len(c.VmdDeviceList) == 0 {
-		return nil
-	}
-
-	logMsg := fmt.Sprintf("VMDs exist, modify NVMe conf device list. Before: %v",
-		c.DeviceList)
-
-	var newDevList []string
-	// Remove VMD addrs from DeviceList and replace with NVMe addrs behind VMD
-	for _, addr := range c.DeviceList {
-		if !common.Includes(c.VmdDeviceList, addr) {
-			newDevList = append(newDevList, addr)
-			continue
-		}
-
-		// build the concatenated form of vmd bdf
-		_, b, d, f, err := ParsePCIAddress(addr)
-		if err != nil {
-			return err
-		}
-		prefix := fmt.Sprintf("%02x%02x%02x", b, d, f)
-
-		// find backing ssds with matching concat vmd bdf in domain of pci addr
-		for _, vmdDevAddr := range c.VmdDeviceList {
-			domain, _, _, _, err := ParsePCIAddress(vmdDevAddr)
-			if err != nil {
-				return err
-			}
-			if fmt.Sprintf("%x", domain) == prefix {
-				newDevList = append(newDevList, vmdDevAddr)
-			}
-		}
-	}
-
-	c.DeviceList = newDevList
-
-	log.Debug(fmt.Sprintf("%s, after: %v", logMsg, c.DeviceList))
-
-	return nil
-}
-
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
 func genFromTempl(cfg *storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
-	if len(cfg.VmdDeviceList) > 0 {
-		templ = `[VMD]
-    Enable True
-
-` + templ
-	}
-
 	t := template.Must(template.New(confOut).Parse(templ))
 	err = t.Execute(&out, cfg)
 
@@ -241,9 +188,12 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 	case storage.BdevClassNone:
 		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilInit}
 	case storage.BdevClassNvme:
-		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, bdevNvmeInit}
-		if len(cfg.VmdDeviceList) > 0 {
-			p.bdev.vosEnv = "VMD"
+		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilInit}
+		if cfg.VmdEnabled {
+			p.bdev.templ = `[VMD]
+    Enable True
+
+` + p.bdev.templ
 		}
 	case storage.BdevClassMalloc:
 		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilInit}

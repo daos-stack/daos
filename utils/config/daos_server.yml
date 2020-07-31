@@ -108,14 +108,16 @@
 ## driver for NVMe device access even though an IOMMU is available. Note
 ## that use of the UIO driver requires that DAOS must run as root.
 #
+## default: false
 #disable_vfio: true
 #
 #
 ## Disable VMD Usage
 #
-## In some circumstances it may be preferable to not use Intel Volume
-## Management Devices through SPDK even if available.
+## In some circumstances it may be preferable to not use Volume Management
+## Devices even if available.
 #
+## default: false
 #disable_vmd: true
 #
 #

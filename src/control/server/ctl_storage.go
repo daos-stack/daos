@@ -28,7 +28,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -59,43 +58,53 @@ func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.
 	}
 }
 
-// addVmdPciAddrs adds backing SSD PCI addresses behind any VMD addresses to
-// bdev config VmdDeviceList to enable them to be used by the class provider.
-//
-// Select any address that has the compressed VMD address as domain.
-func (c *StorageControlService) addVmdPciAddrs(sr *bdev.ScanResponse) error {
-	var prefixes, toAdd []string
-
-	if len(c.instanceStorage) == 0 {
-		return nil
-	}
-
-	for _, addr := range c.instanceStorage[0].Bdev.VmdDeviceList {
-		_, b, d, f, err := bdev.ParsePCIAddress(addr)
-		if err != nil {
-			return err
-		}
-		// concat bus device func
-		prefixes = append(prefixes, fmt.Sprintf("%02x%02x%02x", b, d, f))
-	}
+func (c *StorageControlService) findBdevsWithDomain(sr *bdev.ScanResponse, prefix string) ([]string, error) {
+	var found []string
 
 	for _, c := range sr.Controllers {
 		domain, _, _, _, err := bdev.ParsePCIAddress(c.PciAddr)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if common.Includes(prefixes, fmt.Sprintf("%x", domain)) {
-			toAdd = append(toAdd, c.PciAddr)
+		if fmt.Sprintf("%x", domain) == prefix {
+			found = append(found, c.PciAddr)
 		}
+	}
+
+	return found, nil
+}
+
+// substBdevVmdAddrs replaces VMD PCI addresses in bdev device list with the
+// PCI addresses of the backing devices behind the VMD.
+//
+// Select any PCI addresses that have the compressed VMD address BDF as backing
+// address domain.
+func (c *StorageControlService) substBdevVmdAddrs(sr *bdev.ScanResponse) error {
+	if len(c.instanceStorage) == 0 {
+		return nil
 	}
 
 	for i := range c.instanceStorage {
-		c.instanceStorage[i].Bdev.VmdDeviceList = append(
-			c.instanceStorage[i].Bdev.VmdDeviceList, toAdd...)
-	}
+		var newDevs []string
+		oldDevs := c.instanceStorage[i].Bdev.DeviceList
 
-	if len(toAdd) > 0 {
-		c.log.Debugf("NVMe devices behind VMD: %v", toAdd)
+		for _, dev := range oldDevs {
+			_, b, d, f, err := bdev.ParsePCIAddress(dev)
+			if err != nil {
+				return err
+			}
+			matchDevs, err := c.findBdevsWithDomain(sr,
+				fmt.Sprintf("%02x%02x%02x", b, d, f))
+			if err != nil {
+				return err
+			}
+			if len(matchDevs) == 0 {
+				matchDevs = append(matchDevs, dev)
+			}
+			newDevs = append(newDevs, matchDevs...)
+		}
+
+		c.instanceStorage[i].Bdev.DeviceList = newDevs
 	}
 
 	return nil
@@ -116,10 +125,7 @@ func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing [
 
 	for _, storageCfg := range c.instanceStorage {
 		for _, pciAddr := range storageCfg.Bdev.GetNvmeDevs() {
-			if !common.Includes(storageCfg.Bdev.VmdDeviceList, pciAddr) &&
-				getController(pciAddr) == nil {
-
-				missing = append(missing, pciAddr)
+			if getController(pciAddr) == nil {
 			}
 		}
 	}
@@ -135,15 +141,16 @@ func (c *StorageControlService) Setup() error {
 		return nil
 	}
 
+	if c.bdev.IsVmdEnabled() {
+		if err := c.substBdevVmdAddrs(sr); err != nil {
+			return err
+		}
+	}
+
 	// fail if config specified nvme devices are inaccessible
 	missing, ok := c.canAccessBdevs(sr)
 	if !ok {
 		return FaultBdevNotFound(missing)
-	}
-
-	// add vmd backing ssd pci addresses to bdev config
-	if err := c.addVmdPciAddrs(sr); err != nil {
-		return err
 	}
 
 	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {

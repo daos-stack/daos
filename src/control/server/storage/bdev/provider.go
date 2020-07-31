@@ -24,6 +24,11 @@
 package bdev
 
 import (
+	"bufio"
+	"bytes"
+	"os/exec"
+	"strings"
+
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/fault"
@@ -60,12 +65,14 @@ type (
 		PCIWhitelist  string
 		TargetUser    string
 		ResetOnly     bool
-		SkipReset     bool
 		DisableVFIO   bool
+		DisableVMD    bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
-	PrepareResponse struct{}
+	PrepareResponse struct {
+		VmdDetected bool
+	}
 
 	// FormatRequest defines the parameters for a Format operation.
 	FormatRequest struct {
@@ -84,7 +91,7 @@ type (
 	// DeviceFormatResponses is a map of device identifiers to device Format results.
 	DeviceFormatResponses map[string]*DeviceFormatResponse
 
-	// FormatResults contains the results of a Format operation.
+	// FormatResponse contains the results of a Format operation.
 	FormatResponse struct {
 		DeviceResponses DeviceFormatResponses
 	}
@@ -123,6 +130,7 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 	}
 }
 
+// WithForwardingDisabled returns a provider with forwarding disabled.
 func (p *Provider) WithForwardingDisabled() *Provider {
 	p.fwd.Disabled = true
 	return p
@@ -170,6 +178,46 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	}, nil
 }
 
+// detectVmd returns whether VMD devices have been found and a slice of VMD
+// PCI addresses if found.
+func detectVmd() ([]string, error) {
+	// Check available VMD devices with command:
+	// "$lspci | grep  -i -E "201d | Volume Management Device"
+	lspciCmd := exec.Command("lspci")
+	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
+	var cmdOut bytes.Buffer
+
+	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
+	vmdCmd.Stdout = &cmdOut
+	_ = lspciCmd.Start()
+	_ = vmdCmd.Run()
+	_ = lspciCmd.Wait()
+
+	if cmdOut.Len() == 0 {
+		return []string{}, nil
+	}
+
+	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
+	vmdAddrs := make([]string, 0, vmdCount)
+
+	i := 0
+	scanner := bufio.NewScanner(&cmdOut)
+	for scanner.Scan() {
+		if i == vmdCount {
+			break
+		}
+		s := strings.Split(scanner.Text(), " ")
+		vmdAddrs = append(vmdAddrs, strings.TrimSpace(s[0]))
+		i++
+	}
+
+	if len(vmdAddrs) == 0 {
+		return nil, errors.New("error parsing cmd output")
+	}
+
+	return vmdAddrs, nil
+}
+
 // Prepare attempts to perform all actions necessary to make NVMe components available for
 // use by DAOS.
 func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
@@ -177,11 +225,9 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return p.fwd.Prepare(req)
 	}
 
-	if !req.SkipReset {
-		// run reset first to ensure reallocation of hugepages
-		if err := p.backend.Reset(); err != nil {
-			return nil, errors.WithMessage(err, "SPDK setup reset")
-		}
+	// run reset first to ensure reallocation of hugepages
+	if err := p.backend.Reset(); err != nil {
+		return nil, errors.WithMessage(err, "SPDK setup reset")
 	}
 
 	res := &PrepareResponse{}
@@ -193,6 +239,32 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	if err := p.backend.Prepare(req); err != nil {
 		return nil, errors.WithMessage(err, "SPDK prepare")
 	}
+
+	if req.DisableVMD {
+		return res, nil
+	}
+
+	vmdDevs, err := detectVmd()
+	if err != nil {
+		return nil, errors.Wrap(err, "VMD could not be enabled")
+	}
+
+	if len(vmdDevs) == 0 {
+		return res, nil
+	}
+
+	vmdReq := req
+	// If VMD devices are going to be used, then need to run a separate
+	// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
+	// TODO: ignore devices not in include list
+	req.PCIWhitelist = strings.Join(vmdDevs, " ")
+	p.log.Debugf("VMD enabled, unbinding %v", vmdDevs)
+
+	if err := p.backend.Prepare(vmdReq); err != nil {
+		return nil, errors.WithMessage(err, "SPDK VMD prepare")
+	}
+
+	res.VmdDetected = true
 
 	return res, nil
 }
@@ -213,6 +285,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		DeviceResponses: make(DeviceFormatResponses),
 	}
 
+	// TODO: fix for VMD
 	for _, dev := range req.DeviceList {
 		res.DeviceResponses[dev] = &DeviceFormatResponse{}
 		switch req.Class {

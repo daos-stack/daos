@@ -103,7 +103,7 @@ func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 		shmID = initShmID[0]
 	}
 
-	// don't provide whitelist on init so all devices are discovered
+	// provide empty whitelist on init so all devices are discovered
 	var pciWhiteList []string
 	if err := w.InitSPDKEnv(shmID, pciWhiteList); err != nil {
 		return errors.Wrap(err, "failed to initialize SPDK")

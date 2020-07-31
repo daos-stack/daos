@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package storage
 
 import "github.com/pkg/errors"
@@ -133,16 +134,16 @@ func (b BdevClass) String() string {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	ConfigPath    string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	Class         BdevClass `yaml:"bdev_class,omitempty"`
-	DeviceList    []string  `yaml:"bdev_list,omitempty"`
-	VmdDeviceList []string  `yaml:"-"` // populated during start-up
-	DeviceCount   int       `yaml:"bdev_number,omitempty"`
-	FileSize      int       `yaml:"bdev_size,omitempty"`
-	ShmID         int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
-	MemSize       int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
-	VosEnv        string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	Hostname      string    `yaml:"-"` // used when generating templates
+	ConfigPath  string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	Class       BdevClass `yaml:"bdev_class,omitempty"`
+	DeviceList  []string  `yaml:"bdev_list,omitempty"`
+	VmdEnabled  bool      `yaml:"-"` // set during start-up
+	DeviceCount int       `yaml:"bdev_number,omitempty"`
+	FileSize    int       `yaml:"bdev_size,omitempty"`
+	ShmID       int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
+	MemSize     int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
+	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	Hostname    string    `yaml:"-"` // used when generating templates
 }
 
 func (bc *BdevConfig) Validate() error {

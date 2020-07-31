@@ -167,8 +167,6 @@ type storageFormatCmd struct {
 // Reformat system if membership is not empty and all member ranks are stopped.
 func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, error) {
 	if cmd.Reformat {
-		cmd.log.Info("processing system reformat request")
-
 		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
 		if err != nil {
 			return false, errors.Wrap(err, "System-Query command failed")
