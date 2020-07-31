@@ -190,7 +190,7 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 	case storage.BdevClassNvme:
 		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilInit}
 		if cfg.VmdEnabled {
-			p.bdev.templ = `[VMD]
+			p.bdev.templ = `[Vmd]
     Enable True
 
 ` + p.bdev.templ

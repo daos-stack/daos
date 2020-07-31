@@ -412,10 +412,6 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	} else if (env && strcasecmp(env, "AIO") == 0) {
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
-	} else if (env && strcasecmp(env, "VMD") == 0) {
-		D_WARN("VMD device(s) will be used!\n");
-		/* No additional bdev class for VMD */
-		nvme_glb.bd_bdev_class = BDEV_CLASS_NVME;
 	}
 
 	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;

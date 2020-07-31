@@ -41,14 +41,14 @@ import (
 // config files that can be consumed by spdk.
 func TestParseBdev(t *testing.T) {
 	tests := map[string]struct {
-		bdevClass  storage.BdevClass
-		bdevList   []string
-		vmdList    []string
-		bdevSize   int // relevant for MALLOC/FILE
-		bdevNumber int // relevant for MALLOC
-		vosEnv     string
-		wantBuf    []string
-		errMsg     string
+		bdevClass      storage.BdevClass
+		bdevList       []string
+		bdevVmdEnabled bool
+		bdevSize       int // relevant for MALLOC/FILE
+		bdevNumber     int // relevant for MALLOC
+		vosEnv         string
+		wantBuf        []string
+		errMsg         string
 	}{
 		"defaults from example config": {
 			wantBuf: []string{
@@ -81,11 +81,11 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"VMD devices": {
-			bdevClass: storage.BdevClassNvme,
-			bdevList:  []string{"0000:5d:05.5"},
-			vmdList:   []string{"0000:5d:05.5", "5d0505:01:00.0", "5d0505:03:00.0"},
+			bdevClass:      storage.BdevClassNvme,
+			bdevVmdEnabled: true,
+			bdevList:       []string{"5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
-				`[VMD]`,
+				`[Vmd]`,
 				`    Enable True`,
 				``,
 				`[Nvme]`,
@@ -99,14 +99,14 @@ func TestParseBdev(t *testing.T) {
 				`    HotplugPollRate 0`,
 				``,
 			},
-			vosEnv: "VMD",
+			vosEnv: "NVME",
 		},
 		"multiple VMD and NVMe controllers": {
-			bdevClass: storage.BdevClassNvme,
-			bdevList:  []string{"0000:81:00.0", "0000:5d:05.5"},
-			vmdList:   []string{"0000:5d:05.5", "5d0505:01:00.0", "5d0505:03:00.0"},
+			bdevClass:      storage.BdevClassNvme,
+			bdevVmdEnabled: true,
+			bdevList:       []string{"0000:81:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
 			wantBuf: []string{
-				`[VMD]`,
+				`[Vmd]`,
 				`    Enable True`,
 				``,
 				`[Nvme]`,
@@ -121,7 +121,7 @@ func TestParseBdev(t *testing.T) {
 				`    HotplugPollRate 0`,
 				``,
 			},
-			vosEnv: "VMD",
+			vosEnv: "NVME",
 		},
 		"AIO file": {
 			bdevClass: storage.BdevClassFile,
@@ -172,6 +172,8 @@ func TestParseBdev(t *testing.T) {
 			if tt.bdevClass != "" {
 				config.Class = tt.bdevClass
 			}
+			config.VmdEnabled = tt.bdevVmdEnabled
+
 			if len(tt.bdevList) != 0 {
 				switch tt.bdevClass {
 				case storage.BdevClassFile, storage.BdevClassKdev:
@@ -196,7 +198,6 @@ func TestParseBdev(t *testing.T) {
 			if tt.bdevNumber != 0 {
 				config.DeviceCount = tt.bdevNumber
 			}
-			config.VmdDeviceList = tt.vmdList
 
 			log, buf := logging.NewTestLogger(t.Name())
 			defer func(t *testing.T) {

@@ -285,7 +285,6 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		DeviceResponses: make(DeviceFormatResponses),
 	}
 
-	// TODO: fix for VMD
 	for _, dev := range req.DeviceList {
 		res.DeviceResponses[dev] = &DeviceFormatResponse{}
 		switch req.Class {
