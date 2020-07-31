@@ -684,6 +684,11 @@ def run_tests(dfuse):
     path = dfuse.dir
 
     fname = os.path.join(path, 'test_file3')
+
+    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',
+                         'of={}'.format(os.path.join(path, 'dd_file'))])
+    print(rc)
+    assert rc.returncode == 0
     ofd = open(fname, 'w')
     ofd.write('hello')
     print(os.fstat(ofd.fileno()))
@@ -696,9 +701,9 @@ def run_tests(dfuse):
     assert_file_size(ofd, 1024*1024)
     ofd.truncate(0)
     ofd.seek(0)
-    ofd.write('world\n')
+    ofd.write('simple file contents\n')
     ofd.flush()
-    assert_file_size(ofd, 6)
+    assert_file_size(ofd, 21)
     print(os.fstat(ofd.fileno()))
     ofd.close()
     il_cmd(dfuse, ['cat', fname])

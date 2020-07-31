@@ -89,6 +89,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
+	conn->want |= FUSE_CAP_SPLICE_READ;
+
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
 	dfuse_show_flags(fs_handle, conn->want);
@@ -702,7 +704,7 @@ struct fuse_lowlevel_ops
 	 */
 	fuse_ops->open		= dfuse_cb_open;
 	fuse_ops->release	= dfuse_cb_release;
-	fuse_ops->write		= dfuse_cb_write;
+	fuse_ops->write_buf	= dfuse_cb_write;
 	fuse_ops->read		= dfuse_cb_read;
 	fuse_ops->readlink	= dfuse_cb_readlink;
 	fuse_ops->ioctl		= dfuse_cb_ioctl;

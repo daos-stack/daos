@@ -36,25 +36,43 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 }
 
 void
-dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
+dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	       off_t position, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*fc = fuse_req_ctx(req);
 	int				rc;
 	struct dfuse_event		*ev;
+	size_t				len = fuse_buf_size(bufv);
+	struct fuse_bufvec		ibuf = FUSE_BUFVEC_INIT(len);
+
+	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested flags %#x pid=%d",
+		       position, position + len - 1,
+		       bufv->buf[0].flags, fc->pid);
 
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
+	DFUSE_TRA_UP(ev, oh, "write");
+
+	/* Allocate temporary space for the data whilst they asyncronous
+	 * operation is happening.
+	 */
 	D_ALLOC(ev->de_buff, len);
 	if (ev->de_buff == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	memcpy(ev->de_buff, buff, len);
+	/* Declare a bufvec on the stack and have fuse copy into it.
+	 * For page size and above this will read directly into the
+	 * buffer, avoiding any copying of the data.
+	 */
+	ibuf.buf[0].mem = ev->de_buff;
 
-	DFUSE_TRA_UP(ev, oh, "write");
+	rc = fuse_buf_copy(&ibuf, bufv, 0);
+	if (rc != len)
+		D_GOTO(err, rc = EIO);
 
 	rc = daos_event_init(&ev->de_ev, fs_handle->dpi_eq, NULL);
 	if (rc != -DER_SUCCESS)

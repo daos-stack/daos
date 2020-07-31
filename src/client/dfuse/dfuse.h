@@ -609,7 +609,7 @@ dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,
 		struct dfuse_inode_entry *, const char *, unsigned int);
 
 void
-dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,
+dfuse_cb_write(fuse_req_t, fuse_ino_t, struct fuse_bufvec *, off_t,
 	       struct fuse_file_info *);
 
 void
