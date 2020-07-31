@@ -343,6 +343,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
 		getDeviceClassFn:   netdetect.GetDeviceClass,
+		DisableVMD:         true, // support currently unstable
 	}
 }
 

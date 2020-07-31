@@ -117,8 +117,8 @@
 ## In some circumstances it may be preferable to not use Volume Management
 ## Devices even if available.
 #
-## default: false
-#disable_vmd: true
+## default: true
+#disable_vmd: false
 #
 #
 ## Use Hyperthreads
