@@ -25,6 +25,7 @@ package control
 
 import (
 	"context"
+	"os/user"
 	"strconv"
 	"testing"
 
@@ -34,7 +35,163 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security/auth"
 )
+
+type testUser struct {
+	name string
+	uid  uint32
+	gids []uint32
+}
+
+func (tu *testUser) Username() string {
+	return tu.name
+}
+
+func (tu *testUser) GroupIDs() ([]uint32, error) {
+	return tu.gids, nil
+}
+
+func (tu *testUser) Gid() (uint32, error) {
+	return 0, nil
+}
+
+type testUserDbConfig struct {
+	Current          auth.User
+	CurrentErr       error
+	LookupUserID     auth.User
+	LookupUserIDErr  error
+	LookupGroupID    *user.Group
+	LookupGroupIDErr error
+}
+
+type testUserDb struct {
+	cfg testUserDbConfig
+}
+
+func (db *testUserDb) Current() (auth.User, error) {
+	return db.cfg.Current, db.cfg.CurrentErr
+}
+
+func (db *testUserDb) LookupUserID(_ uint32) (auth.User, error) {
+	return db.cfg.LookupUserID, db.cfg.LookupUserIDErr
+}
+
+func (db *testUserDb) LookupGroupID(_ uint32) (*user.Group, error) {
+	return db.cfg.LookupGroupID, db.cfg.LookupGroupIDErr
+}
+
+func TestControl_PoolformatNameGroup(t *testing.T) {
+	for name, tc := range map[string]struct {
+		dbCfg  *testUserDbConfig
+		usr    string
+		grp    string
+		expUsr string
+		expGrp string
+		expErr error
+	}{
+		"pass through": {
+			usr:    "joe@",
+			grp:    "blow@",
+			expUsr: "joe@",
+			expGrp: "blow@",
+		},
+		"append domain": {
+			usr:    "joe",
+			grp:    "blow",
+			expUsr: "joe@",
+			expGrp: "blow@",
+		},
+		"blank usr": {
+			dbCfg: &testUserDbConfig{
+				Current: &testUser{
+					name: "joe",
+				},
+				LookupGroupID: &user.Group{
+					Name: "blow",
+				},
+			},
+			grp:    "blow",
+			expUsr: "joe@",
+			expGrp: "blow@",
+		},
+		"blank grp": {
+			dbCfg: &testUserDbConfig{
+				Current: &testUser{
+					name: "joe",
+				},
+				LookupGroupID: &user.Group{
+					Name: "blow",
+				},
+			},
+			usr:    "joe",
+			expUsr: "joe@",
+			expGrp: "blow@",
+		},
+		"blank usr and grp": {
+			dbCfg: &testUserDbConfig{
+				Current: &testUser{
+					name: "joe",
+				},
+				LookupGroupID: &user.Group{
+					Name: "blow",
+				},
+			},
+			expUsr: "joe@",
+			expGrp: "blow@",
+		},
+		"numeric": {
+			dbCfg: &testUserDbConfig{
+				LookupUserID: &testUser{
+					name: "joe",
+				},
+				LookupGroupID: &user.Group{
+					Name: "blow",
+				},
+			},
+			usr:    "1000",
+			grp:    "1000",
+			expUsr: "joe@",
+			expGrp: "blow@",
+		},
+		"numeric fails to resolve usr": {
+			dbCfg: &testUserDbConfig{
+				LookupUserIDErr: errors.New("nope"),
+			},
+			usr:    "1000",
+			grp:    "1000",
+			expErr: errors.New("nope"),
+		},
+		"numeric fails to resolve grp": {
+			dbCfg: &testUserDbConfig{
+				LookupUserID: &testUser{
+					name: "joe",
+				},
+				LookupGroupIDErr: errors.New("nope"),
+			},
+			usr:    "1000",
+			grp:    "1000",
+			expErr: errors.New("nope"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dbCfg := tc.dbCfg
+			if dbCfg == nil {
+				dbCfg = &testUserDbConfig{}
+			}
+			db := &testUserDb{*dbCfg}
+			gotUsr, gotGrp, gotErr := formatNameGroup(db, tc.usr, tc.grp)
+
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			common.AssertEqual(t, tc.expUsr, gotUsr, "usr")
+			common.AssertEqual(t, tc.expGrp, gotGrp, "grp")
+		})
+	}
+}
 
 func TestControl_PoolDestroy(t *testing.T) {
 	for name, tc := range map[string]struct {

@@ -92,12 +92,32 @@ func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, 
 		}
 	}
 
-	if usr != "" && !strings.Contains(usr, "@") {
-		usr += "@"
+	if usr != "" {
+		uid, err := strconv.Atoi(usr)
+		if err == nil {
+			user, err := ext.LookupUserID(uint32(uid))
+			if err != nil {
+				return "", "", errors.Wrapf(err, "unable to resolve uid %d", uid)
+			}
+			usr = user.Username()
+		}
+		if !strings.Contains(usr, "@") {
+			usr += "@"
+		}
 	}
 
-	if grp != "" && !strings.Contains(grp, "@") {
-		grp += "@"
+	if grp != "" {
+		gid, err := strconv.Atoi(grp)
+		if err == nil {
+			group, err := ext.LookupGroupID(uint32(gid))
+			if err != nil {
+				return "", "", errors.Wrapf(err, "unable to resolve gid %d", gid)
+			}
+			grp = group.Name
+		}
+		if !strings.Contains(grp, "@") {
+			grp += "@"
+		}
 	}
 
 	return usr, grp, nil
@@ -161,7 +181,7 @@ type (
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
 		UUID    string
-		SvcReps []uint32
+		SvcReps []uint32 `json:"Svcreps"`
 	}
 )
 
