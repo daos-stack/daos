@@ -72,7 +72,7 @@ class DaosCoreBase(TestWithServers):
                 # CRT_CREDIT_EP_CTX=0
                 # CRT_CTX_SHARE_ADDR=1
                 # CRT_CTX_NUM=8
-                env_vars_list = manager.get_config_vale("env_vars")
+                env_vars_list = manager.get_config_value("env_vars")
                 for env_vars in env_vars_list:
                     env_vars["CRT_CREDIT_EP_CTX"] = 0
                     env_vars["CRT_CTX_SHARE_ADDR"] = 1
@@ -103,15 +103,15 @@ class DaosCoreBase(TestWithServers):
             [
                 self.orterun,
                 self.client_mca,
-                "-n", num_clients,
+                "-n", str(num_clients),
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
                 "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
                 self.daos_test,
-                "-s", num_replicas,
+                "-s", str(num_replicas),
                 "-n", dmg_config_file,
                 "".join(["-", subtest]),
-                args
+                str(args)
             ]
         )
 
