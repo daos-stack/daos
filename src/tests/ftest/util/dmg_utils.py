@@ -347,6 +347,7 @@ class DmgCommand(DmgCommandBase):
         #       "ntarget": <B>,
         #       "disabled": <C>,
         #       "leader": <D>,
+        #       "version": <E>,
         #       "target_count": <F>,
         #       "scm": {
         #           "total": <G>,
@@ -363,7 +364,6 @@ class DmgCommand(DmgCommandBase):
         #           "free_mean": <P>
         #       },
         #       "rebuild": {
-        #           "version": <E>,
         #           "state": <Q>,
         #           "objects": <R>,
         #           "records": <S>
@@ -408,12 +408,16 @@ class DmgCommand(DmgCommandBase):
                 if index_1 in map_values:
                     for key, index_2 in map_values[index_1].items():
                         if index_1 == 2:
+                            if "scm" not in data:
+                                data["scm"] = {}
                             data["scm"][key] = match_list[index_2]
                         elif index_1 == 3:
+                            if "nvme" not in data:
+                                data["nvme"] = {}
                             data["nvme"][key] = match_list[index_2]
                         elif index_1 == 4:
-                            data["rebuild"][key] = match_list[index_2]
-                        elif index_1 == 0 and key == "version":
+                            if "rebuild" not in data:
+                                data["rebuild"] = {}
                             data["rebuild"][key] = match_list[index_2]
                         else:
                             data[key] = match_list[index_2]

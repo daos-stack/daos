@@ -44,8 +44,8 @@ class SnapshotAggregation(IorTestBase):
     def update_free_space(self):
         """Append the free space list with the current pool capacities."""
         self.pool.get_info()
-        self.free_space["SCM"].append(self.pool.info.scm.free)
-        self.free_space["NVMe"].append(self.pool.info.nvme.free)
+        self.free_space["SCM"].append(self.pool.get_info_attr("scm.free"))
+        self.free_space["NVMe"].append(self.pool.get_info_attr("nvme.free"))
 
     def test_snapshot_aggregation(self):
         """JIRA ID: DAOS-3751.
