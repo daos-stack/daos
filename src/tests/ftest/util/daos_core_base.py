@@ -66,25 +66,16 @@ class DaosCoreBase(TestWithServers):
         # Enable scalable endpoint (if requested) prior to starting the servers
         scalable_endpoint = self.params.get("scalable_endpoint", self.TEST_PATH)
         if scalable_endpoint:
-            # Number of CaRT contexts should equal or be greater than the number
-            # of DAOS targets
-            targets = manager.get_config_value("targets")
             for manager in self.server_managers:
-                # CRT_CTX_SHARE_ADDR=1
-                manager.set_config_value("crt_ctx_share_addr", 1)
-                # CRT_CREDIT_EP_CTX=0
-                # CRT_CTX_SHARE_ADDR=1
-                # CRT_CTX_NUM=8
-                env_vars_list = manager.get_config_value("env_vars")
-                for env_vars in env_vars_list:
+                for server_params in manager.job.yaml.server_params:
+                    # Number of CaRT contexts should equal or be greater than
+                    # the number of DAOS targets
+                    targets = server_params.get_value("scm_list")
+                    env_vars = server_params.get_value("env_vars")
                     env_vars["CRT_CTX_SHARE_ADDR"] = "1"
                     env_vars["CRT_CTX_NUM"] = str(targets)
-                # Currently the set_config_value() method assigns the same value
-                # to each attribute that matches the attribute name.  If tests
-                # end up defining multiple io servers per host with unique
-                # env_vars values this method will need to updated to support
-                # passing in the full 'env_vars_list' list.
-                manager.set_config_value("env_vars", env_vars_list[0])
+                    server_params.set_value("crt_ctx_share_addr", 1)
+                    server_params.set_value("env_vars", env_vars)
 
         # Start the servers
         super(DaosCoreBase, self).start_server_managers()
