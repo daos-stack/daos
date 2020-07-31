@@ -1054,7 +1054,7 @@ pipeline {
                     post {
                       always {
                           unitTestPost (
-                                     artifacts: ['run_test_memcheck.sh/*']
+                                     artifacts: ['run_test_memcheck.sh/*'],
                                      testResults: 'run_test_memcheck.sh/*memcheck.xml'
                                   )
                         }
