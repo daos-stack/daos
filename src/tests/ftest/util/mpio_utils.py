@@ -24,6 +24,7 @@
 from __future__ import print_function
 
 import os
+
 from env_modules import load_mpi
 from command_utils_base import EnvironmentVariables
 from general_utils import run_command, DaosTestError
@@ -51,19 +52,9 @@ class MpioUtils():
 
         """
         load_mpi('mpich')
-
-        # checking mpich install
-        cmd = "set -e; "                                                \
-              "export MODULEPATH=/usr/share/modules:/etc/modulefiles; " \
-              "for mod in mpi/mpich-x86_64 gnu-mpich; do "              \
-                  "if module is-avail $mod >/dev/null 2>&1; then "      \
-                      "module load $mod >/dev/null 2>&1; "              \
-                      "break; "                                         \
-                  "fi; "                                                \
-              "done; "                                                  \
-              "command -v mpichversion"
-        cmd = '/usr/bin/ssh {} {}'.format(hostlist[0], cmd)
         try:
+            # checking mpich install
+            cmd = "/usr/bin/ssh {} command -v mpichversion".format(hostlist[0])
             result = run_command(cmd)
             self.mpichinstall = \
                 result.stdout.rstrip()[:-len('bin/mpichversion')]
@@ -72,7 +63,6 @@ class MpioUtils():
         except DaosTestError as excep:
             print("Mpich not installed \n {}".format(excep))
             return False
-        return False
 
     # pylint: disable=R0913
     def run_mpiio_tests(self, hostfile, pool_uuid, svcl, test_repo,
