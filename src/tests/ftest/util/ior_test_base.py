@@ -396,7 +396,7 @@ class IorTestBase(TestWithServers):
             fail_on_err (bool): Boolean for whether to fail the test if command
                                 execution returns non zero return code.
             display_output (bool): Boolean for whether to display output.
-        
+
           Returns:
             dict: a dictionary of return codes keys and accompanying NodeSet
                   values indicating which hosts yielded the return code.
