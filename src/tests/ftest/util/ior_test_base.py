@@ -58,7 +58,6 @@ class IorTestBase(TestWithServers):
         self.container = None
         self.lock = None
         self.mpirun = None
-        self.ret = None
 
     def setUp(self):
         """Set up each test case."""
@@ -397,16 +396,20 @@ class IorTestBase(TestWithServers):
             fail_on_err (bool): Boolean for whether to fail the test if command
                                 execution returns non zero return code.
             display_output (bool): Boolean for whether to display output.
+        
+          Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                  values indicating which hosts yielded the return code.
         """
         try:
             # execute bash cmds
-            self.ret = pcmd(
+            ret = pcmd(
                 self.hostlist_clients, cmd, verbose=display_output, timeout=300)
-            if 0 not in self.ret:
+            if 0 not in ret:
                 error_hosts = NodeSet(
                     ",".join(
                         [str(node_set) for code, node_set in
-                         self.ret.items() if code != 0]))
+                         ret.items() if code != 0]))
                 if fail_on_err:
                     raise CommandFailure(
                         "Error running '{}' on the following "
@@ -418,3 +421,5 @@ class IorTestBase(TestWithServers):
                            str(error))
             self.fail("Test was expected to pass but "
                       "it failed.\n")
+
+        return ret
