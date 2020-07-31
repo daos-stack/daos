@@ -375,7 +375,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		}
 		break;
 	default:
-		D_ERROR("Invalid pool target opeartion: %d\n", opc);
+		D_ERROR("Invalid pool target operation: %d\n", opc);
 		D_ASSERT(0);
 	}
 
