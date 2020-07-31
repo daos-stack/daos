@@ -48,8 +48,15 @@ def human_to_bytes(h_size):
 
     Returns:
         int: value translated to bytes.
+
     """
-    units = {"b": 1, "kb": (2**10), "mb": (2**20), "gb": (2**30)}
+    units = {"b": 1,
+             "kb": (2**10),
+             "k": (2**10),
+             "mb": (2**20),
+             "m": (2**20),
+             "gb": (2**30),
+             "g": (2**30)}
     pattern = r"([0-9.]+|[a-zA-Z]+)"
     val, unit = re.findall(pattern, h_size)
 
@@ -58,7 +65,7 @@ def human_to_bytes(h_size):
     if unit.lower() in units:
         val = val * units[unit.lower()]
     else:
-        print("Unit not found! Provide a valid unit i.e: b, kb, mb, gb")
+        print("Unit not found! Provide a valid unit i.e: b,k,kb,m,mb,g,gb")
         val = -1
 
     return val
@@ -192,13 +199,13 @@ def get_host_data(hosts, command, text, error, timeout=None):
     if len(data) > 1 or 0 not in data:
         # Report the errors
         messages = []
-        for code, hosts in data.items():
+        for code, host_list in data.items():
             if code != 0:
-                output_data = list(task.iter_buffers(hosts))
-                if len(output_data) == 0:
+                output_data = list(task.iter_buffers(host_list))
+                if not output_data:
                     messages.append(
                         "{}: rc={}, command=\"{}\"".format(
-                            NodeSet.fromlist(hosts), code, command))
+                            NodeSet.fromlist(host_list), code, command))
                 else:
                     for output, o_hosts in output_data:
                         lines = str(output).splitlines()
@@ -216,31 +223,8 @@ def get_host_data(hosts, command, text, error, timeout=None):
         host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
 
     else:
-        # The command completed successfully on all servers.
         for output, hosts in task.iter_buffers(data[0]):
-            # Find the maximum size of the all the devices reported by
-            # this group of hosts as only one needs to meet the minimum
-            nodes = NodeSet.fromlist(hosts)
-            try:
-                # The assumption here is that each line of command output
-                # will begin with a number and that for the purposes of
-                # checking this requirement the maximum of these numbers is
-                # needed
-                int_host_values = [
-                    int(line.split()[0])
-                    for line in str(output).splitlines()]
-                host_data[nodes] = max(int_host_values)
-
-            except (IndexError, ValueError):
-                # Log the error
-                print(
-                    "    {}: Unable to obtain the maximum {} size due to "
-                    "unexpected output:\n      {}".format(
-                        nodes, text, "\n      ".join(str(output).splitlines())))
-
-                # Return an error data set for all of the hosts
-                host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
-                break
+            host_data[NodeSet.fromlist(hosts)] = str(output)
 
     return host_data
 
@@ -451,6 +435,26 @@ def check_pool_files(log, hosts, uuid):
             log.error("%s: %s not found", result[1], filename)
             status = False
     return status
+
+
+def convert_list(value, separator=","):
+    """Convert a list into a separator-separated string of its items.
+
+    Examples:
+        convert_list([1,2,3])        -> '1,2,3'
+        convert_list([1,2,3], " ")   -> '1 2 3'
+        convert_list([1,2,3], ", ")  -> '1, 2, 3'
+
+    Args:
+        value (list): list to convert into a string
+        separator (str, optional): list item separator. Defaults to ",".
+
+    Returns:
+        str: a single string containing all the list items separated by the
+            separator.
+
+    """
+    return separator.join([str(item) for item in value])
 
 
 def stop_processes(hosts, pattern, verbose=True, timeout=60):
