@@ -33,7 +33,7 @@ tests: !mux
   self_np:
     name: self_test_np
     test_servers_bin: ../../../../bin/crt_launch
-    test_servers_arg: "-e tests/test_group_np_srv --name selftest_srv_grp --cfg_path=."
+    test_servers_arg: "-e ../tests/test_group_np_srv --name selftest_srv_grp --cfg_path=."
     test_servers_env: ""
     test_servers_ppn: "1"
 
@@ -47,7 +47,7 @@ tests: !mux
     cli2_env: ""
     cli2_ppn: "1"
 
-    cli3_bin: tests/test_group_np_cli
+    cli3_bin: ../tests/test_group_np_cli
     cli3_arg: "--name client-group --attach_to selftest_srv_grp --shut_only \
                --cfg_path=."
     cli3_env: ""

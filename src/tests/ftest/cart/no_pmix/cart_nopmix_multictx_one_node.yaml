@@ -10,4 +10,4 @@ defaultENV:
 tests: !mux
   no_pmix_multi_ctx:
     name: no_pmix_multi_ctx
-    tst_bin: tests/no_pmix_multi_ctx
+    tst_bin: ../tests/no_pmix_multi_ctx
