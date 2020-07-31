@@ -66,6 +66,9 @@ class DaosCoreBase(TestWithServers):
         # Enable scalable endpoint (if requested) prior to starting the servers
         scalable_endpoint = self.params.get("scalable_endpoint", self.TEST_PATH)
         if scalable_endpoint:
+            # Number of CaRT contexts should equal or be greater than the number
+            # of DAOS targets
+            targets = manager.get_config_value("targets")
             for manager in self.server_managers:
                 # CRT_CTX_SHARE_ADDR=1
                 manager.set_config_value("crt_ctx_share_addr", 1)
@@ -74,9 +77,8 @@ class DaosCoreBase(TestWithServers):
                 # CRT_CTX_NUM=8
                 env_vars_list = manager.get_config_value("env_vars")
                 for env_vars in env_vars_list:
-                    env_vars["CRT_CREDIT_EP_CTX"] = 0
-                    env_vars["CRT_CTX_SHARE_ADDR"] = 1
-                    env_vars["CRT_CTX_NUM"] = 8
+                    env_vars["CRT_CTX_SHARE_ADDR"] = "1"
+                    env_vars["CRT_CTX_NUM"] = str(targets)
                 # Currently the set_config_value() method assigns the same value
                 # to each attribute that matches the attribute name.  If tests
                 # end up defining multiple io servers per host with unique
@@ -96,7 +98,7 @@ class DaosCoreBase(TestWithServers):
                                        '/run/daos_tests/num_replicas/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         args = self.params.get("args", self.TEST_PATH, "")
-        dmg = self.get_dmg_command()	
+        dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
 
         cmd = " ".join(
