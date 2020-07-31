@@ -324,6 +324,15 @@ class ExecutableCommand(CommandWithParameters):
                 "No pattern regex defined for '{}()'".format(regex_method))
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
+    def update_env_names(self, new_names):
+        """Update environment variable names to export for the command.
+
+        Args:
+            env_names (list): list of environment variable names to add to
+                existing self._env_names variable.
+        """
+        self._env_names.extend(new_names)
+
     def get_environment(self, manager, log_file=None):
         """Get the environment variables to export for the command.
 
@@ -336,7 +345,7 @@ class ExecutableCommand(CommandWithParameters):
 
         Returns:
             EnvironmentVariables: a dictionary of environment variable names and
-                values to export prior to running daos_racer
+                values to export.
 
         """
         env = EnvironmentVariables()
