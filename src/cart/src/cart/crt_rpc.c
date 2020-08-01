@@ -551,11 +551,8 @@ crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	return DER_SUCCESS;
 }
 
-
-
 static int
-crt_issue_uri_lookup(crt_context_t ctx,
-			crt_group_t	*group,
+crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 			d_rank_t contact_rank, uint32_t contact_tag,
 			d_rank_t query_rank, uint32_t query_tag,
 			struct crt_rpc_priv *chained_rpc);
@@ -589,7 +586,6 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	}
 
 	grp_priv = chained_rpc_priv->crp_grp_priv;
-
 	ctx = lookup_rpc->cr_ctx;
 
 	rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
@@ -619,9 +615,9 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	}
 
 	rc = crt_req_send_internal(chained_rpc_priv);
-
 retry:
-	/* TODO: add retry logic later */
+	/* TODO: add retry logic for CART-688 */
+
 out:
 	RPC_PUB_DECREF(lookup_rpc);
 
@@ -651,18 +647,22 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 	int			rc;
 
 	grp_priv = crt_grp_pub2priv(grp);
-
 	ctx = crt_ctx;
 
 	/* If query_rank:tag=0 is in cache, use it as contact destination */
-	rc = crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
+	if (query_tag != 0) {
+		rc = crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
 				query_rank, 0, &cached_uri, NULL);
-	if (rc == 0 && cached_uri != NULL)
-		contact_rank = query_rank;
-	else
-		contact_rank = grp_priv->gp_psr_rank;
+		if (rc == 0 && cached_uri != NULL)
+			D_GOTO(out, contact_rank = query_rank);
+	}
 
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	/* TODO: Add logic for CART-688 */
+	contact_rank = grp_priv->gp_psr_rank;
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+out:
 	return contact_rank;
 }
 
@@ -716,7 +716,7 @@ out:
 }
 
 static int
-crt_issue_uri_lookup(crt_context_t ctx, crt_group_t	*group,
+crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 			d_rank_t contact_rank, uint32_t contact_tag,
 			d_rank_t query_rank, uint32_t query_tag,
 			struct crt_rpc_priv *chained_rpc_priv)
