@@ -20,12 +20,6 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-
-Prerequisite
-Run vos_size to generate vos_size.yaml
-Usage: vos_size.py input.yaml [alternate vos_size.yaml]
-
-See vos_size_input.yaml sample input
 '''
 from __future__ import print_function
 import yaml
@@ -271,6 +265,9 @@ class MetaOverhead(object):
             tree_nodes = (num_values * 2 + order - 1) // order
             return leaf_node_size, int_node_size, tree_nodes
 
+        if self.meta["trees"][key]["num_dynamic"] == 0:
+            return 0,0,0
+
         for item in self.meta["trees"][key]["dynamic"]:
             if item["order"] >= num_values:
                 return item["size"], item["size"], 1
@@ -317,37 +314,3 @@ class MetaOverhead(object):
             self.calc_tree(stats, self.pools[pool])
 
         stats.pretty_print()
-
-# pylint: enable=too-many-instance-attributes
-
-def run_vos_size():
-    """Run the tool"""
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Estimate VOS Overhead")
-    parser.add_argument('config', metavar='CONFIG', type=str, nargs=1,
-                        help='Input configuration file')
-    parser.add_argument('--meta', metavar='META', help='Input metadata file',
-                        default='vos_size.yaml')
-
-    args = parser.parse_args()
-
-    config_yaml = yaml.safe_load(open(args.config[0], "r"))
-
-    meta_yaml = yaml.safe_load(open(args.meta, "r"))
-
-    num_pools = config_yaml.get("num_pools", 1)
-
-    overheads = MetaOverhead(args, num_pools, meta_yaml)
-
-    if "containers" not in config_yaml:
-        print("No \"containers\" key in %s.  Nothing to do" % args.config[0])
-        return
-
-    for container in config_yaml.get("containers"):
-        overheads.load_container(container)
-
-    overheads.print_report()
-
-if __name__ == "__main__":
-    run_vos_size()
