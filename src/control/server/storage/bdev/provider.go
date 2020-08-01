@@ -222,7 +222,12 @@ func detectVmd() ([]string, error) {
 // use by DAOS.
 func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	if p.shouldForward(req) {
-		return p.fwd.Prepare(req)
+		resp, err := p.fwd.Prepare(req)
+		if err == nil && resp.VmdDetected {
+			p.EnableVmd()
+		}
+
+		return resp, err
 	}
 
 	// run reset first to ensure reallocation of hugepages
@@ -230,10 +235,10 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return nil, errors.WithMessage(err, "SPDK setup reset")
 	}
 
-	res := &PrepareResponse{}
-	// if we're only resetting, just return before prep
+	resp := &PrepareResponse{}
+	// if we're only resetting, return before prep
 	if req.ResetOnly {
-		return res, nil
+		return resp, nil
 	}
 
 	if err := p.backend.Prepare(req); err != nil {
@@ -241,7 +246,7 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	}
 
 	if req.DisableVMD {
-		return res, nil
+		return resp, nil
 	}
 
 	vmdDevs, err := detectVmd()
@@ -250,23 +255,24 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	}
 
 	if len(vmdDevs) == 0 {
-		return res, nil
+		return resp, nil
 	}
 
 	vmdReq := req
 	// If VMD devices are going to be used, then need to run a separate
 	// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
+	//
 	// TODO: ignore devices not in include list
-	req.PCIWhitelist = strings.Join(vmdDevs, " ")
+	vmdReq.PCIWhitelist = strings.Join(vmdDevs, " ")
 	p.log.Debugf("VMD enabled, unbinding %v", vmdDevs)
 
 	if err := p.backend.Prepare(vmdReq); err != nil {
 		return nil, errors.WithMessage(err, "SPDK VMD prepare")
 	}
 
-	res.VmdDetected = true
+	resp.VmdDetected = true
 
-	return res, nil
+	return resp, nil
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).

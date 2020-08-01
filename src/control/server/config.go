@@ -274,14 +274,15 @@ func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
 // WithDisableVFIO indicates that the vfio-pci driver should not be
 // used by SPDK even if an IOMMU is detected. Note that this option
 // requires that DAOS be run as root.
-func (c *Configuration) WithDisableVFIO() *Configuration {
-	c.DisableVFIO = true
+func (c *Configuration) WithDisableVFIO(disabled bool) *Configuration {
+	c.DisableVFIO = disabled
 	return c
 }
 
-// WithDisableVMD declares intent to use VMD.
-func (c *Configuration) WithDisableVMD() *Configuration {
-	c.DisableVMD = true
+// WithDisableVMD indicates that vmd devices should not be used even if they
+// exist.
+func (c *Configuration) WithDisableVMD(disabled bool) *Configuration {
+	c.DisableVMD = disabled
 	return c
 }
 

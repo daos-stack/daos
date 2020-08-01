@@ -161,9 +161,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	if err != nil {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
 	}
-	if prepResp.VmdDetected {
-		bdevProvider.EnableVmd()
-	}
 
 	hugePages, err := getHugePageInfo()
 	if err != nil {
@@ -217,7 +214,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// have access to the instance configuration.
 		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
 		// Indicate whether VMD devices have been detected and can be used.
-		srvCfg.Storage.Bdev.VmdEnabled = prepResp.VmdDetected
+		srvCfg.Storage.Bdev.VmdEnabled = bdevProvider.IsVmdEnabled()
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {

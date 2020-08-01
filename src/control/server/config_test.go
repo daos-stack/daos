@@ -131,7 +131,6 @@ func getDeviceClassStub(netdev string) (uint32, error) {
 	default:
 		return 0, nil
 	}
-	return 0, nil
 }
 
 func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
@@ -228,8 +227,8 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO().
-		WithDisableVMD().
+		WithDisableVFIO(true). // vfio enabled by default
+		WithDisableVMD(false). // vmd disabled by default
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
@@ -243,7 +242,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
-		WithHyperthreads(true).
+		WithHyperthreads(true). // hyper-threads disabled by default
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithGetNetworkDeviceClass(getDeviceClassStub).
