@@ -405,22 +405,23 @@ class DmgCommand(DmgCommandBase):
                 4: {"state": 10, "objects": 11, "records": 12}
             }
             for index_1, match_list in enumerate(match):
-                if index_1 in map_values:
-                    for key, index_2 in map_values[index_1].items():
-                        if index_1 == 2:
-                            if "scm" not in data:
-                                data["scm"] = {}
-                            data["scm"][key] = match_list[index_2]
-                        elif index_1 == 3:
-                            if "nvme" not in data:
-                                data["nvme"] = {}
-                            data["nvme"][key] = match_list[index_2]
-                        elif index_1 == 4:
-                            if "rebuild" not in data:
-                                data["rebuild"] = {}
-                            data["rebuild"][key] = match_list[index_2]
-                        else:
-                            data[key] = match_list[index_2]
+                if index_1 not in map_values:
+                    continue
+                for key, index_2 in map_values[index_1].items():
+                    if index_1 == 2:
+                        if "scm" not in data:
+                            data["scm"] = {}
+                        data["scm"][key] = match_list[index_2]
+                    elif index_1 == 3:
+                        if "nvme" not in data:
+                            data["nvme"] = {}
+                        data["nvme"][key] = match_list[index_2]
+                    elif index_1 == 4:
+                        if "rebuild" not in data:
+                            data["rebuild"] = {}
+                        data["rebuild"][key] = match_list[index_2]
+                    else:
+                        data[key] = match_list[index_2]
         return data
 
     def pool_destroy(self, pool, force=True):
@@ -564,7 +565,7 @@ class DmgCommand(DmgCommandBase):
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
     def pool_drain(self, pool, rank, tgt_idx=None):
-        """Drain a daos_server from the pool
+        """Drain a daos_server from the pool.
 
         Args:
             pool (str): Pool uuid.
@@ -681,35 +682,6 @@ def check_system_query_status(stdout_str):
             print("Rank {} failed with state '{}'".format(out[0], out[3]))
         check = False
     return check
-
-def get_pool_uuid_service_replicas_from_stdout(stdout_str):
-    """Get Pool UUID and Service replicas from stdout.
-
-    stdout_str is something like:
-    Active connections: [wolf-3:10001]
-    Creating DAOS pool with 100MB SCM and 0B NvMe storage (1.000 ratio)
-    Pool-create command SUCCEEDED: UUID: 9cf5be2d-083d-4f6b-9f3e-38d771ee313f,
-    Service replicas: 0
-    This method makes it easy to create a test.
-
-    Args:
-        stdout_str (str): Output of pool create command.
-
-    Returns:
-        Tuple (str, str): Tuple that contains two items; Pool UUID and Service
-            replicas if found. If not found, the tuple contains None.
-
-    """
-    # Find the following with regex. One or more of whitespace after "UUID:"
-    # followed by one of more of number, alphabets, or -. Use parenthesis to
-    # get the returned value.
-    uuid = None
-    svc = None
-    match = re.search(r" UUID: (.+), Service replicas: (.+)", stdout_str)
-    if match:
-        uuid = match.group(1)
-        svc = match.group(2)
-    return uuid, svc
 
 
 # ************************************************************************
