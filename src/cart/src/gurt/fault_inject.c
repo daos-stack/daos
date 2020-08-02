@@ -55,6 +55,15 @@ fa_op_key_cmp(struct d_hash_table *htab, d_list_t *rlink, const void *key,
 	return fa_ptr->fa_attr.fa_id == *(uint32_t *)key;
 }
 
+static uint32_t
+fa_op_rec_hash(struct d_hash_table *htab, d_list_t *link)
+{
+	struct d_fault_attr *fa_ptr = fa_link2ptr(link);
+
+	return d_hash_string_u32((const char *)&fa_ptr->fa_attr.fa_id,
+				 sizeof(fa_ptr->fa_attr.fa_id));
+}
+
 static void
 fa_op_rec_free(struct d_hash_table *htab, d_list_t *rlink)
 {
@@ -82,6 +91,7 @@ fa_op_rec_decref(struct d_hash_table *htab, d_list_t *rlink)
 
 static d_hash_table_ops_t fa_table_ops = {
 	.hop_key_cmp	= fa_op_key_cmp,
+	.hop_rec_hash	= fa_op_rec_hash,
 	.hop_rec_decref	= fa_op_rec_decref,
 	.hop_rec_free	= fa_op_rec_free,
 };

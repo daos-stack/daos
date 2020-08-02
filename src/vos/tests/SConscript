@@ -26,11 +26,7 @@ def scons():
     evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils],
                                  LIBS=libraries)
 
-    vos_size = daos_build.program(denv, 'vos_size', ['vos_size.c'],
-                                  LIBS=libraries)
-
-    denv.Install('$PREFIX/bin/', [vos_tests, vos_size, evt_ctl, 'vos_size.py',
-                                  'vos_size_dfs_sample.py'])
+    denv.Install('$PREFIX/bin/', [vos_tests, evt_ctl])
     denv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
 
 if __name__ == "SCons.Script":
