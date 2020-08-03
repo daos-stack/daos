@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
+/*
  * Atomic directives
  */
 #ifndef __GURT_ATOMIC_H__
