@@ -314,6 +314,7 @@ CRT_GEN_STRUCT(crt_grp_cache, CRT_SEQ_GRP_CACHE)
 
 #define CRT_OSEQ_URI_LOOKUP	/* output fields */		 \
 	((crt_phy_addr_t)	(ul_uri)		CRT_VAR) \
+	((uint32_t)		(ul_tag)		CRT_VAR) \
 	((int32_t)		(ul_rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(crt_uri_lookup, CRT_ISEQ_URI_LOOKUP, CRT_OSEQ_URI_LOOKUP)
