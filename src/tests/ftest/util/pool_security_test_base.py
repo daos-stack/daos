@@ -29,7 +29,6 @@ import grp
 import re
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-import dmg_utils
 import agent_utils as agu
 import security_test_base as secTestBase
 
@@ -319,8 +318,8 @@ class PoolSecurityTestBase(TestWithServers):
         self.verify_pool_readwrite(svc, uuid, "read", expect=exp_read)
 
         # Verify pool write operation
-        # daos continer create --pool <uuid>
-        self.log.info("  (8-7)Verify pool write by: daos continer create pool")
+        # daos container create --pool <uuid>
+        self.log.info("  (8-7)Verify pool write by: daos container create pool")
         exp_write = sec_group_rw[1]
         self.verify_pool_readwrite(svc, uuid, "write", expect=exp_write)
 
@@ -369,25 +368,21 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (3)Create a pool with acl
         self.dmg.exit_status_exception = False
-        result = self.dmg.pool_create(scm_size, acl_file=acl_file)
+        data = self.dmg.pool_create(scm_size, acl_file=acl_file)
         self.dmg.exit_status_exception = True
         self.log.info("  (2)dmg= %s", self.dmg)
         self.log.info("  (3)Create a pool with acl")
 
         # (4)Verify the pool create status
-        self.log.info("  (4)dmg.run() result=\n%s", result)
-        if "ERR" not in result.stderr:
-            uuid, svc = \
-                dmg_utils.get_pool_uuid_service_replicas_from_stdout(
-                    result.stdout)
-        else:
+        self.log.info("  (4)dmg.run() result=\n%s", self.dmg.result)
+        if "ERR" in self.dmg.result.stderr:
             self.fail("##(4)Unable to parse pool uuid and svc.")
 
         # (5)Get the pool's acl list
         #    dmg pool get-acl --pool <UUID>
         self.log.info("  (5)Get a pool's acl list by: "
                       "dmg pool get-acl --pool --hostlist")
-        pool_acl_list = self.get_pool_acl_list(uuid)
+        pool_acl_list = self.get_pool_acl_list(data["uuid"])
         self.log.info(
             "   pool original permission_list: %s", permission_list)
         self.log.info(
@@ -401,23 +396,25 @@ class PoolSecurityTestBase(TestWithServers):
         acl_principals = [secTestBase.acl_principal("user", tmp_ace),
                           secTestBase.acl_principal("group", tmp_ace)]
         for new_entry in new_entries:
-            self.update_pool_acl_entry(uuid, "update", new_entry)
+            self.update_pool_acl_entry(data["uuid"], "update", new_entry)
         for principal in acl_principals:
-            self.update_pool_acl_entry(uuid, "delete", principal)
+            self.update_pool_acl_entry(data["uuid"], "delete", principal)
 
         # (7)Verify pool read operation
         #    daos pool query --pool <uuid>
         self.log.info("  (7)Verify pool read by: daos pool query --pool")
-        self.verify_pool_readwrite(svc, uuid, "read", expect=read)
+        self.verify_pool_readwrite(
+            data["svc"], data["uuid"], "read", expect=read)
 
         # (8)Verify pool write operation
-        #    daos continer create --pool <uuid>
-        self.log.info("  (8)Verify pool write by: daos continer create --pool")
-        self.verify_pool_readwrite(svc, uuid, "write", expect=write)
+        #    daos container create --pool <uuid>
+        self.log.info("  (8)Verify pool write by: daos container create --pool")
+        self.verify_pool_readwrite(
+            data["svc"], data["uuid"], "write", expect=write)
         if secondary_grp_test:
             self.log.info("  (8-0)Verifying verify_pool_acl_prim_sec_groups")
             self.verify_pool_acl_prim_sec_groups(
-                pool_acl_list, acl_file, uuid, svc)
+                pool_acl_list, acl_file, data["uuid"], data["svc"])
 
         # (9)Cleanup user and destroy pool
         self.log.info("  (9)Cleanup users and groups")

@@ -4,7 +4,7 @@ hosts:
   test_servers:
     - server-A
 server_config:
-   name: daos_server
+  name: daos_server
 pool:
   mode: 511
   name: daos_server

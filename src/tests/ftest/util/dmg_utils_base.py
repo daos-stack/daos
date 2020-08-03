@@ -31,53 +31,6 @@ from command_utils import CommandWithSubCommand, YamlCommand
 class DmgCommandBase(YamlCommand):
     """Defines a base object representing a dmg command."""
 
-    METHOD_REGEX = {
-        "run":
-            r"(.*)",
-        "network_scan":
-            r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
-            r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
-        "pool_list":
-            r"(?:([0-9a-fA-F-]+) +([0-9,]+))",
-        "pool_create":
-            r"(?:UUID:|Service replicas:)\s+([A-Za-z0-9-]+)",
-        "pool_query":
-            r"(?:Pool\s+([0-9a-fA-F-]+),\s+ntarget=(\d+),\s+disabled=(\d+),"
-            r"\s+leader=(\d+),\s+version=(\d+)|Target\(VOS\)\s+count:"
-            r"\s*(\d+)|(?:(?:SCM:|NVMe:)\s+Total\s+size:\s+([0-9.]+\s+[A-Z]+)"
-            r"\s+Free:\s+([0-9.]+\s+[A-Z]+),\smin:([0-9.]+\s+[A-Z]+),"
-            r"\s+max:([0-9.]+\s+[A-Z]+),\s+mean:([0-9.]+\s+[A-Z]+))"
-            r"|Rebuild\s+\w+,\s+([0-9]+)\s+objs,\s+([0-9]+)\s+recs)",
-        "storage_query_list_pools":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
-            r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
-        "storage_query_list_devices":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+|(?:UUID:([a-z0-9-]+)\s+"
-            r"Targets:\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:([A-Z]+))",
-        "storage_query_device_health":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+.*\s+UUID:([a-z0-9-]+)\s+Targets:"
-            r"\[([0-9 ]+)\]\s+Rank:([0-9]+)\s+State:(\w+)\s+.*\s+|(?:Temp.*|"
-            r"Cont.*Busy Time|Pow.*Cycles|Pow.*Duration|Unsafe.*|Media.*|"
-            r"Read.*|Write.*|Unmap.*|Checksum.*|Err.*Entries|Avail.*|"
-            r"Dev.*Reli.*|Vola.*):\s*([A-Za-z0-9]+)",
-        "storage_query_target_health":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|UUID:([a-z0-9-]+)\s+"
-            r"Targets:\[([0-9 ]+)\]\s+Rank:(\d+)\s+State:(\w+)|"
-            r"(?:Read\s+Errors|Write\s+Errors|Unmap\s+Errors|Checksum\s+Errors|"
-            r"Error\s+Log\s+Entries|Media\s+Errors|Temperature|"
-            r"Available\s+Spare|Device\s+Reliability|Read\s+Only|"
-            r"Volatile\s+Memory\s+Backup):\s?([A-Za-z0-9- ]+)",
-        "storage_set_faulty":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
-            r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
-        "system_query":
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)",
-        "system_start":
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
-        "system_stop":
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
-    }
-
     def __init__(self, path, yaml_cfg=None):
         """Create a dmg Command object.
 
@@ -203,6 +156,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.UpdateAclSubCommand()
             elif self.sub_command.value == "exclude":
                 self.sub_command_class = self.ExcludeSubCommand()
+            elif self.sub_command.value == "drain":
+                self.sub_command_class = self.DrainSubCommand()
             elif self.sub_command.value == "reintegrate":
                 self.sub_command_class = self.ReintegrateSubCommand()
             else:
@@ -235,6 +190,19 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.PoolSubCommand.ExcludeSubCommand,
                     self).__init__(
                         "/run/dmg/pool/exclude/*", "exclude")
+                self.pool = FormattedParameter("--pool={}", None)
+                self.rank = FormattedParameter("--rank={}", None)
+                self.tgt_idx = FormattedParameter("--target-idx={}", None)
+
+        class DrainSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool drain command."""
+
+            def __init__(self):
+                """Create a dmg pool drain command object."""
+                super(
+                    DmgCommandBase.PoolSubCommand.DrainSubCommand,
+                    self).__init__(
+                        "/run/dmg/pool/drain/*", "drain")
                 self.pool = FormattedParameter("--pool={}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)

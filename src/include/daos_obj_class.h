@@ -266,6 +266,7 @@ enum {
 
 	/** EC 2+2 object classes */
 	OC_EC_2P2G1	= 300,
+	OC_EC_2P2G1_32K,
 	OC_EC_2P2G2,
 	OC_EC_2P2G4,
 	OC_EC_2P2G8,
@@ -300,6 +301,7 @@ enum {
 
 	/** EC 4+2 object classes */
 	OC_EC_4P2G1	= 340,
+	OC_EC_4P2G1_32K,
 	OC_EC_4P2G2,
 	OC_EC_4P2G4,
 	OC_EC_4P2G8,
