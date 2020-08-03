@@ -1424,8 +1424,8 @@ test_evt_find_internal(void **state)
 	 */
 	filter.fr_epr.epr_lo = 0;
 	for (epoch = NUM_EPOCHS; epoch > 0; epoch--) {
-		filter.fr_ex.ex_lo = epoch-1;
-		filter.fr_ex.ex_hi = epoch+9;
+		filter.fr_ex.ex_lo = epoch - 1;
+		filter.fr_ex.ex_hi = epoch + 9;
 		filter.fr_epr.epr_hi = epoch;
 		evt_ent_array_init(&ent_array);
 		rc = evt_find(toh, &filter, &ent_array);

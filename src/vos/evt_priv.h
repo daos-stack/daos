@@ -24,6 +24,7 @@
 #define __EVT_PRIV_H__
 
 #include <daos_srv/evtree.h>
+#include "vos_internal.h"
 
 /**
  * Tree node types.
@@ -500,6 +501,20 @@ evt_node_desc_at(struct evt_context *tcx, struct evt_node *node,
 	D_ASSERT(evt_node_is_leaf(tcx, node));
 
 	return evt_off2desc(tcx, ne->ne_child);
+}
+
+static inline bool
+evt_entry_punched(const struct evt_entry *ent, const struct evt_filter *filter)
+{
+	struct vos_punch_record	punch;
+
+	if (filter == NULL)
+		return false;
+
+	punch.pr_epc = filter->fr_punch_epc;
+	punch.pr_minor_epc = filter->fr_punch_minor_epc;
+
+	return vos_epc_punched(ent->en_epoch, ent->en_minor_epc, &punch);
 }
 
 #endif /* __EVT_PRIV_H__ */

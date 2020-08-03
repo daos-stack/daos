@@ -24,7 +24,6 @@
 
 #include <daos/checksum.h>
 #include "evt_priv.h"
-#include "vos_internal.h"
 
 #ifdef VOS_DISABLE_TRACE
 #define V_TRACE(...) (void)0
@@ -846,10 +845,7 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);
 		num_visible = 0;
-		if (filter &&
-		    (filter->fr_punch_epc > ent->en_epoch ||
-		     (filter->fr_punch_epc == ent->en_epoch &&
-		      filter->fr_punch_minor_epc >= ent->en_minor_epc))) {
+		if (evt_entry_punched(ent, filter)) {
 			ent->en_visibility = EVT_COVERED;
 		} else {
 			num_visible = 1;

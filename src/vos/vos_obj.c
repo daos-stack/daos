@@ -406,7 +406,8 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 	if (rc != 0)
 		goto fail;
 
-	if (punched && punched->pr_epc < info->ii_prior_punch.pr_epc)
+	if (punched && vos_epc_punched(punched->pr_epc, punched->pr_minor_epc,
+				       &info->ii_prior_punch))
 		*punched = info->ii_prior_punch;
 
 	return 0;
@@ -520,7 +521,9 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	if (rc != 0)
 		return rc;
 
-	if (info->ii_punched.pr_epc < oiter->it_ilog_info.ii_prior_punch.pr_epc)
+	if (vos_epc_punched(info->ii_punched.pr_epc,
+			    info->ii_punched.pr_minor_epc,
+			    &oiter->it_ilog_info.ii_prior_punch))
 		info->ii_punched = oiter->it_ilog_info.ii_prior_punch;
 
 	if (type == VOS_ITER_RECX) {
@@ -931,10 +934,10 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	it_entry->ie_epoch	 = key.sk_epoch;
 	it_entry->ie_minor_epc	 = key.sk_minor_epc;
-	if (it_entry->ie_epoch <= oiter->it_punched.pr_epc) {
-		if (it_entry->ie_epoch < oiter->it_punched.pr_epc ||
-		    it_entry->ie_minor_epc <= oiter->it_punched.pr_minor_epc)
-			it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+	if (vos_epc_punched(it_entry->ie_epoch, it_entry->ie_minor_epc,
+			    &oiter->it_punched)) {
+		/* entry is covered by a key/object punch */
+		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	}
 	it_entry->ie_rsize	 = rbund.rb_rsize;
 	it_entry->ie_ver	 = rbund.rb_ver;

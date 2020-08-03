@@ -1112,4 +1112,20 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
 
+static inline bool
+vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
+		const struct vos_punch_record *punch)
+{
+	if (punch->pr_epc < epc)
+		return false;
+
+	if (punch->pr_epc > epc)
+		return true;
+
+	if (punch->pr_minor_epc > minor_epc)
+		return true;
+
+	return false;
+}
+
 #endif /* __VOS_INTERNAL_H__ */

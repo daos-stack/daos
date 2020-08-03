@@ -1540,8 +1540,8 @@ minor_epoch_punch(void **state)
 
 	/* Write the first value */
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
-			    0 /* epoch comes from dth */, 0, 0, &dkey, 1, &iod,
-			    NULL, &sgl, dth);
+			       0 /* epoch comes from dth */, 0, 0, &dkey, 1,
+			       &iod, NULL, &sgl, dth);
 	if (rc != 0)
 		goto tx_end;
 
@@ -1559,8 +1559,8 @@ minor_epoch_punch(void **state)
 	rex.rx_nr = strlen(second);
 	d_iov_set(&sgl.sg_iovs[0], (void *)second, strlen(second));
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
-			    0 /* epoch comes from dth */, 0, 0, &dkey, 1, &iod,
-			    NULL, &sgl, dth);
+			       0 /* epoch comes from dth */, 0, 0, &dkey, 1,
+			       &iod, NULL, &sgl, dth);
 tx_end:
 	xid = dth->dth_xid;
 	vts_dtx_end(dth);

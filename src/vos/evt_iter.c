@@ -23,7 +23,6 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include "evt_priv.h"
-#include "vos_internal.h"
 
 #define evt_iter_is_sorted(iter) \
 	(((iter)->it_options & (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) != 0)
@@ -610,11 +609,8 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	/* There is no visibility flag for unsorted entries but go ahead and
 	 * set it EVT_COVERED if user has specified a punch epoch in the filter
 	 */
-	if (entry->en_epoch <= iter->it_filter.fr_punch_epc) {
-		if (entry->en_epoch < iter->it_filter.fr_punch_epc ||
-		    entry->en_minor_epc < iter->it_filter.fr_punch_minor_epc)
-			entry->en_visibility = EVT_COVERED;
-	}
+	if (evt_entry_punched(entry, &iter->it_filter))
+		entry->en_visibility = EVT_COVERED;
 set_anchor:
 	*inob = tcx->tc_inob;
 

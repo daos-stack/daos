@@ -111,15 +111,43 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh)
 	cbs->dc_log_del_args = (void *)(unsigned long)coh.cookie;
 }
 
+/** Returns true if the entry is covered by a punch */
+static inline bool
+vos_ilog_punched(const struct ilog_entry *entry,
+		 const struct vos_punch_record *punch)
+{
+	if (ilog_is_punch(entry))
+		return vos_epc_punched(entry->ie_id.id_epoch,
+				       entry->ie_id.id_punch_minor_eph,
+				       punch);
+	return vos_epc_punched(entry->ie_id.id_epoch,
+			       entry->ie_id.id_update_minor_eph, punch);
+
+}
+
+/** Returns true if the entry is a punch and covers a punch */
+static inline bool
+vos_ilog_punch_covered(const struct ilog_entry *entry,
+		       const struct vos_punch_record *punch)
+{
+	struct vos_punch_record	new_punch;
+
+	if (!ilog_has_punch(entry))
+		return false;
+
+	new_punch.pr_epc = entry->ie_id.id_epoch;
+	new_punch.pr_minor_epc = entry->ie_id.id_punch_minor_eph;
+
+	return vos_epc_punched(punch->pr_epc, punch->pr_minor_epc, &new_punch);
+}
+
 static void
 vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
-	       const struct vos_punch_record *punch,
-	       const struct vos_punch_record *any_punch)
-{
+	       const struct vos_punch_record *punch) {
 	struct ilog_entry	*entry;
+	struct vos_punch_record	*any_punch = &info->ii_prior_any_punch;
 
 	D_ASSERT(punch->pr_epc <= epoch);
-	D_ASSERT(any_punch->pr_epc <= epoch);
 
 	ilog_foreach_entry_reverse(&info->ii_entries, entry) {
 		if (entry->ie_status == ILOG_REMOVED)
@@ -130,9 +158,10 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		/** If a punch epoch is passed in, and it is later than any
 		 * punch in this log, treat it as a prior punch
 		 */
-		if (entry->ie_id.id_epoch <= punch->pr_epc) {
+		if (vos_ilog_punched(entry, punch)) {
 			info->ii_prior_punch = *punch;
-			if (info->ii_prior_any_punch.pr_epc < punch->pr_epc)
+			if (vos_epc_punched(any_punch->pr_epc,
+					    any_punch->pr_minor_epc, punch))
 				info->ii_prior_any_punch = *punch;
 			break;
 		}
@@ -144,8 +173,7 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 			continue;
 		}
 
-		if (ilog_has_punch(entry) &&
-		    info->ii_prior_any_punch.pr_epc <= entry->ie_id.id_epoch) {
+		if (vos_ilog_punch_covered(entry, &info->ii_prior_any_punch)) {
 			info->ii_prior_any_punch.pr_epc = entry->ie_id.id_epoch;
 			info->ii_prior_any_punch.pr_minor_epc =
 				entry->ie_id.id_punch_minor_eph;
@@ -161,9 +189,8 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 			 */
 			if (info->ii_uncommitted < entry->ie_id.id_epoch &&
 			    epc > info->ii_create &&
-			    (epc > info->ii_prior_punch.pr_epc ||
-			     (epc == info->ii_prior_punch.pr_epc &&
-			      minor_epc > info->ii_prior_punch.pr_minor_epc)))
+			    !vos_epc_punched(epc, minor_epc,
+					     &info->ii_prior_punch))
 				info->ii_uncommitted = entry->ie_id.id_epoch;
 			continue;
 		}
@@ -188,9 +215,13 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		info->ii_create = entry->ie_id.id_epoch;
 	}
 
-	if (punch->pr_epc > info->ii_prior_punch.pr_epc)
+	if (vos_epc_punched(info->ii_prior_punch.pr_epc,
+			    info->ii_prior_punch.pr_minor_epc,
+			    punch))
 		info->ii_prior_punch = *punch;
-	if (punch->pr_epc > info->ii_prior_any_punch.pr_epc)
+	if (vos_epc_punched(info->ii_prior_any_punch.pr_epc,
+			    info->ii_prior_any_punch.pr_minor_epc,
+			    punch))
 		info->ii_prior_any_punch = *punch;
 
 	D_DEBUG(DB_TRACE, "After fetch at "DF_X64": create="DF_X64
@@ -207,7 +238,6 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 {
 	struct ilog_desc_cbs	 cbs;
 	struct vos_punch_record	 punch = {0};
-	struct vos_punch_record	 punch_any = {0};
 	int			 rc;
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
@@ -229,18 +259,15 @@ init:
 	info->ii_prior_punch.pr_minor_epc = 0;
 	info->ii_prior_any_punch.pr_epc = 0;
 	info->ii_prior_any_punch.pr_minor_epc = 0;
-	if (punched != NULL) {
+	if (punched != NULL)
 		punch = *punched;
-		punch_any = *punched; /* Only matters if parent is passed in */
-	}
 	if (parent != NULL) {
 		punch = parent->ii_prior_punch;
-		punch_any = parent->ii_prior_any_punch;
 		info->ii_uncommitted = parent->ii_uncommitted;
 	}
 
 	if (rc == 0)
-		vos_parse_ilog(info, epoch, &punch, &punch_any);
+		vos_parse_ilog(info, epoch, &punch);
 
 	return rc;
 }
