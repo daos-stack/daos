@@ -14,7 +14,8 @@ set_vfio_permissions()
 {
 	# make sure regular users can read /dev/vfio
 	echo "RUN: chmod /dev/vfio"
-	if ! sudo chmod a+x /dev/vfio; then
+	sudo chmod a+x /dev/vfio
+	if [ $? -ne 0 ] ; then
 		echo "FAIL"
 		return
 	fi
@@ -22,7 +23,8 @@ set_vfio_permissions()
 
 	# make sure regular user can access everything inside /dev/vfio
 	echo "RUN: chmod /dev/vfio/*"
-	if ! sudo chmod 0666 /dev/vfio/*; then
+	sudo chmod 0666 /dev/vfio/*
+	if [ $? -ne 0 ] ; then
 		echo "FAIL"
 		return
 	fi
@@ -73,14 +75,14 @@ fi
 echo "calling into script: $scriptpath"
 
 if [[ $1 == reset ]]; then
-	PATH=/sbin:$PATH "$scriptpath" reset
+	"$scriptpath" reset
 else
 	# avoid shadowing by prefixing input envars
 	PCI_WHITELIST="$_PCI_WHITELIST" \
 	NRHUGE="$_NRHUGE" \
 	TARGET_USER="$_TARGET_USER" \
 	DRIVER_OVERRIDE="$_DRIVER_OVERRIDE" \
-	 PATH=/sbin:$PATH "$scriptpath"
+	"$scriptpath"
 
 	# build arglist manually to filter missing directories/files
 	# so we don't error on non-existent entities
@@ -88,7 +90,6 @@ else
 		'/sys/class/uio/uio*/device/config'	\
 		'/sys/class/uio/uio*/device/resource*'; do
 
-		# shellcheck disable=SC2086
 		if list=$(ls -d $glob); then
 			echo "RUN: ls -d $glob | xargs -r chown -R "
 			echo -n "$_TARGET_USER"
