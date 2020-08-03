@@ -2340,7 +2340,7 @@ dc_cont_create_snap(tse_task_t *task)
 	if (args->name != NULL) {
 		D_ERROR("Named Snapshots not yet supported\n");
 		tse_task_complete(task, -DER_NOSYS);
-		return DER_NOSYS;
+		return -DER_NOSYS;
 	}
 
 	if (args->epoch == NULL) {
