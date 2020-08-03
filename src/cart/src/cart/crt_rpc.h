@@ -197,7 +197,7 @@ struct crt_rpc_priv {
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
 
-#define CRT_PROTO_INTERNAL_VERSION 1
+#define CRT_PROTO_INTERNAL_VERSION 2
 #define CRT_PROTO_FI_VERSION 0
 
 /* LIST of internal RPCS in form of:
@@ -300,7 +300,7 @@ enum {
 
 #undef X
 
-char *crt_get_rpc_name(crt_opcode_t opc);
+char *crt_opc_to_str(crt_opcode_t opc);
 
 #define CRT_SEQ_GRP_CACHE					 \
 	((d_rank_t)		(gc_rank)		CRT_VAR) \

@@ -211,7 +211,7 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 #define X(a, b, c, d, e) case a: return #a;
 
 char
-*crt_get_rpc_name(crt_opcode_t opc)
+*crt_opc_to_str(crt_opcode_t opc)
 {
 	switch (opc) {
 		CRT_INTERNAL_RPCS_LIST
@@ -590,6 +590,11 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 
 	rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
 			ul_in->ul_rank, ul_out->ul_tag, ul_out->ul_uri);
+	if (rc != 0) {
+		D_ERROR("URI insertion '%s' failed for %d:%d; rc=%d\n",
+			ul_out->ul_uri, ul_in->ul_rank, ul_out->ul_tag, rc);
+		D_GOTO(out, rc);
+	}
 
 	/* Lookup request will either return tag=ul_in->ul_tag URI or
 	 * tag=0 URI if ul_in->ul_tag is not found in server-side cache.
@@ -1030,7 +1035,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			if (rc != 0)
 				D_ERROR("crt_req_uri_lookup() failed. rc %d, "
 					"opc: %#x (%s).\n", rc, req->cr_opc,
-					crt_get_rpc_name(req->cr_opc));
+					crt_opc_to_str(req->cr_opc));
 		}
 		break;
 	case RPC_STATE_URI_LOOKUP:
