@@ -20,6 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
 #ifndef __GURT_LIST_H__
 #define __GURT_LIST_H__
 /**
