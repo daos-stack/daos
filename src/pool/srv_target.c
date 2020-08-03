@@ -130,8 +130,8 @@ gc_ult(void *arg)
 		if (dss_ult_exiting(child->spc_gc_req))
 			break;
 
-		/* Sleep 2 seconds */
-		sched_req_sleep(child->spc_gc_req, 2ULL * 1000);
+		/* It'll be woke up by container destroy or aggregation */
+		sched_req_sleep(child->spc_gc_req, 10ULL * 1000);
 	}
 
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
@@ -420,10 +420,19 @@ pool_cmp_keys(const void *key, unsigned int ksize, struct daos_llink *llink)
 	return uuid_compare(key, pool->sp_uuid) == 0;
 }
 
+static uint32_t
+pool_rec_hash(struct daos_llink *llink)
+{
+	struct ds_pool *pool = pool_obj(llink);
+
+	return d_hash_string_u32((const char *)pool->sp_uuid, sizeof(uuid_t));
+}
+
 static struct daos_llink_ops pool_cache_ops = {
 	.lop_alloc_ref	= pool_alloc_ref,
 	.lop_free_ref	= pool_free_ref,
-	.lop_cmp_keys	= pool_cmp_keys
+	.lop_cmp_keys	= pool_cmp_keys,
+	.lop_rec_hash	= pool_rec_hash,
 };
 
 int
@@ -575,6 +584,14 @@ pool_hdl_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	return uuid_compare(hdl->sph_uuid, key) == 0;
 }
 
+static uint32_t
+pool_hdl_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct ds_pool_hdl *hdl = pool_hdl_obj(link);
+
+	return d_hash_string_u32((const char *)hdl->sph_uuid, sizeof(uuid_t));
+}
+
 static void
 pool_hdl_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
@@ -607,6 +624,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 
 static d_hash_table_ops_t pool_hdl_hash_ops = {
 	.hop_key_cmp	= pool_hdl_key_cmp,
+	.hop_rec_hash	= pool_hdl_rec_hash,
 	.hop_rec_addref	= pool_hdl_rec_addref,
 	.hop_rec_decref	= pool_hdl_rec_decref,
 	.hop_rec_free	= pool_hdl_rec_free

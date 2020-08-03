@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/dustin/go-humanize/english"
@@ -61,12 +60,13 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	resp, err := control.LeaderQuery(ctx, cmd.ctlInvoker, &control.LeaderQueryReq{
 		System: cmd.config.SystemName,
 	})
-	if err != nil {
-		return errors.Wrap(err, "leader query failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "leader query failed")
 	}
 
 	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
@@ -74,7 +74,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// rankStateGroups initialises groupings of ranks that are at a particular state.
+// rankStateGroups initializes groupings of ranks that are at a particular state.
 func rankStateGroups(members system.Members) (system.RankGroups, error) {
 	ranksInState := make(map[system.MemberState]*bytes.Buffer)
 	ranksSeen := make(map[system.Rank]struct{})
@@ -209,12 +209,13 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	req.Ranks = *rankSet
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
-	if err != nil {
-		return errors.Wrap(err, "System-Query command failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "System-Query command failed")
 	}
 
 	cmd.log.Debugf("System-Query command succeeded, absent hosts: %s, absent ranks: %s",
@@ -239,7 +240,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	return err
 }
 
-// rankActionGroups initialises groupings of ranks that return the same results.
+// rankActionGroups initializes groupings of ranks that return the same results.
 func rankActionGroups(results system.MemberResults) (system.RankGroups, error) {
 	ranksWithResult := make(map[string]*bytes.Buffer)
 	ranksSeen := make(map[system.Rank]struct{})
@@ -333,12 +334,13 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStop(context.Background(), cmd.ctlInvoker, req)
-	if err != nil {
-		return errors.Wrap(err, "System-Stop command failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "System-Stop command failed")
 	}
 
 	if len(resp.Results) == 0 {
@@ -372,12 +374,13 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 
 	// TODO DAOS-5079: group errors when ranks don't exist
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
-	if err != nil {
-		return errors.Wrap(err, "System-Start command failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "System-Start command failed")
 	}
 
 	if len(resp.Results) == 0 {
@@ -421,12 +424,13 @@ func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	resp, err := control.ListPools(ctx, cmd.ctlInvoker, &control.ListPoolsReq{
 		System: cmd.config.SystemName,
 	})
-	if err != nil {
-		return errors.Wrap(err, "List-Pools command failed")
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "List-Pools command failed")
 	}
 
 	if len(resp.Pools) == 0 {
