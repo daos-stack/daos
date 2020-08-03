@@ -48,6 +48,7 @@ type mgmtModule struct {
 	ctlInvoker control.Invoker
 	aiCache    *attachInfoCache
 	numaAware  bool
+	netCtx     context.Context
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -95,7 +96,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	numaNode := mod.aiCache.defaultNumaNode
 
 	if mod.numaAware {
-		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
+		numaNode, err = netdetect.GetNUMASocketIDForPid(mod.netCtx, pid)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +130,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
-	scanResults, err := netdetect.ScanFabric(resp.Provider)
+	scanResults, err := netdetect.ScanFabric(mod.netCtx, resp.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +142,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, errors.Wrap(err, "Failed to convert GetAttachInfo response")
 	}
 
-	err = mod.aiCache.initResponseCache(pbResp, scanResults)
+	err = mod.aiCache.initResponseCache(mod.netCtx, pbResp, scanResults)
 	if err != nil {
 		return nil, err
 	}
