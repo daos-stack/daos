@@ -196,14 +196,14 @@ CRT_RPC_DEFINE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 	.prf_req_fmt = c,	\
 	.prf_hdlr = d,		\
 	.prf_co_ops = e,	\
-}
+},
 
 static struct crt_proto_rpc_format crt_internal_rpcs[] = {
-	CRT_INTERNAL_RPCS_LIST,
+	CRT_INTERNAL_RPCS_LIST
 };
 
 static struct crt_proto_rpc_format crt_fi_rpcs[] = {
-	CRT_FI_RPCS_LIST,
+	CRT_FI_RPCS_LIST
 };
 
 #undef X
@@ -536,223 +536,221 @@ crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	return DER_SUCCESS;
 }
 
-/* Note: Currently unused function as logic needs to be rewritten */
-int
-crt_req_uri_lookup_retry(struct crt_grp_priv *grp_priv,
-			 struct crt_rpc_priv *rpc_priv)
-{
-	struct crt_context	*crt_ctx;
-	crt_rpc_t		*rpc_pub = &rpc_priv->crp_pub;
-	int			 rc;
-
-	/* destroy previous URI_LOOKUP req, addref in crt_req_uri_lookup_psr */
-	RPC_PUB_DECREF(rpc_priv->crp_ul_req);
-	rpc_priv->crp_ul_req = NULL;
-
-	rc = crt_grp_psr_reload(grp_priv);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_grp_psr_reload(grp %s) failed, rc: %d\n",
-			  grp_priv->gp_pub.cg_grpid, rc);
-		D_GOTO(out, rc);
-	}
-
-	crt_ctx = rpc_pub->cr_ctx;
-
-	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-	if (!crt_req_timedout(rpc_priv))
-		crt_req_timeout_untrack(rpc_priv);
-	crt_set_timeout(rpc_priv);
-	rc = crt_req_timeout_track(rpc_priv);
-	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_req_timeout_track failed, rc: %d\n",
-			  rc);
-		D_GOTO(out, rc);
-	}
-
-	rpc_priv->crp_state = RPC_STATE_INITED;
-	rc = crt_req_send_internal(rpc_priv);
-
-out:
-	return rc;
-}
+static int
+crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
+			d_rank_t contact_rank, uint32_t contact_tag,
+			d_rank_t query_rank, uint32_t query_tag,
+			struct crt_rpc_priv *chained_rpc);
 
 static void
-crt_req_uri_lookup_by_rpc_cb(const struct crt_cb_info *cb_info)
+uri_lookup_cb(const struct crt_cb_info *cb_info)
 {
-	d_rank_t			 rank;
-	uint32_t			 tag;
-	crt_endpoint_t			*tgt_ep;
-	struct crt_rpc_priv		*rpc_priv;
-	struct crt_grp_priv		*grp_priv;
-	struct crt_context		*crt_ctx;
+	struct crt_rpc_priv		*chained_rpc_priv;
+	struct crt_context		*ctx;
 	struct crt_uri_lookup_out	*ul_out;
-	char				*uri = NULL;
-	bool				 ul_retried = false;
-	int				 rc = 0;
+	struct crt_uri_lookup_in	*ul_in;
+	struct crt_grp_priv		*grp_priv;
+	crt_rpc_t			*lookup_rpc;
+	int				rc = 0;
 
-	rpc_priv = cb_info->cci_arg;
-	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
-		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
-		 rpc_priv->crp_state == RPC_STATE_FWD_UNREACH ||
-		 rpc_priv->crp_state == RPC_STATE_COMPLETED);
-
-	/* Failed uri lookup can complete with cb_info->rpc pointing to
-	 * the original RPC that triggered the lookup if HG_Forward
-	 * fails with mercury errors.
-	 */
-	if (cb_info->cci_rc == DER_SUCCESS)
-		D_ASSERT(rpc_priv->crp_ul_req == cb_info->cci_rpc);
-
-	tgt_ep = &rpc_priv->crp_pub.cr_ep;
-	rank = tgt_ep->ep_rank;
-	tag = tgt_ep->ep_tag;
-
-	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
-
-	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+	chained_rpc_priv = cb_info->cci_arg;
+	lookup_rpc  = cb_info->cci_rpc;
 
 	if (cb_info->cci_rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "failed cci_rc: %d\n",
-			  cb_info->cci_rc);
-		if (cb_info->cci_rc == -DER_OOG)
-			D_GOTO(out, rc = -DER_OOG);
-
-		/* TODO: Proper selection of new PSR is required */
-		rc = cb_info->cci_rc;
-		D_GOTO(out, rc);
+		D_ERROR("URI_LOOKUP rpc completed with rc=%d\n",
+			cb_info->cci_rc);
+		D_GOTO(retry, rc = cb_info->cci_rc);
 	}
 
-	/* extract uri */
-	ul_out = crt_reply_get(cb_info->cci_rpc);
-	D_ASSERT(ul_out != NULL);
+	ul_in = crt_req_get(lookup_rpc);
+	ul_out = crt_reply_get(lookup_rpc);
 
-	if (ul_out->ul_rc != 0)
-		D_GOTO(out, rc = ul_out->ul_rc);
+	if (ul_out->ul_rc != 0) {
+		D_ERROR("URI_LOOKUP returned rc=%d\n", ul_out->ul_rc);
+		D_GOTO(retry, rc = ul_out->ul_rc);
+	}
 
-	uri = ul_out->ul_uri;
+	grp_priv = chained_rpc_priv->crp_grp_priv;
+	ctx = lookup_rpc->cr_ctx;
 
-	/* insert uri to hash table */
-	rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx, rank, tag, uri);
+	rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
+			ul_in->ul_rank, ul_out->ul_tag, ul_out->ul_uri);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
+		D_ERROR("URI insertion '%s' failed for %d:%d; rc=%d\n",
+			ul_out->ul_uri, ul_in->ul_rank, ul_out->ul_tag, rc);
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_req_fill_tgt_uri(rpc_priv, uri);
-	if (rc != 0) {
-		D_ERROR("crt_req_fill_tgt_uri failed, opc: %#x.\n",
-			rpc_priv->crp_pub.cr_opc);
+	/* Lookup request will either return tag=ul_in->ul_tag URI or
+	 * tag=0 URI if ul_in->ul_tag is not found in server-side cache.
+	 *
+	 * ul_out->ul_tag will point to which tag URI was returned for.
+	 * If requested tag does not match returned tag, issue URI
+	 * request directly to the rank:tag=0 server
+	 */
+	if (ul_in->ul_tag != ul_out->ul_tag) {
+		rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
+					lookup_rpc->cr_ep.ep_grp,
+					ul_in->ul_rank, 0,
+					ul_in->ul_rank, ul_in->ul_tag,
+					chained_rpc_priv);
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_req_send_internal(rpc_priv);
+	rc = crt_req_fill_tgt_uri(chained_rpc_priv, ul_out->ul_uri);
 	if (rc != 0) {
-		D_ERROR("crt_req_send_internal() failed, rc %d, opc: %#x\n",
-			rc, rpc_priv->crp_pub.cr_opc);
+		RPC_ERROR(chained_rpc_priv,
+			"crt_req_fill_tgt_uri() failed; rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
+
+	rc = crt_req_send_internal(chained_rpc_priv);
+retry:
+	/* TODO: add retry logic for CART-688 */
 
 out:
+	RPC_PUB_DECREF(lookup_rpc);
+
+	/* Force complete and destroy chained rpc */
 	if (rc != 0) {
-		crt_context_req_untrack(rpc_priv);
-		crt_rpc_complete(rpc_priv, rc);
-		RPC_DECREF(rpc_priv); /* destroy */
+		crt_context_req_untrack(chained_rpc_priv);
+		crt_rpc_complete(chained_rpc_priv, rc);
+		RPC_DECREF(chained_rpc_priv);
 	}
 
-	if (!ul_retried && rpc_priv->crp_ul_req != NULL) {
-		/* addref in crt_req_uri_lookup_by_rpc */
-		RPC_PUB_DECREF(rpc_priv->crp_ul_req);
-		rpc_priv->crp_ul_req = NULL;
+	/* Addref done in crt_issue_uri_lookup() */
+	RPC_DECREF(chained_rpc_priv);
+}
+
+/**
+ * Helper function that returns rank for clients to contact
+ * for performing uri lookups
+ */
+static d_rank_t
+crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
+			d_rank_t query_rank, uint32_t query_tag)
+{
+	struct crt_grp_priv	*grp_priv;
+	d_rank_t		contact_rank = CRT_NO_RANK;
+	char			*cached_uri = NULL;
+	struct crt_context	*ctx;
+	int			rc;
+
+	grp_priv = crt_grp_pub2priv(grp);
+	ctx = crt_ctx;
+
+	/* If query_rank:tag=0 is in cache, use it as contact destination */
+	if (query_tag != 0) {
+		rc = crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
+				query_rank, 0, &cached_uri, NULL);
+		if (rc == 0 && cached_uri != NULL)
+			D_GOTO(out, contact_rank = query_rank);
 	}
-	/* addref in crt_req_uri_lookup_by_rpc */
-	RPC_DECREF(rpc_priv);
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	/* TODO: Add logic for CART-688 */
+	contact_rank = grp_priv->gp_psr_rank;
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+out:
+	return contact_rank;
 }
 
 static int
-crt_req_uri_lookup_by_rpc(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
-			  void *arg, d_rank_t rank, uint32_t tag)
+crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 {
-	crt_rpc_t			*ul_req;
-	crt_endpoint_t			*orig_tgt_ep;
-	crt_endpoint_t			 ul_tgt_ep = {0};
-	struct crt_grp_priv		*grp_priv;
-	struct crt_uri_lookup_in	*ul_in;
-	struct crt_uri_lookup_out	*ul_out;
-	int				 rc = 0;
+	crt_endpoint_t	*tgt_ep;
+	crt_context_t	ctx;
+	crt_group_t	*grp;
+	int		rc;
 
-	orig_tgt_ep = &rpc_priv->crp_pub.cr_ep;
+	tgt_ep = &rpc_priv->crp_pub.cr_ep;
+	ctx = rpc_priv->crp_pub.cr_ctx;
+	grp = tgt_ep->ep_grp;
 
-	grp_priv = crt_grp_pub2priv(orig_tgt_ep->ep_grp);
+	/* Client handling */
+	if (!crt_is_service()) {
+		d_rank_t lookup_rank;
 
-	ul_tgt_ep.ep_grp = orig_tgt_ep->ep_grp;
-	ul_tgt_ep.ep_rank = rank;
-	ul_tgt_ep.ep_tag = tag;
+		lookup_rank = crt_client_get_contact_rank(ctx, grp,
+						tgt_ep->ep_rank,
+						tgt_ep->ep_tag);
+		if (lookup_rank == CRT_NO_RANK) {
+			D_ERROR("Failed to rank for uri lookups\n");
+			D_GOTO(out, rc = -DER_NONEXIST);
+		}
 
-	rc = crt_req_create(rpc_priv->crp_pub.cr_ctx, &ul_tgt_ep,
-			    CRT_OPC_URI_LOOKUP, &ul_req);
-	if (rc != 0) {
-		D_ERROR("crt_req_create URI_LOOKUP failed, rc: %d opc: %#x.\n",
-			rc, rpc_priv->crp_pub.cr_opc);
+		rc = crt_issue_uri_lookup(ctx, grp,
+					lookup_rank, 0,
+					tgt_ep->ep_rank, tgt_ep->ep_tag,
+					rpc_priv);
 		D_GOTO(out, rc);
 	}
-	/* decref in crt_req_uri_lookup_by_rpc_cb */
-	RPC_PUB_ADDREF(ul_req);
-	/* decref in crt_req_uri_lookup_by_rpc_cb */
-	RPC_ADDREF(rpc_priv);
-	rpc_priv->crp_ul_req = ul_req;
-	ul_in = crt_req_get(ul_req);
-	ul_out = crt_reply_get(ul_req);
-	D_ASSERT(ul_in != NULL && ul_out != NULL);
-	ul_in->ul_grp_id = grp_priv->gp_pub.cg_grpid;
-	ul_in->ul_rank = rpc_priv->crp_pub.cr_ep.ep_rank;
-	ul_in->ul_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
-	rc = crt_req_send(ul_req, complete_cb, arg);
-	if (rc != 0) {
-		D_ERROR("URI_LOOKUP (for group %s rank %d through rank %d) "
-			"request send failed, rc: %d opc: %#x.\n",
-			ul_in->ul_grp_id, ul_in->ul_rank, ul_tgt_ep.ep_rank,
-			rc, rpc_priv->crp_pub.cr_opc);
 
-		/* Errors will trigger complete_cb that decrefs
-		 * addrefs taken above.
-		 */
+	/* Server handling */
+
+	/* Servers must know tag=0 uris of other servers */
+	if (tgt_ep->ep_tag == 0) {
+		RPC_ERROR(rpc_priv, "Target %d:%d not known\n",
+			tgt_ep->ep_rank, tgt_ep->ep_tag);
+		D_GOTO(out, rc = -DER_OOG);
 	}
 
+	/* Send request to tag=0 to get uri for ep_tag */
+	rc = crt_issue_uri_lookup(ctx, grp,
+			tgt_ep->ep_rank, 0,
+			tgt_ep->ep_rank, tgt_ep->ep_tag,
+			rpc_priv);
 out:
 	return rc;
 }
 
-/*
- * Contact the PSR to obtain the URI of the target rank which rpc_priv is trying
- * to communicate to
- */
-int
-crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
-		       void *arg)
+static int
+crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
+			d_rank_t contact_rank, uint32_t contact_tag,
+			d_rank_t query_rank, uint32_t query_tag,
+			struct crt_rpc_priv *chained_rpc_priv)
 {
-	crt_endpoint_t			*tgt_ep;
-	struct crt_grp_priv		*grp_priv;
-	int				 rc = 0;
+	crt_rpc_t			*rpc;
+	crt_endpoint_t			target_ep;
+	struct crt_uri_lookup_in	*ul_in;
+	int				rc;
 
-	tgt_ep = &rpc_priv->crp_pub.cr_ep;
-	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
+	target_ep.ep_rank = contact_rank;
+	target_ep.ep_tag = contact_tag;
+	target_ep.ep_grp = group;
 
-	/* The uri lookup RPC will be sent to the same group as rpc_priv's
-	 * target group
-	 */
-	rc = crt_req_uri_lookup_by_rpc(rpc_priv, complete_cb, arg,
-				       grp_priv->gp_psr_rank, 0);
-	if (rc != 0)
-		RPC_ERROR(rpc_priv, "URI_LOOKUP (for group %s rank %d through "
-			  "psr %d) failed, rc: %d.\n", tgt_ep->ep_grp->cg_grpid,
-			  tgt_ep->ep_rank, grp_priv->gp_psr_rank, rc);
+	rc = crt_req_create(ctx, &target_ep, CRT_OPC_URI_LOOKUP, &rpc);
+	if (rc != 0) {
+		D_ERROR("URI_LOOKUP rpc create failed; rc=%d\n", rc);
+		D_GOTO(exit, rc);
+	}
 
+	ul_in = crt_req_get(rpc);
+	ul_in->ul_grp_id = group->cg_grpid;
+	ul_in->ul_rank = query_rank;
+	ul_in->ul_tag = query_tag;
+
+	RPC_PUB_ADDREF(rpc);
+	chained_rpc_priv->crp_ul_req = rpc;
+
+	RPC_ADDREF(chained_rpc_priv);
+	rc = crt_req_send(rpc, uri_lookup_cb, chained_rpc_priv);
+
+	if (rc != 0) {
+		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
+		RPC_DECREF(chained_rpc_priv);
+
+		/* Addref done above */
+		RPC_PUB_DECREF(rpc);
+		chained_rpc_priv->crp_ul_req = NULL;
+	}
+
+exit:
 	return rc;
 }
+
+
 
 /* Fill rpc_priv->crp_hg_addr field based on local cache contents */
 static int
@@ -783,6 +781,25 @@ out:
 	return rc;
 }
 
+bool
+crt_req_is_self(struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_grp_priv	*grp_priv_self;
+	crt_endpoint_t		*tgt_ep;
+	bool			 same_group;
+	bool			 same_rank;
+
+	D_ASSERT(rpc_priv != NULL);
+	grp_priv_self = crt_grp_pub2priv(NULL);
+	tgt_ep = &rpc_priv->crp_pub.cr_ep;
+	same_group = (tgt_ep->ep_grp == NULL) ||
+		     crt_grp_id_identical(tgt_ep->ep_grp->cg_grpid,
+					  grp_priv_self->gp_pub.cg_grpid);
+	same_rank = tgt_ep->ep_rank == grp_priv_self->gp_self;
+
+	return (same_group && same_rank);
+}
+
 /* look in the local cache to find the NA address of the target */
 static int
 crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
@@ -811,6 +828,23 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 		D_GOTO(out, rc);
 	}
 
+	if (base_addr == NULL && rpc_priv->crp_hg_addr == NULL) {
+		if (crt_req_is_self(rpc_priv)) {
+			rc = crt_self_uri_get(tgt_ep->ep_tag, &uri);
+			if (rc != DER_SUCCESS) {
+				D_ERROR("crt_self_uri_get(tag: %d) failed, "
+				"rc %d\n", tgt_ep->ep_tag, rc);
+				D_GOTO(out, rc);
+			}
+
+			rc = crt_grp_lc_uri_insert(grp_priv, ctx->cc_idx,
+				tgt_ep->ep_rank, tgt_ep->ep_tag, base_addr);
+
+			rc = crt_req_fill_tgt_uri(rpc_priv, uri);
+			base_addr = uri;
+			D_GOTO(out, rc);
+		}
+	}
 
 	if (base_addr != NULL && rpc_priv->crp_hg_addr == NULL) {
 		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
@@ -860,119 +894,6 @@ out:
 	if (base_addr)
 		*uri_exists = true;
 	D_FREE(uri);
-	return rc;
-}
-
-static bool
-crt_req_is_self(struct crt_rpc_priv *rpc_priv)
-{
-	struct crt_grp_priv	*grp_priv_self;
-	crt_endpoint_t		*tgt_ep;
-	bool			 same_group;
-	bool			 same_rank;
-
-	D_ASSERT(rpc_priv != NULL);
-	grp_priv_self = crt_grp_pub2priv(NULL);
-	tgt_ep = &rpc_priv->crp_pub.cr_ep;
-	same_group = (tgt_ep->ep_grp == NULL) ||
-		     crt_grp_id_identical(tgt_ep->ep_grp->cg_grpid,
-					  grp_priv_self->gp_pub.cg_grpid);
-	same_rank = tgt_ep->ep_rank == grp_priv_self->gp_self;
-
-	return (same_group && same_rank);
-}
-
-/*
- * the case where we don't have the URI of the target rank
- */
-static int
-crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
-{
-	d_rank_t		 rank;
-	uint32_t		 tag;
-	crt_endpoint_t		*tgt_ep;
-	struct crt_grp_priv	*grp_priv;
-	struct crt_grp_priv	*default_grp_priv;
-	char			*uri = NULL;
-	struct crt_context	*crt_ctx;
-	int			 rc = 0;
-
-	tgt_ep = &rpc_priv->crp_pub.cr_ep;
-
-	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
-	D_ASSERT(grp_priv != NULL);
-
-	default_grp_priv = crt_grp_pub2priv(NULL);
-	D_ASSERT(default_grp_priv != NULL);
-
-	/* For clients - contact PSR */
-	if (!crt_is_service()) {
-		/* send an RPC to the PSR */
-		RPC_TRACE(DB_NET, rpc_priv,
-			"Querying PSR to find out target NA Address.\n");
-		rc = crt_req_uri_lookup_psr(rpc_priv,
-				crt_req_uri_lookup_by_rpc_cb,
-				rpc_priv);
-		if (rc != 0) {
-			rpc_priv->crp_state = RPC_STATE_INITED;
-			D_ERROR("psr uri lookup failed, rc %d.\n",
-				rc);
-		}
-		D_GOTO(out, rc);
-	}
-
-	/* this is a local group */
-	crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	rank = tgt_ep->ep_rank;
-	tag = tgt_ep->ep_tag;
-
-	if (crt_req_is_self(rpc_priv)) {
-		/* rpc is sent to self */
-		rc = crt_self_uri_get(tag, &uri);
-		if (rc != DER_SUCCESS) {
-			D_ERROR("crt_self_uri_get(tag: %d) failed, "
-				"rc %d\n", tag, rc);
-			D_GOTO(out, rc);
-		}
-	} else if (tag == 0) {
-		D_GOTO(out, rc = -DER_INVAL);
-
-	} else {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "Querying rank %d tag 0 for target NA address\n",
-			  rank);
-		rc = crt_req_uri_lookup_by_rpc(rpc_priv,
-					       crt_req_uri_lookup_by_rpc_cb,
-					       rpc_priv, rank, 0);
-		if (rc != 0) {
-			rpc_priv->crp_state = RPC_STATE_INITED;
-			D_ERROR("crt_req_uri_lookup_by_rpc(), rc: %d.\n", rc);
-		}
-		D_GOTO(out, rc);
-	}
-
-	rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx,
-			rank, tag, uri);
-	if (rc != 0) {
-		D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-	rc = crt_req_fill_tgt_uri(rpc_priv, uri);
-	if (rc != 0) {
-		D_ERROR("crt_req_fill_tgt_uri failed, opc: %#x.\n",
-			rpc_priv->crp_pub.cr_opc);
-		D_GOTO(out, rc);
-	}
-	rc = crt_req_send_internal(rpc_priv);
-	if (rc != 0) {
-		D_ERROR("crt_req_send_internal() failed, rc %d, opc: %#x\n",
-			rc, rpc_priv->crp_pub.cr_opc);
-		D_GOTO(out, rc);
-	}
-out:
-	D_FREE(uri);
-
 	return rc;
 }
 
@@ -1081,6 +1002,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 				"opc: %#x.\n", rc, req->cr_opc);
 			D_GOTO(out, rc);
 		}
+
 		if (rpc_priv->crp_hg_addr != NULL) {
 			/* send the RPC if the local cache has the HG_Addr */
 			rc = crt_req_send_immediately(rpc_priv);

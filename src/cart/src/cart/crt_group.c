@@ -1448,106 +1448,6 @@ crt_primary_grp_fini(void)
 	return 0;
 }
 
-static void
-crt_uri_lookup_forward_cb(const struct crt_cb_info *cb_info)
-{
-	struct crt_grp_priv		*default_grp_priv;
-	crt_rpc_t			*ul_req;
-	struct crt_uri_lookup_out	*ul_out;
-	struct crt_uri_lookup_in	*ul_fwd_in;
-	struct crt_uri_lookup_out	*ul_fwd_out;
-	struct crt_context		*crt_ctx;
-	d_rank_t			 g_rank;
-	uint32_t			 tag;
-	char				*uri = NULL;
-	int				 rc;
-
-	ul_req = cb_info->cci_arg;
-	D_ASSERT(ul_req != NULL);
-
-	if (cb_info->cci_rc != DER_SUCCESS)
-		D_GOTO(out, rc = cb_info->cci_rc);
-
-	/* extract URI, insert to local cache */
-	ul_fwd_in = crt_req_get(cb_info->cci_rpc);
-	ul_fwd_out = crt_reply_get(cb_info->cci_rpc);
-
-	if (ul_fwd_out->ul_rc != 0)
-		D_GOTO(out, rc = ul_fwd_out->ul_rc);
-
-	crt_ctx = cb_info->cci_rpc->cr_ctx;
-	g_rank = ul_fwd_in->ul_rank;
-	tag = ul_fwd_in->ul_tag;
-	uri = ul_fwd_out->ul_uri;
-
-	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
-	rc = crt_grp_lc_uri_insert(default_grp_priv, crt_ctx->cc_idx,
-				   g_rank, tag, uri);
-	if (rc != 0)
-		D_ERROR("crt_grp_lc_uri_insert(%p, %d, %u, %s) failed."
-			" rc: %d\n", default_grp_priv, crt_ctx->cc_idx, g_rank,
-			uri, rc);
-
-out:
-	/* reply to original requester */
-	ul_out = crt_reply_get(ul_req);
-	ul_out->ul_rc = rc;
-	ul_out->ul_uri = uri;
-
-	rc = crt_reply_send(ul_req);
-	if (rc != DER_SUCCESS)
-		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
-			rc, ul_req->cr_opc);
-
-	/* Corresponding addref done in crt_uri_lookup_forward*/
-	RPC_PUB_DECREF(ul_req);
-}
-
-static int
-crt_uri_lookup_forward(crt_rpc_t *ul_req, d_rank_t g_rank)
-{
-	struct crt_grp_priv		*default_grp_priv;
-	crt_endpoint_t			 tgt_ep;
-	struct crt_uri_lookup_in	*ul_in, *ul_fwd_in;
-	crt_rpc_t			*ul_fwd_req;
-	struct crt_cb_info		 cbinfo;
-	int				 rc = DER_SUCCESS;
-
-	/* corresponding decref done in crt_uri_lookup_forward_cb */
-	RPC_PUB_ADDREF(ul_req);
-
-	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
-	ul_in = crt_req_get(ul_req);
-	tgt_ep.ep_grp = &default_grp_priv->gp_pub;
-	tgt_ep.ep_rank = g_rank;
-	tgt_ep.ep_tag = 0;
-	rc = crt_req_create(ul_req->cr_ctx, &tgt_ep, CRT_OPC_URI_LOOKUP,
-			    &ul_fwd_req);
-	if (rc != DER_SUCCESS) {
-		D_ERROR("crt_req_create() failed, rc: %d\n", rc);
-		D_GOTO(err_out, rc);
-	}
-
-	ul_fwd_in = crt_req_get(ul_fwd_req);
-	ul_fwd_in->ul_grp_id = default_grp_priv->gp_pub.cg_grpid;
-	ul_fwd_in->ul_rank = g_rank;
-	ul_fwd_in->ul_tag = ul_in->ul_tag;
-
-	rc = crt_req_send(ul_fwd_req, crt_uri_lookup_forward_cb, ul_req);
-	if (rc != DER_SUCCESS) {
-		/* crt_req_send() calls the callback on failure */
-		D_ERROR("crt_req_send() failed, rc: %d\n", rc);
-	}
-	return rc;
-
-err_out:
-	cbinfo.cci_rpc = NULL;
-	cbinfo.cci_arg = ul_req;
-	cbinfo.cci_rc  = rc;
-	crt_uri_lookup_forward_cb(&cbinfo);
-
-	return rc;
-}
 
 void
 crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
@@ -1624,6 +1524,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 			D_ERROR("crt_self_uri_get(tag: %d) failed, "
 				"rc %d\n", ul_in->ul_tag, rc);
 		ul_out->ul_uri = tmp_uri;
+		ul_out->ul_tag = ul_in->ul_tag;
 		D_GOTO(out, rc);
 	}
 
@@ -1638,44 +1539,32 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 	ul_out->ul_uri = cached_uri;
+	ul_out->ul_tag = ul_in->ul_tag;
+
 	if (ul_out->ul_uri != NULL)
 		D_GOTO(out, rc);
 
-	/**
-	 * step 2, make sure URI of tag 0 is in cache in preparation to forward
-	 * the lookup RPC
-	 */
-	if (ul_in->ul_tag != 0) {
-		/* tag != 0, check if tag 0 is in cache */
-		rc = crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx,
-				       g_rank, 0, &cached_uri, NULL);
-		if (rc != 0) {
-			D_ERROR("crt_grp_lc_lookup(grp %s, rank %d, tag %d) "
-				"failed, rc: %d.\n",
-				grp_priv_primary->gp_pub.cg_grpid,
-				g_rank, 0, rc);
-			D_GOTO(out, rc);
-		}
-	}
-	ul_out->ul_uri = cached_uri;
-
-	if (ul_out->ul_uri == NULL)
+	/* If this server does not know rank:0 then return error */
+	if (ul_in->ul_tag == 0)
 		D_GOTO(out, rc = -DER_OOG);
 
-	/* tag 0 uri in cache now */
-	if (ul_in->ul_tag == 0) {
-		/* we are done at this point */
-		D_GOTO(out, rc);
+	/**
+	 * step 2, if rank:tag is not found, lookup rank:tag=0
+	 */
+	ul_out->ul_tag = 0;
+	rc = crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx,
+				       g_rank, 0, &cached_uri, NULL);
+	if (rc != 0) {
+		D_ERROR("crt_grp_lc_lookup(grp %s, rank %d, tag %d) "
+			"failed, rc: %d.\n",
+			grp_priv_primary->gp_pub.cg_grpid,
+			g_rank, 0, rc);
+		D_GOTO(out, rc = -DER_OOG);
 	}
 
-	/* step 3, forward the request to the final target */
-	rc = crt_uri_lookup_forward(rpc_req, g_rank);
-	if (rc != 0)
-		D_ERROR("crt_uri_lookup_forward() failed, rc %d\n", rc);
-
-	if (should_decref)
-		crt_grp_priv_decref(grp_priv);
-	return;
+	ul_out->ul_uri = cached_uri;
+	if (ul_out->ul_uri == NULL)
+		D_GOTO(out, rc = -DER_OOG);
 
 out:
 	if (should_decref)
