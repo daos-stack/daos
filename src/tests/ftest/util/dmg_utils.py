@@ -102,20 +102,109 @@ class DmgCommand(DmgCommandBase):
             ("network", "scan"), provider=provider, all=all_devs)
 
     def storage_scan(self, verbose=False):
+        # pylint: disable=pointless-string-statement
         """Get the result of the dmg storage scan command.
 
         Args:
             verbose (bool, optional): create verbose output. Defaults to False.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: Values obtained from stdout in dictionary. Most of the values
+                are in list.
 
         Raises:
             CommandFailure: if the dmg storage scan command fails.
 
         """
-        return self._get_result(("storage", "scan"), verbose=verbose)
+        self.result = self._get_result(("storage", "scan"), verbose=verbose)
+
+        # Sample dmg storage scan verbose output. Don't delete this sample
+        # because it helps to develop and debug the regex.
+        """
+        --------
+        wolf-130
+        --------
+        SCM Namespace Socket ID Capacity
+        ------------- --------- --------
+        pmem0         0         3.2 TB
+        pmem1         0         3.2 TB
+
+        NVMe PCI     Model                FW Revision Socket ID Capacity
+        --------     -----                ----------- --------- --------
+        0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+        0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
+        0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+        0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
+        """
+
+        # Sample dmg storage scan output. Don't delete this sample because it
+        # helps to develop and debug the regex.
+        """
+         Hosts    SCM Total             NVMe Total
+        -----    ---------             ----------
+        wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
+        """
+
+        data = {}
+
+        if verbose:
+            vals = re.findall(
+                r"--------\n([a-z0-9-]+)\n--------|"
+                r"\n([a-z0-9_]+)[ ]+([\d]+)[ ]+([\d.]+) ([A-Z]+)|"
+                r"([a-f0-9]+:[a-f0-9]+:[a-f0-9]+.[a-f0-9]+)[ ]+"
+                r"(\S+)[ ]+(\S+)[ ]+(\S+)[ ]+(\d+)[ ]+([\d.]+)"
+                r"[ ]+([A-Z]+)[ ]*\n", self.result.stdout)
+
+            data = {}
+            host = vals[0][0]
+            data[host] = {}
+            data[host]["scm"] = {}
+            i = 1
+            while i < len(vals):
+                if vals[i][1] == "":
+                    break
+                pmem_name = vals[i][1]
+                socket_id = vals[i][2]
+                capacity = "{} {}".format(vals[i][3], vals[i][4])
+                data[host]["scm"][pmem_name] = {}
+                data[host]["scm"][pmem_name]["socket"] = socket_id
+                data[host]["scm"][pmem_name]["capacity"] = capacity
+                i += 1
+
+            data[host]["nvme"] = {}
+            while i < len(vals):
+                pci_addr = vals[i][5]
+                model = "{} {}".format(vals[i][6], vals[i][7])
+                fw_revision = vals[i][8]
+                socket_id = vals[i][9]
+                capacity = "{} {}".format(vals[i][10], vals[i][11])
+                data[host]["nvme"][pci_addr] = {}
+                data[host]["nvme"][pci_addr]["model"] = model
+                data[host]["nvme"][pci_addr]["fw_revision"] = fw_revision
+                data[host]["nvme"][pci_addr]["socket"] = socket_id
+                data[host]["nvme"][pci_addr]["capacity"] = capacity
+                i += 1
+
+        else:
+            vals = re.findall(
+                r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+"
+                r"\(([\w\s]+)\)\s+([\d.]+)\s+([A-Z]+)\s+\(([\w\s]+)",
+                self.result.stdout)
+            self.log.info("--- Non-verbose output parse result ---")
+            self.log.info(vals)
+
+            data = {}
+            for row in vals:
+                host = row[0]
+                data[host] = {
+                    "scm": {"capacity": None, "details": None},
+                    "nvme": {"capacity": None, "details": None}}
+                data[host]["scm"]["capacity"] = " ".join(row[1:3])
+                data[host]["scm"]["details"] = row[3]
+                data[host]["nvme"]["capacity"] = " ".join(row[4:6])
+                data[host]["nvme"]["details"] = row[6]
+
+        return data
 
     def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
@@ -468,6 +557,25 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
+    def pool_drain(self, pool, rank, tgt_idx=None):
+        """Drain a daos_server from the pool
+
+        Args:
+            pool (str): Pool uuid.
+            rank (int): Rank of the daos_server to drain
+            tgt_idx (int): target to be excluded from the pool
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool drain command fails.
+
+        """
+        return self._get_result(
+            ("pool", "drain"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+
     def pool_reintegrate(self, pool, rank, tgt_idx=None):
         """Reintegrate a daos_server to the pool.
 
@@ -567,7 +675,6 @@ def check_system_query_status(stdout_str):
             print("Rank {} failed with state '{}'".format(out[0], out[3]))
         check = False
     return check
-
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.

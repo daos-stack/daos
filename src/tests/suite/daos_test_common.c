@@ -817,70 +817,71 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 	return rc;
 }
 
+static void
+daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
+		     const char *grp, const char *dmg_config,
+		     const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+{
+	char		dmg_cmd[DTS_CFG_MAX];
+	int		rc;
+
+	/* build and invoke dmg cmd */
+	dts_create_config(dmg_cmd, "dmg pool %s -i --pool=%s --rank=%d",
+			  sub_cmd, DP_UUID(pool_uuid), rank);
+
+	if (tgt_idx != -1)
+		dts_append_config(dmg_cmd, " --target-idx=%d", tgt_idx);
+	if (dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", dmg_config);
+
+	rc = system(dmg_cmd);
+	print_message("%s rc 0x%x\n", dmg_cmd, rc);
+	assert_int_equal(rc, 0);
+}
+
 void
 daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank,
-		    int tgt_idx)
+		    const char *dmg_config, const d_rank_list_t *svc,
+		    d_rank_t rank, int tgt_idx)
 {
-	struct d_tgt_list	targets;
-	int			rc;
-
-	/** exclude from the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt_idx;
-	rc = daos_pool_tgt_exclude(pool_uuid, grp, svc, &targets, NULL);
-	if (rc)
-		print_message("exclude pool failed rc %d\n", rc);
-	assert_int_equal(rc, 0);
+	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config, svc,
+			     rank, tgt_idx);
 }
 
 void
 daos_add_target(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+		const char *dmg_config, const d_rank_list_t *svc,
+		d_rank_t rank, int tgt_idx)
 {
-	struct d_tgt_list	targets;
-	int			rc;
+	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config, svc,
+			     rank, tgt_idx);
 
-	/** add tgt to the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt_idx;
-	rc = daos_pool_add_tgt(pool_uuid, grp, svc, &targets, NULL);
-	if (rc)
-		print_message("add pool failed rc %d\n", rc);
-	assert_int_equal(rc, 0);
 }
 
 void
 daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank, int tgt_idx)
+		  const char *dmg_config, const d_rank_list_t *svc,
+		  d_rank_t rank, int tgt_idx)
 {
-	struct d_tgt_list	targets;
-	int			rc;
 
-	/** add tgt to the pool */
-	targets.tl_nr = 1;
-	targets.tl_ranks = &rank;
-	targets.tl_tgts = &tgt_idx;
-	rc = daos_pool_drain_tgt(pool_uuid, grp, svc, &targets, NULL);
-	if (rc)
-		print_message("drain pool failed rc %d\n", rc);
-	assert_int_equal(rc, 0);
+	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config, svc,
+			     rank, tgt_idx);
 }
 
 void
 daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const d_rank_list_t *svc, d_rank_t rank)
+		    const char *dmg_config, const d_rank_list_t *svc,
+		    d_rank_t rank)
 {
-	daos_exclude_target(pool_uuid, grp, svc, rank, -1);
+	daos_exclude_target(pool_uuid, grp, dmg_config, svc, rank, -1);
 }
 
 void
 daos_add_server(const uuid_t pool_uuid, const char *grp,
-		const d_rank_list_t *svc, d_rank_t rank)
+		const char *dmg_config, const d_rank_list_t *svc,
+		d_rank_t rank)
 {
-	daos_add_target(pool_uuid, grp, svc, rank, -1);
+	daos_add_target(pool_uuid, grp, dmg_config, svc, rank, -1);
 }
 
 void
@@ -923,12 +924,10 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/* build and invoke dmg cmd to stop the server */
-	if (arg->dmg_config == NULL)
-		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
-				  "--force", rank);
-	else
-		dts_create_config(dmg_cmd, "dmg system stop -i --ranks=%d "
-				  "--force -o %s", rank, arg->dmg_config);
+	dts_create_config(dmg_cmd, "dmg system stop -i -r %d --force", rank);
+	if (arg->dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+
 	rc = system(dmg_cmd);
 	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
