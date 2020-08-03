@@ -560,11 +560,22 @@ obj_dkey2grpmemb(struct dc_object *obj, uint64_t hash, uint32_t map_ver,
 	return 0;
 }
 
-static uint32_t
-obj_shard2tgtid(struct dc_object *obj, uint32_t shard)
+static int
+obj_shard2tgtid(struct dc_object *obj, uint32_t shard, uint32_t map_ver,
+		uint32_t *tgt_id)
 {
-	D_ASSERT(shard < obj->cob_shards_nr);
-	return obj->cob_shards->do_shards[shard].do_target_id;
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (map_ver == obj->cob_version)
+		D_ASSERTF(shard < obj->cob_shards_nr, "bad shard %d exceed %d "
+			  "map_ver %d\n", shard, obj->cob_shards_nr, map_ver);
+	if (shard >= obj->cob_shards_nr) {
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		return -DER_NONEXIST;
+	}
+
+	*tgt_id = obj->cob_shards->do_shards[shard].do_target_id;
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+	return 0;
 }
 
 /**
@@ -844,7 +855,7 @@ shard_open:
 	shard_tgt->st_rank	= obj_shard->do_target_rank;
 	shard_tgt->st_shard	= shard,
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
-	shard_tgt->st_tgt_id	= obj_shard2tgtid(obj, shard);
+	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 	obj_shard_close(obj_shard);
 
 out:
@@ -1004,15 +1015,8 @@ obj_ptr2poh(struct dc_object *obj, daos_handle_t *ph)
 static int
 obj_ptr2pm_ver(struct dc_object *obj, unsigned int *map_ver)
 {
-	daos_handle_t	ph;
-	int		rc;
-
-	rc = obj_ptr2poh(obj, &ph);
-	if (rc != 0)
-		return rc;
-
-	rc = dc_pool_map_version_get(ph, map_ver);
-	return rc;
+	*map_ver = obj->cob_version;
+	return 0;
 }
 
 static int
@@ -2147,7 +2151,13 @@ shard_task_sched(tse_task_t *task, void *arg)
 		 * pool map.
 		 * Also retry the shard IO if it got retryable error last time.
 		 */
-		target = obj_shard2tgtid(shard_auxi->obj, shard_auxi->shard);
+		rc = obj_shard2tgtid(shard_auxi->obj, shard_auxi->shard,
+				     map_ver, &target);
+		if (rc != 0) {
+			D_ERROR("shard %d, obj_shard2tgtid failed "DF_RC"\n",
+				shard_auxi->shard, DP_RC(rc));
+			goto out;
+		}
 		if (obj_auxi->req_tgts.ort_srv_disp ||
 		    obj_retry_error(task->dt_result) ||
 		    sched_arg->tsa_epoch.oe_value !=
@@ -3312,6 +3322,8 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 		else if (!obj_auxi->is_ec_obj)
 			shard = obj_grp_valid_shard_get(obj, shard, map_ver,
 							opc);
+		if (shard < 0)
+			D_GOTO(out_task, rc = shard);
 	} else {
 		dkey_hash = obj_dkey2hash(args->dkey);
 		shard = obj_dkey2shard(obj, dkey_hash, map_ver, opc,
@@ -3588,17 +3600,23 @@ shard_task_reset_query_target(tse_task_t *shard_task, void *arg)
 {
 	struct shard_task_reset_query_target_args	*reset_arg = arg;
 	struct shard_auxi_args				*auxi_arg;
+	int						 rc;
 
 	auxi_arg = tse_task_buf_embedded(shard_task, sizeof(*auxi_arg));
-	if (reset_arg->flags & DAOS_GET_DKEY)
-		auxi_arg->shard = obj_grp_leader_get(auxi_arg->obj,
-					reset_arg->shard, reset_arg->version);
-	else
+	if (reset_arg->flags & DAOS_GET_DKEY) {
+		rc = obj_grp_leader_get(auxi_arg->obj, reset_arg->shard,
+					reset_arg->version);
+		if (rc < 0)
+			return rc;
+		auxi_arg->shard = rc;
+	} else {
 		auxi_arg->shard = reset_arg->shard;
-	auxi_arg->target = obj_shard2tgtid(auxi_arg->obj, auxi_arg->shard);
+	}
+	rc = obj_shard2tgtid(auxi_arg->obj, auxi_arg->shard, reset_arg->version,
+			     &auxi_arg->target);
 	reset_arg->shard += reset_arg->replicas;
 
-	return 0;
+	return rc;
 }
 
 int
@@ -3715,15 +3733,23 @@ dc_obj_query_key(tse_task_t *api_task)
 	for (i = 0; i < obj->cob_shards_nr; i += replicas) {
 		tse_task_t			*task;
 		struct shard_query_key_args	*args;
-		unsigned int			 shard;
+		int				 shard;
 
-		if (api_args->flags & DAOS_GET_DKEY)
+		if (api_args->flags & DAOS_GET_DKEY) {
 			/* Send to leader replica directly for reducing
 			 * retry because some potential 'prepared' DTX.
 			 */
 			shard = obj_grp_leader_get(obj, i, map_ver);
-		else
+			if (shard < 0) {
+				rc = shard;
+				D_ERROR(DF_OID" no valid shard, rc "DF_RC".\n",
+					DP_OID(obj->cob_md.omd_id),
+					DP_RC(rc));
+				D_GOTO(out_task, rc);
+			}
+		} else {
 			shard = shard_first + i;
+		}
 
 		rc = tse_task_create(shard_query_key_task, sched, NULL, &task);
 		if (rc != 0)
@@ -3733,7 +3759,6 @@ dc_obj_query_key(tse_task_t *api_task)
 		args->kqa_api_args	= api_args;
 		args->kqa_auxi.epoch	= epoch;
 		args->kqa_auxi.shard	= shard;
-		args->kqa_auxi.target	= obj_shard2tgtid(obj, shard);
 		args->kqa_auxi.map_ver	= map_ver;
 		args->kqa_auxi.obj	= obj;
 		args->kqa_auxi.obj_auxi	= obj_auxi;
@@ -3741,6 +3766,13 @@ dc_obj_query_key(tse_task_t *api_task)
 		args->kqa_dti		= dti;
 		uuid_copy(args->kqa_coh_uuid, coh_uuid);
 		uuid_copy(args->kqa_cont_uuid, cont_uuid);
+
+		rc = obj_shard2tgtid(obj, shard, map_ver,
+				     &args->kqa_auxi.target);
+		if (rc != 0) {
+			tse_task_complete(task, rc);
+			D_GOTO(out_task, rc);
+		}
 
 		rc = tse_task_register_deps(api_task, 1, &task);
 		if (rc != 0) {
