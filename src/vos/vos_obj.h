@@ -118,7 +118,7 @@ vos_obj_refcount(struct vos_object *obj)
 }
 
 /** Evict an object reference from the cache */
-void vos_obj_evict(struct vos_object *obj);
+void vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj);
 
 int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
 			 daos_unit_oid_t oid);

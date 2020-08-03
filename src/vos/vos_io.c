@@ -479,7 +479,7 @@ biov_align_lens(struct bio_iov *biov, struct evt_entry *ent, daos_size_t rsize)
  */
 static int
 save_recx(struct vos_io_context *ioc, uint64_t rx_idx, uint64_t rx_nr,
-	  daos_epoch_t ep, int type)
+	  daos_epoch_t ep, uint32_t rec_size, int type)
 {
 	struct daos_recx_ep_list	*recx_list;
 	struct daos_recx_ep		 recx_ep;
@@ -495,6 +495,7 @@ save_recx(struct vos_io_context *ioc, uint64_t rx_idx, uint64_t rx_nr,
 	recx_ep.re_recx.rx_nr = rx_nr;
 	recx_ep.re_ep = ep;
 	recx_ep.re_type = type;
+	recx_ep.re_rec_size = rec_size;
 
 	return daos_recx_ep_add(recx_list, &recx_ep);
 }
@@ -560,7 +561,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		if (holes != 0) {
 			if (with_shadow) {
 				rc = save_recx(ioc, lo - holes, holes,
-					       shadow_ep, DRT_SHADOW);
+					       shadow_ep, ent_array.ea_inob,
+					       DRT_SHADOW);
 				if (rc != 0)
 					goto failed;
 			}
@@ -577,7 +579,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		D_ASSERT(rsize == ent_array.ea_inob);
 
 		if (ioc->ic_save_recx) {
-			rc = save_recx(ioc, lo, nr, ent->en_epoch, DRT_NORMAL);
+			rc = save_recx(ioc, lo, nr, ent->en_epoch,
+				       ent_array.ea_inob, DRT_NORMAL);
 			if (rc != 0)
 				goto failed;
 		}
@@ -610,7 +613,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	if (holes != 0) { /* trailing holes */
 		if (with_shadow) {
 			rc = save_recx(ioc, end - holes, holes, shadow_ep,
-				       DRT_SHADOW);
+				       ent_array.ea_inob, DRT_SHADOW);
 			if (rc != 0)
 				goto failed;
 		}
@@ -1800,9 +1803,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (dth != NULL) {
 		struct dtx_rsrvd_uint	*dru;
 
-		D_ASSERT(dth->dth_op_seq >= 1);
-
-		dru = &dth->dth_rsrvds[dth->dth_op_seq - 1];
+		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
 		dru->dru_scm = ioc->ic_rsrvd_scm;
 		ioc->ic_rsrvd_scm = NULL;
 

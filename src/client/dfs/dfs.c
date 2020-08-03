@@ -998,7 +998,7 @@ err:
 
 int
 dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
-	 int *dfs_entry_size)
+		  int *dfs_entry_key_size, int *dfs_entry_size)
 {
 	if (dkey == NULL || akey_count == NULL)
 		return EINVAL;
@@ -1008,6 +1008,7 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 		return ENOMEM;
 
 	*akey_count = SB_AKEYS;
+	*dfs_entry_key_size = strlen(INODE_AKEY_NAME);
 	*dfs_entry_size = sizeof(struct dfs_entry);
 	set_inode_params(true, *iods, dkey);
 
@@ -3744,7 +3745,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_PUNCH;
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
-		D_CDEBUG(rc == -DER_EXIST, DLOG_INFO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
 			"Failed to punch extended attribute '%s'\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}

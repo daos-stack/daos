@@ -20,12 +20,6 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-
-Prerequisite
-Run vos_size to generate vos_size.yaml
-Usage: vos_size.py input.yaml [alternate vos_size.yaml]
-
-See vos_size_input.yaml sample input
 '''
 from __future__ import print_function
 import yaml
@@ -178,7 +172,7 @@ class MetaOverhead(object):
             check_key_type(dkey_spec)
             dkey_count = int(dkey_spec.get("count", 1))
             num_pools = self.num_pools
-            full_count = dkey_count / num_pools
+            full_count = dkey_count // num_pools
             partial_count = dkey_count % num_pools
             if full_count == 0:
                 num_pools = partial_count
@@ -236,7 +230,7 @@ class MetaOverhead(object):
             if akey["key"] == "single_value" or size < cont["csum_gran"]:
                 size += csum_size
             else:
-                size += (size / cont["csum_gran"]) * csum_size
+                size += (size // cont["csum_gran"]) * csum_size
                 if value_spec.get("aligned", "Yes") == "No":
                     size += (csum_size * 2)
         akey["count"] += value_spec.get("count", 1) # Number of values
@@ -268,8 +262,11 @@ class MetaOverhead(object):
         if num_values > max_dyn:
             leaf_node_size = self.meta["trees"][key]["leaf_node_size"]
             int_node_size = self.meta["trees"][key]["int_node_size"]
-            tree_nodes = (num_values * 2 + order - 1) / order
+            tree_nodes = (num_values * 2 + order - 1) // order
             return leaf_node_size, int_node_size, tree_nodes
+
+        if self.meta["trees"][key]["num_dynamic"] == 0:
+            return 0,0,0
 
         for item in self.meta["trees"][key]["dynamic"]:
             if item["order"] >= num_values:
@@ -286,7 +283,7 @@ class MetaOverhead(object):
         leaf_size, int_size, tree_nodes = self.get_dynamic(key, num_values)
         rec_overhead = num_values * record_size
         if leaf_size != int_size and tree_nodes != 1:
-            leafs = tree_nodes / 2
+            leafs = tree_nodes // 2
             ints = tree_nodes - leafs
             overhead = leafs * leaf_size + ints * int_size + rec_overhead
         else:
@@ -317,37 +314,3 @@ class MetaOverhead(object):
             self.calc_tree(stats, self.pools[pool])
 
         stats.pretty_print()
-
-# pylint: enable=too-many-instance-attributes
-
-def run_vos_size():
-    """Run the tool"""
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Estimate VOS Overhead")
-    parser.add_argument('config', metavar='CONFIG', type=str, nargs=1,
-                        help='Input configuration file')
-    parser.add_argument('--meta', metavar='META', help='Input metadata file',
-                        default='vos_size.yaml')
-
-    args = parser.parse_args()
-
-    config_yaml = yaml.safe_load(open(args.config[0], "r"))
-
-    meta_yaml = yaml.safe_load(open(args.meta, "r"))
-
-    num_pools = config_yaml.get("num_pools", 1)
-
-    overheads = MetaOverhead(args, num_pools, meta_yaml)
-
-    if "containers" not in config_yaml:
-        print("No \"containers\" key in %s.  Nothing to do" % args.config[0])
-        return
-
-    for container in config_yaml.get("containers"):
-        overheads.load_container(container)
-
-    overheads.print_report()
-
-if __name__ == "__main__":
-    run_vos_size()
