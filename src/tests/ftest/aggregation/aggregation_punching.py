@@ -64,6 +64,14 @@ class AggregationPunching(MdtestBase):
         # local params
         params = self.params.get("mdtest_params", "/run/mdtest/*")
         processes = self.params.get("np", "/run/mdtest/*")
+        # update mdtest params
+        self.mdtest_cmd.api.update(params[0])
+        self.mdtest_cmd.write_bytes.update(params[1])
+        self.mdtest_cmd.branching_factor.update(params[2])
+        # if branching factor is 1 use num_of_files_dirs
+        # else use items option of mdtest
+        self.mdtest_cmd.num_of_files_dirs.update(params[3])
+        self.mdtest_cmd.depth.update(params[4])
 
         # write bytes * num_dir_size * num_of_client_processes
         mdtest_data_size = params[1] * params[3] * processes
