@@ -29,7 +29,7 @@ then
 	then
 	    ignore+=",SPACING_CAST"
 	fi
-        echo $CP --quiet --no-tree -file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
+        $CP --quiet --no-tree -file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
     done
 fi
 
