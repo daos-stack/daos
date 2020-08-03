@@ -415,11 +415,10 @@ class IorTestBase(TestWithServers):
                         "Error running '{}' on the following "
                         "hosts: {}".format(cmd, error_hosts))
 
-        # report error if any command fails
+         # report error if any command fails
         except CommandFailure as error:
-            self.log.error("Test Failed: %s",
+            self.log.error("DfuseSparseFile Test Failed: %s",
                            str(error))
             self.fail("Test was expected to pass but "
                       "it failed.\n")
-
         return ret
