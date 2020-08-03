@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+import os
 
 from avocado.utils import process
 from apricot import TestWithServers
@@ -68,10 +69,10 @@ class DaosCoreBase(TestWithServers):
         cmd = "{} {} -n {} -x D_LOG_FILE={} \
             -x D_LOG_MASK=DEBUG -x DD_MASK=mgmt,io,md,epc,rebuild \
             {} -s {} -n {} -{} {}".format(self.orterun, self.client_mca,
-                                      num_clients,
-                                      get_log_file(self.client_log),
-                                      self.daos_test, num_replicas,
-                                      dmg_config_file, subtest, args)
+                                          num_clients,
+                                          get_log_file(self.client_log),
+                                          self.daos_test, num_replicas,
+                                          dmg_config_file, subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"
@@ -82,11 +83,24 @@ class DaosCoreBase(TestWithServers):
         try:
             process.run(cmd, env=env)
         except process.CmdError as result:
-            if result.result.exit_status is not 0:
+            if result.result.exit_status != 0:
                 # fake a JUnit failure output
-                with open(self.subtest_name +
-                          "_results.xml", "w") as results_xml:
-                    results_xml.write('''<?xml version="1.0" encoding="UTF-8"?>
+                self.create_results_xml(result)
+                self.fail(
+                    "{0} failed with return code={1}.\n".format(
+                        cmd, result.result.exit_status))
+
+    def create_results_xml(self, result):
+        """Create a JUnit result.xml file for the failed command.
+
+        Args:
+            result (CmdResult): result of the failed command.
+        """
+        filename = "".join([self.subtest_name, "_results.xml"])
+        # filename = os.path.join(self.outputdir, filename)
+        try:
+            with open(filename, "w") as results_xml:
+                results_xml.write('''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="{0}" errors="1" failures="0" skipped="0" tests="1" time="0.0">
   <testcase name="ALL" time="0.0" >
     <error message="Test failed to start up"/>
@@ -99,5 +113,5 @@ class DaosCoreBase(TestWithServers):
   </testcase>
 </testsuite>'''.format(self.subtest_name, result.result.stdout,
                        result.result.stderr))
-                self.fail("{0} failed with return code={1}.\n"
-                          .format(cmd, result.result.exit_status))
+        except IOError as error:
+            self.log.error("Error creating %s: %s", filename, error)
