@@ -60,7 +60,7 @@ extern struct dss_module_key vos_module_key;
 extern unsigned int VOS_BLK_SHIFT;
 extern unsigned int VOS_BLK_SZ;
 
-#define VOS_BLOB_HDR_BLKS	1	/* block */
+#define VOS_BLOB_HDR_BLKS	16	/* block */
 
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
