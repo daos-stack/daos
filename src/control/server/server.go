@@ -157,8 +157,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	prepResp, err := bdevProvider.Prepare(prepReq)
-	if err != nil {
+	if _, err := bdevProvider.Prepare(prepReq); err != nil {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
 	}
 

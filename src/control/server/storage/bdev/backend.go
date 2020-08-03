@@ -24,8 +24,12 @@
 package bdev
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
+	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -229,8 +233,81 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 	return ctrlr, nil
 }
 
-func (b *spdkBackend) Prepare(req PrepareRequest) error {
-	return b.script.Prepare(req)
+// detectVmd returns whether VMD devices have been found and a slice of VMD
+// PCI addresses if found.
+func detectVmd() ([]string, error) {
+	// Check available VMD devices with command:
+	// "$lspci | grep  -i -E "201d | Volume Management Device"
+	lspciCmd := exec.Command("lspci")
+	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
+	var cmdOut bytes.Buffer
+
+	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
+	vmdCmd.Stdout = &cmdOut
+	_ = lspciCmd.Start()
+	_ = vmdCmd.Run()
+	_ = lspciCmd.Wait()
+
+	if cmdOut.Len() == 0 {
+		return []string{}, nil
+	}
+
+	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
+	vmdAddrs := make([]string, 0, vmdCount)
+
+	i := 0
+	scanner := bufio.NewScanner(&cmdOut)
+	for scanner.Scan() {
+		if i == vmdCount {
+			break
+		}
+		s := strings.Split(scanner.Text(), " ")
+		vmdAddrs = append(vmdAddrs, strings.TrimSpace(s[0]))
+		i++
+	}
+
+	if len(vmdAddrs) == 0 {
+		return nil, errors.New("error parsing cmd output")
+	}
+
+	return vmdAddrs, nil
+}
+
+func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
+	resp := &PrepareResponse{}
+
+	if err := b.script.Prepare(req); err != nil {
+		return nil, errors.WithMessage(err, "SPDK prepare")
+	}
+
+	if req.DisableVMD {
+		return resp, nil
+	}
+
+	vmdDevs, err := detectVmd()
+	if err != nil {
+		return nil, errors.Wrap(err, "VMD could not be enabled")
+	}
+
+	if len(vmdDevs) == 0 {
+		return resp, nil
+	}
+
+	vmdReq := req
+	// If VMD devices are going to be used, then need to run a separate
+	// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
+	//
+	// TODO: ignore devices not in include list
+	vmdReq.PCIWhitelist = strings.Join(vmdDevs, " ")
+	b.log.Debugf("VMD enabled, unbinding %v", vmdDevs)
+
+	if err := b.script.Prepare(vmdReq); err != nil {
+		return nil, errors.WithMessage(err, "SPDK VMD prepare")
+	}
+
+	resp.VmdDetected = true
+
+	return resp, nil
 }
 
 func (b *spdkBackend) Reset() error {

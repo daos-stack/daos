@@ -36,13 +36,14 @@ type (
 		formatIdx     int
 		InitErr       error
 		ResetErr      error
+		PrepareResp   *PrepareResponse
 		PrepareErr    error
 		FormatRes     *storage.NvmeController
 		FormatFailIdx int
 		FormatErr     error
 		ScanRes       storage.NvmeControllers
 		ScanErr       error
-		vmdEnabled    bool
+		vmdEnabled    bool // set through public access methods
 	}
 
 	MockBackend struct {
@@ -111,8 +112,15 @@ func (mb *MockBackend) Reset() error {
 	return mb.cfg.ResetErr
 }
 
-func (mb *MockBackend) Prepare(_ PrepareRequest) error {
-	return mb.cfg.PrepareErr
+func (mb *MockBackend) Prepare(_ PrepareRequest) (*PrepareResponse, error) {
+	if mb.cfg.PrepareErr != nil {
+		return nil, mb.cfg.PrepareErr
+	}
+	if mb.cfg.PrepareResp == nil {
+		return new(PrepareResponse), nil
+	}
+
+	return mb.cfg.PrepareResp, nil
 }
 
 func (mb *MockBackend) EnableVmd() {

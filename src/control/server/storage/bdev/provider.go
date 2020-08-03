@@ -24,11 +24,6 @@
 package bdev
 
 import (
-	"bufio"
-	"bytes"
-	"os/exec"
-	"strings"
-
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/fault"
@@ -100,7 +95,7 @@ type (
 	Backend interface {
 		Init(shmID ...int) error
 		Reset() error
-		Prepare(PrepareRequest) error
+		Prepare(PrepareRequest) (*PrepareResponse, error)
 		Scan() (storage.NvmeControllers, error)
 		Format(pciAddr string) (*storage.NvmeController, error)
 		EnableVmd()
@@ -140,8 +135,7 @@ func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
 	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
-// EnableVmd turns on VMD device awareness.
-func (p *Provider) EnableVmd() {
+func (p *Provider) enableVmd() {
 	p.backend.EnableVmd()
 }
 
@@ -164,8 +158,9 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		req.EnableVmd = p.IsVmdEnabled()
 		return p.fwd.Scan(req)
 	}
+	// set vmd state on remote provider in forwarded request
 	if req.IsForwarded() && req.EnableVmd {
-		p.EnableVmd()
+		p.enableVmd()
 	}
 
 	cs, err := p.backend.Scan()
@@ -178,53 +173,14 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	}, nil
 }
 
-// detectVmd returns whether VMD devices have been found and a slice of VMD
-// PCI addresses if found.
-func detectVmd() ([]string, error) {
-	// Check available VMD devices with command:
-	// "$lspci | grep  -i -E "201d | Volume Management Device"
-	lspciCmd := exec.Command("lspci")
-	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
-	var cmdOut bytes.Buffer
-
-	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
-	vmdCmd.Stdout = &cmdOut
-	_ = lspciCmd.Start()
-	_ = vmdCmd.Run()
-	_ = lspciCmd.Wait()
-
-	if cmdOut.Len() == 0 {
-		return []string{}, nil
-	}
-
-	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
-	vmdAddrs := make([]string, 0, vmdCount)
-
-	i := 0
-	scanner := bufio.NewScanner(&cmdOut)
-	for scanner.Scan() {
-		if i == vmdCount {
-			break
-		}
-		s := strings.Split(scanner.Text(), " ")
-		vmdAddrs = append(vmdAddrs, strings.TrimSpace(s[0]))
-		i++
-	}
-
-	if len(vmdAddrs) == 0 {
-		return nil, errors.New("error parsing cmd output")
-	}
-
-	return vmdAddrs, nil
-}
-
 // Prepare attempts to perform all actions necessary to make NVMe components available for
 // use by DAOS.
 func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	if p.shouldForward(req) {
 		resp, err := p.fwd.Prepare(req)
+		// set vmd state on local provider after forwarding request
 		if err == nil && resp.VmdDetected {
-			p.EnableVmd()
+			p.enableVmd()
 		}
 
 		return resp, err
@@ -235,44 +191,13 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return nil, errors.WithMessage(err, "SPDK setup reset")
 	}
 
-	resp := &PrepareResponse{}
+	resp := new(PrepareResponse)
 	// if we're only resetting, return before prep
 	if req.ResetOnly {
 		return resp, nil
 	}
 
-	if err := p.backend.Prepare(req); err != nil {
-		return nil, errors.WithMessage(err, "SPDK prepare")
-	}
-
-	if req.DisableVMD {
-		return resp, nil
-	}
-
-	vmdDevs, err := detectVmd()
-	if err != nil {
-		return nil, errors.Wrap(err, "VMD could not be enabled")
-	}
-
-	if len(vmdDevs) == 0 {
-		return resp, nil
-	}
-
-	vmdReq := req
-	// If VMD devices are going to be used, then need to run a separate
-	// bdev prepare (SPDK setup) with the VMD address as the PCI_WHITELIST
-	//
-	// TODO: ignore devices not in include list
-	vmdReq.PCIWhitelist = strings.Join(vmdDevs, " ")
-	p.log.Debugf("VMD enabled, unbinding %v", vmdDevs)
-
-	if err := p.backend.Prepare(vmdReq); err != nil {
-		return nil, errors.WithMessage(err, "SPDK VMD prepare")
-	}
-
-	resp.VmdDetected = true
-
-	return resp, nil
+	return p.backend.Prepare(req)
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).
