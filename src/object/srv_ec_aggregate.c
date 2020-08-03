@@ -711,7 +711,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 			   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 			   DIOF_TO_SPEC_SHARD, &pshard);
 
-	D_PRINT("Remote parity fetch returned: %d\n", rc);
+	// D_PRINT("Remote parity fetch returned: %d\n", rc);
 	return rc;
 }
 
