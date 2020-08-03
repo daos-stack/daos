@@ -42,13 +42,14 @@ extern "C" {
  * \param[out] dkey DFS superblock D-Key
  * \param[out] iods DFS superblock A-keys
  * \param[out] akey_count number of superblock A-keys
+ * \param[out] dfs_entry_key_size key size of the inode entry
  * \param[out] dfs_entry_size size of the dfs entry
  *
  * \return              0 on success, errno code on failure.
  */
 int
 dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
-		int *dfs_entry_size);
+		int *dfs_entry_key_size, int *dfs_entry_size);
 
 /**
  * Releases the memory allocated by the dfs_get_sb_layout() function.
