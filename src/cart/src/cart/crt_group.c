@@ -1549,7 +1549,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc = -DER_OOG);
 
 	/**
-	 * step 2, if rank:tag is not found, looup rank:tag=0 
+	 * step 2, if rank:tag is not found, lookup rank:tag=0
 	 */
 	ul_out->ul_tag = 0;
 	rc = crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx,
@@ -1565,7 +1565,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	ul_out->ul_uri = cached_uri;
 	if (ul_out->ul_uri == NULL)
 		D_GOTO(out, rc = -DER_OOG);
-	
 
 out:
 	if (should_decref)

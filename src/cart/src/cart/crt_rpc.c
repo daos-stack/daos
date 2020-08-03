@@ -545,7 +545,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 static void
 uri_lookup_cb(const struct crt_cb_info *cb_info)
 {
-	struct crt_rpc_priv 		*chained_rpc_priv;
+	struct crt_rpc_priv		*chained_rpc_priv;
 	struct crt_context		*ctx;
 	struct crt_uri_lookup_out	*ul_out;
 	struct crt_uri_lookup_in	*ul_in;
