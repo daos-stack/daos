@@ -36,7 +36,6 @@ class DaosAggregationThrottling(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-")
     def test_aggregation_throttling(self):
         """Jira ID: DAOS-3749
 
