@@ -31,4 +31,4 @@ container:
 client_processes:
     np: 6
 test_repo:
-    hdf5: "/usr/lib64/hdf5/tests"
+    hdf5: "/usr/lib64/hdf5/mpich/tests"

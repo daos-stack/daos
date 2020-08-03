@@ -123,7 +123,7 @@ def qb_inst_rpms = ""
 el7_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
-                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
+                       "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 " +
                        "fio MACSio"
 
