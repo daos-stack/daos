@@ -64,7 +64,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	DFUSE_TRA_DEBUG(oh, "Fetching new entries at offset %ld", offset);
 
 	rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &count,
-			 (size_t)((NAME_MAX+1) * READDIR_COUNT),
+			 (size_t)((NAME_MAX + 1) * READDIR_COUNT),
 			 filler_cb, &idata);
 
 	oh->doh_anchor_index = count;
@@ -74,13 +74,12 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	DFUSE_TRA_DEBUG(oh, "Added %d entries rc %d", count, rc);
 
 	if (daos_anchor_is_eof(&oh->doh_anchor)) {
-		off_t eof_offset = oh->doh_dre[count ? count - 1 : 0].dre_offset;
+		*eof = oh->doh_dre[count ? count - 1 : 0].dre_offset;
 
 		DFUSE_TRA_DEBUG(oh,
 				"End of stream reached, count %d offset %ld",
 				count,
-				eof_offset);
-		*eof = eof_offset;
+				*eof);
 	}
 
 	return rc;
@@ -128,7 +127,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
-				&ie->ie_stat.st_ino,
+				       &ie->ie_stat.st_ino,
 				sizeof(ie->ie_stat.st_ino),
 				&ie->ie_htl);
 
@@ -145,21 +144,21 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_INFO(inode,
-			"Maybe updating parent inode %lu dfs_root %lu",
+			       "Maybe updating parent inode %lu dfs_root %lu",
 			entry->ino, ie->ie_dfs->dfs_root);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
 			DFUSE_TRA_INFO(inode, "Not updating parent");
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
-					ie->ie_name);
+					       ie->ie_name);
 			if (rc != 0)
 				DFUSE_TRA_ERROR(inode,
 						"dfs_update_parent() failed %d",
 						rc);
 		}
 		inode->ie_parent = ie->ie_parent;
-		strncpy(inode->ie_name, ie->ie_name, NAME_MAX+1);
+		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
@@ -214,7 +213,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	 * different then seek
 	 */
 	if (offset && offset != oh->doh_dre[oh->doh_dre_index].dre_offset &&
-		oh->doh_anchor_index + 1 != offset) {
+	    oh->doh_anchor_index + 1 != offset) {
 		uint32_t num, keys;
 
 		/*
@@ -234,13 +233,15 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		keys = 0;
 		while (num) {
 			rc = dfs_iterate(oh->doh_dfs, oh->doh_obj,
-					 &oh->doh_anchor, &num, (NAME_MAX + 1) * num,
+					 &oh->doh_anchor, &num,
+					 (NAME_MAX + 1) * num,
 					 NULL, NULL);
 			if (rc)
 				D_GOTO(err, rc);
 
 			if (daos_anchor_is_eof(&oh->doh_anchor)) {
-				memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
+				memset(&oh->doh_anchor, 0,
+				       sizeof(oh->doh_anchor));
 				oh->doh_anchor_index = 0;
 				oh->doh_dre_index = 0;
 
@@ -257,7 +258,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		oh->doh_dre_index = 0;
 	}
 
-
 	do {
 		int i;
 		off_t eof = 0;
@@ -266,7 +266,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			offset++;
 
 		if (offset != oh->doh_dre[oh->doh_dre_index].dre_offset) {
-
 			/* maybe fetch entries */
 			rc = fetch_dir_entries(oh, offset, &eof);
 			if (rc != 0)
@@ -280,9 +279,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			struct dfuse_readdir_entry	*dre = &oh->doh_dre[i];
 			struct stat			stbuf = {0};
 			dfs_obj_t			*obj;
-			struct dfuse_dfs		*dfs = oh->doh_ie->ie_dfs;
-			off_t next_offset;
-			size_t written;
+			struct dfuse_dfs		*dfs;
+			off_t				next_offset;
+			size_t				written;
+
+			dfs = oh->doh_ie->ie_dfs;
 
 			if (dre->dre_offset == 0) {
 				DFUSE_TRA_DEBUG(oh, "Reached end of array");
@@ -293,7 +294,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			oh->doh_dre_index += 1;
 
-			next_offset = dre->dre_offset == eof ? -1 : dre->dre_offset + 1;
+			if (dre->dre_offset == eof)
+				next_offset = -1;
+			else
+				next_offset = dre->dre_offset + 1;
 
 			DFUSE_TRA_DEBUG(oh, "Checking offset %ld next %ld '%s'",
 					dre->dre_offset,
@@ -322,7 +326,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(reply, 0);
 			}
 
-
 			if (plus) {
 				struct fuse_entry_param	entry = {0};
 				d_list_t *rlink;
@@ -341,7 +344,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				written = fuse_add_direntry_plus(req,
 								 &reply_buff[buff_offset],
 								 size - buff_offset,
-							         dre->dre_name,
+								 dre->dre_name,
 								 &entry,
 								 next_offset);
 				if (written > size - buff_offset) {
@@ -350,7 +353,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				}
 
 			} else {
-
 				dfs_release(obj);
 
 				written = fuse_add_direntry(req,
@@ -386,9 +388,8 @@ reply:
 	else
 		DFUSE_TRA_DEBUG(oh, "Replying %d %d", added, rc);
 
-	if (added == 0 && rc != 0) {
+	if (added == 0 && rc != 0)
 		D_GOTO(err, 0);
-	}
 
 	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
 	D_FREE(reply_buff);

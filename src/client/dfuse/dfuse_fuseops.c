@@ -389,7 +389,6 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	dfuse_cb_readdir(req, oh, size, offset, true);
 }
 
-
 void
 df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 	      const char *name)

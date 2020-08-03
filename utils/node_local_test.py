@@ -757,6 +757,7 @@ def readdir_test(dfuse, count):
     files = os.listdir(wide_dir)
     print(files)
     print(len(files))
+    assert len(files) == count
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
