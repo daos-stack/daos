@@ -28,8 +28,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 func TestFirmwareCommands(t *testing.T) {
