@@ -1364,20 +1364,21 @@ uh_op_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	struct d_uhash_bundle	*uhbund	= (struct d_uhash_bundle *)key;
 	struct d_uuid		*lkey	= uhbund->key;
+	uint32_t		*retp	= (uint32_t *)lkey->uuid;
 
 	D_ASSERT(ksize == sizeof(struct d_uhash_bundle));
 	D_DEBUG(DB_TRACE, "uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
 
-	return d_hash_string_u32((const char *)lkey->uuid, sizeof(uuid_t));
+	return *retp;
 }
 
 static uint32_t
 uh_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
 {
 	struct d_ulink		*ulink	= link2ulink(link);
+	uint32_t		*retp	= (uint32_t *)ulink->ul_uuid.uuid;
 
-	return d_hash_string_u32((const char *)ulink->ul_uuid.uuid,
-				 sizeof(uuid_t));
+	return *retp;
 }
 
 static bool

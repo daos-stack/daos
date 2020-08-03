@@ -223,7 +223,7 @@ static uint32_t
 spi_key_hash(struct d_hash_table *htable, const void *key, unsigned int len)
 {
 	D_ASSERT(len == sizeof(uuid_t));
-	return d_hash_string_u32((const char *)key, len);
+	return *((const uint32_t *)key);
 }
 
 static void
