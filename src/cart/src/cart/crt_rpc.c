@@ -208,21 +208,6 @@ static struct crt_proto_rpc_format crt_fi_rpcs[] = {
 
 #undef X
 
-#define X(a, b, c, d, e) case a: return #a;
-
-char
-*crt_opc_to_str(crt_opcode_t opc)
-{
-	switch (opc) {
-		CRT_INTERNAL_RPCS_LIST
-		CRT_FI_RPCS_LIST
-		default:
-			return "External rpc";
-	}
-}
-
-#undef X
-
 /* CRT RPC related APIs or internal functions */
 int
 crt_internal_rpc_register(void)
@@ -1034,8 +1019,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			rc = crt_req_uri_lookup(rpc_priv);
 			if (rc != 0)
 				D_ERROR("crt_req_uri_lookup() failed. rc %d, "
-					"opc: %#x (%s).\n", rc, req->cr_opc,
-					crt_opc_to_str(req->cr_opc));
+					"opc: %#x.\n", rc, req->cr_opc);
 		}
 		break;
 	case RPC_STATE_URI_LOOKUP:

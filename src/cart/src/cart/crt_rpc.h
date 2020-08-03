@@ -300,8 +300,6 @@ enum {
 
 #undef X
 
-char *crt_opc_to_str(crt_opcode_t opc);
-
 #define CRT_SEQ_GRP_CACHE					 \
 	((d_rank_t)		(gc_rank)		CRT_VAR) \
 	((uint32_t)		(gc_tag)		CRT_VAR) \
