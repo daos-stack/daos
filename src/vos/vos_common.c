@@ -205,6 +205,7 @@ struct dss_module_key vos_module_key = {
 
 unsigned int VOS_BLK_SZ;
 unsigned int VOS_BLK_SHIFT;
+unsigned int VOS_BLOB_HRD_BLKS;
 
 static int
 vos_mod_init(void)
@@ -212,15 +213,24 @@ vos_mod_init(void)
 	int		rc = 0;
 	char		*media_limit;
 	unsigned	user_limit = 4096;
-
+	char		*mdata_align = NULL;
 
 	media_limit = getenv("DAOS_MEDIA_THRESHOLD");
-	if (media_limit) {
+	if (media_limit != NULL) {
 		/** Check if user media selection limit is legal power of 2 */
 		user_limit =
 		((atoi(media_limit) & ((atoi(media_limit)) - 1)) == 0) ?
 			atoi(media_limit) : 4096;
 	}
+
+	mdata_align = getenv("METADATA_ALIGN");
+        if (mdata_align != NULL)
+		VOS_BLOB_HRD_BLKS = 16;
+	else
+		VOS_BLOB_HRD_BLKS = 1;
+
+	D_PRINT("VOS BLOB header blocks: %u\n",
+		VOS_BLOB_HRD_BLKS);
 
 	VOS_BLK_SZ    = user_limit;
 	VOS_BLK_SHIFT = log10(VOS_BLK_SZ)/log10(2);

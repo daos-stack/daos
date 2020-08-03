@@ -1,5 +1,11 @@
+diff --git a/isa-l b/isa-l
+--- a/isa-l
++++ b/isa-l
+@@ -1 +1 @@
+-Subproject commit 09e787231b31add1234ec9a3dfe718533f1c3bf4
++Subproject commit 09e787231b31add1234ec9a3dfe718533f1c3bf4-dirty
 diff --git a/lib/blob/blobstore.c b/lib/blob/blobstore.c
-index 99abbe5..18f07a7 100644
+index 99abbe5..475f66a 100644
 --- a/lib/blob/blobstore.c
 +++ b/lib/blob/blobstore.c
 @@ -3696,6 +3696,7 @@ spdk_bs_init(struct spdk_bs_dev *dev, struct spdk_bs_opts *o,
@@ -10,17 +16,19 @@ index 99abbe5..18f07a7 100644
  
  	SPDK_DEBUGLOG(SPDK_LOG_BLOB, "Initializing blobstore on dev %p\n", dev);
  
-@@ -3818,6 +3819,14 @@ spdk_bs_init(struct spdk_bs_dev *dev, struct spdk_bs_opts *o,
+@@ -3818,6 +3819,16 @@ spdk_bs_init(struct spdk_bs_dev *dev, struct spdk_bs_opts *o,
  	ctx->super->md_len = bs->md_len;
  	num_md_pages += bs->md_len;
  
-+	mdata_align = getenv("SPDK_MDATA_ALIGN");
-+	if ((mdata_align != NULL) &&
-+	    (num_md_pages % 16) != 0) {
-+		num_md_pages +=
-+			 16 - (num_md_pages % 16);
++	mdata_align = getenv("METADATA_ALIGN");
++	if (mdata_align != NULL) {
++		if ((num_md_pages % 16) != 0) {
++			num_md_pages +=
++				 16 - (num_md_pages % 16);
++
++		}
++		printf("num_md_pages: %d\n", num_md_pages);
 +	}
-+	printf("num_md_pages: %d\n", num_md_pages);
 +
  	num_md_lba = _spdk_bs_page_to_lba(bs, num_md_pages);
  
