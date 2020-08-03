@@ -41,21 +41,23 @@ class CSumErrorLog(DaosCoreBase):
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
         super(CSumErrorLog, self).setUp()
-        self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        self.dmg.get_params(self)
+#        self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
+        self.dmg = self.get_dmg_command()
+#        self.dmg.get_params(self)
         self.dmg.hostlist = self.hostlist_servers[0]
 #        self.dmg.insecure.update(
 #            self.server_managers[0].get_config_value("allow_insecure"),
 #            "dmg.insecure")
-        self.dmg.set_sub_command("storage")
-        self.dmg.sub_command_class.set_sub_command("query")
+#        self.dmg.set_sub_command("storage")
+#        self.dmg.sub_command_class.set_sub_command("query")
 
     def get_nvme_device_id(self):
         self.dmg.json.value = True
-        self.dmg.sub_command_class. \
-            sub_command_class.set_sub_command("list-devices")
+#        self.dmg.sub_command_class. \
+#            sub_command_class.set_sub_command("list-devices")
         try:
-            result = self.dmg.run()
+#            result = self.dmg.run()
+            result = self.dmg.storage_query_list_devices()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
 
@@ -71,13 +73,14 @@ class CSumErrorLog(DaosCoreBase):
             self.fail("No device id provided")
             return
         self.dmg.json.value = True
-        self.dmg.sub_command_class. \
-            sub_command_class.set_sub_command("device-health")
-        self.dmg.sub_command_class. \
-            sub_command_class. \
-            sub_command_class.uuid.value = device_id
+#        self.dmg.sub_command_class. \
+#            sub_command_class.set_sub_command("device-health")
+#        self.dmg.sub_command_class. \
+#            sub_command_class. \
+#            sub_command_class.uuid.value = device_id
         try:
-            result = self.dmg.run()
+#            result = self.dmg.run()
+            result = self.dmg.storage_query_device_health(device_id)
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
 
