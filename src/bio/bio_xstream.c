@@ -171,7 +171,7 @@ traddr_to_vmd(char *dst, const char *src)
 	/* Only the first chunk of data from the traddr is useful */
 	ptr = strchr(traddr_tmp, ch);
 	if (ptr == NULL) {
-		D_ERROR("Transport id not vaild\n");
+		D_ERROR("Transport id not valid\n");
 		return -DER_INVAL;
 	}
 	position = ptr - traddr_tmp;
@@ -259,7 +259,8 @@ populate_whitelist(struct spdk_env_opts *opts)
 				 */
 				rc = traddr_to_vmd(trid->traddr, trid->traddr);
 				if (rc < 0) {
-					D_ERROR("Invalid traddr=%s\n", trid->traddr);
+					D_ERROR("Invalid traddr=%s\n",
+						trid->traddr);
 					rc = -DER_INVAL;
 					break;
 				}
