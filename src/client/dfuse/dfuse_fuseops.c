@@ -89,8 +89,6 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
-	conn->want |= FUSE_CAP_SPLICE_READ;
-
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
 	dfuse_show_flags(fs_handle, conn->want);
