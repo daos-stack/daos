@@ -48,5 +48,7 @@ def scons():
     Default(gurt_lib)
     Export('gurt_lib', 'gurt_targets')
 
+    SConscript('tests/SConscript')
+
 if __name__ == "SCons.Script":
     scons()
