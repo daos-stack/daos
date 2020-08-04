@@ -25,7 +25,6 @@
 import time
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-from apricot import skipForTicket
 
 class DaosAggregationThrottling(IorTestBase):
     # pylint: disable=too-many-ancestors
