@@ -157,30 +157,12 @@ func TestBdevPrepare(t *testing.T) {
 			req:    PrepareRequest{},
 			expRes: &PrepareResponse{},
 		},
-		//		"prepare succeeds vmd not detected": {
-		//			req:           PrepareRequest{DisableVMD: true},
-		//			shouldForward: true,
-		//			mbc: &MockBackendConfig{
-		//				PrepareResp: &PrepareResponse{VmdDetected: true},
-		//			},
-		//			expRes: &PrepareResponse{},
-		//		},
-		//		"prepare succeeds vmd detected": {
-		//			req: PrepareRequest{},
-		//			mbc: &MockBackendConfig{
-		//				PrepareResp: &PrepareResponse{VmdDetected: true},
-		//			},
-		//			expRes: &PrepareResponse{},
-		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.mbc)
-			//			if tc.shouldForward {
-			//				p = NewProvider(log, NewMockBackend(tc.mbc))
-			//			}
 
 			gotRes, gotErr := p.Prepare(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)

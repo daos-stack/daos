@@ -277,7 +277,7 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	resp := &PrepareResponse{}
 
 	if err := b.script.Prepare(req); err != nil {
-		return nil, errors.WithMessage(err, "SPDK prepare")
+		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
 	}
 
 	if req.DisableVMD {
@@ -302,7 +302,7 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	b.log.Debugf("VMD enabled, unbinding %v", vmdDevs)
 
 	if err := b.script.Prepare(vmdReq); err != nil {
-		return nil, errors.WithMessage(err, "SPDK VMD prepare")
+		return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 	}
 
 	resp.VmdDetected = true

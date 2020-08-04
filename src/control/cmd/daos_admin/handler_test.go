@@ -528,7 +528,7 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				PrepareErr: errors.New("test prepare failed"),
 			},
-			expErr: pbin.PrivilegedHelperRequestFailed("SPDK prepare: test prepare failed"),
+			expErr: pbin.PrivilegedHelperRequestFailed("bdev prepare: test prepare failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

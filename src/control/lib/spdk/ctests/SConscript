@@ -1,6 +1,7 @@
 """Build go-spdk bindings C tests"""
 from __future__ import print_function
 import daos_build
+import os
 
 def scons():
     """Execute build"""
@@ -30,13 +31,16 @@ def scons():
         return
     config = Configure(unit_env)
 
-    if GetOption('clean') or config.CheckHeader("nvme_internal.h"):
+    print(dir(unit_env))
+    lookPath = os.path.join(unit_env.subst("$SPDK_SRC"), 'lib', 'nvme',
+                            'nvme_internal.h')
+    if os.path.isfile(lookPath):
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
                                    unit_env.nc], LIBS=libs)
         unit_env.Install("$PREFIX/bin", testbin)
     else:
-        print("SPDK nvme_internal.h missing, skipping nvme_control_ut build")
+        print(lookPath, " missing, skipping nvme_control_ut build")
 
     config.Finish()
 

@@ -350,7 +350,7 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeResp{
 					State: &ResponseState{
 						Status: ResponseStatus_CTL_ERR_NVME,
-						Error:  "SPDK prepare: nvme prep error",
+						Error:  "bdev prepare: nvme prep error",
 					},
 				},
 				Scm: &PrepareScmResp{

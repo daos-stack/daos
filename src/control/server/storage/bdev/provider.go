@@ -188,7 +188,7 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 
 	// run reset first to ensure reallocation of hugepages
 	if err := p.backend.Reset(); err != nil {
-		return nil, errors.WithMessage(err, "SPDK setup reset")
+		return nil, errors.Wrap(err, "bdev prepare reset")
 	}
 
 	resp := new(PrepareResponse)
@@ -197,7 +197,9 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return resp, nil
 	}
 
-	return p.backend.Prepare(req)
+	resp, err := p.backend.Prepare(req)
+
+	return resp, errors.Wrap(err, "bdev prepare")
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).
