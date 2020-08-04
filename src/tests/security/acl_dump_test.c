@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <daos_security.h>
-#include <gurt/errno.h>
+#include <daos_errno.h>
 #include <gurt/common.h>
 
 void
