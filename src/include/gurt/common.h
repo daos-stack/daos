@@ -312,8 +312,8 @@ int d_sgl_init(d_sg_list_t *sgl, unsigned int nr);
 void d_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
-int d_write_string_buffer(d_string_buffer_t *buf, const char *fmt, ...);
-void d_free_string(d_string_buffer_t *buf);
+int d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
+void d_free_string(struct d_string_buffer_t *buf);
 
 
 #if !defined(container_of)

@@ -1898,8 +1898,8 @@ test_gurt_atomic(void **state)
 }
 
 static void
-check_string_buffer(d_string_buffer_t *str_buf, int str_size, int buf_size,
-		    const char *test_str)
+check_string_buffer(struct d_string_buffer_t *str_buf, int str_size,
+		    int buf_size, const char *test_str)
 {
 	assert_non_null(str_buf->str);
 	assert_int_equal(str_buf->str_size, str_size);
@@ -1914,7 +1914,7 @@ static void
 test_gurt_string_buffer(void **state)
 {
 	int rc, i;
-	d_string_buffer_t str_buf = {0};
+	struct d_string_buffer_t str_buf = {0};
 
 	/* empty string */
 	rc = d_write_string_buffer(&str_buf, "");

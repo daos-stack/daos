@@ -100,7 +100,7 @@ typedef struct {
 /**
  * c string buffer
  */
-typedef struct {
+struct d_string_buffer_t {
 	/** c string status */
 	unsigned int status;
 	/** c string size */
@@ -109,7 +109,7 @@ typedef struct {
 	size_t buf_size;
 	/** c string buffer address */
 	char *str;
-} d_string_buffer_t;
+};
 
 static inline void
 d_iov_set(d_iov_t *iov, void *buf, size_t size)

@@ -575,18 +575,17 @@ void d_getenv_int(const char *env, unsigned *int_val)
  * result string is stored as a C string in a buffer pointed by buf. The
  * d_string_buffer_t internal buffer grows as text is written.
  *
- * \param buf	[IN/OUT] string object where the formatted string will
- *			 be stored. Subsecute write operations to the same
- *			 string object will be append at the end of the
- *			 buffer.
- * \param format [IN]	 this is the string that contains the text to be
- *			 written to d_string_buffer_t. Please refer to the
- *			 printf() documentation for full details of how to
-  *			 use the format tags.
- * \return             0 on success, errno code on failure.
+ * \param[in,out] buf    string object where the formatted string will be
+ *                       stored. Subsequent write operations to the same string
+ *                       object will be append at the end of the buffer.
+ * \param[in]     format this is the string that contains the text to be
+ *                       written to d_string_buffer_t. Please refer to the
+ *                       printf() documentation for full details of how to use
+ *                       the format tags.
+ * \return               0 on success, errno code on failure.
  */
 int
-d_write_string_buffer(d_string_buffer_t *buf, const char *format, ...)
+d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 {
 	int n;
 	int size = 64;
@@ -639,10 +638,10 @@ d_write_string_buffer(d_string_buffer_t *buf, const char *format, ...)
  *
  * The d_string_buffer_t internal buffer is deallocated, and stats are reseted.
  *
- * \param buf [IN] string object to be cleaned.
+ * \param[in] buf string object to be cleaned.
  */
 void
-d_free_string(d_string_buffer_t *buf)
+d_free_string(struct d_string_buffer_t *buf)
 {
 	if (buf->str != NULL) {
 		D_FREE(buf->str);

@@ -64,7 +64,7 @@
 	print_record(buf, #name, &name);
 
 static void
-print_dynamic(d_string_buffer_t *buf, const char *name,
+print_dynamic(struct d_string_buffer_t *buf, const char *name,
 	      const struct daos_tree_overhead *ovhd)
 {
 	int	i;
@@ -84,7 +84,7 @@ print_dynamic(d_string_buffer_t *buf, const char *name,
 }
 
 static void
-print_record(d_string_buffer_t *buf, const char *name,
+print_record(struct d_string_buffer_t *buf, const char *name,
 	const struct daos_tree_overhead *ovhd)
 {
 	int	i;
@@ -122,7 +122,7 @@ print_record(d_string_buffer_t *buf, const char *name,
 }
 
 int
-get_vos_structure_sizes_yaml(int alloc_overhead, d_string_buffer_t *buf)
+get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 {
 	FOREACH_TYPE(DECLARE_TYPE)
 	int rc;
