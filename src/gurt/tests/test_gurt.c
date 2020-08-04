@@ -1948,7 +1948,7 @@ test_gurt_string_buffer(void **state)
 					   "experience what's inside");
 		assert_return_code(rc, errno);
 	}
-	check_string_buffer(&str_buf, 24*i, 4096, NULL);
+	check_string_buffer(&str_buf, 24 * i, 4096, NULL);
 
 	d_free_string(&str_buf);
 	assert_null(str_buf.str);

@@ -92,15 +92,15 @@ print_record(struct d_string_buffer_t *buf, const char *name,
 
 	d_write_string_buffer(buf, "  %s:\n", name);
 	d_write_string_buffer(buf, "    order: %d\n",
-		ovhd->to_leaf_overhead.no_order);
+			      ovhd->to_leaf_overhead.no_order);
 	d_write_string_buffer(buf, "    leaf_node_size: %d\n",
-		ovhd->to_leaf_overhead.no_size);
+			      ovhd->to_leaf_overhead.no_size);
 	d_write_string_buffer(buf, "    int_node_size: %d\n",
-		ovhd->to_int_node_size);
+			      ovhd->to_int_node_size);
 	d_write_string_buffer(buf, "    record_msize: %d\n",
-		ovhd->to_record_msize);
+			      ovhd->to_record_msize);
 	d_write_string_buffer(buf, "    node_rec_msize: %d\n",
-		ovhd->to_node_rec_msize);
+			      ovhd->to_node_rec_msize);
 	d_write_string_buffer(buf, "    num_dynamic: %d\n", ovhd->to_dyn_count);
 	if (ovhd->to_dyn_count == 0)
 		return;

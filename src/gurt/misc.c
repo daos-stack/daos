@@ -636,7 +636,7 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 
 /** Deallocate the memory used by d_string_buffer_t
  *
- * The d_string_buffer_t internal buffer is deallocated, and stats are reseted.
+ * The d_string_buffer_t internal buffer is deallocated, and stats are reset.
  *
  * \param[in] buf string object to be cleaned.
  */
