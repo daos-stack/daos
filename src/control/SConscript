@@ -183,7 +183,7 @@ def scons():
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
-                            "-L$BUILD_DIR/src/cart/src/gurt "
+                            "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart/src/cart "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH")

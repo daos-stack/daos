@@ -143,36 +143,48 @@ sched_set_throttle(unsigned int type, unsigned int percent)
 }
 
 struct pressure_ratio {
-	int	pr_free;	/* free space ratio */
-	int	pr_throttle;	/* update throttle ratio */
-	int	pr_pressure;	/* index in pressure_gauge */
+	unsigned int	pr_free;	/* free space ratio */
+	unsigned int	pr_throttle;	/* update throttle ratio */
+	unsigned int	pr_delay;	/* update being delayed in msec */
+	unsigned int	pr_pressure;	/* index in pressure_gauge */
 };
 
 static struct pressure_ratio pressure_gauge[] = {
 	{	/* free space > 40%, no space pressure */
 		.pr_free	= 40,
 		.pr_throttle	= 100,
+		.pr_delay	= 0,
 		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
 	},
 	{	/* free space > 30% */
 		.pr_free	= 30,
 		.pr_throttle	= 70,
+		.pr_delay	= 2000, /* msecs */
 		.pr_pressure	= 1,
 	},
 	{	/* free space > 20% */
 		.pr_free	= 20,
 		.pr_throttle	= 40,
+		.pr_delay	= 4000, /* msecs */
 		.pr_pressure	= 2,
 	},
 	{	/* free space > 10% */
 		.pr_free	= 10,
 		.pr_throttle	= 20,
+		.pr_delay	= 8000, /* msecs */
 		.pr_pressure	= 3,
 	},
-	{	/* free space <= 10% */
+	{	/* free space > 5% */
+		.pr_free	= 5,
+		.pr_throttle	= 10,
+		.pr_delay	= 12000, /* msecs */
+		.pr_pressure	= 4,
+	},
+	{	/* free space <= 5% */
 		.pr_free	= 0,
 		.pr_throttle	= 5,
-		.pr_pressure	= 4,
+		.pr_delay	= 20000, /* msecs */
+		.pr_pressure	= 5,
 	},
 };
 
@@ -531,7 +543,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left, nvme_left;
+	uint64_t		 scm_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -564,17 +576,9 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
 	else
 		scm_left = 0;
 
-	if (NVME_TOTAL(&vps) == 0)	/* NVMe not enabled */
-		nvme_left = UINT64_MAX;
-	else if (NVME_FREE(&vps) > NVME_SYS(&vps))
-		nvme_left = NVME_FREE(&vps) - NVME_SYS(&vps);
-	else
-		nvme_left = 0;
-
 	orig_pressure = spi->spi_space_pressure;
 	for (pr = &pressure_gauge[0]; pr->pr_free != 0; pr++) {
-		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100) &&
-		    nvme_left > (NVME_TOTAL(&vps) * pr->pr_free / 100))
+		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100))
 			break;
 	}
 	spi->spi_space_pressure = pr->pr_pressure;
@@ -602,6 +606,7 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_info	*sri;
 	unsigned int		 req_type = req->sr_attr.sra_type;
+	unsigned int		 delay_msecs;
 
 	D_ASSERT(spi != NULL);
 	D_ASSERT(req_type < SCHED_REQ_MAX);
@@ -615,9 +620,21 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	if (sri->sri_req_kicked < sri->sri_req_limit)
 		goto kickoff;
 
+	if (req->sr_attr.sra_flags & SCHED_REQ_FL_NO_DELAY)
+		goto kickoff;
+
+	if (req_type == SCHED_REQ_UPDATE) {
+		struct pressure_ratio *pr;
+
+		pr = &pressure_gauge[spi->spi_space_pressure];
+		delay_msecs = pr->pr_delay;
+	} else {
+		delay_msecs = max_delay_msecs[req_type];
+	}
+
 	/* Request expired */
 	D_ASSERT(info->si_cur_ts >= req->sr_enqueue_ts);
-	if ((info->si_cur_ts - req->sr_enqueue_ts) > max_delay_msecs[req_type])
+	if ((info->si_cur_ts - req->sr_enqueue_ts) > delay_msecs)
 		goto kickoff;
 
 	/* Remaining requests are not expired */
@@ -673,6 +690,23 @@ is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
 	return (info->si_cur_ts - spi->spi_pressure_ts) < SCHED_DELAY_THRESH;
 }
 
+static inline unsigned int
+throttle_update(unsigned int u_max, struct pressure_ratio *pr)
+{
+	if (u_max == 0)
+		return 0;
+
+	/* Severe space pressure */
+	if (pr->pr_free == 0)
+		return u_max * pr->pr_throttle / 100;
+
+	/* Keep IO flow moving when there are only few inflight updates */
+	if ((u_max * pr->pr_throttle / 100) == 0)
+		return 1;
+
+	return u_max * pr->pr_throttle / 100;
+}
+
 static int
 process_pool_cb(d_list_t *rlink, void *arg)
 {
@@ -707,22 +741,23 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	}
 
 	pr = &pressure_gauge[press];
-	D_ASSERT(pr->pr_throttle >= 0 && pr->pr_throttle < 100);
+	D_ASSERT(pr->pr_throttle < 100);
 
 	if (pr->pr_free != 0) {	/* Light space pressure */
 		/* Throttle updates when there is space to be reclaimed */
 		if (is_gc_pending(spi)) {
-			u_max	= u_max * pr->pr_throttle / 100;
+			u_max	= throttle_update(u_max, pr);
 			io_max	= u_max + f_max;
 		}
 	} else {		/* Severe space pressure */
 		/*
-		 * To avoid update throttling being skipped before the GC ULTs
-		 * are woke up in time, an extra paranoid is_pressure_recent()
-		 * check is added for this severe space pressure situation.
+		 * If space pressure stays in highest level for a while, we
+		 * can assume that no available space could be reclaimed, so
+		 * throttling can be stopped and ENOSPACE could be returned
+		 * to client sooner.
 		 */
-		if (is_gc_pending(spi) || is_pressure_recent(info, spi)) {
-			u_max	= u_max * pr->pr_throttle / 100;
+		if (is_pressure_recent(info, spi)) {
+			u_max	= throttle_update(u_max, pr);
 			/*
 			 * Delay all rebuild and reintegration requests for
 			 * this moment, since we can't tell if they are for
