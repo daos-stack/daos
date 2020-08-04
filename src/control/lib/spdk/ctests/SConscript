@@ -10,9 +10,12 @@ def scons():
     unit_env = senv.Clone()
     prereqs.require(unit_env, 'pmdk', 'spdk', 'isal', 'hwloc', 'cmocka')
 
+    spdk_src = prereqs.get_src_path("spdk")
+    nvme_lib_src = os.path.join(spdk_src, 'lib', 'nvme')
+    spdk_incl_src = os.path.join(spdk_src, 'include')
+
     # spdk/lib/nvme to expose normally opaque types during tests
-    unit_env.AppendUnique(CPPPATH=["$SPDK_SRC/lib/nvme",
-                                   "$SPDK_SRC/include"])
+    unit_env.AppendUnique(CPPPATH=[nvme_lib_src, spdk_incl_src])
 
     # SPDK related libs
     libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
@@ -31,9 +34,7 @@ def scons():
         return
     config = Configure(unit_env)
 
-    print(dir(unit_env))
-    lookPath = os.path.join(unit_env.subst("$SPDK_SRC"), 'lib', 'nvme',
-                            'nvme_internal.h')
+    lookPath = os.path.join(nvme_lib_src, 'nvme_internal.h')
     if os.path.isfile(lookPath):
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
