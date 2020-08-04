@@ -116,6 +116,29 @@ def daos_repos(String distro) {
     }
 }
 
+def unit_packages() {
+    Map stage_info = parseStageInfo()
+    if (stage_info['target'] == 'centos7') {
+        String packages =  'gotestsum openmpi3 ' +
+                           'hwloc-devel argobots ' +
+                           'fuse3-libs fuse3 ' +
+                           'boost-devel ' +
+                           'libisa-l-devel libpmem ' +
+                           'libpmemobj protobuf-c ' +
+                           'spdk-devel libfabric-devel '+
+                           'pmix numactl-devel ' +
+                           'libipmctl-devel ' +
+                           'python36-tabulate '
+        if (quickbuild()) {
+            // TODO: these should be gotten from the Requires: of RPM
+            packages += " spdk-tools mercury boost-devel"
+        }
+        return packages
+    } else {
+        error 'unit packages not implemented for ' + stage_info['target']
+    }
+}
+
 commit_pragma_cache = [:]
 def cachedCommitPragma(Map config) {
 

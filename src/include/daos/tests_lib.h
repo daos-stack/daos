@@ -208,4 +208,18 @@ dts_create_config(char buf[DTS_CFG_MAX], const char *format, ...)
 		buf[DTS_CFG_MAX - 1] = 0;
 }
 
+static inline void
+dts_append_config(char buf[DTS_CFG_MAX], const char *format, ...)
+{
+	va_list	ap;
+	int	count = strnlen(buf, DTS_CFG_MAX);
+
+	va_start(ap, format);
+	vsnprintf(buf + count, DTS_CFG_MAX - count, format, ap);
+	va_end(ap);
+
+	if (strlen(buf) >= DTS_CFG_MAX)
+		buf[DTS_CFG_MAX - 1] = 0;
+}
+
 #endif /* __DAOS_TESTS_LIB_H__ */

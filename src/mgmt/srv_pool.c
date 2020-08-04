@@ -724,33 +724,59 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 
 int
 ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
-			char *tgt_dev,  size_t scm_size, size_t nvme_size)
+		    char *tgt_dev,  size_t scm_size, size_t nvme_size)
 {
-	int			rc;
-	d_rank_list_t		*ranks;
-	struct mgmt_svc		*svc;
+	d_rank_list_t			*unique_add_ranks = NULL;
+	uuid_t				*tgt_uuids = NULL;
+	d_rank_list_t			*ranks;
+	struct mgmt_svc			*svc;
+	int				doms[rank_list->rl_nr];
+	int				ntargets;
+	int				i;
+	int				rc;
 
 	D_DEBUG(DB_MGMT, "extend pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
+	rc = d_rank_list_dup_sort_uniq(&unique_add_ranks, rank_list);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, rank_list,
+					   scm_size, nvme_size, &tgt_uuids);
+	if (rc != 0) {
+		D_ERROR("creating pool on ranks "DF_UUID" failed: rc "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	/* TODO: Need to make pool service aware of new rank UUIDs */
+
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
-		goto out;
+		D_GOTO(out_uuids, rc);
 
 	rc = ds_mgmt_pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
-		goto out_svc;
+		D_GOTO(out_svc, rc);
 
-	D_DEBUG(DB_MGMT, "Extend DAOS pool for "DF_UUID" not supported.\n",
-			DP_UUID(pool_uuid));
-	rc = -DER_NOSYS;
+	ntargets = rank_list->rl_nr;
+	for (i = 0; i < ntargets; ++i)
+		doms[i] = 1;
+
+	rc = ds_pool_add(pool_uuid, ntargets, tgt_uuids, rank_list,
+			    ARRAY_SIZE(doms), doms, ranks);
 
 	d_rank_list_free(ranks);
-
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
-out:
-	return rc;
+out_uuids:
+	D_FREE(tgt_uuids);
 
+out:
+	if (unique_add_ranks != NULL)
+		d_rank_list_free(unique_add_ranks);
+
+	return rc;
 }
 
 int
