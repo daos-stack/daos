@@ -26,8 +26,7 @@ container:
     control_method: daos
 mdtest:
   client_processes:
-    np_4:
-      np: 4
+      np: 2
   test_dir: "/"
   dfs_destroy: False
   iteration: 1
@@ -40,6 +39,6 @@ mdtest:
       # branching_factor
       - 1
       # num_of_dir_files
-      - 10000
+      - 4000
       # depth
       - 0
