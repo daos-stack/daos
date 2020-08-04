@@ -123,7 +123,7 @@ def qb_inst_rpms = ""
 el7_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
-                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
+                       "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 " +
                        "fio MACSio"
 
@@ -435,9 +435,9 @@ pipeline {
                               includes: ".build_vars${arch}.*"
                         stash name: 'centos7-gcc-tests',
                               includes: '''build/*/*/src/cart/src/utest/test_linkage,
-                                           build/*/*/src/cart/src/utest/test_gurt,
                                            build/*/*/src/cart/src/utest/utest_hlc,
                                            build/*/*/src/cart/src/utest/utest_swim,
+                                           build/*/*/src/gurt/tests/test_gurt,
                                            build/*/*/src/rdb/raft/src/tests_main,
                                            build/*/*/src/common/tests/btree_direct,
                                            build/*/*/src/common/tests/btree,

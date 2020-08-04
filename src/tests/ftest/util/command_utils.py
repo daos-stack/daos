@@ -317,11 +317,21 @@ class ExecutableCommand(CommandWithParameters):
         Returns:
             list: a list of strings obtained from the method's output parsed
                 through its regex
+
         """
         if regex_method not in self.METHOD_REGEX:
             raise CommandFailure(
                 "No pattern regex defined for '{}()'".format(regex_method))
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
+
+    def update_env_names(self, new_names):
+        """Update environment variable names to export for the command.
+
+        Args:
+            env_names (list): list of environment variable names to add to
+                existing self._env_names variable.
+        """
+        self._env_names.extend(new_names)
 
     def get_environment(self, manager, log_file=None):
         """Get the environment variables to export for the command.
@@ -335,7 +345,7 @@ class ExecutableCommand(CommandWithParameters):
 
         Returns:
             EnvironmentVariables: a dictionary of environment variable names and
-                values to export prior to running daos_racer
+                values to export.
 
         """
         env = EnvironmentVariables()
@@ -400,6 +410,17 @@ class CommandWithSubCommand(ExecutableCommand):
         # method (including a simple str object).
         #
         self.sub_command_class = None
+
+        # Define an attribute to store the CmdResult from the last run() call.
+        # A CmdResult object has the following properties:
+        #   command         - command string
+        #   exit_status     - exit_status of the command
+        #   stdout          - the stdout
+        #   stderr          - the stderr
+        #   duration        - command execution time
+        #   interrupted     - whether the command completed within timeout
+        #   pid             - command's pid
+        self.result = None
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
@@ -468,25 +489,64 @@ class CommandWithSubCommand(ExecutableCommand):
         self.sub_command.value = value
         self.get_sub_command_class()
 
-    def _get_result(self):
-        """Get the result from running the configured command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the command
-                information, e.g. exit status, stdout, stderr, etc.
+    def run(self):
+        """Run the command and assign the 'result' attribute.
 
         Raises:
-            CommandFailure: if the command fails.
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
 
         """
-        result = None
         try:
-            result = self.run()
+            self.result = super(CommandWithSubCommand, self).run()
         except CommandFailure as error:
             raise CommandFailure(
                 "<{}> command failed: {}".format(self.command, error))
+        return self.result
 
-        return result
+    def _get_result(self, sub_command_list=None, **kwargs):
+        """Get the result from running the command with the defined arguments.
+
+        The optional sub_command_list and kwargs are used to define the command
+        that will be executed.  If they are excluded, the commnad will be run as
+        it currently defined.
+
+        Note: the returned CmdResult is also stored in the self.result
+        attribute as part of the self.run() call.
+
+        Args:
+            sub_command_list (list, optional): a list of sub commands used to
+                define the command to execute. Defaults to None, which will run
+                the command as it is currently defined.
+
+        Raises:
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
+
+        """
+        # Set the subcommands
+        this_command = self
+        if sub_command_list is not None:
+            for sub_command in sub_command_list:
+                this_command.set_sub_command(sub_command)
+                this_command = this_command.sub_command_class
+
+        # Set the sub-command arguments
+        for name, value in kwargs.items():
+            getattr(this_command, name).value = value
+
+        # Issue the command and store the command result
+        return self.run()
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -670,21 +730,25 @@ class YamlCommand(SubProcessCommand):
 
         return value
 
-    def _get_result(self):
-        """Generate the yaml config if defined, then call the parent method.
+    def run(self):
+        """Run the command and assign the 'result' attribute.
 
-        Returns:
-            CmdResult: an avocado CmdResult object containing the command
-                information, e.g. exit status, stdout, stderr, etc.
+        Ensure the yaml file is updated with the current attributes before
+        executing the command.
 
         Raises:
-            CommandFailure: if the command fails.
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
 
         """
         if self.yaml:
             self.create_yaml_file()
-
-        return super(YamlCommand, self)._get_result()
+        return super(YamlCommand, self).run()
 
     def copy_certificates(self, source, hosts):
         """Copy certificates files from the source to the destination hosts.

@@ -247,9 +247,6 @@ daos_iom_copy(const daos_iom_t *src, daos_iom_t *dst)
 	dst->iom_recx_lo = src->iom_recx_lo;
 	dst->iom_nr_out = src->iom_nr_out;
 
-	if (dst->iom_nr < dst->iom_nr_out)
-		D_WARN("mapped recxs list will be truncated");
-
 	to_copy = min(dst->iom_nr, dst->iom_nr_out);
 
 	for (i = 0; i < to_copy ; i++)

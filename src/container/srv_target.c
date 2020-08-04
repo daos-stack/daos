@@ -615,10 +615,19 @@ cont_child_cmp_keys(const void *key, unsigned int ksize,
 	return uuid_compare(key, cont->sc_uuid) == 0;
 }
 
+static uint32_t
+cont_child_rec_hash(struct daos_llink *llink)
+{
+	struct ds_cont_child *cont = cont_child_obj(llink);
+
+	return d_hash_string_u32((const char *)cont->sc_uuid, sizeof(uuid_t));
+}
+
 static struct daos_llink_ops cont_child_cache_ops = {
 	.lop_alloc_ref	= cont_child_alloc_ref,
 	.lop_free_ref	= cont_child_free_ref,
-	.lop_cmp_keys	= cont_child_cmp_keys
+	.lop_cmp_keys	= cont_child_cmp_keys,
+	.lop_rec_hash	= cont_child_rec_hash,
 };
 
 int
