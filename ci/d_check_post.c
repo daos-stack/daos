@@ -20,11 +20,11 @@ main() {
 	/* Conditional free, should be corrected */
 	D_FREE(buff);
 
-	/* This would be removed if it was adjacent to other
-	 * code which was being changed, but the use of
-	 * D_FREE_PTR here should be left
+	/* This will also be changed, as all calls to
+	 * D_FREE_PTR are, regardless of where in the
+	 * source they appear.
 	 */
-	D_FREE_PTR(buff);
+	D_FREE(buff);
 
 	/* for loop that uses both two sets of braces, but also
 	 * a conditional and assigns DATA to zero afterwards

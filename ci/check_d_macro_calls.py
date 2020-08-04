@@ -99,6 +99,7 @@ class CodeLine():
         self.new_text = None
 
     def mark(self, text):
+        """Add a anotation to a line"""
         self.mark_text = text
 
     def _set_text(self, text):
@@ -121,6 +122,7 @@ class CodeLine():
         return self.text
 
     def is_todo(self):
+        """Return if the line is a TODO: comment"""
         return 'TODO' in self.text
 
     def is_cond_on_var(self, var):
@@ -348,7 +350,6 @@ def check_lines(lines):
             next_line = idx + 1
             if not line.text.endswith(';'):
                 continue
-                next_line += 1
 
             if next_line > len(lines):
                 pass
