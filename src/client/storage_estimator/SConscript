@@ -3,7 +3,7 @@
 def install_storage_estimator_module(env, lib_prefix, version):
     """Install Storage Estimador module for the specified python version"""
 
-    if GetOption('help'):
+    if GetOption("help"):
         return
 
     denv = env.Clone()
