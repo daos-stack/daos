@@ -4,7 +4,7 @@ import daos_build
 def build_shim_module(env, lib_prefix, version):
     """Build PyDAOS shim module for the specified python version"""
 
-    if GetOption('help') or GetOption('clean'):
+    if GetOption('help'):
         return
 
     new_env = env.Clone()
@@ -12,7 +12,10 @@ def build_shim_module(env, lib_prefix, version):
 
     if version == "2.7":
         tgt_name = 'pydaos_shim_27'
-        new_env.ParseConfig("pkg-config --cflags --libs python2")
+
+        if not GetOption('clean'):
+            new_env.ParseConfig("pkg-config --cflags --libs python2")
+
     elif version == "3":
         tgt_name = 'pydaos_shim_3'
         extra_flags = " -D__USE_PYTHON3__==1"
