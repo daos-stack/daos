@@ -38,6 +38,8 @@ import logging
 import cart_logparse
 import cart_logtest
 
+import avocado
+
 class CartUtils():
     """CartUtils Class"""
 
@@ -130,10 +132,13 @@ class CartUtils():
         host_cfg = cartobj.params.get("config", "/run/hosts/*/")
 
         if env_CCSA is not None:
-            log_dir = "{}-{}".format(test_name, env_CCSA)
+            _log_dir = "{}-{}".format(test_name, env_CCSA)
         else:
-            log_dir = "{}".format(test_name)
+            _log_dir = "{}".format(test_name)
 
+        avocado_log_dir = avocado.core.data_dir.get_logs_dir()
+
+        log_dir = os.path.join(avocado_log_dir, _log_dir)
         log_path = os.path.join("testLogs", log_dir)
         log_file = os.path.join(log_path, "cart.log")
 
