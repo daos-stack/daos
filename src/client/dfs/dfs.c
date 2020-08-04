@@ -737,8 +737,8 @@ fopen:
  * object first.
  */
 static inline int
-create_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
-	   daos_oclass_id_t cid, dfs_obj_t *dir)
+create_dir(dfs_t *dfs, daos_handle_t parent_oh, daos_oclass_id_t cid,
+	   dfs_obj_t *dir)
 {
 	int			rc;
 
@@ -767,7 +767,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	int			rc;
 
 	if (flags & O_CREAT) {
-		rc = create_dir(dfs, th, parent_oh, cid, dir);
+		rc = create_dir(dfs, parent_oh, cid, dir);
 		if (rc)
 			return rc;
 
@@ -1574,18 +1574,9 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
 	new_dir.name[DFS_MAX_PATH] = '\0';
 
-	if (dfs->use_dtx) {
-		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
-		if (rc) {
-			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, rc);
-		}
-	}
-
-restart:
-	rc = create_dir(dfs, th, parent->oh, cid, &new_dir);
+	rc = create_dir(dfs, parent->oh, cid, &new_dir);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	entry.oid = new_dir.oid;
 	entry.mode = S_IFDIR | mode;
@@ -1593,32 +1584,15 @@ restart:
 	entry.chunk_size = 0;
 
 	rc = insert_entry(parent->oh, th, name, true, entry);
+	if (rc != 0) {
+		daos_obj_close(new_dir.oh, NULL);
+		return rc;
+	}
+
+	rc = daos_obj_close(new_dir.oh, NULL);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		return daos_der2errno(rc);
 
-	daos_obj_close(new_dir.oh, NULL);
-
-	if (dfs->use_dtx) {
-		rc = daos_tx_commit(th, NULL);
-		if (rc == -DER_TX_RESTART) {
-			rc = daos_tx_restart(th, NULL);
-			if (rc) {
-				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc);
-			}
-			goto restart;
-		} else if (rc) {
-			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, rc);
-		}
-	}
-
-out:
-	if (daos_handle_is_valid(th)) {
-		rc = daos_tx_close(th,  NULL);
-		if (rc)
-			D_ERROR("daos_tx_close() failed (%d)\n", rc);
-	}
 	return rc;
 }
 
@@ -1722,7 +1696,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(out, daos_der2errno(rc));
 		}
 	}
 
@@ -1776,12 +1750,12 @@ restart:
 			rc = daos_tx_restart(th, NULL);
 			if (rc) {
 				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc);
+				D_GOTO(out, daos_der2errno(rc));
 			}
 			goto restart;
 		} else if (rc) {
 			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(out, daos_der2errno(rc));
 		}
 	}
 
@@ -1789,9 +1763,14 @@ restart:
 		oid_cp(oid, entry.oid);
 out:
 	if (daos_handle_is_valid(th)) {
-		rc = daos_tx_close(th,  NULL);
-		if (rc)
-			D_ERROR("daos_tx_close() failed (%d)\n", rc);
+		int ret;
+
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
 	}
 	return rc;
 }
@@ -2328,7 +2307,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(out, daos_der2errno(rc));
 		}
 	}
 
@@ -2366,12 +2345,12 @@ restart:
 			rc = daos_tx_restart(th, NULL);
 			if (rc) {
 				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc);
+				D_GOTO(out, daos_der2errno(rc));
 			}
 			goto restart;
 		} else if (rc) {
 			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(out, daos_der2errno(rc));
 		}
 	}
 
@@ -2380,9 +2359,14 @@ restart:
 	return rc;
 out:
 	if (daos_handle_is_valid(th)) {
-		rc = daos_tx_close(th,  NULL);
-		if (rc)
-			D_ERROR("daos_tx_close() failed (%d)\n", rc);
+		int ret;
+
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
 	}
 	D_FREE(obj);
 	return rc;
@@ -3428,7 +3412,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(out, daos_der2errno(rc));
 		}
 	}
 
@@ -3537,20 +3521,25 @@ restart:
 			rc = daos_tx_restart(th, NULL);
 			if (rc) {
 				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc);
+				D_GOTO(out, daos_der2errno(rc));
 			}
 			goto restart;
 		} else if (rc) {
 			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(out, daos_der2errno(rc));
 		}
 	}
 
 out:
 	if (daos_handle_is_valid(th)) {
-		rc = daos_tx_close(th,  NULL);
-		if (rc)
-			D_ERROR("daos_tx_close() failed (%d)\n", rc);
+		int ret;
+
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
 	}
 	if (entry.value) {
 		D_ASSERT(S_ISLNK(entry.mode));
@@ -3605,7 +3594,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
 			D_ERROR("daos_tx_open() failed (%d)\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(out, daos_der2errno(rc));
 		}
 	}
 
@@ -3665,20 +3654,25 @@ restart:
 			rc = daos_tx_restart(th, NULL);
 			if (rc) {
 				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
-				D_GOTO(out, rc);
+				D_GOTO(out, daos_der2errno(rc));
 			}
 			goto restart;
 		} else if (rc) {
 			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, rc);
+			D_GOTO(out, daos_der2errno(rc));
 		}
 	}
 
 out:
 	if (daos_handle_is_valid(th)) {
-		rc = daos_tx_close(th,  NULL);
-		if (rc)
-			D_ERROR("daos_tx_close() failed (%d)\n", rc);
+		int ret;
+
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
 	}
 	if (entry1.value) {
 		D_ASSERT(S_ISLNK(entry1.mode));
