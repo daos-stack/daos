@@ -7,13 +7,13 @@ The D_FREE() macro both allows for NULL to be passed and sets the variable
 to NULL after the free, so do not use conditionals before calling this,
 and do not do an assignment to NULL afterwards.
 
-We used to use an additional D_FREE_PTR() macro as well, so remove this
-on any code being patched.
+We used to use an additional D_FREE_PTR() macro as well, so remove this where
+used.
 
 This script should be run directly, and it will output in patch format so can
 be applied using the following:
 
-$ ./check_d_free_calls.py | patch -p1
+$ ./check_d_macro_calls.py | patch -p1
 
 """
 
@@ -59,6 +59,7 @@ class CodeLine():
         else:
             self.free_var = None
 
+        self.alloc_size = None
         # Set self.alloc_var to the name of anything being allocated, or Null.
         if self.code.startswith('D_ALLOC_PTR'):
             _, val = short.split('(', 1)
@@ -67,6 +68,8 @@ class CodeLine():
             _, val = short.split('(', 1)
             (name, size) = val.split(',', 1)
             self.alloc_var = name.strip()
+            if size.endswith(';'):
+                self.alloc_size = size[:-2].strip()
         else:
             self.alloc_var = None
 
@@ -103,6 +106,10 @@ class CodeLine():
         self.new_text = text
         self.code = self.new_text.strip()
         self.changed = True
+
+    def _set_itext(self, text):
+        """Mark a line as requiring change, copying existing indentation"""
+        self._set_text('{}{}'.format(self.indent, text))
 
     def _get_text(self):
         """Get the text for a line,
@@ -196,6 +203,14 @@ class CodeLine():
         if 'D_FREE_PTR' in self.code:
             self._set_text(self._get_text().replace('D_FREE_PTR', 'D_FREE'))
 
+    def set_alloc(self, alloc_var, count=None):
+        """Make a line use D_ALLOC_PTR or D_ALLOC_ARRAY"""
+
+        if count:
+            self._set_itext('D_ALLOC_ARRAY({}, {});'.format(alloc_var, count))
+        else:
+            self._set_itext('D_ALLOC_PTR({});'.format(alloc_var))
+
 prev_file = None
 def show_patch(lines):
     """Print a number of lines as a patch to stdout
@@ -272,8 +287,25 @@ def check_lines(lines):
         if not line.include:
             continue
 
+        if line.free_var:
+            line.remove_free_ptr()
+
+        if line.alloc_size:
+            size_str = 'sizeof(*{})'.format(line.alloc_var)
+
+            # Check for possible D_ALLOC_PTR() usage.
+            if line.alloc_size == size_str:
+                line.set_alloc(line.alloc_var)
+
+            # Check for possible D_ALLOC_ARRAY() usage.
+            elif line.alloc_size.startswith(size_str):
+                count_part = line.alloc_size[len(size_str):].strip()
+                if count_part[0] == '*':
+                    count = count_part[1:].strip()
+                    line.set_alloc(line.alloc_var, count)
+
         # Check for braces which can be removed.
-        elif line.close_brace and lines[idx-2].conditional_brace:
+        if line.close_brace and lines[idx-2].conditional_brace:
             line.drop_line()
             lines[idx-2].remove_brace()
 
