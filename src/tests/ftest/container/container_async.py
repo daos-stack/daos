@@ -63,15 +63,13 @@ class ContainerAsync(TestWithServers):
 
         cbh1 = CallbackHandler()
         cbh2 = CallbackHandler()
-        tc1 = TestContainer(pool=self.pool, cb_handler=cbh1)
-        tc2 = TestContainer(pool=self.pool)
-        self.container.append(tc1)
-        self.container.append(tc2)
+        self.container.append(TestContainer(pool=self.pool, cb_handler=cbh1))
+        self.container.append(TestContainer(pool=self.pool))
 
         # We can't use TestContainer.create after the pool is destroyed, but we
-        # can't call create which creates the underlying DaosContainer, so
-        # manually instantiate it and set it.
-        tc2.container = DaosContainer(self.pool.context)
+        # can call DaosContainer.create to create the underlying DaosContainer,
+        # so manually instantiate it and set it.
+        self.container[1].container = DaosContainer(self.pool.context)
 
         try:
             self.container[0].create()
@@ -83,7 +81,8 @@ class ContainerAsync(TestWithServers):
             # calls wait, but we're using DaosContainer, so we need to manually
             # call it.
             self.pool.destroy(1)
-            tc2.container.create(poh=ph, con_uuid=None, cb_func=cbh2.callback)
+            self.container[1].container.create(
+                poh=ph, con_uuid=None, cb_func=cbh2.callback)
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != 0,
