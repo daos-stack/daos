@@ -76,20 +76,27 @@ struct dfuse_readdir_entry {
 	off_t	dre_offset;
 };
 
-/** what is returned as the handle for fuse fuse_file_info on create/open */
+/** what is returned as the handle for fuse fuse_file_info on
+ * create/open/opendir
+ */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
-	dfs_t		*doh_dfs;
+	dfs_t				*doh_dfs;
 	/** the DFS object handle */
-	dfs_obj_t	*doh_obj;
+	dfs_obj_t			*doh_obj;
 	/** the inode entry for the file */
-	struct dfuse_inode_entry *doh_ie;
-	/** an anchor to track listing in readdir */
-	daos_anchor_t	doh_anchor;
+	struct dfuse_inode_entry	*doh_ie;
 
+	/* Below here is only used for directories */
+	/** an anchor to track listing in readdir */
+	daos_anchor_t			doh_anchor;
+
+	/** Array of entries returned by dfs but not reported to kernel */
 	struct dfuse_readdir_entry	*doh_dre;
-	int		doh_dre_index;
-	int doh_anchor_index;
+	/** Index into doh_dre array */
+	int				doh_dre_index;
+	/** Index of next dfs entry */
+	int				doh_anchor_index;
 };
 
 struct dfuse_inode_ops {

@@ -364,7 +364,7 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	      struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
@@ -379,7 +379,7 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		  struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);

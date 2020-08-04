@@ -71,8 +71,8 @@ dfuse_lookup_inode_from_obj(struct dfuse_projection_info *fs_handle,
 			    dfs_obj_t *obj,
 			    ino_t *_ino)
 {
-	daos_obj_id_t oid;
-	int rc;
+	daos_obj_id_t	oid;
+	int		rc;
 
 	rc = dfs_obj2id(obj, &oid);
 	if (rc)
@@ -80,8 +80,6 @@ dfuse_lookup_inode_from_obj(struct dfuse_projection_info *fs_handle,
 
 	return dfuse_lookup_inode(fs_handle, dfs, &oid, _ino);
 }
-
-
 
 /* Check a DFS to see if an inode is already in place for it.  This is used
  * for looking up pools and containers to see if a record already exists to
