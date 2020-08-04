@@ -51,6 +51,13 @@ enum dtx_entry_flags {
 	DTE_LEADER		= (1 << 0),
 	/* The DTX entry is invalid. */
 	DTE_INVALID		= (1 << 1),
+	/* If the DTX with this flag is non-committed, then others
+	 * will be blocked (retry again and again) when access the
+	 * data being modified via this DTX. Currently, it is used
+	 * for distributed transaction. It also can be used for EC
+	 * object modification via standalone update/punch.
+	 */
+	DTE_BLOCK		= (1 << 2),
 };
 
 struct dtx_entry {

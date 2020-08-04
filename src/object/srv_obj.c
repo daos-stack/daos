@@ -1817,6 +1817,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
 	struct dtx_id			*dti_cos = NULL;
+	struct dss_sleep_ult		*sleep_ult = NULL;
 	int				dti_cos_cnt;
 	uint32_t			tgt_cnt;
 	uint32_t			version;
@@ -1849,6 +1850,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle dth = {0};
+		int		  retry = 0;
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
@@ -1859,6 +1861,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		epoch.oe_first = orw->orw_epoch_first;
 		epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
 
+re_fetch:
 		rc = dtx_begin(ioc.ioc_coc, &orw->orw_dti, &epoch, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
 			       NULL, 0, NULL, &dth);
@@ -1867,6 +1870,23 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth);
 		rc = dtx_end(&dth, ioc.ioc_coc, rc);
+
+		if (rc == -DER_TX_BUSY && ++retry < 3) {
+			/* XXX: Currently, we commit the distributed transaction
+			 *	sychronously. Normally, it will be very quickly.
+			 *	So let's wait on the server for a while (30 ms),
+			 *	then retry. If related distributed transaction
+			 *	is still not committed after several cycles try,
+			 *	then replies '-DER_TX_BUSY' to the client.
+			 */
+			if (sleep_ult == NULL)
+				sleep_ult = dss_sleep_ult_create();
+
+			if (sleep_ult != NULL) {
+				dss_ult_sleep(sleep_ult, 30000);
+				goto re_fetch;
+			}
+		}
 
 		D_GOTO(out, rc);
 	}
@@ -2010,6 +2030,9 @@ out:
 
 cleanup:
 	D_TIME_END(time_start, OBJ_PF_UPDATE);
+	if (sleep_ult != NULL)
+		dss_sleep_ult_destroy(sleep_ult);
+
 	obj_ec_split_req_fini(split_req);
 	D_FREE(mbs);
 	D_FREE(dti_cos);
@@ -2057,6 +2080,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 {
 	vos_iter_param_t	param = { 0 };
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
+	struct dss_sleep_ult	*sleep_ult = NULL;
+	int			retry = 0;
 	int			opc = opc_get(rpc->cr_opc);
 	int			type;
 	int			rc;
@@ -2154,6 +2179,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 	}
 
+again:
 	rc = dtx_begin(ioc->ioc_coc, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, NULL, &dth);
 	if (rc != 0)
@@ -2167,6 +2193,24 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (rc_tmp != 0)
 		rc = rc_tmp;
 
+	if (rc == -DER_TX_BUSY && ++retry < 3) {
+		/* XXX: Currently, we commit the distributed transaction
+		 *	sychronously. Normally, it will be very quickly.
+		 *	So let's wait on the server for a while (30 ms),
+		 *	then retry. If related distributed transaction
+		 *	is still not committed after several cycles try,
+		 *	then replies '-DER_TX_BUSY' to the client.
+		 */
+		if (sleep_ult == NULL)
+			sleep_ult = dss_sleep_ult_create();
+
+		if (sleep_ult != NULL) {
+			dss_ult_sleep(sleep_ult, 30000);
+			/* re-enumeration from the last -DER_TX_BUSY. */
+			goto again;
+		}
+	}
+
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_ev = anchors->ia_sv;
 
@@ -2175,6 +2219,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		param.ip_epr.epr_hi, type, dss_get_module_info()->dmi_tgt_id,
 		rc);
 failed:
+	if (sleep_ult != NULL)
+		dss_sleep_ult_destroy(sleep_ult);
+
 	*e_out = epoch.oe_value;
 	return rc;
 }
@@ -2733,6 +2780,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct obj_io_context		 ioc;
 	struct dtx_handle		 dth = {0};
 	struct dtx_epoch		 epoch = {0};
+	struct dss_sleep_ult		*sleep_ult = NULL;
+	int				 retry = 0;
 	int				 rc;
 
 	okqi = crt_req_get(rpc);
@@ -2753,6 +2802,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	if (rc == PE_OK_LOCAL)
 		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
 
+again:
 	dkey = &okqi->okqi_dkey;
 	akey = &okqi->okqi_akey;
 	d_iov_set(&okqo->okqo_akey, NULL, 0);
@@ -2779,6 +2829,26 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
 
 out:
+	if (rc == -DER_TX_BUSY && ++retry < 3) {
+		/* XXX: Currently, we commit the distributed transaction
+		 *	sychronously. Normally, it will be very quickly.
+		 *	So let's wait on the server for a while (30 ms),
+		 *	then retry. If related distributed transaction
+		 *	is still not committed after several cycles try,
+		 *	then replies '-DER_TX_BUSY' to the client.
+		 */
+		if (sleep_ult == NULL)
+			sleep_ult = dss_sleep_ult_create();
+
+		if (sleep_ult != NULL) {
+			dss_ult_sleep(sleep_ult, 30000);
+			goto again;
+		}
+	}
+
+	if (sleep_ult != NULL)
+		dss_sleep_ult_destroy(sleep_ult);
+
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
 	okqo->okqo_epoch = epoch.oe_value;
