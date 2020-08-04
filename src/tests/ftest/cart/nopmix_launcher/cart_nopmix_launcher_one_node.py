@@ -58,9 +58,9 @@ class CartNoPmixLauncherOneNodeTest(Test):
         :avocado: tags=all,all_cart,pr,no_pmix_launcher,one_node
         """
 
-        cli_bin = self.params.get("cli_bin", '/run/tests/*/')
-        cli_arg = self.params.get("cli_arg", '/run/tests/*/')
-        cli_ppn = self.params.get("cli_ppn", '/run/tests/*/')
+        cli_bin = self.params.get("test_clients_bin", '/run/tests/*/')
+        cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')
+        cli_ppn = self.params.get("test_clients_ppn", '/run/tests/*/')
         log_mask = self.params.get("D_LOG_MASK", "/run/defaultENV/")
         crt_phy_addr = self.params.get("CRT_PHY_ADDR_STR",
                                           "/run/defaultENV/")

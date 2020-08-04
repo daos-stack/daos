@@ -268,7 +268,7 @@ class CartIvOneNodeTest(Test):
 
         num_servers = self.utils.get_srv_cnt(self, "test_servers")
 
-        srv_ppn = self.params.get("srv_ppn", '/run/tests/*/')
+        srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
 
         # Note: due to CART-408 issue, rank 0 needs to shutdown last
         # Request each server shut down gracefully
