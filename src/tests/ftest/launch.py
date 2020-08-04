@@ -159,7 +159,7 @@ def set_test_environment(args):
             if state.lower() == "up":
                 # Get the interface speed - used to select the fastest available
                 with open(os.path.join(net_path, device, "speed"), "r") as \
-                    fileh:
+                     fileh:
                     try:
                         speed = int(fileh.read().strip())
                         # KVM/Qemu/libvirt returns an EINVAL
@@ -234,6 +234,7 @@ def set_test_environment(args):
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+
 
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
@@ -441,7 +442,7 @@ def get_test_list(tags):
         tags (list): a list of tag or test file names
 
     Returns:
-        (list, list): a tuple of an avacado tag filter list and lists of tests
+        (list, list): a tuple of an avocado tag filter list and lists of tests
 
     """
     test_tags = []
@@ -712,6 +713,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     # Return the untouched or modified yaml file
     return yaml_file
 
+
 def generate_certs():
     """Generate the certificates for the test."""
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
@@ -720,6 +722,7 @@ def generate_certs():
     subprocess.call(
         ["../../../../lib64/daos/certgen/gen_certificates.sh",
          daos_test_log_dir])
+
 
 def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
@@ -990,8 +993,16 @@ USE_DEBUGINFO_INSTALL = True
 
 
 def resolve_debuginfo(pkg):
-    """ given a package name, return it's debuginfo package """
-    import yum # pylint: disable=import-error,import-outside-toplevel
+    """Return the debuginfo package for a given package name.
+
+    Args:
+        pkg (str): a package name
+
+    Returns:
+        str: the debuginfo package name
+
+    """
+    import yum      # pylint: disable=import-error,import-outside-toplevel
 
     yum_base = yum.YumBase()
     yum_base.conf.assumeyes = True
@@ -1018,6 +1029,7 @@ def resolve_debuginfo(pkg):
             'version': pkg_data['version'],
             'release': pkg_data['release'],
             'epoch': pkg_data['epoch']}
+
 
 def install_debuginfos():
     """Install debuginfo packages."""
@@ -1087,7 +1099,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
-    import fnmatch # pylint: disable=import-outside-toplevel
+    import fnmatch  # pylint: disable=import-outside-toplevel
 
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
@@ -1139,7 +1151,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             pattern (str): the fnmatch/glob pattern of core files to
                            run gdb on
         """
-        import magic # pylint: disable=import-error
+        import magic    # pylint: disable=import-error
 
         for corefile in cores:
             if not fnmatch.fnmatch(corefile, pattern):
@@ -1172,8 +1184,12 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 ]
                 stack_trace_file = os.path.join(
                     daos_cores_dir, "{}.stacktrace".format(corefile))
-                with open(stack_trace_file, "w") as stack_trace:
-                    stack_trace.writelines(get_output(cmd))
+                try:
+                    with open(stack_trace_file, "w") as stack_trace:
+                        stack_trace.writelines(get_output(cmd))
+                except IOError as error:
+                    print(
+                        "Error writing {}: {}".format(stack_trace_file, error))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 
@@ -1280,8 +1296,8 @@ def main():
              "replacement values for the bdev_list in each test's yaml file.  "
              "Using the 'auto[:<filter>]' keyword will auto-detect the NVMe "
              "PCI address list on each of the '--test_servers' hosts - the "
-             "optonal '<filter>' can be used to limit auto-detected addresses, "
-             "e.g. 'auto:Optane' for Intel Optane NVMe devices.")
+             "optional '<filter>' can be used to limit auto-detected "
+             "addresses, e.g. 'auto:Optane' for Intel Optane NVMe devices.")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",
