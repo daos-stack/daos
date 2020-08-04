@@ -24,12 +24,10 @@ then
     for FILE in $(git ls-tree --full-tree --name-only HEAD -r src | grep -v -e src/control/vendor -e .go\$ -e pb-c -e debug_setup.h)
     do
 	ignore="$def_ignore"
-	grep -lq CRT_RPC_DECLARE "$FILE"
-	if [ $? -eq 0 ]
-	then
+	if grep -lq CRT_RPC_DECLARE "$FILE"; then
 	    ignore+=",SPACING_CAST"
 	fi
-        $CP --quiet --no-tree -file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
+        $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
     done
 fi
 
