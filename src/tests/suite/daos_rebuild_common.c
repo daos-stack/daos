@@ -66,7 +66,8 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 
 	for (i = 0; i < arg_cnt; i++) {
 		daos_exclude_target(args[i]->pool.pool_uuid,
-				    args[i]->group, &args[i]->pool.svc,
+				    args[i]->group, args[i]->dmg_config,
+				    &args[i]->pool.svc,
 				    rank, tgt_idx);
 		sleep(2);
 	}
@@ -82,6 +83,7 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed)
 			daos_add_target(args[i]->pool.pool_uuid,
 					args[i]->group,
+					args[i]->dmg_config,
 					&args[i]->pool.svc,
 					rank, tgt_idx);
 		sleep(2);
@@ -98,6 +100,7 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed)
 			daos_drain_target(args[i]->pool.pool_uuid,
 					args[i]->group,
+					args[i]->dmg_config,
 					&args[i]->pool.svc,
 					rank, tgt_idx);
 		sleep(2);
@@ -372,7 +375,8 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 
 		for (i = 0; i < nr; i++)
 			daos_add_target(arg->pool.pool_uuid, arg->group,
-					&arg->pool.svc, failed_rank,
+					arg->dmg_config, &arg->pool.svc,
+					failed_rank,
 					failed_tgts ? failed_tgts[i] : -1);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);

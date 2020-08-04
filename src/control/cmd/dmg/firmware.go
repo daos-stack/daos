@@ -26,7 +26,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -51,6 +50,7 @@ type firmwareQueryCmd struct {
 	hostListCmd
 	jsonOutputCmd
 	DeviceType string `short:"t" long:"type" choice:"nvme" choice:"scm" choice:"all" default:"all" description:"Type of storage devices to query"`
+	Verbose    bool   `short:"v" long:"verbose" description:"Display verbose output"`
 }
 
 // Execute runs the firmware query command.
@@ -67,21 +67,31 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.FirmwareQuery(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if req.SCM {
-		if err := pretty.PrintSCMFirmwareQueryMap(resp.HostSCMFirmware, &bld); err != nil {
-			return err
+
+	if cmd.Verbose {
+		if req.SCM {
+			if err := pretty.PrintSCMFirmwareQueryMapVerbose(resp.HostSCMFirmware, &bld); err != nil {
+				return err
+			}
+		}
+	} else {
+		if req.SCM {
+			if err := pretty.PrintSCMFirmwareQueryMap(resp.HostSCMFirmware, &bld); err != nil {
+				return err
+			}
 		}
 	}
 	cmd.log.Info(bld.String())
@@ -97,6 +107,7 @@ type firmwareUpdateCmd struct {
 	jsonOutputCmd
 	DeviceType string `short:"t" long:"type" choice:"nvme" choice:"scm" required:"1" description:"Type of storage devices to update"`
 	FilePath   string `short:"p" long:"path" required:"1" description:"Path to the firmware file accessible from all nodes"`
+	Verbose    bool   `short:"v" long:"verbose" description:"Display verbose output"`
 }
 
 // Execute runs the firmware update command.
@@ -114,20 +125,27 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.FirmwareUpdate(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := pretty.PrintSCMFirmwareUpdateMap(resp.HostSCMResult, &bld); err != nil {
-		return err
+	if cmd.Verbose {
+		if err := pretty.PrintSCMFirmwareUpdateMapVerbose(resp.HostSCMResult, &bld); err != nil {
+			return err
+		}
+	} else {
+		if err := pretty.PrintSCMFirmwareUpdateMap(resp.HostSCMResult, &bld); err != nil {
+			return err
+		}
 	}
 	cmd.log.Info(bld.String())
 
