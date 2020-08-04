@@ -74,7 +74,7 @@ RUN yum -y install \
            python36-clustershell python36-paramiko             \
            python36-numpy python36-jira python3-pip            \
            fuse3-devel libipmctl-devel openmpi3-devel          \
-           hwloc-devel patchelf python36-tabulate
+           hwloc-devel patchelf python36-tabulate java-1.8.0-openjdk
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
@@ -119,19 +119,20 @@ ARG REPOS=""
 ARG REPO_URL=""
 ARG REPO_EL7=""
 # Need to clean this up later
-RUN if [ -n "$REPO_URL" ]; then                                             \
-      cversion=$(cut -d ' ' -f4 /etc/centos-release);                       \
-      version=${cversion%.*} ;                                              \
-      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";      \
-      MY_NAME="${MY_REPO#*//}";                                             \
-      MY_NAME="${MY_NAME//\//_}";                                           \
+RUN if [ -n "$REPO_URL" ]; then                                               \
+      cversion=$(cut -d ' ' -f4 /etc/centos-release);                         \
+      version=${cversion%.*} ;                                                \
+      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";        \
+      MY_NAME="${MY_REPO#*//}";                                               \
+      MY_NAME="${MY_NAME//\//_}";                                             \
       echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;              \
-      yum --assumeyes install yum-utils;                                    \
-      yum-config-manager --assumeyes --quiet --disable base epel extra updates; \
+gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                \
+      yum --assumeyes install yum-utils;                                      \
+      yum-config-manager --assumeyes --quiet                                  \
+                         --disable base epel extra updates;                   \
     fi
 RUN if $QUICKBUILD; then                                                      \
         MY_REPO="${REPO_URL}${REPO_EL7}";                                     \

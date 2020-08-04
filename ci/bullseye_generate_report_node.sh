@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -ex
+set -eux
 
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"

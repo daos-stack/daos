@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This is the script used for generating the Bullseye Reports stage in CI
-set -ex
+set -eux
 
 rm -rf bullseye
 mkdir -p bullseye

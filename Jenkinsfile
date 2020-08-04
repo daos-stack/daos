@@ -56,7 +56,7 @@ def functional_post_always() {
 }
 
 def get_daos_packages() {
-    stage_info = parseStageInfo()
+    Map stage_info = parseStageInfo()
     return get_daos_packages(stage_info['target'])
 }
 
@@ -72,7 +72,7 @@ def get_daos_packages(String distro) {
     return pkgs + "-" + daos_packages_version(distro)
 }
 
-def component_repos() {
+def pr_repos() {
     return cachedCommitPragma(pragma: 'PR-repos')
 }
 
@@ -85,15 +85,25 @@ def daos_repo() {
 }
 
 def el7_daos_repos() {
-    return el7_component_repos + ' ' + component_repos() + ' ' + daos_repo()
+    return el7_component_repos + ' ' + pr_repos() + ' ' + daos_repo()
 }
 
 def leap15_daos_repos() {
-    return leap15_component_repos + ' ' + component_repos() + ' ' + daos_repo()
+    return leap15_component_repos + ' ' + pr_repos() + ' ' + daos_repo()
+}
+
+def component_repos() {
+    Map stage_info = parseStageInfo()
+    if (distro == 'centos7') {
+        return el7_component_repos + ' ' + pr_repos()
+    }
+    if (distro == 'leap15') {
+        return leap15_component_repos + ' ' + pr_repos()
+    }
 }
 
 def daos_repos() {
-    stage_info = parseStageInfo()
+    Map stage_info = parseStageInfo()
     return daos_repos(stage_info['target'])
 }
 
@@ -462,7 +472,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -509,8 +519,8 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                  env.QUICKBUILD_DEPS + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -556,7 +566,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -601,7 +611,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -921,7 +931,7 @@ pipeline {
                             }
                         }
                         unitTest timeout_time: 60,
-                                 inst_repos: daos_repos(),
+                                 inst_repos: component_repos(),
                                  inst_rpms: 'gotestsum openmpi3 ' +
                                             'hwloc-devel argobots ' +
                                             'fuse3-libs fuse3 ' +
@@ -957,7 +967,7 @@ pipeline {
                         }
                         unitTest timeout_time: 60,
                                  ignore_failure: true,
-                                 inst_repos: daos_repos(),
+                                 inst_repos: component_repos(),
                                  inst_rpms: 'gotestsum openmpi3 ' +
                                             'hwloc-devel argobots ' +
                                             'fuse3-libs fuse3 ' +
@@ -1009,7 +1019,7 @@ pipeline {
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
