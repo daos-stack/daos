@@ -402,7 +402,7 @@ class DmgCommand(DmgCommandBase):
                 1: {"target_count": 5},
                 2: space_map,
                 3: space_map,
-                4: {"state": 10, "objects": 11, "records": 12}
+                4: {"status": 10, "objects": 11, "records": 12}
             }
             for index_1, match_list in enumerate(match):
                 if index_1 not in map_values:
