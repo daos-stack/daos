@@ -1599,8 +1599,8 @@ tx_end:
 
 	/* Write the first value */
 	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
-			    0 /* epoch comes from dth */, 0, 0, &dkey, 1, &iod,
-			    NULL, &sgl, dth);
+			       0 /* epoch comes from dth */, 0, 0, &dkey, 1,
+			       &iod, NULL, &sgl, dth);
 	if (rc != 0)
 		goto tx_end2;
 
