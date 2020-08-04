@@ -61,7 +61,7 @@ class DaosServerTransportCredentials(TransportCredentials):
         data = super(
             DaosServerTransportCredentials, self).get_certificate_data(
                 name_list)
-        if self.client_cert_dir.value:
+        if not self.allow_insecure.value and self.client_cert_dir.value:
             if self.client_cert_dir.value not in data:
                 data[self.client_cert_dir.value] = ["agent.crt"]
             else:
