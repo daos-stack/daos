@@ -372,6 +372,7 @@ if grep \"testsuite.setAttribute('name', 'avocado')\" \
 /testsuite.setAttribute('name', 'avocado')/s/'avocado'/os.path.basename(os.path.dirname(result.logfile))/
 wq
 EOF
+fi
 # apply fix for https://github.com/avocado-framework/avocado/commit/bfab1c6b20f8489c343cfc8c8964d8905b0f72a1
 if grep \"from xml.dom.minidom import Document, Element\" \
     /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py; then
