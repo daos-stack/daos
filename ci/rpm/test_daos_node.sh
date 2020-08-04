@@ -1,10 +1,10 @@
 #!/bin/bash
 
 set -uex
-sudo yum -y install --exclude ompi daos{,-client}-"${DAOS_PKG_VERSION}"
+sudo yum -y install daos{,-client}-"${DAOS_PKG_VERSION}"
 sudo yum -y history rollback last-1
-sudo yum -y install --exclude ompi daos{,-{server,client}}-"${DAOS_PKG_VERSION}"
-sudo yum -y install --exclude ompi daos{,-tests}-"${DAOS_PKG_VERSION}"
+sudo yum -y install daos{,-{server,client}}-"${DAOS_PKG_VERSION}"
+sudo yum -y install daos{,-tests}-"${DAOS_PKG_VERSION}"
 
 me=$(whoami)
 for dir in server agent; do
@@ -28,7 +28,7 @@ coproc daos_server --debug start -t 1 --recreate-superblocks
 trap 'set -x; kill -INT $COPROC_PID' EXIT
 line=""
 while [[ "$line" != *started\ on\ rank\ 0* ]]; do
-  read -r -t 60 line <&"${COPROC[0]}"
+  read line <&"${COPROC[0]}"
   echo "Server stdout: $line"
 done
 echo "Server started!"
