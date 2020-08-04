@@ -444,7 +444,7 @@ main(int argc, char **argv)
 		}
 		uuid_copy(dfp->dfp_pool, duns_attr.da_puuid);
 		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
-	} else if (rc == ENODATA) {
+	} else if (rc == ENODATA || rc == ENOTSUP) {
 		if (dfuse_info->di_pool) {
 
 			if (uuid_parse(dfuse_info->di_pool,
