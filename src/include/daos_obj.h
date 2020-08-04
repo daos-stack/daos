@@ -212,6 +212,8 @@ typedef enum {
 typedef struct {
 	/** akey for this iod */
 	daos_key_t		iod_name;
+	/** Size of the single value or the record size of the array */
+	daos_size_t		iod_size;
 	/*
 	 * Type of the value in an iod can be either a single type that is
 	 * always overwritten when updated, or it can be an array of EQUAL sized
@@ -224,8 +226,6 @@ typedef struct {
 	 * ignored and the rx_nr is also required to be 1.
 	 */
 	daos_iod_type_t		iod_type;
-	/** Size of the single value or the record size of the array */
-	daos_size_t		iod_size;
 	/*
 	 * Number of entries in the \a iod_recxs for arrays,
 	 * should be 1 if single value.

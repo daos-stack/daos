@@ -274,13 +274,13 @@ struct shard_auxi_args {
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
-	uint16_t		 flags;
+	/* only for EC, the target idx [0, k + p) */
+	uint16_t		 ec_tgt_idx;
 	/* group index within the req_tgts->ort_shard_tgts */
 	uint16_t		 grp_idx;
 	/* only for EC, the start shard of the EC stripe */
 	uint32_t		 start_shard;
-	/* only for EC, the target idx [0, k + p) */
-	uint16_t		 ec_tgt_idx;
+	uint32_t		 flags;
 };
 
 struct shard_rw_args {
@@ -415,13 +415,27 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
+int obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
+		       uint32_t iod_nr, struct daos_oclass_attr *oca);
+void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
+int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
+		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
+		  crt_bulk_t **p_bulks);
+int obj_get_replicas(struct dc_object *obj);
+int obj_shard_open(struct dc_object *obj, unsigned int shard,
+		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
+int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
+int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
+			tse_task_t **taskp);
+
+#define obj_shard_close(shard)	dc_obj_shard_close(shard)
 
 static inline bool
 obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EVICTED || err == -DER_CSUM ||
+	       err == -DER_EVICTED || err == -DER_CSUM || err == -DER_TX_BUSY ||
 	       daos_crt_network_error(err);
 }
 
@@ -483,10 +497,6 @@ void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
-int dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
-		  daos_obj_update_t *args);
-int dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
-		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {
@@ -510,6 +520,9 @@ ds_obj_remote_update(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
 		    dtx_sub_comp_cb_t comp_cb);
+int
+ds_obj_cpd_dispatch(struct dtx_leader_handle *dth, void *arg, int idx,
+		    dtx_sub_comp_cb_t comp_cb);
 
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
@@ -520,7 +533,83 @@ void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
 void ds_obj_migrate_handler(crt_rpc_t *rpc);
+void ds_obj_cpd_handler(crt_rpc_t *rpc);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
+
+struct daos_cpd_args {
+	struct obj_io_context	*dca_ioc;
+	crt_rpc_t		*dca_rpc;
+	ABT_future		 dca_future;
+	uint32_t		 dca_idx;
+};
+
+static inline struct daos_cpd_sub_head *
+ds_obj_cpd_get_dcsh(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
+
+	/* daos_cpd_sub_head is unqiue for a DTX. */
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_cpd_sub_req *
+ds_obj_cpd_get_dcsr(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
+
+	/* daos_cpd_sub_req array is shared by all tgts for a DTX. */
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_shard_tgt *
+ds_obj_cpd_get_tgts(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_tgts.ca_arrays + dtx_idx;
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_cpd_disp_ent *
+ds_obj_cpd_get_dcde(crt_rpc_t *rpc, int dtx_idx, int ent_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_ents.ca_arrays + dtx_idx;
+
+	if (ent_idx >= dcs->dcs_nr)
+		return NULL;
+
+	return (struct daos_cpd_disp_ent *)dcs->dcs_buf + ent_idx;
+}
+
+static inline uint32_t
+ds_obj_cpd_get_dcsr_cnt(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
+	return dcs->dcs_nr;
+}
+
+static inline uint32_t
+ds_obj_cpd_get_tgt_cnt(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_tgts.ca_arrays + dtx_idx;
+	return dcs->dcs_nr;
+}
 
 static inline uint64_t
 obj_dkey2hash(daos_key_t *dkey)
@@ -562,13 +651,6 @@ int
 dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
-dc_tx_non_cpd_cb(daos_handle_t th, int result);
-
-int
-dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
-	     tse_task_t *task);
-
-void
-dc_tx_check_existence_cb(void *data, tse_task_t *task);
+dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
