@@ -1021,19 +1021,19 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 }
 
 /* JSON output handling for dmg command */
-static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
+static int
+daos_dmg_json_contents(const char *dmg_cmd, struct json_object **parsed_json)
 {
 	long	int  size = 0;
 	char	*content = NULL;
 	char	*filename = "/tmp/daos_dmg.json";
-	struct	json_object *parsed_json = NULL;
-	int	rc;
+	int	rc = 0;
 
 	FILE *fp = fopen(filename, "w+");
 
 	if (!fp) {
 		print_message("fopen %s failed!\n", filename);
-		return NULL;
+		return -DER_IO;
 	}
 
 	/* Need to make sure -j is in the dmg cmd? */
@@ -1045,28 +1045,31 @@ static struct json_object *daos_dmg_json_contents(const char *dmg_cmd)
 	size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 	D_ALLOC(content, size);
-	print_message("json output size is %ld\n", size);
 
 	if (fread(content, size, 1, fp) != 1) {
 		print_message("failed to read content of %s\n", filename);
-		goto out;
+		D_GOTO(out, rc = -DER_IO);
 	}
 
-	parsed_json = json_tokener_parse(content);
+	if (parsed_json == NULL)
+		D_GOTO(out, rc = -DER_IO);
+
+	*parsed_json = json_tokener_parse(content);
+
 out:
 	fclose(fp);
 	rc = unlink(filename);
 	if (rc != 0)
 		D_ERROR("unlink %s failed, rc %d", filename, rc);
 	D_FREE(content);
-	return parsed_json;
+	return rc;
 }
 
 int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 			daos_mgmt_pool_info_t *pools)
 {
-	struct json_object	*parsed_json;
-	struct json_object	*pool_list;
+	struct json_object	*parsed_json = NULL;
+	struct json_object	*response, *pool_list;
 	struct json_object	*pool;
 	struct json_object	*uuid;
 	struct json_object	*rep_ranks;
@@ -1075,19 +1078,25 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 	char	uuid_str[DAOS_UUID_STR_SIZE];
 	int i, j;
 	int rl_nr;
+	int rc = 0;
 
 	if (npools == NULL)
 		return -DER_INVAL;
 	npools_in = *npools;
 
-	parsed_json = daos_dmg_json_contents("dmg pool list -i -j > "
-			"/tmp/daos_dmg.json");
-	if (parsed_json == NULL) {
+	rc = daos_dmg_json_contents("dmg pool list -i -j > "
+			"/tmp/daos_dmg.json", &parsed_json);
+	if (rc != 0) {
 		print_message("daos_dmg_json_contents failed\n");
 		return -DER_INVAL;
 	}
 
-	json_object_object_get_ex(parsed_json, "Pools", &pool_list);
+	if (!json_object_object_get_ex(parsed_json, "response", &response))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	if (!json_object_object_get_ex(response, "Pools", &pool_list))
+		D_GOTO(out, rc = -DER_INVAL);
+
 	if (pool_list == NULL)
 		*npools = 0;
 	else
@@ -1096,14 +1105,12 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 
 	if (pools == NULL) {
 		/* no need to fill up a NULL pools buffer */
-		json_object_put(parsed_json);
-		return 0;
+		goto out;
 	} else if (npools_in && (npools_in < *npools)) {
 		/* For non-NULL pools, the allocated non-zero buffer size is
 		 * not sufficient
 		 */
-		json_object_put(parsed_json);
-		return -DER_TRUNC;
+		D_GOTO(out, rc = -DER_TRUNC);
 	}
 
 	for (i = 0; i < *npools; i++) {
@@ -1129,6 +1136,7 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 		}
 	}
 
+out:
 	json_object_put(parsed_json);
-	return 0;
+	return rc;
 }
