@@ -39,6 +39,7 @@ import cart_logparse
 import cart_logtest
 
 import avocado
+import tempfile
 
 class CartUtils():
     """CartUtils Class"""
@@ -57,7 +58,9 @@ class CartUtils():
 
         unique = random.randint(1, 100000)
 
-        path = "./hostfile"
+        avocado_data_dir = avocado.core.data_dir.get_data_dir()
+        _path = tempfile.mkdtemp(prefix = avocado_data_dir + '/hostfile-')
+        path = _path + '/hostfile'
 
         if not os.path.exists(path):
             os.makedirs(path)
