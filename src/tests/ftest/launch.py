@@ -776,8 +776,8 @@ def run_tests(test_files, tag_filter, args):
                 cur_logs_dir = os.path.join(avocado_logs_dir, "latest")
                 daos_logs_dir = os.environ.get(
                     "DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-                notify_log_size(args, cur_logs_dir, daos_logs_dir,
-                                test_file["yaml"], test_file["py"])
+                get_log_size(
+                    args, cur_logs_dir, daos_logs_dir, test_file["yaml"])
 
             # Optionally store all of the daos server and client log files
             # along with the test results
@@ -933,99 +933,21 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     spawn_commands(host_list, "; ".join(commands), 900)
 
 
-def human_to_bytes(h_size):
-    """Convert human readable size values to respective byte value.
-
-    Args:
-        h_size (str): human readable size value to be converted.
-    """
-    if h_size.endswith("KB") or h_size.endswith("kb"):
-        b_size = int(re.sub('[^0-9]', '', h_size)) * (2**10)
-    elif h_size.endswith("MB") or h_size.endswith("mb"):
-        b_size = int(re.sub('[^0-9]', '', h_size)) * (2**20)
-    elif h_size.endswith("GB") or h_size.endswith("gb"):
-        b_size = int(re.sub('[^0-9]', '', h_size)) * (2**30)
-    elif h_size.endswith("B") or h_size.endswith("b"):
-        b_size = int(re.sub('[^0-9]', '', h_size))
-    return b_size
-
-
-def send_notification(hosts, subject, msg, attachment, from_addr, to_addrs):
-    """Send email notification to provided emails with given message.
-
-    Args:
-        host (list): hosts to perform command in.
-        msg (str): message to be sent.
-        attachment (str): attachment to send on the email.
-        from_addr (str): from email address, a valid domain is necessary.
-        to_addrs (list): list of email addresses to send message to.
-    """
-    mail_cmd = "mail -s \"{}\" -a {} -r {} {} <<< \"{}\"".format(
-        subject, attachment, from_addr, ",".join(to_addrs), msg)
-    spawn_commands(hosts, mail_cmd, 30)
-
-
-def check_log_size(hosts, logs_src, log_size_file, size_limit, test_file):
-    """Get the size of the the directoy of the host test log files in
+def document_log_sizes(hosts, logs_src, log_size_file):
+    """Get the size of the the directory of the host test log files in
     the avocado results directory and store the values in a file.
 
     Args:
         hosts (list): list of hosts
         logs_src (str): the test python file from where logs are being created
         log_size_file (str): file to store the sizes
-        size_limit (str): the size limit in human readable form i.e. 5GB | 10MB
-        test_file (str): the test python file
     """
     # Create a file that contains the sizes for the logs selected.
     command = "du -ab -d 1 {} &> {}".format(logs_src, log_size_file)
     spawn_commands(hosts, command, 30)
 
-    # Check log_size.log file to see if anything goes over size_limit
-    size_info_cmd = "cat {}".format(log_size_file)
-    size_info_out = get_remote_output(hosts, size_info_cmd, 30)
 
-    # Create a dictionary of hosts for each unique return code
-    results = {code: hosts for code, hosts in size_info_out.iter_retcodes()}
-
-    # Determine if the command completed successfully across all the hosts
-    status = len(results) == 1 and 0 in results
-    if not status:
-        print("  Errors detected running \"{}\":".format(command))
-
-    # Check the command output
-    for code in sorted(results):
-        output_data = list(size_info_out.iter_buffers(results[code]))
-        if not output_data:
-            err_nodes = NodeSet.fromlist(results[code])
-            print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
-        else:
-            msg = []
-            o_hosts = None
-            for output, o_hosts in output_data:
-                for idx, line in enumerate(str(output).splitlines()):
-                    size = line.split("\t")[0]
-                    if not size or not size.isdigit():
-                        print("  line: {} Error in log_size.log: {}".format(
-                            idx, o_hosts))
-                    elif int(size) > human_to_bytes(size_limit):
-                        msg.append("Host: {} \nFile: {}\n".format(
-                            ",".join(o_hosts), line))
-            if msg:
-                sub = "Test Log {} Exceeds: {}".format(test_file, size_limit)
-                if "BUILD_URL" in os.environ:
-                    msg.append("Build URL: {}".format(os.environ["BUILD_URL"]))
-                if "CHANGE_AUTHOR_EMAIL" in os.environ:
-                    from_addr = "big-logs@hpdd.intel.com"
-                    to_addrs = [os.environ["CHANGE_AUTHOR_EMAIL"]]
-                    send_notification(o_hosts, sub, "\n".join(msg),
-                                      log_size_file, from_addr, to_addrs)
-                else:
-                    print("No email provided for log-size notification!")
-                    print("Subject: {}, Attch: {}, Msg: {}".format(
-                        sub, log_size_file, "\n".join(msg)))
-
-
-def notify_log_size(args, cur_logs_dir, daos_logs_dir, test_yaml, test_file):
+def get_log_size(args, cur_logs_dir, daos_logs_dir, test_yaml):
     """ Wrapper function to call check_log_size function for different logs.
 
     Args:
@@ -1033,41 +955,20 @@ def notify_log_size(args, cur_logs_dir, daos_logs_dir, test_yaml, test_file):
         cur_logs_dir (str): path to the current test logs
         daos_logs_dir (str): path to daos logs
         test_yaml (str): yaml file containing host names
-        test_file (str): the test python file
     """
-    # Hosts to get the daos logs from and host to get job.log from
-    daos_logs_hosts = get_hosts_from_yaml(test_yaml, args)
-    job_log_host = [socket.gethostname().split(".")[0]]
+    # Parse user input
+    for logs_type in args.logs_size.split(","):
+        if "daos_logs" in logs_type:
+            document_log_sizes(
+                get_hosts_from_yaml(test_yaml, args),
+                daos_logs_dir,
+                os.path.join(daos_logs_dir, "daos_log_size.log"))
+        if "job_logs" in logs_type:
+            document_log_sizes(
+                [socket.gethostname().split(".")[0]],
+                os.path.join(cur_logs_dir, "job.log"),
+                os.path.join(cur_logs_dir, "job_log_size.log"))
 
-    # Parse sizes from user input
-    daos_log_lim = "1GB"
-    job_log_lim = "5MB"
-    for size_arg in args.size_limit.split(","):
-        if "daos_logs" in size_arg:
-            daos_log_lim = size_arg.split("=")[0]
-        if "job_log" in size_arg:
-            job_log_lim = size_arg.split("=")[0]
-
-    # Create dictionary to store info of separate areas
-    LOG_SIZE_INFO = {
-        "hosts": [job_log_host, daos_logs_hosts],
-        "logs_src": [os.path.join(cur_logs_dir, "job.log"), daos_logs_dir],
-        "log_size_file": [os.path.join(cur_logs_dir, "job_log_size.log"),
-                          os.path.join(daos_logs_dir, "daos_log_size.log")],
-        "size_limit": [job_log_lim, daos_log_lim],
-    }
-
-    # Check job.log
-    check_log_size(
-        LOG_SIZE_INFO["hosts"][0], LOG_SIZE_INFO["logs_src"][0],
-        LOG_SIZE_INFO["log_size_file"][0], LOG_SIZE_INFO["size_limit"][0],
-        test_file)
-
-    # Check daos logs
-    check_log_size(
-        LOG_SIZE_INFO["hosts"][1], LOG_SIZE_INFO["logs_src"][1],
-        LOG_SIZE_INFO["log_size_file"][1], LOG_SIZE_INFO["size_limit"][1],
-        test_file)
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
@@ -1435,13 +1336,13 @@ def main():
         action="store_true",
         help="process core files from tests")
     parser.add_argument(
-        "-ls", "--log-size",
+        "-ls", "--logs-size",
         action="store",
-        dest="size_limit",
+        dest="logs_size",
         nargs=1,
         type=str,
-        help="comma-separated list of log areas to collect the size for with "
-             "size specified e.g. daos-logs=1G,job_log=5MB")
+        help="comma-separated list of log areas to collect the log sizes for"
+             "e.g. daos_logs,job_logs")
     parser.add_argument(
         "-s", "--sparse",
         action="store_true",
