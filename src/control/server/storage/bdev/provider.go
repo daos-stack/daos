@@ -74,6 +74,7 @@ type (
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
+		EnableVmd  bool
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
@@ -209,7 +210,12 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 
 	if p.shouldForward(req) {
+		req.EnableVmd = p.IsVmdEnabled()
 		return p.fwd.Format(req)
+	}
+	// set vmd state on remote provider in forwarded request
+	if req.IsForwarded() && req.EnableVmd {
+		p.enableVmd()
 	}
 
 	// TODO (DAOS-3844): Kick off device formats in goroutines? Serially formatting a large
