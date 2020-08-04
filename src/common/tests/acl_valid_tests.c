@@ -32,9 +32,9 @@
 
 #include <daos_types.h>
 #include <daos_security.h>
+#include <daos_errno.h>
 #include <daos/test_utils.h>
 #include <gurt/common.h>
-#include <gurt/errno.h>
 
 static void
 test_ace_is_valid_null(void **state)
