@@ -951,7 +951,7 @@ def archive_config_files(avocado_logs_dir):
         "set -eu",
         "rc=0",
         "copied=()",
-        "for file in $(ls {}/test_*.yaml)".format(config_file_dir),
+        "for file in $(ls {}/*_*_*.yaml)".format(config_file_dir),
         "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_logs_dir),
         "then copied+=($file)",
