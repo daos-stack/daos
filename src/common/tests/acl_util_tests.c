@@ -32,8 +32,8 @@
 
 #include <daos_types.h>
 #include <daos_security.h>
+#include <daos_errno.h>
 #include <gurt/common.h>
-#include <gurt/errno.h>
 
 #define TEST_DEFAULT_ACE_STR	"A::user@:rw"
 
