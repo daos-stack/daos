@@ -32,6 +32,22 @@
 #include <cart/api.h>
 
 int
+crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
+{
+	int rc;
+
+	rc = crt_proc_uuid_t(proc, &dti->dti_uuid);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &dti->dti_hlc);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+int
 crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 {
 	int		rc;

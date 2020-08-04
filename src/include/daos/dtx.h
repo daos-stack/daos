@@ -38,12 +38,12 @@
 #define DTX_COMMIT_THRESHOLD_AGE	10
 
 enum dtx_target_flags {
+	/* The target only contains read-only operations for the DTX. */
 	DTF_RDONLY			= (1 << 0),
 };
 
 /**
- * The daos target that participates in the DTX. It may be shared by
- * multiple modification groups.
+ * The daos target that participates in the DTX.
  */
 struct dtx_daos_target {
 	/* Globally target ID, corresponding to pool_component::co_id. */
@@ -53,9 +53,8 @@ struct dtx_daos_target {
 };
 
 /**
- * If the modified items (replica or EC shard) belong to the same redundancy
- * group, then related DAOS targets on which these items reside will make up
- * a modification group. It is a subset of related DAOS redundancy group.
+ * The items (replica or EC shard) belong to the same redundancy group make
+ * up a modification group that is subset of related DAOS redundancy group.
  *
  * These information will be used for DTX recovery as following:
  *
@@ -88,17 +87,17 @@ struct dtx_redundancy_group {
 	 * count of parity nodes + 1. For replicated one, it is the same as
 	 * the drg_tgt_cnt.
 	 *
-	 * If all the shards 'drg_index[1 - drg_redundancy - 1]' are lost,
+	 * If all the shards 'drg_ids[0 - drg_redundancy - 1]' are lost,
 	 * then the group is regarded as unavailable.
 	 */
 	uint32_t			drg_redundancy;
 
-	/* The indexes for the shards in the dtx_daos_target array. For the
-	 * leader group that is the first one in dtx_memberships, 'drg_index[0]'
+	/* The shards' IDs, corresponding to pool_component::co_id. For the
+	 * leader group that is the first in dtx_memberships, 'drg_index[0]'
 	 * is for the leader, the other 'drg_index[1 - drg_redundancy - 1]'
 	 * are the leader candidates for DTX recovery.
 	 */
-	uint32_t			drg_index[0];
+	uint32_t			drg_ids[0];
 };
 
 struct dtx_memberships {
@@ -183,13 +182,21 @@ enum daos_dtx_alb {
 
 /** Epoch context of a DTX */
 struct dtx_epoch {
-	daos_epoch_t	oe_value;	/**< epoch */
-	daos_epoch_t	oe_first;	/**< first epoch chosen */
-	uint64_t	oe_flags;	/**< DTX_EPOCH_UNCERTAIN, etc. */
+	/** epoch */
+	daos_epoch_t		oe_value;
+	/** first epoch chosen */
+	daos_epoch_t		oe_first;
+	/** such as DTX_EPOCH_UNCERTAIN, etc. */
+	uint32_t		oe_flags;
+	union {
+		uint32_t	oe_padding;
+		/** see 'obj_rpc_flags' when it is transferred on wire. */
+		uint32_t	oe_rpc_flags;
+	};
 };
 
 /* dtx_epoch.oe_flags */
-#define DTX_EPOCH_UNCERTAIN	(1ULL << 0)	/**< oe_value is uncertain */
+#define DTX_EPOCH_UNCERTAIN	(1U << 0)	/**< oe_value is uncertain */
 
 /** Does \a epoch contain a chosen TX epoch? */
 static inline bool
