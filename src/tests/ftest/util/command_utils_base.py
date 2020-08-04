@@ -25,6 +25,7 @@ from logging import getLogger
 import os
 import yaml
 
+
 class CommandFailure(Exception):
     """Base exception for this module."""
 
@@ -518,14 +519,15 @@ class TransportCredentials(YamlParameters):
 
         """
         data = {}
-        for name in name_list:
-            value = getattr(self, name).value
-            if isinstance(value, str):
-                dir_name, file_name = os.path.split(value)
-                if dir_name not in data:
-                    data[dir_name] = [file_name]
-                else:
-                    data[dir_name].append(file_name)
+        if not self.allow_insecure.value:
+            for name in name_list:
+                value = getattr(self, name).value
+                if isinstance(value, str):
+                    dir_name, file_name = os.path.split(value)
+                    if dir_name not in data:
+                        data[dir_name] = [file_name]
+                    else:
+                        data[dir_name].append(file_name)
         return data
 
 
