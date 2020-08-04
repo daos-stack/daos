@@ -1514,18 +1514,24 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 	if (!pool_tree_sane(tree, version)) {
 		D_DEBUG(DB_MGMT, "Insane buffer format\n");
 		rc = -DER_INVAL;
-		goto out;
+		goto error_tree;
 	}
 
 	rc = pool_map_compat(map, version, tree);
 	if (rc != 0) {
 		D_DEBUG(DB_MGMT, "Buffer is incompatible with pool map\n");
-		goto out;
+		goto error_tree;
 	}
 
 	D_DEBUG(DB_TRACE, "Merge buffer with already existent pool map\n");
 	rc = pool_map_merge(map, version, tree);
- out:
+	if(rc != 0)
+		goto error_tree;
+
+	return rc;
+
+error_tree:
+	pool_tree_free(tree);
 	return rc;
 }
 
