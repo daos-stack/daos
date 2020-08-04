@@ -51,6 +51,9 @@ class ParallelIo(FioBase, IorTestBase):
         self.dfuse = None
         self.cont_count = None
         self.pool_count = None
+        self.statvfs_info_initial = None
+        self.statvfs_before_cont_destroy = None
+        self.statvfs_after_cont_destroy = None
         self.pool = []
         self.container = []
 
@@ -144,7 +147,6 @@ class ParallelIo(FioBase, IorTestBase):
         """Method to obtain free space using statvfs
 
           Args:
-            pool_obj (list): List of pool objects.
             path (str): path for which free space needs to be obtained for.
 
           Returns:
@@ -158,6 +160,32 @@ class ParallelIo(FioBase, IorTestBase):
             self.log.info("Statvfs List Output: %s", statvfs_list)
 
         return statvfs_list
+
+    def verify_aggregation(self, reduced_space, count):
+        """Verify if expected space is returned for each pool after containers
+           were destroyed. If not, wait for 60 secs and check again. Wait 4
+           times, otherwise exit the test with a failure.
+
+          Args:
+            reduced_space: expected space to be returned
+        """
+        counter = 1
+        while (self.statvfs_after_cont_destroy[count] <
+               self.statvfs_before_cont_destroy[count] + reduced_space):
+            # try to wait for 4 x 60 secs for aggregation to be completed
+            # or else exit the test with a failure.
+            if counter > 4:
+                self.log.info("Free space before io: %s",
+                              self.statvfs_info_initial)
+                self.log.info("Free space after io: %s",
+                              self.statvfs_before_cont_destroy)
+                self.log.info("Free space at test termination: %s",
+                              self.statvfs_after_cont_destroy)
+                self.fail("Aggregation did not complete as expected")
+            time.sleep(60)
+            self.statvfs_after_cont_destroy = self.statvfs_pool(
+                self.dfuse.mount_dir.value)
+            counter += 1
 
     def test_parallelio(self):
         """Jira ID: DAOS-3775.
@@ -278,9 +306,7 @@ class ParallelIo(FioBase, IorTestBase):
         for _ in range(self.pool_count):
             pool_thread = threading.Thread(target=self.create_pool())
             pool_threads.append(pool_thread)
-        # start container create job
-        for pool_job in pool_threads:
-            pool_job.start()
+            pool_thread.start()
         # wait for container create to finish
         for pool_job in pool_threads:
             pool_job.join()
@@ -289,7 +315,8 @@ class ParallelIo(FioBase, IorTestBase):
         self.start_dfuse()
 
         # record free space using statvfs before any data is written.
-        statvfs_info_before = self.statvfs_pool(self.dfuse.mount_dir.value)
+        self.statvfs_info_initial = self.statvfs_pool(
+            self.dfuse.mount_dir.value)
 
         # Create 10 containers for each pool. Container create process cannot
         # be parallelised as different container create could complete at
@@ -329,14 +356,14 @@ class ParallelIo(FioBase, IorTestBase):
             job.join()
 
         # Record free space after io
-        statvfs_before_cont_destroy = self.statvfs_pool(
+        self.statvfs_before_cont_destroy = self.statvfs_pool(
             self.dfuse.mount_dir.value)
 
         # Destroy half of the containers from each pool
         pfinal = 0
         for count in range(self.cont_count):
             pinitial = pfinal
-            pfinal = pinitial + (self.cont_count / 2)
+            pfinal = pinitial + (self.cont_count // 2)
             del self.container[pinitial:pfinal]
 
         for cont in self.container:
@@ -348,7 +375,7 @@ class ParallelIo(FioBase, IorTestBase):
             destroy_job.join()
 
         # Record free space after container destroy.
-        statvfs_info_after_cont_destroy = self.statvfs_pool(
+        self.statvfs_after_cont_destroy = self.statvfs_pool(
             self.dfuse.mount_dir.value)
 
         # Calculate the expected space to be returned after containers
@@ -360,20 +387,11 @@ class ParallelIo(FioBase, IorTestBase):
         # were destroyed. If not, wait for 60 secs and check again. Wait 4
         # times, otherwise exit the test with a failure.
         for count in range(self.pool_count):
-            counter = 1
-            while (statvfs_info_after_cont_destroy[count] <
-                   statvfs_before_cont_destroy[count] + reduced_space):
-                # try to wait for 4 x 60 secs for aggregation to be completed
-                # or else exit the test with a failure.
-                if counter > 4:
-                    self.log.info("Free space before io: %s",
-                                  statvfs_info_before)
-                    self.log.info("Free space after io: %s",
-                                  statvfs_before_cont_destroy)
-                    self.log.info("Free space at test termination: %s",
-                                  statvfs_info_after_cont_destroy)
-                    self.fail("Aggregation did not complete as expected")
-                time.sleep(60)
-                statvfs_info_after_cont_destroy = self.statvfs_pool(
-                    self.dfuse.mount_dir.value)
-                counter += 1
+            thread = threading.Thread(
+                target=self.verify_aggregation,
+                args=(reduced_space, count))
+            threads.append(thread)
+            thread.start()
+
+        for job in threads:
+            job.join()
