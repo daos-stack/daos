@@ -173,7 +173,7 @@ test_discover_null_controllers(void **state)
 	(void)state; /*unused*/
 
 	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			&mock_get_dev_health_logs);
+			     &mock_get_dev_health_logs, false);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -191,7 +191,7 @@ test_discover_set_controllers(void **state)
 	g_controllers->next = NULL;
 
 	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			&mock_get_dev_health_logs);
+			     &mock_get_dev_health_logs, false);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -209,7 +209,7 @@ test_discover_probe_fail(void **state)
 	g_controllers->next = NULL;
 
 	test_ret = _discover(&mock_spdk_nvme_probe_fail, false,
-			&mock_get_dev_health_logs);
+			     &mock_get_dev_health_logs, false);
 	assert_int_equal(test_ret->rc, -1);
 
 	assert_null(test_ret->ctrlrs);
