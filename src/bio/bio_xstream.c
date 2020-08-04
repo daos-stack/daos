@@ -186,10 +186,9 @@ traddr_to_vmd(char *dst, const char *src)
 			ptr = ptr + 3;
 			strncat(vmd_addr, ptr, 1);
 			break;
-		} else {
-			strcat(vmd_addr, ":");
-			ptr = ptr + 2;
 		}
+		strcat(vmd_addr, ":");
+		ptr = ptr + 2;
 		iteration++;
 	}
 	strncpy(dst, vmd_addr, SPDK_NVMF_TRADDR_MAX_LEN);

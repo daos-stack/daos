@@ -34,14 +34,14 @@ def scons():
         return
     config = Configure(unit_env)
 
-    lookPath = os.path.join(nvme_lib_src, 'nvme_internal.h')
-    if os.path.isfile(lookPath):
+    look_path = os.path.join(nvme_lib_src, 'nvme_internal.h')
+    if os.path.isfile(look_path):
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
                                    unit_env.nc], LIBS=libs)
         unit_env.Install("$PREFIX/bin", testbin)
     else:
-        print(lookPath, " missing, skipping nvme_control_ut build")
+        print(look_path, " missing, skipping nvme_control_ut build")
 
     config.Finish()
 
