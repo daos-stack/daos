@@ -106,51 +106,51 @@ func (nc *NvmeController) HealthDetail(buf *bytes.Buffer) {
 		return
 	}
 
-	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
+	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temperature, stat.Temperature-273)
 
-	if stat.Tempwarntime > 0 {
+	if stat.TempWarnTime > 0 {
 		fmt.Fprintf(buf, "\t\t\t\tTemperature Warning Duration:%s\n",
-			time.Duration(stat.Tempwarntime)*time.Minute)
+			time.Duration(stat.TempWarnTime)*time.Minute)
 	}
-	if stat.Tempcrittime > 0 {
+	if stat.TempCritTime > 0 {
 		fmt.Fprintf(buf, "\t\t\t\tTemperature Critical Duration:%s\n",
-			time.Duration(stat.Tempcrittime)*time.Minute)
+			time.Duration(stat.TempCritTime)*time.Minute)
 	}
 
-	fmt.Fprintf(buf, "\t\t\tController Busy Time:%s\n", time.Duration(stat.Ctrlbusytime)*time.Minute)
-	fmt.Fprintf(buf, "\t\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
-	fmt.Fprintf(buf, "\t\t\tPower On Duration:%s\n", time.Duration(stat.Poweronhours)*time.Hour)
-	fmt.Fprintf(buf, "\t\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
-	fmt.Fprintf(buf, "\t\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
-	fmt.Fprintf(buf, "\t\t\tError Log Entries:%d\n", uint64(stat.Errorlogentries))
+	fmt.Fprintf(buf, "\t\t\tController Busy Time:%s\n", time.Duration(stat.CtrlBusyTime)*time.Minute)
+	fmt.Fprintf(buf, "\t\t\tPower Cycles:%d\n", uint64(stat.PowerCycles))
+	fmt.Fprintf(buf, "\t\t\tPower On Duration:%s\n", time.Duration(stat.PowerOnHours)*time.Hour)
+	fmt.Fprintf(buf, "\t\t\tUnsafe Shutdowns:%d\n", uint64(stat.UnsafeShutdowns))
+	fmt.Fprintf(buf, "\t\t\tMedia Errors:%d\n", uint64(stat.MediaErrors))
+	fmt.Fprintf(buf, "\t\t\tError Log Entries:%d\n", uint64(stat.ErrorCount))
 
 	fmt.Fprintf(buf, "\t\t\tCritical Warnings:\n")
 	fmt.Fprintf(buf, "\t\t\t\tTemperature: ")
-	if stat.Tempwarn {
+	if stat.TempWarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
 	}
 	fmt.Fprintf(buf, "\t\t\t\tAvailable Spare: ")
-	if stat.Availsparewarn {
+	if stat.SpareWarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
 	}
 	fmt.Fprintf(buf, "\t\t\t\tDevice Reliability: ")
-	if stat.Reliabilitywarn {
+	if stat.DeviceReliabilityWarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
 	}
 	fmt.Fprintf(buf, "\t\t\t\tRead Only: ")
-	if stat.Readonlywarn {
+	if stat.ReadonlyWarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
 	}
 	fmt.Fprintf(buf, "\t\t\t\tVolatile Memory Backup: ")
-	if stat.Volatilewarn {
+	if stat.VolatileMemoryWarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")

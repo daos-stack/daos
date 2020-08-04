@@ -34,7 +34,9 @@
 #include <vos_internal.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
+#include <daos_srv/vos.h>
 
+struct bio_xs_context	*vsa_xsctxt_inst;
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static bool vsa_nvme_init;
@@ -119,6 +121,108 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 				blk_off, blk_cnt, DP_RC(rc));
 	}
 	return rc;
+}
+
+static int
+vos_tx_publish(struct dtx_handle *dth, int err)
+{
+	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
+	struct dtx_rsrvd_uint	*dru;
+	int			 rc;
+	int			 i;
+
+again:
+	for (i = 0, rc = 0;
+	     i < dth->dth_rsrvd_cnt && (rc == 0 || err != 0); i++) {
+		dru = &dth->dth_rsrvds[i];
+		rc = vos_publish_scm(cont, dru->dru_scm, err == 0);
+
+		/* FIXME: Currently, vos_publish_blocks() will release
+		 *	  reserved information in 'dru_nvme_list' from
+		 *	  DRAM. So if vos_publish_blocks() failed, the
+		 *	  reserve information in DRAM for those former
+		 *	  published ones cannot be rollback. That will
+		 *	  cause space leaking before in-memory reserve
+		 *	  information synced with persistent allocation
+		 *	  heap until the server restart.
+		 *
+		 *	  It is not fatal, will be handled later.
+		 */
+		if (rc == 0 || err != 0)
+			rc = vos_publish_blocks(cont, &dru->dru_nvme,
+						err == 0, VOS_IOS_GENERIC);
+		if (err != 0)
+			D_FREE(dru->dru_scm);
+	}
+
+	/* Some publish failed, cancel all. */
+	if (err == 0 && rc != 0) {
+		err = rc;
+		goto again;
+	}
+
+	return err;
+}
+
+int
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
+{
+	int	rc;
+
+	if (dth == NULL)
+		return umem_tx_begin(umm, vos_txd_get());
+
+	if (dth->dth_local_tx_started)
+		return 0;
+
+	rc = umem_tx_begin(umm, vos_txd_get());
+	if (rc == 0)
+		dth->dth_local_tx_started = 1;
+
+	return rc;
+}
+
+int
+vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err)
+{
+	if (dth == NULL)
+		return umem_tx_end(umm, err);
+
+	if (!dth->dth_local_tx_started)
+		return err;
+
+	/* Not the last modification. */
+	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq)
+		return 0;
+
+	dth->dth_local_tx_started = 0;
+
+	if (err == 0)
+		err = vos_dtx_prepared(dth);
+
+	err = vos_tx_publish(dth, err);
+	if (err != 0) {
+		vos_dtx_cleanup(dth);
+
+		return umem_tx_abort(umm, err);
+	}
+
+	err = umem_tx_commit(umm);
+	if (err == 0) {
+		int	i;
+
+		for (i = 0; i < dth->dth_modification_cnt; i++) {
+			struct dtx_rsrvd_uint	*dru = &dth->dth_rsrvds[i];
+
+			D_FREE(dru->dru_scm);
+		}
+	} else {
+		/* Aborted case. */
+		vos_tx_publish(dth, -DER_CANCELED);
+		vos_dtx_cleanup(dth);
+	}
+
+	return err;
 }
 
 /**

@@ -25,28 +25,65 @@ package main
 
 import (
 	"context"
-	"os"
+	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
-// storageQueryCmd is the struct representing the query storage subcommand
-type storageQueryCmd struct {
-	NVMe     nvmeHealthQueryCmd `command:"nvme-health" alias:"n" description:"Query raw NVMe SPDK device statistics."`
-	BS       bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
-	Smd      smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
-	DevState devStateQueryCmd   `command:"device-state" alias:"d" description:"Query the device state (ie NORMAL or FAULTY)."`
+type rankCmd struct {
+	Rank *uint32 `short:"r" long:"rank" description:"Constrain operation to the specified server rank"`
 }
 
-// nvmeHealthQueryCmd is the struct representing the "storage query health" subcommand
-//
-// Command is issued across all connected hosts (calls client.StorageScan and is
-// an alias for "storage scan").
+func (r *rankCmd) GetRank() system.Rank {
+	if r.Rank == nil {
+		return system.NilRank
+	}
+	return system.Rank(*r.Rank)
+}
+
+type smdQueryCmd struct {
+	logCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
+}
+
+func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...control.PrintConfigOption) error {
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	var bld strings.Builder
+	if err := control.PrintResponseErrors(resp, &bld, opts...); err != nil {
+		return err
+	}
+	if err := pretty.PrintSmdInfoMap(req, resp.HostStorage, &bld, opts...); err != nil {
+		return err
+	}
+	cmd.log.Info(bld.String())
+
+	return resp.Errors()
+}
+
+// storageQueryCmd is the struct representing the storage query subcommand
+type storageQueryCmd struct {
+	NVMeHealth   nvmeHealthQueryCmd  `command:"nvme-health" alias:"n" description:"Query the health of a NVMe device"`
+	TargetHealth tgtHealthQueryCmd   `command:"target-health" alias:"t" description:"Query the target health"`
+	DeviceHealth devHealthQueryCmd   `command:"device-health" alias:"d" description:"Query the device health"`
+	ListPools    listPoolsQueryCmd   `command:"list-pools" alias:"p" description:"List pools on the server"`
+	ListDevices  listDevicesQueryCmd `command:"list-devices" alias:"d" description:"List storage devices on the server"`
+}
+
 type nvmeHealthQueryCmd struct {
 	logCmd
 	ctlInvokerCmd
@@ -54,19 +91,18 @@ type nvmeHealthQueryCmd struct {
 	jsonOutputCmd
 }
 
-// Execute is run when nvmeHealthQueryCmd activates. Runs NVMe
-// storage scan including health query on all connected servers.
 func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
@@ -81,78 +117,70 @@ func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
 	return resp.Errors()
 }
 
-// bsHealthQueryCmd is the struct representing the "storage query bio" subcommand
-//
-// Command is issued to the management service access point.
-type bsHealthQueryCmd struct {
-	logCmd
-	connectedCmd
-	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query"`
-	Tgtid   string `short:"t" long:"tgtid" description:"VOS target ID to query"`
+type devHealthQueryCmd struct {
+	smdQueryCmd
+	UUID string `short:"u" long:"uuid" required:"1" description:"Device UUID"`
 }
 
-// Execute is run when bsHealthQueryCmd activates.
-// Query the BIO health and error stats of the given device.
-func (b *bsHealthQueryCmd) Execute(args []string) error {
-	if b.Devuuid != "" && b.Tgtid != "" {
-		return errors.New("either device UUID OR target ID need to be specified not both")
-	} else if b.Devuuid == "" && b.Tgtid == "" {
-		return errors.New("device UUID or target ID is required")
+func (cmd *devHealthQueryCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		OmitPools:        true,
+		IncludeBioHealth: true,
+		Rank:             system.NilRank,
+		UUID:             cmd.UUID,
 	}
-
-	req := &mgmtpb.BioHealthReq{DevUuid: b.Devuuid, TgtId: b.Tgtid}
-
-	b.log.Infof("Blobstore Health Data:\n%s\n", b.conns.BioHealthQuery(req))
-
-	return nil
+	return cmd.makeRequest(ctx, req)
 }
 
-// smdQueryCmd is the struct representing the "storage query smd" subcommand
-//
-// Command is issued to the management service access point.
-type smdQueryCmd struct {
-	logCmd
-	connectedCmd
-	Devices bool `short:"d" long:"devices" description:"List all devices/blobstores stored in per-server metadata table."`
-	Pools   bool `short:"p" long:"pools" description:"List all VOS pool targets stored in per-server metadata table."`
+type tgtHealthQueryCmd struct {
+	smdQueryCmd
+	Rank  uint32 `short:"r" long:"rank" required:"1" description:"Server rank hosting target"`
+	TgtId uint32 `short:"t" long:"tgtid" required:"1" description:"VOS target ID to query"`
 }
 
-// Execute is run when ListSmdDevCmd activates
-// Query per-server metadata device table for all connected servers
-func (s *smdQueryCmd) Execute(args []string) error {
-	// default is to print both pools and devices if not specified
-	if !s.Pools && !s.Devices {
-		s.Pools = true
-		s.Devices = true
+func (cmd *tgtHealthQueryCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		OmitPools:        true,
+		IncludeBioHealth: true,
+		Rank:             system.Rank(cmd.Rank),
+		Target:           strconv.Itoa(int(cmd.TgtId)),
 	}
-
-	if s.Devices {
-		req_dev := &mgmtpb.SmdDevReq{}
-		s.log.Infof("SMD Device List:\n%s\n", s.conns.SmdListDevs(req_dev))
-	}
-
-	if s.Pools {
-		req_pool := &mgmtpb.SmdPoolReq{}
-		s.log.Infof("SMD Pool List:\n%s\n", s.conns.SmdListPools(req_pool))
-	}
-
-	return nil
+	return cmd.makeRequest(ctx, req)
 }
 
-// devStateQueryCmd is the struct representing the "storage query device-state" subcommand
-type devStateQueryCmd struct {
-	logCmd
-	connectedCmd
-	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query" required:"1"`
+type listDevicesQueryCmd struct {
+	smdQueryCmd
+	rankCmd
+	Health bool   `short:"b" long:"health" description:"Include device health in results"`
+	UUID   string `short:"u" long:"uuid" description:"Device UUID (all devices if blank)"`
 }
 
-// Execute is run when devStateQueryCmd activates
-// Query the SMD device state of the given device
-func (d *devStateQueryCmd) Execute(args []string) error {
-	// Devuuid is a required command parameter
-	req := &mgmtpb.DevStateReq{DevUuid: d.Devuuid}
+func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		OmitPools:        true,
+		IncludeBioHealth: cmd.Health,
+		Rank:             cmd.GetRank(),
+		UUID:             cmd.UUID,
+	}
+	return cmd.makeRequest(ctx, req)
+}
 
-	d.log.Infof("Device State Info:\n%s\n", d.conns.DevStateQuery(req))
+type listPoolsQueryCmd struct {
+	smdQueryCmd
+	rankCmd
+	UUID    string `short:"u" long:"uuid" description:"Pool UUID (all pools if blank)"`
+	Verbose bool   `short:"v" long:"verbose" description:"Show more detail about pools"`
+}
 
-	return nil
+func (cmd *listPoolsQueryCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.SmdQueryReq{
+		OmitDevices: true,
+		Rank:        cmd.GetRank(),
+		UUID:        cmd.UUID,
+	}
+	return cmd.makeRequest(ctx, req, control.PrintWithVerboseOutput(cmd.Verbose))
 }

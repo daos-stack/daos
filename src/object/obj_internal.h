@@ -139,6 +139,8 @@ struct obj_reasb_req {
 	struct obj_ec_recx_array	*orr_recxs;
 	struct obj_ec_seg_sorter	*orr_sorters;
 	struct dcs_layout		*orr_singv_los;
+	/* to record returned data size from each targets */
+	daos_size_t			*orr_data_sizes;
 	uint32_t			 orr_tgt_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
@@ -149,7 +151,18 @@ struct obj_reasb_req {
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
-	uint32_t			 orr_recov:1; /* for recovery flag */
+	/* object ID */
+	daos_obj_id_t			 orr_oid;
+	/* #iods of IO req */
+	uint32_t			 orr_iod_nr;
+	/* for data recovery flag */
+	uint32_t			 orr_recov:1,
+	/* for iod_size fetching flag */
+					 orr_size_fetch:1,
+	/* for iod_size fetched flag */
+					 orr_size_fetched:1,
+	/* only with single target flag */
+					 orr_single_tgt:1;
 };
 
 static inline void
@@ -297,6 +310,7 @@ struct shard_punch_args {
 struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
+	struct dtx_id		 la_dti;
 };
 
 struct ec_bulk_spec {
@@ -387,11 +401,12 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
-			   uint32_t flags, struct dc_object *obj,
-			   daos_key_t *dkey, daos_key_t *akey,
-			   daos_recx_t *recx, const uuid_t coh_uuid,
-			   const uuid_t cont_uuid, unsigned int *map_ver,
+int dc_obj_shard_query_key(struct dc_obj_shard *shard,
+			   struct dc_obj_epoch *epoch, uint32_t flags,
+			   struct dc_object *obj, daos_key_t *dkey,
+			   daos_key_t *akey, daos_recx_t *recx,
+			   const uuid_t coh_uuid, const uuid_t cont_uuid,
+			   struct dtx_id *dti, unsigned int *map_ver,
 			   tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
@@ -433,6 +448,34 @@ dc_io_epoch_set(struct dc_obj_epoch *epoch)
 	}
 }
 
+static inline void
+dc_sgl_out_set(d_sg_list_t *sgl, daos_size_t data_size)
+{
+	d_iov_t		*iov;
+	daos_size_t	 buf_size;
+	uint32_t	 i;
+
+	if (data_size == 0) {
+		sgl->sg_nr_out = 0;
+		return;
+	}
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++) {
+		iov = &sgl->sg_iovs[i];
+		buf_size += iov->iov_buf_len;
+		if (buf_size < data_size) {
+			iov->iov_len = iov->iov_buf_len;
+			sgl->sg_nr_out = i + 1;
+			continue;
+		}
+
+		iov->iov_len = iov->iov_buf_len -
+			       (buf_size - data_size);
+		sgl->sg_nr_out = i + 1;
+		break;
+	}
+}
+
 void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
 void obj_addref(struct dc_object *obj);
@@ -450,7 +493,8 @@ struct obj_io_context {
 	struct ds_cont_child	*ioc_coc;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
-	bool			 ioc_began;
+	uint32_t		 ioc_began:1,
+				 ioc_csummer_init:1;
 };
 
 struct ds_obj_exec_arg {
@@ -466,6 +510,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
 		    dtx_sub_comp_cb_t comp_cb);
+
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
@@ -509,5 +554,10 @@ int
 dc_tx_non_cpd_cb(daos_handle_t th, int result);
 
 int
-dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc);
+dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
+	     tse_task_t *task);
+
+void
+dc_tx_check_existence_cb(void *data, tse_task_t *task);
+
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

@@ -33,10 +33,19 @@
 static inline daos_size_t
 get_frag_overhead(daos_size_t tot_size, int media)
 {
-	if (media == DAOS_MEDIA_SCM)
-		return (tot_size * 5) / 100;
-	else
-		return (tot_size * 2) / 100;
+	daos_size_t	min_sz = (2ULL << 30);	/* 2GB */
+	daos_size_t	max_sz = (10ULL << 30);	/* 10GB */
+	daos_size_t	ovhd;
+
+	ovhd = (media == DAOS_MEDIA_SCM) ?
+		(tot_size * 5) / 100 : (tot_size * 2) / 100;
+
+	if (ovhd < min_sz)
+		ovhd = min_sz;
+	else if (ovhd > max_sz)
+		ovhd = max_sz;
+
+	return ovhd;
 }
 
 void
@@ -51,6 +60,10 @@ vos_space_sys_init(struct vos_pool *pool)
 	gc_reserve_space(&pool->vp_space_sys[0]);
 	agg_reserve_space(&pool->vp_space_sys[0]);
 
+	/* NVMe isn't configured */
+	if (nvme_tot == 0)
+		POOL_NVME_SYS(pool) = 0;
+
 	if ((POOL_SCM_SYS(pool) * 2) > scm_tot) {
 		D_WARN("Disable SCM space reserving for tiny pool:"DF_UUID" "
 		       "sys["DF_U64"] > tot["DF_U64"]\n",
@@ -58,7 +71,7 @@ vos_space_sys_init(struct vos_pool *pool)
 		POOL_SCM_SYS(pool) = 0;
 	}
 
-	if (pool->vp_vea_info && (POOL_NVME_SYS(pool) * 2) > nvme_tot) {
+	if ((POOL_NVME_SYS(pool) * 2) > nvme_tot) {
 		D_WARN("Disable NVMe space reserving for tiny Pool:"DF_UUID" "
 		       "sys["DF_U64"] > tot["DF_U64"]\n",
 		       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
@@ -140,7 +153,9 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 
 	/* NVMe isn't configured for this VOS pool */
 	if (pool->vp_vea_info == NULL) {
+		NVME_TOTAL(vps) = 0;
 		NVME_FREE(vps) = 0;
+		NVME_SYS(vps) = 0;
 		return 0;
 	}
 
@@ -298,22 +313,22 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 		goto error;
 
 	scm_left -= POOL_SCM_HELD(pool);
-
-	nvme_left = NVME_FREE(&vps);
-	if (pool->vp_vea_info) {
-		if (nvme_left < NVME_SYS(&vps))
-			goto error;
-		nvme_left -= NVME_SYS(&vps);
-		/* 'NVMe held' has already been excluded from 'NVMe free' */
-	}
-
 	if (scm_left < space_est[DAOS_MEDIA_SCM])
 		goto error;
 
-	if (pool->vp_vea_info) {
-		if (nvme_left < space_est[DAOS_MEDIA_NVME])
-			goto error;
-	}
+	/* If NVMe isn't configured or this update doesn't use NVMe space */
+	if (pool->vp_vea_info == NULL || space_est[DAOS_MEDIA_NVME] == 0)
+		goto success;
+
+	nvme_left = NVME_FREE(&vps);
+	if (nvme_left < NVME_SYS(&vps))
+		goto error;
+
+	nvme_left -= NVME_SYS(&vps);
+	/* 'NVMe held' has already been excluded from 'NVMe free' */
+
+	if (nvme_left < space_est[DAOS_MEDIA_NVME])
+		goto error;
 
 success:
 	space_hld[DAOS_MEDIA_SCM]	= space_est[DAOS_MEDIA_SCM];

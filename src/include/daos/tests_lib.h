@@ -66,7 +66,9 @@ daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats,
  * Create a random (optionally) ordered integer array with \a nr elements, value
  * of this array starts from \a base.
  */
-int *dts_rand_iarr_alloc(int nr, int base, bool shuffle);
+uint64_t *dts_rand_iarr_alloc_set(int nr, int base, bool shuffle);
+uint64_t *dts_rand_iarr_alloc(int nr);
+void dts_rand_iarr_set(uint64_t *array, int nr, int base, bool shuffle);
 
 static inline double
 dts_time_now(void)
@@ -203,6 +205,20 @@ dts_create_config(char buf[DTS_CFG_MAX], const char *format, ...)
 	va_end(ap);
 
 	if (count >= DTS_CFG_MAX)
+		buf[DTS_CFG_MAX - 1] = 0;
+}
+
+static inline void
+dts_append_config(char buf[DTS_CFG_MAX], const char *format, ...)
+{
+	va_list	ap;
+	int	count = strnlen(buf, DTS_CFG_MAX);
+
+	va_start(ap, format);
+	vsnprintf(buf + count, DTS_CFG_MAX - count, format, ap);
+	va_end(ap);
+
+	if (strlen(buf) >= DTS_CFG_MAX)
 		buf[DTS_CFG_MAX - 1] = 0;
 }
 

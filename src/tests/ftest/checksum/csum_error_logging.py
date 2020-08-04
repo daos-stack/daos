@@ -23,6 +23,7 @@
 """
 import os
 import re
+import json
 
 from daos_core_base import DaosCoreBase
 from dmg_utils import DmgCommand
@@ -50,45 +51,51 @@ class CSumErrorLog(DaosCoreBase):
         self.dmg.sub_command_class.set_sub_command("query")
 
     def get_nvme_device_id(self):
-        self.dmg.sub_command_class.sub_command_class.set_sub_command("smd")
+        self.dmg.json.value = True
         self.dmg.sub_command_class. \
-            sub_command_class.sub_command_class.devices.value = True
-        self.dmg.sub_command_class. \
-            sub_command_class.sub_command_class.pools.value = True
+            sub_command_class.set_sub_command("list-devices")
         try:
             result = self.dmg.run()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
-        uid = None
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if re.search("^UUID:", line):
-                temp = line.split()
-                uid = temp[1]
-                break
-        return uid
+
+        data = json.loads(result.stdout)
+        resp = data['response']
+        if data['error'] or len(resp['host_errors']) > 0:
+            if data['error']:
+                self.fail("dmg command failed: {}".format(data['error']))
+            else:
+                self.fail("dmg command failed: {}".format(resp['host_errors']))
+        for v in resp['host_storage_map'].values():
+            if v['storage']['smd_info']['devices']:
+                return v['storage']['smd_info']['devices'][0]['uuid']
 
     def get_checksum_error_value(self, device_id=None):
         if device_id is None:
             self.fail("No device id provided")
             return
+        self.dmg.json.value = True
         self.dmg.sub_command_class. \
-            sub_command_class.set_sub_command("blobstore-health")
+            sub_command_class.set_sub_command("device-health")
         self.dmg.sub_command_class. \
             sub_command_class. \
-            sub_command_class.devuuid.value = "{}".format(device_id)
+            sub_command_class.uuid.value = device_id
         try:
             result = self.dmg.run()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
-        csum_count = None
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if re.search("^Checksum", line):
-                temp = line.split()
-                csum_count = int(temp[2])
-                break
-        return csum_count
+
+        data = json.loads(result.stdout)
+        resp = data['response']
+        if data['error'] or len(resp['host_errors']) > 0:
+            if data['error']:
+                self.fail("dmg command failed: {}".format(data['error']))
+            else:
+                self.fail("dmg command failed: {}".format(resp['host_errors']))
+        for v in resp['host_storage_map'].values():
+            if v['storage']['smd_info']['devices']:
+                dev = v['storage']['smd_info']['devices'][0]
+                return dev['health']['checksum_errors']
 
     def test_csum_error_logging(self):
         """

@@ -64,6 +64,17 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	return true;
 }
 
+static uint32_t
+ir_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
+{
+	const struct dfuse_inode_record		*ir;
+
+	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+	return (uint32_t)ir->ir_id.irid_oid.hi;
+
+}
+
 static void
 ir_free(struct d_hash_table *htable, d_list_t *rlink)
 {
@@ -76,6 +87,15 @@ ir_free(struct d_hash_table *htable, d_list_t *rlink)
 
 /* Inode entry hash table operations */
 
+static uint32_t
+ih_key_hash(struct d_hash_table *htable, const void *key,
+	    unsigned int ksize)
+{
+	const ino_t *ino = key;
+
+	return (uint32_t)(*ino);
+}
+
 static bool
 ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	   const void *key, unsigned int ksize)
@@ -86,6 +106,16 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	return *ino == ie->ie_stat.st_ino;
+}
+
+static uint32_t
+ih_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
+{
+	const struct dfuse_inode_entry	*ie;
+
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	return (uint32_t)ie->ie_stat.st_ino;
 }
 
 static void
@@ -115,7 +145,7 @@ static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
 	struct dfuse_inode_entry	*ie;
-	uint				oldref;
+	uint				oldref = 0;
 	uint				newref = 0;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
@@ -156,6 +186,8 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 
 static d_hash_table_ops_t ie_hops = {
 	.hop_key_cmp		= ih_key_cmp,
+	.hop_key_hash		= ih_key_hash,
+	.hop_rec_hash		= ih_rec_hash,
 	.hop_rec_addref		= ih_addref,
 	.hop_rec_decref		= ih_decref,
 	.hop_rec_ndecref	= ih_ndecref,
@@ -163,9 +195,10 @@ static d_hash_table_ops_t ie_hops = {
 };
 
 static d_hash_table_ops_t ir_hops = {
-	.hop_key_cmp	= ir_key_cmp,
-	.hop_key_hash   = ir_key_hash,
-	.hop_rec_free	= ir_free,
+	.hop_key_cmp		= ir_key_cmp,
+	.hop_key_hash		= ir_key_hash,
+	.hop_rec_hash		= ir_rec_hash,
+	.hop_rec_free		= ir_free,
 
 };
 
@@ -218,25 +251,28 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	args.argc = 4;
 
+	/* These allocations are freed later by libfuse so do not use the
+	 * standard allocation macros
+	 */
 	args.allocated = 1;
-	D_ALLOC_ARRAY(args.argv, args.argc);
+	args.argv = calloc(sizeof(*args.argv), args.argc);
 	if (!args.argv)
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[0], "", 1);
+	args.argv[0] = strndup("", 1);
 	if (!args.argv[0])
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[1], "-ofsname=dfuse", 32);
+	args.argv[1] = strndup("-ofsname=dfuse", 32);
 	if (!args.argv[1])
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[2], "-osubtype=daos", 32);
+	args.argv[2] = strndup("-osubtype=daos", 32);
 	if (!args.argv[2])
 		D_GOTO(err, 0);
 
-	D_ASPRINTF(args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
-	if (!args.argv[3])
+	rc = asprintf(&args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
+	if (rc < 0 || !args.argv[3])
 		D_GOTO(err, 0);
 
 	fuse_ops = dfuse_get_fuse_ops();

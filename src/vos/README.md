@@ -666,38 +666,7 @@ For reference, key junction points in the flows are:
 
 ## Metadata Overhead
 
-VOS provides a tool vos_stats.py that can take a set of assumptions about how many keys and objects and VOS pools are in use and provide an estimate of metadata overhead.
-
-To run an example, first setup the paths
-```
-[~/daos]$ source ./utils/sl/setup_local.sh
-/home/jvolivie/daos
-Build vars file found: ./.build_vars.sh
-```
-
-Then run vos_size to create vos_size.yaml with metadata size information
-```
-[~/daos]$ vos_size
-```
-
-Finally, execute vos_size.py to get a metadata estimate for the use cases in an input.yaml.
-An example input yaml is installed to /etc.  This file has comments documenting configuration
-options.
-```
-[~/daos]$ vos_size.py "${SL_PREFIX}/etc/vos_size_input.yaml"
-Metadata totals:
-	pool                :       6.09 K ( 0.00%)
-	container           :      27.19 K ( 0.00%)
-	object              :      33.52 K ( 0.00%)
-	dkey                :     540.62 K ( 0.00%)
-	akey                :     283.81 M ( 0.01%)
-	single_value        :       3.64 G ( 0.18%)
-	array               :       7.10 G ( 0.36%)
-	total_meta          :       1.94 T (99.97%)
-	user_key            :     610.35 M ( 0.03%)
-	user_value          :       1.92 T (99.41%)
-Total bytes with user data: 2079047482K
-```
+There is a tool available to estimate the metadata overhead. It is described on the <a href="https://github.com/daos-stack/daos/blob/master/src/client/storage_estimator/README.md">storage estimator</a> section.
 
 <a id="81"></a>
 

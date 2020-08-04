@@ -54,6 +54,9 @@ int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 		 uint64_t *ncont);
 
+int ds_cont_tgt_close(uuid_t hdl_uuid);
+int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
+		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas);
 /*
  * Per-thread container (memory) object
  *
@@ -73,11 +76,9 @@ struct ds_cont_child {
 				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
-				 sc_vos_aggregating:1,
-				 sc_abort_vos_aggregating:1,
 				 sc_stopping:1;
-	/* Aggregate ULT */
-	struct dss_sleep_ult	 *sc_agg_ult;
+	/* Tracks the schedule request for aggregation ULT */
+	struct sched_request	*sc_agg_req;
 
 	/*
 	 * Snapshot delete HLC (0 means no change), which is used
@@ -146,6 +147,12 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
+
+/** initialize a csummer based on container properties. Will retrieve the
+ * checksum related properties from IV
+ */
+int ds_cont_csummer_init(struct daos_csummer **csummer,
+			 uuid_t pool_uuid, uuid_t cont_uuid);
 
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);

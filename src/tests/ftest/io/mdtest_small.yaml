@@ -10,6 +10,14 @@ hosts:
 timeout: 1500
 server_config:
   name: daos_server
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 pool:
   mode: 146
   name: daos_server

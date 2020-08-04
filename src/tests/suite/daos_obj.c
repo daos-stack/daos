@@ -963,7 +963,7 @@ io_var_idx_offset(void **state)
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	for (offset = UINT64_MAX; offset > 0; offset >>= 8) {
+	for (offset = (UINT64_MAX >> 1); offset > 0; offset >>= 8) {
 		char buf[10];
 
 
@@ -2054,9 +2054,9 @@ basic_byte_array(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	d_iov_t	 dkey;
+	d_iov_t		 dkey;
 	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov[2];
+	d_iov_t		 sg_iov[2];
 	daos_iod_t	 iod;
 	daos_recx_t	 recx[5];
 	char		 stack_buf_out[STACK_BUF_LEN];
@@ -2066,6 +2066,7 @@ basic_byte_array(void **state)
 	char		 *buf;
 	char		 *buf_out;
 	int		 buf_len, tmp_len;
+	bool		 test_ec = false;
 	int		 step = 1;
 	int		 rc;
 
@@ -2076,8 +2077,12 @@ basic_byte_array(void **state)
 	dts_buf_render(stack_buf, STACK_BUF_LEN);
 	dts_buf_render(bulk_buf, TEST_BULK_BUF_LEN);
 
+test_ec_obj:
 	/** open object */
-	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	if (test_ec)
+		oid = dts_oid_gen(dts_ec_obj_class, 0, arg->myrank);
+	else
+		oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -2138,6 +2143,8 @@ next_step:
 	recx[3].rx_nr	= buf_len;
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= &recx[3];
+	iod.iod_size	= DAOS_REC_ANY;
+	assert_int_equal(iod.iod_size, 0);
 	d_iov_set(&sg_iov[1], buf_out + tmp_len, buf_len - tmp_len);
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			    NULL, NULL);
@@ -2186,6 +2193,14 @@ next_step:
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
+
+	if (test_runable(arg, dts_ec_grp_size) && !test_ec) {
+		print_message("\nrun same test fr EC object ...\n");
+		test_ec = true;
+		step = 1;
+		goto test_ec_obj;
+	}
+
 	print_message("all good\n");
 	D_FREE(bulk_buf);
 	D_FREE(bulk_buf_out);
@@ -3021,7 +3036,7 @@ tgt_idx_change_retry(void **state)
 		/** exclude target of the replica */
 		print_message("rank 0 excluding target rank %u ...\n", rank);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    &arg->pool.svc, rank);
+				    arg->dmg_config, &arg->pool.svc, rank);
 		assert_int_equal(rc, 0);
 
 		/** progress the async IO (not must) */
@@ -3077,7 +3092,8 @@ tgt_idx_change_retry(void **state)
 
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding target rank %u ...\n", rank);
-		daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+		daos_add_server(arg->pool.pool_uuid, arg->group,
+				arg->dmg_config, &arg->pool.svc,
 				rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3124,7 +3140,7 @@ fetch_replica_unavail(void **state)
 
 		/** exclude the target of this obj's replicas */
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    &arg->pool.svc, rank);
+				    arg->dmg_config, &arg->pool.svc, rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -3145,7 +3161,8 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 
 		/* add back the excluded targets */
-		daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+		daos_add_server(arg->pool.pool_uuid, arg->group,
+				arg->dmg_config, &arg->pool.svc,
 				rank);
 
 		/* wait until reintegration is done */
@@ -4091,6 +4108,8 @@ obj_setup_internal(void **state)
 
 	if (arg->pool.pool_info.pi_nnodes < 2)
 		dts_obj_class = OC_S1;
+	else if (arg->objclass != OC_UNKNOWN)
+		dts_obj_class = arg->objclass;
 
 	return 0;
 }

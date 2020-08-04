@@ -132,12 +132,27 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
 		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
+		DisableVFIO:   cfg.DisableVFIO,
 	}
 
 	if cfgHasBdev(cfg) {
 		// The config value is intended to be per-ioserver, so we need to adjust
 		// based on the number of ioservers.
 		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
+	}
+
+	// Perform these checks to avoid even trying a prepare if the system
+	// isn't configured properly.
+	if cfgHasBdev(cfg) {
+		if runningUser.Uid != "0" {
+			if cfg.DisableVFIO {
+				return FaultVfioDisabled
+			}
+
+			if !iommuDetected() {
+				return FaultIommuDisabled
+			}
+		}
 	}
 
 	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
@@ -150,14 +165,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	// Don't bother with these checks if there aren't any block devices configured.
 	if cfgHasBdev(cfg) {
+		// Double-check that we got the requested number of huge pages after prepare.
 		if hugePages.Free < prepReq.HugePageCount {
 			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-		}
-
-		if runningUser.Uid != "0" && !iommuDetected() {
-			return FaultIommuDisabled
 		}
 	}
 
@@ -166,6 +177,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
+	var netDevClass uint32
+
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		return err
+	}
+	defer netdetect.CleanUp(netCtx)
+
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIOServers {
 			break
@@ -176,7 +195,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
 		// specify the correct device for each.
 		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
-			deviceAlias, err := netdetect.GetDeviceAlias(srvCfg.Fabric.Interface)
+			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, srvCfg.Fabric.Interface)
 			if err != nil {
 				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
 			}
@@ -213,6 +232,13 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg))
 		if err := harness.AddInstance(srv); err != nil {
 			return err
+		}
+
+		if i == 0 {
+			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -274,10 +300,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
+
 	clientNetworkCfg := ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,
 		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      cfg.Fabric.CrtTimeout,
+		NetDevClass:     netDevClass,
 	}
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &clientNetworkCfg))
 

@@ -34,8 +34,6 @@ from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
-
 
 class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods
@@ -75,7 +73,6 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.uuid = None
         self.info = None
-        self.cmd_output = None
         self.svc_ranks = None
         self.connected = False
         self.dmg = dmg_command
@@ -136,14 +133,9 @@ class TestPool(TestDaosApiBase):
         elif self.control_method.value == self.USE_DMG and self.dmg:
             # Create a pool with the dmg command
             self._log_method("dmg.pool_create", kwargs)
-            result = self.dmg.pool_create(**kwargs)
-            # self.cmd_output to keep the actual stdout of dmg command for
-            # checking the negative/warning message.
-            self.cmd_output = result.stdout
-            uuid, svc = get_pool_uuid_service_replicas_from_stdout(
-                result.stdout)
+            data = self.dmg.pool_create(**kwargs)
 
-            # Populte the empty DaosPool object with the properties of the pool
+            # Populate the empty DaosPool object with the properties of the pool
             # created with dmg pool create.
             if self.name.value:
                 self.pool.group = ctypes.create_string_buffer(self.name.value)
@@ -151,14 +143,14 @@ class TestPool(TestDaosApiBase):
             # Convert the string of service replicas from the dmg command output
             # into an ctype array for the DaosPool object using the same
             # technique used in DaosPool.create().
-            service_replicas = [int(value) for value in svc.split(",")]
+            service_replicas = [int(value) for value in data["svc"].split(",")]
             rank_t = ctypes.c_uint * len(service_replicas)
             rank = rank_t(*list([svc for svc in service_replicas]))
             rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
             self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
 
             # Set UUID and attached to the DaosPool object
-            self.pool.set_uuid_str(uuid)
+            self.pool.set_uuid_str(data["uuid"])
             self.pool.attached = 1
 
         elif self.control_method.value == self.USE_DMG:
@@ -207,7 +199,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool and self.connected:
-            self.log.info("Disonnecting from pool %s", self.uuid)
+            self.log.info("Disconnecting from pool %s", self.uuid)
             self._call_method(self.pool.disconnect, {})
             self.connected = False
             return True
@@ -261,11 +253,20 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(CommandFailure)
-    def set_property(self):
+    def set_property(self, prop_name=None, prop_value=None):
         """Set Property.
 
         It sets property for a given pool uuid using
         dmg.
+
+        Args:
+            prop_name (str, optional): pool property name. Defaults to
+                None.
+            prop_value (str, optional): value to be set for the property.
+                Defaults to None.
+
+        Returns:
+            None
 
         """
         if self.pool:
@@ -273,8 +274,12 @@ class TestPool(TestDaosApiBase):
 
             if self.control_method.value == self.USE_DMG and self.dmg:
                 # set-prop for given pool using dmg
-                self.dmg.pool_set_prop(self.uuid, self.prop_name,
-                                       self.prop_value)
+                if prop_name is not None and prop_value is not None:
+                    self.dmg.pool_set_prop(self.uuid, prop_name,
+                                           prop_value)
+                else:
+                    self.dmg.pool_set_prop(self.uuid, self.prop_name,
+                                           self.prop_value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -648,7 +653,7 @@ class TestPool(TestDaosApiBase):
             container (TestContainer): container from which to read data
 
         Returns:
-            bool: True if all the data is read successfully befoire rebuild
+            bool: True if all the data is read successfully before rebuild
                 completes; False otherwise
 
         """

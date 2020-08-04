@@ -35,6 +35,14 @@ server_config:
       # scm_class: dcpm
       # scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 daos_tests:
   num_clients:
     num_clients: 1
@@ -91,6 +99,10 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 25
       args: -s3 -u subtests="25"
+    test_r_26:
+      daos_test: r
+      test_name: rebuild tests 26
+      args: -s3 -u subtests="26"
     test_r_27:
       daos_test: r
       test_name: rebuild tests 27

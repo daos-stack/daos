@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import re
 import uuid
+import time
 from enum import IntEnum
 
 from command_utils_base import CommandFailure, FormattedParameter
@@ -80,7 +81,7 @@ class IorCommand(ExecutableCommand):
         self.block_size = FormattedParameter("-b {}")
         self.test_delay = FormattedParameter("-d {}")
         self.script = FormattedParameter("-f {}")
-        self.signatute = FormattedParameter("-G {}")
+        self.signature = FormattedParameter("-G {}")
         self.repetitions = FormattedParameter("-i {}")
         self.outlier_threshold = FormattedParameter("-j {}")
         self.alignment = FormattedParameter("-J {}")
@@ -128,7 +129,7 @@ class IorCommand(ExecutableCommand):
         self.dfs_pool = FormattedParameter("--dfs.pool {}")
         self.dfs_svcl = FormattedParameter("--dfs.svcl {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
-        self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
+        self.dfs_destroy = FormattedParameter("--dfs.destroy", False)
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
@@ -136,6 +137,11 @@ class IorCommand(ExecutableCommand):
 
         # A list of environment variable names to set and export with ior
         self._env_names = ["D_LOG_FILE"]
+
+        # Attributes used to determine command success when run as a subprocess
+        # See self.check_ior_subprocess_status() for details.
+        self.pattern = None
+        self.pattern_count = 1
 
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
@@ -170,12 +176,12 @@ class IorCommand(ExecutableCommand):
         if self.api.value in ["DAOS", "MPIIO"]:
             self.daos_group.update(group, "daos_group" if display else None)
             self.daos_cont.update(
-                cont_uuid if cont_uuid else uuid.uuid4(),
+                cont_uuid if cont_uuid else str(uuid.uuid4()),
                 "daos_cont" if display else None)
         else:
             self.dfs_group.update(group, "daos_group" if display else None)
             self.dfs_cont.update(
-                cont_uuid if cont_uuid else uuid.uuid4(),
+                cont_uuid if cont_uuid else str(uuid.uuid4()),
                 "daos_cont" if display else None)
 
     def set_daos_pool_params(self, pool, display=True):
@@ -275,12 +281,23 @@ class IorCommand(ExecutableCommand):
         env["MPI_LIB"] = "\"\""
         env["FI_PSM2_DISCONNECT"] = "1"
 
-        if "mpirun" in manager_cmd or "srun" in manager_cmd:
-            env["DAOS_POOL"] = self.daos_pool.value
-            env["DAOS_SVCL"] = self.daos_svcl.value
-            env["DAOS_CONT"] = self.daos_cont.value
-            env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
+        # ior POSIX api does not require the below options.
+        if "POSIX" in manager_cmd:
+            return env
 
+        if "mpirun" in manager_cmd or "srun" in manager_cmd:
+            if self.daos_pool.value is not None:
+                env["DAOS_POOL"] = self.daos_pool.value
+                env["DAOS_SVCL"] = self.daos_svcl.value
+                env["DAOS_CONT"] = self.daos_cont.value
+                env["IOR_HINT__MPI__romio_daos_obj_class"] = \
+                    self.daos_oclass.value
+            elif self.dfs_pool.value is not None:
+                env["DAOS_POOL"] = self.dfs_pool.value
+                env["DAOS_SVCL"] = self.dfs_svcl.value
+                env["DAOS_CONT"] = self.dfs_cont.value
+                env["IOR_HINT__MPI__romio_dfs_obj_class"] = \
+                    self.dfs_oclass.value
         return env
 
     @staticmethod
@@ -320,10 +337,72 @@ class IorCommand(ExecutableCommand):
         """
         logger.info("\n")
         logger.info(message)
-        for m in metrics:
-            logger.info(m)
+        for message in metrics:
+            logger.info(message)
         logger.info("\n")
 
+
+    def check_ior_subprocess_status(self, sub_process, command,
+                                    pattern_timeout=10):
+        """Verify the status of the command started as a subprocess.
+
+        Continually search the subprocess output for a pattern (self.pattern)
+        until the expected number of patterns (self.pattern_count) have been
+        found (typically one per host) or the timeout (pattern_timeout)
+        is reached or the process has stopped.
+
+        Args:
+            sub_process (process.SubProcess): subprocess used to run the command
+            command (str): ior command being looked for
+            pattern_timeout: (int): check pattern until this timeout limit is
+                                    reached.
+        Returns:
+            bool: whether or not the command progress has been detected
+
+        """
+        complete = True
+        self.log.info(
+            "Checking status of the %s command in %s with a %s second timeout",
+            command, sub_process, pattern_timeout)
+
+        if self.pattern is not None:
+            detected = 0
+            complete = False
+            timed_out = False
+            start = time.time()
+
+            # Search for patterns in the subprocess output until:
+            #   - the expected number of pattern matches are detected (success)
+            #   - the time out is reached (failure)
+            #   - the subprocess is no longer running (failure)
+            while not complete and not timed_out and sub_process.poll() is None:
+                output = sub_process.get_stdout()
+                detected = len(re.findall(self.pattern, output))
+                complete = detected == self.pattern_count
+                timed_out = time.time() - start > pattern_timeout
+
+            # Summarize results
+            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
+                detected, self.pattern_count, self.pattern,
+                time.time() - start, pattern_timeout)
+
+            if not complete:
+                # Report the error / timeout
+                self.log.info(
+                    "%s detected - %s:\n%s",
+                    "Time out" if timed_out else "Error",
+                    msg,
+                    sub_process.get_stdout())
+
+                # Stop the timed out process
+                if timed_out:
+                    self.stop()
+            else:
+                # Report the successful start
+                self.log.info(
+                    "%s subprocess startup detected - %s", command, msg)
+
+        return complete
 
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary."""

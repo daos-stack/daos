@@ -138,7 +138,12 @@ class Test(avocadoTest):
     # pylint: enable=invalid-name
 
     def get_test_name(self):
-        """Obtain test name from self.__str__()."""
+        """Obtain the test method name from the Avocado test name.
+
+        Returns:
+            str: name of the test method
+
+        """
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
 
@@ -370,7 +375,7 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             agent_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos agent using a unquie server group name
+                which to start the daos agent using a unique server group name
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
@@ -392,7 +397,7 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(agent_groups, dict):
             for group, hosts in agent_groups.items():
-                transport = DaosAgentTransportCredentials()
+                transport = DaosAgentTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "agent")
                 # Setup the access points with the server hosts
@@ -411,7 +416,7 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             server_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos server using a unquie server group name
+                which to start the daos server using a unique server group name
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos server on all server
                 hosts specified in the test's yaml file.
@@ -428,12 +433,13 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, hosts in server_groups.items():
-                transport = DaosServerTransportCredentials()
+                transport = DaosServerTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "server")
                 dmg_config_file = self.get_config_file(group, "dmg")
                 # Setup the access points with the server hosts
                 common_cfg = CommonConfig(group, transport)
+
                 self.add_server_manager(
                     config_file, dmg_config_file, common_cfg)
                 self.configure_manager(
@@ -475,9 +481,8 @@ class TestWithServers(TestWithoutServers):
         if config_file is None:
             config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
-            common_cfg = CommonConfig(
-                self.server_group, DaosAgentTransportCredentials())
-
+            agent_transport = DaosAgentTransportCredentials(self.workdir)
+            common_cfg = CommonConfig(self.server_group, agent_transport)
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
         agent_cmd = DaosAgentCommand(self.bin, agent_cfg, timeout)
@@ -509,12 +514,13 @@ class TestWithServers(TestWithoutServers):
             config_file = self.get_config_file("daos", "server")
         if common_cfg is None:
             common_cfg = CommonConfig(
-                self.server_group, DaosServerTransportCredentials())
+                self.server_group, DaosServerTransportCredentials(self.workdir))
 
         if dmg_config_file is None:
             dmg_config_file = self.get_config_file("daos", "dmg")
+        transport_dmg = DmgTransportCredentials(self.workdir)
         dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
+            dmg_config_file, self.server_group, transport_dmg)
         # Create a ServerCommand to manage with a new ServerManager object
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
         server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
@@ -773,7 +779,8 @@ class TestWithServers(TestWithoutServers):
 
         dmg_config_file = self.get_config_file("daos", "dmg")
         dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
+            dmg_config_file, self.server_group,
+            DmgTransportCredentials(self.workdir))
         dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
 
@@ -795,7 +802,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
                 test yaml file. Defaults to None.
-            create ((bool, optional): should the pool be created. Defaults to
+            create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
@@ -805,8 +812,7 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(
-            self.context, dmg_command=self.server_managers[index].dmg)
+        pool = TestPool(self.context, dmg_command=self.get_dmg_command(index))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
@@ -824,7 +830,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
                 test yaml file. Defaults to None.
-            create ((bool, optional): should the pool be created. Defaults to
+            create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
@@ -867,3 +873,34 @@ class TestWithServers(TestWithoutServers):
                 to True.
         """
         self.container = self.get_container(pool, namespace, create)
+
+    def start_additional_servers(self, additional_servers, index=0):
+        """Start additional servers.
+
+        This method can be used to start a new daos_server during a test.
+
+        Args:
+            additional_servers (list of str): List of hostnames to start
+                daos_server.
+            index (int): Determines which server_managers to use when creating
+                the new server.
+        """
+        self.server_managers.append(
+            DaosServerManager(
+                self.server_managers[index].manager.job,
+                self.manager_class,
+                self.server_managers[index].dmg.yaml
+            )
+        )
+        self.server_managers[-1].manager.assign_environment(
+            EnvironmentVariables({"PATH": None}), True)
+        self.server_managers[-1].hosts = (
+            additional_servers, self.workdir, self.hostfile_servers_slots)
+
+        self.log.info(
+            "Starting %s: group=%s, hosts=%s, config=%s", "server",
+            self.server_managers[-1].get_config_value("name"),
+            self.server_managers[-1].hosts,
+            self.server_managers[-1].get_config_value("filename"))
+        self.server_managers[-1].verify_socket_directory(getuser())
+        self.server_managers[-1].start()

@@ -24,7 +24,9 @@
 package system
 
 import (
+	"fmt"
 	"net"
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -36,7 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestMember_Stringify(t *testing.T) {
+func TestSystem_Member_Stringify(t *testing.T) {
 	states := []MemberState{
 		MemberStateUnknown,
 		MemberStateAwaitFormat,
@@ -68,7 +70,48 @@ func TestMember_Stringify(t *testing.T) {
 	}
 }
 
-func TestMember_AddRemove(t *testing.T) {
+func TestSystem_Membership_Get(t *testing.T) {
+	for name, tc := range map[string]struct {
+		memberToAdd *Member
+		rankToGet   Rank
+		expMember   *Member
+		expErr      error
+	}{
+		"exists": {
+			MockMember(t, 1, MemberStateUnknown),
+			Rank(1),
+			MockMember(t, 1, MemberStateUnknown),
+			nil,
+		},
+		"absent": {
+			MockMember(t, 1, MemberStateUnknown),
+			Rank(2),
+			MockMember(t, 1, MemberStateUnknown),
+			FaultMemberMissing(Rank(2)),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			ms := NewMembership(log)
+
+			if _, err := ms.Add(tc.memberToAdd); err != nil {
+				t.Fatal(err)
+			}
+
+			m, err := ms.Get(tc.rankToGet)
+			CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expMember, m, name)
+		})
+	}
+}
+
+func TestSystem_Membership_AddRemove(t *testing.T) {
 	for name, tc := range map[string]struct {
 		membersToAdd  Members
 		ranksToRemove []Rank
@@ -133,14 +176,32 @@ func TestMember_AddRemove(t *testing.T) {
 	}
 }
 
-func TestMember_AddOrUpdate(t *testing.T) {
-	started := MemberStateJoined
+func assertMembersEqual(t *testing.T, a Member, b Member, msg string) {
+	t.Helper()
+	AssertTrue(t, reflect.DeepEqual(a, b),
+		fmt.Sprintf("%s: want %#v, got %#v", msg, a, b))
+}
+
+func TestSystem_Membership_AddOrReplace(t *testing.T) {
+	m0a := *MockMember(t, 0, MemberStateStopped)
+	m1a := *MockMember(t, 1, MemberStateStopped)
+	m2a := *MockMember(t, 2, MemberStateStopped)
+	m0b := m0a
+	m0b.UUID = "m0b" // uuid changes after reformat
+	m0b.state = MemberStateJoined
+	m1b := m1a
+	m1b.Addr = m0a.Addr // rank allocated differently between hosts after reformat
+	m1b.UUID = "m1b"
+	m1b.state = MemberStateJoined
+	m2b := m2a
+	m2a.Addr = m0a.Addr // ranks 0,2 on same host before reformat
+	m2b.Addr = m1a.Addr // ranks 0,1 on same host after reformat
+	m2b.UUID = "m2b"
+	m2b.state = MemberStateJoined
 
 	for name, tc := range map[string]struct {
-		membersToAddOrUpdate Members
-		expMembers           Members
-		expCreated           []bool
-		expOldState          []*MemberState
+		membersToAddOrReplace Members
+		expMembers            Members
 	}{
 		"add then update": {
 			Members{
@@ -148,8 +209,6 @@ func TestMember_AddOrUpdate(t *testing.T) {
 				MockMember(t, 1, MemberStateStopped),
 			},
 			Members{MockMember(t, 1, MemberStateStopped)},
-			[]bool{true, false},
-			[]*MemberState{nil, &started},
 		},
 		"add multiple": {
 			Members{
@@ -160,17 +219,10 @@ func TestMember_AddOrUpdate(t *testing.T) {
 				MockMember(t, 1, MemberStateUnknown),
 				MockMember(t, 2, MemberStateUnknown),
 			},
-			[]bool{true, true},
-			[]*MemberState{nil, nil},
 		},
-		"update same state": {
-			Members{
-				MockMember(t, 1, MemberStateJoined),
-				MockMember(t, 1, MemberStateJoined),
-			},
-			Members{MockMember(t, 1, MemberStateJoined)},
-			[]bool{true, false},
-			[]*MemberState{nil, &started},
+		"rank uuid and address changed after reformat": {
+			Members{&m0a, &m1a, &m2a, &m0b, &m2b, &m1b},
+			Members{&m0b, &m1b, &m2b},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -179,11 +231,8 @@ func TestMember_AddOrUpdate(t *testing.T) {
 
 			ms := NewMembership(log)
 
-			for i, m := range tc.membersToAddOrUpdate {
-				created, oldState := ms.AddOrUpdate(m)
-				AssertEqual(t, tc.expCreated[i], created, name)
-				AssertEqual(t, tc.expOldState[i], oldState, name)
-
+			for _, m := range tc.membersToAddOrReplace {
+				ms.AddOrReplace(m)
 			}
 
 			AssertEqual(t, len(tc.expMembers), len(ms.members), name)
@@ -193,22 +242,13 @@ func TestMember_AddOrUpdate(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				AssertEqual(t, em.Rank, m.Rank, name)
-				AssertEqual(t, em.State(), m.State(), name)
-
-				m, err = ms.Get(em.Rank)
-				if err != nil {
-					t.Fatal(err)
-				}
-				m.state = MemberStateEvicted
-				AssertEqual(t, em.Rank, m.Rank, name)
-				AssertEqual(t, MemberStateEvicted, m.State(), name)
+				assertMembersEqual(t, *em, *m, name)
 			}
 		})
 	}
 }
 
-func TestMember_HostRanks(t *testing.T) {
+func TestSystem_Membership_HostRanks(t *testing.T) {
 	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
 	if err != nil {
 		t.Fatal(err)
@@ -222,7 +262,7 @@ func TestMember_HostRanks(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		members      Members
-		rankList     []Rank
+		ranks        string
 		expRanks     []Rank
 		expHostRanks map[string][]Rank
 		expHosts     []string
@@ -241,7 +281,7 @@ func TestMember_HostRanks(t *testing.T) {
 		},
 		"subset rank list": {
 			members:  members,
-			rankList: []Rank{1, 2},
+			ranks:    "1-2",
 			expRanks: []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{
 				"127.0.0.1:10001": {Rank(1)},
@@ -255,14 +295,14 @@ func TestMember_HostRanks(t *testing.T) {
 		},
 		"distinct rank list": {
 			members:      members,
-			rankList:     []Rank{0, 5},
+			ranks:        "0,5",
 			expRanks:     []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{},
 			expHosts:     []string{},
 		},
 		"superset rank list": {
 			members:  members,
-			rankList: []Rank{0, 1, 2, 3, 4, 5},
+			ranks:    "0-5",
 			expRanks: []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{
 				"127.0.0.1:10001": {Rank(1), Rank(4)},
@@ -285,15 +325,243 @@ func TestMember_HostRanks(t *testing.T) {
 				}
 			}
 
-			AssertEqual(t, tc.expRanks, ms.Ranks(), "ranks")
-			AssertEqual(t, tc.expHostRanks, ms.HostRanks(tc.rankList...), "host ranks")
-			AssertEqual(t, tc.expHosts, ms.Hosts(tc.rankList...), "hosts")
-			AssertEqual(t, tc.expMembers, ms.Members(tc.rankList...), "members")
+			rankSet, err := CreateRankSet(tc.ranks)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			AssertEqual(t, tc.expRanks, ms.RankList(), "ranks")
+			AssertEqual(t, tc.expHostRanks, ms.HostRanks(rankSet), "host ranks")
+			AssertEqual(t, tc.expHosts, ms.HostList(rankSet), "hosts")
+			AssertEqual(t, tc.expMembers, ms.Members(rankSet), "members")
 		})
 	}
 }
 
-func TestMember_Convert(t *testing.T) {
+func TestSystem_Membership_CheckRanklist(t *testing.T) {
+	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := Members{
+		MockMember(t, 0, MemberStateJoined),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateEvicted),
+		NewMember(Rank(4), "", addr1, MemberStateStopped), // second host rank
+	}
+
+	for name, tc := range map[string]struct {
+		members    Members
+		inRanklist string
+		expRanks   string
+		expMissing string
+		expErr     error
+	}{
+		"no rank list": {
+			members:  members,
+			expRanks: "0-4",
+		},
+		"bad rank list": {
+			members:    members,
+			inRanklist: "foobar",
+			expErr:     errors.New("unexpected alphabetic character(s)"),
+		},
+		"no members": {
+			inRanklist: "0-4",
+			expMissing: "0-4",
+		},
+		"full ranklist": {
+			members:    members,
+			inRanklist: "0-4",
+			expRanks:   "0-4",
+		},
+		"partial ranklist": {
+			members:    members,
+			inRanklist: "3-4",
+			expRanks:   "3-4",
+		},
+		"oversubscribed ranklist": {
+			members:    members[:3],
+			inRanklist: "0-4",
+			expMissing: "3-4",
+			expRanks:   "0-2",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			ms := NewMembership(log)
+
+			for _, m := range tc.members {
+				if _, err := ms.Add(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			hit, miss, err := ms.CheckRanks(tc.inRanklist)
+			CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expRanks, hit.String(), "extant ranks")
+			AssertEqual(t, tc.expMissing, miss.String(), "missing ranks")
+		})
+	}
+}
+
+func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
+	if netString != "tcp" {
+		return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'", netString)
+	}
+
+	return map[string]*net.TCPAddr{
+			"127.0.0.1:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"127.0.0.2:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"127.0.0.3:10001": &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-1:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+			"foo-2:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 10001},
+			"foo-3:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.3"), Port: 10001},
+			"foo-4:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.4"), Port: 10001},
+			"foo-5:10001":     &net.TCPAddr{IP: net.ParseIP("127.0.0.5"), Port: 10001},
+		}[address], map[string]error{
+			"127.0.0.4:10001": errors.New("bad lookup"),
+			"127.0.0.5:10001": errors.New("bad lookup"),
+			"foo-6:10001":     errors.New("bad lookup"),
+		}[address]
+}
+
+func TestSystem_Membership_CheckHostlist(t *testing.T) {
+	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := Members{
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 4, MemberStateJoined),
+		MockMember(t, 5, MemberStateJoined),
+		NewMember(Rank(6), "", addr1, MemberStateStopped), // second host rank
+	}
+
+	for name, tc := range map[string]struct {
+		members         Members
+		inHosts         string
+		expRanks        string
+		expMissingHosts string
+		expErr          error
+	}{
+		"no host list": {
+			members: members,
+		},
+		"bad host list": {
+			members: members,
+			inHosts: "123,foobar",
+			expErr:  errors.New("invalid hostname"),
+		},
+		"no members with ip & port": {
+			inHosts:         "127.0.0.[1-3]:10001",
+			expMissingHosts: "127.0.0.[1-3]:10001",
+		},
+		"no members with ip": {
+			inHosts:         "127.0.0.[1-3]",
+			expMissingHosts: "127.0.0.[1-3]",
+		},
+		"no members with hostname": {
+			inHosts:         "foo-[1-3]",
+			expMissingHosts: "foo-[1-3]",
+		},
+		"ips cant resolve": {
+			members:         members,
+			inHosts:         "127.0.0.[1-5]",
+			expRanks:        "1-3,6",
+			expMissingHosts: "127.0.0.[4-5]",
+		},
+		"ips cant resolve with port": {
+			members:         members,
+			inHosts:         "127.0.0.[1-5]:10001",
+			expRanks:        "1-3,6",
+			expMissingHosts: "127.0.0.[4-5]:10001",
+		},
+		"ips cant resolve bad port": {
+			members:         members,
+			inHosts:         "127.0.0.[1-2]:10000,127.0.0.3:10001",
+			expRanks:        "3",
+			expMissingHosts: "127.0.0.[1-2]:10000",
+		},
+		"ips partial ranklist": {
+			members:  members,
+			inHosts:  "127.0.0.[1-2]:10001",
+			expRanks: "1-2,6",
+		},
+		"ips oversubscribed ranklist": {
+			members:         members,
+			inHosts:         "127.0.0.[0-9]:10001",
+			expRanks:        "1-3,6",
+			expMissingHosts: "127.0.0.[0,4-9]:10001",
+		},
+		"hostnames can resolve": {
+			members:  members,
+			inHosts:  "foo-[1-5]",
+			expRanks: "1-6",
+		},
+		"hostnames cant resolve with port": {
+			members:  members,
+			inHosts:  "foo-[1-5]:10001",
+			expRanks: "1-6",
+		},
+		"hostnames cant resolve bad port": {
+			members:         members,
+			inHosts:         "foo-[1-2]:10000,foo-3:10001",
+			expRanks:        "3",
+			expMissingHosts: "foo-[1-2]:10000",
+		},
+		"hostnames partial ranklist": {
+			members:  members,
+			inHosts:  "foo-[1-3]:10001",
+			expRanks: "1-3,6",
+		},
+		"hostnames oversubscribed ranklist": {
+			members:         members,
+			inHosts:         "foo-[0-9]:10001",
+			expRanks:        "1-6",
+			expMissingHosts: "foo-[0,6-9]:10001",
+		},
+		"hostnames oversubscribed without port": {
+			members:         members,
+			inHosts:         "foo-[5-7]",
+			expRanks:        "5",
+			expMissingHosts: "foo-[6-7]",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			ms := NewMembership(log)
+
+			for _, m := range tc.members {
+				if _, err := ms.Add(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			rankSet, missingHostSet, err := ms.CheckHosts(tc.inHosts, 10001, mockResolveFn)
+			CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expRanks, rankSet.String(), "extant ranks")
+			AssertEqual(t, tc.expMissingHosts, missingHostSet.String(), "missing hosts")
+		})
+	}
+}
+
+func TestSystem_Member_Convert(t *testing.T) {
 	membersIn := Members{MockMember(t, 1, MemberStateJoined)}
 	membersOut := Members{}
 	if err := convert.Types(membersIn, &membersOut); err != nil {
@@ -302,10 +570,11 @@ func TestMember_Convert(t *testing.T) {
 	AssertEqual(t, membersIn, membersOut, "")
 }
 
-func TestMemberResult_Convert(t *testing.T) {
+func TestSystem_MemberResult_Convert(t *testing.T) {
 	mrsIn := MemberResults{
 		NewMemberResult(1, nil, MemberStateStopped),
 		NewMemberResult(2, errors.New("can't stop"), MemberStateUnknown),
+		MockMemberResult(1, "ping", errors.New("foobar"), MemberStateErrored),
 	}
 	mrsOut := MemberResults{}
 
@@ -318,7 +587,7 @@ func TestMemberResult_Convert(t *testing.T) {
 	AssertEqual(t, mrsIn, mrsOut, "")
 }
 
-func TestMember_UpdateMemberStates(t *testing.T) {
+func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 	// blank host address should get updated to that of member
 	mrDiffAddr1 := NewMemberResult(1, nil, MemberStateReady)
 	mrDiffAddr1.Addr = ""
@@ -433,13 +702,14 @@ func TestMember_UpdateMemberStates(t *testing.T) {
 			}
 
 			// members should be updated with result state
-			if err := ms.UpdateMemberStates(tc.results, tc.ignoreErrs); err != nil {
-				ExpectError(t, err, tc.expErrMsg, name)
+			err := ms.UpdateMemberStates(tc.results, !tc.ignoreErrs)
+			ExpectError(t, err, tc.expErrMsg, name)
+			if err != nil {
 				return
 			}
 
 			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(MemberResult{}, Member{})}
-			for i, m := range ms.Members() {
+			for i, m := range ms.Members(nil) {
 				if diff := cmp.Diff(tc.expMembers[i], m, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 				}

@@ -196,7 +196,7 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 		VOS_ITER_SINGLE : VOS_ITER_RECX;
 
 	rc = vos_iterate(&iter_param, iter_type, false, &anchors,
-			 counting_cb, NULL, &nr);
+			 counting_cb, NULL, &nr, NULL);
 	assert_int_equal(rc, 0);
 
 	return nr;
@@ -421,10 +421,10 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		    "Discard" : "Aggregate", epr_a->epr_lo, epr_a->epr_hi);
 
 	if (ds->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
+		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
-				   ds_csum_agg_recalc);
+				   ds_csum_agg_recalc, NULL, NULL);
 	if (rc != -DER_CSUM) {
 		assert_int_equal(rc, 0);
 		verify_view(arg, oid, dkey, akey, ds);
@@ -593,9 +593,9 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		    "Discard" : "Aggregate");
 
 	if (ds_sample->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
+		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1120,9 +1120,10 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 
 	for (i = 0; i < 2; i++) {
 		if (discard)
-			rc = vos_discard(arg->ctx.tc_co_hdl, &epr);
+			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
+					   NULL, NULL);
 
 		assert_int_equal(rc, 0);
 
@@ -1812,7 +1813,7 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -1975,17 +1976,17 @@ aggregate_22(void **state)
 		     sizeof(buf_u), &recx, buf_u);
 
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey,
 		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey2,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey2,
 		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 	memset(buf_u, 0, sizeof(buf_u));
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey3,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey3,
 		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey4,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey4,
 		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 
 	update_value(arg, oid, epoch++, 0, dkey, akey, DAOS_IOD_ARRAY,
@@ -1995,20 +1996,20 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey,
 		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey2,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey2,
 		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey3,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey3,
 		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey4,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey4,
 		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 
 	arg->ta_flags &= TF_PUNCH;
@@ -2017,16 +2018,16 @@ aggregate_22(void **state)
 
 	/* Also check conditional updates still work */
 	update_value(arg, oid, epoch++,
-		     VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE, dkey,
+		     VOS_OF_COND_DKEY_UPDATE, dkey,
 		     akey, DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	update_value(arg, oid, epoch++,
-		     VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_UPDATE, dkey,
+		     VOS_OF_COND_AKEY_UPDATE, dkey,
 		     akey2, DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 	update_value(arg, oid, epoch++,
-		     VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_UPDATE, dkey,
+		     VOS_OF_COND_AKEY_UPDATE, dkey,
 		     akey3, DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	update_value(arg, oid, epoch++,
-		     VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE, dkey,
+		     VOS_OF_COND_DKEY_UPDATE, dkey,
 		     akey4, DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 }
 

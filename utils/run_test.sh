@@ -30,7 +30,7 @@ lock_test()
         flock 9
         find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
              xargs -0r rm -vrf
-        "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
+        eval "${VALGRIND_CMD}" "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
         exit "${PIPESTATUS[0]}"
     ) 9>/mnt/daos/jenkins.lock
 }
@@ -79,8 +79,34 @@ if [ -d "/mnt/daos" ]; then
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
     fi
 
+    echo "Running Cmocka tests"
+    if [ -z "$RUN_TEST_VALGRIND" ]; then
+        # Tests that do not run valgrind
+        run_test src/rdb/raft_tests/raft_tests.py
+        go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
+        if test -f "$go_spdk_ctests"; then
+            run_test "$go_spdk_ctests"
+        else
+            echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
+        fi
+        run_test src/control/run_go_tests.sh
+    else
+        if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
+            [ -z "$VALGRIND_SUPP" ] &&
+                VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
+            VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
+                          --error-limit=no --suppressions=${VALGRIND_SUPP} \
+                          --xml=yes \
+                          --xml-file=memcheck-results-%p.xml"
+        else
+            VALGRIND_SUPP=""
+            VALGRIND_CMD=""
+        fi
+    fi
+
+    # Tests
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_linkage"
-    run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_gurt"
+    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_swim"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
@@ -90,32 +116,12 @@ if [ -d "/mnt/daos" ]; then
     export DAOS_IO_BYPASS=pm_snap
     run_test "${SL_PREFIX}/bin/vos_tests" -A 50
     unset DAOS_IO_BYPASS
-    run_test src/common/tests/btree.sh ukey -s 20000
-    run_test src/common/tests/btree.sh direct -s 20000
-    run_test src/common/tests/btree.sh -s 20000
-    run_test src/common/tests/btree.sh perf -s 20000
-    run_test src/common/tests/btree.sh perf direct -s 20000
-    run_test src/common/tests/btree.sh perf ukey -s 20000
-    run_test src/common/tests/btree.sh dyn ukey -s 20000
-    run_test src/common/tests/btree.sh dyn -s 20000
-    run_test src/common/tests/btree.sh dyn perf -s 20000
-    run_test src/common/tests/btree.sh dyn perf ukey -s 20000
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
     run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
     run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
     run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
-    run_test src/vos/tests/evt_ctl.sh
-    run_test src/vos/tests/evt_ctl.sh pmem
     run_test "${SL_PREFIX}/bin/vea_ut"
-    run_test src/rdb/raft_tests/raft_tests.py
-    go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
-    if test -f "$go_spdk_ctests"; then
-        run_test "$go_spdk_ctests"
-    else
-        echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
-    fi
-    run_test src/control/run_go_tests.sh
     run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
     run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_api_tests"
@@ -128,12 +134,28 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
-    run_test "${SL_PREFIX}/bin/vos_size"
-    run_test "${SL_PREFIX}/bin/vos_size.py" \
-             "${SL_PREFIX}/etc/vos_size_input.yaml"
-    run_test "${SL_PREFIX}/bin/vos_size.py" \
-             "${SL_PREFIX}/etc/vos_dfs_sample.yaml"
 
+    # Scripts launching tests
+    run_test src/client/storage_estimator/common/tests/storage_estimator.sh
+    export USE_VALGRIND=${RUN_TEST_VALGRIND}
+    export VALGRIND_SUPP=${VALGRIND_SUPP}
+    unset VALGRIND_CMD
+    run_test src/common/tests/btree.sh ukey -s 20000
+    run_test src/common/tests/btree.sh direct -s 20000
+    run_test src/common/tests/btree.sh -s 20000
+    run_test src/common/tests/btree.sh perf -s 20000
+    run_test src/common/tests/btree.sh perf direct -s 20000
+    run_test src/common/tests/btree.sh perf ukey -s 20000
+    run_test src/common/tests/btree.sh dyn ukey -s 20000
+    run_test src/common/tests/btree.sh dyn -s 20000
+    run_test src/common/tests/btree.sh dyn perf -s 20000
+    run_test src/common/tests/btree.sh dyn perf ukey -s 20000
+    run_test src/vos/tests/evt_ctl.sh
+    run_test src/vos/tests/evt_ctl.sh pmem
+    unset USE_VALGRIND
+    unset VALGRIND_SUPP
+
+    # Reporting
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
         echo "SUCCESS! NO TEST FAILURES"

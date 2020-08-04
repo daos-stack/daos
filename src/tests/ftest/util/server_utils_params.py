@@ -24,24 +24,49 @@
 import os
 
 from command_utils_base import \
-    BasicParameter, LogParameter, YamlParameters, TransportCredentials, \
-    EnvironmentVariables
+    BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
 
 class DaosServerTransportCredentials(TransportCredentials):
     # pylint: disable=too-few-public-methods
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self):
+    def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
         super(DaosServerTransportCredentials, self).__init__(
-            "/run/server_config/transport_config/*", "transport_config")
+            "/run/server_config/transport_config/*",
+            "transport_config", log_dir)
 
         # Additional daos_server transport credential parameters:
         #   - client_cert_dir: <str>, e.g. "".daos/clients"
         #       Location of client certificates [daos_server only]
         #
-        self.client_cert_dir = BasicParameter(None)
+        self.client_cert_dir = LogParameter(log_dir, None, "clients")
+        self.cert = LogParameter(log_dir, None, "server.crt")
+        self.key = LogParameter(log_dir, None, "server.key")
+
+    def get_certificate_data(self, name_list):
+        """Get certificate data.
+
+           Args:
+               name_list (list): list of certificate attribute names.
+
+           Returns:
+               data (dict): a dictionary of parameter directory name keys and
+                   value.
+        """
+
+        # Ensure the client cert directory includes the required certificate
+        name_list.remove("client_cert_dir")
+        data = super(
+            DaosServerTransportCredentials, self).get_certificate_data(
+                name_list)
+        if not self.allow_insecure.value and self.client_cert_dir.value:
+            if self.client_cert_dir.value not in data:
+                data[self.client_cert_dir.value] = ["agent.crt"]
+            else:
+                data[self.client_cert_dir.value].append("agent.crt")
+        return data
 
 
 class DaosServerYamlParameters(YamlParameters):
@@ -269,32 +294,6 @@ class DaosServerYamlParameters(YamlParameters):
                     "".join(log_name),
                     "server_config.server[{}].log_file".format(index))
 
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
-
-        Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
-        """
-        env = EnvironmentVariables()
-        mapping = {
-            "OFI_INTERFACE": "fabric_iface",
-            "OFI_PORT": "fabric_iface_port",
-            "CRT_PHY_ADDR_STR": "provider",
-        }
-        for key, name in mapping.items():
-            value = self.server_params[index].get_value(name)
-            if value is not None:
-                env[key] = value
-
-        return env
-
     class PerServerYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""
 
@@ -316,6 +315,7 @@ class DaosServerYamlParameters(YamlParameters):
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
+            default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
             # All log files should be placed in the same directory on each host
             # to enable easy log file archiving by launch.py
@@ -342,17 +342,27 @@ class DaosServerYamlParameters(YamlParameters):
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.pinned_numa_node = BasicParameter(None)
-            self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR")
+            self.log_mask = BasicParameter(None, "INFO")
             self.log_file = LogParameter(log_dir, None, "daos_server.log")
-            self.env_vars = BasicParameter(
-                None,
-                ["ABT_ENV_MAX_NUM_XSTREAMS=100",
-                 "ABT_MAX_NUM_XSTREAMS=100",
-                 "DAOS_MD_CAP=1024",
-                 "FI_SOCKETS_MAX_CONN_RETRY=1",
-                 "FI_SOCKETS_CONN_TIMEOUT=2000",
-                 "DD_MASK=mgmt,io,md,epc,rebuild"]
-            )
+
+            # Set extra environment variables for sockets provider
+            default_env_vars = [
+                "ABT_ENV_MAX_NUM_XSTREAMS=100",
+                "ABT_MAX_NUM_XSTREAMS=100",
+                "DAOS_MD_CAP=1024",
+                "DD_MASK=mgmt,io,md,epc,rebuild"
+            ]
+            if default_provider == "ofi+sockets":
+                default_env_vars.extend([
+                    "FI_SOCKETS_MAX_CONN_RETRY=5",
+                    "FI_SOCKETS_CONN_TIMEOUT=2000",
+                    "CRT_SWIM_RPC_TIMEOUT=10",
+                    "SWIM_PING_TIMEOUT=10000",
+                    "SWIM_PROTOCOL_PERIOD_LEN=30000",
+                    "SWIM_SUSPECT_TIMEOUT=90000",
+                ])
+            self.env_vars = BasicParameter(None, default_env_vars)
+
             # global CRT_CTX_SHARE_ADDR shared with client
             self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
 

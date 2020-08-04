@@ -38,7 +38,7 @@ class DaosRacerCommand(ExecutableCommand):
             host (str): host on which to run the daos_racer command
         """
         super(DaosRacerCommand, self).__init__(
-            "/run/daos_racer", "daos_racer", path)
+            "/run/daos_racer/*", "daos_racer", path)
         self.host = host
 
         # Number of seconds to run
@@ -54,7 +54,7 @@ class DaosRacerCommand(ExecutableCommand):
         # daos_racer command.  The values for these names are populated by the
         # get_environment() method and added to command line by the
         # set_environment() method.
-        self._env_names = ["OFI_INTERFACE", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+        self._env_names = ["D_LOG_FILE"]
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -88,6 +88,16 @@ class DaosRacerCommand(ExecutableCommand):
         env["OMPI_MCA_oob"] = "tcp"
         env["OMPI_MCA_pml"] = "ob1"
         return env
+
+    def set_environment(self, env):
+        """Set the environment variables to export prior to running daos_racer.
+
+        Args:
+            env (EnvironmentVariables): a dictionary of environment variable
+                names and values to export prior to running daos_racer
+        """
+        # Include exports prior to the daos_racer command
+        self._pre_command = env.get_export_str()
 
     def run(self):
         """Run the daos_racer command remotely.

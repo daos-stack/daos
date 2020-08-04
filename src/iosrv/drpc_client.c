@@ -63,14 +63,13 @@ notify_ready(void)
 		D_GOTO(out_uri, rc = -DER_NOMEM);
 
 	srv__notify_ready_req__pack(&req, reqb);
-
-	dreq = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
-				DRPC_METHOD_SRV_NOTIFY_READY);
-	if (dreq == NULL) {
-		rc = -DER_NOMEM;
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+			      DRPC_METHOD_SRV_NOTIFY_READY, &dreq);
+	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_uri;
 	}
+
 	dreq->body.len = reqb_size;
 	dreq->body.data = reqb;
 
@@ -109,6 +108,7 @@ notify_bio_error(int media_err_type, int tgt_id)
 		return -DER_INVAL;
 	}
 
+	/* TODO: How does this get freed on error? */
 	rc = crt_self_uri_get(0 /* tag */, &bioerr_req.uri);
 	if (rc != 0)
 		return rc;
@@ -130,12 +130,11 @@ notify_bio_error(int media_err_type, int tgt_id)
 		return -DER_NOMEM;
 
 	srv__bio_error_req__pack(&bioerr_req, req);
-	dreq = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
-				DRPC_METHOD_SRV_BIO_ERR);
-
-	if (dreq == NULL) {
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+			      DRPC_METHOD_SRV_BIO_ERR, &dreq);
+	if (rc != 0) {
 		D_FREE(req);
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	dreq->body.len = req_size;
@@ -170,10 +169,9 @@ drpc_init(void)
 	}
 
 	D_ASSERT(dss_drpc_ctx == NULL);
-	dss_drpc_ctx = drpc_connect(path);
-	if (dss_drpc_ctx == NULL) {
-		D_GOTO(out_path, rc = -DER_NOMEM);
-	}
+	rc = drpc_connect(path, &dss_drpc_ctx);
+	if (dss_drpc_ctx == NULL)
+		D_GOTO(out_path, 0);
 
 	rc = notify_ready();
 	if (rc != 0) {

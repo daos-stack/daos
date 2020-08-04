@@ -61,14 +61,6 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint16_t(proc, &key->kd_csum_type);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint16_t(proc, &key->kd_csum_len);
-	if (rc != 0)
-		return -DER_HG;
-
 	return 0;
 }
 
@@ -408,12 +400,13 @@ crt_proc_struct_daos_recx_ep_list(crt_proc_t proc,
 	rc = crt_proc_uint32_t(proc, &list->re_nr);
 	if (rc != 0)
 		return -DER_HG;
-	if (list->re_nr == 0)
-		return 0;
 
 	rc = crt_proc_bool(proc, &list->re_ep_valid);
 	if (rc != 0)
 		return -DER_HG;
+
+	if (list->re_nr == 0)
+		return 0;
 
 	switch (proc_op) {
 	case CRT_PROC_DECODE:
@@ -428,16 +421,20 @@ crt_proc_struct_daos_recx_ep_list(crt_proc_t proc,
 			if (rc != 0)
 				return -DER_HG;
 
-			rc = crt_proc_uint8_t(proc, &list->re_items[i].re_type);
-			if (rc != 0)
-				return -DER_HG;
-
 			if (list->re_ep_valid) {
 				rc = crt_proc_daos_epoch_t(proc,
 						&list->re_items[i].re_ep);
 				if (rc != 0)
 					return -DER_HG;
 			}
+			rc = crt_proc_uint32_t(proc,
+					&list->re_items[i].re_rec_size);
+			if (rc != 0)
+				return -DER_HG;
+
+			rc = crt_proc_uint8_t(proc, &list->re_items[i].re_type);
+			if (rc != 0)
+				return -DER_HG;
 		}
 		break;
 	default: /* CRT_PROC_FREE */

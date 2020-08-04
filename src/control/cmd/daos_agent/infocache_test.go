@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -42,14 +43,30 @@ import (
 
 const maxConcurrent = 100
 
+type netdetectCleanup func(context.Context)
+
+func initCache(t *testing.T, scanResults []netdetect.FabricScan, aiCache *attachInfoCache) (context.Context, netdetectCleanup) {
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		t.Fatalf("failed to init netdetect context: %v", err)
+	}
+	err = aiCache.initResponseCache(netCtx, &mgmtpb.GetAttachInfoResp{}, scanResults)
+	if err != nil {
+		t.Fatalf("initResponseCache error: %v", err)
+	}
+	return netCtx, netdetect.CleanUp
+}
+
 func TestInfoCacheInitNoScanResults(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 	enabled := atm.NewBool(true)
 	scanResults := []netdetect.FabricScan{}
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
-	common.AssertTrue(t, err == nil, "initResponseCache error")
+
+	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
+	defer cleanupFn(netCtx)
+
 	common.AssertTrue(t, aiCache.isCached() == true, "initResponseCache failed to initialized")
 
 	for name, tc := range map[string]struct {
@@ -103,8 +120,9 @@ func TestInfoCacheInit(t *testing.T) {
 		{Provider: "ofi+sockets", DeviceName: "eth3_node2", NUMANode: 2}}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
-	common.AssertEqual(t, err, nil, "initResponseCache error")
+
+	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
+	defer cleanupFn(netCtx)
 
 	for name, tc := range map[string]struct {
 		numaNode int
@@ -132,6 +150,76 @@ func TestInfoCacheInit(t *testing.T) {
 	}
 }
 
+func TestInfoCacheInitWithDeviceFiltering(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+	enabled := atm.NewBool(true)
+
+	scanResults := []netdetect.FabricScan{
+		{Provider: "ofi+sockets", DeviceName: "eth0_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
+		{Provider: "ofi+sockets", DeviceName: "eth1_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
+		{Provider: "ofi+sockets", DeviceName: "eth2_node0", NUMANode: 0, NetDevClass: netdetect.Ether},
+		{Provider: "ofi+sockets", DeviceName: "ib0_node0", NUMANode: 0, NetDevClass: netdetect.Infiniband},
+		{Provider: "ofi+sockets", DeviceName: "eth0_node1", NUMANode: 1, NetDevClass: netdetect.Ether},
+		{Provider: "ofi+sockets", DeviceName: "ib1_node1", NUMANode: 1, NetDevClass: netdetect.Infiniband},
+		{Provider: "ofi+sockets", DeviceName: "eth0_node2", NUMANode: 2, NetDevClass: netdetect.Ether},
+		{Provider: "ofi+sockets", DeviceName: "eth1_node2", NUMANode: 2, NetDevClass: netdetect.Ether},
+		{Provider: "ofi+sockets", DeviceName: "eth2_node2", NUMANode: 2, NetDevClass: netdetect.Ether},
+		{Provider: "ofi+sockets", DeviceName: "eth3_node2", NUMANode: 2, NetDevClass: netdetect.Ether}}
+
+	aiCache := attachInfoCache{log: log, enabled: enabled}
+
+	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
+	defer cleanupFn(netCtx)
+
+	for name, tc := range map[string]struct {
+		numaNode          int
+		numDevs           int
+		serverNetDevClass uint32
+	}{
+		"info cache device with filtering for Ethernet with numa 0": {
+			numaNode:          0,
+			numDevs:           3,
+			serverNetDevClass: netdetect.Ether,
+		},
+		"info cache device with filtering for Ethernet with numa 1": {
+			numaNode:          1,
+			numDevs:           1,
+			serverNetDevClass: netdetect.Ether,
+		},
+		"info cache device with filtering for Ethernet with numa 2": {
+			numaNode:          2,
+			numDevs:           4,
+			serverNetDevClass: netdetect.Ether,
+		},
+		"info cache device with filtering for Infiniband with numa 0": {
+			numaNode:          0,
+			numDevs:           1,
+			serverNetDevClass: netdetect.Infiniband,
+		},
+		"info cache device with filtering for Infiniband with numa 1": {
+			numaNode:          1,
+			numDevs:           1,
+			serverNetDevClass: netdetect.Infiniband,
+		},
+		"info cache device with filtering for Infiniband with numa 2": {
+			numaNode:          2,
+			numDevs:           0,
+			serverNetDevClass: netdetect.Infiniband,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := &mgmtpb.GetAttachInfoResp{NetDevClass: tc.serverNetDevClass}
+			err := aiCache.initResponseCache(netCtx, resp, scanResults)
+			common.AssertEqual(t, err, nil, "initResponseCache error")
+
+			numDevs := len(aiCache.numaDeviceMarshResp[tc.numaNode])
+			common.AssertEqual(t, numDevs, tc.numDevs,
+				fmt.Sprintf("initResponseCache error - expected %d cached responses, got %d", tc.numDevs, numDevs))
+		})
+	}
+}
+
 // TestInfoCacheGetResponse reads an entry from the cache for the specified NUMA node
 // and verifies that it got the exact response that was expected.
 func TestInfoCacheGetResponse(t *testing.T) {
@@ -144,8 +232,9 @@ func TestInfoCacheGetResponse(t *testing.T) {
 		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
-	common.AssertEqual(t, err, nil, "initResponseCache error")
+
+	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
+	defer cleanupFn(netCtx)
 
 	for name, tc := range map[string]struct {
 		numaNode   int
@@ -192,8 +281,9 @@ func TestInfoCacheDefaultNumaNode(t *testing.T) {
 		{Provider: "ofi+sockets", DeviceName: "eth2", NUMANode: 2}}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
-	common.AssertEqual(t, err, nil, "initResponseCache error")
+
+	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
+	defer cleanupFn(netCtx)
 
 	for name, tc := range map[string]struct {
 		numaNode   int
@@ -257,8 +347,9 @@ func TestInfoCacheLoadBalancer(t *testing.T) {
 	}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
-	common.AssertEqual(t, err, nil, "initResponseCache error")
+
+	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
+	defer cleanupFn(netCtx)
 
 	var results map[int][]byte
 	var response map[int]*mgmtpb.GetAttachInfoResp
@@ -305,6 +396,7 @@ func TestInfoCacheLoadBalancer(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			for i := 0; i < tc.numDevices+2; i++ {
+				var err error
 				results[i], err = aiCache.getResponse(tc.numaNode)
 				common.AssertEqual(t, err, nil, "getResponse error")
 				response[i] = &mgmtpb.GetAttachInfoResp{}
@@ -369,8 +461,9 @@ func TestInfoCacheConcurrentAccess(t *testing.T) {
 		{Provider: "ofi+sockets", DeviceName: "eth3_node2", NUMANode: 2, Priority: 3}}
 
 	aiCache := attachInfoCache{log: log, enabled: enabled}
-	err := aiCache.initResponseCache(&mgmtpb.GetAttachInfoResp{}, scanResults)
-	common.AssertEqual(t, err, nil, "initResponseCache error")
+
+	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
+	defer cleanupFn(netCtx)
 
 	var wg sync.WaitGroup
 	maxNumaNodes := 3
