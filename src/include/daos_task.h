@@ -556,6 +556,8 @@ typedef struct {
 typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Control commit behavior, such as retry. */
+	uint32_t		flags;
 } daos_tx_commit_t;
 
 /** Transaction abort args */
