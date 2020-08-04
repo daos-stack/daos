@@ -56,6 +56,13 @@ struct ds_pool {
 	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns	       *sp_iv_ns;
 	uint32_t		sp_dtx_resync_version;
+	/* Special pool/container handle uuid, which are
+	 * created on the pool leader step up, and propagated
+	 * to all servers by IV. Then they will be used by server
+	 * to access the data on other servers.
+	 */
+	uuid_t			sp_srv_cont_hdl;
+	uuid_t			sp_srv_pool_hdl;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
