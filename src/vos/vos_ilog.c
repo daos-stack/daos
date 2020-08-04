@@ -479,9 +479,7 @@ punch_log:
 		 */
 		minor_epc--;
 	}
-	rc = ilog_update(loh, NULL, epr->epr_hi,
-			 dth != NULL ? dth->dth_op_seq : VOS_MINOR_EPC_MAX - 1,
-			 true);
+	rc = ilog_update(loh, NULL, epr->epr_hi, minor_epc, true);
 
 	ilog_close(loh);
 
