@@ -619,7 +619,7 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 
 		if ((buf->str_size + n) < buf->buf_size) {
 			buf->str_size += n;
-			return n;
+			return 0;
 		}
 
 		size = buf->buf_size * 2;
