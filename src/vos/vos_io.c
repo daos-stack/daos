@@ -1789,7 +1789,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		ioc->ic_read_conflict = true;
 
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ? dth->dth_op_seq : 1);
+	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ?
+			  dth->dth_op_seq : VOS_MINOR_EPC_MAX);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));

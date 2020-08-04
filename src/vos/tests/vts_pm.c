@@ -1628,6 +1628,50 @@ tx_end2:
 	assert_int_equal(iod.iod_size, 0);
 	assert_memory_equal(buf, sexpected, strlen(sexpected));
 
+	/** Let's simulate replay scenario where rebuild replays a minor epoch
+	 * punch and an update with the same major epoch
+	 */
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+	rex.rx_idx = 0;
+	rex.rx_nr = strlen(first);
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
+	epoch++;
+	/** First write the punched extent */
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
+			    &iod, NULL, &sgl);
+	assert_int_equal(rc, 0);
+
+	/** Now the "replay" punch */
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch + 1, 0,
+			   VOS_OF_REPLAY_PC, &dkey, 1, &akey, NULL);
+	assert_int_equal(rc, 0);
+
+	/** Now write the update at the same major epoch that is after the
+	 *  punched extent
+	 */
+	rex.rx_idx = strlen(first);
+	rex.rx_nr = strlen(second);
+	d_iov_set(&sgl.sg_iovs[0], (void *)second, rex.rx_nr);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch + 1, 0, 0, &dkey, 1,
+			    &iod, NULL, &sgl);
+	assert_int_equal(rc, 0);
+
+	/** Now check the value matches the expected value */
+	memset(buf, 'x', sizeof(buf));
+	rex.rx_idx = 0;
+	rex.rx_nr = sizeof(buf);
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch + 2, 0, &dkey, 1,
+			   &iod, &sgl);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(buf, expected, strlen(expected));
+	epoch += 2;
+
 	daos_sgl_fini(&sgl, false);
 }
 

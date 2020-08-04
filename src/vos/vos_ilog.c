@@ -61,18 +61,21 @@ static int
 vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 		    daos_epoch_t epoch, bool *same, void *args)
 {
-	uint32_t dtx = vos_dtx_get();
+	struct dtx_handle	*dth = vos_dth_get();
+	uint32_t		 dtx = vos_dtx_get();
 
-	/* If the entry is committed, treat the new update as a different
-	 * transaction.   If the operation (update or punch) is the same,
-	 * we can detect this and return -DER_ALREADY.   If it's not,
-	 * we require either a major or minor epoch change and will
-	 * return -DER_TX_RESTART.
-	 */
-	if (tx_id != DTX_LID_COMMITTED && dtx == tx_id)
+	*same = false;
+
+	if (tx_id == DTX_LID_COMMITTED) {
+		/** If it's committed and the current update is not
+		 * transactional, treat it as the same transaction and let the
+		 * minor epoch handle any conflicts.
+		 */
+		if (dth == NULL)
+			*same = true;
+	} else if (tx_id == dtx) {
 		*same = true;
-	else
-		*same = false;
+	}
 
 	return 0;
 }
