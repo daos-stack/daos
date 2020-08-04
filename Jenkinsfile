@@ -985,7 +985,7 @@ pipeline {
                     steps {
                         functionalTest inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
-                                                  ' ' + functional_rpms
+                                                  ' ' + functional_rpms +
                                                   ' python2-tabulate '
                     }
                     post {
@@ -1010,7 +1010,7 @@ pipeline {
                     steps {
                         functionalTest inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
-                                                  ' ' + functional_rpms
+                                                  ' ' + functional_rpms +
                                                   ' python2-tabulate '
                     }
                     post {
@@ -1035,7 +1035,7 @@ pipeline {
                     steps {
                         functionalTest inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
-                                                  ' ' + functional_rpms
+                                                  ' ' + functional_rpms +
                                                   ' python2-tabulate '
                    }
                     post {
@@ -1060,7 +1060,7 @@ pipeline {
                     steps {
                         functionalTest inst_repos: el7_daos_repos(),
                                        inst_rpms: get_daos_packages('centos7') +
-                                                  ' ' + functional_rpms
+                                                  ' ' + functional_rpms +
                                                   ' python2-tabulate '
                     }
                     post {
