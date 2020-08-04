@@ -701,9 +701,14 @@ dfs_test_hole_mgmt(void **state)
 	/** reset */
 	memset(rbuf[0], '-', buf_size + 100);
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	/** truncate file back to 0 */
-	rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
-	assert_int_equal(rc, 0);
+	if (arg->myrank == 0) {
+		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);
@@ -784,9 +789,14 @@ dfs_test_hole_mgmt(void **state)
 	for (i = 0; i < NUM_SEGS; i++)
 		memset(rbuf[i], '-', buf_size + 100);
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	/** truncate file back to 0 */
-	rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
-	assert_int_equal(rc, 0);
+	if (arg->myrank == 0) {
+		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);

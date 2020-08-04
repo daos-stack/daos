@@ -5,19 +5,10 @@ hosts:
     - server-A
   test_clients:
     - server-B
-  transport_config:
-    - allow_insecure: False
-    - ca_cert: ~/.daos/daosCA.crt
-    - cert: ~/.daos/daos_agent.crt
-    - key: ~/.daos/daos_agent.key
-    - server_name: server
 timeout: 600
 server_config:
   name: daos_server
   port: 10001
-daos_server:
-  start:
-     insecure: False
 pool_acl:
   scm_size: 134217728
   user_prefix: daos_ci

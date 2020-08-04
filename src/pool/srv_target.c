@@ -158,6 +158,7 @@ start_gc_ult(struct ds_pool_child *child)
 
 	D_ASSERT(gc != ABT_THREAD_NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 	child->spc_gc_req = sched_req_get(&attr, gc);
 	if (child->spc_gc_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
@@ -420,10 +421,19 @@ pool_cmp_keys(const void *key, unsigned int ksize, struct daos_llink *llink)
 	return uuid_compare(key, pool->sp_uuid) == 0;
 }
 
+static uint32_t
+pool_rec_hash(struct daos_llink *llink)
+{
+	struct ds_pool *pool = pool_obj(llink);
+
+	return d_hash_string_u32((const char *)pool->sp_uuid, sizeof(uuid_t));
+}
+
 static struct daos_llink_ops pool_cache_ops = {
 	.lop_alloc_ref	= pool_alloc_ref,
 	.lop_free_ref	= pool_free_ref,
-	.lop_cmp_keys	= pool_cmp_keys
+	.lop_cmp_keys	= pool_cmp_keys,
+	.lop_rec_hash	= pool_rec_hash,
 };
 
 int
@@ -575,6 +585,14 @@ pool_hdl_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 	return uuid_compare(hdl->sph_uuid, key) == 0;
 }
 
+static uint32_t
+pool_hdl_rec_hash(struct d_hash_table *htable, d_list_t *link)
+{
+	struct ds_pool_hdl *hdl = pool_hdl_obj(link);
+
+	return d_hash_string_u32((const char *)hdl->sph_uuid, sizeof(uuid_t));
+}
+
 static void
 pool_hdl_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
@@ -607,6 +625,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 
 static d_hash_table_ops_t pool_hdl_hash_ops = {
 	.hop_key_cmp	= pool_hdl_key_cmp,
+	.hop_rec_hash	= pool_hdl_rec_hash,
 	.hop_rec_addref	= pool_hdl_rec_addref,
 	.hop_rec_decref	= pool_hdl_rec_decref,
 	.hop_rec_free	= pool_hdl_rec_free
