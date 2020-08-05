@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/*
+/**
  * This is a test for the RPC error case in which the RPC handler doesn't call
  * crt_reply_send().
  */

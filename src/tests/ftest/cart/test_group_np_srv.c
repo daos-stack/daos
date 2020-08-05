@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/*
+/**
  * This is a simple example of cart test_group server, running with no pmix.
  */
 #include <stdio.h>

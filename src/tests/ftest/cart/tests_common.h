@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/*
+/**
  * Common functions to be shared among tests
  */
 #ifndef __TESTS_COMMON_H__

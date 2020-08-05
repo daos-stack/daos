@@ -20,26 +20,33 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Portions of this file are based on The Self-* Storage System Project
+ * Copyright (c) 2004-2011, Carnegie Mellon University.
+ * All rights reserved.
+ * http://www.pdl.cmu.edu/  (Parallel Data Lab at Carnegie Mellon)
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This software is being provided by the copyright holders under the
+ * following license. By obtaining, using and/or copying this software,
+ * you agree that you have read, understood, and will comply with the
+ * following terms and conditions:
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Permission to reproduce, use, and prepare derivative works of this
+ * software is granted provided the copyright and "No Warranty" statements
+ * are included with all reproductions and derivative works and associated
+ * documentation. This software may also be redistributed without charge
+ * provided that the copyright and "No Warranty" statements are included
+ * in all redistributions.
  *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * NO WARRANTY. THIS SOFTWARE IS FURNISHED ON AN "AS IS" BASIS.
+ * CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY KIND, EITHER
+ * EXPRESSED OR IMPLIED AS TO THE MATTER INCLUDING, BUT NOT LIMITED
+ * TO: WARRANTY OF FITNESS FOR PURPOSE OR MERCHANTABILITY, EXCLUSIVITY
+ * OF RESULTS OR RESULTS OBTAINED FROM USE OF THIS SOFTWARE. CARNEGIE
+ * MELLON UNIVERSITY DOES NOT MAKE ANY WARRANTY OF ANY KIND WITH RESPECT
+ * TO FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
+ * COPYRIGHT HOLDERS WILL BEAR NO LIABILITY FOR ANY USE OF THIS SOFTWARE
+ * OR DOCUMENTATION.
  */
-
 /**
  * This file is part of CaRT. It implements message logging system.
  */

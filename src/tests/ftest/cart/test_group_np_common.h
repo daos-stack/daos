@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/*
+/**
  * This is a cart test_group common file, running with no pmix.
  */
 #ifndef __TEST_GROUP_NP_COMMON_H__

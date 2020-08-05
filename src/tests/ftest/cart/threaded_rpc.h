@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/*
+/**
  * Common code for threaded_client/threaded_server testing multiple threads
  * using a single context
  */
