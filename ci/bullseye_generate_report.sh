@@ -1,22 +1,24 @@
 #!/bin/bash
 
-# This is the script used for generating the Bullseye Reports stage in CI
 set -eux
 
-rm -rf bullseye
-mkdir -p bullseye
-tar -C bullseye --strip-components=1 -xf bullseye.tar
+if [ ! -d '/opt/BullseyeCoverage/bin' ]; then
+  echo 'Bullseye not found.'
+  exit 1
+fi
+export COVFILE="$WORKSPACE/test.cov"
+export PATH="/opt/BullseyeCoverage/bin:$PATH"
+fi
 
-# shellcheck disable=SC1091
-source ./.build_vars.sh
-DAOS_BASE=${SL_PREFIX%/install*}
-NODE=${NODELIST%%,*}
-mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+mv "$WORKSPACE/test.cov_1" "$COVFILE"
+if [ -e "$WORKSPACE/test.cov_2" ]; then
+  covmerge --no-banner --file "$COVFILE" "$WORKSPACE"/test.cov_*
+fi
 
-# shellcheck disable=SC2029
-ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
-                                     HOSTNAME=$HOSTNAME        \
-                                     HOSTPWD=$PWD              \
-                                     SL_PREFIX=$SL_PREFIX      \
-                                     BULLSEYE=$BULLSEYE        \
-                              $(cat "$mydir/bullseye_generate_report_node.sh")"
+if [ -e "$COVFILE" ]; then
+  echo "Coverage file $COVFILE is missing"
+else
+  ls -l "$COVFILE"
+fi
+
+java -jar bullshtml.jar test_coverage

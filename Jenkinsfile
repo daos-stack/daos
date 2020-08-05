@@ -31,11 +31,6 @@ def doc_only_change() {
     return rc == 1
 }
 
-def skip_stage(String stage, String def_val) {
-    return cachedCommitPragma(pragma: 'Skip-' + stage,
-                              def_val: def_val) == 'true'
-}
-
 def skip_stage(String stage, boolean def_val = false) {
     String value = 'false'
     if (def_val) {
@@ -94,10 +89,10 @@ def leap15_daos_repos() {
 
 def component_repos() {
     Map stage_info = parseStageInfo()
-    if (distro == 'centos7') {
+    if (stage_info['target'] == 'centos7') {
         return el7_component_repos + ' ' + pr_repos()
     }
-    if (distro == 'leap15') {
+    if (stage_info['target'] == 'leap15') {
         return leap15_component_repos + ' ' + pr_repos()
     }
 }
@@ -197,8 +192,7 @@ leap15_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 " +
-                       "fio MACSio"
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -947,25 +941,9 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        script {
-                            if (quickbuild()) {
-                                // TODO: these should be gotten from the Requires: of RPMs
-                                qb_inst_rpms = " spdk-tools mercury boost-devel"
-                            }
-                        }
                         unitTest timeout_time: 60,
                                  inst_repos: component_repos(),
-                                 inst_rpms: 'gotestsum openmpi3 ' +
-                                            'hwloc-devel argobots ' +
-                                            'fuse3-libs fuse3 ' +
-                                            'boost-devel ' +
-                                            'libisa-l-devel libpmem ' +
-                                            'libpmemobj protobuf-c ' +
-                                            'spdk-devel libfabric-devel '+
-                                            'pmix numactl-devel ' +
-                                            'libipmctl-devel ' +
-                                            'python36-tabulate ' +
-                                            qb_inst_rpms
+                                 inst_rpms: unit_packages()
                     }
                     post {
                       always {
@@ -982,26 +960,10 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        script {
-                            if (quickbuild()) {
-                                // TODO: these should be gotten from the Requires: of RPMs
-                                qb_inst_rpms = " spdk-tools mercury boost-devel"
-                            }
-                        }
                         unitTest timeout_time: 60,
                                  ignore_failure: true,
                                  inst_repos: component_repos(),
-                                 inst_rpms: 'gotestsum openmpi3 ' +
-                                            'hwloc-devel argobots ' +
-                                            'fuse3-libs fuse3 ' +
-                                            'boost-devel ' +
-                                            'libisa-l-devel libpmem ' +
-                                            'libpmemobj protobuf-c ' +
-                                            'spdk-devel libfabric-devel '+
-                                            'pmix numactl-devel ' +
-                                            'libipmctl-devel ' +
-                                            'python36-tabulate' +
-                                            qb_inst_rpms
+                                 inst_rpms: unit_packages()
                     }
                     post {
                       always {
@@ -1201,10 +1163,22 @@ pipeline {
                 stage('Bullseye Report') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('bullseye', true) }
+                      allOf {
+                        expression { ! env.BULLSEYE != null }
+                        expression { ! skip_stage('bullseye', true) }
+                      }
                     }
-                    agent {
-                        label 'ci_vm1'
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
+                        }
                     }
                     steps {
                         cloverReportPublish(
