@@ -30,7 +30,7 @@ import "fmt"
 /*
 #cgo LDFLAGS: -lgurt
 
-#include <gurt/errno.h>
+#include <daos_errno.h>
 */
 import "C"
 

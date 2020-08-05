@@ -1622,7 +1622,7 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg);
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    &arg->pool.alive_svc,
+			    arg->dmg_config, &arg->pool.alive_svc,
 			    layout1->ol_shards[0]->os_ranks[0]);
 	assert_true(disabled_nr < disabled_targets(arg));
 
@@ -1649,8 +1649,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 			    1, &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_success(rc);
 
-	daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.alive_svc,
-		rank_to_exclude);
+	daos_add_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
+			&arg->pool.alive_svc, rank_to_exclude);
 	assert_int_equal(disabled_nr, disabled_targets(arg));
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);

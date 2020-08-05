@@ -37,7 +37,7 @@
 #include <uuid/uuid.h>
 
 #include <cart/types.h>
-#include <gurt/errno.h>
+#include <daos_errno.h>
 #include <cart/iv.h>
 #include <cart/swim.h>
 

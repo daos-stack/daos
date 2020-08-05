@@ -2,16 +2,11 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%if (0%{?suse_version} >= 1500)
-# until we get an updated mercury build on 15.2
-%global mercury_version 2.0.0~rc1-1.suse.lp151
-%else
 %global mercury_version 2.0.0~rc1-1%{?dist}
-%endif
 
 Name:          daos
 Version:       1.1.0
-Release:       28%{?relval}%{?dist}
+Release:       30%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -35,11 +30,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse3-devel >= 3.4.2
-%if (0%{?suse_version} >= 1500)
-BuildRequires: libprotobuf-c-devel
-%else
 BuildRequires: protobuf-c-devel
-%endif
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
@@ -48,7 +39,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.6.0
+BuildRequires: raft-devel >= 0.6.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -62,7 +53,6 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
-BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -78,7 +68,7 @@ BuildRequires: cunit-devel
 BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
-BuildRequires: lua-lmod
+BuildRequires: Modules
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
 %else
@@ -244,15 +234,11 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
-%{_bindir}/vos_size
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
 %{_bindir}/pl_bench
 %{_bindir}/rdbt
-%{_bindir}/vos_size_dfs_sample.py
-%{_bindir}/vos_size.py
-%{_libdir}/libdfs_internal.so
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
@@ -306,17 +292,24 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_bindir}/dfuse
 %{_bindir}/daos
 %{_bindir}/dfuse_hl
+%{_bindir}/daos_storage_estimator.py
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/libdfs_internal.so
+%{_libdir}/libvos_size.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
+%dir  %{_libdir}/python2.7/site-packages/storage_estimator
 %{_libdir}/python2.7/site-packages/pydaos/*.py
+%{_libdir}/python2.7/site-packages/storage_estimator/*.py
 %if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/*.pyo
+%{_libdir}/python2.7/site-packages/storage_estimator/*.pyc
+%{_libdir}/python2.7/site-packages/storage_estimator/*.pyo
 %endif
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
@@ -328,10 +321,14 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
+%dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
+%{_libdir}/python3/site-packages/storage_estimator/*.py
 %if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/*.pyc
 %{_libdir}/python3/site-packages/pydaos/*.pyo
+%{_libdir}/python3/site-packages/storage_estimator/*.pyc
+%{_libdir}/python3/site-packages/storage_estimator/*.pyo
 %endif
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
@@ -373,6 +370,13 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Wed Jul 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-30
+- Add the daos_storage_estimator.py tool. It merges the functionality of the
+  former tools vos_size, vos_size.py, vos_size_dfs_sample.py and parse_csv.py.
+
+* Wed Jul 29 2020 Jeffrey V Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-29
+- Revert prior changes from version 28
+
 * Mon Jul 13 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-28
 - Change fuse requirement to fuse3
 - Use Lmod for MPI module loading
@@ -455,7 +459,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 - Remove scons_local as dependency
 
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
-- Bump up go minimum version to 1.12
+- bump up go minimum version to 1.12
 
 * Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
 - daos-server requires daos-client (same version)
