@@ -9,6 +9,10 @@ def scons():
     daos_build.test(unit_env, 'srv_checksum_tests',
                     ['srv_checksum_tests.c', '../srv_csum.c'],
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    daos_build.test(unit_env, 'srv_ec_aggregate_test',
+                    ['srv_ec_aggregate_test.c', '../srv_ec_aggregate.c', '../obj_class.c'],
+                    LIBS=['daos_common', 'vos', 'bio', 'abt', 'isal', 'uuid', 'gurt', 'cmocka'])
+
 
 if __name__ == "SCons.Script":
     scons()

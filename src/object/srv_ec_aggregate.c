@@ -49,7 +49,7 @@ struct ec_agg_pool_info {
 	/* Shared handle UUIDs, and service listr
 	 * are initialized in system Xstream.
 	 */
-	ABT_eventual	 api_eventual;		/* eventual for sys offload */
+//	ABT_eventual	 api_eventual;		/* eventual for sys offload */
 };
 
 /* Parameters used to drive iterate all.
@@ -107,7 +107,7 @@ struct ec_agg_stripe_ud {
 	uint8_t			*asu_bit_map;
 	unsigned int		 asu_cell_cnt;
 	bool			 asu_recalc;
-	ABT_eventual		 asu_eventual;
+	//ABT_eventual		 asu_eventual;
 };
 
 /* Represents an replicated data extent.
@@ -507,6 +507,7 @@ agg_update_vos(struct ec_agg_entry *entry)
 	return rc;
 }
 
+#ifdef NO
 /* Determines if an extent (the recx) overlaps a cell.
  */
 static inline bool
@@ -539,7 +540,6 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	}
 	return rc;
 }
-
 
 /* Fetches the old data for the cells in the stripe undergoing a partial parity
  * update, or a parity recalculation.  For update, the bit_map indicates the
@@ -849,7 +849,6 @@ agg_full_cells(uint8_t *bit_map, unsigned int estart, unsigned int elen,
 		}
 	return cell_cnt;
 }
-
 /* Driver function for partial stripe update. Fetches the data and then invokes
  * second function to update the parity.
  */
@@ -944,7 +943,7 @@ ev_out:
 out:
 	return rc;
 }
-
+#endif
 /* Process the prior stripe. Invoked when the iterator has moved to the first
  * extent in the subsequent.
  */
@@ -966,23 +965,22 @@ agg_process_stripe(struct ec_agg_entry *entry)
 						entry->ae_oca->u.ec.e_len);
 	iter_param.ip_recx.rx_nr	= entry->ae_oca->u.ec.e_len;
 
- 
+	/*
 	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
+	*/
 
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	if (rc != 0)
 		goto out;
-
+/*
 	D_PRINT("Par query: epoch: %lu, offset: %lu, length: %lu\n",
 		entry->ae_par_extent.ape_epoch,
 		entry->ae_par_extent.ape_recx.rx_idx,
 		entry->ae_par_extent.ape_recx.rx_nr);
-
-	if (rc != 0)
-		goto out;
+*/
 
 	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch &&
 			entry->ae_par_extent.ape_epoch != ~(0ULL)) {
@@ -1002,8 +1000,10 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		update_vos = false;
 		goto out;
 	}
+#ifdef NO
 	/* Parity, some later replicas, not full stripe. */
 	rc = agg_process_partial_stripe(entry);
+#endif
 out:
 	if (update_vos && rc == 0)
 		rc = agg_update_vos(entry);
@@ -1070,10 +1070,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
-	D_PRINT("adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
-		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
-		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
-		agg_entry->ae_oid.id_shard);
 	D_DEBUG(DB_TRACE, "adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
@@ -1165,7 +1161,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 /* Initializes the struct holding the iteration state (ec_agg_entry).
  */
 static void
-agg_init_entry(daos_handle_t lcoh, daos_handle_t gcoh,
+agg_reset_entry(daos_handle_t lcoh, daos_handle_t gcoh,
 	       struct ec_agg_entry *agg_entry,
 	       vos_iter_entry_t *entry, struct daos_oclass_attr *oca,
 	       d_sg_list_t *sgl)
@@ -1230,9 +1226,13 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca))
 		return rc;
+#ifdef NO
 	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
+#else
+	rc = 1;
+#endif
 	if (rc == 1) {
 		if (agg_param->ap_agg_entry == NULL) {
 			D_ALLOC_PTR(agg_param->ap_agg_entry);
@@ -1244,7 +1244,7 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 					 ae_cur_stripe.as_dextents);
 
 		}
-		agg_init_entry(agg_param->ap_cont_handle,
+		agg_reset_entry(agg_param->ap_cont_handle,
 			       agg_param->ap_pool_info.api_cont_hdl,
 			       agg_param->ap_agg_entry, entry, oca,
 			       &agg_param->ap_sgl);
@@ -1259,6 +1259,7 @@ out:
 	return rc;
 }
 
+#ifdef NO
 /* Captures the IV values need for pool and container open. Runs in
  * system xstream.
  */
@@ -1303,6 +1304,7 @@ out:
 	daos_prop_entries_free(prop);
 	D_FREE(prop);
 }
+#endif
 
 /* Iterates entire VOS. Invokes nested iterator to recurse through trees
  * for all objects meeting the criteria: object is EC, and this target is
@@ -1314,8 +1316,8 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
 	struct ec_agg_param	 agg_param = { 0 };
-	daos_handle_t		 ph = DAOS_HDL_INVAL;
-	int			*status;
+	//daos_handle_t		 ph = DAOS_HDL_INVAL;
+	//int			*status;
 	int			 rc = 0;
 
 	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
@@ -1326,7 +1328,7 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 		cont->sc_pool->spc_pool->sp_map_version;
 	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
 	agg_param.ap_cont_handle	= cont->sc_hdl;
-
+#ifdef NO
 	rc = ABT_eventual_create(sizeof(*status),
 				 &agg_param.ap_pool_info.api_eventual);
 	if (rc != ABT_SUCCESS)
@@ -1366,15 +1368,17 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= 0ULL;
 	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
-
+#endif
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
+	agg_sgl_fini(&agg_param.ap_sgl);
+#ifdef NO
 out:
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	D_FREE(agg_param.ap_agg_entry);
-	agg_sgl_fini(&agg_param.ap_sgl);
 	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 	dsc_pool_close(ph);
+#endif
 	return rc;
 
 }
