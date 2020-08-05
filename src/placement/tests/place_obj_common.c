@@ -251,7 +251,7 @@ plt_obj_reint_layout_check(struct pl_obj_layout *layout,
 
 void
 plt_obj_add_layout_check(struct pl_obj_layout *layout,
-		struct pl_obj_layout *org_layout, uint32_t pool_size,
+			 struct pl_obj_layout *org_layout, uint32_t pool_size,
 		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
 		uint32_t *shard_ids)
 {
@@ -305,9 +305,9 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 	}
 }
 
-
 void
 plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
+			     uint32_t pool_size)
 		uint32_t pool_size)
 {
 	int i;
@@ -626,7 +626,7 @@ getObjectClasses(daos_oclass_id_t **oclass_id_pp)
 
 int
 extend_test_pool_map(struct pool_map *map,
-		uint32_t nnodes, uuid_t target_uuids[],
+		     uint32_t nnodes, uuid_t target_uuids[],
 		d_rank_list_t *rank_list, uint32_t ndomains,
 		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
 		uint32_t dss_tgt_nr)
@@ -641,7 +641,7 @@ extend_test_pool_map(struct pool_map *map,
 	map_version = pool_map_get_version(map) + 1;
 
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
-			ntargets, domains, target_uuids, rank_list, NULL,
+			  ntargets, domains, target_uuids, rank_list, NULL,
 			dss_tgt_nr);
 	D_ASSERT(rc == 0);
 
@@ -664,7 +664,7 @@ is_max_class_obj(daos_oclass_id_t cid)
 	oc_attr = daos_oclass_attr_find(oid);
 
 	if (oc_attr->ca_grp_nr == DAOS_OBJ_GRP_MAX ||
-	   oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
+	    oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
 		return true;
 	return false;
 }

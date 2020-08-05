@@ -195,7 +195,7 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 
 int
 pl_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
-		    struct daos_obj_shard_md *shard_md,
+		     struct daos_obj_shard_md *shard_md,
 		    uint32_t reint_ver, uint32_t *tgt_rank,
 		    uint32_t *shard_id, unsigned int array_size, int myrank)
 {

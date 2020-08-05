@@ -129,18 +129,18 @@ can_extend(enum PL_OP_TYPE op, enum pool_comp_state state)
  * and appends them into the d_list provided. The function appends the targets
  * from the "new" layout and not those from the "original" layout.
  *
- * \param[in]	jmap		A pointer to the jump map used to retrive a
+ * \param[in]	jmap		A pointer to the jump map used to retrieve a
  *				reference to the pool map target.
  * \param[in]	original	The original layout calculated not including any
  *				recent pool map changes, like reintegration.
  * \param[in]	new		The new layout that contains changes in layout
- *				that occured due to pool status changes.
+ *				that occurred due to pool status changes.
  * \param[out]	diff		The d_list that contains the differences that
  *				were calculated.
  */
 static inline void
 layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
-		struct pl_obj_layout *new, d_list_t *diff)
+		 struct pl_obj_layout *new, d_list_t *diff)
 {
 	int index;
 
@@ -302,24 +302,24 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 		return num_dom;
 
 	if (curr_dom->do_children != NULL) {
-		next_dom = &curr_dom->do_children[num_dom-1];
+		next_dom = &curr_dom->do_children[num_dom - 1];
 		fseq = next_dom->do_comp.co_fseq;
 		status = next_dom->do_comp.co_status;
 
-		while (num_dom-1 > 0 && fseq == 1 && status == PO_COMP_ST_NEW) {
+		while (num_dom - 1 > 0 && fseq == 1 && status == PO_COMP_ST_NEW) {
 			num_dom--;
-			next_dom = &curr_dom->do_children[num_dom-1];
+			next_dom = &curr_dom->do_children[num_dom - 1];
 			fseq = next_dom->do_comp.co_fseq;
 			status = next_dom->do_comp.co_status;
 		}
 	} else {
-		next_target = &curr_dom->do_targets[num_dom-1];
+		next_target = &curr_dom->do_targets[num_dom - 1];
 		fseq = next_target->ta_comp.co_fseq;
 		status = next_target->ta_comp.co_status;
 
-		while (num_dom-1 > 0 && fseq == 0 && status == PO_COMP_ST_NEW) {
+		while (num_dom - 1 > 0 && fseq == 0 && status == PO_COMP_ST_NEW) {
 			num_dom--;
-			next_target = &curr_dom->do_targets[num_dom-1];
+			next_target = &curr_dom->do_targets[num_dom - 1];
 			fseq = next_target->ta_comp.co_fseq;
 			status = next_target->ta_comp.co_status;
 		}
@@ -729,7 +729,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 			uint32_t fseq;
 
 			get_target(root, &target, key, dom_used, tgts_used, k,
-					op_type);
+				   op_type);
 
 			tgt_id = target->ta_comp.co_id;
 			fseq = target->ta_comp.co_fseq;
@@ -915,13 +915,13 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	if (is_pool_adding(root)) {
 		/* Allocate space to hold the layout */
 		rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
-				 &add_layout);
+					 &add_layout);
 
 		remap_list_free_all(&remap_list);
 		D_INIT_LIST_HEAD(&remap_list);
 
 		rc = get_object_layout(jmap, add_layout, &jmop, &remap_list,
-			PL_ADD, md);
+				       PL_ADD, md);
 		assert(rc == 0);
 		D_INIT_LIST_HEAD(&add_list);
 		layout_find_diff(jmap, layout, add_layout, &add_list);
@@ -1118,7 +1118,7 @@ out:
 
 static int
 jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
-			struct daos_obj_shard_md *shard_md,
+			   struct daos_obj_shard_md *shard_md,
 			uint32_t reint_ver, uint32_t *tgt_rank,
 			uint32_t *shard_id, unsigned int array_size,
 			int myrank)
@@ -1155,7 +1155,7 @@ jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 	if (rc)
 		return 0;
 	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
-			&add_layout);
+				 &add_layout);
 	if (rc)
 		goto out;
 
@@ -1173,7 +1173,7 @@ jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 
 	/* Get placement after server addition. */
 	rc = get_object_layout(jmap, add_layout, &jop, &remap_list, PL_ADD,
-				md);
+			       md);
 	if (rc)
 		goto out;
 
