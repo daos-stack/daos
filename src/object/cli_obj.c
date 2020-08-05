@@ -2720,7 +2720,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 */
 
 		if ((!obj_auxi->spec_shard && !obj_auxi->no_retry) ||
-		    task->dt_result != -DER_INPROGRESS)
+		    (task->dt_result != -DER_INPROGRESS &&
+		     task->dt_result != -DER_TX_BUSY))
 			obj_auxi->io_retry = 1;
 
 		if (task->dt_result == -DER_CSUM) {
@@ -2738,6 +2739,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				obj_auxi->io_retry = 0;
 			}
 		}
+
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
 	}

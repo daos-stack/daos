@@ -71,7 +71,7 @@ vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 		 * transactional, treat it as the same transaction and let the
 		 * minor epoch handle any conflicts.
 		 */
-		if (dth == NULL)
+		if (!dtx_is_valid_handle(dth))
 			*same = true;
 	} else if (tx_id == dtx) {
 		*same = true;
@@ -386,9 +386,8 @@ update:
 		return rc;
 	}
 
-	rc = ilog_update(loh, &max_epr, epr->epr_hi,
-			 dth != NULL ? dth->dth_op_seq : VOS_MINOR_EPC_MAX,
-			 false);
+	rc = ilog_update(loh, &max_epr, epr->epr_hi, dtx_is_valid_handle(dth) ?
+			 dth->dth_op_seq : VOS_MINOR_EPC_MAX, false);
 
 	ilog_close(loh);
 
