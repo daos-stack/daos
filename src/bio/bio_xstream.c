@@ -167,7 +167,8 @@ traddr_to_vmd(char *dst, const char *src)
 	const char ch = ':';
 	int position, iteration;
 
-	strncpy(traddr_tmp, src, SPDK_NVMF_TRADDR_MAX_LEN);
+	strncpy(traddr_tmp, src, sizeof(traddr_tmp) - 1);
+	traddr_tmp[sizeof(traddr_tmp) - 1] = '\0';
 	/* Only the first chunk of data from the traddr is useful */
 	ptr = strchr(traddr_tmp, ch);
 	if (ptr == NULL) {
@@ -181,6 +182,7 @@ traddr_to_vmd(char *dst, const char *src)
 	iteration = 0;
 	while (*ptr != '\0') {
 		strncat(vmd_addr, ptr, 2);
+		strcat(vmd_addr, "");
 		if (iteration != 0) {
 			strcat(vmd_addr, ".");
 			ptr = ptr + 3;
@@ -191,7 +193,8 @@ traddr_to_vmd(char *dst, const char *src)
 		ptr = ptr + 2;
 		iteration++;
 	}
-	strncpy(dst, vmd_addr, SPDK_NVMF_TRADDR_MAX_LEN);
+	strncpy(dst, vmd_addr, sizeof(dst) - 1);
+	dst[sizeof(dst) - 1] = '\0';
 
 	return 0;
 }
