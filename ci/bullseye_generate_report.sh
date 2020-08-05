@@ -8,7 +8,6 @@ if [ ! -d '/opt/BullseyeCoverage/bin' ]; then
 fi
 export COVFILE="$WORKSPACE/test.cov"
 export PATH="/opt/BullseyeCoverage/bin:$PATH"
-fi
 
 mv "$WORKSPACE/test.cov_1" "$COVFILE"
 if [ -e "$WORKSPACE/test.cov_2" ]; then
