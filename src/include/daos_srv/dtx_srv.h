@@ -74,7 +74,9 @@ struct dtx_handle {
 					 /* Leader oid is touched. */
 					 dth_touched_leader_oid:1,
 					 /* Local TX is started. */
-					 dth_local_tx_started:1;
+					 dth_local_tx_started:1,
+					 /* Retry with this server. */
+					 dth_local_retry:1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -231,6 +233,12 @@ dtx_entry_put(struct dtx_entry *dte)
 {
 	if (--(dte->dte_refs) == 0)
 		D_FREE(dte);
+}
+
+static inline bool
+dtx_is_valid_handle(struct dtx_handle *dth)
+{
+	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
 }
 
 struct dtx_scan_args {
