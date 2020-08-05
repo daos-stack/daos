@@ -2080,6 +2080,8 @@ io_query_key(void **state)
 	struct io_test_args	*arg = *state;
 	int			rc = 0;
 	int			i, j;
+	struct dtx_handle	*dth;
+	struct dtx_id		xid;
 	daos_epoch_t		epoch = 1;
 	daos_key_t		dkey;
 	daos_key_t		akey;
@@ -2267,16 +2269,33 @@ io_query_key(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, KEY_INC * 2);
 
+	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch++, 0, &dth);
+
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
 			       DAOS_GET_MAX, epoch++, &dkey_read, NULL, NULL,
-			       NULL);
+			       dth);
 	assert_int_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, MAX_INT_KEY - KEY_INC);
 
+	vts_dtx_end(dth);
+
+	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch - 3, 0, &dth);
+	/* Now punch the object at earlier epoch */
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, NULL, 0,
+			   NULL, dth);
+	assert_int_equal(rc, -DER_TX_RESTART);
+	vts_dtx_end(dth);
+
+	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch + 1, 0, &dth);
 	/* Now punch the object */
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, NULL, 0,
-			   NULL, NULL);
+			   NULL, dth);
 	assert_int_equal(rc, 0);
+	xid = dth->dth_xid;
+	vts_dtx_end(dth);
+
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert_int_equal(rc, 1);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
 			       DAOS_GET_MAX, epoch++, &dkey_read, NULL, NULL,
