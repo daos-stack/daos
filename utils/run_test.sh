@@ -82,7 +82,7 @@ if [ -d "/mnt/daos" ]; then
 
     echo "Running Cmocka tests"
     VALGRIND_CMD=""
-    if [ -z "$RUN_TEST_VALGRIND" ]; then
+    if [ "$RUN_TEST_VALGRIND" = 'disabled' ]; then
         # Tests that do not run valgrind
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"

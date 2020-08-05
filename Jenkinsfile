@@ -950,14 +950,11 @@ pipeline {
                                             'libipmctl-devel ' +
                                             'python36-tabulate' +
                                             qb_inst_rpms,
-                                 junit_files: ''
 
                     }
                     post {
                       always {
-                          unitTestPost (
-                                     artifacts: ['run_test_memcheck.sh/*']
-                                  )
+                          unitTestPost ()
                         }
                     }
                 } // End run_test.sh with memcheck stage
