@@ -304,11 +304,9 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 		D_ASSERT(target_set[spare_id] == 2);
 	}
 }
-
 void
 plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
 			     uint32_t pool_size)
-		uint32_t pool_size)
 {
 	int i;
 	int  target_num;

@@ -501,10 +501,9 @@ add_object_class(daos_oclass_id_t cid)
 		D_ASSERTF(rc == 0, "rc == %d\n", rc);
 		plt_obj_layout_check(org_layout[test_num], COMPONENT_NR, 0);
 	}
-
 	extend_test_pool_map(po_map, NUM_TO_EXTEND, target_uuids, &rank_list,
-			     NUM_TO_EXTEND, domains, NULL, NULL, VOS_PER_TARGET);
-			NUM_TO_EXTEND, domains, NULL, NULL, VOS_PER_TARGET);
+			     NUM_TO_EXTEND, domains, NULL, NULL,
+			     VOS_PER_TARGET);
 
 
 	/* test normal placement for pools currently being extended */
@@ -512,10 +511,9 @@ add_object_class(daos_oclass_id_t cid)
 		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL, &layout);
 		D_ASSERT(rc == 0);
 
-		num_new_spares = pl_obj_find_addition(pl_map,
-						      &md_arr[test_num], NULL, po_ver,
-					spare_tgt_ranks, shard_ids,
-					SPARE_MAX_NUM, -1);
+		num_new_spares = pl_obj_find_addition(pl_map, &md_arr[test_num],
+				NULL, po_ver, spare_tgt_ranks, shard_ids,
+				SPARE_MAX_NUM, -1);
 		D_ASSERT(num_new_spares >= 0);
 
 		plt_obj_add_layout_check(layout, org_layout[test_num],

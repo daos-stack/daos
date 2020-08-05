@@ -60,14 +60,12 @@ plt_obj_add_layout_check(struct pl_obj_layout *layout,
 		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
 		uint32_t *shard_ids);
 
-
 void
 plt_obj_reint_layout_check(struct pl_obj_layout *layout,
 			   struct pl_obj_layout *org_layout, uint32_t pool_size,
-		struct pl_obj_layout *org_layout, uint32_t pool_size,
-		int *reint_tgts, int num_reint, int num_spares,
-		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
-		uint32_t *shard_ids);
+			   int *reint_tgts, int num_reint, int num_spares,
+			   uint32_t num_spares_returned,
+			   uint32_t *spare_tgt_ranks, uint32_t *shard_ids);
 
 void
 plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
