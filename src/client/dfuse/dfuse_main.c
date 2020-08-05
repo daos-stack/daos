@@ -477,7 +477,7 @@ main(int argc, char **argv)
 					    DAOS_COO_RW, &dfs->dfs_coh,
 					    &dfs->dfs_co_info, NULL);
 			if (rc) {
-				printf("Failed container open (%d)\n");
+				printf("Failed container open (%d)\n", rc);
 				D_GOTO(out_dfs, ret = rc);
 			}
 
