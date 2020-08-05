@@ -285,7 +285,6 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_refs = 1;
 	dth->dth_mbs = mbs;
 
-	dth->dth_sync = 0;
 	dth->dth_resent = 0;
 	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_modify_shared = 0;
@@ -297,6 +296,17 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_dti_cos_count = dti_cos_cnt;
 	dth->dth_ent = NULL;
 	dth->dth_flags = leader ? DTE_LEADER : 0;
+
+	/* Set 'DTE_BLOCK' flag for distributed transaction.
+	 * At the same time, ask DTX to 'sync' commit.
+	 */
+	if (mbs != NULL && mbs->dm_grp_cnt > 1) {
+		dth->dth_flags |= DTE_BLOCK;
+		dth->dth_sync = 1;
+	} else {
+		dth->dth_sync = 0;
+	}
+
 	dth->dth_modification_cnt = sub_modification_cnt;
 
 	dth->dth_op_seq = 0;
@@ -638,13 +648,6 @@ again:
 
 			dth->dth_sync = 1;
 		}
-
-		/* FIXME: For the DTX across multiple modification groups,
-		 *	  commit it synchronously. That will be changed in
-		 *	  next phase.
-		 */
-		if (dth->dth_mbs->dm_grp_cnt > 1)
-			dth->dth_sync = 1;
 
 		/* For synchronous DTX, do not add it into CoS cache, otherwise,
 		 * we may have no way to remove it from the cache.
