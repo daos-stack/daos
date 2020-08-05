@@ -60,9 +60,13 @@ class CSumErrorLog(DaosCoreBase):
             self.fail("dmg command failed: {}".format(details))
 
         data = json.loads(result.stdout)
-        if len(data['host_errors']) > 0:
-            self.fail("dmg command failed: {}".format(data['host_errors']))
-        for v in data['host_storage_map'].values():
+        resp = data['response']
+        if data['error'] or len(resp['host_errors']) > 0:
+            if data['error']:
+                self.fail("dmg command failed: {}".format(data['error']))
+            else:
+                self.fail("dmg command failed: {}".format(resp['host_errors']))
+        for v in resp['host_storage_map'].values():
             if v['storage']['smd_info']['devices']:
                 return v['storage']['smd_info']['devices'][0]['uuid']
 
@@ -82,9 +86,13 @@ class CSumErrorLog(DaosCoreBase):
             self.fail("dmg command failed: {}".format(details))
 
         data = json.loads(result.stdout)
-        if len(data['host_errors']) > 0:
-            self.fail("dmg command failed: {}".format(data['host_errors']))
-        for v in data['host_storage_map'].values():
+        resp = data['response']
+        if data['error'] or len(resp['host_errors']) > 0:
+            if data['error']:
+                self.fail("dmg command failed: {}".format(data['error']))
+            else:
+                self.fail("dmg command failed: {}".format(resp['host_errors']))
+        for v in resp['host_storage_map'].values():
             if v['storage']['smd_info']['devices']:
                 dev = v['storage']['smd_info']['devices'][0]
                 return dev['health']['checksum_errors']

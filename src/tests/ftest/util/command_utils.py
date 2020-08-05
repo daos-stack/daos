@@ -324,6 +324,15 @@ class ExecutableCommand(CommandWithParameters):
                 "No pattern regex defined for '{}()'".format(regex_method))
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
+    def update_env_names(self, new_names):
+        """Update environment variable names to export for the command.
+
+        Args:
+            env_names (list): list of environment variable names to add to
+                existing self._env_names variable.
+        """
+        self._env_names.extend(new_names)
+
     def get_environment(self, manager, log_file=None):
         """Get the environment variables to export for the command.
 
@@ -336,7 +345,7 @@ class ExecutableCommand(CommandWithParameters):
 
         Returns:
             EnvironmentVariables: a dictionary of environment variable names and
-                values to export prior to running daos_racer
+                values to export.
 
         """
         env = EnvironmentVariables()
@@ -756,14 +765,15 @@ class YamlCommand(SubProcessCommand):
                 for name in data:
                     run_command(
                         "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
-                            ",".join(hosts), name))
+                            ",".join(hosts), name),
+                        verbose=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
                         result = run_command(
                             "clush -S -v -w {} --copy {} --dest {}".format(
                                 ",".join(hosts), src_file, dst_file),
-                            raise_exception=False)
+                            raise_exception=False, verbose=False)
                         if result.exit_status != 0:
                             self.log.info(
                                 "WARNING: failure copying '%s' to '%s' on %s",

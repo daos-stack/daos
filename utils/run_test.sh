@@ -107,7 +107,7 @@ if [ -d "/mnt/daos" ]; then
 
     # Tests
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_linkage"
-    run_test "${SL_BUILD_DIR}/src/cart/src/utest/test_gurt"
+    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_hlc"
     run_test "${SL_BUILD_DIR}/src/cart/src/utest/utest_swim"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
@@ -135,11 +135,9 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
     run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
-    run_test "${SL_PREFIX}/bin/vos_size"
-    run_test "${SL_PREFIX}/bin/vos_size.py" \
-             "${SL_PREFIX}/etc/vos_size_input.yaml"
 
     # Scripts launching tests
+    run_test src/client/storage_estimator/common/tests/storage_estimator.sh
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD
