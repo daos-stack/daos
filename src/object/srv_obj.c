@@ -1303,7 +1303,8 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				     fetch_flags, shadows, &ioh, dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
-			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_BUSY,
+				 DB_IO, DLOG_ERR,
 				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
