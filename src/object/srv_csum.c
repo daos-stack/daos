@@ -120,6 +120,7 @@ cc_2nr(const struct csum_context *ctx, uint64_t bytes)
 {
 	return bytes / ctx->cc_rec_len;
 }
+
 static uint64_t
 cc_2nb(const struct csum_context *ctx, uint64_t records)
 {

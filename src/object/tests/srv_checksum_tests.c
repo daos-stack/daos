@@ -198,7 +198,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	csum_len = daos_csummer_get_csum_len(ctx->csummer);
 	cs = daos_csummer_get_chunksize(ctx->csummer);
 	assert_true(cs != 0);
-	dummy_csums = (uint8_t *) "SSSSSSSSSSSSSSSSSSSSSSSSSS";
+	dummy_csums = (uint8_t *)"SSSSSSSSSSSSSSSSSSSSSSSSSS";
 	rec_size = setup->rec_size;
 
 	/** count number of layouts */
@@ -688,6 +688,7 @@ partial_chunk_request2(void **state)
 
 	test_case_destroy(&ctx);
 }
+
 /**
  * Single extent that spans multiple chunks. Request is only part of first
  * and last chunk so those should have new checksums, while only the
@@ -701,7 +702,6 @@ partial_chunk_request2(void **state)
  * Should create a new csum for the first chunk, copy the middle 2 chunks, then
  * create a new csum for the last chunk
  */
-
 static void
 request_needs_new_and_copy(void **state)
 {
@@ -1355,7 +1355,7 @@ larger_records2(void **state)
 	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
 		.request_len = 12,
-		.chunksize = 1024*32,
+		.chunksize = 1024 * 32,
 		.rec_size = 1024,
 		.layout = {
 			{.data = large_data02,
@@ -1417,9 +1417,9 @@ static const struct CMUnitTest array_tests[] = {
 	TA("SRV_CSUM_ARRAY10: Partial chunks and full chunks",
 	   request_needs_new_and_copy),
 	TA("SRV_CSUM_ARRAY11: Partial Extents, chunks don't align",
-	  unaligned_chunks_csums_new_csum_is_created),
+	   unaligned_chunks_csums_new_csum_is_created),
 	TA("SRV_CSUM_ARRAY12: Partial Extents, first extent isn't aligned",
-	  unaligned_first_chunk),
+	   unaligned_first_chunk),
 	TA("SRV_CSUM_ARRAY13: Partial Extents, extent smaller than chunk",
 	   extent_smaller_than_chunk),
 	TA("SRV_CSUM_ARRAY14: Extent is larger than chunk",
