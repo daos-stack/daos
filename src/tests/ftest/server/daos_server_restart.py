@@ -54,7 +54,7 @@ class DaosServerTest(TestWithServers):
         try:
             self.server_managers[0].start()
         except ServerFailed as error:
-            self.fail
+            self.fail(
                 "##Failed restartng server, %s", error)
 
     def restart_daos_io_server(self, force=False):
