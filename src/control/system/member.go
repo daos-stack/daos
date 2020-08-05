@@ -40,6 +40,18 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+func ErrMemberExists(r Rank) *MemberExistsError {
+	return &MemberExistsError{rank: r}
+}
+
+type MemberExistsError struct {
+	rank Rank
+}
+
+func (mee *MemberExistsError) Error() string {
+	return fmt.Sprintf("member with rank %d already exists", mee.rank)
+}
+
 // MemberState represents the activity state of DAOS system members.
 type MemberState int
 
@@ -299,7 +311,7 @@ type Membership struct {
 func (m *Membership) addMember(member *Member) error {
 	_, err := m.db.FindMemberByUUID(member.UUID)
 	if err == nil {
-		return FaultMemberExists(member.Rank)
+		return &MemberExistsError{member.Rank}
 	}
 	m.log.Debugf("adding system member: %s", member)
 

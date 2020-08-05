@@ -470,7 +470,12 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		doms[i] = 1;
 
 	rc = ds_pool_add(pool_uuid, ntargets, tgt_uuids, rank_list,
-			    ARRAY_SIZE(doms), doms, svc_ranks);
+			 ARRAY_SIZE(doms), doms, svc_ranks);
+	if (rc != 0) {
+		D_ERROR("extending pool "DF_UUID" failed: rc "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		D_GOTO(out_uuids, rc);
+	}
 
 out_uuids:
 	D_FREE(tgt_uuids);

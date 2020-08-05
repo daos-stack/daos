@@ -92,9 +92,6 @@ const (
 
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
-	SystemMemberExists
-	SystemMemberMissing
-	SystemMemberChanged
 
 	// client fault codes
 	ClientUnknown Code = iota + 500
