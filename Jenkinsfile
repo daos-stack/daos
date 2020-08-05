@@ -1168,6 +1168,7 @@ pipeline {
                         expression { ! skip_stage('bullseye', true) }
                       }
                     }
+                    agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
