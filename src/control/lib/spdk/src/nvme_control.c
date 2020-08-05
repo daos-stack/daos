@@ -84,13 +84,75 @@ write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 	sequence->is_completed = 1;
 }
 
+static void
+wipe_ns(struct format_sequence *sequence, int nsid, struct ret_t *ret)
+{
+	int rc;
+
+	sequence->ns = spdk_nvme_ctrlr_get_ns(sequence->ctrlr, nsid);
+	if (!sequence->ns) {
+		snprintf(ret->err, sizeof(ret->err), "null ns");
+		ret->rc = -NVMEC_ERR_NULL_NS;
+		return;
+	}
+
+	sequence->qpair = spdk_nvme_ctrlr_alloc_io_qpair(sequence->ctrlr, NULL,
+							0);
+	if (sequence->qpair == NULL) {
+		snprintf(ret->err, sizeof(ret->err),
+			"spdk_nvme_ctrlr_alloc_io_qpair() failed");
+		ret->rc = -NVMEC_ERR_ALLOC_IO_QPAIR;
+		return;
+	}
+
+	sequence->using_cmb_io = 1;
+	sequence->buf = spdk_nvme_ctrlr_alloc_cmb_io_buffer(sequence->ctrlr,
+							   0x1000);
+	if (sequence->buf == NULL) {
+		sequence->using_cmb_io = 0;
+		sequence->buf = spdk_zmalloc(0x1000, 0x1000, NULL,
+					     SPDK_ENV_SOCKET_ID_ANY,
+					     SPDK_MALLOC_DMA);
+	}
+	if (sequence->buf == NULL) {
+		snprintf(ret->err, sizeof(ret->err),
+			"write buffer allocation failed\n");
+		ret->rc = -NVMEC_ERR_ALLOC_SEQUENCE_BUF;
+		return;
+	}
+	if (sequence->using_cmb_io) {
+		printf("INFO: using controller memory buffer for IO\n");
+	} else {
+		printf("INFO: using host memory buffer for IO\n");
+	}
+	sequence->is_completed = 0;
+
+	rc = spdk_nvme_ns_cmd_write(sequence->ns, sequence->qpair,
+				    sequence->buf, 0, /* LBA start */
+				    1, /* number of LBAs */ write_complete,
+				    &sequence, 0);
+	if (rc != 0) {
+		snprintf(ret->err, sizeof(ret->err),
+			"starting write i/o failed (rc: %d)", rc);
+		ret->rc = -NVMEC_ERR_NS_WRITE_FAIL;
+		return;
+	}
+
+	while (!sequence->is_completed) {
+		spdk_nvme_qpair_process_completions(sequence->qpair, 0);
+	}
+	spdk_nvme_ctrlr_free_io_qpair(sequence->qpair);
+
+	fprintf(stderr, "DBG: successfully wiped ns %d\n", nsid);
+}
+
 struct ret_t *
 nvme_wipe_first_ns(char *ctrlr_pci_addr)
 {
-	int			 ns_id, rc;
 	struct ctrlr_entry	*ctrlr_entry;
 	struct format_sequence   sequence;
 	struct ret_t		*ret;
+	int			 nsid;
 
 	ret = init_ret(0);
 
@@ -100,69 +162,12 @@ nvme_wipe_first_ns(char *ctrlr_pci_addr)
 
 	sequence.ctrlr = ctrlr_entry->ctrlr;
 
-	ns_id = spdk_nvme_ctrlr_get_first_active_ns(sequence.ctrlr);
-	if (ns_id != 1) {
-		/* unexpected, don't wipe */
-		snprintf(ret->err, sizeof(ret->err),
-			"expected first active namespace at id 1, got %d",
-			ns_id);
-		ret->rc = -NVMEC_ERR_NS_ID_UNEXPECTED;
-		return ret;
+	for (nsid = spdk_nvme_ctrlr_get_first_active_ns(sequence.ctrlr);
+	     nsid != 0;
+	     nsid = spdk_nvme_ctrlr_get_next_active_ns(sequence.ctrlr, nsid)) {
+		fprintf(stderr, "DBG: wiping ns %d\n", nsid);
+		wipe_ns(&sequence, nsid, ret);
 	}
-
-	sequence.ns = spdk_nvme_ctrlr_get_ns(sequence.ctrlr, ns_id);
-	if (!sequence.ns) {
-		snprintf(ret->err, sizeof(ret->err), "null ns");
-		ret->rc = -NVMEC_ERR_NULL_NS;
-		return ret;
-	}
-
-	sequence.qpair = spdk_nvme_ctrlr_alloc_io_qpair(sequence.ctrlr, NULL,
-							0);
-	if (sequence.qpair == NULL) {
-		snprintf(ret->err, sizeof(ret->err),
-			"spdk_nvme_ctrlr_alloc_io_qpair() failed");
-		ret->rc = -NVMEC_ERR_ALLOC_IO_QPAIR;
-		return ret;
-	}
-
-	sequence.using_cmb_io = 1;
-	sequence.buf = spdk_nvme_ctrlr_alloc_cmb_io_buffer(sequence.ctrlr,
-							   0x1000);
-	if (sequence.buf == NULL) {
-		sequence.using_cmb_io = 0;
-		sequence.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
-					    SPDK_ENV_SOCKET_ID_ANY,
-					    SPDK_MALLOC_DMA);
-	}
-	if (sequence.buf == NULL) {
-		snprintf(ret->err, sizeof(ret->err),
-			"write buffer allocation failed\n");
-		ret->rc = -NVMEC_ERR_ALLOC_SEQUENCE_BUF;
-		return ret;
-	}
-	if (sequence.using_cmb_io) {
-		printf("INFO: using controller memory buffer for IO\n");
-	} else {
-		printf("INFO: using host memory buffer for IO\n");
-	}
-	sequence.is_completed = 0;
-
-	rc = spdk_nvme_ns_cmd_write(sequence.ns, sequence.qpair, sequence.buf,
-		0, /* LBA start */
-		1, /* number of LBAs */
-		write_complete, &sequence, 0);
-	if (rc != 0) {
-		snprintf(ret->err, sizeof(ret->err),
-			"starting write i/o failed (rc: %d)", rc);
-		ret->rc = -NVMEC_ERR_NS_WRITE_FAIL;
-		return ret;
-	}
-
-	while (!sequence.is_completed) {
-		spdk_nvme_qpair_process_completions(sequence.qpair, 0);
-	}
-	spdk_nvme_ctrlr_free_io_qpair(sequence.qpair);
 
 	return ret;
 }
@@ -170,7 +175,7 @@ nvme_wipe_first_ns(char *ctrlr_pci_addr)
 struct ret_t *
 nvme_format(char *ctrlr_pci_addr)
 {
-	int					 ns_id;
+	int					 nsid;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_nvme_ns			*ns;
 	struct spdk_nvme_format			 format = {};
@@ -192,16 +197,16 @@ nvme_format(char *ctrlr_pci_addr)
 	}
 
 	if (cdata->fna.format_all_ns) {
-		ns_id = SPDK_NVME_GLOBAL_NS_TAG;
+		nsid = SPDK_NVME_GLOBAL_NS_TAG;
 		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, 1);
 	} else {
-		ns_id = 1; /* just format first ns */
-		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, ns_id);
+		nsid = 1; /* just format first ns */
+		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, nsid);
 	}
 
 	if (ns == NULL) {
 		snprintf(ret->err, sizeof(ret->err),
-			"namespace with id %d not found", ns_id);
+			"namespace with id %d not found", nsid);
 		ret->rc = -NVMEC_ERR_NS_NOT_FOUND;
 		return ret;
 	}
@@ -212,7 +217,7 @@ nvme_format(char *ctrlr_pci_addr)
 	format.pil	= 0; /* protection information location N/A */
 	format.ses	= 0; /* secure erase operation set user data erase */
 
-	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, ns_id, &format);
+	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, nsid, &format);
 	if (ret->rc != 0) {
 		snprintf(ret->err, sizeof(ret->err), "format failed");
 		return ret;
