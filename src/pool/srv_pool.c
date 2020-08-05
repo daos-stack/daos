@@ -1139,8 +1139,14 @@ unlock:
 	if (rc)
 		D_GOTO(out, rc);
 
-	uuid_generate(pool_hdl_uuid);
-	uuid_generate(cont_hdl_uuid);
+	if (!uuid_is_null(svc->ps_pool->sp_srv_cont_hdl)) {
+		uuid_copy(pool_hdl_uuid, svc->ps_pool->sp_srv_pool_hdl);
+		uuid_copy(cont_hdl_uuid, svc->ps_pool->sp_srv_cont_hdl);
+	} else {
+		uuid_generate(pool_hdl_uuid);
+		uuid_generate(cont_hdl_uuid);
+	}
+
 	rc = ds_pool_iv_srv_hdl_update(svc->ps_pool, pool_hdl_uuid,
 				       cont_hdl_uuid);
 	if (rc) {
@@ -4364,7 +4370,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 
 	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		return rc;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -4628,6 +4634,8 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 				   &ds_pool_prop_connectable, &value);
 		if (rc != 0)
 			D_GOTO(out_free, rc);
+
+		ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
 		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
 			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
 	}

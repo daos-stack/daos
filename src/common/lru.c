@@ -247,6 +247,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	llink->ll_evicted = 0;
 	llink->ll_ref	  = 1; /* 1 for caller */
 	llink->ll_ops	  = lcache->dlc_ops;
+	D_INIT_LIST_HEAD(&llink->ll_qlink);
 
 	rc = d_hash_rec_insert(&lcache->dlc_htable, key, key_size,
 			       &llink->ll_link, true);

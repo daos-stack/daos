@@ -363,7 +363,6 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
-		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
 		case PO_COMP_ST_NEW:
@@ -371,6 +370,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			return -DER_INVAL;
+		case PO_COMP_ST_DRAIN:
 		case PO_COMP_ST_DOWN:
 			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
 				target->ta_comp.co_rank,
@@ -389,6 +389,9 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			}
 		}
 		break;
+	default:
+		D_ERROR("Invalid pool target operation: %d\n", opc);
+		D_ASSERT(0);
 	}
 
 	return DER_SUCCESS;
