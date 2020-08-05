@@ -513,7 +513,7 @@ class CommandWithSubCommand(ExecutableCommand):
         """Get the result from running the command with the defined arguments.
 
         The optional sub_command_list and kwargs are used to define the command
-        that will be executed.  If they are excluded, the commnad will be run as
+        that will be executed.  If they are excluded, the command will be run as
         it currently defined.
 
         Note: the returned CmdResult is also stored in the self.result
