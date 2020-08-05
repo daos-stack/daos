@@ -307,7 +307,7 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 		status = next_dom->do_comp.co_status;
 
 		while (num_dom - 1 > 0 && fseq == 1 &&
-				status == PO_COMP_ST_NEW) {
+		       status == PO_COMP_ST_NEW) {
 			num_dom--;
 			next_dom = &curr_dom->do_children[num_dom - 1];
 			fseq = next_dom->do_comp.co_fseq;
@@ -319,7 +319,7 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 		status = next_target->ta_comp.co_status;
 
 		while (num_dom - 1 > 0 && fseq == 0 &&
-				status == PO_COMP_ST_NEW) {
+		       status == PO_COMP_ST_NEW) {
 			num_dom--;
 			next_target = &curr_dom->do_targets[num_dom - 1];
 			fseq = next_target->ta_comp.co_fseq;

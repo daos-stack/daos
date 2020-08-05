@@ -512,8 +512,10 @@ add_object_class(daos_oclass_id_t cid)
 		D_ASSERT(rc == 0);
 
 		num_new_spares = pl_obj_find_addition(pl_map, &md_arr[test_num],
-				NULL, po_ver, spare_tgt_ranks, shard_ids,
-				SPARE_MAX_NUM, -1);
+						      NULL, po_ver,
+						      spare_tgt_ranks,
+						      shard_ids,
+						      SPARE_MAX_NUM, -1);
 		D_ASSERT(num_new_spares >= 0);
 
 		plt_obj_add_layout_check(layout, org_layout[test_num],
