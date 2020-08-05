@@ -120,7 +120,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	 * potential conflict with subsequent modifications against
 	 * the same object.
 	 */
-	if (dth != NULL)
+	if (dtx_is_valid_handle(dth))
 		dth->dth_sync = 1;
 
 	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "DF_X64"\n",
@@ -282,8 +282,8 @@ do_log:
 	if (rc != 0)
 		return rc;
 
-	rc = ilog_update(loh, NULL, epoch, dth != NULL ? dth->dth_op_seq : 1,
-			 false);
+	rc = ilog_update(loh, NULL, epoch,
+			 dtx_is_valid_handle(dth) ? dth->dth_op_seq : 1, false);
 
 	ilog_close(loh);
 skip_log:

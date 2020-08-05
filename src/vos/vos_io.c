@@ -454,7 +454,9 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	struct bio_io_context *bioc;
 	int i, rc;
 
-	if (iod_nr == 0) {
+	if (iod_nr == 0 &&
+	    !(fetch_flags &
+	      (VOS_FETCH_SET_TS_ONLY | VOS_FETCH_CHECK_EXISTENCE))) {
 		D_ERROR("Invalid iod_nr (0).\n");
 		rc = -DER_IO_INVAL;
 		goto error;
@@ -495,9 +497,15 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		goto error;
 
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, cond_flags, iod_nr,
-				 dth ? &dth->dth_xid.dti_uuid : NULL);
+				 dtx_is_valid_handle(dth) ?
+				 &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto error;
+
+	if (ioc->ic_read_ts_only || ioc->ic_check_existence) {
+		*ioc_pp = ioc;
+		return 0;
+	}
 
 	cont = vos_hdl2cont(coh);
 
@@ -515,11 +523,6 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (ioc->ic_biov_csums == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
-	}
-
-	if (ioc->ic_read_ts_only || ioc->ic_check_existence) {
-		*ioc_pp = ioc;
-		return 0;
 	}
 
 	for (i = 0; i < iod_nr; i++) {
@@ -1184,6 +1187,9 @@ update_ts_on_fetch(struct vos_io_context *ioc, int err)
 	if (ts_set == NULL)
 		return;
 
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_READ_TS))
+		return;
+
 	/** Aborted for another reason, no timestamp updates */
 	if (err != 0 && err != -DER_NONEXIST)
 		return;
@@ -1245,6 +1251,8 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
+	vos_dth_set(dth);
+
 	if (!vos_ts_lookup(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, false,
 			   &entry)) {
 		/** Re-cache the container timestamps */
@@ -1283,13 +1291,13 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	*ioh = vos_ioc2ioh(ioc);
 
 out:
+	vos_dth_set(NULL);
+
 	update_ts_on_fetch(ioc, rc);
 
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
 		ioc->ic_recx_lists = NULL;
-		if (rc == -DER_NONEXIST && ioc->ic_read_ts_only)
-			rc = 0;
 		return vos_fetch_end(vos_ioc2ioh(ioc), rc);
 	}
 	return 0;
@@ -2046,7 +2054,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	vos_dth_set(dth);
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
@@ -2069,7 +2077,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		ioc->ic_read_conflict = true;
 
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ?
+	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?
 			  dth->dth_op_seq : VOS_MINOR_EPC_MAX);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
@@ -2085,7 +2093,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 	}
 
-	if (dth != NULL) {
+	if (dtx_is_valid_handle(dth)) {
 		struct dtx_rsrvd_uint	*dru;
 
 		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
@@ -2142,9 +2150,11 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		"\n", DP_UOID(oid), iod_nr, dth ? dth->dth_epoch :  epoch);
+		"\n", DP_UOID(oid), iod_nr,
+		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch);
 
-	rc = vos_ioc_create(coh, oid, false, dth ? dth->dth_epoch : epoch,
+	rc = vos_ioc_create(coh, oid, false,
+			    dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch,
 			    flags, iod_nr, iods, iods_csums, 0, NULL, dedup,
 			    dedup_th, dth, &ioc);
 	if (rc != 0)

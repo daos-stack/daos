@@ -23,9 +23,7 @@
 /**
  * This file is part of daos
  *
- * tests/suite/daos_dtx.c
- *
- *
+ * tests/suite/daos_base_tx.c
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -74,7 +72,6 @@ dtx_check_replicas(const char *dkey, const char *akey, const char *msg,
 		print_message("%s: rep %d, result %d, size %lu/%lu\n",
 			      msg, i, req->result, size, req->iod[0].iod_size);
 
-		assert_int_equal(req->result, 0);
 		assert_int_equal(req->iod[0].iod_size, size);
 		if (fetch_buf != NULL)
 			assert_memory_equal(update_buf, fetch_buf, size);
@@ -516,7 +513,6 @@ dtx_handle_resend(void **state, uint64_t fail_loc, uint16_t oclass)
 
 	lookup_single(dkey, akey, 0, fetch_buf, dts_dtx_iosize, DAOS_TX_NONE,
 		      &req);
-	assert_int_equal(req.result, 0);
 	assert_int_equal(req.iod[0].iod_size, dts_dtx_iosize);
 	assert_memory_equal(update_buf, fetch_buf, dts_dtx_iosize);
 
@@ -525,7 +521,6 @@ dtx_handle_resend(void **state, uint64_t fail_loc, uint16_t oclass)
 
 	lookup_single(dkey, akey, 0, fetch_buf, dts_dtx_iosize, DAOS_TX_NONE,
 		      &req);
-	assert_int_equal(req.result, 0);
 	assert_int_equal(req.iod[0].iod_size, 0);
 
 	dtx_set_fail_loc(arg, 0);
@@ -659,12 +654,10 @@ dtx_17(void **state)
 
 	lookup_single(dkey, akey1, 0, fetch_buf, dts_dtx_iosize, DAOS_TX_NONE,
 		      &req);
-	assert_int_equal(req.result, 0);
 	assert_int_equal(req.iod[0].iod_size, 0);
 
 	lookup_single(dkey, akey2, 0, fetch_buf, dts_dtx_iosize, DAOS_TX_NONE,
 		      &req);
-	assert_int_equal(req.result, 0);
 	assert_int_equal(req.iod[0].iod_size, dts_dtx_iosize);
 	assert_memory_equal(update_buf, fetch_buf, dts_dtx_iosize);
 
@@ -722,7 +715,7 @@ dtx_test_setup(void **state)
 }
 
 int
-run_daos_dtx_test(int rank, int size, int *sub_tests, int sub_tests_size)
+run_daos_base_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
@@ -732,7 +725,7 @@ run_daos_dtx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS dtx tests", dtx_tests,
+	rc = run_daos_sub_tests("Signle RDG TX tests", dtx_tests,
 				ARRAY_SIZE(dtx_tests), sub_tests,
 				sub_tests_size, dtx_test_setup, test_teardown);
 
