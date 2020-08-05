@@ -949,12 +949,12 @@ pipeline {
                                             'pmix numactl-devel ' +
                                             'libipmctl-devel ' +
                                             'python36-tabulate' +
-                                            qb_inst_rpms,
+                                            qb_inst_rpms
 
                     }
                     post {
                       always {
-                          unitTestPost ()
+                          unitTestPost()
                         }
                     }
                 } // End run_test.sh with memcheck stage
