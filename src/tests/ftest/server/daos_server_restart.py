@@ -26,6 +26,7 @@ from __future__ import print_function
 from apricot import TestWithServers
 from server_utils import ServerFailed
 from daos_utils import DaosCommand
+from command_utils import CommandFailure
 
 
 class DaosServerTest(TestWithServers):
@@ -49,12 +50,12 @@ class DaosServerTest(TestWithServers):
             self.server_managers[0].stop()
         except ServerFailed as error:
             self.fail(
-                "##Failed stoping server, {}".format(error))
+                "##Failed stopping server, %s", error)
         try:
             self.server_managers[0].start()
         except ServerFailed as error:
-            self.fail(
-                "##Failed restartng server, {}".format(error))
+            self.fail
+                "##Failed restartng server, %s", error)
 
     def restart_daos_io_server(self, force=False):
         """method to perform io_server stop and start by dmg"""
@@ -63,26 +64,27 @@ class DaosServerTest(TestWithServers):
             self.server_managers[0].dmg.system_stop(force)
         except CommandFailure as error:
             self.fail(
-                "##Failed stoping daos io-server by dmg, {}".format(error))
+                "##Failed stopping daos io-server by dmg, %s", error)
         try:
             self.server_managers[0].dmg.system_start()
         except CommandFailure as error:
             self.fail(
-                "##Failed starting daos io-server by dmg, {}".format(error))
+                "##Failed starting daos io-server by dmg, %s", error)
 
     def get_pool_list(self):
         """method to get the pool list contents"""
         pool_list = self.get_dmg_command().get_output("pool_list")
-        self.log.info(
-            "get_pool-list: {}".format(pool_list))
+        self.log.info("get_pool-list: %s", pool_list)
         return pool_list
 
-    def verify_pool_list(self, expected_pool_list=[]):
+    def verify_pool_list(self, expected_pool_list=None):
         """method to verify the pool list"""
+        if expected_pool_list is None:
+            expected_pool_list = []
         pool_list = self.get_pool_list()
         self.log.info(
-            "\n===Current pool-list:  {}\n===Expected pool-list: {}\n".format(
-                pool_list, expected_pool_list))
+            "\n===Current pool-list:  %s\n===Expected pool-list: %s\n",
+            pool_list, expected_pool_list)
         if pool_list != expected_pool_list:
             self.fail(
                 "##Current pool-list mismatch with the expected pool-list.")
@@ -93,21 +95,21 @@ class DaosServerTest(TestWithServers):
         num_of_pool = self.params.get("num_of_pool", "/run/server/*/", 3)
         container_per_pool = self.params.get(
             "container_per_pool", "/run/server/*/", 2)
-        for i in range(num_of_pool):
-            self.dmg = self.get_dmg_command()
-            result = self.dmg.pool_create(scm_size)
+        for _ in range(num_of_pool):
+            dmg = self.get_dmg_command()
+            result = dmg.pool_create(scm_size)
             uuid = result['uuid']
             svc = result['svc']
-            for j  in range(container_per_pool):
+            for _ in range(container_per_pool):
                 daos_cmd = DaosCommand(self.bin)
                 daos_cmd.exit_status_exception = False
                 result = daos_cmd.container_create(pool=uuid, svc=svc)
-                self.log.info("container create status:", result)
+                self.log.info("container create status: %s", result)
 
     def test_daos_server_reformat(self):
         """JIRA ID: DAOS-3596.
 
-        Test Description: verify reformating DAOS is same as a fresh install.
+        Test Description: verify reformatting DAOS is same as a fresh install.
         Steps:
         (1)Verify daos server pool list after started.
         (2)Restart server without pool been created, and verify.
