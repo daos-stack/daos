@@ -42,7 +42,8 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		if (rc)
 			D_GOTO(err, rc);
 
-		if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
+		if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX &&
+			dattr.da_type != DAOS_PROP_CO_LAYOUT_HDF5)
 			D_GOTO(err, rc = ENOTSUP);
 	}
 
