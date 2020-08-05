@@ -292,7 +292,7 @@ main(int argc, char **argv)
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out, ret = rc);
 
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
@@ -363,7 +363,7 @@ main(int argc, char **argv)
 	if (!dfuse_info->di_mountpoint) {
 		printf("Mountpoint is required\n");
 		show_help(argv[0]);
-		exit(1);
+		D_GOTO(out_debug, ret = -DER_NO_HDL);
 	}
 
 	/* Is this required, or can we assume some kind of default for
@@ -372,7 +372,7 @@ main(int argc, char **argv)
 	if (!svcl) {
 		printf("Svcl is required\n");
 		show_help(argv[0]);
-		exit(1);
+		D_GOTO(out_debug, ret = -DER_NO_HDL);
 	}
 
 	if (dfuse_info->di_pool) {
@@ -383,7 +383,7 @@ main(int argc, char **argv)
 
 		if (dfuse_info->di_cont) {
 			if (uuid_parse(dfuse_info->di_cont, tmp_uuid) < 0) {
-				printf("Invalid container uuid");
+				printf("Invalid container uuid\n");
 				exit(1);
 			}
 		}
@@ -406,32 +406,30 @@ main(int argc, char **argv)
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
-		DFUSE_TRA_ERROR(dfuse_info,
-				"Invalid pool service rank list");
+		printf("Invalid pool service rank list\n");
 		D_GOTO(out_dfuse, ret = -DER_INVAL);
 	}
 
-	D_ALLOC_PTR(dfs);
-	if (!dfs) {
+	D_ALLOC_PTR(dfp);
+	if (!dfp)
 		D_GOTO(out_svcl, ret = -DER_NOMEM);
-	}
+
+	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
+	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
+
+	d_list_add(&dfp->dfp_list, &dfuse_info->di_dfp_list);
+
+	D_ALLOC_PTR(dfs);
+	if (!dfs)
+		D_GOTO(out_dfs, ret = -DER_NOMEM);
 
 	if (dfuse_info->di_caching)
 		dfs->dfs_attr_timeout = 5;
 
-	D_ALLOC_PTR(dfp);
-	if (!dfp) {
-		D_GOTO(out_svcl, ret = -DER_NOMEM);
-	}
-
-	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
-
-	d_list_add(&dfp->dfp_list, &dfuse_info->di_dfp_list);
 	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 
 	dfs->dfs_dfp = dfp;
 
-	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
 	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
@@ -449,15 +447,14 @@ main(int argc, char **argv)
 
 			if (uuid_parse(dfuse_info->di_pool,
 					dfp->dfp_pool) < 0) {
-				DFUSE_TRA_ERROR(dfp, "Invalid pool uuid");
+				printf("Invalid pool uuid\n");
 				D_GOTO(out_dfs, ret = -DER_INVAL);
 			}
 			if (dfuse_info->di_cont) {
 
 				if (uuid_parse(dfuse_info->di_cont,
 						dfs->dfs_cont) < 0) {
-					DFUSE_TRA_ERROR(dfp,
-							"Invalid container uuid");
+					printf("Invalid container uuid\n");
 					D_GOTO(out_dfs, ret = -DER_INVAL);
 				}
 			}
@@ -478,8 +475,7 @@ main(int argc, char **argv)
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(dfp,
-					"Failed to connect to pool (%d)", rc);
+			printf("Failed to connect to pool (%d)\n", rc);
 			D_GOTO(out_dfs, 0);
 		}
 
@@ -490,9 +486,7 @@ main(int argc, char **argv)
 					    DAOS_COO_RW, &dfs->dfs_coh,
 					    &dfs->dfs_co_info, NULL);
 			if (rc) {
-				DFUSE_TRA_ERROR(dfp,
-						"Failed container open (%d)",
-						rc);
+				printf("Failed container open (%d)\n");
 				D_GOTO(out_dfs, ret = rc);
 			}
 
@@ -500,8 +494,7 @@ main(int argc, char **argv)
 				       &dfs->dfs_ns);
 			if (rc) {
 				daos_cont_close(dfs->dfs_coh, NULL);
-				DFUSE_TRA_ERROR(dfp,
-						"dfs_mount failed (%d)", rc);
+				printf("dfs_mount failed (%d)\n", rc);
 				D_GOTO(out_dfs, ret = rc);
 			}
 			dfs->dfs_ops = &dfuse_dfs_ops;
