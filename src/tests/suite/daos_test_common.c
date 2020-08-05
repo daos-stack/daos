@@ -113,7 +113,8 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 				      nvme_size, prop, &outpool->svc,
 				      outpool->pool_uuid, NULL);
 		if (rc)
-			print_message("daos_pool_create failed, rc: %d\n", rc);
+			print_message(
+			"daos_pool_create failed, daos-4963 rc: %d\n", rc);
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
 				       DP_UUID(outpool->pool_uuid));
