@@ -28,6 +28,7 @@ import os
 
 from general_utils import run_task
 from command_utils_base import CommandFailure
+from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 
@@ -247,7 +248,7 @@ class ServerFillUp(IorTestBase):
         try:
             self.run_ior_with_pool(create_cont=_create_cont)
             results.put("PASS")
-        except CommandFailure as _error:
+        except (CommandFailure, TestFail) as _error:
             results.put("FAIL")
 
         self.container_info["{}{}{}"
