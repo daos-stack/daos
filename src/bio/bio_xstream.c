@@ -165,9 +165,16 @@ traddr_to_vmd(char *dst, const char *src)
 	char vmd_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1] = "0000:";
 	char *ptr;
 	const char ch = ':';
+	char addr_split[3];
 	int position, iteration;
+	int n;
 
-	strncpy(traddr_tmp, src, SPDK_NVMF_TRADDR_MAX_LEN);
+	n = snprintf(traddr_tmp, SPDK_NVMF_TRADDR_MAX_LEN, "%s", src);
+	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
+		D_ERROR("snprintf failed\n");
+		return -DER_INVAL;
+	}
+
 	/* Only the first chunk of data from the traddr is useful */
 	ptr = strchr(traddr_tmp, ch);
 	if (ptr == NULL) {
@@ -180,7 +187,13 @@ traddr_to_vmd(char *dst, const char *src)
 	ptr = traddr_tmp;
 	iteration = 0;
 	while (*ptr != '\0') {
-		strncat(vmd_addr, ptr, 2);
+		n = snprintf(addr_split, sizeof(addr_split), "%s", ptr);
+		if (n < 0) {
+			D_ERROR("snprintf failed\n");
+			return -DER_INVAL;
+		}
+		strcat(vmd_addr, addr_split);
+
 		if (iteration != 0) {
 			strcat(vmd_addr, ".");
 			ptr = ptr + 3;
@@ -191,7 +204,11 @@ traddr_to_vmd(char *dst, const char *src)
 		ptr = ptr + 2;
 		iteration++;
 	}
-	strncpy(dst, vmd_addr, SPDK_NVMF_TRADDR_MAX_LEN);
+	n = snprintf(dst, SPDK_NVMF_TRADDR_MAX_LEN, "%s", vmd_addr);
+	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
+		D_ERROR("snprintf failed\n");
+		return -DER_INVAL;
+	}
 
 	return 0;
 }
