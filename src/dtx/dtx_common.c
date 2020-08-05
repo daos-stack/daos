@@ -201,8 +201,8 @@ dtx_batched_commit(void *arg)
 				DTX_AGG_THRESHOLD_AGE_UPPER))) {
 			ds_cont_child_get(cont);
 			cont->sc_dtx_aggregating = 1;
-			rc = dss_ult_create(dtx_aggregate, cont,
-				DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
+			rc = dss_ult_create(dtx_aggregate, cont, DSS_ULT_GC,
+					    DSS_TGT_SELF, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
 				ds_cont_child_put(cont);
@@ -283,6 +283,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_modification_cnt = sub_modification_cnt;
 
 	dth->dth_op_seq = 0;
+	dth->dth_rsrvd_cnt = 0;
 	dth->dth_oid_cnt = 0;
 	dth->dth_oid_cap = 0;
 	dth->dth_oid_array = NULL;

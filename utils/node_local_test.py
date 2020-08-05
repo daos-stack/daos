@@ -64,7 +64,7 @@ class WarningsFactory():
     # Error levels supported by the reporint are LOW, NORMAL, HIGH, ERROR.
     # Errors from this list of functions are known to happen during shutdown
     # for the time being, so are downgraded to LOW.
-    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'rdb_timerd')
+    FLAKY_FUNCTIONS = ('ds_pool_child_purge')
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')

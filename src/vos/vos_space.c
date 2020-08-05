@@ -33,10 +33,19 @@
 static inline daos_size_t
 get_frag_overhead(daos_size_t tot_size, int media)
 {
-	if (media == DAOS_MEDIA_SCM)
-		return (tot_size * 5) / 100;
-	else
-		return (tot_size * 2) / 100;
+	daos_size_t	min_sz = (2ULL << 30);	/* 2GB */
+	daos_size_t	max_sz = (10ULL << 30);	/* 10GB */
+	daos_size_t	ovhd;
+
+	ovhd = (media == DAOS_MEDIA_SCM) ?
+		(tot_size * 5) / 100 : (tot_size * 2) / 100;
+
+	if (ovhd < min_sz)
+		ovhd = min_sz;
+	else if (ovhd > max_sz)
+		ovhd = max_sz;
+
+	return ovhd;
 }
 
 void
@@ -304,22 +313,22 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 		goto error;
 
 	scm_left -= POOL_SCM_HELD(pool);
-
-	nvme_left = NVME_FREE(&vps);
-	if (pool->vp_vea_info) {
-		if (nvme_left < NVME_SYS(&vps))
-			goto error;
-		nvme_left -= NVME_SYS(&vps);
-		/* 'NVMe held' has already been excluded from 'NVMe free' */
-	}
-
 	if (scm_left < space_est[DAOS_MEDIA_SCM])
 		goto error;
 
-	if (pool->vp_vea_info) {
-		if (nvme_left < space_est[DAOS_MEDIA_NVME])
-			goto error;
-	}
+	/* If NVMe isn't configured or this update doesn't use NVMe space */
+	if (pool->vp_vea_info == NULL || space_est[DAOS_MEDIA_NVME] == 0)
+		goto success;
+
+	nvme_left = NVME_FREE(&vps);
+	if (nvme_left < NVME_SYS(&vps))
+		goto error;
+
+	nvme_left -= NVME_SYS(&vps);
+	/* 'NVMe held' has already been excluded from 'NVMe free' */
+
+	if (nvme_left < space_est[DAOS_MEDIA_NVME])
+		goto error;
 
 success:
 	space_hld[DAOS_MEDIA_SCM]	= space_est[DAOS_MEDIA_SCM];

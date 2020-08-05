@@ -133,24 +133,26 @@ vos_tx_publish(struct dtx_handle *dth, int err)
 
 again:
 	for (i = 0, rc = 0;
-	     i < dth->dth_modification_cnt && (rc == 0 || err != 0); i++) {
+	     i < dth->dth_rsrvd_cnt && (rc == 0 || err != 0); i++) {
 		dru = &dth->dth_rsrvds[i];
-		if (dru->dru_scm != NULL) {
-			rc = vos_publish_scm(cont, dru->dru_scm, err == 0);
+		rc = vos_publish_scm(cont, dru->dru_scm, err == 0);
 
-			/* FIXME: Currently, vos_publish_blocks() will release
-			 *	  reserved information in 'dru_nvme_list' from
-			 *	  DRAM. So if vos_publish_blocks() failed, the
-			 *	  former published ones cannot be rollback. It
-			 *	  will be handled later.
-			 */
-			if (rc == 0 || err != 0)
-				rc = vos_publish_blocks(cont, &dru->dru_nvme,
-							err == 0,
-							VOS_IOS_GENERIC);
-			if (err != 0)
-				D_FREE(dru->dru_scm);
-		}
+		/* FIXME: Currently, vos_publish_blocks() will release
+		 *	  reserved information in 'dru_nvme_list' from
+		 *	  DRAM. So if vos_publish_blocks() failed, the
+		 *	  reserve information in DRAM for those former
+		 *	  published ones cannot be rollback. That will
+		 *	  cause space leaking before in-memory reserve
+		 *	  information synced with persistent allocation
+		 *	  heap until the server restart.
+		 *
+		 *	  It is not fatal, will be handled later.
+		 */
+		if (rc == 0 || err != 0)
+			rc = vos_publish_blocks(cont, &dru->dru_nvme,
+						err == 0, VOS_IOS_GENERIC);
+		if (err != 0)
+			D_FREE(dru->dru_scm);
 	}
 
 	/* Some publish failed, cancel all. */
