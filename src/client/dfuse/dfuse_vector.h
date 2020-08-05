@@ -24,7 +24,7 @@
 #ifndef __DFUSE_VECTOR_H__
 #define __DFUSE_VECTOR_H__
 
-#include <gurt/errno.h>
+#include <daos_errno.h>
 
 /* An opaque 64-bit structure allocated by the user */
 typedef struct {

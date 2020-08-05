@@ -1,5 +1,4 @@
-#!python
-# (C) Copyright 2016-2020 Intel Corporation.
+# (C) Copyright 2020 Intel Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,14 +18,12 @@
 # provided in Contract No. 8F-30005.
 # Any reproduction of computer software, computer software documentation, or
 # portions thereof marked with this legend must also reproduce the markings.
-#
 """Unit tests"""
 
 import os
 import daos_build
 
-TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c']
-LIBPATH = [Dir('../cart'), Dir('../../../gurt')]
+TEST_SRC = ['test_gurt.c']
 
 def scons():
     """Scons function"""
@@ -34,8 +31,7 @@ def scons():
         return
 
     # pylint: disable=too-many-locals
-    Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
-    Import('cart_lib')
+    Import('env', 'prereqs', 'gurt_targets')
     # pylint: enable=too-many-locals
 
     #Use full path to wrap_cmocka.h for configure test.  Since standalone
@@ -55,10 +51,7 @@ def scons():
     test_env = env.Clone()
     prereqs.require(test_env, "mercury", "uuid", "cmocka")
     test_env.AppendUnique(LIBS=['pthread'])
-    test_env.AppendUnique(CPPPATH=['../include'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
-    test_env.AppendUnique(LIBPATH=LIBPATH)
-    test_env.AppendUnique(RPATH_FULL=LIBPATH)
     tests = []
 
     for test in TEST_SRC:
@@ -66,13 +59,11 @@ def scons():
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = daos_build.test(test_env, target=testname,
-                                   source=testobj + cart_targets +
-                                   swim_targets + gurt_targets,
+                                   source=testobj + gurt_targets,
                                    LIBS=test_env["LIBS"] + ['yaml'],
                                    LINKFLAGS=flags)
         tests.append(testprog)
 
-    test_env.Requires(tests, cart_lib)
     Default(tests)
 
 if __name__ == "SCons.Script":
