@@ -236,11 +236,13 @@ static void
 m_csum64_get(struct daos_csummer *obj)
 {
 	mchecksum_object_t checksum = obj->dcs_ctx;
+
 	uint32_t *crc32 = (uint32_t *) obj->dcs_csum_buf;
 
 	mchecksum_get(checksum, crc32, obj->dcs_csum_buf_size,
 		      MCHECKSUM_FINALIZE);
 }
+
 static uint16_t
 m_csum64_get_size(struct daos_csummer *obj)
 {
@@ -264,6 +266,7 @@ m_csum64_finish(struct daos_csummer *obj)
 	uint64_t *crc64 = (uint64_t *) obj->dcs_csum_buf;
 	int rc = mchecksum_get(checksum, crc64, obj->dcs_csum_buf_size,
 			       MCHECKSUM_FINALIZE);
+
 	if (rc == MCHECKSUM_SUCCESS)
 		rc = 0;
 	return rc;
@@ -281,8 +284,8 @@ struct csum_ft m_csum64_algo = {
 #endif
 
 static int
-gurt_64_update(struct daos_csummer *obj,
-	      uint8_t *buf, size_t buf_len)
+murmur64_update(struct daos_csummer *obj,
+		uint8_t *buf, size_t buf_len)
 {
 
 	uint64_t *value = (uint64_t *)obj->dcs_csum_buf;
@@ -291,25 +294,24 @@ gurt_64_update(struct daos_csummer *obj,
 	return 0;
 }
 
-struct csum_ft gurt_murmur64_algo = {
-	.cf_update = gurt_64_update,
+struct csum_ft murmur64_algo = {
+	.cf_update = murmur64_update,
 	.cf_csum_len = sizeof(uint64_t),
 	.cf_name = "murm64"
 };
 
 static int
-hash_string32_update(struct daos_csummer *obj,
-	      uint8_t *buf, size_t buf_len)
+string32_update(struct daos_csummer *obj,
+		uint8_t *buf, size_t buf_len)
 {
-
 	uint32_t *value = (uint32_t *)obj->dcs_csum_buf;
 
 	*value = d_hash_string_u32((char *)buf, buf_len);
 	return 0;
 }
 
-struct csum_ft hash_string32_algo = {
-	.cf_update = hash_string32_update,
+struct csum_ft string32_algo = {
+	.cf_update = string32_update,
 	.cf_csum_len = sizeof(uint32_t),
 	.cf_name = "str32"
 };
@@ -450,8 +452,8 @@ main(int argc, char *argv[])
 #ifdef MCHECKSUM_SUPPORT
 		csum_fts[type_count++] = &m_csum64_algo;
 #endif
-		csum_fts[type_count++] = &gurt_murmur64_algo;
-		csum_fts[type_count++] = &hash_string32_algo;
+		csum_fts[type_count++] = &murmur64_algo;
+		csum_fts[type_count++] = &string32_algo;
 	}
 
 	if (sizes_count == 0) {
