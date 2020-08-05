@@ -377,9 +377,11 @@ fi
 if grep \"from xml.dom.minidom import Document, Element\" \
     /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py; then
     sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py
-/from xml.dom.minidom import Document, Element/s/from xml.dom.minidom import Document/
-/ = Element\(/s/ = document.createElement\(/
-/\(Element\(/s/\(document.createElement\(/
+/from xml.dom.minidom import Document, Element/s/, Element//
+/element = Element(element_type)/s/Element/document.createElement/
+/system_out = Element('system-out')/s/Element/document.createElement/
+/testcase.appendChild(Element('skipped'))/s/Element/document.createElement/
+/testcase.appendChild(Element('skipped'))/s/Element/document.createElement/
 wq
 EOF
 fi
