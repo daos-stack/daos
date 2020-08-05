@@ -39,7 +39,6 @@ def scons():
                     'include/gurt/%s' % header)
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
-    env.AppendUnique(CPPPATH=[Dir('cart/src/utest').srcnode()])
     Export('env', 'CART_VERSION')
 
     SConscript('gurt/SConscript')
