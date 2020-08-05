@@ -85,9 +85,9 @@ class DaosServerTest(TestWithServers):
         self.log.info(
             "\n===Current pool-list:  %s\n===Expected pool-list: %s\n",
             pool_list, expected_pool_list)
-        if pool_list != expected_pool_list:
-            self.fail(
-                "##Current pool-list mismatch with the expected pool-list.")
+        self.assertItemsEqual(
+            pool_list, expected_pool_list,
+            "##Current pool-list mismatch with the expected pool-list.")
 
     def create_pool_and_container(self):
         """method to create pool and container"""
@@ -119,7 +119,7 @@ class DaosServerTest(TestWithServers):
         (5)Verify after DAOS server restarted, it should appear as an empty
            fresh installation.
 
-        :avocado: tags=all,pr,hw,large,server_test,server_restart
+        :avocado: tags=all,pr,hw,large,server_test,server_reformat
         """
 
         self.log.info("(1)Verify daos server pool list after started.")
@@ -151,7 +151,7 @@ class DaosServerTest(TestWithServers):
         (5)Use the cmd line to perform a controlled shutdown when the
            daos cluster is incomplete (i.e. 1 of the 2 servers is down).
 
-        :avocado: tags=all,pr,hw,large,server_test,server_reformat
+        :avocado: tags=all,pr,hw,large,server_test,server_restart
         """
 
         self.log.info(
@@ -175,14 +175,13 @@ class DaosServerTest(TestWithServers):
             "the daos io-server.")
         self.verify_pool_list(pool_list)
 
-        print(" ")
-        print("self.hostlist_servers= ", self.hostlist_servers)
-        print(" ")
         hosts = self.hostlist_servers
         self.hostlist_servers = hosts[-1]
-        print(" ")
-        print("(5)Restart daos io server for the last server on the cluster ")
-        print("   self.hostlist_servers= ", self.hostlist_servers)
+        self.log.info(
+            "(5)Restart daos io server for the last server on the cluster."
+            "   self.hostlist_servers= ", self.hostlist_servers)
+        self.restart_daos_io_server(force=True)
+        self.verify_pool_list(pool_list)
         self.restart_daos_io_server()
         self.verify_pool_list(pool_list)
         self.hostlist_servers = hosts
