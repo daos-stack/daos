@@ -116,9 +116,8 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dfs_ops->create) {
+	if (!parent_inode->ie_dfs->dfs_ops->create)
 		D_GOTO(err, rc = ENOTSUP);
-	}
 
 	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode,
 					      fi);
@@ -248,9 +247,8 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dfs_ops->mkdir) {
+	if (!parent_inode->ie_dfs->dfs_ops->mkdir)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
 
 	parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,	name, mode);
 
@@ -338,9 +336,9 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dfs_ops->unlink) {
+	if (!parent_inode->ie_dfs->dfs_ops->unlink)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -375,9 +373,9 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->readdir) {
+	if (!inode->ie_dfs->dfs_ops->readdir)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->readdir(req, inode, size, offset, fi);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -405,9 +403,9 @@ df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->symlink) {
+	if (!inode->ie_dfs->dfs_ops->symlink)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->symlink(req, link, inode, name);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -435,9 +433,9 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->setxattr) {
+	if (!inode->ie_dfs->dfs_ops->setxattr)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->setxattr(req, inode, name, value, size, flags);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -464,9 +462,9 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->getxattr) {
+	if (!inode->ie_dfs->dfs_ops->getxattr)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->getxattr(req, inode, name, size);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -493,9 +491,9 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->removexattr) {
+	if (!inode->ie_dfs->dfs_ops->removexattr)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->removexattr(req, inode, name);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -522,9 +520,9 @@ df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->listxattr) {
+	if (!inode->ie_dfs->dfs_ops->listxattr)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->listxattr(req, inode, size);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -568,7 +566,6 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 		newparent_inode = container_of(rlink2, struct dfuse_inode_entry,
 					       ie_htl);
-
 
 		if (parent_inode->ie_dfs != newparent_inode->ie_dfs)
 			D_GOTO(decref_both, rc = EXDEV);

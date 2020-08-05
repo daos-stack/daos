@@ -24,7 +24,6 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-
 void
 dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, struct dfuse_inode_entry *newparent,

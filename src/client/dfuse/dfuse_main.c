@@ -130,7 +130,6 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 	if (child_pid == 0) {
 		bg_fd = di_spipe[1];
 		return 0;
-
 	}
 
 	sa.sa_handler = noop_handler;
@@ -163,7 +162,7 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 		}
 		if (child_ret) {
 			printf("Exiting %d %s\n", child_ret,
-				d_errstr(child_ret));
+			       d_errstr(child_ret));
 			exit(-(child_ret + DER_ERR_GURT_BASE));
 		} else {
 			exit(0);
@@ -221,9 +220,8 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 
 	rc = fuse_session_mount(dfuse_info->di_session,
 				dfuse_info->di_mountpoint);
-	if (rc != 0) {
+	if (rc != 0)
 		goto cleanup;
-	}
 
 	fuse_opt_free_args(args);
 
@@ -232,9 +230,8 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 
 	rc = ll_loop_fn(dfuse_info);
 	fuse_session_unmount(dfuse_info->di_session);
-	if (rc) {
+	if (rc)
 		goto cleanup;
-	}
 
 	return true;
 cleanup:
@@ -300,9 +297,8 @@ main(int argc, char **argv)
 
 	D_INIT_LIST_HEAD(&dfuse_info->di_dfp_list);
 	rc = D_MUTEX_INIT(&dfuse_info->di_lock, NULL);
-	if (rc != -DER_SUCCESS) {
+	if (rc != -DER_SUCCESS)
 		D_GOTO(out_debug, ret = rc);
-	}
 
 	dfuse_info->di_threaded = true;
 
@@ -397,7 +393,6 @@ main(int argc, char **argv)
 		}
 	}
 
-
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_debug, ret = rc);
@@ -444,16 +439,14 @@ main(int argc, char **argv)
 		uuid_copy(dfs->dfs_cont, duns_attr.da_cuuid);
 	} else if (rc == ENODATA) {
 		if (dfuse_info->di_pool) {
-
 			if (uuid_parse(dfuse_info->di_pool,
-					dfp->dfp_pool) < 0) {
+				       dfp->dfp_pool) < 0) {
 				printf("Invalid pool uuid\n");
 				D_GOTO(out_dfs, ret = -DER_INVAL);
 			}
 			if (dfuse_info->di_cont) {
-
 				if (uuid_parse(dfuse_info->di_cont,
-						dfs->dfs_cont) < 0) {
+					       dfs->dfs_cont) < 0) {
 					printf("Invalid container uuid\n");
 					D_GOTO(out_dfs, ret = -DER_INVAL);
 				}
@@ -468,7 +461,6 @@ main(int argc, char **argv)
 	}
 
 	if (uuid_is_null(dfp->dfp_pool) == 0) {
-
 		/** Connect to DAOS pool */
 		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
 				       dfuse_info->di_svcl, DAOS_PC_RW,
@@ -480,7 +472,6 @@ main(int argc, char **argv)
 		}
 
 		if (uuid_is_null(dfs->dfs_cont) == 0) {
-
 			/** Try to open the DAOS container (the mountpoint) */
 			rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
 					    DAOS_COO_RW, &dfs->dfs_coh,
@@ -525,7 +516,6 @@ out_dfs:
 					   dfs_list) {
 			DFUSE_TRA_ERROR(dfs, "DFS left at the end");
 			if (!daos_handle_is_inval(dfs->dfs_coh)) {
-
 				rc = dfs_umount(dfs->dfs_ns);
 				if (rc != 0)
 					DFUSE_TRA_ERROR(dfs,

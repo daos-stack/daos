@@ -341,7 +341,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-
 #define DFUSE_REPLY_WRITE(desc, req, bytes)				\
 	do {								\
 		int __rc;						\

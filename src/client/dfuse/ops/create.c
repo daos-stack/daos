@@ -123,5 +123,4 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(oh);
 	D_FREE(ie);
-	return;
 }
