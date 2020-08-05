@@ -179,6 +179,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	harness := NewIOServerHarness(log)
 	var netDevClass uint32
 
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		return err
+	}
+	defer netdetect.CleanUp(netCtx)
+
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIOServers {
 			break
@@ -189,7 +195,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
 		// specify the correct device for each.
 		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
-			deviceAlias, err := netdetect.GetDeviceAlias(srvCfg.Fabric.Interface)
+			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, srvCfg.Fabric.Interface)
 			if err != nil {
 				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
 			}
