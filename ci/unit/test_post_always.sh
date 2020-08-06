@@ -13,12 +13,13 @@ else
   exit 1
 fi
 
+rm -rf run_test.sh vm_test
 DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
+
+
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-rm -rf run_test.sh vm_test run_test_memcheck.sh
-echo "WITH_VALGRIND=${WITH_VALGRIND}"
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \

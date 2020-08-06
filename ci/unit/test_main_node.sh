@@ -22,17 +22,19 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts
 sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
-cd "$DAOS_BASE"
-if [ "$WITH_VALGRIND" = "memcheck" ]; then
-    # run_test.sh with valgrind memcheck
-    IS_CI=true OLD_CI=false RUN_TEST_VALGRIND=memcheck utils/run_test.sh
-    # Remove DAOS_BASE from memcheck xml results
-    find test_results -maxdepth 1 -name 'results-*-memcheck.xml' -print0 | \
-        xargs -0 sed -i "s:$DAOS_BASE::g"
-elif [ "$WITH_VALGRIND" = "disabled" ]; then
+if [ "$WITH_VALGRIND" = "disabled"  ]; then
     # set CMOCKA envs here
     export CMOCKA_MESSAGE_OUTPUT=xml
     export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
-    IS_CI=true OLD_CI=false utils/run_test.sh
+fi
+
+cd "$DAOS_BASE"
+IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
+
+if [ "$WITH_VALGRIND" == 'disabled' ]; then
     ./utils/node_local_test.py all
+elif [ "$WITH_VALGRIND" == 'memcheck' ]; then
+    # Remove DAOS_BASE from memcheck xml results
+    find run_test_memcheck.sh -maxdepth 1 -name 'results-*-memcheck.xml' \
+        -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"
 fi
