@@ -130,13 +130,9 @@ public class IODataDesc {
    */
   public IODataDesc duplicate() throws IOException {
     List<Entry> newEntries = new ArrayList<>(akeyEntries.size());
-    akeyEntries.forEach(e -> {
-      try {
-        newEntries.add(e.duplicate());
-      } catch (IOException ioException) {
-        ioException.printStackTrace();
-      }
-    });
+    for (Entry e : akeyEntries) {
+      newEntries.add(e.duplicate());
+    }
     return new IODataDesc(dkey, newEntries, updateOrFetch);
   }
 
@@ -259,10 +255,6 @@ public class IODataDesc {
     return akeyEntries.get(index);
   }
 
-  public int numberOfEntries() {
-    return akeyEntries.size();
-  }
-
   /**
    * create data description entry for fetch.
    *
@@ -340,7 +332,7 @@ public class IODataDesc {
 
   @Override
   public String toString() {
-    return toString();
+    return toString(2048);
   }
 
   public String toString(int maxSize) {
@@ -583,8 +575,19 @@ public class IODataDesc {
       }
     }
 
+    public boolean isFetchBufReleased() {
+      if (!updateOrFetch) {
+        return encoded && (dataBuffer == null);
+      }
+      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+    }
+
     public int getRequestSize() {
       return dataSize;
+    }
+
+    public int getOffset() {
+      return offset;
     }
 
     /**
