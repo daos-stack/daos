@@ -1022,22 +1022,23 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 
 /* JSON output handling for dmg command */
 static int
-daos_dmg_json_contents(const char *dmg_cmd, struct json_object **parsed_json)
+daos_dmg_json_contents(const char *dmg_cmd, const char *filename,
+		       struct json_object **parsed_json)
 {
-	long	int  size = 0;
+	long	int size = 0;
 	char	*content = NULL;
-	char	*filename = "/tmp/daos_dmg.json";
+	char	system_cmd[DTS_CFG_MAX];
 	int	rc = 0;
+	FILE	*fp;
 
-	FILE *fp = fopen(filename, "w+");
-
+	fp = fopen(filename, "w+");
 	if (!fp) {
 		print_message("fopen %s failed!\n", filename);
 		return -DER_IO;
 	}
 
-	/* Need to make sure -j is in the dmg cmd? */
-	rc = system(dmg_cmd);
+	dts_create_config(system_cmd, "%s > %s", dmg_cmd, filename);
+	rc = system(system_cmd);
 	assert_int_equal(rc, 0);
 
 	/* get the content size and allocate buffer */
@@ -1069,23 +1070,27 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 			daos_mgmt_pool_info_t *pools)
 {
 	struct json_object	*parsed_json = NULL;
-	struct json_object	*response, *pool_list;
+	struct json_object	*response;
+	struct json_object	*pool_list;
 	struct json_object	*pool;
 	struct json_object	*uuid;
 	struct json_object	*rep_ranks;
 	struct json_object	*rank;
 	daos_size_t		npools_in;
-	char	uuid_str[DAOS_UUID_STR_SIZE];
-	int i, j;
-	int rl_nr;
-	int rc = 0;
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	char			filename[DTS_CFG_MAX];
+	int			i, j;
+	int			rl_nr;
+	int			rc = 0;
 
 	if (npools == NULL)
 		return -DER_INVAL;
 	npools_in = *npools;
 
-	rc = daos_dmg_json_contents("dmg pool list -i -j > "
-			"/tmp/daos_dmg.json", &parsed_json);
+	dts_create_config(filename, "/tmp/dmg_pool_list_%d.json", (uint8_t)rand());
+
+	rc = daos_dmg_json_contents("dmg pool list -i -j", filename,
+				    &parsed_json);
 	if (rc != 0) {
 		print_message("daos_dmg_json_contents failed\n");
 		return -DER_INVAL;
@@ -1101,7 +1106,6 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 		*npools = 0;
 	else
 		*npools = json_object_array_length(pool_list);
-	print_message("#pools %lu\n", *npools);
 
 	if (pools == NULL) {
 		/* no need to fill up a NULL pools buffer */
