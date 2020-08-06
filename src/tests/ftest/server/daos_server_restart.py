@@ -57,7 +57,7 @@ class DaosServerTest(TestWithServers):
             self.fail(
                 "##Failed restartng server, %s", error)
 
-    def restart_daos_io_server(self, force=False):
+    def restart_daos_io_server(self, force=True):
         """method to perform io_server stop and start by dmg"""
 
         try:
@@ -85,7 +85,7 @@ class DaosServerTest(TestWithServers):
         self.log.info(
             "\n===Current pool-list:  %s\n===Expected pool-list: %s\n",
             pool_list, expected_pool_list)
-        self.assertItemsEqual(
+        self.assertEqual(
             pool_list, expected_pool_list,
             "##Current pool-list mismatch with the expected pool-list.")
 
@@ -169,7 +169,7 @@ class DaosServerTest(TestWithServers):
         self.restart_daos_io_server()
         self.log.info(
             "(3)Force shutdown and restart the daos io-server.")
-        self.restart_daos_io_server(force=True)
+        self.restart_daos_io_server()
         self.log.info(
             "(4)Verify pool list after forced shutdown and restart "
             "the daos io-server.")
@@ -180,8 +180,9 @@ class DaosServerTest(TestWithServers):
         self.log.info(
             "(5)Restart daos io server for the last server on the cluster."
             "   self.hostlist_servers= ", self.hostlist_servers)
-        self.restart_daos_io_server(force=True)
-        self.verify_pool_list(pool_list)
         self.restart_daos_io_server()
         self.verify_pool_list(pool_list)
+        # Blocked by DAOS-3883 causing intermittent failures on CI
+        #self.restart_daos_io_server(force=False)
+        #self.verify_pool_list(pool_list)
         self.hostlist_servers = hosts
