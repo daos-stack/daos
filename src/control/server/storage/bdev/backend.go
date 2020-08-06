@@ -201,20 +201,20 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	if err := b.Init(); err != nil {
-		return nil, err
-	}
-
-	ctrlr, err := getController(pciAddr, b.binding.controllers)
-	if err != nil {
-		return nil, err
-	}
+//	if err := b.Init(); err != nil {
+//		return nil, err
+//	}
+//
+//	ctrlr, err := getController(pciAddr, b.binding.controllers)
+//	if err != nil {
+//		return nil, err
+//	}
 
 	if err := b.binding.Format(b.log, pciAddr); err != nil {
 		return nil, err
 	}
 
-	return ctrlr, nil
+	return new(storage.NvmeController), nil
 }
 
 func (b *spdkBackend) Prepare(req PrepareRequest) error {

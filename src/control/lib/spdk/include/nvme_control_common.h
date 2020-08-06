@@ -108,11 +108,14 @@ struct ctrlr_entry {
 	struct ns_entry		*nss;
 	struct dev_health_entry	*dev_health;
 	int			 socket_id;
+	char			 name[1024];
 	struct ctrlr_entry	*next;
 };
 
 struct ns_entry {
+	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_ns	*ns;
+	struct spdk_nvme_qpair	*qpair;
 	struct ns_entry		*next;
 };
 

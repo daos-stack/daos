@@ -170,12 +170,12 @@ func pciAddressList(ctrlrs []Controller) []string {
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
 func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
-	ctrlrs, err := processReturn(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
+	//ctrlrs, err := processReturn(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
 
-	pciAddrs := pciAddressList(ctrlrs)
-	log.Debugf("discovered nvme ssds: %v", pciAddrs)
+	//pciAddrs := pciAddressList(ctrlrs)
+	//log.Debugf("discovered nvme ssds: %v", pciAddrs)
 
-	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
+	return []Controller{}, nil //wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
 
 // Format device at given pci address, destructive operation!

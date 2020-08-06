@@ -96,7 +96,7 @@ func (c *StorageControlService) Setup() error {
 		// fail if config specified nvme devices are inaccessible
 		missing, ok := c.canAccessBdevs(sr)
 		if !ok {
-			return FaultBdevNotFound(missing)
+			c.log.Error(FaultBdevNotFound(missing).Error())
 		}
 	}
 

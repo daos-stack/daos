@@ -39,7 +39,6 @@ import "C"
 
 import (
 	"fmt"
-	"unsafe"
 )
 
 // ENV is the interface that provides SPDK environment management.
@@ -72,22 +71,22 @@ func Rc2err(label string, rc C.int) error {
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
 func (e *Env) InitSPDKEnv(shmID int) (err error) {
-	opts := &C.struct_spdk_env_opts{}
-
-	C.spdk_env_opts_init(opts)
-
-	// shmID 0 will be ignored
-	if shmID > 0 {
-		opts.shm_id = C.int(shmID)
-	}
-
-	// quiet DPDK EAL logging by setting log level to ERROR
-	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
-
-	rc := C.spdk_env_init(opts)
-	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
-		return
-	}
+//	opts := &C.struct_spdk_env_opts{}
+//
+//	C.spdk_env_opts_init(opts)
+//
+//	// shmID 0 will be ignored
+//	if shmID > 0 {
+//		opts.shm_id = C.int(shmID)
+//	}
+//
+//	// quiet DPDK EAL logging by setting log level to ERROR
+//	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
+//
+//	rc := C.spdk_env_init(opts)
+//	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
+//		return
+//	}
 
 	return
 }
