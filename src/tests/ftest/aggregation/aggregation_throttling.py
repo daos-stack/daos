@@ -57,7 +57,8 @@ class DaosAggregationThrottling(IorTestBase):
             Also, verify the aggregation reclaimed the space used by
             second ior.
 
-        :avocado: tags=all,pr,hw,large,aggregate,daosio,aggregatethrottling
+        :avocado: tags=all,hw,large,full_regression,aggregate,daosio
+        :avocado: tags=aggregatethrottling
         """
 
         # Create pool and container
