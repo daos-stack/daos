@@ -1,35 +1,44 @@
 <configuration>
   <property>
     <name>fs.defaultFS</name>
-    <value>daos://default:1</value>
-    <description>Unique DAOS server URI which follows standard URI format, schema://ip:port.
-      For now, ip and port are not actually used by DAOS to connect to DAOS server since DAOS uses shared file
-      to connect to server. Instead ip and port here are used for representing pool uuid and container uuid on
-      which DAOS FS mounted. To make it flexible, ip and port are not real pool uuid and container  uuid, but
-      keys which are mapped to real uuids. Here is the convention.
+    <value>daos:///</value>
+    <description>Unique DAOS server URI which follows standard URI format, schema://[authority]/. 'schema' is fixed
+      'daos'. And '[authority]' is optional depending on your choices. Different from other file systems, pool UUID and
+      container UUID are needed to connect to DAOS instead of IP/port. And long UUIDs are not good choice put as URI
+      authority. Thus a mapping between authority and UUIDs is given here for simplicity if authority is necessary. Here
+      is the convention.
 
-      IP:
-      default means value of "fs.daos.pool.uuid".
-      pkey means value of "pkey.fs.daos.pool.uuid".
+      1, default URI without authority, 'daos:///'. It reads default values of "fs.daos.pool.uuid" and
+      "fs.daos.container.uuid". And try to read other optional configs prefixed with "fs.daos." from this file. Be sure
+      there is no DAOS URI with authority, like 'daos://fs/', configured to "fs.DefaultFS". Otherwise, you'll get
+      filesystem instance of 'daos://fs/' instead of your desired one, 'daos:///', after you called the Hadoop
+      FileSystem get methods, like 'get(uri, configuration)'.
 
-      Port:
-      1 means value of "fs.daos.container.uuid".
-      ckey (positive integer) means value of "cckey.fs.daos.container.uuid". (additional c due to  ckey is integer)
+      2, URI with authority, like 'daos://fs1/'. It reads values of "fs1.fs.daos.pool.uuid" and
+      "fs1.fs.daos.container.uuid" first. And try to read other optional configs from "fs1.fs.daos.*" first and
+      fall back to optional configs prefixed with "fs.daos." from this file.
 
-      Other configuration (fs.daos.*) values will be read first from pkeycckey.fs.daos.* and fall back to default
-      fs.daos.*.
-
-      For example,
-      daos://default:1 uses default values of "fs.daos.pool.uuid" and "fs.daos.container.uuid". And read other
-      default configurations.
-      daos://pool1:2 uses values of "pool1.fs.daos.pool.uuid" and "c2.fs.daos.container.uuid". And try to read
-      other configurations from pool1c2.fs.daos.* first and fall back to defaults.
+      The two UUID configs must be provided whilst the others are all optional. If this file is not provided in
+      classpath or the UUIDs are not configured, user should at least set "fs.daos.pool.uuid" and
+      "fs.daos.container.uuid" in Hadoop Configuration instance passed for getting file system. Configs from Hadoop have
+      higher priority than this file, including the UUIDs. And you should not prefix the configs with authority when set
+      them in Hadoop Configuration even URI has authority.
     </description>
+  </property>
+  <property>
+    <name>fs.daos.server.group</name>
+    <value>daos_server</value>
+    <description>daos server group</description>
   </property>
   <property>
     <name>fs.daos.pool.uuid</name>
     <value>uuid of pool</value>
     <description>UUID of DAOS pool</description>
+  </property>
+  <property>
+    <name>fs.daos.pool.flags</name>
+    <value>2</value>
+    <description>daos pool access flags, 1 for readonly, 2 for read/write, 4 for execute</description>
   </property>
   <property>
     <name>fs.daos.container.uuid</name>

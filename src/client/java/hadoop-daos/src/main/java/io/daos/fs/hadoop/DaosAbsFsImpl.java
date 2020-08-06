@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,13 +45,13 @@ public class DaosAbsFsImpl extends DelegateToFileSystem {
   }
 
   /**
-   * get DAOS FS default port which is {@link Constants#DAOS_CONFIG_CONTAINER_KEY_DEFAULT}.
-   * see resources/daos-site-example.xml for port usage in DAOS FS.
-   * @return default port
+   * not used in DAOS. Just return 1 as fake port.
+   *
+   * @return 1
    */
   @Override
   public int getUriDefaultPort() {
-    return Integer.valueOf(Constants.DAOS_CONFIG_CONTAINER_KEY_DEFAULT);
+    return 1;
   }
 
   @Override
