@@ -120,7 +120,9 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'pool_iv_value_alloc_internal': ('sgl->sg_iovs[0].iov_buf'),
                      'daos_prop_entry_copy': ('entry_dup->dpe_str'),
                      'daos_prop_dup': ('entry_dup->dpe_str'),
-                     'auth_cred_to_iov': ('packed')}
+                     'auth_cred_to_iov': ('packed'),
+                     'daos_csummer_alloc_iods_csums': ('buf'),
+		     'daos_sgl_init': ('sgl->sg_iovs')}
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
@@ -152,7 +154,9 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'pool_svc_load_uuid_cb': ('path'),
                     'ie_sclose': ('ie', 'dfs', 'dfp'),
                     'notify_ready': ('req.uri'),
-                    'get_tgt_rank': ('tgts')}
+                    'get_tgt_rank': ('tgts'),
+                    'obj_rw_reply': ('orwo->orw_iod_csums.ca_arrays'),
+                    'ds_csum_agg_recalc': ('sgl.sg_iovs')}
 
 mismatch_alloc_seen = {}
 mismatch_free_seen = {}

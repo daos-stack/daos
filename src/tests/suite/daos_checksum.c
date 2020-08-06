@@ -1441,6 +1441,10 @@ many_iovs_with_single_values(void **state)
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
 			    AKEY_NR, iods, sgls, NULL, NULL);
 	assert_int_equal(0, rc);
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
 }
 
 static void
@@ -1475,6 +1479,10 @@ request_non_existent_data(void **state)
 			    1, &ctx.fetch_iod,
 			    &ctx.fetch_sgl, NULL, NULL);
 	assert_success(rc);
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
 }
 
 static void
@@ -2069,7 +2077,7 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM13: Enumerate objects with too small csum buffer",
 		  test_enumerate_object_csum_buf_too_small),
 	CSUM_TEST("DAOS_CSUM14: Many IODs", many_iovs_with_single_values),
-	CSUM_TEST("DAOS_CSUM15: Request non existent data",
+	CSUM_TEST("bug DAOS_CSUM15: Request non existent data",
 		  request_non_existent_data),
 	CSUM_TEST("DAOS_CSUM16: Unaligned hole at beginning",
 		  unaligned_hole_at_beginning),
