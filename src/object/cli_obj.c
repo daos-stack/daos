@@ -2159,8 +2159,8 @@ shard_task_sched(tse_task_t *task, void *arg)
 		target = obj_shard2tgtid(shard_auxi->obj, shard_auxi->shard);
 		if (obj_auxi->req_tgts.ort_srv_disp ||
 		    obj_retry_error(task->dt_result) ||
-		    dtx_epoch_equal(&sched_arg->tsa_epoch,
-				    &shard_auxi->epoch) ||
+		    !dtx_epoch_equal(&sched_arg->tsa_epoch,
+				     &shard_auxi->epoch) ||
 		    target != shard_auxi->target) {
 			D_DEBUG(DB_IO, "shard %d, dt_result %d, target %d @ "
 				"map_ver %d, target %d @ last_map_ver %d, "
@@ -2293,10 +2293,10 @@ shard_io_task(tse_task_t *task)
 	th = shard_auxi->obj_auxi->th;
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(&shard_auxi->epoch)) {
 		rc = dc_tx_get_epoch(task, th, &shard_auxi->epoch);
+		if (rc < 0)
+			return rc;
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
-		else if (rc < 0)
-			return rc;
 	}
 
 	return shard_io(task, shard_auxi);
@@ -3604,10 +3604,10 @@ shard_query_key_task(tse_task_t *task)
 	/* See the similar shard_io_task. */
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
 		rc = dc_tx_get_epoch(task, th, epoch);
+		if (rc < 0)
+			return rc;
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
-		else if (rc < 0)
-			return rc;
 	}
 
 	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver,
