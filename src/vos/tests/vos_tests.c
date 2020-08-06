@@ -83,15 +83,15 @@ run_all_tests(int keys, bool nest_iterators)
 	const char	*it;
 	char		 cfg_desc_io[DTS_CFG_MAX];
 	int		 failed = 0;
-	//int		 feats; //DM
+	int		 feats;
 	int		 i;
 	int		 j;
 
 	if (!bypass) {
 		if (!nest_iterators) {
 			dts_create_config(cfg_desc_io, "keys=%d", keys);
-			//failed += run_ts_tests(cfg_desc_io); //DM
-			//failed += run_mvcc_tests(cfg_desc_io); //DM
+			failed += run_ts_tests(cfg_desc_io);
+			failed += run_mvcc_tests(cfg_desc_io);
 		}
 		bypass = "none";
 	}
@@ -99,15 +99,15 @@ run_all_tests(int keys, bool nest_iterators)
 	dts_create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
 
 	if (nest_iterators == false) {
-		//failed += run_pm_tests(cfg_desc_io); //DM
-		//failed += run_pool_test(cfg_desc_io); //DM
-		//failed += run_co_test(cfg_desc_io); //DM
-		//failed += run_discard_tests(cfg_desc_io); //DM
+		failed += run_pm_tests(cfg_desc_io);
+		failed += run_pool_test(cfg_desc_io);
+		failed += run_co_test(cfg_desc_io);
+		failed += run_discard_tests(cfg_desc_io);
 		failed += run_aggregate_tests(false, cfg_desc_io);
-		//failed += run_gc_tests(cfg_desc_io); //DM
-		//failed += run_dtx_tests(cfg_desc_io); //DM
-		//failed += run_ilog_tests(cfg_desc_io); //DM
-		//failed += run_csum_extent_tests(cfg_desc_io); //DM
+		failed += run_gc_tests(cfg_desc_io);
+		failed += run_dtx_tests(cfg_desc_io);
+		failed += run_ilog_tests(cfg_desc_io);
+		failed += run_csum_extent_tests(cfg_desc_io);
 
 		it = "standalone";
 	} else {
@@ -116,13 +116,13 @@ run_all_tests(int keys, bool nest_iterators)
 	dts_create_config(cfg_desc_io, "keys=%d bypass=%s iterator=%s", keys,
 		      bypass, it);
 
-	for (i = 0; dkey_feats[i] >= 0; i++) { //DM
-		for (j = 0; akey_feats[j] >= 0; j++) { //DM
-	//		feats = dkey_feats[i] | akey_feats[j]; //DM
-	//		failed += run_io_test(feats, keys, nest_iterators, //DM
-	//				      cfg_desc_io); //DM
-		} //DM
-	} //DM
+	for (i = 0; dkey_feats[i] >= 0; i++) {
+		for (j = 0; akey_feats[j] >= 0; j++) {
+			feats = dkey_feats[i] | akey_feats[j];
+			failed += run_io_test(feats, keys, nest_iterators,
+					      cfg_desc_io);
+		}
+	}
 
 	return failed;
 }
