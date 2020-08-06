@@ -33,6 +33,8 @@
 #include "daos_iotest.h"
 #include <daos/dtx.h>
 
+/* Only for test */
+
 static int dts_dtx_class	= OC_RP_3G1;
 static int dts_dtx_replica_cnt	= 3;
 static int dts_dtx_iosize	= 64;
