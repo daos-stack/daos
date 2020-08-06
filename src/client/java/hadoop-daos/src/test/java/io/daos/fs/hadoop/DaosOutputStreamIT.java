@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,21 +34,19 @@ import static org.junit.Assert.assertEquals;
  */
 public class DaosOutputStreamIT {
   private static FileSystem fs;
-  private static String testRootPath = DaosUtils.generateUniqueTestPath();
+  private static String testRootPath = DaosHadoopTestUtils.generateUniqueTestPath();
 
   @Rule
   public Timeout testTimeout = new Timeout(30 * 60 * 1000);
 
   @BeforeClass
   public static void setup() throws IOException {
-    System.out.println("@BeforeClass");
     fs = DaosFSFactory.getFS();
     fs.mkdirs(new Path(testRootPath));
   }
 
   @AfterClass
-  public  static void tearDown() throws Exception {
-    System.out.println("@AfterClass");
+  public static void tearDown() throws Exception {
     if (fs != null) {
       fs.delete(new Path(testRootPath), true);
     }
@@ -57,7 +55,7 @@ public class DaosOutputStreamIT {
 
   private Path getTestPath() throws IOException {
     Path p = new Path(testRootPath + "/daos");
-    if(!fs.exists(p)){
+    if (!fs.exists(p)) {
       fs.mkdirs(p);
     }
     return p;
@@ -73,7 +71,7 @@ public class DaosOutputStreamIT {
     ContractTestUtils.generateTestFile(fs, file, size, 256, 255);
     try {
       ContractTestUtils.generateTestFile(fs, file, size, 256, 255);
-    } catch (FileAlreadyExistsException e ) {
+    } catch (FileAlreadyExistsException e) {
       // throw new FileAlreadyExistsException
     }
     Assert.assertEquals(1024, fs.listStatus(file)[0].getLen());
@@ -89,7 +87,7 @@ public class DaosOutputStreamIT {
     FileSystem.clearStatistics();
     long size = 1024 * 1024;
     FileSystem.Statistics statistics =
-            FileSystem.getStatistics("daos", DaosFileSystem.class);
+        FileSystem.getStatistics("daos", DaosFileSystem.class);
     // This test is a little complicated for statistics, lifecycle is
     // generateTestFile
     //   fs.create(getFileStatus)    read 1
@@ -101,12 +99,11 @@ public class DaosOutputStreamIT {
     // fs.delete
     //   getFileStatus & delete & exists & create fake dir read 2, write 2
     ContractTestUtils.createAndVerifyFile(fs, getTestPath(), size - 1);
-    int readNum = (int) (size-1)/ Constants.DEFAULT_DAOS_PRELOAD_SIZE + 1;
+    int readNum = (int) (size - 1) / Constants.DEFAULT_DAOS_PRELOAD_SIZE + 1;
     assertEquals(readNum, statistics.getReadOps());
     assertEquals(size - 1, statistics.getBytesRead());
-    int writeNum = (int) (size-1)/ Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE + 1;
+    int writeNum = (int) (size - 1) / Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE + 1;
     assertEquals(writeNum, statistics.getWriteOps());
     assertEquals(size - 1, statistics.getBytesWritten());
   }
-
 }

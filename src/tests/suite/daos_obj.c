@@ -3110,7 +3110,6 @@ fetch_replica_unavail(void **state)
 	const char		 akey[] = "test_update akey";
 	const char		 rec[]  = "test_update record";
 	uint32_t		 size = 64;
-	daos_pool_info_t	 info = {0};
 	d_rank_t		 rank = 2;
 	char			*buf;
 	int			 rc;
@@ -3130,14 +3129,6 @@ fetch_replica_unavail(void **state)
 		      &req);
 
 	if (arg->myrank == 0) {
-		/** disable rebuild */
-		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
-		assert_int_equal(rc, 0);
-		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
-			DMG_KEY_FAIL_LOC, DAOS_REBUILD_DISABLE, 0,
-			NULL);
-		assert_int_equal(rc, 0);
-
 		/** exclude the target of this obj's replicas */
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, &arg->pool.svc, rank);
@@ -3153,10 +3144,6 @@ fetch_replica_unavail(void **state)
 	lookup_single(dkey, akey, 0, buf, size, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0) {
-		/* re-enable rebuild */
-		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
-					  DMG_KEY_FAIL_LOC, 0, 0, NULL);
-
 		/* wait until rebuild done */
 		test_rebuild_wait(&arg, 1);
 

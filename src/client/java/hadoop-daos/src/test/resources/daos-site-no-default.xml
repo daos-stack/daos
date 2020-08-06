@@ -1,7 +1,7 @@
 <configuration>
   <property>
     <name>fs.defaultFS</name>
-    <value>daos://default:1</value>
+    <value>daos:///</value>
   </property>
   <property>
     <name>fs.daos.pool.uuid</name>
@@ -53,12 +53,12 @@
   </property>
 
   <property>
-    <name>pool2.fs.daos.pool.uuid</name>
+    <name>pool2c2.fs.daos.pool.uuid</name>
     <value>pool2 uuid</value>
     <description>UUID of DAOS pool</description>
   </property>
   <property>
-    <name>c2.fs.daos.container.uuid</name>
+    <name>pool2c2.fs.daos.container.uuid</name>
     <value>c2 uuid</value>
     <description>UUID of DAOS container which created with "--type posix"</description>
   </property>
