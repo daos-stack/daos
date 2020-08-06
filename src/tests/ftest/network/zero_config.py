@@ -227,7 +227,7 @@ class ZeroConfigTest(TestWithServers):
             self.stop_agents()
             self.stop_servers()
 
-            # Remove server manger from list so we don't start 2 servers on the
+            # Remove server manager from list so we don't start 2 servers on the
             # next iteration.
             self.agent_managers.pop()
             self.server_managers.pop()
