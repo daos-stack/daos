@@ -43,23 +43,54 @@ class DaosServerTest(TestWithServers):
         """Initialize a DaosServerTest object."""
         super(DaosServerTest, self).__init__(*args, **kwargs)
 
-    def restart_daos_server(self):
-        """method to perform server stop and start"""
+    def restart_daos_server(self, reformat=True):
+        """method to perform server stop and start.
+        Args:
+            reformat (bool): always reformat storage, could be destructive.
 
+        """
+        self.log.info("=Restart daos_server, server stop().")
         try:
             self.server_managers[0].stop()
         except ServerFailed as error:
             self.fail(
-                "##Failed stopping server, %s", error)
+                "##Failed on restart daos_server, stopping server, %s", error)
+        self.log.info("=Restart daos_server, prepare().")
         try:
-            self.server_managers[0].start()
+            self.server_managers[0].prepare()
         except ServerFailed as error:
             self.fail(
-                "##Failed restartng server, %s", error)
+                "##Failed on restart daos_server, prepare(), %s", error)
+        self.log.info("=Restart daos_server, detect_format_ready().")
+        try:
+            self.server_managers[0].detect_format_ready()
+        except ServerFailed as error:
+            self.fail(
+                "##Failed on restart daos_server, detect_format_ready(), %s",
+                error)
+        self.log.info("=Restart daos_server, dmg storage_format.")
+        self.server_managers[0].dmg.exit_status_exception = False
+        try:
+            self.server_managers[0].dmg.storage_format(reformat)
+        except ServerFailed as error:
+            self.fail(
+                "##Failed on restart daos_server, dmg.storage_format(), %s",
+                error)
+        self.log.info("=Restart daos_server, detect_io_server_start().")
+        try:
+            self.server_managers[0].detect_io_server_start()
+        except ServerFailed as error:
+            self.fail(
+                "##Failed on restart daos_server, .detect_io_server_start(),"
+                " %s", error)
 
     def restart_daos_io_server(self, force=True):
-        """method to perform io_server stop and start by dmg"""
+        """method to perform io_server stop and start by dmg.
+        Args:
+            force (bool): Force to stop the daos io_server.
+            Defaults to True.
 
+        """
         try:
             self.server_managers[0].dmg.system_stop(force)
         except CommandFailure as error:
@@ -174,7 +205,6 @@ class DaosServerTest(TestWithServers):
             "(4)Verify pool list after forced shutdown and restart "
             "the daos io-server.")
         self.verify_pool_list(pool_list)
-
         hosts = self.hostlist_servers
         self.hostlist_servers = hosts[-1]
         self.log.info(
