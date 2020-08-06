@@ -46,6 +46,7 @@ struct dfuse_info {
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
 	bool				di_foreground;
+	bool				di_direct_io;
 	bool				di_caching;
 	/* List head of dfuse_pool entries */
 	d_list_t			di_dfp_list;
@@ -280,7 +281,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
-		if (__err == ENOTSUP || __err == EIO)			\
+		if (__err == ENOTSUP || __err == EIO || __err == EINVAL) \
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
@@ -355,15 +356,15 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 #if HAVE_CACHE_READDIR
 
-#define DFUSE_REPLY_OPEN(oh, req, fi)					\
+#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(oh, "Returning open");		\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(fi)->keep_cache = 1;				\
-			(fi)->cache_readdir = 1;			\
+			(_fi)->keep_cache = 1;				\
+			(_fi)->cache_readdir = 1;			\
 		}							\
-		__rc = fuse_reply_open(req, fi);			\
+		__rc = fuse_reply_open(req, _fi);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(oh,				\
 					"fuse_reply_open returned %d:%s", \
@@ -372,14 +373,14 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
 #else
 
-#define DFUSE_REPLY_OPEN(oh, req, fi)					\
+#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(oh, "Returning open");		\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(fi)->keep_cache = 1;				\
+			(_fi)->keep_cache = 1;				\
 		}							\
-		__rc = fuse_reply_open(req, fi);			\
+		__rc = fuse_reply_open(req, _fi);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(oh,				\
 					"fuse_reply_open returned %d:%s", \

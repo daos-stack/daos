@@ -1,7 +1,7 @@
 <configuration>
   <property>
     <name>fs.defaultFS</name>
-    <value>daos://default:1</value>
+    <value>daos:///</value>
   </property>
   <property>
     <name>fs.daos.pool.uuid</name>

@@ -239,7 +239,12 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 	 * Enumerate all cases of <rc_crt, rc_svc, hint>. Keep them at the same
 	 * indentation level, please.
 	 */
-	if (rc_crt == -DER_OOG) {
+	if (rc_crt == -DER_INVAL) {
+		D_DEBUG(DB_MD, "group-id %s does not exist for rank %u: rc_crt=%d\n",
+			ep->ep_grp->cg_grpid, ep->ep_rank, rc_crt);
+		rsvc_client_process_error(client, rc_crt, ep);
+		return RSVC_CLIENT_PROCEED;
+	} else if (rc_crt == -DER_OOG) {
 		D_DEBUG(DB_MD, "rank %u out of group: rc_crt=%d\n",
 			ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);

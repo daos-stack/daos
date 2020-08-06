@@ -33,5 +33,4 @@ public class DaosContractSeekIT extends AbstractContractSeekTest {
     configuration.set(Constants.DAOS_POOL_SVC, DaosFSFactory.svc);
     return new DaosContractIT(configuration);
   }
-
 }
