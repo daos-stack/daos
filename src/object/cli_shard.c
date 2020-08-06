@@ -320,7 +320,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	if (rc != 0) {
-		if (rc == -DER_INPROGRESS) {
+		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may "
 				"need retry: "DF_RC"\n", rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank,
@@ -1029,7 +1029,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 			D_DEBUG(DB_IO, "key size "DF_U64" too big.\n",
 				oeo->oeo_size);
 			enum_args->eaa_kds[0].kd_key_len = oeo->oeo_size;
-		} else if (rc == -DER_INPROGRESS) {
+		} else if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
 				""DF_RC"\n", enum_args->rpc, opc, DP_RC(rc));
 		} else {
@@ -1328,7 +1328,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		if (rc == -DER_NONEXIST)
 			D_GOTO(out, rc = 0);
 
-		if (rc == -DER_INPROGRESS)
+		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY)
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
 				cb_args->rpc, opc, rc);
 		else
@@ -1529,7 +1529,7 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 	if (rc == -DER_NONEXIST)
 		D_GOTO(out, rc = 0);
 
-	if (rc == -DER_INPROGRESS) {
+	if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
 		D_DEBUG(DB_TRACE,
 			"rpc %p OBJ_SYNC_RPC may need retry: rc = "DF_RC"\n",
 			rpc, DP_RC(rc));
