@@ -16,4 +16,4 @@ server_config:
   name: daos_server
   servers:
     bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
+    bdev_list: ["aaaa:aa:aa.a"]
