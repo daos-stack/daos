@@ -70,7 +70,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         """
         self.log.info("==>   Verify dmg output against expected output:")
         dmg_info = self.get_pool_query_info(self.uuid)
-        exp_info = self.params.get("exp_vals", "/run", {})
+        exp_info = self.params.get("exp_vals", default={})
 
         # Add the expected uuid value
         exp_info["uuid"] = self.uuid.upper()

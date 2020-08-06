@@ -503,7 +503,8 @@ class TestPool(TestDaosApiBase):
         checks = [
             (key,
              c_uuid_to_str(self.get_info_attr(key))
-             if key == "pi_uuid" else self.get_info_attr(key),
+             if key == "pi_uuid" and not isinstance(self.info, PoolInfo) else
+             self.get_info_attr(key),
              val)
             for key, val in locals().items()
             if key != "self" and val is not None]

@@ -424,11 +424,11 @@ class DmgCommand(DmgCommandBase):
         #   Rebuild <Q>, <R> objs, <S> recs
         #
         # This yields the following tuple of tuples when run through the regex:
-        #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '')
-        #   1: ('', '', '', '', '', <F>, '', '', '', '', '', '', '')
-        #   2: ('', '', '', '', '', '', <G>, <H>, <I>, <J>, <K>, '', '')
-        #   3: ('', '', '', '', '', '', <L>, <M>, <N>, <O>, <P>, '', '')
-        #   4: ('', '', '', '', '', '', '', '', '', '', <Q>, <R>, <S>)
+        #   0: (<A>, <B>, <C>, <D>, <E>, '', '', '', '', '', '', '', '', '')
+        #   1: ('', '', '', '', '', <F>, '', '', '', '', '', '', '', '')
+        #   2: ('', '', '', '', '', '', <G>, <H>, <I>, <J>, <K>, '', '', '')
+        #   3: ('', '', '', '', '', '', <L>, <M>, <N>, <O>, <P>, '', '', '')
+        #   4: ('', '', '', '', '', '', '', '', '', '', '', <Q>, <R>, <S>)
         #
         # This method will convert the regex result into the following dict:
         #   data = {
@@ -491,7 +491,7 @@ class DmgCommand(DmgCommandBase):
                 1: {"target_count": 5},
                 2: space_map,
                 3: space_map,
-                4: {"status": 10, "objects": 11, "records": 12}
+                4: {"status": 11, "objects": 12, "records": 13}
             }
             for index_1, match_list in enumerate(match):
                 if index_1 not in map_values:
