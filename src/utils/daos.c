@@ -452,6 +452,11 @@ enum {
 	DAOS_PROPERTIES_OPTION = 1,
 };
 
+/* resource and command arguments (ie "container create" for example) can be
+ * skipped for options evaluation
+ */
+#define SKIP_RES_AND_CMD_ARGS 2
+
 static int
 common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 {
@@ -530,10 +535,13 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (cmdname == NULL)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 
-	/* Parse command options. Use goto on any errors here
-	 * since some options may result in resource allocation.
+	/* Parse remaining command-line options (skip resource and command).
+	 * Use goto on any errors here since some options may result in
+	 * resource allocation.
 	 */
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc - SKIP_RES_AND_CMD_ARGS,
+				 &argv[SKIP_RES_AND_CMD_ARGS], "", options,
+				 NULL)) != -1) {
 		switch (rc) {
 		case 'G':
 			D_FREE(ap->sysname);
@@ -702,6 +710,13 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			fprintf(stderr, "unknown option : %d\n", rc);
 			D_GOTO(out_free, rc = RC_PRINT_HELP);
 		}
+	}
+
+	/* unexpected extra arguments not allowed */
+	if (optind < argc - SKIP_RES_AND_CMD_ARGS) {
+		fprintf(stderr, "unexpected extra argument : '%s'\n",
+			argv[optind + SKIP_RES_AND_CMD_ARGS]);
+		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
 	cmd_args_print(ap);
