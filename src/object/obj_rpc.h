@@ -111,8 +111,8 @@
 		0, &CQF_obj_migrate,					\
 		ds_obj_migrate_handler, NULL),				\
 	X(DAOS_OBJ_RPC_CPD,						\
-		0, NULL /* TBD */,					\
-		NULL /* TBD */, NULL)
+		0, &CQF_obj_cpd,					\
+		ds_obj_cpd_handler, NULL)
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 
@@ -154,21 +154,8 @@ enum obj_rpc_flags {
 	DRF_CPD_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
 	DRF_CPD_BULK		= (1 << 10),
-};
-
-struct obj_iod_array {
-	/* number of iods (oia_iods) */
-	uint32_t		 oia_iod_nr;
-	/* number obj iods (oia_oiods) */
-	uint32_t		 oia_oiod_nr;
-	daos_iod_t		*oia_iods;
-	struct dcs_iod_csums	*oia_iod_csums;
-	struct obj_io_desc	*oia_oiods;
-	/* byte offset array for target, need this info after RPC dispatched
-	 * to specific target server as there is no oiod info already.
-	 * one for each iod, NULL for replica.
-	 */
-	uint64_t		*oia_offs;
+	/* Contain EC split req, only used on CPD leader locally. */
+	DRF_HAS_EC_SPLIT	= (1 << 11),
 };
 
 /* common for update/fetch */
@@ -374,6 +361,8 @@ struct daos_cpd_update {
 		d_sg_list_t		*dcu_sgls;
 		crt_bulk_t		*dcu_bulks;
 	};
+	/* Pointer to EC split req, only used on server, not pack on-wrie. */
+	struct obj_ec_split_req		*dcu_ec_split_req;
 };
 
 struct daos_cpd_punch {
@@ -532,15 +521,6 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
-}
-
-static inline bool
-obj_is_tgt_modification_opc(uint32_t opc)
-{
-	return opc == DAOS_OBJ_RPC_TGT_UPDATE ||
-	       opc == DAOS_OBJ_RPC_TGT_PUNCH ||
-	       opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
-	       opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
 }
 
 static inline bool

@@ -540,10 +540,10 @@ init:
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
 			     true, tgt_cnt == 0 ? true : false, dth);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
-		"dti_cos_cnt %d: "DF_RC"\n",
+	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, leader "DF_UOID
+		", dti_cos_cnt %d: "DF_RC"\n",
 		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, dti_cos_cnt, DP_RC(rc));
+		dth->dth_ver, DP_UOID(*leader_oid), dti_cos_cnt, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dlh->dlh_subs);
