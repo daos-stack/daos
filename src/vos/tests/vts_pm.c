@@ -1630,6 +1630,16 @@ tx_end2:
 
 	/** Let's simulate replay scenario where rebuild replays a minor epoch
 	 * punch and an update with the same major epoch
+	 *
+	 * This can happen with something like the following
+	 * DTX does an update and commits at epoch 1.
+	 * DAOS takes a snapshot at epoch 2.
+	 * DTX does a distributed transaction that does punch and update at
+	 * 3.1 and 3.2, respectively and commits
+	 *
+	 * At some later time, rebuild runs.  While rebuilding the snapshot,
+	 * it will replay the future punch at 3.   Internally, on replay,
+	 * the minor epoch is set to MAX for updates and MAX - 1 for punch.
 	 */
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
 	iod.iod_type = DAOS_IOD_ARRAY;

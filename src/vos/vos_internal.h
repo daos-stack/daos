@@ -1122,7 +1122,7 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 	if (punch->pr_epc > epc)
 		return true;
 
-	if (punch->pr_minor_epc > minor_epc)
+	if (punch->pr_minor_epc >= minor_epc)
 		return true;
 
 	return false;

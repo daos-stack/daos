@@ -683,13 +683,7 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	d_list_t		*current;
 	d_list_t		*next;
 	bool			 insert;
-	struct vos_punch_record	 punched = {0};
 	int			 rc = 0;
-
-	if (filter) {
-		punched.pr_epc = filter->fr_punch_epc;
-		punched.pr_minor_epc = filter->fr_punch_minor_epc;
-	}
 
 	D_INIT_LIST_HEAD(&covered);
 	*num_visible = 0;
@@ -702,12 +696,9 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	evt_ent_array_for_each(this_ent, ent_array) {
 		next = evt_array_entry2link(this_ent);
 
-		if (punched.pr_epc >= this_ent->en_epoch) {
-			if (punched.pr_epc > this_ent->en_epoch ||
-			    punched.pr_minor_epc >= this_ent->en_minor_epc) {
-				this_ent->en_visibility = EVT_COVERED;
-				continue;
-			}
+		if (evt_entry_punched(this_ent, filter)) {
+			this_ent->en_visibility = EVT_COVERED;
+			continue;
 		}
 
 		evt_array_entry2le(this_ent)->le_prev = NULL;
