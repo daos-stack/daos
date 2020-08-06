@@ -331,9 +331,9 @@ dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
 		if (tx->tx_epoch.oe_first == 0)
 			tx->tx_epoch.oe_first = tx->tx_epoch.oe_value;
 		D_DEBUG(DB_IO, DF_X64"/%p: set: value="DF_U64" first="DF_U64
-			" flags="DF_X64"\n", th.cookie, task,
+			" flags=%x, rpc flags %x\n", th.cookie, task,
 			tx->tx_epoch.oe_value, tx->tx_epoch.oe_first,
-			tx->tx_epoch.oe_flags);
+			tx->tx_epoch.oe_flags, tx->tx_epoch.oe_rpc_flags);
 	}
 
 out:
