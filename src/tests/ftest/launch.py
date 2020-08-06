@@ -236,6 +236,27 @@ def set_test_environment(args):
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
 
+# Temporary debug function to troubleshoot write-permissions problem
+def dump_ls_output(ls_arg):
+    """Print the stdout and stderr of ls command.
+
+    Args:
+        arg (string): directory to run /bin/ls command on
+
+    Returns:
+        void
+
+    """
+
+    ls_cmd = "ls -ltrd " + ls_arg
+    out = subprocess.Popen(ls_cmd,
+               shell=True,
+               stdout=subprocess.PIPE,
+               stderr=subprocess.STDOUT)
+    stdout,stderr = out.communicate()
+    print("DEBUG: stdout of [" + ls_cmd + "]:\n {}".format(stdout))
+    print("DEBUG: stderr of [" + ls_cmd + "]:\n {}".format(stderr))
+
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
 
@@ -250,6 +271,10 @@ def get_output(cmd, check=True):
 
     """
     print("Running {}".format(" ".join(cmd)))
+    print("Running in cwd(): {}".format(os.getcwd()))
+    dump_ls_output('.')
+    dump_ls_output('*')
+
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     stdout, _ = process.communicate()
