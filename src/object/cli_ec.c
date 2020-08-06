@@ -1485,15 +1485,12 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 }
 
 int
-obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
+obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 		 struct daos_oclass_attr *oca, struct obj_reasb_req *reasb_req,
-		 bool update)
+		 uint32_t iod_nr, bool update)
 {
-	daos_iod_t		*iods = args->iods;
-	d_sg_list_t		*sgls = args->sgls;
-	uint32_t		 iod_nr = args->nr;
-	bool			 singv_only = true;
-	int			 i, rc = 0;
+	bool	singv_only = true;
+	int	i, rc = 0;
 
 	reasb_req->orr_oid = oid;
 	reasb_req->orr_iod_nr = iod_nr;

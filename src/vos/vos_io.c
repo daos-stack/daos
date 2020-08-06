@@ -1293,8 +1293,6 @@ out:
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
 		ioc->ic_recx_lists = NULL;
-		if (rc == -DER_NONEXIST && ioc->ic_read_ts_only)
-			rc = 0;
 		return vos_fetch_end(vos_ioc2ioh(ioc), rc);
 	}
 	return 0;
