@@ -65,7 +65,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 		},
 		{
 			"system query with bad ranklist",
-			"system query --ranks 0,2,fo,,4-8",
+			"system query --ranks 0,2,four,,4-8",
 			"",
 			errors.Errorf("creating numeric set from "),
 		},
