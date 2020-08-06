@@ -179,7 +179,7 @@ class DaosServerTest(TestWithServers):
         self.hostlist_servers = hosts[-1]
         self.log.info(
             "(5)Restart daos io server for the last server on the cluster."
-            "   self.hostlist_servers= ", self.hostlist_servers)
+            "   self.hostlist_servers= %s", self.hostlist_servers)
         self.restart_daos_io_server()
         self.verify_pool_list(pool_list)
         # Blocked by DAOS-3883 causing intermittent failures on CI
