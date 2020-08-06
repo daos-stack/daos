@@ -1087,7 +1087,8 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 		return -DER_INVAL;
 	npools_in = *npools;
 
-	dts_create_config(filename, "/tmp/dmg_pool_list_%d.json", (uint8_t)rand());
+	dts_create_config(filename, "/tmp/dmg_pool_list_%d.json",
+			  (uint8_t)rand());
 
 	rc = daos_dmg_json_contents("dmg pool list -i -j", filename,
 				    &parsed_json);
@@ -1136,7 +1137,7 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 			pools[i].mgpi_svc->rl_ranks[j] =
 				json_object_get_int(rank);
 			print_message("rl_ranks = %d\n",
-				pools[i].mgpi_svc->rl_ranks[j]);
+				      pools[i].mgpi_svc->rl_ranks[j]);
 		}
 	}
 
