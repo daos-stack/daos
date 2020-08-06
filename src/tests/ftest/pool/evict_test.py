@@ -112,8 +112,7 @@ class EvictTests(TestWithServers):
         # exception is expected
         except DaosApiError as result:
             if test_param == "BAD_SERVER_NAME":
-                # Due to DAOS-3835, no specific error code is available for now.
-                err = "-1025"
+                err = "-1003"
             else:
                 err = "-1005"
             status = err in str(result)
@@ -266,7 +265,7 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid server group name.
 
-        :avocado: tags=all,pool,full_regression,small,poolevict
+        :avocado: tags=all,pool,pr,full_regression,small,poolevict
         :avocado: tags=poolevict_bad_server_name
         """
         test_param = self.params.get("server_name", '/run/badparams/*')
