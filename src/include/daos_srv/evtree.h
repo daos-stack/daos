@@ -134,7 +134,9 @@ struct evt_filter {
 	struct evt_extent	fr_ex;	/**< extent range */
 	daos_epoch_range_t	fr_epr;	/**< epoch range */
 	/** higher level punch epoch (0 if not punched) */
-	daos_epoch_t		fr_punch;
+	daos_epoch_t		fr_punch_epc;
+	/** Minor epc for higher level punch */
+	uint16_t		fr_punch_minor_epc;
 };
 
 /** Log format of extent */
@@ -164,11 +166,12 @@ struct evt_filter {
 
 /** Log format of evtree filter */
 #define DF_FILTER			\
-	DF_EXT "@" DF_U64"-"DF_U64"(punch="DF_U64")"
+	DF_EXT "@" DF_X64"-"DF_X64"(punch="DF_X64".%d)"
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
-	(filter)->fr_epr.epr_hi, (filter)->fr_punch
+	(filter)->fr_epr.epr_hi, (filter)->fr_punch_epc,	\
+	(filter)->fr_punch_minor_epc
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -574,13 +577,11 @@ int evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
  * \a rect to \a ent_array.
  *
  * \param toh		[IN]		The tree open handle
- * \param epr		[IN]		Epoch range to search
- * \param extent	[IN]		The extent to search
+ * \param filter	[IN]		Describes the range to search
  * \param ent_array	[IN,OUT]	Pass in initialized list, filled in by
  *					the function
  */
-int evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
-	     const struct evt_extent *extent,
+int evt_find(daos_handle_t toh, const struct evt_filter *filter,
 	     struct evt_entry_array *ent_array);
 
 /**
