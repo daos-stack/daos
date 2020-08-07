@@ -66,14 +66,26 @@ class DaosCoreBase(TestWithServers):
         # Enable scalable endpoint (if requested) prior to starting the servers
         scalable_endpoint = self.params.get("scalable_endpoint", self.TEST_PATH)
         if scalable_endpoint:
-            for manager in self.server_managers:
-                for server_params in manager.job.yaml.server_params:
+            for server_mgr in self.server_managers:
+                for server_params in server_mgr.manager.job.yaml.server_params:
                     # Number of CaRT contexts should equal or be greater than
                     # the number of DAOS targets
-                    targets = server_params.get_value("scm_list")
+                    targets = server_params.get_value("targets")
+
+                    # Replace/Add the environment variable assignment strings,
+                    # e.g. "A=a", in the env_vars list
                     env_vars = server_params.get_value("env_vars")
-                    env_vars["CRT_CTX_SHARE_ADDR"] = "1"
-                    env_vars["CRT_CTX_NUM"] = str(targets)
+                    keys = [value.split("=")[0] for value in env_vars]
+                    assign_value_keys = {
+                        "CRT_CTX_SHARE_ADDR": "CRT_CTX_SHARE_ADDR=1",
+                        "CRT_CTX_NUM": "=".join(["CRT_CTX_NUM", str(targets)])
+                    }
+                    for key in assign_value_keys:
+                        if key in keys:
+                            index = keys.index(key)
+                            env_vars[index] = assign_value_keys[key]
+                        else:
+                            env_vars.append(assign_value_keys[key])
                     server_params.set_value("crt_ctx_share_addr", 1)
                     server_params.set_value("env_vars", env_vars)
 
