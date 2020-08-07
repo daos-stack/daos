@@ -83,8 +83,8 @@ class CartUtils():
         path = './hostfile'
 
         if not os.path.exists(path):
-            dump_ls_output('.')
-            dump_ls_output('*')
+            self.dump_ls_output('.')
+            self.dump_ls_output('*')
             os.makedirs(path)
         hostfile = path + "/hostfile" + str(unique)
 
