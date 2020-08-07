@@ -1050,7 +1050,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		vos_ilog_ts_mark(ts_set, ilog);
 
 	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, parent,
-			    info, ts_set, true);
+			    info, ts_set, true,
+			    (flags & VOS_OF_REPLAY_PC) != 0);
 
 	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;

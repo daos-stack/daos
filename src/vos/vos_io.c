@@ -767,7 +767,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	 * sorting and clipping of rectangles
 	 */
 	struct evt_entry_array	 ent_array = { 0 };
-	struct evt_extent	 extent;
+	struct evt_filter	 filter;
 	struct bio_iov		 biov = {0};
 	daos_size_t		 holes; /* hole width */
 	daos_size_t		 rsize;
@@ -780,11 +780,15 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	index = recx->rx_idx;
 	end   = recx->rx_idx + recx->rx_nr;
 
-	extent.ex_lo = index;
-	extent.ex_hi = end - 1;
+	filter.fr_ex.ex_lo = index;
+	filter.fr_ex.ex_hi = end - 1;
+	filter.fr_epr = *epr;
+	filter.fr_punch_epc = ioc->ic_akey_info.ii_prior_punch.pr_epc;
+	filter.fr_punch_minor_epc =
+		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
 
 	evt_ent_array_init(&ent_array);
-	rc = evt_find(toh, epr, &extent, &ent_array);
+	rc = evt_find(toh, &filter, &ent_array);
 	if (rc != 0)
 		goto failed;
 
@@ -801,7 +805,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		if (lo != index) {
 			D_ASSERTF(lo > index,
 				  DF_U64"/"DF_U64", "DF_EXT", "DF_ENT"\n",
-				  lo, index, DP_EXT(&extent),
+				  lo, index, DP_EXT(&filter.fr_ex),
 				  DP_ENT(ent));
 			holes += lo - index;
 		}
@@ -928,8 +932,8 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 	rc = vos_ilog_check(info, &epr, epr_out, true);
 out:
 	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC" epr_in="DF_X64"-"DF_X64
-		" punch="DF_X64" epr_out="DF_X64"-"DF_X64"\n", DP_RC(rc),
-		epr.epr_lo, epr.epr_hi, info->ii_prior_punch,
+		" punch="DF_PUNCH" epr_out="DF_X64"-"DF_X64"\n", DP_RC(rc),
+		epr.epr_lo, epr.epr_hi, DP_PUNCH(&info->ii_prior_punch),
 		epr_out ? epr_out->epr_lo : 0,
 		epr_out ? epr_out->epr_hi : 0);
 	return rc;
@@ -1947,7 +1951,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ? dth->dth_op_seq : 1);
+	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ?
+			  dth->dth_op_seq : VOS_MINOR_EPC_MAX);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));
@@ -2311,13 +2316,8 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_fetch_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
 			     fetch_flags, NULL, &ioh, dth);
 	if (rc) {
-		if (rc == -DER_INPROGRESS)
-			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "
-				"conflict modification: "DF_RC"\n",
-				DP_UOID(oid), DP_RC(rc));
-		else
-			D_ERROR("Fetch "DF_UOID" failed "DF_RC"\n",
-				DP_UOID(oid), DP_RC(rc));
+		VOS_TX_TRACE_FAIL(rc, "Cannot fetch "DF_UOID": "DF_RC"\n",
+				  DP_UOID(oid), DP_RC(rc));
 		return rc;
 	}
 
