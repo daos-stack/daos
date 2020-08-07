@@ -72,22 +72,21 @@ class DaosCoreBase(TestWithServers):
                     # the number of DAOS targets
                     targets = server_params.get_value("targets")
 
-                    # Replace/Add the environment variable assignment strings,
-                    # e.g. "A=a", in the env_vars list
+                    # Convert the list of variable assignments into a dictionary
+                    # of variable names and their values
                     env_vars = server_params.get_value("env_vars")
-                    keys = [value.split("=")[0] for value in env_vars]
-                    assign_value_keys = {
-                        "CRT_CTX_SHARE_ADDR": "CRT_CTX_SHARE_ADDR=1",
-                        "CRT_CTX_NUM": "=".join(["CRT_CTX_NUM", str(targets)])
-                    }
-                    for key in assign_value_keys:
-                        if key in keys:
-                            index = keys.index(key)
-                            env_vars[index] = assign_value_keys[key]
-                        else:
-                            env_vars.append(assign_value_keys[key])
+                    env_dict = {
+                        item.split("=")[0]: item.split("=")[1]
+                        for item in env_vars}
+                    env_dict["CRT_CTX_SHARE_ADDR"] = "1"
+                    if "CRT_CTX_NUM" not in env_dict or \
+                            int(env_dict["CRT_CTX_NUM"]) < int(targets):
+                        env_dict["CRT_CTX_NUM"] = str(targets)
                     server_params.set_value("crt_ctx_share_addr", 1)
-                    server_params.set_value("env_vars", env_vars)
+                    server_params.set_value(
+                        "env_vars",
+                        ["=".join(items) for items in env_dict.items()]
+                    )
 
         # Start the servers
         super(DaosCoreBase, self).start_server_managers()
