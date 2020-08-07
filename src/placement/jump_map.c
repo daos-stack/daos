@@ -290,7 +290,6 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 	struct pool_domain *next_dom;
 	struct pool_target *next_target;
 	uint32_t num_dom;
-	uint32_t fseq;
 	uint8_t status;
 
 	if (curr_dom->do_children == NULL)
@@ -303,26 +302,20 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 
 	if (curr_dom->do_children != NULL) {
 		next_dom = &curr_dom->do_children[num_dom - 1];
-		fseq = next_dom->do_comp.co_fseq;
 		status = next_dom->do_comp.co_status;
 
-		while (num_dom - 1 > 0 && fseq == 1 &&
-		       status == PO_COMP_ST_NEW) {
+		while (num_dom-1 > 0 && status == PO_COMP_ST_NEW) {
 			num_dom--;
 			next_dom = &curr_dom->do_children[num_dom - 1];
-			fseq = next_dom->do_comp.co_fseq;
 			status = next_dom->do_comp.co_status;
 		}
 	} else {
 		next_target = &curr_dom->do_targets[num_dom - 1];
-		fseq = next_target->ta_comp.co_fseq;
 		status = next_target->ta_comp.co_status;
 
-		while (num_dom - 1 > 0 && fseq == 0 &&
-		       status == PO_COMP_ST_NEW) {
+		while (num_dom-1 > 0 && status == PO_COMP_ST_NEW) {
 			num_dom--;
 			next_target = &curr_dom->do_targets[num_dom - 1];
-			fseq = next_target->ta_comp.co_fseq;
 			status = next_target->ta_comp.co_status;
 		}
 	}
@@ -1155,14 +1148,15 @@ jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 	/* Allocate space to hold the layout */
 	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr, &layout);
 	if (rc)
-		return 0;
-	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
-				 &add_layout);
-	if (rc)
-		goto out;
+		return rc;
 
 	D_INIT_LIST_HEAD(&remap_list);
 	D_INIT_LIST_HEAD(&add_list);
+
+	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
+			&add_layout);
+	if (rc)
+		goto out;
 
 	/* Get original placement */
 	rc = get_object_layout(jmap, layout, &jop, &remap_list, PL_PLACE, md);
