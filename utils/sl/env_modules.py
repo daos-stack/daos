@@ -196,6 +196,10 @@ class _env_module():
         except subprocess.CalledProcessError:
             print("Could not invoke module avail")
 
+def modules_clear():
+    """global function to clear all modules from environment"""
+    return self._module_func('clear')
+
 def load_mpi(mpi):
     """global function to load MPI into os.environ"""
     if _env_module.env_module_init is None:

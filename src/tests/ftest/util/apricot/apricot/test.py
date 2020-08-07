@@ -176,7 +176,13 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super(TestWithoutServers, self).setUp()
+
+        # Start with a clear Env Modules environment
+        modules_clear()
+
+        # Load Open MPI environment
         load_mpi('openmpi')
+
         self.orterun = find_executable('orterun')
         if self.orterun is None:
             self.fail("Could not find orterun")
