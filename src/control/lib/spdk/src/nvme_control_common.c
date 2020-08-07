@@ -86,9 +86,9 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  struct spdk_nvme_ctrlr *ctrlr,
 	  const struct spdk_nvme_ctrlr_opts *opts)
 {
-	int			 nsid, num_ns;
 	struct ctrlr_entry	*entry;
 	struct spdk_nvme_ns	*ns;
+	int			 nsid, num_ns;
 
 	entry = malloc(sizeof(struct ctrlr_entry));
 	if (entry == NULL) {
@@ -291,8 +291,8 @@ static int
 collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 {
 	struct dev_health_t			 *h_tmp;
-	struct spdk_nvme_health_information_page health_pg;
-	union spdk_nvme_critical_warning_state	 cwarn;
+	struct spdk_nvme_health_information_page  health_pg;
+	union spdk_nvme_critical_warning_state	  cwarn;
 
 	h_tmp = malloc(sizeof(struct dev_health_t));
 	if (h_tmp == NULL) {
