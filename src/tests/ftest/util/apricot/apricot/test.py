@@ -51,7 +51,7 @@ from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-from env_modules import load_mpi
+from env_modules import load_mpi, modules_purge
 from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
