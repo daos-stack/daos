@@ -39,6 +39,7 @@ func TestBdevRunnerPrepare(t *testing.T) {
 		testNrHugePages  = 42
 		testTargetUser   = "amos"
 		testPciWhitelist = "a,b,c"
+		testPciBlacklist = "x,y,z"
 	)
 
 	for name, tc := range map[string]struct {
@@ -83,6 +84,32 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				fmt.Sprintf("%s=%s", pciWhiteListEnv, testPciWhitelist),
 				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
+		},
+		"blacklist": {
+			req: PrepareRequest{
+				HugePageCount: testNrHugePages,
+				TargetUser:    testTargetUser,
+				PCIBlacklist:  testPciBlacklist,
+				DisableVFIO:   true,
+			},
+			expEnv: []string{
+				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
+				fmt.Sprintf("%s=%s", pciBlackListEnv, testPciBlacklist),
+				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
+			},
+		},
+		"blacklist whitelist fails": {
+			req: PrepareRequest{
+				HugePageCount: testNrHugePages,
+				TargetUser:    testTargetUser,
+				PCIBlacklist:  testPciBlacklist,
+				PCIWhitelist:  testPciWhitelist,
+				DisableVFIO:   true,
+			},
+			expErr: errors.New(
+				"SPDK prepare: bdev_include and bdev_exclude can't be used together"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
