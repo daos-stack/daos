@@ -587,10 +587,10 @@ void d_getenv_int(const char *env, unsigned *int_val)
 int
 d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 {
-	int n;
-	int size = 64;
-	char *new_buf;
-	va_list ap;
+	int	n;
+	int	size = 64;
+	char	*new_buf;
+	va_list	ap;
 
 	if (buf == NULL || buf->status != 0) {
 		return -DER_NO_PERM;
@@ -619,7 +619,8 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 
 		if ((buf->str_size + n) < buf->buf_size) {
 			buf->str_size += n;
-			return 0;
+			buf->status = DER_SUCCESS;
+			return DER_SUCCESS;
 		}
 
 		size = buf->buf_size * 2;

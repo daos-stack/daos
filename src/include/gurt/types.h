@@ -102,13 +102,13 @@ typedef struct {
  */
 struct d_string_buffer_t {
 	/** c string status */
-	unsigned int status;
+	int	status;
 	/** c string size */
-	size_t str_size;
+	size_t	str_size;
 	/** buffer size */
-	size_t buf_size;
+	size_t	buf_size;
 	/** c string buffer address */
-	char *str;
+	char	*str;
 };
 
 static inline void

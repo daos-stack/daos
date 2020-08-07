@@ -1904,6 +1904,7 @@ check_string_buffer(struct d_string_buffer_t *str_buf, int str_size,
 	assert_non_null(str_buf->str);
 	assert_int_equal(str_buf->str_size, str_size);
 	assert_int_equal(str_buf->buf_size, buf_size);
+	assert_int_equal(str_buf->status, 0);
 	if (test_str != NULL) {
 		assert_string_equal(str_buf->str, test_str);
 	}
@@ -1915,6 +1916,7 @@ test_gurt_string_buffer(void **state)
 {
 	int rc, i;
 	struct d_string_buffer_t str_buf = {0};
+	wchar_t wbuf[2] = {129, 0};
 
 	/* empty string */
 	rc = d_write_string_buffer(&str_buf, "");
@@ -1949,6 +1951,23 @@ test_gurt_string_buffer(void **state)
 		assert_return_code(rc, errno);
 	}
 	check_string_buffer(&str_buf, 24 * i, 4096, NULL);
+
+	/* run as string buffer */
+	for (i = 0; i < 100; i++) {
+		d_write_string_buffer(&str_buf,
+				      "experience what's inside");
+	}
+	check_string_buffer(&str_buf, 24 * i, 4096, NULL);
+
+	/* run as string buffer with encoding error */
+	d_write_string_buffer(&str_buf, "Only");
+	d_write_string_buffer(&str_buf, " the%ls", wbuf);
+	d_write_string_buffer(&str_buf, " paranoid");
+	d_write_string_buffer(&str_buf, " survive");
+
+	assert_int_not_equal(str_buf.status, 0);
+	assert_string_equal(strerror(errno),
+			    "Invalid or incomplete multibyte or wide character");
 
 	d_free_string(&str_buf);
 	assert_null(str_buf.str);
