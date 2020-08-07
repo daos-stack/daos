@@ -24,7 +24,7 @@
 #include <daos/common.h>
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
-#include <gurt/errno.h>
+#include <daos_errno.h>
 
 #include <stdlib.h>
 #include <sys/socket.h>

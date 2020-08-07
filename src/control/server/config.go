@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -49,8 +50,8 @@ const (
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
-type networkProviderValidation func(string, string) error
-type networkNUMAValidation func(string, uint) error
+type networkProviderValidation func(context.Context, string, string) error
+type networkNUMAValidation func(context.Context, string, uint) error
 type networkDeviceClass func(string) (uint32, error)
 
 // ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
@@ -459,13 +460,19 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
+	netCtx, err := netdetect.Init(context.Background())
+	defer netdetect.CleanUp(netCtx)
+	if err != nil {
+		return err
+	}
+
 	for i, srv := range c.Servers {
 		srv.Fabric.Update(c.Fabric)
 		if err := srv.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
 
-		err := c.validateProviderFn(srv.Fabric.Interface, srv.Fabric.Provider)
+		err := c.validateProviderFn(netCtx, srv.Fabric.Interface, srv.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "Network device %s does not support provider %s.  The configuration is invalid.",
 				srv.Fabric.Interface, srv.Fabric.Provider)
@@ -477,7 +484,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 		// Because this is an optional parameter, this is considered non-fatal.
 		numaNode, err := srv.Fabric.GetNumaNode()
 		if err == nil {
-			err = c.validateNUMAFn(srv.Fabric.Interface, numaNode)
+			err = c.validateNUMAFn(netCtx, srv.Fabric.Interface, numaNode)
 			if err != nil {
 				return errors.Wrapf(err, "Network device %s on NUMA node %d is an invalid configuration.",
 					srv.Fabric.Interface, numaNode)

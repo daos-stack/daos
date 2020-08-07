@@ -25,7 +25,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"strings"
 
@@ -55,12 +54,13 @@ type smdQueryCmd struct {
 func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...control.PrintConfigOption) error {
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
@@ -96,12 +96,13 @@ func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
 	req := &control.StorageScanReq{}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
