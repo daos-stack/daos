@@ -58,9 +58,7 @@ class CartUtils():
 
         unique = random.randint(1, 100000)
 
-        avocado_data_dir = avocado.core.data_dir.get_data_dir()
-        _path = tempfile.mkdtemp(prefix = avocado_data_dir + '/hostfile-')
-        path = _path + '/hostfile'
+        path = './hostfile'
 
         if not os.path.exists(path):
             os.makedirs(path)
@@ -135,13 +133,10 @@ class CartUtils():
         host_cfg = cartobj.params.get("config", "/run/hosts/*/")
 
         if env_CCSA is not None:
-            _log_dir = "{}-{}".format(test_name, env_CCSA)
+            log_dir = "{}-{}".format(test_name, env_CCSA)
         else:
-            _log_dir = "{}".format(test_name)
+            log_dir = "{}".format(test_name)
 
-        avocado_log_dir = avocado.core.data_dir.get_logs_dir()
-
-        log_dir = os.path.join(avocado_log_dir, _log_dir)
         log_path = os.path.join("testLogs", log_dir)
         log_file = os.path.join(log_path, "cart.log")
 
