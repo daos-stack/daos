@@ -641,10 +641,6 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	int			 nfailed = 0;
 	int			 rc;
 
-#if 0 /* FIXME: Many "same TX" cases fail currently. */
-	if (same_tx)
-		goto out;
-#endif
 	if (is_excluded(empty, r, rp, re, w, wp, we, same_tx))
 		goto out;
 
