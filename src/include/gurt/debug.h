@@ -29,7 +29,7 @@
 #include <assert.h>
 
 #include <gurt/debug_setup.h>
-#include <gurt/errno.h>
+#include <daos_errno.h>
 
 /**
  * \file

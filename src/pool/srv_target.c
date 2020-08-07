@@ -158,6 +158,7 @@ start_gc_ult(struct ds_pool_child *child)
 
 	D_ASSERT(gc != ABT_THREAD_NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 	child->spc_gc_req = sched_req_get(&attr, gc);
 	if (child->spc_gc_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
