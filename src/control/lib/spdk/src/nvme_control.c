@@ -113,9 +113,39 @@ struct hello_world_sequence {
 };
 
 static void
+wipe_read_complete(void *arg, const struct spdk_nvme_cpl *completion)
+{
+	struct hello_world_sequence *sequence = arg;
+
+	/* Assume the I/O was successful */
+	sequence->is_completed = 1;
+	/* See if an error occurred. If so, display information
+	 * about it, and set completion value so that I/O
+	 * caller is aware that an error occurred.
+	 */
+	if (spdk_nvme_cpl_is_error(completion)) {
+		spdk_nvme_qpair_print_completion(sequence->ns_entry->qpair, (struct spdk_nvme_cpl *)completion);
+		fprintf(stderr, "I/O error status: %s\n", spdk_nvme_cpl_get_status_string(&completion->status));
+		fprintf(stderr, "Read I/O failed, aborting run\n");
+		sequence->is_completed = 2;
+	}
+
+	/*
+	 * The read I/O has completed.  Print the contents of the
+	 *  buffer, free the buffer, then mark the sequence as
+	 *  completed.  This will trigger the hello_world() function
+	 *  to exit its polling loop.
+	 */
+	printf("%s", sequence->buf);
+	spdk_free(sequence->buf);
+}
+
+static void
 wipe_write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 {
 	struct hello_world_sequence	*sequence = arg;
+	struct ns_entry			*ns_entry = sequence->ns_entry;
+	int				rc;
 
 	/* See if an error occurred. If so, display information
 	 * about it, and set completion value so that I/O
@@ -128,9 +158,26 @@ wipe_write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 		sequence->is_completed = 2;
 		exit(1);
 	}
-	/* Assume the I/O was successful */
-	sequence->is_completed = 1;
+	/*
+	 * The write I/O has completed.  Free the buffer associated with
+	 *  the write I/O and allocate a new zeroed buffer for reading
+	 *  the data back from the NVMe namespace.
+	 */
+//	if (sequence->using_cmb_io) {
+//		spdk_nvme_ctrlr_free_cmb_io_buffer(ns_entry->ctrlr, sequence->buf, 0x1000);
+//	} else {
 	spdk_free(sequence->buf);
+//	}
+	sequence->buf = spdk_zmalloc(0x1000, 0x1000, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+
+	rc = spdk_nvme_ns_cmd_read(ns_entry->ns, ns_entry->qpair, sequence->buf,
+				   0, /* LBA start */
+				   1, /* number of LBAs */
+				   wipe_read_complete, (void *)sequence, 0);
+	if (rc != 0) {
+		fprintf(stderr, "starting read I/O failed\n");
+		exit(1);
+	}
 }
 
 static void
@@ -165,23 +212,30 @@ hello_world(void)
 		 * will be pinned, whichis required for data buffers used for SPDK NVMe
 		  I/O operations.
 		 */
-		sequence.using_cmb_io = 1;
-		sequence.buf = spdk_nvme_ctrlr_alloc_cmb_io_buffer(ns_entry->ctrlr, 0x1000);
-		if (sequence.buf == NULL) {
-			sequence.using_cmb_io = 0;
-			sequence.buf = spdk_zmalloc(0x1000, 0x1000, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
-		}
+//		sequence.using_cmb_io = 1;
+//		sequence.buf = spdk_nvme_ctrlr_alloc_cmb_io_buffer(ns_entry->ctrlr, 0x1000);
+//		if (sequence.buf == NULL) {
+//			sequence.using_cmb_io = 0;
+		sequence.buf = spdk_zmalloc(0x1000, 0x1000, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+//		}
 		if (sequence.buf == NULL) {
 			fprintf(stderr, "ERROR: write buffer allocation failed\n");
 			return;
 		}
-		if (sequence.using_cmb_io) {
-			fprintf(stderr, "INFO: using controller memory buffer for IO\n");
-		} else {
-			fprintf(stderr, "INFO: using host memory buffer for IO\n");
-		}
+//		if (sequence.using_cmb_io) {
+//			fprintf(stderr, "INFO: using controller memory buffer for IO\n");
+//		} else {
+		fprintf(stderr, "INFO: using host memory buffer for IO\n");
+//		}
 		sequence.is_completed = 0;
 		sequence.ns_entry = ns_entry;
+
+		/*
+		 * Print "Hello world!" to sequence.buf.  We will write this data to LBA
+		 *  0 on the namespace, and then later read it back into a separate buffer
+		 *  to demonstrate the full I/O path.
+		 */
+		//snprintf(sequence.buf, 0x1000, "%s", "\n");
 
 		/*
 		 * Write the data buffer to LBA 0 of this namespace.  "write_complete" and
@@ -220,7 +274,11 @@ hello_world(void)
 		 *  break this loop and then exit the program.
 		 */
 		while (!sequence.is_completed) {
-			spdk_nvme_qpair_process_completions(ns_entry->qpair, 0);
+			rc = spdk_nvme_qpair_process_completions(ns_entry->qpair, 0);
+			if (rc < 0) {
+				fprintf(stderr, "process completions returns %d\n", rc);
+				break;
+			}
 		}
 
 		/*
