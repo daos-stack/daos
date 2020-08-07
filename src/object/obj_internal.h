@@ -493,8 +493,7 @@ struct obj_io_context {
 	struct ds_cont_child	*ioc_coc;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
-	uint32_t		 ioc_began:1,
-				 ioc_csummer_init:1;
+	uint32_t		 ioc_began:1;
 };
 
 struct ds_obj_exec_arg {

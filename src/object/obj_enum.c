@@ -208,7 +208,7 @@ fill_key_csum(vos_iter_entry_t *key_ent, struct dss_enum_arg *arg)
 	struct dcs_csum_info	*csum_info;
 	int			 rc;
 
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_calc)
 		return 0;
 
 	rc = daos_csummer_calc_key(csummer, &key_ent->ie_key, &csum_info);
