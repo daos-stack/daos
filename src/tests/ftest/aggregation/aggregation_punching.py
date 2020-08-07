@@ -82,11 +82,15 @@ class AggregationPunching(MdtestBase):
         free_space_after_mdtest =\
             pool_info.pi_space.ps_space.s_free[storage_index]
 
-        self.log.info("Free space after mdtest == initial free space" +
-                      " - mdtest_data")
-        self.log.info("{} == {}".format(
+        self.log.info("free_space_after_mdtest <= initial_free_space" +
+                      " - mdtest_data_size")
+        self.log.info("mdtest_data_size = {}".format(mdtest_data_size))
+        self.log.info("Storage Index = {}".format(
+            "NVMe" if storage_index else "SCM"))
+        self.log.info("{} <= {}".format(
             free_space_after_mdtest, initial_free_space-mdtest_data_size))
-        self.assertTrue(free_space_after_mdtest < initial_free_space)
+        self.assertTrue(free_space_after_mdtest <
+                        initial_free_space - mdtest_data_size)
 
         # Enable the aggregation
         self.log.info("Enabling aggregation")
@@ -96,14 +100,16 @@ class AggregationPunching(MdtestBase):
         self.log.info("Verifying the aggregation deleted the punched" +
                       " records and space is reclaimed")
 
+        expected_free_space = free_space_after_mdtest + mdtest_data_size
+
         # For the given mdtest configuration, the aggregation should
-        # be done in less than 120 seconds.
-        while counter < 4:
+        # be done in less than 150 seconds.
+        while counter < 5:
             pool_info = self.pool.pool.pool_query()
             final_free_space =\
                 pool_info.pi_space.ps_space.s_free[storage_index]
 
-            if final_free_space == initial_free_space:
+            if final_free_space >= expected_free_space:
                 break
             else:
                 self.log.info("Space is not reclaimed yet !")
@@ -115,6 +121,9 @@ class AggregationPunching(MdtestBase):
         final_free_space =\
             pool_info.pi_space.ps_space.s_free[storage_index]
 
-        self.log.info("{} == {}".format(
-            final_free_space, initial_free_space))
-        self.assertTrue(final_free_space == initial_free_space)
+        self.log.info("Checking if space is reclaimed")
+        self.log.info("final_free_space >=" +
+                      " free_space_after_mdtest + mdtest_data_size")
+        self.log.info("{} >= {}".format(
+            final_free_space, expected_free_space))
+        self.assertTrue(final_free_space >= expected_free_space)
