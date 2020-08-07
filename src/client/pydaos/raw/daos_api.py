@@ -1524,7 +1524,7 @@ class DaosContainer(object):
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
-                params = [self.poh, self.uuid, None, None, event]
+                params = [self.poh, self.uuid, None, event]
             else:
                 params = [self.poh, self.uuid, ctypes.byref(self.cont_prop),
                           None, event]
