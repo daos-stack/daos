@@ -287,6 +287,13 @@ ilog_ts_idx_get(struct ilog_df *ilog_df);
 uint32_t
 ilog_version_get(daos_handle_t loh);
 
+/** Returns true if there is a punch minor epoch */
+static inline bool
+ilog_has_punch(const struct ilog_entry *entry)
+{
+	return entry->ie_id.id_punch_minor_eph > 0;
+}
+
 static inline bool
 ilog_is_punch(const struct ilog_entry *entry)
 {

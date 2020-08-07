@@ -811,7 +811,7 @@ struct vos_iter_info {
 	d_iov_t			*ii_akey; /* conditional akey */
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
-	daos_epoch_t		 ii_punched;
+	struct vos_punch_record	 ii_punched;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -889,7 +889,7 @@ struct vos_obj_iter {
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** highest epoch where parent obj/key was punched */
-	daos_epoch_t		 it_punched;
+	struct vos_punch_record	 it_punched;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
 	/* reference on the object */
@@ -1121,5 +1121,21 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
+
+static inline bool
+vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
+		const struct vos_punch_record *punch)
+{
+	if (punch->pr_epc < epc)
+		return false;
+
+	if (punch->pr_epc > epc)
+		return true;
+
+	if (punch->pr_minor_epc >= minor_epc)
+		return true;
+
+	return false;
+}
 
 #endif /* __VOS_INTERNAL_H__ */
