@@ -126,6 +126,14 @@ struct dev_health_entry {
 };
 
 extern struct ctrlr_entry	*g_controllers;
+extern struct ns_entry		*g_namespaces;
+
+bool
+probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
+	 struct spdk_nvme_ctrlr_opts *opts);
+
+void
+register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns);
 
 /**
  * Attach call back function to report a device that has been

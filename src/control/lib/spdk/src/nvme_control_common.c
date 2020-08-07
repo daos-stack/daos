@@ -28,18 +28,19 @@
 #include "nvme_control_common.h"
 
 struct ctrlr_entry	*g_controllers;
+struct ns_entry		*g_namespaces;
 
-static bool
+bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	 struct spdk_nvme_ctrlr_opts *opts)
 {
 	return true;
 }
 
-static void
+void
 register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 {
-	struct ns_entry				*nentry;
+	struct ns_entry				*nentry, *ngentry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 
 	/*
@@ -67,6 +68,17 @@ register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 	nentry->ns = ns;
 	nentry->next = centry->nss;
 	centry->nss = nentry;
+
+	ngentry = malloc(sizeof(struct ns_entry));
+	if (ngentry == NULL) {
+		perror("ns_entry malloc");
+		exit(1);
+	}
+
+	ngentry->ctrlr =  centry->ctrlr;
+	ngentry->ns = ns;
+	ngentry->next = g_namespaces;
+	g_namespaces = ngentry;
 }
 
 void
@@ -176,9 +188,10 @@ get_controller(struct ctrlr_entry **entry, char *addr)
 struct ret_t *
 _discover(prober probe, bool detach, health_getter get_health)
 {
-	int			 rc;
 	struct ctrlr_entry	*ctrlr_entry;
 	struct dev_health_entry	*health_entry;
+	struct ret_t		*ret;
+	int			 rc;
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -217,7 +230,10 @@ _discover(prober probe, bool detach, health_getter get_health)
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
-	return collect();
+	ret = collect();
+	cleanup(detach);
+	return ret;
+
 fail:
 	cleanup(detach);
 	return init_ret(rc);
