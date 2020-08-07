@@ -373,18 +373,6 @@ if grep \"testsuite.setAttribute('name', 'avocado')\" \
 wq
 EOF
 fi
-# apply fix for https://github.com/avocado-framework/avocado/commit/bfab1c6b20f8489c343cfc8c8964d8905b0f72a1
-if grep \"from xml.dom.minidom import Document, Element\" \
-    /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py; then
-    sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py
-/from xml.dom.minidom import Document, Element/s/, Element//
-/element = Element(element_type)/s/Element/document.createElement/
-/system_out = Element('system-out')/s/Element/document.createElement/
-/testcase.appendChild(Element('skipped'))/s/Element/document.createElement/
-/testcase.appendChild(Element('skipped'))/s/Element/document.createElement/
-wq
-EOF
-fi
 
 pushd $PREFIX/lib/daos/TESTING/ftest
 

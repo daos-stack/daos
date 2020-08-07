@@ -753,6 +753,7 @@ def run_tests(test_files, tag_filter, args):
         "--ignore-missing-references", "on",
         "--html-job-result", "on",
         "--tap-job-result", "off",
+        "--show", "app,avocado.debug",
     ]
     if not args.sparse:
         command_list.append("--show-job-log")
