@@ -345,7 +345,10 @@ class CartUtils():
         #pylint: enable=undefined-variable
 
         try:
-            subprocess.check_call(['sh', '-l', '-c', 'module -V'])
+            with open(os.devnull, 'w') as devnull:
+                subprocess.check_call(['sh', '-l', '-c', 'module -V'], 
+                  stdout=devnull,
+                  stderr=devnull)
         except subprocess.CalledProcessError:
             # older version of module return -1
             return self.init_mpi_old(load[0])
