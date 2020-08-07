@@ -290,8 +290,6 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 	/** Set the lower bounds for the entry */
 	entry->te_hash_idx = hash_idx;
 	entry->te_record_ptr = idx;
-	uuid_clear(entry->te_tx_rl);
-	uuid_clear(entry->te_tx_rh);
 	TS_TRACE("Allocated", entry, *idx, type);
 
 	D_ASSERT(type == info->ti_type);
