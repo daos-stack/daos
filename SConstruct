@@ -22,7 +22,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
                  '-Wframe-larger-than=4096',
-		 ' -mavx2']
+                 ' -mavx2']
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
