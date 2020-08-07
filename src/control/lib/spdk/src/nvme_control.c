@@ -142,9 +142,9 @@ wipe(void)
 			return;
 		}
 
-		sequence->buf = spdk_zmalloc(0x1000, 0x1000, NULL,
-					     SPDK_ENV_SOCKET_ID_ANY,
-					     SPDK_MALLOC_DMA);
+		sequence.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
+					    SPDK_ENV_SOCKET_ID_ANY,
+					    SPDK_MALLOC_DMA);
 		if (sequence.buf == NULL) {
 			fprintf(stderr, "write buffer allocation failed\n");
 			return;

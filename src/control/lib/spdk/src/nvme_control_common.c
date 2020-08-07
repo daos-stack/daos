@@ -231,7 +231,7 @@ _discover(prober probe, bool detach, health_getter get_health)
 	}
 
 	ret = collect();
-	cleanup(detach);
+	//cleanup(detach);
 	return ret;
 
 fail:
