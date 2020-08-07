@@ -1,5 +1,5 @@
-/*
- * (C) Copyright 2018-2020 Intel Corporation.
+/**
+ * (C) Copyright 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,28 +21,17 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-/**
- * DAOS Implementation of Hadoop File System.
- *
- * <pre>
- * To get instance of DAOS Implementation, {@link io.daos.fs.hadoop.DaosFileSystem}, user just needs to make
- * below statements after proper hadoop configuration.
- * <code>
- * Configuration cfg = new Configuration();
- * cfg.set(Constants.DAOS_POOL_UUID, poolUuid);
- * cfg.set(Constants.DAOS_CONTAINER_UUID, containerUuid);
- * cfg.set(Constants.DAOS_POOL_SVC, svc);
- * FileSystem fileSystem = FileSystem.get(URI.create("daos://ip:port/"), cfg);
- * </code>
- * </pre>
- *
- * <p>
- * Be noted the schema is {@link io.daos.fs.hadoop.Constants#DAOS_SCHEMA}
- *
- * <p>
- * For hadoop configuration, please refer {@linkplain io.daos.fs.hadoop.DaosFileSystem DaosFileSystem}
- *
- * @see io.daos.fs.hadoop.DaosFileSystem
- */
-package io.daos.fs.hadoop;
+#ifndef __DAOS_DEDUP_H
+#define __DAOS_DEDUP_H
 
+#include <cont_props.h>
+
+int
+dedup_get_csum_algo(struct cont_props *cont_props);
+
+void
+dedup_configure_csummer(struct daos_csummer *csummer,
+			struct cont_props *cont_props);
+
+
+#endif /** __DAOS_DEDUP_H */
