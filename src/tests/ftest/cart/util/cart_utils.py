@@ -374,6 +374,9 @@ class CartUtils():
 
         self.print("\nCMD : %s\n" % cmd)
 
+        import os
+        self.print("\nENV : %s\n" % os.environ)
+
         cmd = shlex.split(cmd)
         rtn = subprocess.call(cmd)
 
