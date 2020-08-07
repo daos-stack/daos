@@ -178,7 +178,7 @@ class TestWithoutServers(Test):
         super(TestWithoutServers, self).setUp()
 
         # Start with a clear Env Modules environment
-        modules_clear()
+        modules_purge()
 
         # Load Open MPI environment
         load_mpi('openmpi')

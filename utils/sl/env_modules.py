@@ -200,6 +200,10 @@ def modules_clear():
     """global function to clear all modules from environment"""
     return self._module_func('clear')
 
+def modules_purge():
+    """global function to purge all modules from environment"""
+    return self._module_func('purge')
+
 def load_mpi(mpi):
     """global function to load MPI into os.environ"""
     if _env_module.env_module_init is None:
