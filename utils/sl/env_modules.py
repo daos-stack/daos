@@ -138,6 +138,7 @@ class _env_module():
                 self._module_func('unload', to_unload)
 
         for to_load in load:
+            self._module_func('purge')
             if self._module_func('load', to_load):
                 print("Loaded %s" % to_load)
                 return True
@@ -195,14 +196,6 @@ class _env_module():
                 print("Modules doesn't appear to be installed")
         except subprocess.CalledProcessError:
             print("Could not invoke module avail")
-
-def modules_clear():
-    """global function to clear all modules from environment"""
-    return self._module_func('clear')
-
-def modules_purge():
-    """global function to purge all modules from environment"""
-    return self._module_func('purge')
 
 def load_mpi(mpi):
     """global function to load MPI into os.environ"""
