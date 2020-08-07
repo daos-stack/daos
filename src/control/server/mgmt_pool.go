@@ -476,12 +476,12 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", *newReq)
-
-	req.SvcRanks, err = svc.getPoolServiceRanks(req.GetUuid())
+	newReq.SvcRanks, err = svc.getPoolServiceRanks(req.GetUuid())
 	if err != nil {
 		return nil, err
 	}
+
+	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", *newReq)
 
 	dresp, err := mi.CallDrpc(ctx, drpc.MethodPoolSetProp, newReq)
 	if err != nil {
@@ -494,6 +494,10 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, resp:%+v", *resp)
+
+	if resp.GetStatus() != 0 {
+		return resp, nil
+	}
 
 	if resp.GetNumber() != newReq.GetNumber() {
 		return nil, errors.Errorf("Response number doesn't match request (%d != %d)",

@@ -900,13 +900,14 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set pool property on %s\n", req->uuid);
-
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
 		D_ERROR("Couldn't parse '%s' to UUID\n", req->uuid);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	D_INFO("Received request to set pool property on "DF_UUID"\n",
+	       DP_UUID(uuid));
 
 	new_prop = daos_prop_alloc(1);
 	if (new_prop == NULL) {
@@ -932,7 +933,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	default:
 		D_ERROR("Pool property request with no value (%d)\n",
-				req->value_case);
+			req->value_case);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -942,8 +943,8 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = ds_mgmt_pool_set_prop(uuid, svc_ranks, new_prop, &result);
 	if (rc != 0) {
-		D_ERROR("Failed to set pool property on %s: %d\n",
-				req->uuid, rc);
+		D_ERROR("Failed to set pool property on "DF_UUID": "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
 		goto out_ranks;
 	}
 
@@ -972,8 +973,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
 		if (entry->dpe_str == NULL)
 			D_GOTO(out_result, rc = -DER_INVAL);
-		D_ASPRINTF(resp.strval, "%s",
-			   entry->dpe_str);
+		D_ASPRINTF(resp.strval, "%s", entry->dpe_str);
 		if (resp.strval == NULL)
 			D_GOTO(out_result, rc = -DER_NOMEM);
 		resp.value_case = MGMT__POOL_SET_PROP_RESP__VALUE_STRVAL;
@@ -984,7 +984,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	default:
 		D_ERROR("Pool property response with no value (%d)\n",
-				req->value_case);
+			req->value_case);
 		D_GOTO(out_result, rc = -DER_INVAL);
 	}
 
