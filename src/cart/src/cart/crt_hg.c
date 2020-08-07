@@ -1158,7 +1158,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 	 * ones, such as out of memory, bad parameters passed, invalid handle
 	 * etc...
 	 *
-	 * For network errors, we do not want ot return error back to the caller
+	 * For network errors, we do not want to return error back to the caller
 	 * of crt_req_send(), but instead we want to invoke completion callback
 	 * manually with 'node unreachable' (DER_UNREACH) error.
 	 *
