@@ -42,38 +42,38 @@ tests: !mux
   ctl:
     name: ctl_basic
     test_servers_bin: ../../../../bin/crt_launch
-    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp --cfg_path=/tmp"
+    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grptmp"
     test_servers_env: ""
     test_servers_ppn: "1"
 
     cli1_bin: ../../../../bin/cart_ctl
-    cli1_arg: "get_uri_cache --group-name server_grp --rank 0 --cfg_path=/tmp"
+    cli1_arg: "get_uri_cache --group-name server_grp --rank 0"
     cli1_env: ""
     cli1_ppn: "1"
 
     cli2_bin: ../../../../bin/cart_ctl
-    cli2_arg: "list_ctx --group-name server_grp --rank 0 --cfg_path=/tmp"
+    cli2_arg: "list_ctx --group-name server_grp --rank 0"
     cli2_env: ""
     cli2_ppn: "1"
 
     cli3_bin: ../../../../bin/cart_ctl
-    cli3_arg: "enable_fi --group-name server_grp --rank 0 --cfg_path=/tmp"
+    cli3_arg: "enable_fi --group-name server_grp --rank 0"
     cli3_env: ""
     cli3_ppn: "1"
 
     cli4_bin: ../../../../bin/cart_ctl
     cli4_arg: "set_fi_attr --attr 1911,5,0,1,100 --group-name \
-               server_grp --rank 0 --cfg_path=/tmp"
+               server_grp --rank 0"
     cli4_env: ""
     cli4_ppn: "1"
 
     cli5_bin: ../../../../bin/cart_ctl
-    cli5_arg: "disable_fi --group-name server_grp --rank 0 --cfg_path=/tmp"
+    cli5_arg: "disable_fi --group-name server_grp --rank 0"
     cli5_env: ""
     cli5_ppn: "1"
 
     cli6_bin: ../tests/test_group_np_cli
     cli6_arg: "--name client-group --attach_to server_grp --shut_only \
-               --cfg_path=/tmp"
+              tmp"
     cli6_env: ""
     cli6_ppn: "1"

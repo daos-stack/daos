@@ -41,6 +41,27 @@ import cart_logtest
 import avocado
 import tempfile
 
+# Temporary debug function to troubleshoot write-permissions problem
+def dump_ls_output(ls_arg):
+    """Print the stdout and stderr of ls command.
+
+    Args:
+        arg (string): directory to run /bin/ls command on
+
+    Returns:
+        void
+
+    """
+
+    ls_cmd = "ls -ltrd " + ls_arg
+    out = subprocess.Popen(ls_cmd,
+               shell=True,
+               stdout=subprocess.PIPE,
+               stderr=subprocess.STDOUT)
+    stdout,stderr = out.communicate()
+    print("DEBUG: stdout of [" + ls_cmd + "]:\n {}".format(stdout))
+    print("DEBUG: stderr of [" + ls_cmd + "]:\n {}".format(stderr))
+
 class CartUtils():
     """CartUtils Class"""
 
@@ -52,28 +73,6 @@ class CartUtils():
         self.provider = None
         self.module = lambda *x: False
 
-    # Temporary debug function to troubleshoot write-permissions problem
-    @staticmethod
-    def dump_ls_output(ls_arg):
-        """Print the stdout and stderr of ls command.
-
-        Args:
-            arg (string): directory to run /bin/ls command on
-
-        Returns:
-            void
-
-        """
-
-        ls_cmd = "ls -ltrd " + ls_arg
-        out = subprocess.Popen(ls_cmd,
-                   shell=True,
-                   stdout=subprocess.PIPE,
-                   stderr=subprocess.STDOUT)
-        stdout,stderr = out.communicate()
-        print("DEBUG: stdout of [" + ls_cmd + "]:\n {}".format(stdout))
-        print("DEBUG: stderr of [" + ls_cmd + "]:\n {}".format(stderr))
-
     @staticmethod
     def write_host_file(hostlist, slots=1):
         """ write out a hostfile suitable for orterun """
@@ -83,8 +82,8 @@ class CartUtils():
         path = './hostfile'
 
         if not os.path.exists(path):
-            self.dump_ls_output('.')
-            self.dump_ls_output('*')
+            dump_ls_output('.')
+            dump_ls_output('*')
             os.makedirs(path)
         hostfile = path + "/hostfile" + str(unique)
 
