@@ -127,6 +127,7 @@ dts_credit_take(struct dts_context *tsc)
 int
 dts_credit_drain(struct dts_context *tsc)
 {
+	tsc->tsc_dkey_idx = 0;
 	return credit_poll(tsc, true);
 }
 

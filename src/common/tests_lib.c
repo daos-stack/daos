@@ -255,6 +255,36 @@ static daos_sort_ops_t rand_iarr_ops = {
 };
 
 int *
+dts_rand_dkey_alloc(int nr, int base, bool shuffle)
+{
+	int	*array;
+	int	 i, j, random;
+
+	D_ALLOC_ARRAY(array, nr);
+	if (!array)
+		return NULL;
+
+	if (shuffle) {
+		i = 0;
+		while(i < nr) {
+			random = rand() % 200000 + 1;
+			for (j = 0; j < i; j++) {
+				if (array[j] == random)
+					break;
+			}
+			if (j == i) {
+				array[i] = random;
+				i++;
+			}
+		}
+	} else {
+		for (i = 0; i < nr; i++)
+			array[i] = base + i;
+	}
+	return array;
+}
+
+int *
 dts_rand_iarr_alloc(int nr, int base, bool shuffle)
 {
 	int	*array;
@@ -265,7 +295,27 @@ dts_rand_iarr_alloc(int nr, int base, bool shuffle)
 		return NULL;
 
 	for (i = 0; i < nr; i++)
-		array[i] = base + i;
+		array[i] = rand() % nr + 1;
+
+	if (shuffle)
+		daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
+
+	return array;
+}
+
+
+int *
+dts_rand_iarr_alloc_recx(int nr, int base, bool shuffle, uint64_t total_bytes)
+{
+	int	*array;
+	int	 i;
+
+	D_ALLOC_ARRAY(array, nr);
+	if (!array)
+		return NULL;
+
+	for (i = 0; i < nr; i++)
+		array[i] = rand() % total_bytes + 1;
 
 	if (shuffle)
 		daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
@@ -274,7 +324,7 @@ dts_rand_iarr_alloc(int nr, int base, bool shuffle)
 }
 
 void
-dts_reset_key(void)
+dts_reset_key()
 {
 	int_key_gen = 1;
 }

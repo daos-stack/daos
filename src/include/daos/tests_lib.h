@@ -66,7 +66,16 @@ daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats,
  * Create a random (optionally) ordered integer array with \a nr elements, value
  * of this array starts from \a base.
  */
+int *dts_rand_dkey_alloc(int nr, int base, bool shuffle);
+
+/**
+ * Create a random (optionally) ordered integer array with \a nr elements, value
+ * of this array starts from \a base.
+ */
+int *dts_rand_iarr_alloc_recx(int nr, int base, bool shuffle, uint64_t total_bytes);
+
 int *dts_rand_iarr_alloc(int nr, int base, bool shuffle);
+
 
 static inline double
 dts_time_now(void)
@@ -142,6 +151,8 @@ struct dts_context {
 	int			 tsc_cred_nr;
 	/** value size for \a tsc_credits */
 	int			 tsc_cred_vsize;
+	/** dkey counter */
+	int			 tsc_dkey_idx;
 	/** INPUT END */
 
 	/** OUTPUT: initialized within \a dts_ctx_init() */

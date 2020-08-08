@@ -345,6 +345,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_t			 cont_hdl_uuid;
 	uuid_t			 cont_uuid;
 	bool			 cb_registered = false;
+	bool			 client_tag = false;
 	uint32_t		 flags = 0;
 	int			 rc;
 
@@ -390,6 +391,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		DF_U64"\n", req, opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
 		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag,
 		args->auxi.epoch);
+
+	d_getenv_bool("DAOS_CLI_PRINT_TAG", &client_tag);
+	if (client_tag)
+		D_PRINT("tag: %d\n", tgt_ep.ep_tag);
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 

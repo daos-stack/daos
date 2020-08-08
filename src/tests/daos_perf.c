@@ -66,6 +66,7 @@ unsigned int		 ts_obj_p_cont	= 1;	/* # objects per container */
 unsigned int		 ts_dkey_p_obj	= 1;	/* # dkeys per object */
 unsigned int		 ts_akey_p_dkey	= 100;	/* # akeys per dkey */
 unsigned int		 ts_recx_p_akey	= 1000;	/* # recxs per akey */
+uint64_t		 ts_total_bytes;
 /* value type: single or array */
 bool			 ts_single	= true;
 /* always overwrite value of an akey */
@@ -89,6 +90,7 @@ bool			ts_rebuild_only_iteration = false;
 /* rebuild without update */
 bool			ts_rebuild_no_update = false;
 bool			ts_flat_obj = false;
+char			akey_str = '0';
 
 static int
 vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
@@ -180,8 +182,9 @@ set_value_buffer(char *buffer, int idx)
 
 static int
 akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
-		     char *dkey, char *akey, daos_epoch_t *epoch,
-		     int *indices, int idx, char *verify_buff)
+		     char *dkey, uint64_t dkey_int, char *akey,
+		     daos_epoch_t *epoch, int *indices, int idx,
+		     char *verify_buff)
 {
 	struct dts_io_credit *cred;
 	daos_iod_t	     *iod;
@@ -207,17 +210,21 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 
 	/* setup dkey */
 	if (ts_flat_obj) {
-		memcpy(cred->tc_dbuf, dkey, sizeof(uint64_t));
-		d_iov_set(&cred->tc_dkey, cred->tc_dbuf, sizeof(int64_t));
+		memcpy(cred->tc_dbuf, &dkey_int, sizeof(uint64_t));
+		d_iov_set(&cred->tc_dkey, cred->tc_dbuf, sizeof(uint64_t));
+		d_iov_set(&iod->iod_name, &akey_str, 1);
 	} else {
 		memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
-		d_iov_set(&cred->tc_dkey, cred->tc_dbuf, strlen(cred->tc_dbuf));
+		d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
+				strlen(cred->tc_dbuf));
+
+		memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
+		d_iov_set(&iod->iod_name, cred->tc_abuf,
+				strlen(cred->tc_abuf));
+
 	}
 
 	/* setup I/O descriptor */
-	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
-	d_iov_set(&iod->iod_name, cred->tc_abuf,
-			strlen(cred->tc_abuf));
 	iod->iod_size = vsize;
 	recx->rx_nr  = 1;
 	if (ts_single) {
@@ -269,49 +276,48 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 }
 
 static int	*ts_dkeys;
-static int	 ts_dkey_idx;
 
 static void
-dkey_gen_int(char *buf, int rank)
+dkey_gen_int(uint64_t *ptr, int rank)
 {
-	uint64_t *ptr = (uint64_t *)buf;
+	uint64_t tot_dkeys	= ts_dkey_p_obj * ts_ctx.tsc_mpi_size;
+	int	 index		= (ts_dkey_p_obj * ts_ctx.tsc_mpi_rank) + ts_ctx.tsc_dkey_idx;
 
 	if (!ts_dkeys)
-		ts_dkeys = dts_rand_iarr_alloc(ts_dkey_p_obj, 0, true);
-
-	*ptr = ts_dkeys[(ts_dkey_idx + rank) % ts_dkey_p_obj];
-	ts_dkey_idx++;
+		ts_dkeys = dts_rand_dkey_alloc(tot_dkeys, 0, true);
+	*ptr = ts_dkeys[index];
+	ts_ctx.tsc_dkey_idx++;
 }
 
+static int	*ts_indices;
 
 static int
 dkey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type, char *dkey,
 		     daos_epoch_t *epoch)
 {
-	int		*indices;
-	char		 akey[DTS_KEY_LEN];
-	int		 i;
-	int		 j;
-	int		 rc = 0;
+	char		akey[DTS_KEY_LEN];
+	uint64_t	dkey_int;
+	int		i;
+	int		j;
+	int		rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
-	D_ASSERT(indices != NULL);
+	if (!ts_indices)
+		ts_indices = dts_rand_iarr_alloc_recx(ts_recx_p_akey, 0, ts_shuffle, ts_total_bytes);
+	D_ASSERT(ts_indices != NULL);
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
-		if (ts_flat_obj)
-			dkey_gen_int(dkey, ts_ctx.tsc_mpi_rank);
+                if (ts_flat_obj)
+			dkey_gen_int(&dkey_int, ts_ctx.tsc_mpi_rank);
 		else
 			dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 		for (j = 0; j < ts_recx_p_akey; j++) {
-			rc = akey_update_or_fetch(oh, op_type, dkey, akey,
-						  epoch, indices, j, NULL);
+			rc = akey_update_or_fetch(oh, op_type, dkey, dkey_int, akey,
+						  epoch, ts_indices, j, NULL);
 			if (rc)
 				goto failed;
 		}
 	}
-
 failed:
-	D_FREE(indices);
 	return rc;
 }
 
@@ -325,8 +331,7 @@ objects_update(d_rank_t rank)
 	daos_epoch_t	epoch = 0;
 
 	if (ts_flat_obj)
-		ofeats = DAOS_OF_KV_FLAT;
-
+		ofeats = DAOS_OF_KV_FLAT | DAOS_OF_DKEY_UINT64;
 	dts_reset_key();
 
 	if (!ts_overwrite)
@@ -354,7 +359,6 @@ objects_update(d_rank_t rank)
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			char	 dkey[DTS_KEY_LEN];
 
-			dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 			rc = dkey_update_or_fetch(ts_ohs[i], TS_DO_UPDATE, dkey,
 						  &epoch);
 			if (rc)
@@ -367,23 +371,20 @@ objects_update(d_rank_t rank)
 }
 
 static int
-dkey_verify(daos_handle_t oh, char *dkey, daos_epoch_t *epoch)
+dkey_verify(daos_handle_t oh, char *dkey, uint64_t dkey_int, daos_epoch_t *epoch)
 {
 	int	 i;
-	int	*indices;
 	char	 ground_truth[TEST_VAL_SIZE];
 	char	 test_string[TEST_VAL_SIZE];
 	char	 akey[DTS_KEY_LEN];
 	int	 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
-	D_ASSERT(indices != NULL);
 	dts_key_gen(akey, DTS_KEY_LEN, "walker");
 
 	for (i = 0; i < ts_recx_p_akey; i++) {
 		set_value_buffer(ground_truth, i);
-		rc = akey_update_or_fetch(oh, TS_DO_FETCH, dkey, akey, epoch,
-					  indices, i, test_string);
+		rc = akey_update_or_fetch(oh, TS_DO_FETCH, dkey, dkey_int, akey, epoch,
+					  ts_indices, i, test_string);
 		if (rc)
 			goto failed;
 		if (memcmp(test_string, ground_truth, TEST_VAL_SIZE) != 0) {
@@ -393,8 +394,8 @@ dkey_verify(daos_handle_t oh, char *dkey, daos_epoch_t *epoch)
 			goto failed;
 		}
 	}
+
 failed:
-	D_FREE(indices);
 	return rc;
 }
 
@@ -406,6 +407,7 @@ objects_verify(void)
 	int		k;
 	int		rc = 0;
 	char		dkey[DTS_KEY_LEN];
+	uint64_t	dkey_int;
 	daos_epoch_t	epoch = 0;
 
 	dts_reset_key();
@@ -414,12 +416,12 @@ objects_verify(void)
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			if (ts_flat_obj)
-				dkey_gen_int(dkey, ts_ctx.tsc_mpi_rank);
+				dkey_gen_int(&dkey_int, ts_ctx.tsc_mpi_rank);
 			else
 				dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 
 			for (k = 0; k < ts_akey_p_dkey; k++) {
-				rc = dkey_verify(ts_ohs[i], dkey, &epoch);
+				rc = dkey_verify(ts_ohs[i], dkey, dkey_int, &epoch);
 				if (rc != 0)
 					return rc;
 			}
@@ -468,10 +470,6 @@ objects_fetch(d_rank_t rank)
 		for (j = 0; j < ts_dkey_p_obj; j++) {
 			char	 dkey[DTS_KEY_LEN];
 
-			if (ts_flat_obj)
-				dkey_gen_int(dkey, ts_ctx.tsc_mpi_rank);
-			else
-				dts_key_gen(dkey, DTS_KEY_LEN, "blade");
 			rc = dkey_update_or_fetch(ts_ohs[i], TS_DO_FETCH, dkey,
 						  &epoch);
 			if (rc != 0)
@@ -595,6 +593,7 @@ ts_write_perf(double *start_time, double *end_time)
 {
 	int	rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	*start_time = dts_time_now();
 	rc = objects_update(RANK_ZERO);
 	*end_time = dts_time_now();
@@ -610,15 +609,16 @@ ts_fetch_perf(double *start_time, double *end_time)
 {
 	int	rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	rc = objects_update(RANK_ZERO);
 	if (rc)
 		return rc;
+	MPI_Barrier(MPI_COMM_WORLD);
 	*start_time = dts_time_now();
 	rc = objects_fetch(RANK_ZERO);
 	*end_time = dts_time_now();
 	if (rc)
 		return rc;
-
 	rc = objects_verify_close();
 	return rc;
 }
@@ -1262,6 +1262,9 @@ main(int argc, char **argv)
 	ts_ctx.tsc_cred_vsize	= vsize;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
+	ts_total_bytes = ts_ctx.tsc_mpi_size * ts_dkey_p_obj * ts_akey_p_dkey;
+	ts_total_bytes *= ts_recx_p_akey * vsize;
+	ts_total_bytes /= 1048576;
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
@@ -1275,10 +1278,11 @@ main(int argc, char **argv)
 			"\trecx_per_akey : %u\n"
 			"\tvalue type    : %s\n"
 			"\tvalue size    : %u\n"
+			"\ttotal bytes   : "DF_U64"MB\n"
 			"\tzero copy     : %s\n"
 			"\toverwrite     : %s\n"
 			"\tverify fetch  : %s\n"
-			"\tflat_key	 : %s\n"
+			"\tflat_key      : %s\n"
 			"\tVOS file      : %s\n",
 			ts_class_name(),
 			(unsigned int)(scm_size >> 20),
@@ -1291,6 +1295,7 @@ main(int argc, char **argv)
 			ts_recx_p_akey,
 			ts_val_type(),
 			vsize,
+			ts_total_bytes,
 			ts_yes_or_no(ts_zero_copy),
 			ts_yes_or_no(ts_overwrite),
 			ts_yes_or_no(ts_verify_fetch),
@@ -1345,6 +1350,8 @@ main(int argc, char **argv)
 	}
 
 	dts_ctx_fini(&ts_ctx);
+	D_FREE(ts_indices);
+	D_FREE(ts_dkeys);
 	MPI_Finalize();
 	free(ts_ohs);
 
