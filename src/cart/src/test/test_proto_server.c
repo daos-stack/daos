@@ -41,13 +41,17 @@ test_run(d_rank_t my_rank)
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	if (test.tg_save_cfg && my_rank == 0) {
-		rc = crt_group_config_path_set(test.tg_cfg_path);
-		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
-
+	// START: FIXME: always save 
+	if (my_rank == 0) { 
 		rc = crt_group_config_save(NULL, true);
 		D_ASSERTF(rc == 0,
 			  "crt_group_config_save() failed. rc: %d\n", rc);
+	}
+	// END: FIXME: always save 
+
+	if (test.tg_save_cfg && my_rank == 0) {
+		rc = crt_group_config_path_set(test.tg_cfg_path);
+		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
 
 	switch (test.tg_num_proto) {
