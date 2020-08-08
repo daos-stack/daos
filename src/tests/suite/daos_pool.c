@@ -344,6 +344,7 @@ pool_attribute(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying all attributes deletion\n");
+	total_size = 0;
 	rc = daos_pool_list_attr(arg->pool.poh, NULL, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
