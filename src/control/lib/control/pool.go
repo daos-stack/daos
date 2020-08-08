@@ -92,32 +92,12 @@ func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, 
 		}
 	}
 
-	if usr != "" {
-		uid, err := strconv.Atoi(usr)
-		if err == nil {
-			user, err := ext.LookupUserID(uint32(uid))
-			if err != nil {
-				return "", "", errors.Wrapf(err, "unable to resolve uid %d", uid)
-			}
-			usr = user.Username()
-		}
-		if !strings.Contains(usr, "@") {
-			usr += "@"
-		}
+	if usr != "" && !strings.Contains(usr, "@") {
+		usr += "@"
 	}
 
-	if grp != "" {
-		gid, err := strconv.Atoi(grp)
-		if err == nil {
-			group, err := ext.LookupGroupID(uint32(gid))
-			if err != nil {
-				return "", "", errors.Wrapf(err, "unable to resolve gid %d", gid)
-			}
-			grp = group.Name
-		}
-		if !strings.Contains(grp, "@") {
-			grp += "@"
-		}
+	if grp != "" && !strings.Contains(grp, "@") {
+		grp += "@"
 	}
 
 	return usr, grp, nil

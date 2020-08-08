@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#include <pwd.h>
+#include <grp.h>
 #include <linux/limits.h>
 #include <json-c/json.h>
 
@@ -318,6 +320,8 @@ dmg_pool_create(const char *dmg_config_file,
 {
 	int			argcount = 0;
 	char			**args = NULL;
+	struct passwd		*passwd = NULL;
+	struct group		*group = NULL;
 	daos_mgmt_pool_info_t	pool_info = {};
 	struct json_object	*dmg_out = NULL;
 	int			rc = 0;
@@ -343,13 +347,25 @@ dmg_pool_create(const char *dmg_config_file,
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	passwd = getpwuid(uid);
+	if (passwd == NULL) {
+		D_ERROR("unable to resolve %d to passwd entry\n", uid);
+		D_GOTO(out_cmd, rc = -DER_INVAL);
+	}
+
 	args = cmd_push_arg(args, &argcount,
-			    "--user=%d ", uid);
+			    "--user=%s ", passwd->pw_name);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	group = getgrgid(gid);
+	if (group == NULL) {
+		D_ERROR("unable to resolve %d to group name\n", gid);
+		D_GOTO(out_cmd, rc = -DER_INVAL);
+	}
+
 	args = cmd_push_arg(args, &argcount,
-			    "--group=%d ", gid);
+			    "--group=%s ", group->gr_name);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
