@@ -21,39 +21,36 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package hostlist
+package bdev
 
 import (
-	"unicode"
+	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
-// CreateNumericList creates a special HostList that contains numeric entries
-// and ranges only (no hostname prefixes) from the supplied string representation.
-func CreateNumericList(stringRanges string) (*HostList, error) {
-	for _, r := range stringRanges {
-		if unicode.IsSpace(r) {
-			return nil, errors.New("unexpected whitespace character(s)")
-		}
-		if unicode.IsLetter(r) {
-			return nil, errors.New("unexpected alphabetic character(s)")
-		}
+// ParsePCIAddress returns separated components of BDF format PCI address.
+func ParsePCIAddress(addr string) (dom, bus, dev, fun uint64, err error) {
+	parts := strings.Split(addr, ":")
+	devFunc := strings.Split(parts[len(parts)-1], ".")
+	if len(parts) != 3 || len(devFunc) != 2 {
+		err = errors.Errorf("unexpected pci address bdf format: %q", addr)
+		return
 	}
 
-	return parseBracketedHostList(stringRanges, outerRangeSeparators,
-		rangeOperator, true)
-}
-
-// CreateNumericSet creates a special HostSet containing numeric entries
-// and ranges only (no hostname prefixes) from the supplied string representation.
-func CreateNumericSet(stringRanges string) (*HostSet, error) {
-	hl, err := CreateNumericList(stringRanges)
-	if err != nil {
-		return nil, errors.Wrapf(err,
-			"creating numeric set from %q", stringRanges)
+	if dom, err = strconv.ParseUint(parts[0], 16, 64); err != nil {
+		return
 	}
-	hl.Uniq()
+	if bus, err = strconv.ParseUint(parts[1], 16, 32); err != nil {
+		return
+	}
+	if dev, err = strconv.ParseUint(devFunc[0], 16, 32); err != nil {
+		return
+	}
+	if fun, err = strconv.ParseUint(devFunc[1], 16, 32); err != nil {
+		return
+	}
 
-	return &HostSet{list: hl}, nil
+	return
 }
