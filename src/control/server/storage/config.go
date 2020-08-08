@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package storage
 
 import "github.com/pkg/errors"
@@ -136,6 +137,7 @@ type BdevConfig struct {
 	ConfigPath  string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	Class       BdevClass `yaml:"bdev_class,omitempty"`
 	DeviceList  []string  `yaml:"bdev_list,omitempty"`
+	VmdEnabled  bool      `yaml:"-"` // set during start-up
 	DeviceCount int       `yaml:"bdev_number,omitempty"`
 	FileSize    int       `yaml:"bdev_size,omitempty"`
 	ShmID       int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
