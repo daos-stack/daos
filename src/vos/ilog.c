@@ -721,6 +721,7 @@ check_equal(struct ilog_context *lctx, daos_epoch_t *epoch_out,
 			    prec_out->p_punch_minor_eph >
 			    prec_out->p_update_minor_eph)
 				return -DER_ALREADY;
+
 			if (id_in->id_update_minor_eph &&
 			    prec_out->p_update_minor_eph >
 			    prec_out->p_punch_minor_eph)
