@@ -18,6 +18,7 @@
 
 package io.daos.fs.hadoop;
 
+import io.daos.DaosUtils;
 import io.daos.dfs.DaosFsClient;
 import io.daos.dfs.DaosUns;
 import io.daos.dfs.DunsInfo;
@@ -84,7 +85,7 @@ public class DaosFileSystemTest {
     DunsInfo info = new DunsInfo("123", "56", "POSIX", Constants.DAOS_POOL_SVC + "=0");
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
-        eq(io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
+        eq(io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();
@@ -126,7 +127,7 @@ public class DaosFileSystemTest {
         sb.toString());
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
-        eq(io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
+        eq(io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
     unsFs.close();

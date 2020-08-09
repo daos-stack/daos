@@ -105,6 +105,7 @@ public class DaosFsClientIT {
     } finally {
       if (client != null) {
         client.close();
+      }
     }
   }
 

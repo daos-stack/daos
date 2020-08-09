@@ -31,9 +31,7 @@ import java.util.Map;
 
 import com.google.protobuf.TextFormat;
 
-import io.daos.BufferAllocator;
-import io.daos.DaosClient;
-import io.daos.DaosIOException;
+import io.daos.*;
 import io.daos.dfs.uns.*;
 
 import org.apache.commons.lang.ObjectUtils;
@@ -199,14 +197,14 @@ public class DaosUns {
   public void destroyPath() throws IOException {
     long poolHandle = 0;
 
-    poolHandle = DaosFsClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
+    poolHandle = DaosClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
       builder.ranks, builder.poolFlags);
     try {
       DaosFsClient.dunsDestroyPath(poolHandle, builder.path);
       log.info("UNS path {} destroyed");
     } finally {
       if (poolHandle != 0) {
-        DaosFsClient.daosClosePool(poolHandle);
+        DaosClient.daosClosePool(poolHandle);
       }
     }
   }
@@ -236,7 +234,7 @@ public class DaosUns {
    * {@link DaosIOException}
    */
   public static DunsInfo getAccessInfo(String path, String appInfoAttrName) throws IOException {
-    return getAccessInfo(path, appInfoAttrName, io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
+    return getAccessInfo(path, appInfoAttrName, Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
       false);
   }
 

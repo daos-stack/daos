@@ -50,9 +50,9 @@ JNIEXPORT jboolean JNICALL Java_io_daos_dfs_DaosFsClient_delete
 /*
  * Class:     io_daos_dfs_DaosFsClient
  * Method:    dfsSetPrefix
- * Signature: (JLjava/lang/String;)I
+ * Signature: (JLjava/lang/String;)V
  */
-JNIEXPORT jint JNICALL Java_io_daos_dfs_DaosFsClient_dfsSetPrefix
+JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_dfsSetPrefix
   (JNIEnv *, jobject, jlong, jstring);
 
 /*
@@ -206,6 +206,62 @@ JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_dfsUnmountFsOnRoot
  */
 JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_dfsUnmountFs
   (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    dunsCreatePath
+ * Signature: (JLjava/lang/String;JI)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_io_daos_dfs_DaosFsClient_dunsCreatePath
+  (JNIEnv *, jclass, jlong, jstring, jlong, jint);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    dunsResolvePath
+ * Signature: (Ljava/lang/String;)[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_io_daos_dfs_DaosFsClient_dunsResolvePath
+  (JNIEnv *, jclass, jstring);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    dunsGetAppInfo
+ * Signature: (Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_io_daos_dfs_DaosFsClient_dunsGetAppInfo
+  (JNIEnv *, jclass, jstring, jstring, jint);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    dunsSetAppInfo
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_dunsSetAppInfo
+  (JNIEnv *, jclass, jstring, jstring, jstring);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    dunsDestroyPath
+ * Signature: (JLjava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_dunsDestroyPath
+  (JNIEnv *, jclass, jlong, jstring);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    dunsParseAttribute
+ * Signature: (Ljava/lang/String;)[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_io_daos_dfs_DaosFsClient_dunsParseAttribute
+  (JNIEnv *, jclass, jstring);
+
+/*
+ * Class:     io_daos_dfs_DaosFsClient
+ * Method:    daosFinalize
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_io_daos_dfs_DaosFsClient_daosFinalize
+  (JNIEnv *, jclass);
 
 #ifdef __cplusplus
 }
