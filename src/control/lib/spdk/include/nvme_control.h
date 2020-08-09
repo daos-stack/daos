@@ -43,7 +43,7 @@ nvme_discover(void);
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
-nvme_wipe_first_ns(char *ctrlr_pci_addr);
+nvme_wipe_namespaces(char *ctrlr_pci_addr);
 
 /**
  * Format NVMe controller namespace.

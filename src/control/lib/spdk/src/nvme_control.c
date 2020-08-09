@@ -110,9 +110,6 @@ wipe_write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 		sequence->is_completed = 2;
 		return;
 	}
-	spdk_free(sequence->buf);
-	sequence->buf = spdk_zmalloc(0x1000, 0x1000, NULL,
-				     SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
 
 	rc = spdk_nvme_ns_cmd_read(ns_entry->ns, ns_entry->qpair, sequence->buf,
 				   0, /* LBA start */ 1, /* number of LBAs */
@@ -147,6 +144,7 @@ wipe(void)
 					    SPDK_MALLOC_DMA);
 		if (sequence.buf == NULL) {
 			fprintf(stderr, "write buffer allocation failed\n");
+			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 			return;
 		}
 		sequence.is_completed = 0;
@@ -158,6 +156,8 @@ wipe(void)
 					    wipe_write_complete, &sequence, 0);
 		if (rc != 0) {
 			fprintf(stderr, "starting write I/O failed\n");
+			spdk_free(sequence->buf);
+			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 			return;
 		}
 
@@ -171,6 +171,7 @@ wipe(void)
 			}
 		}
 
+		spdk_free(sequence->buf);
 		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 		nentry = nentry->next;
 		fprintf(stderr, "Wiped NVMe Namespace\n");
@@ -199,7 +200,7 @@ wipe_cleanup(void)
 }
 
 struct ret_t *
-nvme_wipe_first_ns(char *ctrlr_pci_addr)
+nvme_wipe_namespaces(char *ctrlr_pci_addr)
 {
 	int rc;
 	struct spdk_env_opts opts;

@@ -194,7 +194,7 @@ func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
 	failMsg := "NVMe Format(): C.nvme_"
 	wipeMsg := failMsg + "wipe_first_ns()"
 
-	if _, err = processReturn(C.nvme_wipe_first_ns(csPci), wipeMsg); err == nil {
+	if _, err = processReturn(C.nvme_wipe_namespaces(csPci), wipeMsg); err == nil {
 		return // quick format succeeded
 	}
 
