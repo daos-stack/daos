@@ -29,7 +29,7 @@ import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.NotDirectoryException;
 
-import io.daos.dfs.DaosIOException;
+import io.daos.DaosIOException;
 
 import org.apache.hadoop.fs.ParentNotDirectoryException;
 

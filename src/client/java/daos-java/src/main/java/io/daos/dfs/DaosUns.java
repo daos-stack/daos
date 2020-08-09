@@ -31,6 +31,9 @@ import java.util.Map;
 
 import com.google.protobuf.TextFormat;
 
+import io.daos.BufferAllocator;
+import io.daos.DaosClient;
+import io.daos.DaosIOException;
 import io.daos.dfs.uns.*;
 
 import org.apache.commons.lang.ObjectUtils;
@@ -100,7 +103,7 @@ public class DaosUns {
     byte[] bytes = attribute.toByteArray();
     ByteBuffer buffer = BufferAllocator.directBuffer(bytes.length);
     buffer.put(bytes);
-    poolHandle = DaosFsClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
+    poolHandle = DaosClient.daosOpenPool(builder.poolUuid, builder.serverGroup,
       builder.ranks, builder.poolFlags);
     try {
       String cuuid = DaosFsClient.dunsCreatePath(poolHandle, builder.path,
@@ -110,7 +113,7 @@ public class DaosUns {
       return cuuid;
     } finally {
       if (poolHandle != 0) {
-        DaosFsClient.daosClosePool(poolHandle);
+        DaosClient.daosClosePool(poolHandle);
       }
     }
   }

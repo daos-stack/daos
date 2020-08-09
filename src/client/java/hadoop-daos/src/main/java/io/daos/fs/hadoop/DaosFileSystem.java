@@ -68,7 +68,7 @@ import org.slf4j.LoggerFactory;
  * <tbody>
  * <tr>
  *   <td>{@value io.daos.fs.hadoop.Constants#DAOS_SERVER_GROUP}</td>
- *   <td>{@value io.daos.dfs.Constants#POOL_DEFAULT_SERVER_GROUP}</td>
+ *   <td>{@value io.daos.Constants#POOL_DEFAULT_SERVER_GROUP}</td>
  *   <td></td>
  *   <td>false</td>
  *   <td>daos server group name</td>
@@ -82,11 +82,11 @@ import org.slf4j.LoggerFactory;
  * </tr>
  * <tr>
  *   <td>{@value io.daos.fs.hadoop.Constants#DAOS_POOL_FLAGS}</td>
- *   <td>{@value io.daos.dfs.Constants#ACCESS_FLAG_POOL_READWRITE}</td>
+ *   <td>{@value io.daos.Constants#ACCESS_FLAG_POOL_READWRITE}</td>
  *   <td>
- *       {@value io.daos.dfs.Constants#ACCESS_FLAG_POOL_READONLY},
- *       {@value io.daos.dfs.Constants#ACCESS_FLAG_POOL_READWRITE},
- *       {@value io.daos.dfs.Constants#ACCESS_FLAG_POOL_EXECUTE}
+ *       {@value io.daos.Constants#ACCESS_FLAG_POOL_READONLY},
+ *       {@value io.daos.Constants#ACCESS_FLAG_POOL_READWRITE},
+ *       {@value io.daos.Constants#ACCESS_FLAG_POOL_EXECUTE}
  *   </td>
  *   <td>false</td>
  *   <td>pool access flags</td>
@@ -248,7 +248,7 @@ public class DaosFileSystem extends FileSystem {
       if (file.exists()) {
         try {
           info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
-            io.daos.dfs.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
+            io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
           if (info != null) {
             break;
           }

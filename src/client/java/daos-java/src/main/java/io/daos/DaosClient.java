@@ -156,7 +156,7 @@ public class DaosClient implements ForceCloseable {
    * @throws IOException
    * {@link DaosIOException}
    */
-  static native long daosOpenPool(String poolId, String serverGroup, String ranks, int flags) throws IOException;
+  public static native long daosOpenPool(String poolId, String serverGroup, String ranks, int flags) throws IOException;
 
   /**
    * open container.
@@ -191,7 +191,7 @@ public class DaosClient implements ForceCloseable {
    * @throws IOException
    * {@link DaosIOException}
    */
-  static native void daosClosePool(long poolPtr) throws IOException;
+  public static native void daosClosePool(long poolPtr) throws IOException;
 
   static synchronized void closeAll() throws IOException {
     ForceCloseable c;
