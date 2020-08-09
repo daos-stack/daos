@@ -81,12 +81,7 @@ func (srv *IOServerInstance) CallDrpc(ctx context.Context, method drpc.Method, b
 		return nil, err
 	}
 
-	srv.log.Debugf("instance %d: dRPC call %d begin", srv.Index(), method)
-	res, err := makeDrpcCall(ctx, srv.log, dc, method, body)
-	srv.log.Debugf("instance %d: dRPC call %d/%d end: %d",
-		srv.Index(), method, res.GetSequence(), res.GetStatus())
-
-	return res, err
+	return makeDrpcCall(ctx, srv.log, dc, method, body)
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.

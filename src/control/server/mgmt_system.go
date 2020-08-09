@@ -119,16 +119,15 @@ func (svc *mgmtSvc) groupUpdateLoop(ctx context.Context) {
 			if !updateRequested {
 				continue
 			}
-			svc.log.Debug("performing group update")
+			svc.log.Debug("starting group update")
 			if err := svc.doGroupUpdate(ctx); err != nil {
 				svc.log.Error(errors.Wrap(err, "group update failed").Error())
 				continue
 			}
-			svc.log.Debug("performed group update")
+			svc.log.Debug("finished group update")
 			updateRequested = false
 		case <-svc.updateReqChan:
 			updateRequested = true
-			svc.log.Debug("received group update request")
 		}
 	}
 }
@@ -138,12 +137,11 @@ func (svc *mgmtSvc) startUpdateLoop(ctx context.Context) {
 }
 
 func (svc *mgmtSvc) requestGroupUpdate(ctx context.Context) {
-	svc.log.Debug("requesting group update")
 	go func(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 		case svc.updateReqChan <- struct{}{}:
-			svc.log.Debug("sent group update request")
+			svc.log.Debug("requested group update")
 		}
 	}(ctx)
 }
@@ -164,14 +162,18 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,
 	}
+	rankSet := &system.RankSet{}
 	for rank, uri := range gm.RankURIs {
 		req.Servers = append(req.Servers, &mgmtpb.GroupUpdateReq_Server{
 			Rank: rank.Uint32(),
 			Uri:  uri,
 		})
+		if err := rankSet.Add(rank); err != nil {
+			return errors.Wrap(err, "adding rank to set")
+		}
 	}
 
-	svc.log.Debugf("group update request: %+v", req)
+	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
 	dResp, err := mi.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
@@ -182,8 +184,6 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal GroupUpdate response")
 	}
-
-	svc.log.Debugf("GroupUpdate response: %+v", resp)
 
 	if resp.GetStatus() != 0 {
 		return drpc.DaosStatus(resp.GetStatus())
