@@ -334,7 +334,7 @@ public class DaosFileIT {
 
   @AfterClass
   public static void teardown() throws Exception{
-    if(client != null) {
+    if (client != null) {
       client.close();
     }
   }

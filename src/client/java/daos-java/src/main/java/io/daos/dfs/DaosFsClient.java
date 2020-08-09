@@ -31,7 +31,6 @@ import java.util.concurrent.Executors;
 
 import io.daos.*;
 import org.apache.commons.lang.ObjectUtils;
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -941,7 +940,6 @@ public final class DaosFsClient extends SharableClient implements ForceCloseable
   static synchronized native void daosFinalize() throws IOException;
 
   //------------------native methods end------------------
-
 
   int getDefaultFileAccessFlags() {
     return getBuilder().defaultFileAccessFlags;

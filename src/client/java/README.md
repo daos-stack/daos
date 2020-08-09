@@ -10,12 +10,14 @@ from daos_pool.h and daos_cont.h. There are five main classes, DaosClient, DaosF
 DaosObject.
 
 * DaosClient
+
 Java DAOS client for common pool/container operations which is indirectly invoked via JNI. Other types of client, like
 DFS client and Object client, should reference this base client for pool/container related operations. Besides, it also
 does some common works, like loading dynamic library, libdaos-jni.so at startup and registering shutdown hook for
 closing all registered clients and finalize DAOS safely.
 
 * DaosFsClient
+
 It delegates pool/container related APIs to DaosClient. By default, there will be single instance of DaosFsClient per
 pool and container. All DAOS DFS calls are from this class which has all native methods implementations in jni which
 call DAOS APIs directly. It provides a few public APIs, move, delete, mkdir, exists, for simple non-repetitive file
@@ -23,6 +25,7 @@ operations. They release all opened files, if any, immediately. If you have mult
 period of time, you should use DaosFile which can be instantiated by calling getFile methods.
 
 * DaosObjClient
+
 Same as DaosFsClient, it delegates pool/container related APIs to DaosClient. And it's sharable client per pool and
 container. All DAOS object JNI calls are from this class. User should not use this client for object calls directly, but
 use DaosObject which is created from this client.
@@ -176,12 +179,14 @@ For distribution, the default is for including two artifacts daos-jar and hadoop
 all dependencies as well when build with "-P with-deps"
 
 ## Documentation
+
 You can run below command to generate JavaDoc. There could be some error message during build. Just ignore them if your
 final build status is success. Then go to target/site folder to find documentation.
 
     mvn site
 
 ## Run
+
 Beside DAOS setup and environment variables, one more environment for JVM signal chaining should be set as below.
 
     export LD_PRELOAD=<YOUR JDK HOME>/jre/lib/amd64/libjsig.so
@@ -216,6 +221,7 @@ file, like capacity-scheduler.xml in yarn.
 ```
 
 ## Contacts
+
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos). Bugs should be reported through our 
 [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and
  [debug logs](./doc/debugging.md).

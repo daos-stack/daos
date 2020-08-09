@@ -41,8 +41,8 @@ public class DaosFsClientIT {
     try {
       client = builder.build();
       Assert.assertTrue(client != null);
-    }finally {
-      if(client != null){
+    } finally {
+      if (client != null) {
         client.close();
       }
     }
@@ -178,7 +178,7 @@ public class DaosFsClientIT {
       Assert.assertFalse(srcFile.exists());
       Assert.assertTrue(client.getFile(destDir, destFileName).exists());
     } finally {
-      if(client != null){
+      if (client != null) {
         client.close();
       }
     }
