@@ -1194,7 +1194,7 @@ int main(int argc, char **argv)
 
 	if (g_my_rank == 0) {
 		rc = crt_group_config_save(grp, true);
-		assert(rc == 0);
+		D_ASSERTF(rc == 0, "crt_group_config_save failed %d\n", rc);
 	}
 
 	pthread_join(g_progress_thread, NULL);
