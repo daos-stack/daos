@@ -93,13 +93,13 @@ struct dev_health_t {
 };
 
 /**
- * \brief Return containing return code, controllers, namespaces and error
+ * \brief Return containing return code, controllers, namespaces and info
  * message
  */
 struct ret_t {
 	int		rc;
 	struct ctrlr_t *ctrlrs;
-	char		err[1024];
+	char		info[1024];
 };
 
 struct ctrlr_entry {
@@ -108,7 +108,6 @@ struct ctrlr_entry {
 	struct ns_entry		*nss;
 	struct dev_health_entry	*dev_health;
 	int			 socket_id;
-	char			 name[1024];
 	struct ctrlr_entry	*next;
 };
 

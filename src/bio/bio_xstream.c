@@ -555,7 +555,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	/* Try to load blobstore without specifying 'bstype' first */
 	bs = load_blobstore(ctxt, bdev, NULL, false);
 	if (bs == NULL) {
-	        D_DEBUG(DB_MGMT, "creating bs for %s\n",
+	        D_DEBUG(DB_MGMT, "Creating bs for %s\n",
 			spdk_bdev_get_name(bdev));
 
 		/* Create blobstore if it wasn't created before */
@@ -619,16 +619,8 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 	for (bdev = spdk_bdev_first(); bdev != NULL;
 	     bdev = spdk_bdev_next(bdev)) {
-		D_DEBUG(DB_MGMT, "Bdev discovery: %s\n",
-			spdk_bdev_get_name(bdev));
-        }
-	for (bdev = spdk_bdev_first(); bdev != NULL;
-	     bdev = spdk_bdev_next(bdev)) {
 		if (nvme_glb.bd_bdev_class != get_bdev_type(bdev))
 			continue;
-
-		D_DEBUG(DB_MGMT, "Bdev bio create: %s\n",
-			spdk_bdev_get_name(bdev));
 
 		rc = create_bio_bdev(ctxt, bdev);
 		if (rc)
