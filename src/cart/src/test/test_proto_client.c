@@ -63,6 +63,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 	high_ver = cb_info->pq_arg;
 
 	D_ASSERT(cb_info->pq_arg != NULL);
+	D_ERROR("query_cb() failed, cb_info->pq_rc: %d.\n", cb_info->pq_rc);
 	D_ASSERT(cb_info->pq_rc == DER_SUCCESS);
 
 	*high_ver = cb_info->pq_ver;
