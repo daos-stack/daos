@@ -86,13 +86,13 @@ enum {
 				 * purpose.
 				 */
 	DAOS_OC_EC_K2P1_L32K,	/* Erasure code, 2 data cells, 1 parity cell,
-				 * cell size 32KB.
+				 * cell size 32K.
 				 */
 	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
-				 * cell size 32KB.
+				 * cell size 32K.
 				 */
-	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
-				 * cell size 1MB.
+	DAOS_OC_EC_K4P2_L32K,	/* Erasure code, 4 data cells, 2 parity cells,
+				 * cell size 32K.
 				 */
 };
 
@@ -431,6 +431,7 @@ enum daos_recx_type {
 struct daos_recx_ep {
 	daos_recx_t	re_recx;
 	daos_epoch_t	re_ep;
+	uint32_t	re_rec_size;
 	uint8_t		re_type;
 };
 

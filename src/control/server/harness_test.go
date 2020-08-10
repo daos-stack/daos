@@ -570,7 +570,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				CmpErr(t, tc.expIoErrs[srv.Index()], srv._lastErr)
 			}
-			members := membership.Members()
+			members := membership.Members(nil)
 			AssertEqual(t, len(tc.expMembers), len(members), "unexpected number in membership")
 			for i, member := range members {
 				if diff := cmp.Diff(fmt.Sprintf("%v", member),

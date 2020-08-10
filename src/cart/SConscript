@@ -38,27 +38,23 @@
 
 import os
 import sys
-import daos_build
 
 Import('prereqs', 'env')
-
-# Keep versioned libs for now to avoid any conflict with 1.0
-CART_VERSION = "4.7.0"
 
 def scons():
     """Scons function"""
 
     env.Alias('install', '$PREFIX')
 
-    env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
+    Export('env', 'prereqs')
 
-    Export('env', 'prereqs', 'CART_VERSION')
     # generate targets in specific build dir to avoid polluting the source code
     SConscript('src/SConscript')
     SConscript('test/SConscript')
 
     env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp',
                                 'utils/fault-inject-cart.yaml'])
+
 
 if __name__ == "SCons.Script":
     scons()

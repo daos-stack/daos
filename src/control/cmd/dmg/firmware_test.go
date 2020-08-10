@@ -28,8 +28,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 func TestFirmwareCommands(t *testing.T) {
@@ -37,6 +38,17 @@ func TestFirmwareCommands(t *testing.T) {
 		{
 			"Query with no args defaults to all",
 			"firmware query",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareQueryReq{
+					SCM:  true,
+					NVMe: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query with verbose",
+			"firmware query --verbose",
 			strings.Join([]string{
 				printRequest(t, &control.FirmwareQueryReq{
 					SCM:  true,
@@ -90,19 +102,30 @@ func TestFirmwareCommands(t *testing.T) {
 		},
 		{
 			"Update with no type",
-			"firmware update --path=/doesnt/matter",
+			"firmware update --path=/does_not/matter",
 			"",
 			errors.New("the required flag `-t, --type' was not specified"),
 		},
 		{
 			"Update with invalid type",
-			"firmware update --type=all --path=/doesnt/matter",
+			"firmware update --type=all --path=/does_not/matter",
 			"",
 			errors.New("Invalid value `all' for option `-t, --type'. Allowed values are: nvme or scm"),
 		},
 		{
 			"Update with SCM",
 			"firmware update --type=scm --path=/dont/care",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareUpdateReq{
+					FirmwarePath: "/dont/care",
+					Type:         control.DeviceTypeSCM,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update with verbose option",
+			"firmware update --type=scm --path=/dont/care --verbose",
 			strings.Join([]string{
 				printRequest(t, &control.FirmwareUpdateReq{
 					FirmwarePath: "/dont/care",

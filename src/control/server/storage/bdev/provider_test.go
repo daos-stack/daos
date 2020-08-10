@@ -35,10 +35,12 @@ import (
 
 func TestBdevScan(t *testing.T) {
 	for name, tc := range map[string]struct {
-		req    ScanRequest
-		mbc    *MockBackendConfig
-		expRes *ScanResponse
-		expErr error
+		req           ScanRequest
+		forwarded     bool
+		mbc           *MockBackendConfig
+		expRes        *ScanResponse
+		expErr        error
+		expVmdEnabled bool
 	}{
 		"no devices": {
 			req:    ScanRequest{},
@@ -70,6 +72,25 @@ func TestBdevScan(t *testing.T) {
 				},
 			},
 		},
+		"multiple devices with vmd enabled": {
+			req:       ScanRequest{EnableVmd: true},
+			forwarded: true,
+			mbc: &MockBackendConfig{
+				ScanRes: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+				},
+			},
+			expRes: &ScanResponse{
+				Controllers: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+				},
+			},
+			expVmdEnabled: true,
+		},
 		"failure": {
 			req: ScanRequest{},
 			mbc: &MockBackendConfig{
@@ -84,6 +105,8 @@ func TestBdevScan(t *testing.T) {
 
 			p := NewMockProvider(log, tc.mbc)
 
+			tc.req.Forwarded = tc.forwarded
+
 			gotRes, gotErr := p.Scan(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
@@ -93,16 +116,19 @@ func TestBdevScan(t *testing.T) {
 			if diff := cmp.Diff(tc.expRes, gotRes, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}
+			common.AssertEqual(t, tc.expVmdEnabled, p.IsVmdEnabled(), "vmd enabled")
 		})
 	}
 }
 
 func TestBdevPrepare(t *testing.T) {
 	for name, tc := range map[string]struct {
-		req    PrepareRequest
-		mbc    *MockBackendConfig
-		expRes *PrepareResponse
-		expErr error
+		req           PrepareRequest
+		shouldForward bool
+		mbc           *MockBackendConfig
+		vmdDetectErr  error
+		expRes        *PrepareResponse
+		expErr        error
 	}{
 		"reset fails": {
 			req: PrepareRequest{},
@@ -116,7 +142,7 @@ func TestBdevPrepare(t *testing.T) {
 				ResetOnly: true,
 			},
 			mbc: &MockBackendConfig{
-				PrepareErr: errors.New("we shouldn't get this far!"),
+				PrepareErr: errors.New("should not get this far"),
 			},
 			expRes: &PrepareResponse{},
 		},
@@ -277,7 +303,9 @@ func TestBdevFormat(t *testing.T) {
 					},
 					storage.MockNvmeController(2).PciAddr: &DeviceFormatResponse{
 						Formatted: false,
-						Error:     FaultFormatError(errors.New("format failed")),
+						Error: FaultFormatError(
+							storage.MockNvmeController(2).PciAddr,
+							errors.New("format failed")),
 					},
 					storage.MockNvmeController(3).PciAddr: &DeviceFormatResponse{
 						Formatted:  true,

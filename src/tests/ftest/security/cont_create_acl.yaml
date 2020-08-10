@@ -3,15 +3,10 @@
 hosts:
   test_servers:
     - server-A
-  transport_config:
-    - allow_insecure: True
 timeout: 1200
 server_config:
   name: daos_server
   port: 10001
-daos_server:
-  start:
-    insecure: True
 pool:
   mode: 511
   name: daos_server

@@ -528,7 +528,7 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				PrepareErr: errors.New("test prepare failed"),
 			},
-			expErr: pbin.PrivilegedHelperRequestFailed("SPDK prepare: test prepare failed"),
+			expErr: pbin.PrivilegedHelperRequestFailed("bdev prepare: test prepare failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -601,7 +601,8 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 			expPayload: &bdev.FormatResponse{
 				DeviceResponses: bdev.DeviceFormatResponses{
 					"foo": &bdev.DeviceFormatResponse{
-						Error: bdev.FaultFormatError(errors.New("test format failed")),
+						Error: bdev.FaultFormatError(
+							"foo", errors.New("test format failed")),
 					},
 				},
 			},

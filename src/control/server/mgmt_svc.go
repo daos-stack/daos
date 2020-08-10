@@ -24,6 +24,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"os/exec"
 	"strconv"
@@ -408,7 +409,7 @@ func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (
 		return nil, errors.Errorf("smdSetFaulty on %s did not match any devices", req.Uuid)
 	}
 
-	srvs, err := svc.harness.FilterInstancesByRank([]system.Rank{rank})
+	srvs, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
 	if err != nil {
 		return nil, err
 	}

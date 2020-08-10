@@ -446,7 +446,7 @@ main(int argc, char **argv)
 	int			 oc_index;
 	int			 rc;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 

@@ -465,7 +465,7 @@ server_init(int argc, char *argv[])
 	char		hostname[256] = { 0 };
 	int		rc;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 

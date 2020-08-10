@@ -35,6 +35,20 @@ def build_vos(env, standalone):
                              LIBS=['vea'])
     denv.Install('$PREFIX/' + install, vos)
 
+def build_vos_internal(env):
+    """build vos internal"""
+    denv = env.Clone()
+
+    libraries = ['vos', 'bio', 'abt', 'daos_common', 'gurt']
+
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(LINKFLAGS=[r'-Wl,-rpath=\$$ORIGIN/daos_srv'])
+
+    vos_size = daos_build.library(denv, 'vos_size', ['vos_size.c'],
+                                  LIBS=libraries)
+
+    denv.Install('$PREFIX/lib64/', vos_size)
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -50,6 +64,7 @@ def scons():
 
     build_vos(denv, False)
     build_vos(denv, True)
+    build_vos_internal(denv)
 
     SConscript('tests/SConscript', exports='denv')
 

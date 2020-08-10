@@ -38,7 +38,7 @@ class DaosRacerCommand(ExecutableCommand):
             host (str): host on which to run the daos_racer command
         """
         super(DaosRacerCommand, self).__init__(
-            "/run/daos_racer", "daos_racer", path)
+            "/run/daos_racer/*", "daos_racer", path)
         self.host = host
 
         # Number of seconds to run
@@ -88,6 +88,16 @@ class DaosRacerCommand(ExecutableCommand):
         env["OMPI_MCA_oob"] = "tcp"
         env["OMPI_MCA_pml"] = "ob1"
         return env
+
+    def set_environment(self, env):
+        """Set the environment variables to export prior to running daos_racer.
+
+        Args:
+            env (EnvironmentVariables): a dictionary of environment variable
+                names and values to export prior to running daos_racer
+        """
+        # Include exports prior to the daos_racer command
+        self._pre_command = env.get_export_str()
 
     def run(self):
         """Run the daos_racer command remotely.

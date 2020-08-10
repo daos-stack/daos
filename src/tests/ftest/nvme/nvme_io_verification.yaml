@@ -14,7 +14,7 @@ server_config:
  name: daos_server
  servers:
    bdev_class: nvme
-   bdev_list: ["0000:81:00.0","0000:da:00.0"]
+   bdev_list: ["0000:81:00.0"]
 pool:
  mode: 511
  name: daos_server
@@ -24,25 +24,28 @@ ior:
  client_processes:
    np: 16
  flags: "-w -W -r -R -k -vv"
+ flag_restart:
+   write: "-w -k -G=5"
+   read: "-r -R -k -G=5"
  repetitions: 1
  api: DAOS
  object_type: 'SX'
  daos_destroy: False
  transfersize: !mux
    case1:
-     block_size: 20000000
+     block_size: 30000000
      tsize:
        - 8
        - 1000
        - 200000
        - 1000000
-       - 20000000
+       - 30000000
    case2:
-     block_size: 60000000
+     block_size: 120000000
      tsize:
        - 50000
-       - 1200000
-       - 15000000
+       - 2400000
+       - 30000000
        - 60000000
  ior_sequence:
 #   - [scmsize, nvmesize]

@@ -5,8 +5,13 @@
 
 set -uex
 
-# shellcheck disable=SC1091
-source ./.build_vars.sh
+if [ -e ./.build_vars.sh ]; then
+  # shellcheck disable=SC1091
+  source ./.build_vars.sh
+else
+  echo 'The .build_vars.sh file is missing!'
+  exit 1
+fi
 
 rm -rf run_test.sh vm_test
 DAOS_BASE="${SL_PREFIX%/install*}"

@@ -68,6 +68,14 @@ func TestStorageCommands(t *testing.T) {
 			errors.New("--ranks parameter invalid"),
 		},
 		{
+			"Format with invalid hosts filter",
+			"storage format --rank-hosts foo-[1-3]",
+			strings.Join([]string{
+				printRequest(t, &control.StorageFormatReq{}),
+			}, " "),
+			errors.New("--rank-hosts parameter invalid"),
+		},
+		{
 			"Non-system reformat with invalid ranks filter",
 			"storage format --reformat --ranks 0-4",
 			strings.Join([]string{
@@ -75,6 +83,14 @@ func TestStorageCommands(t *testing.T) {
 				printRequest(t, &control.StorageFormatReq{Reformat: true}),
 			}, " "),
 			errors.New("--ranks parameter invalid"),
+		},
+		{
+			"Non-system reformat with invalid hosts filter",
+			"storage format --reformat --rank-hosts foo-[1-3]",
+			strings.Join([]string{
+				printRequest(t, &control.StorageFormatReq{}),
+			}, " "),
+			errors.New("--rank-hosts parameter invalid"),
 		},
 		{
 			"Scan",
@@ -182,25 +198,27 @@ func TestStorageCommands(t *testing.T) {
 
 func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 	for name, tc := range map[string]struct {
-		reformat bool
-		rankList []system.Rank
-		uErr     error
-		members  []*ctlpb.SystemMember
-		expOK    bool
-		expErr   error
+		reformat, expSysReformat bool
+		hosts, ranks             string
+		uErr, expErr             error
+		members                  []*ctlpb.SystemMember
 	}{
+		"no reformat with rank-hosts": {
+			hosts:  "foo-[0-1]",
+			expErr: errors.New("--rank-hosts parameter invalid"),
+		},
 		"no reformat with rank list": {
-			rankList: []system.Rank{0, 1},
-			expErr:   errors.New("--ranks parameter invalid"),
+			ranks:  "0-1",
+			expErr: errors.New("--ranks parameter invalid"),
 		},
 		"no reformat without rank list": {},
-		"empty membership": {
-			reformat: true,
-		},
 		"failed member query": {
 			reformat: true,
 			uErr:     errors.New("system failed"),
 			expErr:   errors.New("system failed"),
+		},
+		"empty membership": {
+			reformat: true,
 		},
 		"rank not stopped": {
 			reformat: true,
@@ -229,7 +247,7 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 				{Rank: 0, State: uint32(system.MemberStateStopped)},
 				{Rank: 0, State: uint32(system.MemberStateStopped)},
 			},
-			expOK: true,
+			expSysReformat: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -245,10 +263,12 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 			cmd.log = log
 			cmd.Reformat = tc.reformat
 			cmd.ctlInvoker = mi
+			cmd.Hosts = tc.hosts
+			cmd.Ranks = tc.ranks
 
-			ok, err := cmd.shouldReformatSystem(context.Background(), tc.rankList)
+			sysReformat, err := cmd.shouldReformatSystem(context.Background())
 			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expOK, ok, name)
+			common.AssertEqual(t, tc.expSysReformat, sysReformat, name)
 		})
 	}
 }

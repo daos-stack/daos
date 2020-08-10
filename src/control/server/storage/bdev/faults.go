@@ -58,10 +58,11 @@ func FaultFormatUnknownClass(class string) *fault.Fault {
 	)
 }
 
-func FaultFormatError(err error) *fault.Fault {
+func FaultFormatError(pciAddress string, err error) *fault.Fault {
 	return bdevFault(
 		code.BdevFormatFailure,
-		fmt.Sprintf("NVMe format failed: %s", err), "",
+		fmt.Sprintf("NVMe format failed on %q: %s", pciAddress, err),
+		"",
 	)
 }
 

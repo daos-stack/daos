@@ -63,7 +63,7 @@ class WarningsFactory():
     # Error levels supported by the reporint are LOW, NORMAL, HIGH, ERROR.
     # Errors from this list of functions are known to happen during shutdown
     # for the time being, so are downgraded to LOW.
-    FLAKY_FUNCTIONS = ('daos_lru_cache_destroy', 'rdb_timerd')
+    FLAKY_FUNCTIONS = ('ds_pool_child_purge')
 
     def __init__(self, filename):
         self._fd = open(filename, 'w')
@@ -1031,6 +1031,15 @@ def run_il_test(server, conf):
     # Read it from within a container
     ret = il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
     assert ret.returncode == 0
+    ret = subprocess.run(['dd',
+                          'if={}'.format(os.path.join(dirs[-1], 'bash')),
+                          'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
+                          'iflag=direct',
+                          'oflag=direct',
+                          'bs=128k'])
+
+    print(ret)
+    assert ret.returncode == 0
     dfuse.stop()
 
 def run_in_fg(server, conf):
@@ -1068,14 +1077,6 @@ def test_pydaos_kv(server, conf):
 
     daos = import_daos(server, conf)
 
-    file_self = os.path.dirname(os.path.abspath(__file__))
-    mod_dir = os.path.join(file_self,
-                           '../src/client/pydaos')
-    if mod_dir not in sys.path:
-        sys.path.append(mod_dir)
-
-    dbm = __import__('daosdbm')
-
     pools = get_pool_list()
 
     while len(pools) < 1:
@@ -1087,9 +1088,9 @@ def test_pydaos_kv(server, conf):
 
     print(container)
     c_uuid = container.decode().split()[-1]
-    kvg = dbm.daos_named_kv(pool, c_uuid)
+    container = daos.Cont(pool, c_uuid)
 
-    kv = kvg.get_kv_by_name('Dave')
+    kv = container.get_kv_by_name('my_test_kv', create=True)
     kv['a'] = 'a'
     kv['b'] = 'b'
     kv['list'] = pickle.dumps(list(range(1, 100000)))
@@ -1110,7 +1111,9 @@ def test_pydaos_kv(server, conf):
 
     data['no-key'] = None
 
+    kv.value_size = 32
     kv.bget(data, value_size=16)
+    print("Default get value size %d", kv.value_size)
     print("Second iteration")
     failed = False
     for key in data:
@@ -1124,6 +1127,10 @@ def test_pydaos_kv(server, conf):
 
     if failed:
         print("That's not good")
+
+    kv = None
+    print('Closing container and opening new one')
+    kv = container.get_kv_by_name('my_test_kv')
 
 def test_alloc_fail(conf):
     """run 'daos' client binary with fault injection

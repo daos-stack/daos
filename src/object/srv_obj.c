@@ -32,6 +32,7 @@
 
 #include <abt.h>
 #include <daos/rpc.h>
+#include <daos/cont_props.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/container.h>
@@ -129,7 +130,7 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 
 static void
 obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
-	     struct ds_cont_hdl *cont_hdl)
+	     struct ds_cont_child *cont)
 {
 	int rc;
 	int i;
@@ -170,8 +171,8 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 			orwo->orw_maps.ca_count = 0;
 		}
 
-		if (cont_hdl) {
-			daos_csummer_free_ic(cont_hdl->sch_csummer,
+		if (cont) {
+			daos_csummer_free_ic(cont->sc_csummer,
 				&orwo->orw_iod_csums.ca_arrays);
 			orwo->orw_iod_csums.ca_count = 0;
 		}
@@ -262,7 +263,8 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
-		  daos_handle_t ioh, d_sg_list_t **sgls, int sgl_nr)
+		  daos_handle_t ioh, d_sg_list_t **sgls,
+		  struct bio_sglist *bsgls_dup, int sgl_nr)
 {
 	struct obj_bulk_args	arg = { 0 };
 	crt_bulk_opid_t		bulk_opid;
@@ -294,16 +296,26 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 		offset = remote_offs != NULL ? remote_offs[i] : 0;
 		if (sgls != NULL) {
+			D_ASSERT(bsgls_dup == NULL);
 			sgl = sgls[i];
 		} else {
 			struct bio_sglist *bsgl;
+			bool deduped_skip = true;
 
 			D_ASSERT(!daos_handle_is_inval(ioh));
 			bsgl = vos_iod_sgl_at(ioh, i);
+			if (bsgls_dup) {	/* dedup verify case */
+				rc = vos_dedup_dup_bsgl(ioh, bsgl,
+							&bsgls_dup[i]);
+				if (rc)
+					break;
+				bsgl = &bsgls_dup[i];
+				deduped_skip = false;
+			}
 			D_ASSERT(bsgl != NULL);
 
 			sgl = &tmp_sgl;
-			rc = bio_sgl_convert(bsgl, sgl);
+			rc = bio_sgl_convert(bsgl, sgl, deduped_skip);
 			if (rc)
 				break;
 		}
@@ -420,17 +432,17 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 		struct obj_rw_in	*orw = crt_req_get(rpc);
 		struct ds_pool		*pool;
-
-		pool = ds_pool_lookup(orw->orw_pool_uuid);
-		if (pool == NULL)
-			return -DER_NONEXIST;
 		struct bio_sglist	*fbsgl;
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
 
+		pool = ds_pool_lookup(orw->orw_pool_uuid);
+		if (pool == NULL)
+			return -DER_NONEXIST;
+
 		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
 		fbsgl = vos_iod_sgl_at(ioh, 0);
-		bio_sgl_convert(fbsgl, &fsgl);
+		bio_sgl_convert(fbsgl, &fsgl, false);
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
 		*fbuffer += 0x2;
 		daos_sgl_fini(&fsgl, false);
@@ -632,7 +644,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 	bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 	rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind,
 			       orw->orw_bulks.ca_arrays, off,
-			       DAOS_HDL_INVAL, &p_sgl, orw->orw_nr);
+			       DAOS_HDL_INVAL, &p_sgl, NULL, orw->orw_nr);
 out:
 	orwo->orw_ret = rc;
 	orwo->orw_map_version = orw->orw_map_ver;
@@ -674,7 +686,7 @@ ec_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		D_ASSERT(bsgl != NULL);
 
 		sgl = &tmp_sgl;
-		rc = bio_sgl_convert(bsgl, sgl);
+		rc = bio_sgl_convert(bsgl, sgl, true);
 		if (rc)
 			break;
 
@@ -769,9 +781,8 @@ next:
  * used for the csum structures.
  */
 static int
-obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
-			 struct obj_rw_in *orw,
-			 struct obj_rw_out *orwo)
+obj_fetch_csum_init(struct ds_cont_child *cont, struct obj_rw_in *orw,
+		    struct obj_rw_out *orwo)
 {
 	int rc;
 
@@ -782,7 +793,7 @@ obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 	 *
 	 * The memory will be freed in obj_rw_reply
 	 */
-	rc = daos_csummer_alloc_iods_csums(cont_hdl->sch_csummer,
+	rc = daos_csummer_alloc_iods_csums(cont->sc_csummer,
 					   orw->orw_iod_array.oia_iods,
 					   orw->orw_iod_array.oia_iod_nr,
 					   false, NULL,
@@ -843,7 +854,7 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 	uint32_t	i;
 	int		rc;
 
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0;
 
 	rc = daos_csummer_verify_key(csummer, &orw->orw_dkey,
@@ -873,16 +884,48 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 	return 0;
 }
 
+/** Add a recov record to the recov_lists (for singv degraded fetch) */
+static int
+obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
+		       daos_epoch_t epoch,
+		       struct daos_recx_ep_list **recov_lists_ptr)
+{
+	struct daos_recx_ep_list	*recov_lists = *recov_lists_ptr;
+	struct daos_recx_ep_list	*recov_list;
+	struct daos_recx_ep		 recx_ep;
+
+	if (recov_lists == NULL) {
+		D_ALLOC_ARRAY(recov_lists, iod_nr);
+		if (recov_lists == NULL)
+			return -DER_NOMEM;
+		*recov_lists_ptr = recov_lists;
+	}
+
+	/* add one recx with any idx/nr to notify client this singv need to be
+	 * recovered.
+	 */
+	recov_list = &recov_lists[iod_idx];
+	recx_ep.re_recx.rx_idx = 0;
+	recx_ep.re_recx.rx_nr = 1;
+	recx_ep.re_ep = epoch;
+	recx_ep.re_type = DRT_SHADOW;
+	recx_ep.re_rec_size = rec_size;
+
+	return daos_recx_ep_add(recov_list, &recx_ep);
+}
+
 /** Filter and prepare for the sing value EC update/fetch */
-static void
+static int
 obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
-		       bool for_update)
+		       bool for_update, bool deg_fetch,
+		       struct daos_recx_ep_list **recov_lists_ptr)
 {
 	struct daos_oclass_attr		*oca = NULL;
 	daos_iod_t			*iod;
 	struct obj_ec_singv_local	 loc;
 	uint32_t			 tgt_idx;
 	uint32_t			 i;
+	int				 rc = 0;
 
 	tgt_idx = orw->orw_oid.id_shard - orw->orw_start_shard;
 	for (i = 0; i < orw->orw_nr; i++) {
@@ -907,8 +950,15 @@ obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
 			offs[i] = loc.esl_off;
 			if (for_update)
 				iod->iod_size = loc.esl_size;
+			if (deg_fetch)
+				rc = obj_singv_ec_add_recov(orw->orw_nr, i,
+							    iod->iod_size,
+							    orw->orw_epoch,
+							    recov_lists_ptr);
 		}
 	}
+
+	return rc;
 }
 
 /* Call internal method to increment CSUM media error. */
@@ -1017,6 +1067,69 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 	return 0;
 }
 
+/*
+ * Check if the dedup data is identical to the RDMA data in a temporal
+ * allocated SCM extent, if memcmp fails, update the temporal SCM address
+ * in VOS tree, otherwise, keep using the original dedup data address
+ * in VOS tree and free the temporal SCM extent.
+ */
+static int
+obj_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup, int sgl_nr)
+{
+	struct bio_sglist	*bsgl, *bsgl_dup;
+	int			 i, j, rc;
+
+	D_ASSERT(!daos_handle_is_inval(ioh));
+	D_ASSERT(bsgls_dup != NULL);
+
+	for (i = 0; i < sgl_nr; i++) {
+		bsgl = vos_iod_sgl_at(ioh, i);
+		D_ASSERT(bsgl != NULL);
+		bsgl_dup = &bsgls_dup[i];
+
+		D_ASSERT(bsgl->bs_nr_out == bsgl_dup->bs_nr_out);
+		for (j = 0; j < bsgl->bs_nr_out; j++) {
+			struct bio_iov	*biov = &bsgl->bs_iovs[j];
+			struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[j];
+
+			if (bio_iov2buf(biov) == NULL) {
+				D_ASSERT(bio_iov2buf(biov_dup) == NULL);
+				continue;
+			}
+
+			/* Didn't use deduped extent */
+			if (!biov->bi_addr.ba_dedup) {
+				D_ASSERT(!biov_dup->bi_addr.ba_dedup);
+				continue;
+			}
+			D_ASSERT(biov_dup->bi_addr.ba_dedup);
+
+			D_ASSERT(bio_iov2len(biov) == bio_iov2len(biov_dup));
+			rc = memcmp(bio_iov2buf(biov), bio_iov2buf(biov_dup),
+				    bio_iov2len(biov));
+
+			if (rc == 0) {	/* verify succeeded */
+				D_DEBUG(DB_IO, "Verify dedup succeeded\n");
+				continue;
+			}
+
+			/*
+			 * Replace the dedup addr in VOS tree with the temporal
+			 * SCM extent, ignore space leak if later transaction
+			 * failed to commit.
+			 */
+			biov->bi_addr.ba_off = biov_dup->bi_addr.ba_off;
+			biov->bi_addr.ba_dedup = false;
+			biov_dup->bi_addr.ba_off = UMOFF_NULL;
+
+			D_DEBUG(DB_IO, "Verify dedup extents failed, "
+				"use newly allocated extent\n");
+		}
+	}
+
+	return 0;
+}
+
 static int
 obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		uint64_t cond_flags, daos_key_t *dkey, unsigned int iod_nr,
@@ -1077,6 +1190,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	struct daos_recx_ep_list	*recov_lists = NULL;
 	daos_iod_t			*iods;
 	uint64_t			*offs;
+	struct bio_sglist		*bsgls_dup = NULL; /* dedup verify */
 	int				err, rc = 0;
 
 	D_TIME_START(time_start, OBJ_PF_UPDATE_LOCAL);
@@ -1099,7 +1213,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		D_GOTO(out, rc = 0);
 	}
 
-	rc = csum_verify_keys(ioc->ioc_coh->sch_csummer, orw);
+	rc = csum_verify_keys(ioc->ioc_coc->sc_csummer, orw);
 	if (rc != 0) {
 		D_ERROR("csum_verify_keys error: %d", rc);
 		if (rc == -DER_CSUM)
@@ -1117,7 +1231,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	/* Prepare IO descriptor */
 	if (obj_rpc_is_update(rpc)) {
-		obj_singv_ec_rw_filter(orw, iods, offs, true);
+		obj_singv_ec_rw_filter(orw, iods, offs, true, false, NULL);
 		bulk_op = CRT_BULK_GET;
 
 		/** Fault injection - corrupt data from network */
@@ -1127,10 +1241,27 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				    orw->orw_sgls.ca_count);
 		}
 
+		if (rma && ioc->ioc_coc->sc_props.dcp_dedup &&
+		    ioc->ioc_coc->sc_props.dcp_dedup_verify) {
+			/**
+			 * If deduped data need to be compared, then perform
+			 * the I/O are a regular one, we will check for dedup
+			 * data after RDMA
+			 */
+			D_ALLOC_ARRAY(bsgls_dup, orw->orw_nr);
+			if (bsgls_dup == NULL) {
+				rc = -DER_NOMEM;
+				goto out;
+			}
+		}
+
 		rc = vos_update_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
 			      orw->orw_epoch, orw->orw_api_flags,
 			      dkey, orw->orw_nr, iods,
-			      iod_csums, &ioh, dth);
+			      iod_csums,
+			      ioc->ioc_coc->sc_props.dcp_dedup,
+			      ioc->ioc_coc->sc_props.dcp_dedup_size,
+			      &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1176,13 +1307,6 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				 DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
-		recov_lists = vos_ioh2recx_list(ioh);
-		if (recov_lists != NULL) {
-			daos_recx_ep_list_set_ep_valid(recov_lists,
-						       orw->orw_nr);
-			orwo->orw_rels.ca_arrays = recov_lists;
-			orwo->orw_rels.ca_count = orw->orw_nr;
-		}
 
 		rc = obj_set_reply_sizes(rpc);
 		if (rc != 0)
@@ -1199,7 +1323,20 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
 			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
 		}
-		obj_singv_ec_rw_filter(orw, iods, offs, false);
+		recov_lists = vos_ioh2recx_list(ioh);
+		rc = obj_singv_ec_rw_filter(orw, iods, offs, false,
+					    ec_deg_fetch, &recov_lists);
+		if (rc != 0) {
+			D_ERROR(DF_UOID" obj_singv_ec_rw_filter failed: "
+				DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
+			goto out;
+		}
+		if (recov_lists != NULL) {
+			daos_recx_ep_list_set_ep_valid(recov_lists,
+						       orw->orw_nr);
+			orwo->orw_rels.ca_arrays = recov_lists;
+			orwo->orw_rels.ca_count = orw->orw_nr;
+		}
 	}
 
 	biod = vos_ioh2desc(ioh);
@@ -1211,22 +1348,25 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	}
 
 	if (obj_rpc_is_fetch(rpc) && !spec_fetch) {
-		rc = obj_fetch_csum_init(ioc->ioc_coh, orw, orwo);
+		rc = obj_fetch_csum_init(ioc->ioc_coc, orw, orwo);
 		if (rc) {
 			D_ERROR(DF_UOID" fetch csum init failed: %d.\n",
 				DP_UOID(orw->orw_oid), rc);
 			goto post;
 		}
-		rc = csum_add2iods(ioh,
-				   orw->orw_iod_array.oia_iods,
-				   orw->orw_iod_array.oia_iod_nr,
-				   ioc->ioc_coh->sch_csummer,
-				   orwo->orw_iod_csums.ca_arrays);
 
-		if (rc) {
-			D_ERROR(DF_UOID" fetch verify failed: %d.\n",
-				DP_UOID(orw->orw_oid), rc);
-			goto post;
+		if (ioc->ioc_coc->sc_props.dcp_csum_enabled) {
+			rc = csum_add2iods(ioh,
+					   orw->orw_iod_array.oia_iods,
+					   orw->orw_iod_array.oia_iod_nr,
+					   ioc->ioc_coc->sc_csummer,
+					   orwo->orw_iod_csums.ca_arrays);
+			if (rc) {
+				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
+					DP_UOID(orw->orw_oid), rc);
+				goto post;
+
+			}
 		}
 	}
 
@@ -1234,7 +1374,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind,
 				       orw->orw_bulks.ca_arrays, offs,
-				       ioh, NULL, orw->orw_nr);
+				       ioh, NULL, bsgls_dup, orw->orw_nr);
 		if (!rc)
 			bio_iod_flush(biod);
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
@@ -1252,8 +1392,13 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	}
 
 	if (obj_rpc_is_update(rpc)) {
+		if (bsgls_dup != NULL) {	/* dedup verify */
+			rc = obj_dedup_verify(ioh, bsgls_dup, orw->orw_nr);
+			D_GOTO(post, rc);
+		}
+
 		rc = obj_verify_bio_csum(rpc, iods, iod_csums, biod,
-					 ioc->ioc_coh->sch_csummer);
+					 ioc->ioc_coc->sc_csummer);
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
@@ -1270,6 +1415,15 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		obj_log_csum_err();
 post:
 	err = bio_iod_post(biod);
+	if (bsgls_dup != NULL) {
+		int	i;
+
+		for (i = 0; i < orw->orw_nr; i++) {
+			vos_dedup_free_bsgl(ioh, &bsgls_dup[i]);
+			bio_sgl_fini(&bsgls_dup[i]);
+		}
+		D_FREE(bsgls_dup);
+	}
 	rc = rc ? : err;
 out:
 	rc = obj_rw_complete(rpc, ioc->ioc_map_ver, ioh, rc, dth);
@@ -1342,15 +1496,13 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(coh_uuid), coh);
 
-	/* load csummer on demand for rebuild - will be destroyed in
-	 * obj_ioc_fini if rebuild container
-	 */
-	rc = ds_cont_csummer_init(&coh->sch_csummer, pool_uuid, cont_uuid);
+	/* load VOS container on demand for rebuild */
+	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
 	if (rc)
 		D_GOTO(failed, rc);
 
-	/* load VOS container on demand for rebuild */
-	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
+	/* load csummer on demand for rebuild if not already loaded */
+	rc = ds_cont_csummer_init(coc);
 	if (rc)
 		D_GOTO(failed, rc);
 
@@ -1366,24 +1518,9 @@ failed:
 	return rc;
 }
 
-static bool
-obj_ioc_is_rebuild_container(struct obj_io_context *ioc)
-{
-	if (ioc->ioc_coh == NULL ||
-	    ioc->ioc_coc == NULL ||
-	    ioc->ioc_coc->sc_pool == NULL)
-		return false;
-
-	return is_container_from_srv(ioc->ioc_coc->sc_pool->spc_uuid,
-				    ioc->ioc_coh->sch_uuid);
-}
-
 static void
 obj_ioc_fini(struct obj_io_context *ioc)
 {
-	if (obj_ioc_is_rebuild_container(ioc))
-		daos_csummer_destroy(&ioc->ioc_coh->sch_csummer);
-
 	if (ioc->ioc_coh != NULL) {
 		ds_cont_hdl_put(ioc->ioc_coh);
 		ioc->ioc_coh = NULL;
@@ -1456,7 +1593,7 @@ obj_ioc_begin(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	}
 out:
 	dss_rpc_cntr_enter(DSS_RC_OBJ);
-	ioc->ioc_began = true;
+	ioc->ioc_began = 1;
 	return rc;
 }
 
@@ -1465,7 +1602,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_began) {
 		dss_rpc_cntr_exit(DSS_RC_OBJ, !!err);
-		ioc->ioc_began = false;
+		ioc->ioc_began = 0;
 	}
 	obj_ioc_fini(ioc);
 }
@@ -1575,7 +1712,7 @@ out:
 		rc = -DER_IO;
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
-	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
+	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
@@ -1814,7 +1951,7 @@ again:
 		goto cleanup;
 
 out:
-	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coh);
+	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, ioc.ioc_coc);
 
 cleanup:
 	D_TIME_END(time_start, OBJ_PF_UPDATE);
@@ -1868,7 +2005,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	bool			recursive = false;
 	struct dtx_handle	dth = {0};
 
-	enum_arg->csummer = ioc->ioc_coh->sch_csummer;
+	enum_arg->csummer = ioc->ioc_coc->sc_csummer;
 	/* prepare enumeration parameters */
 	param.ip_hdl = ioc->ioc_vos_coh;
 	param.ip_oid = oei->oei_oid;
@@ -1914,6 +2051,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		recursive = true;
 		enum_arg->chk_key2big = true;
 		enum_arg->need_punch = true;
+		enum_arg->copy_data_cb = vos_iter_copy;
 	}
 
 	/*
@@ -1941,7 +2079,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, NULL, &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg, &dth);
+	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg,
+			   vos_iterate, &dth);
 
 	/* dss_enum_pack may return 1. */
 	rc_tmp = dtx_end(&dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
@@ -2002,7 +2141,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 		return 0;
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, NULL,
-			       DAOS_HDL_INVAL, sgls, idx);
+			       DAOS_HDL_INVAL, sgls, NULL, idx);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
 		oeo->oeo_kds.ca_arrays = NULL;
@@ -2613,6 +2752,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 
 	if (!obj_rpc_is_update(rpc) ||
 	    !daos_csummer_initialized(csummer) ||
+	    csummer->dcs_skip_data_verify ||
 	    !csummer->dcs_srv_verify)
 		return 0;
 
@@ -2627,7 +2767,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 			return -DER_CSUM;
 		}
 
-		rc = bio_sgl_convert(bsgl, &sgl);
+		rc = bio_sgl_convert(bsgl, &sgl, false);
 
 		if (rc == 0)
 			rc = daos_csummer_verify_iod(csummer, iod, &sgl,

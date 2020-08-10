@@ -159,7 +159,7 @@ func (svc *mgmtSvc) drpcOnLocalRanks(parent context.Context, req *mgmtpb.RanksRe
 	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
 	defer cancel()
 
-	instances, err := svc.harness.FilterInstancesByRank(system.RanksFromUint32(req.GetRanks()))
+	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 		signal = syscall.SIGKILL
 	}
 
-	instances, err := svc.harness.FilterInstancesByRank(system.RanksFromUint32(req.GetRanks()))
+	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +345,7 @@ func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) 
 	}
 	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, req:%+v\n", *req)
 
-	instances, err := svc.harness.FilterInstancesByRank(system.RanksFromUint32(req.GetRanks()))
+	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +411,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	}
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
-	instances, err := svc.harness.FilterInstancesByRank(system.RanksFromUint32(req.GetRanks()))
+	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
