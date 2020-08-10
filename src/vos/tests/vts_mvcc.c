@@ -644,6 +644,24 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	if (is_excluded(empty, r, rp, re, w, wp, we, same_tx))
 		goto out;
 
+	/*
+	 * Figure out the expected read result, perform read, and verify the
+	 * result.
+	 */
+	if (r->o_rtype == R_E && !empty)
+		expected_rrc = -DER_EXIST;
+	else if (r->o_rtype == R_NE && empty)
+		expected_rrc = -DER_NONEXIST;
+
+	if (same_tx && expected_rrc != 0) {
+		/** Not a valid use case as conditional updates are split in the
+		 *  context of distributed transactions.  The conditional fetch
+		 *  would mean either the update doesn't execute or should abort
+		 *  the transaction if it returns -DER_EXIST
+		 */
+		goto out;
+	}
+
 	print_message("CASE %d.%d: %s, %s(%s, "DF_U64"), %s(%s, "DF_U64"), "
 		      "%s TX [%d]\n", i, j, empty ? "empty" : "nonemtpy",
 		      r->o_name, rp, re, w->o_name, wp, we,
@@ -682,14 +700,6 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		}
 	}
 
-	/*
-	 * Figure out the expected read result, perform read, and verify the
-	 * result.
-	 */
-	if (r->o_rtype == R_E && !empty)
-		expected_rrc = -DER_EXIST;
-	else if (r->o_rtype == R_NE && empty)
-		expected_rrc = -DER_NONEXIST;
 	print_message("  %s(%s, "DF_U64") (expect %d): ",
 		      r->o_name, rp, re, expected_rrc);
 	rc = r->o_func(arg, rtx, rp, re);
