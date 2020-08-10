@@ -1426,6 +1426,10 @@ many_iovs_with_single_values(void **state)
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
 			    AKEY_NR, iods, sgls, NULL, NULL);
 	assert_int_equal(0, rc);
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
 }
 
 static void
@@ -1460,6 +1464,10 @@ request_non_existent_data(void **state)
 			    1, &ctx.fetch_iod,
 			    &ctx.fetch_sgl, NULL, NULL);
 	assert_success(rc);
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
 }
 
 static bool
