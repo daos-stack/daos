@@ -304,7 +304,7 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 		next_dom = &curr_dom->do_children[num_dom - 1];
 		status = next_dom->do_comp.co_status;
 
-		while (num_dom-1 > 0 && status == PO_COMP_ST_NEW) {
+		while (num_dom - 1 > 0 && status == PO_COMP_ST_NEW) {
 			num_dom--;
 			next_dom = &curr_dom->do_children[num_dom - 1];
 			status = next_dom->do_comp.co_status;
@@ -313,7 +313,7 @@ get_num_domains(struct pool_domain *curr_dom, enum PL_OP_TYPE op_type)
 		next_target = &curr_dom->do_targets[num_dom - 1];
 		status = next_target->ta_comp.co_status;
 
-		while (num_dom-1 > 0 && status == PO_COMP_ST_NEW) {
+		while (num_dom - 1 > 0 && status == PO_COMP_ST_NEW) {
 			num_dom--;
 			next_target = &curr_dom->do_targets[num_dom - 1];
 			status = next_target->ta_comp.co_status;
@@ -1154,7 +1154,7 @@ jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 	D_INIT_LIST_HEAD(&add_list);
 
 	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
-			&add_layout);
+				 &add_layout);
 	if (rc)
 		goto out;
 
