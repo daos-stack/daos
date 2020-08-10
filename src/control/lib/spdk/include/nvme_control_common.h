@@ -45,6 +45,7 @@ enum NvmeControlStatusCode {
 	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 12,
 	NVMEC_ERR_NULL_NS		= 13,
 	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 14,
+	NVMEC_ERR_NO_VMD_CTRLRS		= 15,
 	NVMEC_LAST_STATUS_VALUE
 };
 
@@ -56,6 +57,7 @@ struct ctrlr_t {
 	char		     serial[1024];
 	char		     pci_addr[1024];
 	char		     fw_rev[1024];
+	char		     pci_type[1024];
 	int		     socket_id;
 	struct ns_t	    *nss;
 	struct dev_health_t *dev_health;
@@ -182,7 +184,7 @@ typedef int
 (*health_getter)(struct spdk_nvme_ctrlr *, struct dev_health_entry *);
 
 struct ret_t *
-_discover(prober, bool, health_getter);
+_discover(prober, bool, health_getter, bool);
 
 /**
  * Provide ability to pass function pointers to _collect for mocking

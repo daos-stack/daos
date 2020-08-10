@@ -176,6 +176,8 @@ struct vos_pool {
 	daos_size_t		vp_space_sys[DAOS_MEDIA_MAX];
 	/** Held space by inflight updates. In bytes */
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
+	/** Dedup hash */
+	struct d_hash_table	*vp_dedup_hash;
 };
 
 /**
@@ -809,7 +811,7 @@ struct vos_iter_info {
 	d_iov_t			*ii_akey; /* conditional akey */
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
-	daos_epoch_t		 ii_punched;
+	struct vos_punch_record	 ii_punched;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -887,7 +889,7 @@ struct vos_obj_iter {
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** highest epoch where parent obj/key was punched */
-	daos_epoch_t		 it_punched;
+	struct vos_punch_record	 it_punched;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
 	/* reference on the object */
@@ -968,6 +970,13 @@ vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
 }
 
+int
+vos_dedup_init(struct vos_pool *pool);
+void
+vos_dedup_fini(struct vos_pool *pool);
+void
+vos_dedup_invalidate(struct vos_pool *pool);
+
 /* Reserve SCM through umem_reserve() for a PMDK transaction */
 struct vos_rsrvd_scm {
 	unsigned int		rs_actv_cnt;
@@ -984,6 +993,7 @@ vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 int
 vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 		   daos_size_t size, enum vos_io_stream ios, uint64_t *off);
+
 int
 vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 		   enum vos_io_stream ios);
@@ -1111,5 +1121,21 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
+
+static inline bool
+vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
+		const struct vos_punch_record *punch)
+{
+	if (punch->pr_epc < epc)
+		return false;
+
+	if (punch->pr_epc > epc)
+		return true;
+
+	if (punch->pr_minor_epc >= minor_epc)
+		return true;
+
+	return false;
+}
 
 #endif /* __VOS_INTERNAL_H__ */

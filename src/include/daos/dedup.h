@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,34 +21,17 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include "dfuse_common.h"
-#include "dfuse.h"
+#ifndef __DAOS_DEDUP_H
+#define __DAOS_DEDUP_H
 
-#include "daos_uns.h"
+#include <cont_props.h>
+
+int
+dedup_get_csum_algo(struct cont_props *cont_props);
 
 void
-dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
-		  const char *name, const char *value, size_t size,
-		  int flags)
-{
-	int rc;
+dedup_configure_csummer(struct daos_csummer *csummer,
+			struct cont_props *cont_props);
 
-	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
-	if (strcmp(name, DUNS_XATTR_NAME) == 0) {
-		struct duns_attr_t	dattr = {};
-
-		rc = duns_parse_attr((char *)value, size, &dattr);
-		if (rc)
-			D_GOTO(err, rc);
-	}
-
-	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
-			  size, flags);
-	if (rc == 0) {
-		DFUSE_REPLY_ZERO(inode, req);
-		return;
-	}
-err:
-	DFUSE_REPLY_ERR_RAW(inode, req, rc);
-}
+#endif /** __DAOS_DEDUP_H */

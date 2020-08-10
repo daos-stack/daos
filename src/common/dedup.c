@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,34 +21,32 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include "dfuse_common.h"
-#include "dfuse.h"
+#include <daos/checksum.h>
+#include <daos/dedup.h>
 
-#include "daos_uns.h"
+int
+dedup_get_csum_algo(struct cont_props *cont_props)
+{
+	if (cont_props->dcp_dedup && cont_props->dcp_dedup_verify)
+		return DAOS_PROP_CO_CSUM_CRC64;
+	if (cont_props->dcp_dedup)
+		return  DAOS_PROP_CO_CSUM_SHA256;
+
+	return DAOS_PROP_CO_CSUM_OFF;
+}
 
 void
-dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
-		  const char *name, const char *value, size_t size,
-		  int flags)
+dedup_configure_csummer(struct daos_csummer *csummer,
+			struct cont_props *cont_props)
 {
-	int rc;
+	if (!cont_props->dcp_csum_enabled && cont_props->dcp_dedup) {
+		csummer->dcs_skip_data_verify = true;
+		csummer->dcs_skip_key_calc = true;
+		csummer->dcs_skip_key_verify = true;
 
-	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
-
-	if (strcmp(name, DUNS_XATTR_NAME) == 0) {
-		struct duns_attr_t	dattr = {};
-
-		rc = duns_parse_attr((char *)value, size, &dattr);
-		if (rc)
-			D_GOTO(err, rc);
+		if (csummer->dcs_chunk_size == 0)
+			csummer->dcs_chunk_size = 32 * 1024;
+		else if (csummer->dcs_chunk_size < cont_props->dcp_dedup_size)
+			csummer->dcs_chunk_size = cont_props->dcp_dedup_size;
 	}
-
-	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
-			  size, flags);
-	if (rc == 0) {
-		DFUSE_REPLY_ZERO(inode, req);
-		return;
-	}
-err:
-	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }
