@@ -153,7 +153,6 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: fio
-Requires: json-c
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -385,6 +384,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 * Wed Aug 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-31
 - Change fuse requirement to fuse3
 - Use Lmod for MPI module loading
+- Remove unneeded (and un-distro gated) Requires: json-c
 
 * Wed Jul 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-30
 - Add the daos_storage_estimator.py tool. It merges the functionality of the
