@@ -836,7 +836,7 @@ out:
  * (hg_addr == NULL) means the caller only want to lookup the base_addr.
  * (base_addr == NULL) means the caller only want to lookup the hg_addr.
  */
-int
+void
 crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		  d_rank_t rank, uint32_t tag,
 		  crt_phy_addr_t *uri, hg_addr_t *hg_addr)
@@ -844,7 +844,6 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	struct crt_lookup_item	*li;
 	d_list_t		*rlink;
 	struct crt_grp_priv	*default_grp_priv;
-	int			 rc = 0;
 
 	D_ASSERT(grp_priv != NULL);
 
@@ -881,7 +880,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 			*hg_addr = li->li_tag_addr[tag];
 		d_hash_rec_decref(&default_grp_priv->gp_lookup_cache[ctx_idx],
 				  rlink);
-		D_GOTO(out, rc);
+		D_GOTO(out, 0);
 	} else {
 		D_DEBUG(DB_ALL, "Entry for rank=%d not found\n", rank);
 	}
@@ -892,11 +891,11 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	if (hg_addr)
 		*hg_addr = NULL;
 
-	return rc;
+	return;
 
 out:
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
-	return rc;
+	return;
 }
 
 inline bool
@@ -1530,14 +1529,8 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 
 
 	/* step 1, lookup the URI in the local cache */
-	rc = crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank,
-			       ul_in->ul_tag, &cached_uri, NULL);
-	if (rc != 0) {
-		D_ERROR("crt_grp_lc_lookup(grp %s, rank %d, tag %d) failed, "
-			"rc: %d.\n", grp_priv_primary->gp_pub.cg_grpid,
-			g_rank, ul_in->ul_tag, rc);
-		D_GOTO(out, rc);
-	}
+	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank,
+			  ul_in->ul_tag, &cached_uri, NULL);
 	ul_out->ul_uri = cached_uri;
 	ul_out->ul_tag = ul_in->ul_tag;
 
@@ -1552,16 +1545,8 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	 * step 2, if rank:tag is not found, lookup rank:tag=0
 	 */
 	ul_out->ul_tag = 0;
-	rc = crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx,
-				       g_rank, 0, &cached_uri, NULL);
-	if (rc != 0) {
-		D_ERROR("crt_grp_lc_lookup(grp %s, rank %d, tag %d) "
-			"failed, rc: %d.\n",
-			grp_priv_primary->gp_pub.cg_grpid,
-			g_rank, 0, rc);
-		D_GOTO(out, rc = -DER_OOG);
-	}
-
+	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx,
+			  g_rank, 0, &cached_uri, NULL);
 	ul_out->ul_uri = cached_uri;
 	if (ul_out->ul_uri == NULL)
 		D_GOTO(out, rc = -DER_OOG);
@@ -2189,23 +2174,13 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 				grp_priv->gp_pub.cg_grpid);
 			D_GOTO(out, rc = -DER_PROTO);
 		}
-		rc = crt_grp_lc_lookup(grp_priv, 0, psr_rank, 0, &uri, NULL);
-		if (rc == 0) {
-			if (uri == NULL)
-				break;
 
-			rc = crt_grp_psr_set(grp_priv, psr_rank, uri, false);
-			D_GOTO(out, 0);
-		} else if (rc != -DER_EVICTED) {
-			/*
-			 * DER_EVICTED means the psr_rank being evicted then can
-			 * try next one, for other errno just treats as failure.
-			 */
-			D_ERROR("crt_grp_lc_lookup(grp %s, rank %d tag 0) "
-				"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-				psr_rank, rc);
-			D_GOTO(out, rc);
-		}
+		crt_grp_lc_lookup(grp_priv, 0, psr_rank, 0, &uri, NULL);
+		if (uri == NULL)
+			break;
+
+		rc = crt_grp_psr_set(grp_priv, psr_rank, uri, false);
+		D_GOTO(out, 0);
 	}
 
 	rc = crt_grp_config_psr_load(grp_priv, psr_rank);
@@ -2492,10 +2467,10 @@ out:
 int
 crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 {
-	int rc = 0;
 	struct crt_grp_priv	*grp_priv;
 	crt_phy_addr_t		uri;
 	hg_addr_t		hg_addr;
+	int			rc = 0;
 
 	if (uri_str == NULL) {
 		D_ERROR("Passed uri_str is NULL\n");
@@ -2512,13 +2487,7 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 	if (rank == grp_priv->gp_self && crt_is_service())
 		return crt_self_uri_get(tag, uri_str);
 
-	rc = crt_grp_lc_lookup(grp_priv, 0, rank, tag, &uri, &hg_addr);
-	if (rc != 0) {
-		D_ERROR("crt_grp_lc_lookup failed for rank=%d tag=%d\n",
-			rank, tag);
-		D_GOTO(out, rc);
-	}
-
+	crt_grp_lc_lookup(grp_priv, 0, rank, tag, &uri, &hg_addr);
 	if (uri == NULL) {
 		D_DEBUG(DB_ALL, "uri for %d:%d not found\n", rank, tag);
 		D_GOTO(out, rc = -DER_OOG);
@@ -2528,8 +2497,6 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 	if (!(*uri_str)) {
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-
-
 out:
 	return rc;
 }
