@@ -32,7 +32,9 @@
 #include <daos/common.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/daos_server.h>
+#ifndef VOS_UNIT_TEST
 #include <daos_srv/srv_obj_ec.h>
+#endif
 #include "obj_ec.h"
 #include "obj_internal.h"
 
@@ -49,7 +51,9 @@ struct ec_agg_pool_info {
 	/* Shared handle UUIDs, and service listr
 	 * are initialized in system Xstream.
 	 */
-//	ABT_eventual	 api_eventual;		/* eventual for sys offload */
+#ifndef VOS_UNIT_TEST
+	ABT_eventual	 api_eventual;		/* eventual for sys offload */
+#endif
 };
 
 /* Parameters used to drive iterate all.
@@ -1259,7 +1263,7 @@ out:
 	return rc;
 }
 
-#ifdef NO
+#ifndef VOS_UNIT_TEST
 /* Captures the IV values need for pool and container open. Runs in
  * system xstream.
  */
@@ -1304,7 +1308,6 @@ out:
 	daos_prop_entries_free(prop);
 	D_FREE(prop);
 }
-#endif
 
 /* Iterates entire VOS. Invokes nested iterator to recurse through trees
  * for all objects meeting the criteria: object is EC, and this target is
@@ -1316,8 +1319,8 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
 	struct ec_agg_param	 agg_param = { 0 };
-	//daos_handle_t		 ph = DAOS_HDL_INVAL;
-	//int			*status;
+	daos_handle_t		 ph = DAOS_HDL_INVAL;
+	int			*status;
 	int			 rc = 0;
 
 	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
@@ -1328,7 +1331,6 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 		cont->sc_pool->spc_pool->sp_map_version;
 	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
 	agg_param.ap_cont_handle	= cont->sc_hdl;
-#ifdef NO
 	rc = ABT_eventual_create(sizeof(*status),
 				 &agg_param.ap_pool_info.api_eventual);
 	if (rc != ABT_SUCCESS)
@@ -1368,17 +1370,14 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= 0ULL;
 	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
-#endif
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
 	agg_sgl_fini(&agg_param.ap_sgl);
-#ifdef NO
 out:
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	D_FREE(agg_param.ap_agg_entry);
 	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 	dsc_pool_close(ph);
-#endif
 	return rc;
 
 }
@@ -1396,3 +1395,34 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 
 	return rc;
 }
+
+#else
+
+static int
+agg_iterate_all(daos_handle_t coh, daos_epoch_range_t *epr)
+{
+	vos_iter_param_t	iter_param = { 0 };
+	struct vos_iter_anchors anchors = { 0 };
+	struct ec_agg_param	agg_param = { 0 };
+	int			rc = 0;
+
+	agg_param.ap_cont_handle	= coh;
+	iter_param.ip_hdl		= coh;
+	iter_param.ip_epr.epr_lo	= 0ULL;
+	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
+	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
+			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
+	agg_sgl_fini(&agg_param.ap_sgl);
+	return rc;
+
+}
+int
+ds_obj_ec_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
+{
+	int	rc = 0;
+
+	rc = agg_iterate_all(coh, epr);
+
+	return rc;
+}
+#endif
