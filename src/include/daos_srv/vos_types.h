@@ -428,7 +428,7 @@ struct vos_iter_anchors {
 			ia_reprobe_ev:1;
 };
 
-/* Ignores DTX as they are transient records.   Add VEA overheads later */
+/* Ignores DTX as they are transient records */
 enum VOS_TREE_CLASS {
 	VOS_TC_CONTAINER,
 	VOS_TC_OBJECT,
@@ -436,6 +436,7 @@ enum VOS_TREE_CLASS {
 	VOS_TC_AKEY,
 	VOS_TC_SV,
 	VOS_TC_ARRAY,
+	VOS_TC_VEA,
 };
 
 #endif /* __VOS_TYPES_H__ */
