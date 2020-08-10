@@ -1031,6 +1031,15 @@ def run_il_test(server, conf):
     # Read it from within a container
     ret = il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
     assert ret.returncode == 0
+    ret = subprocess.run(['dd',
+                          'if={}'.format(os.path.join(dirs[-1], 'bash')),
+                          'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
+                          'iflag=direct',
+                          'oflag=direct',
+                          'bs=128k'])
+
+    print(ret)
+    assert ret.returncode == 0
     dfuse.stop()
 
 def run_in_fg(server, conf):
@@ -1102,7 +1111,9 @@ def test_pydaos_kv(server, conf):
 
     data['no-key'] = None
 
+    kv.value_size = 32
     kv.bget(data, value_size=16)
+    print("Default get value size %d", kv.value_size)
     print("Second iteration")
     failed = False
     for key in data:
