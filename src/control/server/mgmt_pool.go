@@ -149,12 +149,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 			svc.log.Errorf("cleaning up pool %s due to create failure %s", req.Uuid, err)
 
-			ps.State = system.PoolServiceStateDestroying
-			if cuErr = svc.sysdb.UpdatePoolService(ps); cuErr != nil {
-				svc.log.Errorf("error while setting pool %s to destroying: %s", req.Uuid, cuErr)
-				break
-			}
-
 			var pdResp *mgmtpb.PoolDestroyResp
 			pdResp, cuErr = svc.PoolDestroy(ctx,
 				&mgmtpb.PoolDestroyReq{
@@ -174,9 +168,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		}
 
 		if cuErr == nil {
-			if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
-				svc.log.Errorf("Failed to remove pool %s in cleanup", ps.PoolUUID)
-			}
 			svc.log.Errorf("removed pool service entry for %s in cleanup", req.Uuid)
 			return
 		}
@@ -221,14 +212,33 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	req.SvcRanks, err = svc.getPoolServiceRanks(req.GetUuid())
+	uuid, err := uuid.Parse(req.GetUuid())
 	if err != nil {
 		return nil, err
 	}
 
+	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	if ps.State == system.PoolServiceStateDestroying {
+		return nil, drpc.DaosAlready
+	}
+
+	ps.State = system.PoolServiceStateDestroying
+	if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+		return nil, err
+	}
+
+	req.SvcRanks = system.RanksToUint32(ps.Replicas)
 	dresp, err := mi.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
+	}
+
+	if err := svc.sysdb.RemovePoolService(uuid); err != nil {
+		return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
 	}
 
 	resp := &mgmtpb.PoolDestroyResp{}
