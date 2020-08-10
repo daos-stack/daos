@@ -71,9 +71,10 @@ get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
 }
 
 struct ret_t *
-nvme_discover(void)
+nvme_discover(bool init_vmd)
 {
-	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs);
+	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs,
+			 init_vmd);
 }
 
 static void

@@ -24,6 +24,7 @@
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
 #include <spdk/env.h>
+#include <spdk/vmd.h>
 
 #include "nvme_control_common.h"
 
@@ -186,12 +187,20 @@ get_controller(struct ctrlr_entry **entry, char *addr)
 }
 
 struct ret_t *
-_discover(prober probe, bool detach, health_getter get_health)
+_discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 {
 	struct ctrlr_entry	*ctrlr_entry;
 	struct dev_health_entry	*health_entry;
 	struct ret_t		*ret;
 	int			 rc;
+
+	if (init_vmd) {
+		rc = spdk_vmd_init();
+		if (rc) {
+			rc = -NVMEC_ERR_NO_VMD_CTRLRS;
+			goto fail;
+		}
+	}
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -203,6 +212,12 @@ _discover(prober probe, bool detach, health_getter get_health)
 	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
 	if (rc != 0)
 		goto fail;
+
+	/**
+	 * TODO: add fini call when we upgrade SPDK to a version that supports
+	 * if (init_vmd)
+	 *   spdk_vmd_fini();
+	 */
 
 	if (!g_controllers || !g_controllers->ctrlr)
 		return init_ret(0); /* no controllers */
@@ -332,7 +347,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	struct ctrlr_entry		       *ctrlr_entry;
 	struct spdk_pci_device		       *pci_dev;
 	struct ctrlr_t			       *ctrlr_tmp;
-	int					rc;
+	int					rc, written;
 
 	ctrlr_entry = g_controllers;
 
@@ -366,8 +381,16 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			goto fail;
 		}
 
-		/* populate numa socket id */
+		/* populate numa socket id & pci device type */
 		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
+		written = snprintf(ctrlr_tmp->pci_type,
+				   sizeof(ctrlr_tmp->pci_type), "%s",
+				   spdk_pci_device_get_type(pci_dev));
+		if (written >= sizeof(ctrlr_tmp->pci_type)) {
+			rc = -NVMEC_ERR_CHK_SIZE;
+			free(pci_dev);
+			goto fail;
+		}
 		free(pci_dev);
 
 		/* Alloc linked list of namespaces per controller */

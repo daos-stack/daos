@@ -53,7 +53,7 @@ const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
 // NVME is the interface that provides SPDK NVMe functionality.
 type NVME interface {
 	// Discover NVMe controllers and namespaces, and device health info
-	Discover(logging.Logger) ([]Controller, error)
+	Discover(logging.Logger, bool) ([]Controller, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger, string) error
 	// Cleanup NVMe object references
@@ -163,17 +163,23 @@ func pciAddressList(ctrlrs []Controller) []string {
 	return pciAddrs
 }
 
-// Discover NVMe devices accessible by SPDK on a given host.
+// Discover NVMe devices, including NVMe devices behind VMDs if enabled,
+// accessible by SPDK on a given host.
 //
 // Calls C.nvme_discover which returns pointers to single linked list of
 // ctrlr_t structs. These are converted and returned as Controller slices
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
-func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
-	ctrlrs, err := processReturn(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
+func (n *Nvme) Discover(log logging.Logger, enableVmd bool) ([]Controller, error) {
+	ctrlrs, err := processReturn(C.nvme_discover(C.bool(enableVmd)),
+		"NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
-	log.Debugf("discovered nvme ssds: %v", pciAddrs)
+	var vmdMsg string
+	if enableVmd {
+		vmdMsg = " with vmd enabled"
+	}
+	log.Debugf("discovered nvme ssds%s: %v", vmdMsg, pciAddrs)
 
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
