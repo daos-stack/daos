@@ -46,7 +46,11 @@ struct sched_pool_info {
 	struct sched_req_info	spi_req_array[SCHED_REQ_MAX];
 	/* When space pressure info acquired, in msecs */
 	uint64_t		spi_space_ts;
+	/* When pool is running into space pressure, in msecs */
+	uint64_t		spi_pressure_ts;
 	int			spi_space_pressure;
+	int			spi_gc_ults;
+	int			spi_gc_sleeping;
 	int			spi_ref;
 };
 
@@ -89,20 +93,25 @@ enum {
 
 static int	sched_policy;
 
+#define SCHED_DELAY_THRESH	20000	/* msecs */
+
 static unsigned int max_delay_msecs[SCHED_REQ_MAX] = {
-	5000,	/* SCHED_REQ_IO */
-	10000,	/* SCHED_REQ_GC */
-	5000,	/* SCHED_REQ_MIGRATE */
+	20000,	/* SCHED_REQ_UPDATE */
+	1000,	/* SCHED_REQ_FETCH */
+	500,	/* SCHED_REQ_GC */
+	20000,	/* SCHED_REQ_MIGRATE */
 };
 
 static unsigned int max_qds[SCHED_REQ_MAX] = {
-	10240,	/* SCHED_REQ_IO */
+	64000,	/* SCHED_REQ_UPDATE */
+	32000,	/* SCHED_REQ_FETCH */
 	1024,	/* SCHED_REQ_GC */
-	4096,	/* SCHED_REQ_MIGRATE */
+	64000,	/* SCHED_REQ_MIGRATE */
 };
 
 static unsigned int req_throttle[SCHED_REQ_MAX] = {
-	0,	/* SCHED_REQ_IO */
+	0,	/* SCHED_REQ_UPDATE */
+	0,	/* SCHED_REQ_FETCH */
 	30,	/* SCHED_REQ_GC */
 	30,	/* SCHED_REQ_REBUILD */
 };
@@ -124,7 +133,7 @@ sched_set_throttle(unsigned int type, unsigned int percent)
 		return -DER_INVAL;
 	}
 
-	if (type == SCHED_REQ_IO) {
+	if (type == SCHED_REQ_UPDATE || type == SCHED_REQ_FETCH) {
 		D_ERROR("Can't throttle IO requests");
 		return -DER_INVAL;
 	}
@@ -132,6 +141,52 @@ sched_set_throttle(unsigned int type, unsigned int percent)
 	req_throttle[type] = percent;
 	return 0;
 }
+
+struct pressure_ratio {
+	unsigned int	pr_free;	/* free space ratio */
+	unsigned int	pr_throttle;	/* update throttle ratio */
+	unsigned int	pr_delay;	/* update being delayed in msec */
+	unsigned int	pr_pressure;	/* index in pressure_gauge */
+};
+
+static struct pressure_ratio pressure_gauge[] = {
+	{	/* free space > 40%, no space pressure */
+		.pr_free	= 40,
+		.pr_throttle	= 100,
+		.pr_delay	= 0,
+		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
+	},
+	{	/* free space > 30% */
+		.pr_free	= 30,
+		.pr_throttle	= 70,
+		.pr_delay	= 2000, /* msecs */
+		.pr_pressure	= 1,
+	},
+	{	/* free space > 20% */
+		.pr_free	= 20,
+		.pr_throttle	= 40,
+		.pr_delay	= 4000, /* msecs */
+		.pr_pressure	= 2,
+	},
+	{	/* free space > 10% */
+		.pr_free	= 10,
+		.pr_throttle	= 20,
+		.pr_delay	= 8000, /* msecs */
+		.pr_pressure	= 3,
+	},
+	{	/* free space > 5% */
+		.pr_free	= 5,
+		.pr_throttle	= 10,
+		.pr_delay	= 12000, /* msecs */
+		.pr_pressure	= 4,
+	},
+	{	/* free space <= 5% */
+		.pr_free	= 0,
+		.pr_throttle	= 5,
+		.pr_delay	= 20000, /* msecs */
+		.pr_pressure	= 5,
+	},
+};
 
 static inline unsigned int
 pool2req_cnt(struct sched_pool_info *pool_info, unsigned int type)
@@ -195,7 +250,7 @@ spi_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	struct sched_pool_info	*spi = sched_rlink2spi(rlink);
 	unsigned int		 type;
 
-	for (type = SCHED_REQ_IO; type < SCHED_REQ_MAX; type++) {
+	for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX; type++) {
 		D_ASSERT(pool2req_cnt(spi, type) == 0);
 		D_ASSERT(d_list_empty(pool2req_list(spi, type)));
 	}
@@ -358,7 +413,7 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 	D_INIT_LIST_HEAD(&spi->spi_hash_link);
 	uuid_copy(spi->spi_pool_id, pool_uuid);
 
-	for (type = SCHED_REQ_IO; type < SCHED_REQ_MAX; type++) {
+	for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX; type++) {
 		list = pool2req_list(spi, type);
 		D_INIT_LIST_HEAD(list);
 	}
@@ -429,7 +484,8 @@ req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 
 	D_ASSERT(attr && func && arg);
 	switch (attr->sra_type) {
-	case SCHED_REQ_IO:
+	case SCHED_REQ_UPDATE:
+	case SCHED_REQ_FETCH:
 		abt_pool = dx->dx_pools[DSS_POOL_IO];
 		break;
 	case SCHED_REQ_GC:
@@ -487,8 +543,9 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left, nvme_left;
-	int			 rc;
+	uint64_t		 scm_left;
+	struct pressure_ratio	*pr;
+	int			 orig_pressure, rc;
 
 	D_ASSERT(spi->spi_space_ts <= info->si_cur_ts);
 	/* Use cached space presure info */
@@ -519,28 +576,25 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
 	else
 		scm_left = 0;
 
-	if (NVME_FREE(&vps) > NVME_SYS(&vps))
-		nvme_left = NVME_FREE(&vps) - NVME_SYS(&vps);
-	else
-		nvme_left = 0;
+	orig_pressure = spi->spi_space_pressure;
+	for (pr = &pressure_gauge[0]; pr->pr_free != 0; pr++) {
+		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100))
+			break;
+	}
+	spi->spi_space_pressure = pr->pr_pressure;
 
-	if (scm_left < (SCM_TOTAL(&vps) * 1 / 10) ||
-	    nvme_left < (NVME_TOTAL(&vps) * 1 / 10))
-		spi->spi_space_pressure = SCHED_SPACE_PRESS_SEVERE;
-	else if (scm_left < (SCM_TOTAL(&vps) * 3 / 10) ||
-		 nvme_left < (NVME_TOTAL(&vps) * 3 / 10))
-		spi->spi_space_pressure = SCHED_SPACE_PRESS_LIGHT;
-	else
-		spi->spi_space_pressure = SCHED_SPACE_PRESS_NONE;
-
-	if (spi->spi_space_pressure != 0)
-		D_WARN("XS(%d): pool:"DF_UUID" is under %s presure, "
+	if (spi->spi_space_pressure != SCHED_SPACE_PRESS_NONE &&
+	    spi->spi_space_pressure != orig_pressure) {
+		D_INFO("XS(%d): pool:"DF_UUID" is under %d presure, "
 		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"] "
 		       "NVMe: tot["DF_U64"], sys["DF_U64"], free["DF_U64"]\n",
 		       dx->dx_xs_id, DP_UUID(spi->spi_pool_id),
-		       spi->spi_space_pressure == 1 ? "light" : "severe",
-		       SCM_TOTAL(&vps), SCM_SYS(&vps), SCM_FREE(&vps),
-		       NVME_TOTAL(&vps), NVME_SYS(&vps), NVME_FREE(&vps));
+		       spi->spi_space_pressure, SCM_TOTAL(&vps),
+		       SCM_SYS(&vps), SCM_FREE(&vps), NVME_TOTAL(&vps),
+		       NVME_SYS(&vps), NVME_FREE(&vps));
+
+		spi->spi_pressure_ts = info->si_cur_ts;
+	}
 out:
 	return spi->spi_space_pressure;
 }
@@ -552,6 +606,7 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_info	*sri;
 	unsigned int		 req_type = req->sr_attr.sra_type;
+	unsigned int		 delay_msecs;
 
 	D_ASSERT(spi != NULL);
 	D_ASSERT(req_type < SCHED_REQ_MAX);
@@ -565,9 +620,21 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	if (sri->sri_req_kicked < sri->sri_req_limit)
 		goto kickoff;
 
+	if (req->sr_attr.sra_flags & SCHED_REQ_FL_NO_DELAY)
+		goto kickoff;
+
+	if (req_type == SCHED_REQ_UPDATE) {
+		struct pressure_ratio *pr;
+
+		pr = &pressure_gauge[spi->spi_space_pressure];
+		delay_msecs = pr->pr_delay;
+	} else {
+		delay_msecs = max_delay_msecs[req_type];
+	}
+
 	/* Request expired */
 	D_ASSERT(info->si_cur_ts >= req->sr_enqueue_ts);
-	if ((info->si_cur_ts - req->sr_enqueue_ts) > max_delay_msecs[req_type])
+	if ((info->si_cur_ts - req->sr_enqueue_ts) > delay_msecs)
 		goto kickoff;
 
 	/* Remaining requests are not expired */
@@ -607,14 +674,49 @@ reset_req_limit(struct dss_xstream *dx, struct sched_pool_info *spi,
 	spi->spi_req_array[req_type].sri_req_kicked = 0;
 }
 
+/* Are space reclaiming ULTs busy/pending on reclaiming space? */
+static inline bool
+is_gc_pending(struct sched_pool_info *spi)
+{
+	D_ASSERT(spi->spi_gc_ults >= spi->spi_gc_sleeping);
+	return spi->spi_gc_ults && (spi->spi_gc_ults > spi->spi_gc_sleeping);
+}
+
+/* Just run into this space pressure situation recently? */
+static inline bool
+is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
+{
+	D_ASSERT(info->si_cur_ts >= spi->spi_pressure_ts);
+	return (info->si_cur_ts - spi->spi_pressure_ts) < SCHED_DELAY_THRESH;
+}
+
+static inline unsigned int
+throttle_update(unsigned int u_max, struct pressure_ratio *pr)
+{
+	if (u_max == 0)
+		return 0;
+
+	/* Severe space pressure */
+	if (pr->pr_free == 0)
+		return u_max * pr->pr_throttle / 100;
+
+	/* Keep IO flow moving when there are only few inflight updates */
+	if ((u_max * pr->pr_throttle / 100) == 0)
+		return 1;
+
+	return u_max * pr->pr_throttle / 100;
+}
+
 static int
 process_pool_cb(d_list_t *rlink, void *arg)
 {
 	struct dss_xstream	*dx = (struct dss_xstream *)arg;
+	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
-	unsigned int		 io_max, gc_max, mig_max;
+	unsigned int		 u_max, f_max, io_max, gc_max, mig_max;
 	unsigned int		 gc_thr, mig_thr;
-	int			 rc;
+	struct pressure_ratio	*pr;
+	int			 press;
 
 	spi = sched_rlink2spi(rlink);
 
@@ -622,41 +724,58 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	mig_thr	= req_throttle[SCHED_REQ_MIGRATE];
 	D_ASSERT(gc_thr < 100 && mig_thr < 100);
 
-	io_max	= pool2req_cnt(spi, SCHED_REQ_IO);
+	u_max	= pool2req_cnt(spi, SCHED_REQ_UPDATE);
+	f_max	= pool2req_cnt(spi, SCHED_REQ_FETCH);
+	io_max	= u_max + f_max;
+
 	gc_max	= pool2req_cnt(spi, SCHED_REQ_GC);
 	mig_max	= pool2req_cnt(spi, SCHED_REQ_MIGRATE);
 
-	rc = check_space_pressure(dx, spi, true);
+	press = check_space_pressure(dx, spi, true);
 
-	switch (rc) {
-	case SCHED_SPACE_PRESS_SEVERE:
-		if ((gc_max / 2) > 0)
-			io_max = min(io_max, gc_max / 2);
-		else if (gc_max)
-			io_max = min(io_max, gc_max);
-		break;
-	case SCHED_SPACE_PRESS_LIGHT:
-		if (gc_max)
-			io_max = min(gc_max, io_max);
-		break;
-	case SCHED_SPACE_PRESS_NONE:
-		if (io_max && gc_max && gc_thr) {
-			gc_thr = min(1, io_max * gc_thr / 100);
-			gc_max = min(gc_max, gc_thr);
-		}
-		break;
-	default:
-		D_ASSERT(0);
-		break;
+	if (press == SCHED_SPACE_PRESS_NONE) {
+		/* Throttle GC & aggregation */
+		if (io_max && gc_max && gc_thr)
+			gc_max = min(gc_max, io_max * gc_thr / 100);
+		goto out;
 	}
 
-	/* Throttle rebuild and reintegraion */
+	pr = &pressure_gauge[press];
+	D_ASSERT(pr->pr_throttle < 100);
+
+	if (pr->pr_free != 0) {	/* Light space pressure */
+		/* Throttle updates when there is space to be reclaimed */
+		if (is_gc_pending(spi)) {
+			u_max	= throttle_update(u_max, pr);
+			io_max	= u_max + f_max;
+		}
+	} else {		/* Severe space pressure */
+		/*
+		 * If space pressure stays in highest level for a while, we
+		 * can assume that no available space could be reclaimed, so
+		 * throttling can be stopped and ENOSPACE could be returned
+		 * to client sooner.
+		 */
+		if (is_pressure_recent(info, spi)) {
+			u_max	= throttle_update(u_max, pr);
+			/*
+			 * Delay all rebuild and reintegration requests for
+			 * this moment, since we can't tell if they are for
+			 * update or fetch.
+			 */
+			mig_max	= 0;
+		}
+	}
+
+out:
+	/* Throttle rebuild and reintegration */
 	if (mig_max && io_max && mig_thr) {
-		mig_thr = min(1, io_max * mig_thr / 100);
+		mig_thr = max(1, io_max * mig_thr / 100);
 		mig_max = min(mig_max, mig_thr);
 	}
 
-	reset_req_limit(dx, spi, SCHED_REQ_IO, io_max);
+	reset_req_limit(dx, spi, SCHED_REQ_UPDATE, u_max);
+	reset_req_limit(dx, spi, SCHED_REQ_FETCH, f_max);
 	reset_req_limit(dx, spi, SCHED_REQ_GC, gc_max);
 	reset_req_limit(dx, spi, SCHED_REQ_MIGRATE, mig_max);
 
@@ -734,7 +853,8 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 		return false;
 
 	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
-		 attr->sra_type == SCHED_REQ_IO ||
+		 attr->sra_type == SCHED_REQ_UPDATE ||
+		 attr->sra_type == SCHED_REQ_FETCH ||
 		 attr->sra_type == SCHED_REQ_MIGRATE);
 
 	/* For VOS xstream only */
@@ -752,7 +872,8 @@ req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 	sri = &req->sr_pool_info->spi_req_array[attr->sra_type];
 
 	D_ASSERT(d_list_empty(&req->sr_link));
-	if (attr->sra_type == SCHED_REQ_IO) {
+	if (attr->sra_type == SCHED_REQ_UPDATE ||
+	    attr->sra_type == SCHED_REQ_FETCH) {
 		D_ASSERT(policy_ops[sched_policy].enqueue_io != NULL);
 		policy_ops[sched_policy].enqueue_io(dx, req, NULL);
 	} else {
@@ -801,6 +922,23 @@ sched_req_yield(struct sched_request *req)
 	ABT_self_suspend();
 }
 
+static inline void
+gc_sleep_counting(struct sched_request *req, int sleep)
+{
+	struct sched_pool_info	*spi = req->sr_pool_info;
+
+	D_ASSERT(spi != NULL);
+	if (req->sr_attr.sra_type != SCHED_REQ_GC)
+		return;
+
+	spi->spi_gc_sleeping += sleep;
+
+	D_ASSERT(spi->spi_gc_sleeping >= 0);
+	D_ASSERTF(spi->spi_gc_sleeping <= spi->spi_gc_ults,
+		  "gc:%d, sleeping:%d\n", spi->spi_gc_ults,
+		  spi->spi_gc_sleeping);
+}
+
 void
 sched_req_sleep(struct sched_request *req, uint32_t msecs)
 {
@@ -828,6 +966,8 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 	if (d_list_empty(&req->sr_link))
 		d_list_add(&req->sr_link, &info->si_sleep_list);
 
+	gc_sleep_counting(req, 1);
+
 	ABT_self_suspend();
 }
 
@@ -842,6 +982,9 @@ sched_req_wakeup(struct sched_request *req)
 	D_ASSERT(!d_list_empty(&req->sr_link));
 	d_list_del_init(&req->sr_link);
 	req->sr_wakeup_time = 0;
+
+	gc_sleep_counting(req, -1);
+
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 	ABT_thread_resume(req->sr_ult);
 }
@@ -893,6 +1036,7 @@ wakeup_all(struct dss_xstream *dx)
 		} else {
 			d_list_del_init(&req->sr_link);
 			req->sr_wakeup_time = 0;
+			gc_sleep_counting(req, -1);
 			D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 			req_enqueue(dx, req);
 		}
@@ -903,10 +1047,12 @@ struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_request	*req;
 	int			 rc;
 
 	D_ASSERT(attr->sra_type == SCHED_REQ_GC ||
-		 attr->sra_type == SCHED_REQ_IO ||
+		 attr->sra_type == SCHED_REQ_UPDATE ||
+		 attr->sra_type == SCHED_REQ_FETCH ||
 		 attr->sra_type == SCHED_REQ_MIGRATE);
 
 	if (ult == ABT_THREAD_NULL) {
@@ -921,7 +1067,11 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 		ult = self;
 	}
 
-	return req_get(dx, attr, NULL, NULL, ult);
+	req = req_get(dx, attr, NULL, NULL, ult);
+	if (req != NULL && attr->sra_type == SCHED_REQ_GC)
+		req->sr_pool_info->spi_gc_ults++;
+
+	return req;
 }
 
 void
@@ -933,6 +1083,11 @@ sched_req_put(struct sched_request *req)
 	D_ASSERT(req != NULL && req->sr_ult != ABT_THREAD_NULL);
 	D_ASSERT(d_list_empty(&req->sr_link));
 	d_list_add_tail(&req->sr_link, &info->si_idle_list);
+
+	if (req->sr_attr.sra_type == SCHED_REQ_GC) {
+		D_ASSERT(req->sr_pool_info->spi_gc_ults > 0);
+		req->sr_pool_info->spi_gc_ults--;
+	}
 }
 
 void

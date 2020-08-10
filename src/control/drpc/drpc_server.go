@@ -60,7 +60,6 @@ type DomainSocketServer struct {
 // sessions.
 func (d *DomainSocketServer) closeSession(s *Session) {
 	d.sessionsMutex.Lock()
-	d.log.Debug("Closing a session")
 	s.Close()
 	delete(d.sessions, s.Conn)
 	d.sessionsMutex.Unlock()
@@ -96,7 +95,6 @@ func (d *DomainSocketServer) Listen() {
 			return
 		}
 
-		d.log.Debug("Creating session for connection")
 		c := NewSession(conn, d.service)
 		d.sessionsMutex.Lock()
 		d.sessions[conn] = c

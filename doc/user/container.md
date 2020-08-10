@@ -56,7 +56,17 @@ release.
 
 ## Data Integrity
 
-Checksum configuration is done per container and is disabled by default.
+DAOS allows to detect and fix (when data protection is enabled) silent data
+corruptions. This is done by calculating checksums for both data and metadata
+in the DAOS library on the client side and storing those checksums persistently
+in SCM. The checksums will then be validated on access and on update/write as
+well on the server side if server verify option is enabled.
+
+Corrupted data will never be returned to the application. When a corruption is
+detected, DAOS will try to read from a different replica, if any.  If the
+original data cannot be recovered, then an error will be reported to the
+application.
+
 To enable and configure checksums, the following container properties are used
 during container create.
 
@@ -67,6 +77,9 @@ during container create.
   DAOS_PROP_CO_CSUM_CRC16,
   DAOS_PROP_CO_CSUM_CRC32,
   DAOS_PROP_CO_CSUM_CRC64,
+  DAOS_PROP_CO_CSUM_SHA1,
+  DAOS_PROP_CO_CSUM_SHA256,
+  DAOS_PROP_CO_CSUM_SHA512
 ```
 
 - `DAOS_PROP_CO_CSUM_CHUNK_SIZE`: defines the chunk size used for
@@ -83,6 +96,56 @@ during container create.
 !!! note
     Note that currently, once a container is created, its checksum configuration
     cannot be changed.
+
+!!! warning
+    The checksum feature is only supported in DAOS 1.2.
+
+## Inline Deduplication (Preview)
+
+Data deduplication (dedup) is a process that allows to eliminate duplicated
+data copies in order to decrease capacity requirements. DAOS has some initial
+support of inline dedup.
+
+When dedup is enabled, each DAOS server maintains a per-pool table indexing
+extents by their hash (i.e. checksum). Any new I/Os bigger than the
+deduplication threshold will thus be looked up in this table to find out
+whether an existing extent with the same signature has already been stored.
+If an extent is found, then two options are provided:
+
+- Transferring the data from the client to the server and doing a memory compare
+  (i.e. memcmp) of the two extents to verify that they are indeed identical.
+- Trusting the hash function and skipping the data transfer. To minimize issue
+  with hash collision, a cryptographic hash function (i.e. SHA256) is used in
+  this case. The benefit of this approarch is that the data to be written does
+  not need to be transferred to the server. Data processing is thus greatly
+  accelerated.
+
+The inline dedup feature can be enabled on a per-container basis. To enable and
+configure dedup, the following container properties are used:
+
+- `DAOS_PROP_CO_DEDUP`: Type of dedup mechanism to use. Supported values are
+
+```c
+  DAOS_PROP_CO_DEDUP_OFF, // default
+  DAOS_PROP_CO_DEDUP_MEMCMP, // memory compare
+  DAOS_PROP_CO_CSUM_HASH // hash-based using SHA256
+```
+
+- `DAOS_PROP_CO_DEDUP_THRESHOLD`: defines the minimal I/O size to consider
+  the I/O for dedup (default is 4K).
+
+!!! warning
+    Dedup is a feature preview in 1.2 (i.e. master) and has some known
+    limitations. Aggregation of deduplicated extents isn't supported and the
+    checksum tree isn't persistent yet. This means that aggregation is disabled
+    for a container with dedplication enabled and duplicated extents won't be
+    matched after a server restart.
+
+## Compression & Encryption
+
+The `DAOS_PROP_CO_COMPRESS` and `DAOS_PROP_CO_ENCRYPT` properties are reserved
+for configuring respectively online compression and encryption.
+These features are currently not on the roadmap.
 
 ## Snapshot & Rollback
 
@@ -280,9 +343,3 @@ $ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> \
 
 The user and group names are case sensitive and must be formatted as
 [DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
-
-## Compression & Encryption
-
-The `DAOS_PROP_CO_COMPRESS` and `DAOS_PROP_CO_ENCRYPT` properties are reserved
-for configuring respectively online compression and encryption.
-These features are currently not on the roadmap.

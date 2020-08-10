@@ -71,16 +71,27 @@ bool
 uint_ref_lru_cmp(const void *key, unsigned int ksize,
 		 struct daos_llink *llink)
 {
-	struct uint_ref	*ref = NULL;
+	struct uint_ref	*ref = container_of(llink, struct uint_ref, ur_llink);
 
-	ref = container_of(llink, struct uint_ref, ur_llink);
+	D_ASSERT(ksize == sizeof(uint64_t));
+
 	return (ref->ur_key == *(uint64_t *)key);
+}
+
+uint32_t
+uint_ref_lru_hash(struct daos_llink *llink)
+{
+	struct uint_ref	*ref = container_of(llink, struct uint_ref, ur_llink);
+
+	return d_hash_string_u32((const char *)&ref->ur_key,
+				 sizeof(ref->ur_key));
 }
 
 struct daos_llink_ops uint_ref_llink_ops = {
 	.lop_free_ref	= uint_ref_lru_free,
 	.lop_alloc_ref	= uint_ref_lru_alloc,
 	.lop_cmp_keys	= uint_ref_lru_cmp,
+	.lop_rec_hash	= uint_ref_lru_hash,
 };
 
 static inline int
@@ -114,7 +125,7 @@ main(int argc, char **argv)
 	struct daos_llink	*link_ret[3] = {NULL};
 	struct daos_lru_cache	*tcache = NULL;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 

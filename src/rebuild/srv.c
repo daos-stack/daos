@@ -803,14 +803,13 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	/* Send rebuild RPC to all targets of the pool to initialize rebuild.
 	 * XXX this should be idempotent as well as query and fini.
 	 */
-retry:
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
 				  pool, DAOS_REBUILD_MODULE,
 				  REBUILD_OBJECTS_SCAN, &rpc, NULL,
 				  NULL);
 	if (rc != 0) {
 		D_ERROR("pool map broad cast failed: rc "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_rpc, rc = 0); /* ignore the failure */
+		return rc;
 	}
 
 	rsi = crt_req_get(rpc);
@@ -825,78 +824,14 @@ retry:
 	rsi->rsi_rebuild_op = rebuild_op;
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
 	rc = dss_rpc_send(rpc);
-	if (rc != 0) {
-		/* If it is network failure, timedout, or group version
-		 * mismatch, let's refresh failure list and retry
-		 */
-		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc) ||
-		     rc == -DER_GRPVER) && !rebuild_gst.rg_abort) {
-			crt_req_decref(rpc);
-			D_GOTO(retry, rc);
-		}
-		D_GOTO(out_rpc, rc);
-	}
+	rso = crt_reply_get(rpc);
+	if (rc == 0)
+		rc = rso->rso_status;
 
 	rgt->rgt_init_scan = 1;
-	rso = crt_reply_get(rpc);
-	if (rso->rso_ranks_list != NULL) {
-		int i;
-
-		/* If the target failed to start rebuild, let's mark the
-		 * the target DOWN, and schedule the rebuild for the
-		 * target
-		 */
-		d_rank_list_dump(rso->rso_ranks_list, "failed starting rebuild",
-				 strlen("failed starting rebuild"));
-
-		for (i = 0; i < rso->rso_ranks_list->rl_nr; i++) {
-			struct pool_target_id_list	list;
-			struct pool_target		*targets;
-			int				tgt_nr;
-			struct pool_target_id		*ids;
-			int				j;
-
-			tgt_nr = pool_map_find_target_by_rank_idx(pool->sp_map,
-					rso->rso_ranks_list->rl_ranks[i], -1,
-					&targets);
-
-			D_ALLOC_ARRAY(ids, tgt_nr);
-			if (ids == NULL)
-				D_GOTO(out_rpc, rc = -DER_NOMEM);
-
-			for (j = 0; j < tgt_nr; j++)
-				ids[j].pti_id = targets[j].ta_comp.co_id;
-			list.pti_number = tgt_nr;
-			list.pti_ids = ids;
-
-			rc = ds_pool_tgt_exclude(pool->sp_uuid, &list);
-			if (rc) {
-				D_ERROR("Can not exclude targets on rank %d\n",
-					rso->rso_ranks_list->rl_ranks[i]);
-				D_GOTO(out_rpc, rc);
-			}
-
-			rc = ds_rebuild_schedule(pool->sp_uuid,
-					pool_map_get_version(pool->sp_map),
-					&list, RB_OP_FAIL);
-			if (rc != 0) {
-				D_ERROR("rebuild fails rc "DF_RC"\n",
-					DP_RC(rc));
-				break;
-			}
-		}
-	}
-
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
-	rc = rso->rso_status;
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start pool rebuild: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-		D_GOTO(out_rpc, rc);
-	}
-out_rpc:
-	crt_req_decref(rpc);
 
+	crt_req_decref(rpc);
 	return rc;
 }
 
@@ -1154,8 +1089,8 @@ done:
 	if (!is_rebuild_global_done(rgt)) {
 		int ret;
 
-		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done.\n",
-			DP_UUID(task->dst_pool_uuid));
+		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done: %d\n",
+			DP_UUID(task->dst_pool_uuid), rgt->rgt_status.rs_errno);
 
 		if (rgt->rgt_abort && rgt->rgt_status.rs_errno == 0) {
 			/* If the leader is stopped due to the leader change,
@@ -1174,11 +1109,24 @@ done:
 					     task->dst_map_ver,
 					     RB_OP_FAIL,
 					     &task->dst_tgts);
-		if (ret == 1)
+		if (ret == 1 || rgt->rgt_abort)
 			D_GOTO(iv_stop, rc);
 
-		D_WARN("Rebuild does not finish by %d\n",
-		       rgt->rgt_status.rs_errno);
+		/* NB: we can not skip the rebuild of the target,
+		 * otherwise it will lose data and also mess the
+		 * rebuild sequence, which has to be done by failure
+		 * sequence order.
+		 */
+		ret = ds_rebuild_schedule(pool->sp_uuid,
+					  task->dst_map_ver,
+					  &task->dst_tgts, RB_OP_FAIL);
+		if (ret != 0) {
+			D_ERROR("reschedule "DF_RC"\n", DP_RC(ret));
+			D_GOTO(iv_stop, rc);
+		}
+
+		D_DEBUG(DB_REBUILD, DF_UUID" reschedule rebuild\n",
+			DP_UUID(pool->sp_uuid));
 	} else {
 		if (task->dst_tgts.pti_number <= 0)
 			goto iv_stop;

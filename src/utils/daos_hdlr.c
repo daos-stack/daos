@@ -938,13 +938,43 @@ cont_decode_props(daos_prop_t *props)
 		fprintf(stderr, "checksum verification on server property not found\n");
 		rc = -DER_INVAL;
 	} else {
-		D_PRINT("cksum verif. on-server:\t");
+		D_PRINT("cksum verif. on server:\t");
 		if (entry->dpe_val == DAOS_PROP_CO_CSUM_SV_OFF)
 			D_PRINT("off\n");
 		else if (entry->dpe_val == DAOS_PROP_CO_CSUM_SV_ON)
 			D_PRINT("on\n");
 		else
 			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP);
+	if (entry == NULL) {
+		fprintf(stderr, "dedup property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("deduplication:\t\t");
+		switch (entry->dpe_val) {
+		case DAOS_PROP_CO_DEDUP_OFF:
+			D_PRINT("off\n");
+			break;
+		case DAOS_PROP_CO_DEDUP_MEMCMP:
+			D_PRINT("memcmp\n");
+			break;
+		case DAOS_PROP_CO_DEDUP_HASH:
+			D_PRINT("hash\n");
+			break;
+		default:
+			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
+			break;
+		}
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP_THRESHOLD);
+	if (entry == NULL) {
+		fprintf(stderr, "dedup threshold property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("dedup threshold:\t"DF_U64"\n", entry->dpe_val);
 	}
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC);

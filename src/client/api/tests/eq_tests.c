@@ -990,7 +990,7 @@ main(int argc, char **argv)
 
 	setenv("OFI_INTERFACE", "lo", 1);
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0) {
 		print_error("Failed daos_debug_init: %d\n", rc);
 		return rc;

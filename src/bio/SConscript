@@ -22,6 +22,7 @@ def scons():
     libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
     libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
     libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
+    libs += ['spdk_vmd']
 
     # Other libs
     libs += ['numa', 'dl', 'smd']
