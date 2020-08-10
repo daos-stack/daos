@@ -42,7 +42,8 @@
 	ACTION(integer_dkey, VOS_TC_DKEY, BTR_FEAT_DIRECT_KEY)		\
 	ACTION(integer_akey, VOS_TC_AKEY, BTR_FEAT_DIRECT_KEY)		\
 	ACTION(single_value, VOS_TC_SV, 0)				\
-	ACTION(array, VOS_TC_ARRAY, 0)
+	ACTION(array, VOS_TC_ARRAY, 0)					\
+	ACTION(vea, VOS_TC_VEA, 0)
 
 #define DECLARE_TYPE(name, type, feats)	\
 	struct daos_tree_overhead	name;
