@@ -75,10 +75,11 @@ class NvmeEnospace(ServerFillUp):
             output = str(buf).split('\n')
 
         for line in output:
-            if 'DER_NOSPACE' in line:
-                self.der_nospace_count += 1
-            else:
-                self.other_errors_count += 1
+            if 'ERR' in line:
+                if 'DER_NOSPACE' in line:
+                    self.der_nospace_count += 1
+                else:
+                    self.other_errors_count += 1
 
     def verify_enspace_log(self, der_nospace_err_count):
         """

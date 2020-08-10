@@ -5,7 +5,9 @@ hosts:
   test_clients:
     - client-C
     - client-D
-timeout: 2500
+#Few tests are in loop for ~10 times and single loop
+#is taking 15min to finish so larger timeout to run tests.
+timeout: 10000
 server_config:
   servers_per_host: 2
   name: daos_server
