@@ -121,7 +121,7 @@ class ServerFillUp(IorTestBase):
         print('Maximum Storage space from the servers is {}'
               .format(int(min(drive_capa) * 0.99)))
 
-        #Return the 99% of storage space as it wont be used 100% for
+        #Return the 99% of storage space as it won't be used 100% for
         #pool creation.
         return int(min(drive_capa) * 0.99)
 
