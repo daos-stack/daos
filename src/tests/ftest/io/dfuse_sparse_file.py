@@ -69,7 +69,7 @@ class DfuseSparseFile(IorTestBase):
         # get scm space before write
         self.space_before = self.pool.get_pool_free_space("nvme")
 
-        # create large fle and perform write to it so that if goes out of
+        # create large file and perform write to it so that if goes out of
         # space.
         sparse_file = str(self.dfuse.mount_dir.value + "/" +
                           "sparsefile.txt")
