@@ -313,22 +313,22 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 		goto error;
 
 	scm_left -= POOL_SCM_HELD(pool);
-
-	nvme_left = NVME_FREE(&vps);
-	if (pool->vp_vea_info) {
-		if (nvme_left < NVME_SYS(&vps))
-			goto error;
-		nvme_left -= NVME_SYS(&vps);
-		/* 'NVMe held' has already been excluded from 'NVMe free' */
-	}
-
 	if (scm_left < space_est[DAOS_MEDIA_SCM])
 		goto error;
 
-	if (pool->vp_vea_info) {
-		if (nvme_left < space_est[DAOS_MEDIA_NVME])
-			goto error;
-	}
+	/* If NVMe isn't configured or this update doesn't use NVMe space */
+	if (pool->vp_vea_info == NULL || space_est[DAOS_MEDIA_NVME] == 0)
+		goto success;
+
+	nvme_left = NVME_FREE(&vps);
+	if (nvme_left < NVME_SYS(&vps))
+		goto error;
+
+	nvme_left -= NVME_SYS(&vps);
+	/* 'NVMe held' has already been excluded from 'NVMe free' */
+
+	if (nvme_left < space_est[DAOS_MEDIA_NVME])
+		goto error;
 
 success:
 	space_hld[DAOS_MEDIA_SCM]	= space_est[DAOS_MEDIA_SCM];

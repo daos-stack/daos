@@ -20,6 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
 /**
  * \file
  * GURT Common functions and types.
@@ -43,9 +44,9 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#include <daos_errno.h>
 
 #include <gurt/types.h>
-#include <gurt/errno.h>
 #include <gurt/debug.h>
 #include <gurt/fault_inject.h>
 

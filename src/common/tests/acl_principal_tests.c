@@ -31,8 +31,8 @@
 #include <cmocka.h>
 
 #include <daos_security.h>
+#include <daos_errno.h>
 #include <gurt/common.h>
-#include <gurt/errno.h>
 #include <pwd.h>
 #include <grp.h>
 #include <errno.h>

@@ -474,19 +474,19 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 			inHosts:         "foo-[1-3]",
 			expMissingHosts: "foo-[1-3]",
 		},
-		"ips cant resolve": {
+		"ips can't resolve": {
 			members:         members,
 			inHosts:         "127.0.0.[1-5]",
 			expRanks:        "1-3,6",
 			expMissingHosts: "127.0.0.[4-5]",
 		},
-		"ips cant resolve with port": {
+		"ips can't resolve with port": {
 			members:         members,
 			inHosts:         "127.0.0.[1-5]:10001",
 			expRanks:        "1-3,6",
 			expMissingHosts: "127.0.0.[4-5]:10001",
 		},
-		"ips cant resolve bad port": {
+		"ips can't resolve bad port": {
 			members:         members,
 			inHosts:         "127.0.0.[1-2]:10000,127.0.0.3:10001",
 			expRanks:        "3",
@@ -508,12 +508,12 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 			inHosts:  "foo-[1-5]",
 			expRanks: "1-6",
 		},
-		"hostnames cant resolve with port": {
+		"hostnames can't resolve with port": {
 			members:  members,
 			inHosts:  "foo-[1-5]:10001",
 			expRanks: "1-6",
 		},
-		"hostnames cant resolve bad port": {
+		"hostnames can't resolve bad port": {
 			members:         members,
 			inHosts:         "foo-[1-2]:10000,foo-3:10001",
 			expRanks:        "3",
