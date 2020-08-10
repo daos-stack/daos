@@ -1728,17 +1728,17 @@ minor_epoch_punch_rebuild(void **state)
 	 */
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
 	epoch++;
-	/** first write the punched extent */
+	/** First write the punched extent */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
 			    &iod, NULL, &sgl);
 	assert_int_equal(rc, 0);
 
-	/** now the "replay" punch */
+	/** Now the "replay" punch */
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch + 1, 0,
 			   VOS_OF_REPLAY_PC, &dkey, 1, &akey, NULL);
 	assert_int_equal(rc, 0);
 
-	/** now write the update at the same major epoch that is after the
+	/** Now write the update at the same major epoch that is after the
 	 *  punched extent
 	 */
 	rex.rx_idx = strlen(first);
@@ -1748,7 +1748,7 @@ minor_epoch_punch_rebuild(void **state)
 			    &iod, NULL, &sgl);
 	assert_int_equal(rc, 0);
 
-	/** now check the value matches the expected value */
+	/** Now check the value matches the expected value */
 	memset(buf, 'x', sizeof(buf));
 	rex.rx_idx = 0;
 	rex.rx_nr = sizeof(buf);
@@ -1773,20 +1773,20 @@ static const struct CMUnitTest punch_model_tests[] = {
 	  array_3, pm_setup, pm_teardown },
 	{ "VOS804: VOS punch model array read/write/punch char static",
 	  array_4, pm_setup, pm_teardown },
-	{ "VOS805: simple punch model test", punch_model_test, NULL, NULL},
-	{ "VOS806: multi update", simple_multi_update, NULL, NULL},
-	{ "VOS807: array set/get size, write, punch",
+	{ "VOS805: Simple punch model test", punch_model_test, NULL, NULL},
+	{ "VOS806: Multi update", simple_multi_update, NULL, NULL},
+	{ "VOS807: Array Set/get size, write, punch",
 	  array_size_write, pm_setup, pm_teardown },
-	{ "VOS808: object punch and fetch",
+	{ "VOS808: Object punch and fetch",
 	  object_punch_and_fetch, NULL, NULL },
-	{ "VOS809: sgl test", sgl_test, NULL, NULL },
-	{ "VOS809: small sgl test", small_sgl, NULL, NULL },
-	{ "VOS810: conditionals test", cond_test, NULL, NULL },
-	{ "VOS811: test vos_obj_array_remove", remove_test, NULL, NULL },
-	{ "VOS812: minor epoch punch sv", minor_epoch_punch_sv, NULL, NULL },
-	{ "VOS813: minor epoch punch array", minor_epoch_punch_array, NULL,
+	{ "VOS809: SGL test", sgl_test, NULL, NULL },
+	{ "VOS809: Small SGL test", small_sgl, NULL, NULL },
+	{ "VOS810: Conditionals test", cond_test, NULL, NULL },
+	{ "VOS811: Test vos_obj_array_remove", remove_test, NULL, NULL },
+	{ "VOS812: Minor epoch punch sv", minor_epoch_punch_sv, NULL, NULL },
+	{ "VOS813: Minor epoch punch array", minor_epoch_punch_array, NULL,
 		NULL },
-	{ "VOS814: minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
+	{ "VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
 		NULL },
 };
 
@@ -1795,7 +1795,7 @@ run_pm_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "vos punch model tests %s", cfg);
+	dts_create_config(test_name, "VOS Punch Model tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 	return cmocka_run_group_tests_name(test_name,
