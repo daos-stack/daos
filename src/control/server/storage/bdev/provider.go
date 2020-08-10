@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
@@ -44,6 +45,7 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
+		EnableVmd bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -60,16 +62,20 @@ type (
 		TargetUser    string
 		ResetOnly     bool
 		DisableVFIO   bool
+		DisableVMD    bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
-	PrepareResponse struct{}
+	PrepareResponse struct {
+		VmdDetected bool
+	}
 
 	// FormatRequest defines the parameters for a Format operation.
 	FormatRequest struct {
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
+		EnableVmd  bool
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
@@ -82,7 +88,7 @@ type (
 	// DeviceFormatResponses is a map of device identifiers to device Format results.
 	DeviceFormatResponses map[string]*DeviceFormatResponse
 
-	// FormatResults contains the results of a Format operation.
+	// FormatResponse contains the results of a Format operation.
 	FormatResponse struct {
 		DeviceResponses DeviceFormatResponses
 	}
@@ -91,9 +97,11 @@ type (
 	Backend interface {
 		Init(shmID ...int) error
 		Reset() error
-		Prepare(PrepareRequest) error
+		Prepare(PrepareRequest) (*PrepareResponse, error)
 		Scan() (storage.NvmeControllers, error)
 		Format(pciAddr string) (*storage.NvmeController, error)
+		EnableVmd()
+		IsVmdEnabled() bool
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -119,6 +127,7 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 	}
 }
 
+// WithForwardingDisabled returns a provider with forwarding disabled.
 func (p *Provider) WithForwardingDisabled() *Provider {
 	p.fwd.Disabled = true
 	return p
@@ -126,6 +135,15 @@ func (p *Provider) WithForwardingDisabled() *Provider {
 
 func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
 	return !p.fwd.Disabled && !req.IsForwarded()
+}
+
+func (p *Provider) enableVmd() {
+	p.backend.EnableVmd()
+}
+
+// IsVmdEnabled returns true if provider is VMD device aware.
+func (p *Provider) IsVmdEnabled() bool {
+	return p.backend.IsVmdEnabled()
 }
 
 // Init performs any initialization steps required by the provider.
@@ -139,7 +157,12 @@ func (p *Provider) Init(req InitRequest) error {
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.shouldForward(req) {
+		req.EnableVmd = p.IsVmdEnabled()
 		return p.fwd.Scan(req)
+	}
+	// set vmd state on remote provider in forwarded request
+	if req.IsForwarded() && req.EnableVmd {
+		p.enableVmd()
 	}
 
 	cs, err := p.backend.Scan()
@@ -156,25 +179,29 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 // use by DAOS.
 func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	if p.shouldForward(req) {
-		return p.fwd.Prepare(req)
+		resp, err := p.fwd.Prepare(req)
+		// set vmd state on local provider after forwarding request
+		if err == nil && resp.VmdDetected {
+			p.enableVmd()
+		}
+
+		return resp, err
 	}
 
 	// run reset first to ensure reallocation of hugepages
 	if err := p.backend.Reset(); err != nil {
-		return nil, errors.WithMessage(err, "SPDK setup reset")
+		return nil, errors.Wrap(err, "bdev prepare reset")
 	}
 
-	res := &PrepareResponse{}
-	// if we're only resetting, just return before prep
+	resp := new(PrepareResponse)
+	// if we're only resetting, return before prep
 	if req.ResetOnly {
-		return res, nil
+		return resp, nil
 	}
 
-	if err := p.backend.Prepare(req); err != nil {
-		return nil, errors.WithMessage(err, "SPDK prepare")
-	}
+	resp, err := p.backend.Prepare(req)
 
-	return res, nil
+	return resp, errors.Wrap(err, "bdev prepare")
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).
@@ -184,7 +211,12 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 
 	if p.shouldForward(req) {
+		req.EnableVmd = p.IsVmdEnabled()
 		return p.fwd.Format(req)
+	}
+	// set vmd state on remote provider in forwarded request
+	if req.IsForwarded() && req.EnableVmd {
+		p.enableVmd()
 	}
 
 	// TODO (DAOS-3844): Kick off device formats in goroutines? Serially formatting a large
