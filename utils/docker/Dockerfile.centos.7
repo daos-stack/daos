@@ -62,7 +62,7 @@ RUN yum -y install epel-release; \
         python-pep8 python-pygit2 python2-pygithub python-requests     \
         readline-devel scons sg3_utils ShellCheck yasm pciutils        \
         valgrind-devel python36-pylint man java-1.8.0-openjdk maven    \
-        python36-requests
+        json-c-devel python36-requests
 
 # DAOS specific
 RUN yum -y install \
@@ -72,7 +72,7 @@ RUN yum -y install \
            ndctl ipmctl e2fsprogs                              \
            python2-clustershell python2-Cython                 \
            python36-clustershell python36-paramiko             \
-           python36-numpy python36-jira python3-pip Lmod       \
+           python36-numpy python36-jira python3-pip            \
            fuse3-devel libipmctl-devel openmpi3-devel          \
            hwloc-devel patchelf python36-tabulate
 

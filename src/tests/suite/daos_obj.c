@@ -3036,7 +3036,7 @@ tgt_idx_change_retry(void **state)
 		/** exclude target of the replica */
 		print_message("rank 0 excluding target rank %u ...\n", rank);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    &arg->pool.svc, rank);
+				    arg->dmg_config, &arg->pool.svc, rank);
 		assert_int_equal(rc, 0);
 
 		/** progress the async IO (not must) */
@@ -3092,7 +3092,8 @@ tgt_idx_change_retry(void **state)
 
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding target rank %u ...\n", rank);
-		daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+		daos_add_server(arg->pool.pool_uuid, arg->group,
+				arg->dmg_config, &arg->pool.svc,
 				rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -3109,7 +3110,6 @@ fetch_replica_unavail(void **state)
 	const char		 akey[] = "test_update akey";
 	const char		 rec[]  = "test_update record";
 	uint32_t		 size = 64;
-	daos_pool_info_t	 info = {0};
 	d_rank_t		 rank = 2;
 	char			*buf;
 	int			 rc;
@@ -3129,17 +3129,9 @@ fetch_replica_unavail(void **state)
 		      &req);
 
 	if (arg->myrank == 0) {
-		/** disable rebuild */
-		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
-		assert_int_equal(rc, 0);
-		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
-			DMG_KEY_FAIL_LOC, DAOS_REBUILD_DISABLE, 0,
-			NULL);
-		assert_int_equal(rc, 0);
-
 		/** exclude the target of this obj's replicas */
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    &arg->pool.svc, rank);
+				    arg->dmg_config, &arg->pool.svc, rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -3152,15 +3144,12 @@ fetch_replica_unavail(void **state)
 	lookup_single(dkey, akey, 0, buf, size, DAOS_TX_NONE, &req);
 
 	if (arg->myrank == 0) {
-		/* re-enable rebuild */
-		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
-					  DMG_KEY_FAIL_LOC, 0, 0, NULL);
-
 		/* wait until rebuild done */
 		test_rebuild_wait(&arg, 1);
 
 		/* add back the excluded targets */
-		daos_add_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+		daos_add_server(arg->pool.pool_uuid, arg->group,
+				arg->dmg_config, &arg->pool.svc,
 				rank);
 
 		/* wait until reintegration is done */
@@ -3256,6 +3245,7 @@ io_obj_key_query(void **state)
 	daos_recx_t	recx;
 	uint64_t	dkey_val, akey_val;
 	uint32_t	flags;
+	daos_handle_t	th;
 	int		rc;
 
 	/** open object */
@@ -3339,15 +3329,24 @@ io_obj_key_query(void **state)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
+	/*
+	 * Not essential to this test, opening a TX helps us exercise
+	 * dc_tx_get_epoch through the daos_obj_query_key fanout.
+	 */
+	rc = daos_tx_open(arg->coh, &th, 0, NULL);
+	assert_int_equal(rc, 0);
+
 	flags = 0;
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
-	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx,
-				NULL);
+	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey.iov_buf, 10);
 	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
 	assert_int_equal(recx.rx_idx, 50);
 	assert_int_equal(recx.rx_nr, 1);
+
+	rc = daos_tx_close(th, NULL);
+	assert_int_equal(rc, 0);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);

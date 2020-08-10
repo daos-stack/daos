@@ -224,7 +224,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-		       struct test_pool *opool, daos_prop_t *prop);
+		       struct test_pool *opool);
 int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
@@ -300,6 +300,8 @@ int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
+int run_daos_dedup_test(int rank, int size, int *sub_tests,
+			   int sub_tests_size);
 unsigned int daos_checksum_test_arg2type(char *optarg);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
@@ -325,16 +327,20 @@ int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
 void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-			 const d_rank_list_t *svc, d_rank_t rank, int tgt);
+			 const char *dmg_config, const d_rank_list_t *svc,
+			 d_rank_t rank, int tgt);
 void daos_add_target(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank, int tgt);
+		     const char *dmg_config, const d_rank_list_t *svc,
+		     d_rank_t rank, int tgt);
 void daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank, int tgt);
-
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank, int tgt);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const d_rank_list_t *svc, d_rank_t rank);
+			 const char *dmg_config, const d_rank_list_t *svc,
+			 d_rank_t rank);
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank);
+		     const char *dmg_config, const d_rank_list_t *svc,
+		     d_rank_t rank);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,

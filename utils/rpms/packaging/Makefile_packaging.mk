@@ -2,12 +2,10 @@
 # Needs the following variables set at a minimum:
 # NAME :=
 # SRC_EXT :=
+# SOURCE =
 
 # Put site overrides (i.e. REPOSITORY_URL, DAOS_STACK_*_LOCAL_REPO) in here
 -include Makefile.local
-
-# default to Leap 15 distro for chrootbuild
-CHROOT_NAME ?= opensuse-leap-15.2-x86_64
 
 ifeq ($(DEB_NAME),)
 DEB_NAME := $(NAME)
@@ -44,9 +42,9 @@ VERSION_ID  := 7
 DISTRO_ID   := el7
 DISTRO_BASE := EL_7
 endif
-ifeq ($(CHROOT_NAME),opensuse-leap-15.2-x86_64)
-VERSION_ID  := 15.2
-DISTRO_ID   := sl15.2
+ifeq ($(CHROOT_NAME),opensuse-leap-15.1-x86_64)
+VERSION_ID  := 15.1
+DISTRO_ID   := sl15.1
 DISTRO_BASE := LEAP_15
 endif
 ifeq ($(CHROOT_NAME),leap-42.3-x86_64)
@@ -86,10 +84,8 @@ endef
 endif
 
 BUILD_OS ?= leap.15
+CHROOT_NAME ?= opensuse-leap-15.1-x86_64
 PACKAGING_CHECK_DIR ?= ../packaging
-PR_REPOS         := $(shell set -x; git show -s --format=%B | sed -ne 's/^PR-repos: *\(.*\)/\1/p')
-LEAP_15_PR_REPOS := $(shell set -x; git show -s --format=%B | sed -ne 's/^PR-repos-leap15: *\(.*\)/\1/p')
-EL_7_PR_REPOS    := $(shell set -x; git show -s --format=%B | sed -ne 's/^PR-repos-el7: *\(.*\)/\1/p')
 COMMON_RPM_ARGS := --define "%_topdir $$PWD/_topdir" $(BUILD_DEFINES)
 DIST    := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
 ifeq ($(DIST),)
@@ -152,7 +148,7 @@ define install_repos
 	        ;;                                                          \
 	        sl42.3) distro="leap42.3";                                  \
 	        ;;                                                          \
-	        sl15.2) distro="leap15";                                    \
+	        sl15.1) distro="leap15";                                    \
 	        ;;                                                          \
 	    esac;                                                           \
 	    baseurl=$${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$$repo/job/$$branch/; \
@@ -386,7 +382,7 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	        ;;                                                          \
 	        sl42.3) distro="leap42.3";                                  \
 	        ;;                                                          \
-	        sl15.2) distro="leap15";                                    \
+	        sl15.1) distro="leap15";                                    \
 	        ;;                                                          \
 	    esac;                                                           \
 	    for repo in $($(DISTRO_BASE)_PR_REPOS) $(PR_REPOS); do                          \

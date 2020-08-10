@@ -1,0 +1,34 @@
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+timeout: 1800
+server_config:
+    name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["0000:81:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
+        env_vars:
+        - IO_STAT_PERIOD=5
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 21474836480 #20G
+    nvme_size: 107374182400 #100G
+    svcn: 1
+    control_method: dmg
+ior:
+    client_processes:
+        np_16:
+            np: 16
+    test_file: daos:testFile
+    repetitions: 2
+    daos_destroy: False
+    iorflags:
+          ior_flags: "-v -W -w -r -R"
+          ior_api: DAOS
+          transfer_block_size: [1M, 2G]
+          obj_class: "SX"

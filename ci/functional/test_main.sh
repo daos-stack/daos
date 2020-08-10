@@ -34,8 +34,8 @@ if $TEST_RPMS; then
     # shellcheck disable=SC2029
     ssh -i ci_key -l jenkins "${first_node}" \
       "TEST_TAG=\"$test_tag\"                        \
-       TNODES=$tnodes                                \
-       FTEST_ARG=$FTEST_ARG                          \
+       TNODES=\"$tnodes\"                            \
+       FTEST_ARG=\"$FTEST_ARG\"                      \
        $(cat ci/functional/test_main_node.sh)"
     # now collect up the logs and store them like non-RPM test does
     mkdir -p install/lib/daos/TESTING/

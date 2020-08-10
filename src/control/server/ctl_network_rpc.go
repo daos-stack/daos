@@ -52,7 +52,13 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		provider = req.GetProvider()
 	}
 
-	results, err := netdetect.ScanFabric(provider, excludes)
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer netdetect.CleanUp(netCtx)
+
+	results, err := netdetect.ScanFabric(netCtx, provider, excludes)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
