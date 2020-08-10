@@ -115,6 +115,8 @@ struct cont_iv_prop {
 	uint64_t	cip_csum;
 	uint64_t	cip_csum_chunk_size;
 	uint64_t	cip_csum_server_verify;
+	uint64_t	cip_dedup;
+	uint64_t	cip_dedup_size;
 	uint64_t	cip_redun_fac;
 	uint64_t	cip_redun_lvl;
 	uint64_t	cip_snap_max;

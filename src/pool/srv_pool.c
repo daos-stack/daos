@@ -4354,14 +4354,14 @@ ds_pool_extend(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 		uint32_t ndomains, int32_t *domains, uint32_t *map_version_p)
 
 {
-	struct pool_svc		*svc;
+	struct pool_svc		*svc = NULL;
 	struct rdb_tx		tx;
 	bool			updated;
 	int rc;
 
 	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		return rc;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -4386,6 +4386,7 @@ out_svc:
 	if (hint != NULL)
 		ds_rsvc_set_hint(&svc->ps_rsvc, hint);
 	pool_svc_put_leader(svc);
+
 	return rc;
 }
 

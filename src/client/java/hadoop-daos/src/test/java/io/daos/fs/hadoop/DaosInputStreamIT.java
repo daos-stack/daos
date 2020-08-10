@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,7 +41,7 @@ import static org.junit.Assert.assertTrue;
 public class DaosInputStreamIT {
   private static final Logger LOG = LoggerFactory.getLogger(DaosInputStreamIT.class);
   private static FileSystem fs;
-  private static String testRootPath = DaosUtils.generateUniqueTestPath();
+  private static String testRootPath = DaosHadoopTestUtils.generateUniqueTestPath();
 
   @Rule
   public Timeout testTimeout = new Timeout(30 * 60 * 1000);
@@ -68,8 +68,8 @@ public class DaosInputStreamIT {
     fs.mkdirs(p);
     List<Path> files = new ArrayList<>();
 
-    for (int i=0; i<numFiles; i++) {
-      Path file = new Path(p, ""+i);
+    for (int i = 0; i < numFiles; i++) {
+      Path file = new Path(p, "" + i);
       files.add(file);
     }
     for (Path file : files) {
@@ -79,13 +79,13 @@ public class DaosInputStreamIT {
   }
 
   private Path setPath(String path) throws IOException {
-    Path p ;
+    Path p;
     if (path.startsWith("/")) {
       p = new Path(testRootPath + path);
     } else {
       p = new Path(testRootPath + "/" + path);
     }
-    if(!fs.exists(p.getParent())){
+    if (!fs.exists(p.getParent())) {
       fs.mkdirs(p.getParent());
     }
     return p;
@@ -138,7 +138,7 @@ public class DaosInputStreamIT {
     byte[] buf = new byte[bufLen];
     long bytesRead = 0;
     while (bytesRead < size) {
-      int bytes = 0 ;
+      int bytes = 0;
       if (size - bytesRead < bufLen) {
         int remaining = (int) (size - bytesRead);
         bytes = instream.read(buf, 0, remaining);
@@ -170,23 +170,23 @@ public class DaosInputStreamIT {
 
     FSDataInputStream fsDataInputStream = this.fs.open(smallSeekFile);
     assertTrue("expected position at:" + 0 + ", but got:"
-            + fsDataInputStream.getPos(), fsDataInputStream.getPos() == 0);
+        + fsDataInputStream.getPos(), fsDataInputStream.getPos() == 0);
     DaosInputStream in =
-            (DaosInputStream)fsDataInputStream.getWrappedStream();
+        (DaosInputStream) fsDataInputStream.getWrappedStream();
     byte[] buf = new byte[Constants.DEFAULT_DAOS_PRELOAD_SIZE];
-    in.read(buf,0, Constants.DEFAULT_DAOS_PRELOAD_SIZE);
+    in.read(buf, 0, Constants.DEFAULT_DAOS_PRELOAD_SIZE);
     assertTrue("expected position at:"
-                    + Constants.DEFAULT_DAOS_READ_BUFFER_SIZE + ", but got:"
-                    + in.getPos(),
-            in.getPos() == Constants.DEFAULT_DAOS_PRELOAD_SIZE);
+            + Constants.DEFAULT_DAOS_READ_BUFFER_SIZE + ", but got:"
+            + in.getPos(),
+        in.getPos() == Constants.DEFAULT_DAOS_PRELOAD_SIZE);
 
     fsDataInputStream.seek(4 * 1024 * 1024);
     buf = new byte[1 * 1024 * 1024];
-    in.read(buf,0, 1 * 1024 * 1024);
+    in.read(buf, 0, 1 * 1024 * 1024);
     assertTrue("expected position at:" + size + ", but got:"
-                      + in.getPos(),
-              in.getPos() == size);
+            + in.getPos(),
+        in.getPos() == size);
 
-      IOUtils.closeStream(fsDataInputStream);
+    IOUtils.closeStream(fsDataInputStream);
   }
 }
