@@ -432,9 +432,9 @@ host1
 -----
 	No SCM modules found
 
-NVMe PCI  Model   FW Revision Socket ID Capacity 
---------  -----   ----------- --------- -------- 
-pciAddr-1 model-1 fwRev-1     1         1 B      
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
 
 `,
 		},
@@ -541,9 +541,9 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            1 B      
 
-NVMe PCI  Model   FW Revision Socket ID Capacity 
---------  -----   ----------- --------- -------- 
-pciAddr-1 model-1 fwRev-1     1         1 B      
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
 
 `,
 		},
@@ -566,9 +566,9 @@ SCM Namespace Socket ID Capacity
 ------------- --------- -------- 
 /dev/pmem1    1         1 B      
 
-NVMe PCI  Model   FW Revision Socket ID Capacity 
---------  -----   ----------- --------- -------- 
-pciAddr-1 model-1 fwRev-1     1         1 B      
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
 
 `,
 		},
@@ -595,9 +595,9 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            1 B      
 
-NVMe PCI  Model   FW Revision Socket ID Capacity 
---------  -----   ----------- --------- -------- 
-pciAddr-1 model-1 fwRev-1     1         1 B      
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
 
 `,
 		},
@@ -631,9 +631,9 @@ host2
 -----
 	No SCM modules found
 
-NVMe PCI  Model   FW Revision Socket ID Capacity 
---------  -----   ----------- --------- -------- 
-pciAddr-1 model-1 fwRev-1     1         1 B      
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
 
 `,
 		},
@@ -651,9 +651,9 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            1 B      
 
-NVMe PCI  Model   FW Revision Socket ID Capacity 
---------  -----   ----------- --------- -------- 
-pciAddr-1 model-1 fwRev-1     1         1 B      
+NVMe PCI     Model   FW Revision Socket ID Capacity 
+--------     -----   ----------- --------- -------- 
+0000:80:00.1 model-1 fwRev-1     1         1 B      
 
 `,
 		},

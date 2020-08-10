@@ -312,9 +312,6 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 				dra->dra_future = ABT_FUTURE_NULL;
 				return rc;
 			}
-
-			drr->drr_result = rc;
-			ABT_future_set(future, drr);
 		}
 
 		i++;
