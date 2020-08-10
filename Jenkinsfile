@@ -13,7 +13,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@corci-918d") _
 
 def doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -191,8 +190,9 @@ el7_component_repos = ""
 leap15_component_repos = ""
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
-                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
+                       "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 " +
+                       "fio MACSio"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -951,7 +951,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit test Bullseye') {
+                stage('Unit Test Bullseye') {
                     when {
                       beforeAgent true
                       expression { ! skip_stage('bullseye', true) }
