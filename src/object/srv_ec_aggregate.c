@@ -55,9 +55,10 @@ struct ec_agg_pool_info {
 /* Parameters used to drive iterate all.
  */
 struct ec_agg_param {
-	struct ec_agg_entry	*ap_agg_entry;	 /* entry used for each OID */
 	d_sg_list_t		 ap_sgl;	 /* mem alloc-ed for I/O */
 	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info */
+	struct ec_agg_entry	*ap_agg_entry;	 /* entry used for each OID */
+	daos_prop_t		*ap_prop;
 	daos_handle_t		 ap_cont_handle; /* container handle */
 };
 
@@ -71,10 +72,10 @@ struct ec_agg_par_extent {
 /* Represents the current stripe undergoing aggregation.
  */
 struct ec_agg_stripe {
-	daos_off_t	as_stripenum;   /* ordinal of the stripe, offset/(k*len) */
-	daos_epoch_t	as_hi_epoch;    /* highest epoch of any extent in stripe */
-	d_list_t	as_dextents;    /* list of stripe's data (replica) extents */
-	daos_off_t	as_stripe_fill; /* amount of stripe covered by replicas */
+	daos_off_t	as_stripenum;   /* ordinal of stripe, offset/(k*len) */
+	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe */
+	d_list_t	as_dextents;    /* list of stripe's data  extents */
+	daos_off_t	as_stripe_fill; /* amount of stripe covered by data */
 	unsigned int	as_extent_cnt;  /* number of replica extents */
 	unsigned int	as_offset;     /* start offset in stripe */
 };
@@ -98,6 +99,7 @@ struct ec_agg_entry {
 	struct ec_agg_stripe	 ae_cur_stripe;
 	struct ec_agg_par_extent ae_par_extent;
 	daos_handle_t		 ae_obj_hdl;
+	d_rank_t		 ae_peer_rank;
 };
 
 /* Struct used to drive offloaded stripe update.
@@ -531,11 +533,26 @@ agg_overlap(daos_recx_t *recx, unsigned int cell, unsigned int k,
 static int
 agg_get_obj_handle(struct ec_agg_entry *entry)
 {
-	int		rc = 0;
+	struct daos_obj_layout *layout;
+	int			i, j, rc = 0;
+	bool			opened = false;
 
 	if (daos_handle_is_inval(entry->ae_obj_hdl)) {
 		rc = dsc_obj_open(entry->ae_cont_hdl, entry->ae_oid.id_pub,
 				  DAOS_OO_RW, &entry->ae_obj_hdl);
+		if (!rc)
+			opened = true;
+	}
+	if (opened) {
+		d_rank_t myrank, prevrank = ~0;
+		crt_group_rank(NULL, &myrank);
+		D_PRINT("my rank: %u\n", myrank);
+		dc_obj_layout_get(entry->ae_obj_hdl, &layout);
+		for (i = 0; i < layout->ol_nr; i++)
+			for (j = 0; j < layout->ol_shards[i]->os_replica_nr;
+			     j++)
+				if (layout->ol_shards[i]->os_ranks[j] == myrank)
+					entry->ae_peer_rank = prevrank;
 	}
 	return rc;
 }
@@ -1165,7 +1182,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 /* Initializes the struct holding the iteration state (ec_agg_entry).
  */
 static void
-agg_init_entry(daos_handle_t lcoh, daos_handle_t gcoh,
+agg_reset_entry(daos_handle_t lcoh, daos_handle_t gcoh,
 	       struct ec_agg_entry *agg_entry,
 	       vos_iter_entry_t *entry, struct daos_oclass_attr *oca,
 	       d_sg_list_t *sgl)
@@ -1244,7 +1261,7 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 					 ae_cur_stripe.as_dextents);
 
 		}
-		agg_init_entry(agg_param->ap_cont_handle,
+		agg_reset_entry(agg_param->ap_cont_handle,
 			       agg_param->ap_pool_info.api_cont_hdl,
 			       agg_param->ap_agg_entry, entry, oca,
 			       &agg_param->ap_sgl);
@@ -1266,7 +1283,6 @@ static void
 agg_iv_ult(void *arg)
 {
 	struct ec_agg_param	*agg_param = (struct ec_agg_param *)arg;
-	daos_prop_t		*prop = NULL;
 	struct daos_prop_entry	*entry = NULL;
 	int			 rc = 0;
 
@@ -1279,29 +1295,30 @@ agg_iv_ult(void *arg)
 		goto out;
 	}
 
-	D_ALLOC_PTR(prop);
-	if (prop == NULL) {
+	D_ALLOC_PTR(agg_param->ap_prop);
+	if (agg_param->ap_prop == NULL) {
 		D_ERROR("Property allocation failed\n");
 		rc = -DER_NOMEM;
 		goto out;
 	}
 
-	rc = ds_pool_iv_prop_fetch(agg_param->ap_pool_info.api_pool, prop);
+	rc = ds_pool_iv_prop_fetch(agg_param->ap_pool_info.api_pool,
+				   agg_param->ap_prop);
 	if (rc) {
 		D_ERROR("ds_pool_iv_prop_fetch failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
+	entry = daos_prop_entry_get(agg_param->ap_prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	agg_param->ap_pool_info.api_svc_list =
 					(d_rank_list_t *)entry->dpe_val_ptr;
 
+out:
 	ABT_eventual_set(agg_param->ap_pool_info.api_eventual,
 			 (void *)&rc, sizeof(rc));
-out:
-	daos_prop_entries_free(prop);
-	D_FREE(prop);
+	// daos_prop_entries_free(prop);
+	//D_FREE(prop);
 }
 
 /* Iterates entire VOS. Invokes nested iterator to recurse through trees
@@ -1350,6 +1367,8 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 			   agg_param.ap_pool_info.api_poh_uuid, 0, NULL,
 			   agg_param.ap_pool_info.api_pool->sp_map,
 			   agg_param.ap_pool_info.api_svc_list, &ph);
+	daos_prop_entries_free(agg_param.ap_prop);
+	D_FREE(agg_param.ap_prop);
 	if (rc) {
 		D_ERROR("dsc_pool_open failed: "DF_RC"\n", DP_RC(rc));
 		goto out;

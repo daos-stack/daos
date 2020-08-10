@@ -110,6 +110,9 @@
 	X(DAOS_OBJ_RPC_MIGRATE,						\
 		0, &CQF_obj_migrate,					\
 		ds_obj_migrate_handler, NULL),				\
+	X(DAOS_OBJ_RPC_EC_AGGREGATE,					\
+		0, &CQF_obj_ec_agg,				\
+		ds_obj_ec_agg_handler, NULL),			\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, NULL /* TBD */,					\
 		NULL /* TBD */, NULL)
@@ -316,6 +319,22 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((int32_t)		(om_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
+
+#define DAOS_ISEQ_OBJ_EC_AGG	/* input fields */			\
+	((uuid_t)		(ec_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(ec_cont_uuid)		CRT_VAR)	\
+	((uuid_t)		(ec_poh_uuid)		CRT_VAR)	\
+	((uuid_t)		(ea_coh_uuid)		CRT_VAR)	\
+	((daos_unit_oid_t)	(ea_oids)		CRT_VAR)	\
+	((daos_key_t)		(ea_dkey)		CRT_VAR)	\
+	((uint64_t)		(ea_eph)		CRT_VAR)	\
+	((daos_iod_t)		(ea_iod)		CRT_VAR)	\
+	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
+
+#define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
+	((int32_t)		(om_status)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
