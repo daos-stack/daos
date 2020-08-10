@@ -1805,7 +1805,7 @@ test_enumerate_object(void **state)
 	d_iov_t			 csum_iov = {0};
 	d_sg_list_t		 sgl = {0};
 	struct dcs_csum_info	*csum_info = NULL;
-	void			*csum_ptr;
+	void			*end_byte;
 	const uint32_t		 akey_nr = 5;
 	/** will enumerate for each akey, value of each akey, and 1 dkey */
 	const uint32_t		 enum_nr = akey_nr * 2 + 1;
@@ -1865,15 +1865,16 @@ test_enumerate_object(void **state)
 	assert_int_equal(enum_nr, nr);
 
 	/** Make sure csum iov is correct */
-	csum_ptr = csum_iov.iov_buf;
-	while (csum_ptr < csum_iov.iov_buf + csum_iov.iov_len) {
+	end_byte = csum_iov.iov_buf + csum_iov.iov_len;
+	while (csum_iov.iov_buf < end_byte) {
 		ci_cast(&csum_info, &csum_iov);
-		assert_int_equal(1, csum_info->cs_nr);
-		csum_ptr += ci_size(*csum_info);
+		csum_iov.iov_buf += ci_size(*csum_info);
+		csum_iov.iov_buf_len -= ci_size(*csum_info);
+		csum_iov.iov_len -= ci_size(*csum_info);
 		csum_count++;
 	}
 
-	assert_int_equal(13, csum_count);
+	assert_int_equal(11, csum_count);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
