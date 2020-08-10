@@ -373,21 +373,6 @@ if grep \"testsuite.setAttribute('name', 'avocado')\" \
 wq
 EOF
 fi
-# Adding debug to xunit.py
-sudo ed <<EOF /usr/lib/python2.7/site-packages/avocado/plugins/xunit.py
-44i
-        print(\"-- _escape_cdata(): cdata:\n\" + cdata)
-.
-45d
-.
-i
-        new_cdata = cdata.replace(']]>', ']]>]]&gt;<![CDATA[')
-        print(\"-- _escape_cdata(): new_cdata:\n\" + new_cdata)
-        return new_cdata
-
-.
-wq
-EOF
 
 pushd $PREFIX/lib/daos/TESTING/ftest
 
