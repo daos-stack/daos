@@ -68,5 +68,7 @@ class GroupTest(Test):
         cmd = srv_cmd
         self.utils.launch_test(self, cmd)
 
+        self.utils.log_copy(self)
+
 if __name__ == "__main__":
     main()

@@ -39,7 +39,6 @@ import cart_logparse
 import cart_logtest
 
 import avocado
-import tempfile
 
 # Temporary debug function to troubleshoot write-permissions problem
 def dump_ls_output(ls_arg):
@@ -413,6 +412,27 @@ class CartUtils():
 
         self.stdout.info(cmd)
         self.progress_log.info(cmd)
+
+    @staticmethod
+    def log_copy(cartobj):
+        """Copy cart log files to Jenkins-accessible directory """
+
+        import shutil
+        import tempfile
+
+        print("Copy log path", cartobj.log_path, " to ", os.environ["AVOCADO_TEST_LOGDIR"])
+        # Copy log files to jenkins dir
+
+        # Source path  
+        src = cartobj.log_path
+
+        # Destination path  
+        _dest = os.environ["AVOCADO_TEST_LOGDIR"]
+        dest = tempfile.mkdtemp(dir = _dest)
+
+        # Copy the content of source to destination  
+        rc = shutil.copytree(src, dest + "-testLogs")
+        print("shutil.copytree: ", src, " to ", dest, ",  rc = ", rc)
 
     @staticmethod
     def log_check(cartobj):

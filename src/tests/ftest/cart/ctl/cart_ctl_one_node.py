@@ -83,5 +83,7 @@ class CartCtlOneNodeTest(Test):
         clicmd = self.utils.build_cmd(self, self.env, "cli6")
         self.utils.launch_test(self, clicmd, srv_rtn)
 
+        self.utils.log_copy(self)
+
 if __name__ == "__main__":
     main()

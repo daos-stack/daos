@@ -80,5 +80,7 @@ class CartCtlFiveNodeTest(Test):
 
         self.utils.stop_process(srv_rtn)
 
+        self.utils.log_copy(self)
+
 if __name__ == "__main__":
     main()

@@ -82,5 +82,7 @@ class CartNoPmixOneNodeTest(Test):
 
         self.utils.print("Finished waiting for {}".format(p))
 
+        self.utils.log_copy(self)
+
 if __name__ == "__main__":
     main()
