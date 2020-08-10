@@ -567,7 +567,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 
 	if (ul_out->ul_rc != 0) {
 		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP returned rc=%d\n",
-			ul_out->ul_rc);
+			  ul_out->ul_rc);
 		D_GOTO(retry, rc = ul_out->ul_rc);
 	}
 
@@ -687,7 +687,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		}
 
 		rc = crt_issue_uri_lookup(ctx, grp, lookup_rank, 0,
-				          tgt_ep->ep_rank, tgt_ep->ep_tag,
+					  tgt_ep->ep_rank, tgt_ep->ep_tag,
 					  rpc_priv);
 		D_GOTO(out, rc);
 	}
@@ -770,7 +770,6 @@ crt_lc_hg_addr_fill(struct crt_rpc_priv *rpc_priv)
 
 	crt_grp_lc_lookup(grp_priv, ctx->cc_idx, tgt_ep->ep_rank,
 			  tgt_ep->ep_tag, NULL, &rpc_priv->crp_hg_addr);
-	return;
 }
 
 bool
@@ -820,7 +819,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 			rc = crt_self_uri_get(tgt_ep->ep_tag, &uri);
 			if (rc != DER_SUCCESS) {
 				D_ERROR("crt_self_uri_get(tag: %d) failed, "
-				        "rc %d\n", tgt_ep->ep_tag, rc);
+					"rc %d\n", tgt_ep->ep_tag, rc);
 				D_GOTO(out, rc);
 			}
 
