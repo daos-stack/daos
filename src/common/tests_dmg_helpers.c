@@ -142,7 +142,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (cmd_str == NULL)
 		return -DER_NOMEM;
 
-	D_INFO("running %s\n", cmd_str);
+	D_DEBUG(DB_TEST, "running %s\n", cmd_str);
 	fp = popen(cmd_str, "r");
 	if (!fp) {
 		D_ERROR("failed to invoke %s\n", cmd_str);
