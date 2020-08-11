@@ -21,6 +21,7 @@
 from ior_test_base import IorTestBase
 
 
+# pylint: disable=too-many-ancestors
 class IoConsistency(IorTestBase):
     """Test class Description: Verify data consistency using different
                                middlewares. In this case, using DFS and POSIX.
@@ -49,7 +50,7 @@ class IoConsistency(IorTestBase):
             Mount the container using dfuse
             Run IOR -a POSIX -r -R to verify data consistency and delete the
             file.
-            Try to re-write to the same file name after deletion, which should
+            Try to re-create to the same file name after deletion, which should
             work without issues.
             Repeat the same steps as above for SSF this time.
         :avocado: tags=all,daosio,hw,large,pr,ioconsistency
@@ -66,10 +67,10 @@ class IoConsistency(IorTestBase):
             if api_flag[0] == "POSIX":
                 # if api is POSIX do not create new pool and container.
                 # Also do not stop dfuse when ior command is complete.
-                self.run_ior_with_pool(update=False, stop_dfuse=False)
+                self.run_ior_with_pool(create_pool=False, stop_dfuse=False)
             else:
                 self.run_ior_with_pool()
 
         # Try to re-create the file with same name and size.
         self.ior_cmd.flags.update(apis_flags[0][1])
-        self.run_ior_with_pool(update=False)
+        self.run_ior_with_pool(create_pool=False)

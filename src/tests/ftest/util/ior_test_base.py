@@ -126,7 +126,7 @@ class IorTestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          test_file="daos:testFile", update=True,
+                          test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True):
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -140,8 +140,8 @@ class IorTestBase(TestWithServers):
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
                 "daos:testFile". Is ignored when using POSIX through DFUSE.
-            update (bool, optional): If it is true, create pool and container
-                else just run the ior. Defaults to True.
+            create_pool (bool, optional): If it is true, create pool and
+                container else just run the ior. Defaults to True.
             create_cont (bool, optional): Create new container. Default is True
             stop_dfuse (bool, optional): Stop dfuse after ior command is
                 finished. Default is True.
@@ -150,7 +150,7 @@ class IorTestBase(TestWithServers):
             CmdResult: result of the ior command execution
 
         """
-        if update:
+        if create_pool:
             self.update_ior_cmd_with_pool(create_cont)
 
         # start dfuse if api is POSIX
