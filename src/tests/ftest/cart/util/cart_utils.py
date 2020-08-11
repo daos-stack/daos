@@ -61,6 +61,15 @@ def dump_ls_output(ls_arg):
     print("DEBUG: stdout of [" + ls_cmd + "]:\n {}".format(stdout))
     print("DEBUG: stderr of [" + ls_cmd + "]:\n {}".format(stderr))
 
+import os, fnmatch
+
+def find_files(directory, pattern):
+    for root, dirs, files in os.walk(directory):
+        for basename in files:
+            if fnmatch.fnmatch(basename, pattern):
+                filename = os.path.join(root, basename)
+                yield filename
+
 class CartUtils():
     """CartUtils Class"""
 
@@ -382,6 +391,8 @@ class CartUtils():
         cmd = shlex.split(cmd)
         rtn = subprocess.call(cmd)
 
+        self.print("\nENV : %s\n" % os.environ)
+
         if rtn:
             if srv1 is not None:
                 self.stop_process(srv1)
@@ -458,3 +469,16 @@ class CartUtils():
             cl = cart_logparse.LogIter(log_file)
             c_log_test = cart_logtest.LogTest(cl)
             c_log_test.check_log_file(strict_test)
+
+    @staticmethod
+    def dump_cart_logs():
+        """Print contents of cart.log
+
+        Returns:
+            void
+        """
+
+        for filename in find_files('.', 'cart.log*'):
+            print('Found cart.log file: ', filename)
+            log = open(filename, "r").read()
+            print(log)

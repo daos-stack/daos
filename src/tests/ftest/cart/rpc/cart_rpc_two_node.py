@@ -62,7 +62,5 @@ class CartRpcTwoNodeTest(Test):
         self.utils.log_copy(self)
         self.utils.log_check(self)
 
-        self.utils.log_copy(self)
-
 if __name__ == "__main__":
     main()
