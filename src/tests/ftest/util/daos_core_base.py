@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+import write_host_file
+
 from avocado.utils import process
 from apricot import TestWithServers
 from env_modules import load_mpi
@@ -52,6 +54,13 @@ class DaosCoreBase(TestWithServers):
         # obtain separate logs
         self.update_log_file_names(self.subtest_name)
         super(DaosCoreBase, self).setUp()
+        self.hostfile_clients_slots = None
+        # single client for all tests except for 'daos_test -F'
+        if not self.subtest_name == "DAOS File System tests":
+            self.hostlist_clients = [self.hostlist_clients[0]]
+            self.hostfile_clients = write_host_file.write_host_file(
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
@@ -65,13 +74,17 @@ class DaosCoreBase(TestWithServers):
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
 
-        cmd = "{} {} -n {} -x D_LOG_FILE={} \
+        # for 'daos_test -F' increase the number of client processes to 16
+        if subtest == "F":
+            num_clients = 16
+
+        cmd = "{} {} -n {} --hostfile {} -x D_LOG_FILE={} --map-by node \
             -x D_LOG_MASK=DEBUG -x DD_MASK=mgmt,io,md,epc,rebuild \
             {} -s {} -n {} -{} {}".format(self.orterun, self.client_mca,
-                                      num_clients,
-                                      get_log_file(self.client_log),
-                                      self.daos_test, num_replicas,
-                                      dmg_config_file, subtest, args)
+                                          num_clients, self.hostfile_clients,
+                                          get_log_file(self.client_log),
+                                          self.daos_test, num_replicas,
+                                          dmg_config_file, subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"
