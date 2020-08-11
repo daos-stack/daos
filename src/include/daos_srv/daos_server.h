@@ -255,9 +255,14 @@ enum {
 	SCHED_REQ_MAX,
 };
 
+enum {
+	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
+};
+
 struct sched_req_attr {
 	uuid_t		sra_pool_id;
 	uint32_t	sra_type;
+	uint32_t	sra_flags;
 };
 
 static inline void

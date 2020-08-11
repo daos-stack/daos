@@ -33,11 +33,11 @@ import (
 // and ranges only (no hostname prefixes) from the supplied string representation.
 func CreateNumericList(stringRanges string) (*HostList, error) {
 	for _, r := range stringRanges {
-		if unicode.IsLetter(r) {
-			return nil, errors.New("unexpected alphabetic character(s)")
-		}
 		if unicode.IsSpace(r) {
 			return nil, errors.New("unexpected whitespace character(s)")
+		}
+		if unicode.IsLetter(r) {
+			return nil, errors.New("unexpected alphabetic character(s)")
 		}
 	}
 

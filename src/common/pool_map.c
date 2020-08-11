@@ -1212,7 +1212,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 		rc = pool_map_find_domain(map, tree[0].do_comp.co_type,
 					  PO_COMP_ID_ALL, &cur_doms);
 	}
-	if (rc != 0)
+	if (rc == 0)
 		goto failed;
 
 	dst_doms = dst_tree;
@@ -1304,8 +1304,6 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 						pool_comp_type2str(dc->co_type),
 						dc->co_id);
 
-					dc->co_status = PO_COMP_ST_UPIN;
-
 					*child = sdom->do_children[j];
 					child++;
 
@@ -1335,8 +1333,6 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 					D_DEBUG(DB_TRACE, "New target[%d]\n",
 						tc->co_id);
 
-					tc->co_status = PO_COMP_ST_UPIN;
-
 					*target = sdom->do_targets[j];
 					target++;
 
@@ -1360,7 +1356,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	pool_map_finalise(map);
 
 	/* install new buffer for pool map */
-	rc = pool_map_initialise(map, true, dst_tree);
+	rc = pool_map_initialise(map, false, dst_tree);
 	D_ASSERT(rc == 0 || rc == -DER_NOMEM);
 
 	map->po_version = version;
@@ -1369,10 +1365,146 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	return rc;
 }
 
+static int
+uuid_compare_cb(const void *a, const void *b)
+{
+	uuid_t *ua = (uuid_t *)a;
+	uuid_t *ub = (uuid_t *)b;
+
+	return uuid_compare(*ua, *ub);
+}
+
+int
+gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
+		int map_version, int ndomains, int nnodes, int ntargets,
+		const int32_t *domains, uuid_t target_uuids[],
+		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
+		uint32_t dss_tgt_nr)
+{
+	struct pool_component	map_comp;
+	struct pool_buf		*map_buf;
+	struct pool_domain      *found_dom;
+	uuid_t		       *uuids;
+	uint32_t		num_comps;
+	uint8_t			new_status;
+	bool			updated;
+	int i, rc;
+
+	updated = false;
+
+	/* Prepare the pool map attribute buffers. */
+	map_buf = pool_buf_alloc(ndomains + nnodes + ntargets);
+	if (map_buf == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+
+	/* Make a sorted target UUID array to determine target IDs. */
+	D_ALLOC_ARRAY(uuids, nnodes);
+	if (uuids == NULL)
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
+	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
+
+	if (map != NULL) {
+		new_status = PO_COMP_ST_NEW;
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_RACK,
+						 PO_COMP_ID_ALL, NULL);
+	} else {
+		new_status = PO_COMP_ST_UPIN;
+		num_comps = 0;
+	}
+	/* fill racks */
+	for (i = 0; i < ndomains; i++) {
+		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
+		map_comp.co_status = new_status;
+		map_comp.co_index = i + num_comps;
+		map_comp.co_id = i + num_comps;
+		map_comp.co_rank = 0;
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = domains[i];
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0)
+			return rc;
+	}
+
+	if (map != NULL)
+		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
+						 PO_COMP_ID_ALL, NULL);
+	else
+		num_comps = 0;
+
+	/* fill nodes */
+	for (i = 0; i < nnodes; i++) {
+		uuid_t *p = bsearch(target_uuids[i], uuids, nnodes,
+				    sizeof(uuid_t), uuid_compare_cb);
+
+		if (map) {
+			found_dom = pool_map_find_node_by_rank(map,
+					target_addrs->rl_ranks[i]);
+			if (found_dom)
+				continue;
+		}
+
+		updated = true;
+		map_comp.co_type = PO_COMP_TP_NODE;
+		map_comp.co_status = new_status;
+		map_comp.co_index = i + num_comps;
+		map_comp.co_id = (p - uuids) + num_comps;
+		map_comp.co_rank = target_addrs->rl_ranks[i];
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = dss_tgt_nr;
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0)
+			return rc;
+	}
+
+	if (!updated)
+		return -DER_ALREADY;
+
+	if (map != NULL)
+		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
+	else
+		num_comps = 0;
+
+	/* fill targets */
+	for (i = 0; i < nnodes; i++) {
+		int j;
+
+		for (j = 0; j < dss_tgt_nr; j++) {
+			map_comp.co_type = PO_COMP_TP_TARGET;
+			map_comp.co_status = new_status;
+			map_comp.co_index = j;
+			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
+			map_comp.co_rank = target_addrs->rl_ranks[i];
+			map_comp.co_ver = map_version;
+			map_comp.co_fseq = 1;
+			map_comp.co_nr = 1;
+
+			rc = pool_buf_attach(map_buf, &map_comp, 1);
+			if (rc != 0)
+				return rc;
+		}
+	}
+	if (uuids_out)
+		*uuids_out = uuids;
+
+	*map_buf_out = map_buf;
+	return 0;
+
+out_map_buf:
+	pool_buf_free(map_buf);
+
+	return rc;
+}
+
+
 int
 pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 {
-	struct pool_domain *tree; /* root of the new component tree */
+	struct pool_domain *tree = NULL;
 	int		    rc;
 
 	rc = pool_buf_parse(buf, &tree);
@@ -1382,18 +1514,23 @@ pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
 	if (!pool_tree_sane(tree, version)) {
 		D_DEBUG(DB_MGMT, "Insane buffer format\n");
 		rc = -DER_INVAL;
-		goto out;
+		goto error_tree;
 	}
 
 	rc = pool_map_compat(map, version, tree);
 	if (rc != 0) {
 		D_DEBUG(DB_MGMT, "Buffer is incompatible with pool map\n");
-		goto out;
+		goto error_tree;
 	}
 
 	D_DEBUG(DB_TRACE, "Merge buffer with already existent pool map\n");
 	rc = pool_map_merge(map, version, tree);
- out:
+	if(rc != 0)
+		goto error_tree;
+
+	return rc;
+
+error_tree:
 	pool_tree_free(tree);
 	return rc;
 }
@@ -2065,6 +2202,7 @@ unsigned int
 pool_map_get_version(struct pool_map *map)
 {
 	D_DEBUG(DB_TRACE, "Fetch pool map version %u\n", map->po_version);
+	D_ASSERT(map != NULL);
 	return map->po_version;
 }
 
