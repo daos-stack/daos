@@ -119,11 +119,6 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
-struct dc_obj_epoch {
-	daos_epoch_t	oe_value;
-	bool		oe_uncertain;
-};
-
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -135,7 +130,7 @@ struct dc_obj_epoch {
  */
 struct obj_reasb_req {
 	/* epoch for IO (now only used for fetch */
-	struct dc_obj_epoch		 orr_epoch;
+	struct dtx_epoch		 orr_epoch;
 	/* original user input iods/sgls */
 	daos_iod_t			*orr_uiods;
 	d_sg_list_t			*orr_usgls;
