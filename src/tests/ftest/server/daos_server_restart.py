@@ -25,7 +25,6 @@ from __future__ import print_function
 
 from avocado import fail_on
 from apricot import TestWithServers
-from server_utils import ServerFailed
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
 
