@@ -218,6 +218,7 @@ class _Obj(object):
             raise PyDError("failed to close object", ret)
 
     def getoid(self):
+        """Return the object ID for this object"""
         return self.oid
 
     def __str__(self):
@@ -318,6 +319,11 @@ class KVObj(_Obj):
     dump()
         Fetch all the key-value pairs and return them in a python dictionary.
     """
+
+    # Size of buffer to use for reads.  If the object value is bigger than this
+    # then it'll require two round trips rather than one.
+    value_size = 1024*1024
+
     def get(self, key):
         """Retrieve value associated with the key."""
 
@@ -341,8 +347,10 @@ class KVObj(_Obj):
     def __delitem__(self, key):
         self.put(key, None)
 
-    def bget(self, ddict, value_size=4096):
+    def bget(self, ddict, value_size=None):
         """Bulk get value for all the keys of the input python dictionary."""
+        if value_size is None:
+            value_size = self.value_size
         ret = pydaos_shim.kv_get(DAOS_MAGIC, self.oh, ddict, value_size)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to retrieve KV value", ret)

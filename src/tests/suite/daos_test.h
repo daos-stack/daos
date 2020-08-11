@@ -224,7 +224,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-		       struct test_pool *opool, daos_prop_t *prop);
+		       struct test_pool *opool);
 int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
@@ -299,6 +299,8 @@ int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
+			   int sub_tests_size);
+int run_daos_dedup_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
 unsigned int daos_checksum_test_arg2type(char *optarg);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
