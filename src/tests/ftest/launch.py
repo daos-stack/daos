@@ -897,6 +897,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Copy any DAOS logs created on any host under test
     host_list = get_hosts_from_yaml(test_yaml, args)
+    print("Archiving host logs from {} in {}".format(host_list, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
@@ -916,6 +917,7 @@ def archive_config_files(avocado_logs_dir):
     # written to a shared directory
     this_host = socket.gethostname().split(".")[0]
     host_list = [this_host]
+    print("Archiving config files from {} in {}".format(host_list, destination))
 
     # Copy any config files
     base_dir = get_build_environment()["PREFIX"]
@@ -934,12 +936,14 @@ def archive_files(destination, host_list, source_files):
     """
     this_host = socket.gethostname().split(".")[0]
 
+    # Create the destination directory
+    get_output(["mkdir", destination], check=False)
+
     # Display available disk space prior to copy.  Allow commands to fail w/o
     # exiting this program.  Any disk space issues preventing the creation of a
     # directory will be caught in the archiving of the source files.
     print("Current disk space usage of {}".format(destination))
     print(get_output(["df", "-h", destination], check=False))
-    get_output(["mkdir", destination], check=False)
 
     # Copy any source files that exist on the remote hosts and remove them from
     # the remote host if the copy is successful.  Attempt all of the commands
