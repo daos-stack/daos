@@ -557,8 +557,9 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	lookup_rpc  = cb_info->cci_rpc;
 
 	if (cb_info->cci_rc != 0) {
-		D_ERROR("URI_LOOKUP rpc completed with rc=%d\n",
-			cb_info->cci_rc);
+		RPC_ERROR(chained_rpc_priv,
+			  "URI_LOOKUP rpc completed with rc=%d\n",
+			  cb_info->cci_rc);
 		D_GOTO(retry, rc = cb_info->cci_rc);
 	}
 
@@ -741,7 +742,6 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 	rc = crt_req_send(rpc, uri_lookup_cb, chained_rpc_priv);
 
 	if (rc != 0) {
-		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 		RPC_DECREF(chained_rpc_priv);
 
 		/* Addref done above */
