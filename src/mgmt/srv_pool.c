@@ -45,24 +45,29 @@ struct list_pools_iter_args {
 };
 
 /**
- * Destroy the pool on the specified ranks
+ * Destroy the pool on the specified ranks.
+ * If filter_invert == false: destroy on all ranks EXCEPT those in filter_ranks.
+ * If filter_invert == true:  destroy on all ranks specified in filter_ranks.
  */
 static int
-ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *excluded)
+ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid,
+			       d_rank_list_t *filter_ranks, bool filter_invert)
 {
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
 	struct mgmt_tgt_destroy_out	*td_out;
 	unsigned int			opc;
 	int				topo;
+	uint32_t			flags;
 	int				rc;
 
 	/* Collective RPC to destroy the pool on all of targets */
+	flags = filter_invert ? CRT_RPC_FLAG_FILTER_INVERT : 0;
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
-				  excluded, opc, NULL, NULL, 0, topo,
+				  filter_ranks, opc, NULL, NULL, flags, topo,
 				  &td_req);
 	if (rc)
 		D_GOTO(fini_ranks, rc);
@@ -86,7 +91,7 @@ out_rpc:
 	crt_req_decref(td_req);
 
 fini_ranks:
-	map_ranks_fini(excluded);
+	map_ranks_fini(filter_ranks);
 	return rc;
 }
 
@@ -103,7 +108,7 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 	if (rc)
 		return rc;
 
-	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &excluded);
+	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &excluded, false);
 	if (rc)
 		return rc;
 
@@ -198,7 +203,7 @@ decref:
 	crt_req_decref(tc_req);
 	if (rc) {
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
-							    rank_list);
+							    rank_list, true);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
@@ -539,7 +544,7 @@ out_svcp:
 		*svcp = NULL;
 
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
-							    rank_list);
+							    rank_list, true);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));

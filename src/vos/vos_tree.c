@@ -27,6 +27,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <daos/btree_class.h>
 #include <daos/btree.h>
 #include <daos/mem.h>
 #include <daos/object.h>
@@ -714,6 +715,13 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 		.ta_feats	= BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "singv",
 		.ta_ops		= &singv_btr_ops,
+	},
+	{
+		.ta_class	= DBTREE_CLASS_IV,
+		.ta_order	= VEA_TREE_ODR,
+		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+		.ta_name	= "vea",
+		.ta_ops		= &dbtree_iv_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_END,
