@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -31,7 +31,7 @@ import java.util.concurrent.*;
 import io.daos.dfs.DaosFile;
 import io.daos.dfs.DaosFsClient;
 import io.daos.fs.hadoop.Constants;
-import io.daos.fs.hadoop.DaosConfig;
+import io.daos.fs.hadoop.DaosConfigFile;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -119,7 +119,7 @@ public class Main {
     protected String api;
     protected String scriptPath;
 
-    protected Runner(FileSystem fs){
+    protected Runner(FileSystem fs) {
       this.fs = fs;
     }
 
@@ -128,7 +128,7 @@ public class Main {
       seq = System.getProperty("seq");
       System.out.println("seq: " + seq);
       String hostname = InetAddress.getLocalHost().getHostName();
-      path = path + "/" + hostname + "/" + (seq==null?"":seq);
+      path = path + "/" + hostname + "/" + (seq == null ? "" : seq);
       System.out.println("write path: " + path);
       jvmThreads = Integer.valueOf(System.getProperty("jvmThreads", "1"));
       System.out.println("JVM threads: " + jvmThreads);
@@ -141,20 +141,20 @@ public class Main {
     public abstract void run() throws Exception;
   }
 
-  static abstract class WriteRunner extends Runner{
+  static abstract class WriteRunner extends Runner {
     protected int writeSize;
     protected long fileSize;
 
-    protected WriteRunner(FileSystem fs){
+    protected WriteRunner(FileSystem fs) {
       super(fs);
     }
 
     protected void prepare() throws Exception {
       super.prepare();
-      writeSize = Integer.parseInt(DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_WRITE_BUFFER_SIZE,
-              String.valueOf(Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE)));
+      writeSize = Integer.parseInt(DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_WRITE_BUFFER_SIZE,
+          String.valueOf(Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE)));
       System.out.println("write buffer size: " + writeSize);
-      fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L*1024L*1024L)));
+      fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L * 1024L * 1024L)));
       System.out.println("file size: " + fileSize);
     }
   }
@@ -173,13 +173,13 @@ public class Main {
     }
 
     @Override
-    public void run() throws Exception{
+    public void run() throws Exception {
       prepare();
 
       ExecutorService executor = Executors.newFixedThreadPool(parallel);
       List<Future<Double>> futures = new ArrayList<>();
-      for (int i=0; i<parallel; i++) {
-        Future<Double> future = executor.submit(new WriteTask(i, fs, path+"/thread"+i, writeSize, fileSize));
+      for (int i = 0; i < parallel; i++) {
+        Future<Double> future = executor.submit(new WriteTask(i, fs, path + "/thread" + i, writeSize, fileSize));
         futures.add(future);
       }
 
@@ -210,8 +210,8 @@ public class Main {
       prepare();
 
       List<ShellExecutor> executors = new ArrayList<>();
-      for (int i=0; i<parallel; i++) {
-        File dir = new File(".", i+"");
+      for (int i = 0; i < parallel; i++) {
+        File dir = new File(".", i + "");
         if (!dir.exists()) {
           dir.mkdir();
         }
@@ -259,6 +259,7 @@ public class Main {
     List<String> cmdList;
     String resultPrefix;
     String finalRstPrefix;
+
     ShellExecutor(int id, List<String> cmdList, File out, File err, String resultPrefix, String finalRstPrefix) {
       this.id = id;
       this.cmdList = cmdList;
@@ -269,14 +270,14 @@ public class Main {
       this.finalRstPrefix = finalRstPrefix;
     }
 
-    public void execute() throws Exception{
+    public void execute() throws Exception {
       process = pb.start();
     }
 
-    public Double getPerf() throws Exception{
+    public Double getPerf() throws Exception {
       try (BufferedReader br = new BufferedReader(new FileReader(out))) {
         String line;
-        while((line=br.readLine()) != null) {
+        while ((line = br.readLine()) != null) {
           int index = line.indexOf(finalRstPrefix);
           if (index >= 0) {
             System.out.println(line);
@@ -294,7 +295,7 @@ public class Main {
       StringBuilder sb = new StringBuilder();
       try (BufferedReader br = new BufferedReader(new FileReader(err))) {
         String line;
-        while((line=br.readLine()) != null) {
+        while ((line = br.readLine()) != null) {
           sb.append(line);
           sb.append('\n');
         }
@@ -308,26 +309,26 @@ public class Main {
     protected boolean random;
     protected long fileSize;
 
-    protected ReadRunner(FileSystem fs){
+    protected ReadRunner(FileSystem fs) {
       super(fs);
     }
 
     @Override
     protected void prepare() throws Exception {
       super.prepare();
-      readSize = Integer.valueOf(DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_READ_BUFFER_SIZE,
-              String.valueOf(Constants.DEFAULT_DAOS_READ_BUFFER_SIZE)));
+      readSize = Integer.valueOf(DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_READ_BUFFER_SIZE,
+          String.valueOf(Constants.DEFAULT_DAOS_READ_BUFFER_SIZE)));
       System.out.println("read buffer size: " + readSize);
       random = "true".equalsIgnoreCase(System.getProperty("random"));
       System.out.println("random: " + random);
-      fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L*1024L*1024L)));
+      fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L * 1024L * 1024L)));
       System.out.println("file size: " + fileSize);
     }
   }
 
   static class ThreadsReadRunner extends ReadRunner {
 
-    protected ThreadsReadRunner(FileSystem fs){
+    protected ThreadsReadRunner(FileSystem fs) {
       super(fs);
     }
 
@@ -344,9 +345,9 @@ public class Main {
 
       ExecutorService executor = Executors.newFixedThreadPool(parallel);
       List<Future<Double>> futures = new ArrayList<>();
-      for (int i=0; i<parallel; i++) {
+      for (int i = 0; i < parallel; i++) {
         Future<Double> future = executor.submit(
-                new ReadTask(i, fs, path+"/thread"+i, readSize, random, fileSize));
+            new ReadTask(i, fs, path + "/thread" + i, readSize, random, fileSize));
         futures.add(future);
       }
 
@@ -377,8 +378,8 @@ public class Main {
       prepare();
 
       List<ShellExecutor> executors = new ArrayList<>();
-      for (int i=0; i<parallel; i++) {
-        File dir = new File(".", i+"");
+      for (int i = 0; i < parallel; i++) {
+        File dir = new File(".", i + "");
         if (!dir.exists()) {
           dir.mkdir();
         }
@@ -395,7 +396,7 @@ public class Main {
         list.add("-Duid=" + System.getProperty("uid"));
         list.add("-Dthreads=" + jvmThreads);
         list.add("-Dseq=" + i);
-        list.add("-Drandom=" + (random?"true":"false"));
+        list.add("-Drandom=" + (random ? "true" : "false"));
         list.add("-Dapi=" + api);
         executors.add(new ShellExecutor(i, list, out, err, READ_PERF_PREFIX, FINAL_READ_PERF_PREFIX));
       }
@@ -423,6 +424,7 @@ public class Main {
     String writePath;
     int writeSize;
     long fileSize;
+
     WriteTask(int id, FileSystem fs, String writePath, int writeSize, long fileSize) {
       this.id = id;
       this.fs = fs;
@@ -437,8 +439,8 @@ public class Main {
       byte[] bytes = new byte[writeSize];
 
       int v = 0;
-      for (int i=0; i<bytes.length; i++) {
-        bytes[i] = (byte)((v++) % 255);
+      for (int i = 0; i < bytes.length; i++) {
+        bytes[i] = (byte) ((v++) % 255);
       }
 
       long count = 0;
@@ -453,10 +455,10 @@ public class Main {
       }
       long end = System.currentTimeMillis();
 
-      double rst = count*1.0/((end-start)*1.0/1000);
+      double rst = count * 1.0 / ((end - start) * 1.0 / 1000);
       System.out.println("write path: " + writePath);
       System.out.println(WRITE_PERF_PREFIX + "file size(" + id + "): " + count);
-      System.out.println(WRITE_PERF_PREFIX + "time(" + id + "): " + ((end-start)*1.0/1000));
+      System.out.println(WRITE_PERF_PREFIX + "time(" + id + "): " + ((end - start) * 1.0 / 1000));
       System.out.println(WRITE_PERF_PREFIX + "perf(" + id + "): " + rst);
       return rst;
     }
@@ -493,13 +495,13 @@ public class Main {
 
       if ("java-api".equalsIgnoreCase(api)) {
         String poolId = System.getProperty("pid",
-                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_POOL_UUID));
+            DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_POOL_UUID));
         String contId = System.getProperty("uid",
-                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_CONTAINER_UUID));
+            DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_CONTAINER_UUID));
         String svc = System.getProperty("svc",
-                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_POOL_SVC));
+            DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_POOL_SVC));
         DaosFsClient client = new DaosFsClient.DaosFsClientBuilder().poolId(poolId).containerId(contId)
-                .ranks(svc).build();
+            .ranks(svc).build();
 
         start = System.currentTimeMillis();
 
@@ -512,7 +514,7 @@ public class Main {
           while (count < fileSize) {
             long offset = (long) (fileSize * rd.nextFloat());
             size = file.read(byteBuffer, 0, offset,
-                    offset + readSize > fileSize ? (fileSize - offset) : readSize);
+                offset + readSize > fileSize ? (fileSize - offset) : readSize);
 //            size = fos.read(bytes);
             count += size;
             times++;
@@ -559,12 +561,12 @@ public class Main {
       }
 
 
-      double rst = count*1.0/((end-start)*1.0/1000);
+      double rst = count * 1.0 / ((end - start) * 1.0 / 1000);
       System.out.println("api: " + api);
       System.out.println("read path: " + readPath);
       System.out.println("number of reads: " + times);
       System.out.println(READ_PERF_PREFIX + "file size(" + id + "): " + count);
-      System.out.println(READ_PERF_PREFIX + "time(" + id + "): " + ((end-start)*1.0/1000));
+      System.out.println(READ_PERF_PREFIX + "time(" + id + "): " + ((end - start) * 1.0 / 1000));
       System.out.println(READ_PERF_PREFIX + "perf(" + id + "): " + rst);
       return rst;
     }

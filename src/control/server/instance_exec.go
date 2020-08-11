@@ -43,31 +43,28 @@ type IOServerRunner interface {
 	GetConfig() *ioserver.Config
 }
 
-func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
+func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error {
 	idx := srv.Index()
 
 	srv.log.Debugf("instance %d: checking if storage is formatted", idx)
-	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
-		return
+	if err := srv.awaitStorageReady(ctx, recreateSBs); err != nil {
+		return err
 	}
-	if err = srv.createSuperblock(recreateSBs); err != nil {
-		return
+	if err := srv.createSuperblock(recreateSBs); err != nil {
+		return err
 	}
 
 	if !srv.hasSuperblock() {
 		return errors.Errorf("instance %d: no superblock after format", idx)
 	}
 
-	return
+	return nil
 }
 
 // start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
 func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
-	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
-		return errors.Wrap(err, "start failed; unable to prepare NVMe device(s)")
-	}
 	if err := srv.bdevClassProvider.GenConfigFile(); err != nil {
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
