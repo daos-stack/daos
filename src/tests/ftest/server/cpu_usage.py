@@ -39,15 +39,15 @@ class CPUUsage(TestWithServers):
         Test Description: Test CPU usage of daos_server.
         :avocado: tags=all,server,small,full_regression,cpu_usage
         """
-        ps_get_cpu = "ps -C daos_io_server -o %\cpu"
+        ps_get_cpu = r"ps -C daos_io_server -o %\cpu"
         # It takes about 5 sec for CPU usage to become stable.
         time.sleep(10)
         task = run_task(hosts=self.hostlist_servers, command=ps_get_cpu)
         # Sample output.
         # %CPU
         # 1798
-        for output, nodes in task.iter_buffers():
+        for output, _ in task.iter_buffers():
             usage = str(output).splitlines()[-1]
             self.log.info("CPU usage = %s", usage)
-            self.assertTrue(
-				int(usage) < 100, "CPU usage is above 100%: {}%".format(usage))
+            self.assertTrue(int(usage) < 100, "CPU usage " +
+				"is above 100%: {}%".format(usage))
