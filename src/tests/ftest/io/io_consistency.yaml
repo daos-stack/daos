@@ -47,7 +47,7 @@ ior:
   signature: 5
   repetitions: 1
   transfersize_blocksize:
-    4K:
+    1M:
       transfer_size: '1M'
       block_size: '2G'
   objectclass:
