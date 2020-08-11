@@ -50,6 +50,7 @@ class GroupTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
+        self.utils.log_copy(self)
 
     def test_group(self):
         """
