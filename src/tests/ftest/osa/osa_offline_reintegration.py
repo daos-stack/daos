@@ -116,8 +116,8 @@ class OSAOfflineReintegration(TestWithServers):
         target_list = []
         exclude_servers = len(self.hostlist_servers) - 1
 
-        # Exclude target : random two targets
-        n = random.randint(1, 7)
+        # Exclude target : random two targets (target idx : 0-7)
+        n = random.randint(0, 6)
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
