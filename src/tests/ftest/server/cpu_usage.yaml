@@ -1,4 +1,3 @@
-# pylint: disable=style
 hosts:
   test_servers:
     - server-A
