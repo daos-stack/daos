@@ -85,7 +85,8 @@
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */
 #define VOS_SVT_ORDER		5	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
-#define DTX_BTREE_ORDER		23	/* Order for DTX tree */
+#define DTX_BTREE_ORDER	23	/* Order for DTX tree */
+#define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
 #define DAOS_VOS_VERSION 1
 

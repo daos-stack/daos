@@ -33,10 +33,11 @@ def scons():
     denv.Install('$PREFIX/lib64/', common)
 
     tenv = denv.Clone()
+    tenv.AppendUnique(LIBS=['json-c'])
 
     prereqs.require(tenv, 'argobots')
 
-    tests_lib_src = ['tests_lib.c']
+    tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']
     tests_lib = daos_build.library(tenv, 'libdaos_tests', tests_lib_src)
     tenv.Install('$PREFIX/lib64/', tests_lib)
 
