@@ -21,11 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import time
-import general_utils
 
-from ClusterShell.NodeSet import NodeSet
-from command_utils import CommandFailure
+import time
 from ior_test_base import IorTestBase
 
 
@@ -40,7 +37,6 @@ class DfuseSpaceCheck(IorTestBase):
         super(DfuseSpaceCheck, self).__init__(*args, **kwargs)
         self.space_before = None
         self.block_size = None
-        self.ret_code = None
 
     def tearDown(self):
         """Tear down each test case."""
@@ -66,36 +62,6 @@ class DfuseSpaceCheck(IorTestBase):
 
         return free_space_nvme
 
-    def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
-        """Execute cmd using general_utils.pcmd
-
-          Args:
-            cmd (str): String command to be executed
-            fail_on_err (bool): Boolean for whether to fail the test if command
-                                execution returns non zero return code.
-            display_output (bool): Boolean for whether to display output.
-        """
-        try:
-            # execute bash cmds
-            self.ret_code = general_utils.pcmd(
-                self.hostlist_clients, cmd, verbose=display_output, timeout=300)
-            if 0 not in self.ret_code:
-                error_hosts = NodeSet(
-                    ",".join(
-                        [str(node_set) for code, node_set in
-                         self.ret_code.items() if code != 0]))
-                if fail_on_err:
-                    raise CommandFailure(
-                        "Error running '{}' on the following "
-                        "hosts: {}".format(cmd, error_hosts))
-
-        # report error if any command fails
-        except CommandFailure as error:
-            self.log.error("DfuseSpaceCheck Test Failed: %s",
-                           str(error))
-            self.fail("Test was expected to pass but "
-                      "it failed.\n")
-
     def check_aggregation(self):
         """Check Aggregation for 240 secs max, else fail the test."""
         counter = 1
@@ -118,12 +84,11 @@ class DfuseSpaceCheck(IorTestBase):
         """
         file_count = 0
         while self.get_nvme_free_space(False) >= self.block_size:
-            if 0 in self.ret_code:
-                file_loc = str(self.dfuse.mount_dir.value +
-                               "/largefile_{}.txt".format(file_count))
-                write_dd_cmd = u"dd if=/dev/zero of={} bs={} count=1".format(
-                    file_loc, self.block_size)
-                self.execute_cmd(write_dd_cmd, False, False)
+            file_loc = str(self.dfuse.mount_dir.value +
+                           "/largefile_{}.txt".format(file_count))
+            write_dd_cmd = u"dd if=/dev/zero of={} bs={} count=1".format(
+                file_loc, self.block_size)
+            if 0 in self.execute_cmd(write_dd_cmd, False, False):
                 file_count += 1
 
         return file_count
