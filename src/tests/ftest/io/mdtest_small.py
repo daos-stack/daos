@@ -52,7 +52,7 @@ class MdtestSmall(MdtestBase):
         """
         # local params
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
-
+        error_class = error12
         # Running mdtest for different variants
         for params in mdtest_params:
             # update mdtest params

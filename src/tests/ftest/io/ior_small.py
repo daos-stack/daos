@@ -54,7 +54,7 @@ class IorSmall(IorTestBase):
         transfer_block_size = self.params.get("transfer_block_size",
                                               '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
-
+        error_class = error1
         # run tests for different variants
         self.ior_cmd.flags.update(flags[0])
         for oclass in obj_class:
