@@ -101,19 +101,23 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		resp.Status = int32(drpc.DaosAlready)
 		return resp, nil
 	}
-	if _, ok := err.(*system.FindPoolError); !ok {
+	if _, ok := err.(*system.ErrPoolNotFound); !ok {
 		return nil, err
 	}
 
+	var ranks []system.Rank
 	if len(req.GetRanks()) > 0 {
-		ranks := system.RanksFromUint32(req.GetRanks())
+		ranks = system.RanksFromUint32(req.GetRanks())
 		ranks, err = system.DedupeRanks(ranks)
 		if err != nil {
 			return nil, err
 		}
 		req.Ranks = system.RanksToUint32(ranks)
 	} else {
-		ranks := svc.sysdb.MemberRanks()
+		ranks, err = svc.sysdb.MemberRanks()
+		if err != nil {
+			return nil, err
+		}
 		req.Ranks = system.RanksToUint32(ranks)
 	}
 
@@ -653,8 +657,13 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", *req)
 
+	psList, err := svc.sysdb.PoolServiceList()
+	if err != nil {
+		return nil, err
+	}
+
 	resp := new(mgmtpb.ListPoolsResp)
-	for _, ps := range svc.sysdb.PoolServiceList() {
+	for _, ps := range psList {
 		resp.Pools = append(resp.Pools, &mgmtpb.ListPoolsResp_Pool{
 			Uuid:    ps.PoolUUID.String(),
 			Svcreps: system.RanksToUint32(ps.Replicas),

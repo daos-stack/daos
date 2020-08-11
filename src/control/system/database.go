@@ -24,13 +24,10 @@
 package system
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
+	"sort"
 	"sync"
 	"time"
 
@@ -48,23 +45,20 @@ const (
 )
 
 type (
-	MemberDatabase struct {
-		Ranks ServerRankMap
-		Uuids ServerUuidMap
-		Addrs ServerAddrMap
-	}
-
-	PoolDatabase struct {
-		Ranks PoolRankMap
-		Uuids PoolUuidMap
-		Addrs PoolAddrMap
-	}
-
 	onDatabaseStartedFn func() error
 
-	Database struct {
+	dbData struct {
+		log logging.Logger
+
 		sync.RWMutex
-		rankLock       sync.Mutex
+		NextRank      Rank
+		MapVersion    uint32
+		Members       *MemberDatabase
+		Pools         *PoolDatabase
+		SchemaVersion uint
+	}
+
+	Database struct {
 		log            logging.Logger
 		cfg            *DatabaseConfig
 		isReplica      bool
@@ -73,149 +67,25 @@ type (
 		raft           *raft.Raft
 		onStarted      []onDatabaseStartedFn
 
-		NextRank      Rank
-		MapVersion    uint32
-		Members       *MemberDatabase
-		Pools         *PoolDatabase
-		SchemaVersion uint
+		rankLock sync.Mutex
+		data     *dbData
 	}
 
 	DatabaseConfig struct {
 		Replicas []string
 		RaftDir  string
 	}
+
+	GroupMap struct {
+		Version  uint32
+		RankURIs map[Rank]string
+	}
 )
 
-func (mdb *MemberDatabase) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		return nil
-	}
-
-	type fromJSON MemberDatabase
-	from := &struct {
-		Ranks map[Rank]uuid.UUID
-		Addrs map[string][]uuid.UUID
-		*fromJSON
-	}{
-		Ranks:    make(map[Rank]uuid.UUID),
-		Addrs:    make(map[string][]uuid.UUID),
-		fromJSON: (*fromJSON)(mdb),
-	}
-
-	if err := json.Unmarshal(data, from); err != nil {
-		return err
-	}
-
-	for rank, uuid := range from.Ranks {
-		member, found := mdb.Uuids[uuid]
-		if !found {
-			return errors.Errorf("rank %d missing UUID", rank)
-		}
-		mdb.Ranks[rank] = member
-	}
-
-	for addrStr, uuids := range from.Addrs {
-		for _, uuid := range uuids {
-			member, found := mdb.Uuids[uuid]
-			if !found {
-				return errors.Errorf("addr %s missing UUID", addrStr)
-			}
-
-			addr, err := net.ResolveTCPAddr("tcp", addrStr)
-			if err != nil {
-				return err
-			}
-			mdb.Addrs.addMember(addr, member)
-		}
-	}
-
-	return nil
-}
-
-func (mdb *MemberDatabase) addMember(m *Member) {
-	mdb.Ranks[m.Rank] = m
-	mdb.Uuids[m.UUID] = m
-	mdb.Addrs.addMember(m.Addr, m)
-}
-
-func (mdb *MemberDatabase) removeMember(m *Member) {
-	delete(mdb.Ranks, m.Rank)
-	delete(mdb.Uuids, m.UUID)
-	delete(mdb.Addrs, m.Addr)
-}
-
-func (pdb *PoolDatabase) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		return nil
-	}
-
-	type fromJSON PoolDatabase
-	from := &struct {
-		Ranks map[Rank][]uuid.UUID
-		Addrs map[string][]uuid.UUID
-		*fromJSON
-	}{
-		Ranks:    make(map[Rank][]uuid.UUID),
-		Addrs:    make(map[string][]uuid.UUID),
-		fromJSON: (*fromJSON)(pdb),
-	}
-
-	if err := json.Unmarshal(data, from); err != nil {
-		return err
-	}
-
-	for rank, uuids := range from.Ranks {
-		for _, uuid := range uuids {
-			svc, found := pdb.Uuids[uuid]
-			if !found {
-				return errors.Errorf("rank %d missing UUID", rank)
-			}
-
-			if _, exists := pdb.Ranks[rank]; !exists {
-				pdb.Ranks[rank] = []*PoolService{}
-			}
-			pdb.Ranks[rank] = append(pdb.Ranks[rank], svc)
-		}
-	}
-
-	for addrStr, uuids := range from.Addrs {
-		for _, uuid := range uuids {
-			svc, found := pdb.Uuids[uuid]
-			if !found {
-				return errors.Errorf("addr %s missing UUID", addrStr)
-			}
-
-			addr, err := net.ResolveTCPAddr("tcp", addrStr)
-			if err != nil {
-				return err
-			}
-			if _, exists := pdb.Addrs[addr]; !exists {
-				pdb.Addrs[addr] = []*PoolService{}
-			}
-			pdb.Addrs[addr] = append(pdb.Addrs[addr], svc)
-		}
-	}
-
-	return nil
-}
-
-func (pdb *PoolDatabase) addService(ps *PoolService) {
-	pdb.Uuids[ps.PoolUUID] = ps
-	for _, rank := range ps.Replicas {
-		pdb.Ranks[rank] = append(pdb.Ranks[rank], ps)
-	}
-}
-
-func (pdb *PoolDatabase) removeService(ps *PoolService) {
-	delete(pdb.Uuids, ps.PoolUUID)
-	for _, rank := range ps.Replicas {
-		rankServices := pdb.Ranks[rank]
-		for idx, rs := range rankServices {
-			if rs.PoolUUID == ps.PoolUUID {
-				pdb.Ranks[rank] = append(rankServices[:idx], rankServices[:idx]...)
-				break
-			}
-		}
+func newGroupMap(version uint32) *GroupMap {
+	return &GroupMap{
+		Version:  version,
+		RankURIs: make(map[Rank]string),
 	}
 }
 
@@ -230,37 +100,21 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) *Database {
 		resolveTCPAddr: net.ResolveTCPAddr,
 		interfaceAddrs: net.InterfaceAddrs,
 
-		Members: &MemberDatabase{
-			Ranks: make(ServerRankMap),
-			Uuids: make(ServerUuidMap),
-			Addrs: make(ServerAddrMap),
+		data: &dbData{
+			log: log,
+			Members: &MemberDatabase{
+				Ranks: make(ServerRankMap),
+				Uuids: make(ServerUuidMap),
+				Addrs: make(ServerAddrMap),
+			},
+			Pools: &PoolDatabase{
+				Ranks: make(PoolRankMap),
+				Uuids: make(PoolUuidMap),
+				Addrs: make(PoolAddrMap),
+			},
+			SchemaVersion: CurrentSchemaVersion,
 		},
-		Pools: &PoolDatabase{
-			Ranks: make(PoolRankMap),
-			Uuids: make(PoolUuidMap),
-			Addrs: make(PoolAddrMap),
-		},
-		SchemaVersion: CurrentSchemaVersion,
 	}
-}
-
-type ErrNotReplica struct {
-	Replicas []string
-}
-
-func (enr *ErrNotReplica) Error() string {
-	return fmt.Sprintf("not a system db replica (try one of %s)",
-		strings.Join(enr.Replicas, ","))
-}
-
-type ErrNotLeader struct {
-	Replicas []string
-}
-
-func (enr *ErrNotLeader) Error() string {
-	// TODO: remove self from returned replicas
-	return fmt.Sprintf("not the system db leader (try one of %s)",
-		strings.Join(enr.Replicas, ","))
 }
 
 func (db *Database) resolveReplicas() (reps []*net.TCPAddr, err error) {
@@ -274,7 +128,7 @@ func (db *Database) resolveReplicas() (reps []*net.TCPAddr, err error) {
 	return
 }
 
-func (db *Database) checkReplica(ctrlAddr *net.TCPAddr) (isReplica, isBootStrap bool, err error) {
+func (db *Database) checkReplica(ctrlAddr *net.TCPAddr) (repAddr *net.TCPAddr, isBootStrap bool, err error) {
 	var repAddrs []*net.TCPAddr
 	repAddrs, err = db.resolveReplicas()
 	if err != nil {
@@ -298,25 +152,35 @@ func (db *Database) checkReplica(ctrlAddr *net.TCPAddr) (isReplica, isBootStrap 
 		localAddrs = append(localAddrs, ctrlAddr.IP)
 	}
 
-	for idx, repAddr := range repAddrs {
+	var idx int
+	for idx, repAddr = range repAddrs {
 		if repAddr.Port != ctrlAddr.Port {
 			continue
 		}
 		for _, localAddr := range localAddrs {
 			if repAddr.IP.Equal(localAddr) {
-				isReplica = true
 				if idx == 0 {
 					isBootStrap = true
 				}
-				break
+				return
 			}
-		}
-		if isReplica {
-			break
 		}
 	}
 
 	return
+}
+
+func (db *Database) checkLeader() error {
+	if !db.isReplica {
+		return &ErrNotReplica{db.cfg.Replicas}
+	}
+	if db.raft.State() != raft.Leader {
+		return &ErrNotLeader{
+			LeaderHint: string(db.raft.Leader()),
+			Replicas:   db.cfg.Replicas,
+		}
+	}
+	return nil
 }
 
 // OnStart registers callbacks to be run when the database
@@ -326,13 +190,15 @@ func (db *Database) OnStart(fn onDatabaseStartedFn) {
 }
 
 func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
+	var repAddr *net.TCPAddr
 	var isBootStrap, needsBootStrap bool
 	var err error
 
-	db.isReplica, isBootStrap, err = db.checkReplica(ctrlAddr)
+	repAddr, isBootStrap, err = db.checkReplica(ctrlAddr)
 	if err != nil {
 		return err
 	}
+	db.isReplica = repAddr != nil
 	db.log.Debugf("system db start: isReplica: %t, isBootStrap: %t", db.isReplica, isBootStrap)
 
 	if !db.isReplica {
@@ -351,10 +217,13 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 	rc := raft.DefaultConfig()
 	rc.SnapshotThreshold = 16 // arbitrarily low to exercise snapshots
 	//rc.SnapshotInterval = 5 * time.Second
+	rc.HeartbeatTimeout = 250 * time.Millisecond
+	rc.ElectionTimeout = 250 * time.Millisecond
+	rc.LeaderLeaseTimeout = 125 * time.Millisecond
+	rc.LocalID = raft.ServerID(repAddr.String())
 	// Just use an in-memory transport for the moment, until
 	// we add real replica support over gRPC.
 	_, transport := raft.NewInmemTransport(raft.NewInmemAddr())
-	rc.LocalID = raft.ServerID("node00")
 
 	snaps, err := raft.NewFileSnapshotStore(db.cfg.RaftDir, 2, os.Stderr)
 	if err != nil {
@@ -399,27 +268,15 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 	return nil
 }
 
-type GroupMap struct {
-	Version  uint32
-	RankURIs map[Rank]string
-}
-
-func NewGroupMap(version uint32) *GroupMap {
-	return &GroupMap{
-		Version:  version,
-		RankURIs: make(map[Rank]string),
-	}
-}
-
 func (db *Database) GroupMap() (*GroupMap, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
-	db.RLock()
-	defer db.RUnlock()
+	db.data.RLock()
+	defer db.data.RUnlock()
 
-	gm := NewGroupMap(db.MapVersion)
-	for _, srv := range db.Members.Ranks {
+	gm := newGroupMap(db.data.MapVersion)
+	for _, srv := range db.data.Members.Ranks {
 		gm.RankURIs[srv.Rank] = srv.FabricURI
 	}
 	return gm, nil
@@ -429,17 +286,15 @@ func (db *Database) ReplicaRanks() (*GroupMap, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
-	db.RLock()
-	defer db.RUnlock()
+	db.data.RLock()
+	defer db.data.RUnlock()
 
 	// TODO: Should this only return one rank per replica, or
 	// should we return all ready ranks per replica, for resiliency?
-	gm := NewGroupMap(db.MapVersion)
-	for _, srv := range db.Members.Ranks {
-		isReplica, _, err := db.checkReplica(srv.Addr)
-		// FIXME: Joined doesn't seem like the right state here, but
-		// I don't see where it ever transitions to Ready...
-		if err != nil || !isReplica || srv.state != MemberStateJoined {
+	gm := newGroupMap(db.data.MapVersion)
+	for _, srv := range db.data.Members.Ranks {
+		repAddr, _, err := db.checkReplica(srv.Addr)
+		if err != nil || repAddr == nil || srv.state != MemberStateJoined {
 			continue
 		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI
@@ -447,121 +302,68 @@ func (db *Database) ReplicaRanks() (*GroupMap, error) {
 	return gm, nil
 }
 
-func (db *Database) AllMembers() []*Member {
-	db.RLock()
-	defer db.RUnlock()
+func (db *Database) AllMembers() ([]*Member, error) {
+	if err := db.checkLeader(); err != nil {
+		return nil, err
+	}
+	db.data.RLock()
+	defer db.data.RUnlock()
 
 	// NB: This is expensive! We make a copy of the
 	// membership to ensure that it can't be changed
 	// elsewhere.
-	dbCopy := make([]*Member, len(db.Members.Uuids))
+	dbCopy := make([]*Member, len(db.data.Members.Uuids))
 	copyIdx := 0
-	for _, dbRec := range db.Members.Uuids {
+	for _, dbRec := range db.data.Members.Uuids {
 		dbCopy[copyIdx] = new(Member)
 		*dbCopy[copyIdx] = *dbRec
 		copyIdx++
 	}
-	return dbCopy
+	return dbCopy, nil
 }
 
-func (db *Database) MemberRanks() []Rank {
-	db.RLock()
-	defer db.RUnlock()
+func (db *Database) MemberRanks() ([]Rank, error) {
+	if err := db.checkLeader(); err != nil {
+		return nil, err
+	}
+	db.data.RLock()
+	defer db.data.RUnlock()
 
-	ranks := make([]Rank, 0, len(db.Members.Ranks))
-	for rank := range db.Members.Ranks {
+	ranks := make([]Rank, 0, len(db.data.Members.Ranks))
+	for rank := range db.data.Members.Ranks {
 		ranks = append(ranks, rank)
 	}
-	return ranks
+
+	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
+
+	return ranks, nil
 }
 
-func (db *Database) MemberCount() int {
-	db.RLock()
-	defer db.RUnlock()
-
-	return len(db.Members.Ranks)
-}
-
-type raftOp uint32
-
-func (ro raftOp) String() string {
-	return [...]string{
-		"noop",
-		"addMember",
-		"updateMember",
-		"removeMember",
-	}[ro]
-}
-
-const (
-	raftOpNoop raftOp = iota
-	raftOpAddMember
-	raftOpUpdateMember
-	raftOpRemoveMember
-	raftOpAddPoolService
-	raftOpUpdatePoolService
-	raftOpRemovePoolService
-)
-
-type raftUpdate struct {
-	Time time.Time
-	Op   raftOp
-	Data json.RawMessage
-}
-
-var raftTimeout = 1 * time.Second
-
-func (db *Database) applyMembership(op raftOp, m *Member) error {
-	data, err := json.Marshal(m)
-	if err != nil {
-		return err
+func (db *Database) MemberCount() (int, error) {
+	if err := db.checkLeader(); err != nil {
+		return -1, err
 	}
-	return db.applyUpdate(op, data)
+	db.data.RLock()
+	defer db.data.RUnlock()
+
+	return len(db.data.Members.Ranks), nil
 }
 
-func (db *Database) applyPoolService(op raftOp, ps *PoolService) error {
-	data, err := json.Marshal(ps)
-	if err != nil {
-		return err
+func (db *Database) CurMapVersion() (uint32, error) {
+	if err := db.checkLeader(); err != nil {
+		return 0, err
 	}
-	return db.applyUpdate(op, data)
-}
+	db.data.RLock()
+	defer db.data.RUnlock()
 
-func (db *Database) applyUpdate(op raftOp, data []byte) error {
-	data, err := json.Marshal(&raftUpdate{
-		Time: time.Now(),
-		Op:   op,
-		Data: data,
-	})
-	if err != nil {
-		return err
-	}
-
-	return db.raft.Apply(data, raftTimeout).Error()
-}
-
-func (db *Database) CurMapVersion() uint32 {
-	db.RLock()
-	defer db.RUnlock()
-
-	return db.MapVersion
+	return db.data.MapVersion, nil
 }
 
 func (db *Database) RemoveMember(m *Member) error {
 	if err := db.checkLeader(); err != nil {
 		return err
 	}
-	return db.applyMembership(raftOpRemoveMember, m)
-}
-
-func (db *Database) checkLeader() error {
-	if !db.isReplica {
-		return &ErrNotReplica{db.cfg.Replicas}
-	}
-	if db.raft.State() != raft.Leader {
-		return &ErrNotLeader{db.cfg.Replicas}
-	}
-	return nil
+	return db.submitMemberUpdate(raftOpRemoveMember, m)
 }
 
 func (db *Database) AddMember(newMember *Member) error {
@@ -587,10 +389,10 @@ func (db *Database) AddMember(newMember *Member) error {
 		// with the correct rank, but increment NextRank as part of the Apply.
 		db.rankLock.Lock()
 		defer db.rankLock.Unlock()
-		newMember.Rank = db.NextRank
+		newMember.Rank = db.data.NextRank
 	}
 
-	if err := db.applyMembership(raftOpAddMember, newMember); err != nil {
+	if err := db.submitMemberUpdate(raftOpAddMember, newMember); err != nil {
 		return err
 	}
 
@@ -603,116 +405,83 @@ func (db *Database) UpdateMember(m *Member) error {
 	if err := db.checkLeader(); err != nil {
 		return err
 	}
-	return db.applyMembership(raftOpUpdateMember, m)
-}
-
-type FindMemberError struct {
-	byRank *Rank
-	byUUID *uuid.UUID
-	byAddr net.Addr
-}
-
-func (fme *FindMemberError) Error() string {
-	switch {
-	case fme.byRank != nil:
-		return fmt.Sprintf("unable to find member with rank %d", *fme.byRank)
-	case fme.byUUID != nil:
-		return fmt.Sprintf("unable to find member with uuid %s", *fme.byUUID)
-	case fme.byAddr != nil:
-		return fmt.Sprintf("unable to find member with addr %s", fme.byAddr)
-	default:
-		return "unable to find member"
-	}
+	return db.submitMemberUpdate(raftOpUpdateMember, m)
 }
 
 func (db *Database) FindMemberByRank(rank Rank) (*Member, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
-	db.RLock()
-	defer db.RUnlock()
+	db.data.RLock()
+	defer db.data.RUnlock()
 
-	if m, found := db.Members.Ranks[rank]; found {
+	if m, found := db.data.Members.Ranks[rank]; found {
 		return m, nil
 	}
 
-	return nil, &FindMemberError{byRank: &rank}
+	return nil, &ErrMemberNotFound{byRank: &rank}
 }
 
 func (db *Database) FindMemberByUUID(uuid uuid.UUID) (*Member, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
-	db.RLock()
-	defer db.RUnlock()
+	db.data.RLock()
+	defer db.data.RUnlock()
 
-	if m, found := db.Members.Uuids[uuid]; found {
+	if m, found := db.data.Members.Uuids[uuid]; found {
 		return m, nil
 	}
 
-	return nil, &FindMemberError{byUUID: &uuid}
+	return nil, &ErrMemberNotFound{byUUID: &uuid}
 }
 
 func (db *Database) FindMembersByAddr(addr net.Addr) ([]*Member, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
-	db.RLock()
-	defer db.RUnlock()
+	db.data.RLock()
+	defer db.data.RUnlock()
 
-	if m, found := db.Members.Addrs[addr]; found {
+	if m, found := db.data.Members.Addrs[addr]; found {
 		return m, nil
 	}
 
-	return nil, &FindMemberError{byAddr: addr}
+	return nil, &ErrMemberNotFound{byAddr: addr}
 }
 
-type FindPoolError struct {
-	byRank *Rank
-	byUUID *uuid.UUID
-	byAddr net.Addr
-}
-
-func (fpe *FindPoolError) Error() string {
-	switch {
-	case fpe.byRank != nil:
-		return fmt.Sprintf("unable to find pool service with rank %d", *fpe.byRank)
-	case fpe.byUUID != nil:
-		return fmt.Sprintf("unable to find pool service with uuid %s", *fpe.byUUID)
-	default:
-		return "unable to find pool service"
+func (db *Database) PoolServiceList() ([]*PoolService, error) {
+	if err := db.checkLeader(); err != nil {
+		return nil, err
 	}
-}
-
-func (db *Database) PoolServiceList() []*PoolService {
-	db.RLock()
-	defer db.RUnlock()
+	db.data.RLock()
+	defer db.data.RUnlock()
 
 	// NB: This is expensive! We make a copy of the
 	// pool services to ensure that they can't be changed
 	// elsewhere.
-	dbCopy := make([]*PoolService, len(db.Pools.Uuids))
+	dbCopy := make([]*PoolService, len(db.data.Pools.Uuids))
 	copyIdx := 0
-	for _, dbRec := range db.Pools.Uuids {
+	for _, dbRec := range db.data.Pools.Uuids {
 		dbCopy[copyIdx] = new(PoolService)
 		*dbCopy[copyIdx] = *dbRec
 		copyIdx++
 	}
-	return dbCopy
+	return dbCopy, nil
 }
 
 func (db *Database) FindPoolServiceByUUID(uuid uuid.UUID) (*PoolService, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
-	db.RLock()
-	defer db.RUnlock()
+	db.data.RLock()
+	defer db.data.RUnlock()
 
-	if p, found := db.Pools.Uuids[uuid]; found {
+	if p, found := db.data.Pools.Uuids[uuid]; found {
 		return p, nil
 	}
 
-	return nil, &FindPoolError{byUUID: &uuid}
+	return nil, &ErrPoolNotFound{byUUID: &uuid}
 }
 
 func (db *Database) AddPoolService(ps *PoolService) error {
@@ -725,7 +494,7 @@ func (db *Database) AddPoolService(ps *PoolService) error {
 		return errors.Errorf("pool %s already exists", p.PoolUUID)
 	}
 
-	if err := db.applyPoolService(raftOpAddPoolService, ps); err != nil {
+	if err := db.submitPoolUpdate(raftOpAddPoolService, ps); err != nil {
 		return err
 	}
 
@@ -745,7 +514,7 @@ func (db *Database) RemovePoolService(uuid uuid.UUID) error {
 		return errors.Wrapf(err, "failed to retrieve pool %s", uuid)
 	}
 
-	if err := db.applyPoolService(raftOpRemovePoolService, ps); err != nil {
+	if err := db.submitPoolUpdate(raftOpRemovePoolService, ps); err != nil {
 		return err
 	}
 
@@ -765,7 +534,7 @@ func (db *Database) UpdatePoolService(ps *PoolService) error {
 		return errors.Wrapf(err, "failed to retrieve pool %s", ps.PoolUUID)
 	}
 
-	if err := db.applyPoolService(raftOpUpdatePoolService, ps); err != nil {
+	if err := db.submitPoolUpdate(raftOpUpdatePoolService, ps); err != nil {
 		return err
 	}
 
@@ -773,144 +542,3 @@ func (db *Database) UpdatePoolService(ps *PoolService) error {
 
 	return nil
 }
-
-type fsm Database
-
-func (f *fsm) applyMemberUpdate(op raftOp, data []byte) {
-	m := new(Member)
-	if err := json.Unmarshal(data, m); err != nil {
-		f.log.Errorf("failed to decode member update: %s", err)
-		return
-	}
-
-	switch op {
-	case raftOpAddMember:
-		if !m.Rank.Equals(f.NextRank) {
-			f.log.Errorf("unexpected new member rank (%d != %d)", m.Rank, f.NextRank)
-		}
-		f.NextRank++
-		f.Members.addMember(m)
-		f.log.Debugf("added member: %+v", m)
-	case raftOpUpdateMember:
-		cur, found := f.Members.Uuids[m.UUID]
-		if !found {
-			f.log.Errorf("member update for unknown member %+v", m)
-		}
-		cur.state = m.state
-		cur.Info = m.Info
-		f.log.Debugf("updated member: %+v", m)
-	case raftOpRemoveMember:
-		f.Members.removeMember(m)
-		f.log.Debugf("removed %+v", m)
-	default:
-		f.log.Errorf("unhandled Member Apply operation: %d", op)
-		return
-	}
-
-	f.MapVersion++
-}
-
-func (f *fsm) applyPoolServiceUpdate(op raftOp, data []byte) {
-	ps := new(PoolService)
-	if err := json.Unmarshal(data, ps); err != nil {
-		f.log.Errorf("failed to decode pool service update: %s", err)
-		return
-	}
-
-	switch op {
-	case raftOpAddPoolService:
-		f.Pools.addService(ps)
-		f.log.Debugf("added pool service: %+v", ps)
-	case raftOpUpdatePoolService:
-		cur, found := f.Pools.Uuids[ps.PoolUUID]
-		if !found {
-			f.log.Errorf("pool service update for unknown pool %+v", ps)
-		}
-		cur.State = ps.State
-		cur.Replicas = ps.Replicas
-		f.log.Debugf("updated pool service: %+v", ps)
-	case raftOpRemovePoolService:
-		f.Pools.removeService(ps)
-		f.log.Debugf("removed %+v", ps)
-	default:
-		f.log.Errorf("unhandled Pool Service Apply operation: %d", op)
-		return
-	}
-}
-
-func (f *fsm) Apply(l *raft.Log) interface{} {
-	c := new(raftUpdate)
-	if err := json.Unmarshal(l.Data, c); err != nil {
-		f.log.Errorf("failed to unmarshal %+v: %s", l.Data, err)
-		return nil
-	}
-
-	f.log.Debugf("applying log: %+v", string(l.Data))
-
-	f.Lock()
-	defer f.Unlock()
-	switch c.Op {
-	case raftOpAddMember, raftOpUpdateMember, raftOpRemoveMember:
-		f.applyMemberUpdate(c.Op, c.Data)
-	case raftOpAddPoolService, raftOpUpdatePoolService, raftOpRemovePoolService:
-		f.applyPoolServiceUpdate(c.Op, c.Data)
-	default:
-		f.log.Errorf("unhandled Apply operation: %d", c.Op)
-	}
-
-	return nil
-}
-
-func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
-	f.Lock()
-	defer f.Unlock()
-
-	data, err := json.Marshal(f)
-	if err != nil {
-		return nil, err
-	}
-
-	f.log.Debugf("db snapshot saved: %+v", string(data))
-	return &fsmSnapshot{data}, nil
-}
-
-func (f *fsm) Restore(rc io.ReadCloser) error {
-	db := NewDatabase(nil, nil)
-	if err := json.NewDecoder(rc).Decode(db); err != nil {
-		return err
-	}
-
-	if db.SchemaVersion != CurrentSchemaVersion {
-		return errors.Errorf("restored schema version %d != %d",
-			db.SchemaVersion, CurrentSchemaVersion)
-	}
-
-	f.Members = db.Members
-	f.Pools = db.Pools
-	f.NextRank = db.NextRank
-	f.MapVersion = db.MapVersion
-	f.log.Debugf("db snapshot loaded: %+v", db)
-	return nil
-}
-
-type fsmSnapshot struct {
-	data []byte
-}
-
-func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
-	err := func() error {
-		if _, err := sink.Write(f.data); err != nil {
-			return err
-		}
-
-		return sink.Close()
-	}()
-
-	if err != nil {
-		sink.Cancel()
-	}
-
-	return err
-}
-
-func (f *fsmSnapshot) Release() {}

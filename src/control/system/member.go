@@ -40,18 +40,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func ErrMemberExists(r Rank) *MemberExistsError {
-	return &MemberExistsError{rank: r}
-}
-
-type MemberExistsError struct {
-	rank Rank
-}
-
-func (mee *MemberExistsError) Error() string {
-	return fmt.Sprintf("member with rank %d already exists", mee.rank)
-}
-
 // MemberState represents the activity state of DAOS system members.
 type MemberState int
 
@@ -311,7 +299,7 @@ type Membership struct {
 func (m *Membership) addMember(member *Member) error {
 	_, err := m.db.FindMemberByUUID(member.UUID)
 	if err == nil {
-		return &MemberExistsError{member.Rank}
+		return &ErrMemberExists{Rank: member.Rank}
 	}
 	m.log.Debugf("adding system member: %s", member)
 
@@ -337,11 +325,16 @@ func (m *Membership) Add(member *Member) (int, error) {
 		return -1, err
 	}
 
-	return m.db.MemberCount(), nil
+	count, err := m.db.MemberCount()
+	if err != nil {
+		return -1, err
+	}
+
+	return count, nil
 }
 
 // Count returns the number of members.
-func (m *Membership) Count() int {
+func (m *Membership) Count() (int, error) {
 	return m.db.MemberCount()
 }
 
@@ -375,9 +368,13 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		if err := m.db.UpdateMember(curMember); err != nil {
 			return nil, err
 		}
-		resp.MapVersion = m.db.CurMapVersion()
 
-		return resp, nil
+		resp.MapVersion, err = m.db.CurMapVersion()
+		if err != nil {
+			return nil, err
+		}
+
+		return resp, err
 	}
 
 	newMember := &Member{
@@ -393,7 +390,10 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 	resp.Created = true
 	resp.Member = newMember
-	resp.MapVersion = m.db.CurMapVersion()
+	resp.MapVersion, err = m.db.CurMapVersion()
+	if err != nil {
+		return nil, err
+	}
 
 	return resp, nil
 }
@@ -437,17 +437,8 @@ func (m *Membership) Get(rank Rank) (*Member, error) {
 }
 
 // RankList returns slice of all ordered member ranks.
-func (m *Membership) RankList() (ranks []Rank) {
-	m.RLock()
-	defer m.RUnlock()
-
-	for _, rank := range m.db.MemberRanks() {
-		ranks = append(ranks, rank)
-	}
-
-	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
-
-	return
+func (m *Membership) RankList() ([]Rank, error) {
+	return m.db.MemberRanks()
 }
 
 func (m *Membership) getHostRanks(rankSet *RankSet) map[string][]Rank {
@@ -458,7 +449,13 @@ func (m *Membership) getHostRanks(rankSet *RankSet) map[string][]Rank {
 		rankList = rankSet.Ranks()
 	}
 
-	for _, member := range m.db.AllMembers() {
+	members, err := m.db.AllMembers()
+	if err != nil {
+		m.log.Errorf("failed to get all members: %s", err)
+		return nil
+	}
+
+	for _, member := range members {
 		addr := member.Addr.String()
 
 		if len(rankList) != 0 && !member.Rank.InList(rankList) {
@@ -517,8 +514,11 @@ func (m *Membership) Members(rankSet *RankSet) (members Members) {
 	defer m.RUnlock()
 
 	if rankSet == nil || rankSet.Count() == 0 {
-		for _, member := range m.db.AllMembers() {
-			members = append(members, member)
+		var err error
+		members, err = m.db.AllMembers()
+		if err != nil {
+			m.log.Errorf("failed to get all members: %s", err)
+			return nil
 		}
 	} else {
 		for _, rank := range rankSet.Ranks() {
@@ -596,7 +596,10 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 
 	var rankList []Rank
 	if ranks == "" {
-		rankList = m.RankList()
+		rankList, err = m.RankList()
+		if err != nil {
+			return
+		}
 	} else {
 		rankList, err = ParseRanks(ranks)
 		if err != nil {

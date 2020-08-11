@@ -28,32 +28,19 @@ import (
 	"net"
 
 	"github.com/google/uuid"
-)
-
-const (
-	PoolServiceStateCreating PoolServiceState = iota
-	PoolServiceStateReady
-	PoolServiceStateDestroying
-)
-
-type (
-	PoolServiceState uint
-
-	PoolService struct {
-		PoolUUID uuid.UUID
-		State    PoolServiceState
-		Replicas []Rank
-	}
-
-	PoolRankMap map[Rank][]*PoolService
-	PoolUuidMap map[uuid.UUID]*PoolService
-	PoolAddrMap map[net.Addr][]*PoolService
+	"github.com/pkg/errors"
 )
 
 type (
 	ServerRankMap map[Rank]*Member
 	ServerUuidMap map[uuid.UUID]*Member
 	ServerAddrMap map[net.Addr][]*Member
+
+	MemberDatabase struct {
+		Ranks ServerRankMap
+		Uuids ServerUuidMap
+		Addrs ServerAddrMap
+	}
 )
 
 func (srm ServerRankMap) MarshalJSON() ([]byte, error) {
@@ -85,29 +72,60 @@ func (sam ServerAddrMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jm)
 }
 
-func (prm PoolRankMap) MarshalJSON() ([]byte, error) {
-	jm := make(map[Rank][]uuid.UUID)
-	for rank, svcList := range prm {
-		if _, exists := jm[rank]; !exists {
-			jm[rank] = []uuid.UUID{}
+func (mdb *MemberDatabase) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	type fromJSON MemberDatabase
+	from := &struct {
+		Ranks map[Rank]uuid.UUID
+		Addrs map[string][]uuid.UUID
+		*fromJSON
+	}{
+		Ranks:    make(map[Rank]uuid.UUID),
+		Addrs:    make(map[string][]uuid.UUID),
+		fromJSON: (*fromJSON)(mdb),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	for rank, uuid := range from.Ranks {
+		member, found := mdb.Uuids[uuid]
+		if !found {
+			return errors.Errorf("rank %d missing UUID", rank)
 		}
-		for _, svc := range svcList {
-			jm[rank] = append(jm[rank], svc.PoolUUID)
+		mdb.Ranks[rank] = member
+	}
+
+	for addrStr, uuids := range from.Addrs {
+		for _, uuid := range uuids {
+			member, found := mdb.Uuids[uuid]
+			if !found {
+				return errors.Errorf("addr %s missing UUID", addrStr)
+			}
+
+			addr, err := net.ResolveTCPAddr("tcp", addrStr)
+			if err != nil {
+				return err
+			}
+			mdb.Addrs.addMember(addr, member)
 		}
 	}
-	return json.Marshal(jm)
+
+	return nil
 }
 
-func (pam PoolAddrMap) MarshalJSON() ([]byte, error) {
-	jm := make(map[string][]uuid.UUID)
-	for addr, svcList := range pam {
-		addrStr := addr.String()
-		if _, exists := jm[addrStr]; !exists {
-			jm[addrStr] = []uuid.UUID{}
-		}
-		for _, svc := range svcList {
-			jm[addrStr] = append(jm[addrStr], svc.PoolUUID)
-		}
-	}
-	return json.Marshal(jm)
+func (mdb *MemberDatabase) addMember(m *Member) {
+	mdb.Ranks[m.Rank] = m
+	mdb.Uuids[m.UUID] = m
+	mdb.Addrs.addMember(m.Addr, m)
+}
+
+func (mdb *MemberDatabase) removeMember(m *Member) {
+	delete(mdb.Ranks, m.Rank)
+	delete(mdb.Uuids, m.UUID)
+	delete(mdb.Addrs, m.Addr)
 }
