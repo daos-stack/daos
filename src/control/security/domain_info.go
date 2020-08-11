@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,21 +67,16 @@ func DomainInfoFromUnixConn(log logging.Logger, sock *net.UnixConn) (*DomainInfo
 	}
 	defer f.Close()
 
-	log.Debugf("Client Socket Credentials:\n")
 	fd := int(f.Fd())
 	creds, err := syscall.GetsockoptUcred(fd, syscall.SOL_SOCKET, syscall.SO_PEERCRED)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get sockopt creds")
 	}
-	log.Debugf("Pid: %d\n", creds.Pid)
-	log.Debugf("Uid: %d\n", creds.Uid)
-	log.Debugf("Gid: %d", creds.Gid)
 
 	ctx, err := unix.GetsockoptString(fd, syscall.SOL_SOCKET, syscall.SO_PEERSEC)
 	if err != nil {
-		log.Debugf("Unable to obtain peer context: %s\n", err)
 		ctx = ""
 	}
-	log.Debugf("Context: %s", ctx)
+	log.Debugf("client pid: %d uid: %d gid %d ctx: %s", creds.Pid, creds.Uid, creds.Gid, ctx)
 	return InitDomainInfo(creds, ctx), nil
 }

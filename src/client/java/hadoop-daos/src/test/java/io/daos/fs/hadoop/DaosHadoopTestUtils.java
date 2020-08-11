@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,26 +28,27 @@ import java.net.URI;
 /**
  *
  */
-public class DaosUtils {
+public class DaosHadoopTestUtils {
   private static Configuration configuration;
   public static final String TEST_FS_DAOS_NAME = "test.fs.daos.name";
 
-  private DaosUtils(){}
+  private DaosHadoopTestUtils() {
+  }
 
-  public static DaosFileSystem createTestFileSystem(Configuration conf)throws IOException{
+  public static DaosFileSystem createTestFileSystem(Configuration conf) throws IOException {
     DaosFileSystem daosFileSystem = new DaosFileSystem();
     configuration = conf;
     daosFileSystem.initialize(getURI(configuration), configuration);
     return daosFileSystem;
   }
 
-  public static Configuration getConfiguration(){
-    return configuration!=null ? configuration:null;
+  public static Configuration getConfiguration() {
+    return configuration != null ? configuration : null;
   }
 
   private static URI getURI(Configuration conf) {
     String fsname = conf.getTrimmed(
-            DaosUtils.TEST_FS_DAOS_NAME, "daos://192.168.2.1:23456/");
+        DaosHadoopTestUtils.TEST_FS_DAOS_NAME, "daos://192.168.2.1:23456/");
 
     boolean liveTest = !StringUtils.isEmpty(fsname);
     URI testURI = null;
@@ -58,7 +59,7 @@ public class DaosUtils {
 
     if (!liveTest) {
       throw new AssumptionViolatedException("No test filesystem in "
-          + DaosUtils.TEST_FS_DAOS_NAME);
+          + DaosHadoopTestUtils.TEST_FS_DAOS_NAME);
     }
     return testURI;
   }
