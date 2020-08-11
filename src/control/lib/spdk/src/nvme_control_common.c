@@ -187,20 +187,12 @@ get_controller(struct ctrlr_entry **entry, char *addr)
 }
 
 struct ret_t *
-_discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
+_discover(prober probe, bool detach, health_getter get_health)
 {
 	struct ctrlr_entry	*ctrlr_entry;
 	struct dev_health_entry	*health_entry;
 	struct ret_t		*ret;
 	int			 rc;
-
-	if (init_vmd) {
-		rc = spdk_vmd_init();
-		if (rc) {
-			rc = -NVMEC_ERR_NO_VMD_CTRLRS;
-			goto fail;
-		}
-	}
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -212,12 +204,6 @@ _discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
 	if (rc != 0)
 		goto fail;
-
-	/**
-	 * TODO: add fini call when we upgrade SPDK to a version that supports
-	 * if (init_vmd)
-	 *   spdk_vmd_fini();
-	 */
 
 	if (!g_controllers || !g_controllers->ctrlr)
 		return init_ret(0); /* no controllers */

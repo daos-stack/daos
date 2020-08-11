@@ -28,12 +28,10 @@
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.
  *
- * \param init_vmd Enable discovery of NVMe controllers backing a VMD address.
- *
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
-nvme_discover(bool init_vmd);
+nvme_discover(void);
 
 /**
  * Wipe NVMe controller namespace LBA-0.

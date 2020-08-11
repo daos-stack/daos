@@ -33,17 +33,16 @@ import (
 
 type (
 	MockBackendConfig struct {
-		formatIdx     int
-		InitErr       error
-		ResetErr      error
-		PrepareResp   *PrepareResponse
-		PrepareErr    error
-		FormatRes     *storage.NvmeController
-		FormatFailIdx int
-		FormatErr     error
-		ScanRes       storage.NvmeControllers
-		ScanErr       error
-		vmdEnabled    bool // set through public access methods
+		formatIdx       int
+		PrepareResetErr error
+		PrepareResp     *PrepareResponse
+		PrepareErr      error
+		FormatRes       *FormatResponse
+		FormatFailIdx   int
+		FormatErr       error
+		ScanRes         *ScanResponse
+		ScanErr         error
+		vmdEnabled      bool // set through public access methods
 	}
 
 	MockBackend struct {
@@ -65,23 +64,11 @@ func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
 }
 
-func (mb *MockBackend) Init(_ ...int) error {
-	return mb.cfg.InitErr
-}
-
-func (mb *MockBackend) Scan() (storage.NvmeControllers, error) {
-	if err := mb.Init(); err != nil {
-		return nil, err
-	}
-
+func (mb *MockBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
 	return mb.cfg.ScanRes, mb.cfg.ScanErr
 }
 
-func (mb *MockBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	if err := mb.Init(); err != nil {
-		return nil, err
-	}
-
+func (mb *MockBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	if mb.cfg.FormatRes != nil || mb.cfg.FormatErr != nil {
 		if mb.cfg.FormatErr != nil && mb.cfg.FormatFailIdx == mb.cfg.formatIdx {
 			mb.cfg.formatIdx++
@@ -94,22 +81,27 @@ func (mb *MockBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 		}
 	}
 
+	addr := req.DeviceList[0]
 	mockRe := regexp.MustCompile(`^0000:80:00.(\d+)$`)
-	if match := mockRe.FindStringSubmatch(pciAddr); match != nil {
+	if match := mockRe.FindStringSubmatch(addr); match != nil {
 		idx, err := strconv.ParseInt(match[1], 16, 32)
 		if err != nil {
 			return nil, err
 		}
-		return storage.MockNvmeController(int32(idx)), nil
+		addr = storage.MockNvmeController(int32(idx)).PciAddr
 	}
 
-	return &storage.NvmeController{
-		PciAddr: pciAddr,
+	return &FormatResponse{
+		DeviceResponses: DeviceFormatResponses{
+			addr: &DeviceFormatResponse{
+				Formatted: true,
+			},
+		},
 	}, nil
 }
 
-func (mb *MockBackend) Reset() error {
-	return mb.cfg.ResetErr
+func (mb *MockBackend) PrepareReset() error {
+	return mb.cfg.PrepareResetErr
 }
 
 func (mb *MockBackend) Prepare(_ PrepareRequest) (*PrepareResponse, error) {

@@ -49,15 +49,17 @@ enum NvmeControlStatusCode {
 	NVMEC_LAST_STATUS_VALUE
 };
 
+#define TEXTLEN 1024
+
 /**
  * \brief NVMe controller details
  */
 struct ctrlr_t {
-	char		     model[1024];
-	char		     serial[1024];
-	char		     pci_addr[1024];
-	char		     fw_rev[1024];
-	char		     pci_type[1024];
+	char		     model[TEXTLEN];
+	char		     serial[TEXTLEN];
+	char		     pci_addr[TEXTLEN];
+	char		     fw_rev[TEXTLEN];
+	char		     pci_type[TEXTLEN];
 	int		     socket_id;
 	struct ns_t	    *nss;
 	struct dev_health_t *dev_health;
@@ -101,7 +103,7 @@ struct dev_health_t {
 struct ret_t {
 	int		rc;
 	struct ctrlr_t *ctrlrs;
-	char		info[1024];
+	char		info[TEXTLEN];
 };
 
 struct ctrlr_entry {
@@ -194,7 +196,7 @@ typedef int
 (*health_getter)(struct spdk_nvme_ctrlr *, struct dev_health_entry *);
 
 struct ret_t *
-_discover(prober, bool, health_getter, bool);
+_discover(prober, bool, health_getter);
 
 /**
  * Provide ability to pass function pointers to _collect for mocking

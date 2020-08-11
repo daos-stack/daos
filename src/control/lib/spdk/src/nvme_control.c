@@ -71,10 +71,9 @@ get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
 }
 
 struct ret_t *
-nvme_discover(bool init_vmd)
+nvme_discover(void)
 {
-	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs,
-			 init_vmd);
+	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs);
 }
 
 static void
@@ -122,8 +121,9 @@ write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 }
 
 static struct ret_t *
-wipe(void)
+wipe(char *ctrlr_pci_addr)
 {
+	struct ctrlr_entry	*centry;
 	struct ns_entry		*nentry;
 	struct ret_t		*ret;
 	struct wipe_sequence	 sequence;
@@ -131,7 +131,14 @@ wipe(void)
 
 	ret = init_ret(0);
 
-	nentry = g_namespaces;
+	rc = get_controller(&centry, ctrlr_pci_addr);
+	if (rc != 0) {
+		snprintf(ret->info, sizeof(ret->info), "get_controller()\n");
+		ret->rc = rc;
+		return ret;
+	}
+
+	nentry = centry->nss;
 	while (nentry != NULL) {
 		nentry->qpair = spdk_nvme_ctrlr_alloc_io_qpair(nentry->ctrlr,
 							       NULL, 0);
@@ -187,6 +194,10 @@ wipe(void)
 			return ret;
 		}
 
+		snprintf(ret->info + sizeof(ret->info),
+			 sizeof(TEXTLEN) - strlen(ret->info), "%d ",
+			 spdk_nvme_ns_get_id(nentry->ns));
+
 		spdk_free(sequence.buf);
 		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 		nentry = nentry->next;
@@ -221,26 +232,9 @@ struct ret_t *
 nvme_wipe_namespaces(char *ctrlr_pci_addr)
 {
 	struct ret_t		*ret;
-	struct spdk_env_opts	 opts;
 	int			 rc;
 
 	ret = init_ret(0);
-
-	/*
-	 * SPDK relies on an abstraction around the local environment
-	 * named env that handles memory allocation and PCI device operations.
-	 * This library must be initialized first.
-	 */
-	spdk_env_opts_init(&opts);
-	opts.name = "wipe";
-	opts.shm_id = 0;
-	rc = spdk_env_init(&opts);
-	if (rc < 0) {
-		snprintf(ret->info, sizeof(ret->info), "spdk_env_init() (%d)\n",
-			 rc);
-		ret->rc = -1;
-		return ret;
-	}
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -266,7 +260,7 @@ nvme_wipe_namespaces(char *ctrlr_pci_addr)
 		return ret;
 	}
 
-	ret = wipe();
+	ret = wipe(ctrlr_pci_addr);
 	wipe_cleanup();
 	return ret;
 }

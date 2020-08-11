@@ -41,30 +41,71 @@ import "C"
 import (
 	"fmt"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 // ENV is the interface that provides SPDK environment management.
 type ENV interface {
-	InitSPDKEnv(int) error
+	InitSPDKEnv(EnvOptions) error
 }
 
 // Env is a simple ENV implementation.
 type Env struct{}
 
-// Rc2err returns an failure if rc != 0.
-//
-// TODO: If err is already set then it is wrapped,
-// otherwise it is ignored. e.g.
-// func Rc2err(label string, rc C.int, err error) error {
+// Rc2err returns error from label and rc.
 func Rc2err(label string, rc C.int) error {
-	if rc != 0 {
-		if rc < 0 {
-			rc = -rc
-		}
-		// e := errors.Error(rc)
-		return fmt.Errorf("%s: %d", label, rc) // e
+	return fmt.Errorf("%s: %d", label, rc)
+}
+
+type EnvOptions struct {
+	ShmID int // shared memory segment identifier for SPDK IPC
+	// MemSize
+	PciWhiteList []string // restrict SPDK device access
+	EnableVMD    bool     // VMD devices should be included
+}
+
+func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cPtr unsafe.Pointer, err error) {
+	opts = new(C.struct_spdk_env_opts)
+
+	C.spdk_env_opts_init(opts)
+
+	if o.ShmID > 0 {
+		opts.shm_id = C.int(o.ShmID)
 	}
-	return nil
+
+	// quiet DPDK EAL logging by setting log level to ERROR
+	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
+
+	if len(o.PciWhiteList) > 0 {
+		cPtr, err = pciListToC(o.PciWhiteList)
+		if err != nil {
+			return
+		}
+		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(cPtr)
+		opts.num_pci_addr = C.ulong(len(o.PciWhiteList))
+	}
+
+	return
+}
+
+func pciListToC(inAddrs []string) (unsafe.Pointer, error) {
+	var tmpAddr *C.struct_spdk_pci_addr
+	structSize := unsafe.Sizeof(*tmpAddr)
+
+	outAddrs := C.malloc(C.ulong(structSize) * C.ulong(len(inAddrs)))
+
+	for i, inAddr := range inAddrs {
+		offset := uintptr(i) * structSize
+		tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
+
+		if rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr)); rc != 0 {
+			C.free(unsafe.Pointer(outAddrs))
+			return nil, Rc2err("spdk_pci_addr_parse()", rc)
+		}
+	}
+
+	return outAddrs, nil
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -72,43 +113,26 @@ func Rc2err(label string, rc C.int) error {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *Env) InitSPDKEnv(shmID int, pciWhiteList []string) (err error) {
-	opts := &C.struct_spdk_env_opts{}
-
-	C.spdk_env_opts_init(opts)
-
-	// shmID 0 will be ignored
-	if shmID > 0 {
-		opts.shm_id = C.int(shmID)
+func (e *Env) InitSPDKEnv(opts EnvOptions) error {
+	cOpts, toFree, err := opts.toC()
+	if toFree != nil {
+		defer C.free(unsafe.Pointer(toFree))
+	}
+	if err != nil {
+		return errors.Wrap(err, "convert spdk env opts to C")
 	}
 
-	// quiet DPDK EAL logging by setting log level to ERROR
-	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
-
-	if len(pciWhiteList) != 0 {
-		var tmpAddr *C.struct_spdk_pci_addr
-		structSize := unsafe.Sizeof(*tmpAddr)
-
-		outAddrs := C.malloc(C.ulong(structSize) * C.ulong(len(pciWhiteList)))
-		defer C.free(unsafe.Pointer(outAddrs))
-
-		for i, inAddr := range pciWhiteList {
-			offset := uintptr(i) * structSize
-			tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
-
-			rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr))
-			if err = Rc2err("spdk_pci_addr_parse", rc); err != nil {
-				return
-			}
-		}
-
-		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(outAddrs)
+	if rc := C.spdk_env_init(cOpts); rc != 0 {
+		return Rc2err("spdk_env_init()", rc)
 	}
 
-	rc := C.spdk_env_init(opts)
-	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
-		return
+	if !opts.EnableVMD {
+		return nil
 	}
 
-	return
+	if rc := C.spdk_vmd_init(); rc != 0 {
+		return Rc2err("spdk_vmd_init()", rc)
+	}
+
+	return nil
 }

@@ -49,7 +49,11 @@ func TestBdevScan(t *testing.T) {
 		"single device": {
 			req: ScanRequest{},
 			mbc: &MockBackendConfig{
-				ScanRes: storage.NvmeControllers{storage.MockNvmeController()},
+				ScanRes: &ScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(),
+					},
+				},
 			},
 			expRes: &ScanResponse{
 				Controllers: storage.NvmeControllers{storage.MockNvmeController()},
@@ -58,10 +62,12 @@ func TestBdevScan(t *testing.T) {
 		"multiple devices": {
 			req: ScanRequest{},
 			mbc: &MockBackendConfig{
-				ScanRes: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
+				ScanRes: &ScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(1),
+						storage.MockNvmeController(2),
+						storage.MockNvmeController(3),
+					},
 				},
 			},
 			expRes: &ScanResponse{
@@ -76,10 +82,12 @@ func TestBdevScan(t *testing.T) {
 			req:       ScanRequest{EnableVmd: true},
 			forwarded: true,
 			mbc: &MockBackendConfig{
-				ScanRes: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
+				ScanRes: &ScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(1),
+						storage.MockNvmeController(2),
+						storage.MockNvmeController(3),
+					},
 				},
 			},
 			expRes: &ScanResponse{
@@ -133,7 +141,7 @@ func TestBdevPrepare(t *testing.T) {
 		"reset fails": {
 			req: PrepareRequest{},
 			mbc: &MockBackendConfig{
-				ResetErr: errors.New("reset failed"),
+				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("reset failed"),
 		},
@@ -250,8 +258,7 @@ func TestBdevFormat(t *testing.T) {
 			expRes: &FormatResponse{
 				DeviceResponses: DeviceFormatResponses{
 					mockSingle.PciAddr: &DeviceFormatResponse{
-						Formatted:  true,
-						Controller: mockSingle,
+						Formatted: true,
 					},
 				},
 			},
@@ -268,16 +275,13 @@ func TestBdevFormat(t *testing.T) {
 			expRes: &FormatResponse{
 				DeviceResponses: DeviceFormatResponses{
 					mockSingle.PciAddr: &DeviceFormatResponse{
-						Formatted:  true,
-						Controller: mockSingle,
+						Formatted: true,
 					},
 					storage.MockNvmeController(2).PciAddr: &DeviceFormatResponse{
-						Formatted:  true,
-						Controller: storage.MockNvmeController(2),
+						Formatted: true,
 					},
 					storage.MockNvmeController(3).PciAddr: &DeviceFormatResponse{
-						Formatted:  true,
-						Controller: storage.MockNvmeController(3),
+						Formatted: true,
 					},
 				},
 			},
@@ -298,8 +302,7 @@ func TestBdevFormat(t *testing.T) {
 			expRes: &FormatResponse{
 				DeviceResponses: DeviceFormatResponses{
 					mockSingle.PciAddr: &DeviceFormatResponse{
-						Formatted:  true,
-						Controller: mockSingle,
+						Formatted: true,
 					},
 					storage.MockNvmeController(2).PciAddr: &DeviceFormatResponse{
 						Formatted: false,
@@ -308,8 +311,7 @@ func TestBdevFormat(t *testing.T) {
 							errors.New("format failed")),
 					},
 					storage.MockNvmeController(3).PciAddr: &DeviceFormatResponse{
-						Formatted:  true,
-						Controller: storage.MockNvmeController(3),
+						Formatted: true,
 					},
 				},
 			},

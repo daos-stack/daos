@@ -53,7 +53,7 @@ const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
 // NVME is the interface that provides SPDK NVMe functionality.
 type NVME interface {
 	// Discover NVMe controllers and namespaces, and device health info
-	Discover(logging.Logger, bool) ([]Controller, error)
+	Discover(logging.Logger) ([]Controller, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger, string) error
 	// Cleanup NVMe object references
@@ -170,16 +170,12 @@ func pciAddressList(ctrlrs []Controller) []string {
 // ctrlr_t structs. These are converted and returned as Controller slices
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
-func (n *Nvme) Discover(log logging.Logger, enableVmd bool) ([]Controller, error) {
-	ctrlrs, err := processReturn(C.nvme_discover(C.bool(enableVmd)),
+func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
+	ctrlrs, err := processReturn(C.nvme_discover(),
 		"NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
-	var vmdMsg string
-	if enableVmd {
-		vmdMsg = " with vmd enabled"
-	}
-	log.Debugf("discovered nvme ssds%s: %v", vmdMsg, pciAddrs)
+	log.Debugf("discovered nvme ssds: %v", pciAddrs)
 
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
@@ -200,7 +196,12 @@ func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
 	failMsg := "NVMe Format(): C.nvme_"
 	wipeMsg := failMsg + "wipe_first_ns()"
 
-	if _, err = processReturn(C.nvme_wipe_namespaces(csPci), wipeMsg); err == nil {
+	retPtr := C.nvme_wipe_namespaces(csPci)
+	if retPtr.rc == 0 {
+		log.Debugf("NVMe Format(): wiped namespaces [%s] on %s",
+			C.GoString(&retPtr.info[0]), ctrlrPciAddr)
+	}
+	if _, err = processReturn(retPtr, wipeMsg); err == nil {
 		return // quick format succeeded
 	}
 
@@ -287,8 +288,8 @@ func processReturn(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller,
 	ctrlrPtr := retPtr.ctrlrs
 
 	if retPtr.rc != 0 {
-		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc), C.GoString(&retPtr.err[0])),
-			failMsg)
+		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc),
+			C.GoString(&retPtr.info[0])), failMsg)
 
 		return
 	}
@@ -298,7 +299,8 @@ func processReturn(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller,
 
 		if nsPtr := ctrlrPtr.nss; nsPtr != nil {
 			for nsPtr != nil {
-				ctrlr.Namespaces = append(ctrlr.Namespaces, c2GoNamespace(nsPtr))
+				ctrlr.Namespaces = append(ctrlr.Namespaces,
+					c2GoNamespace(nsPtr))
 				nsPtr = nsPtr.next
 			}
 		}
