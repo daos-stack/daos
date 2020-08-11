@@ -103,7 +103,7 @@ class NvmeEnospace(ServerFillUp):
 
     def delete_all_containers(self):
         """
-        Delete all the containers
+        Delete all the containers.
         """
         #List all the container
         kwargs = {"pool": self.pool.uuid, "svc": self.pool.svc_ranks}
