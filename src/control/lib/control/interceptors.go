@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 )
 
@@ -44,6 +45,21 @@ func unwrapFault(st *status.Status) error {
 	f, err := proto.UnwrapFault(st)
 	if f != nil {
 		return f
+	}
+
+	return err
+}
+
+// unwrapDaosStatus takes a gRPC status object
+// and unwraps additional information, if available.
+func unwrapDaosStatus(st *status.Status) error {
+	if st == nil {
+		return nil
+	}
+
+	s, err := proto.UnwrapDaosStatus(st)
+	if err == nil {
+		return s
 	}
 
 	return err
@@ -76,6 +92,9 @@ func streamErrorInterceptor() grpc.DialOption {
 			if f, isFault := unwrapFault(st).(*fault.Fault); isFault {
 				return cs, f
 			}
+			if s, isStatus := unwrapDaosStatus(st).(drpc.DaosStatus); isStatus {
+				return cs, s
+			}
 			return cs, connErrToFault(st, cc.Target())
 		}
 		return cs, nil
@@ -90,6 +109,9 @@ func unaryErrorInterceptor() grpc.DialOption {
 			st := status.Convert(err)
 			if f, isFault := unwrapFault(st).(*fault.Fault); isFault {
 				return f
+			}
+			if s, isStatus := unwrapDaosStatus(st).(drpc.DaosStatus); isStatus {
+				return s
 			}
 			return connErrToFault(st, cc.Target())
 		}
