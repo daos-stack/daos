@@ -34,6 +34,7 @@ class CPUUsage(TestWithServers):
     """
 
     def test_cpu_usage(self):
+        # pylint: disable=pylint-bad-continuation
         """
         JIRA ID: DAOS-4826
         Test Description: Test CPU usage of daos_server.
@@ -49,5 +50,5 @@ class CPUUsage(TestWithServers):
         for output, _ in task.iter_buffers():
             usage = str(output).splitlines()[-1]
             self.log.info("CPU usage = %s", usage)
-            self.assertTrue(int(usage) < 100, "CPU usage " +
-				"is above 100%: {}%".format(usage))
+            self.assertTrue(
+                int(usage) < 100, "CPU usage is above 100%: {}%".format(usage))
