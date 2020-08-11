@@ -158,6 +158,7 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
 	struct daos_csummer	*csummer;
+	struct daos_csummer	*csummer_copy = NULL;
 	d_sg_list_t		*sgls;
 	struct obj_rw_in	*orw;
 	struct obj_rw_out	*orwo;
@@ -172,6 +173,13 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	csummer = dc_cont_hdl2csummer(rw_args->dobj->do_co_hdl);
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		return 0;
+
+	/** Used to do actual checksum calculations. This prevents conflicts
+	 * between tasks
+	 */
+	csummer_copy = daos_csummer_copy(csummer);
+	if (csummer_copy == NULL)
+		return -DER_NOMEM;
 
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
@@ -210,7 +218,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			continue;
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i],
+		rc = daos_csummer_verify_iod(csummer_copy, iod, &sgls[i],
 					     iod_csum, singv_lo, shard_idx,
 					     map);
 		if (rc != 0) {
@@ -231,6 +239,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			break;
 		}
 	}
+	daos_csummer_destroy(&csummer_copy);
 
 	return rc;
 }

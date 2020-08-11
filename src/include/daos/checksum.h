@@ -203,6 +203,15 @@ daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
 int
 daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props);
 
+/**
+ * Initialize a daos_csummer as a copy of an existing daos_csummer
+ * @param obj		daos_csummer to be copied.
+ *
+ * @return		Allocated daos_csummer, or NULL if not enough memory.
+ */
+struct daos_csummer *
+daos_csummer_copy(const struct daos_csummer *obj);
+
 /** Destroy the daos_csummer */
 void
 daos_csummer_destroy(struct daos_csummer **obj);

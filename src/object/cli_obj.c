@@ -2931,6 +2931,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 		struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	struct daos_csummer	*csummer_copy = NULL;
 	struct cont_props	 cont_props = dc_cont_hdl2props(obj->cob_coh);
 	struct dcs_csum_info	*dkey_csum = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
@@ -2970,21 +2971,33 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 			return 0;
 	}
 
+	/** Used to do actual checksum calculations. This prevents conflicts
+	 * between tasks
+	 */
+	csummer_copy = daos_csummer_copy(csummer);
+	if (csummer_copy == NULL)
+		return -DER_NOMEM;
+
+
 	/** Calc 'd' key checksum */
-	rc = daos_csummer_calc_key(csummer, args->dkey, &dkey_csum);
-	if (rc != 0)
+	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
+	if (rc != 0) {
+		daos_csummer_destroy(&csummer_copy);
 		return rc;
+	}
 
 	/** Calc 'a' key checksum and value checksum */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, NULL,
+	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
 				    args->nr,
 				    false, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
-		daos_csummer_free_ci(csummer, &dkey_csum);
+		daos_csummer_free_ci(csummer_copy, &dkey_csum);
+		daos_csummer_destroy(&csummer_copy);
 		D_ERROR("daos_csummer_calc_iods error: %d", rc);
 		return rc;
 	}
+	daos_csummer_destroy(&csummer_copy);
 
 	/** fault injection - corrupt data and/or keys after calculating
 	 * checksum - simulates corruption over network
@@ -3007,6 +3020,7 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	       struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	struct daos_csummer	*csummer_copy;
 	struct dcs_csum_info	*dkey_csum = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
@@ -3023,21 +3037,33 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 		return 0;
 	}
 
+	/** Used to do actual checksum calculations. This prevents conflicts
+	 * between tasks
+	 */
+	csummer_copy = daos_csummer_copy(csummer);
+	if (csummer_copy == NULL)
+		return -DER_NOMEM;
+
 	/** dkey */
-	rc = daos_csummer_calc_key(csummer, args->dkey, &dkey_csum);
-	if (rc != 0)
+	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
+	if (rc != 0) {
+		daos_csummer_destroy(&csummer_copy);
 		return rc;
+	}
 
 	/** akeys (1 for each iod) */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, NULL,
+	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
 				    args->nr,
 				    true, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
 		D_ERROR("daos_csummer_calc_iods error: %d", rc);
-		daos_csummer_free_ci(csummer, &dkey_csum);
+		daos_csummer_free_ci(csummer_copy, &dkey_csum);
+		daos_csummer_destroy(&csummer_copy);
 		return rc;
 	}
+
+	daos_csummer_destroy(&csummer_copy);
 
 	/**
 	 * fault injection - corrupt keys after calculating checksum -
