@@ -15,7 +15,7 @@
 #  Note: Uses .build_vars.sh to find daos artifacts
 #  Note: New tests should return non-zero if there are any
 #    failures.
-
+set -x
 #check for existence of /mnt/daos first:
 failed=0
 failures=()
@@ -81,7 +81,7 @@ if [ -d "/mnt/daos" ]; then
 
     echo "Running Cmocka tests"
     VALGRIND_CMD=""
-    if [ "$RUN_TEST_VALGRIND" = 'disabled' ]; then
+    if [ -z "$RUN_TEST_VALGRIND" ]; then
         # Tests that do not run valgrind
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
@@ -95,10 +95,11 @@ if [ -d "/mnt/daos" ]; then
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
+            VALGRIND_XML_PATH="run_test_memcheck.sh/results-%p-memcheck.xml"
             VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
-                       --error-limit=no --suppressions=${VALGRIND_SUPP} \
-                       --xml=yes \
-                       --xml-file=run_test_memcheck.sh/results-%p-memcheck.xml"
+                                   --error-limit=no \
+                                   --suppressions=${VALGRIND_SUPP} \
+                                   --xml=yes --xml-file=${VALGRIND_XML_PATH}"
         else
             VALGRIND_SUPP=""
         fi

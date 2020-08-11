@@ -950,7 +950,6 @@ pipeline {
                                             'libipmctl-devel ' +
                                             'python36-tabulate' +
                                             qb_inst_rpms
-
                     }
                     post {
                       always {

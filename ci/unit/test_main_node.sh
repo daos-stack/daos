@@ -22,16 +22,16 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts
 sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
-if [ "$WITH_VALGRIND" = "disabled"  ]; then
-    # set CMOCKA envs here
-    export CMOCKA_MESSAGE_OUTPUT=xml
-    export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
-fi
+# set CMOCKA envs here
+export CMOCKA_MESSAGE_OUTPUT=xml
+export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g"
+[[ -z ${WITH_VALGRIND} ]] && export "${CMOCKA_XML_FILE}.xml" \
+    || export "${CMOCKA_XML_FILE}_${WITH_VALGRIND}.xml"
 
 cd "$DAOS_BASE"
 IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
 
-if [ "$WITH_VALGRIND" == 'disabled' ]; then
+if [ -z "$WITH_VALGRIND" ]; then
     ./utils/node_local_test.py all
 elif [ "$WITH_VALGRIND" == 'memcheck' ]; then
     # Remove DAOS_BASE from memcheck xml results

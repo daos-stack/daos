@@ -25,8 +25,6 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
   WITH_VALGRIND=$WITH_VALGRIND      \
   $(cat "$mydir/test_post_always_node.sh")"
 
-if [ "$WITH_VALGRIND" == "disabled" ]; then
-    # Note that we are taking advantage of the NFS mount here and if that
-    # should ever go away, we need to pull run_test.sh/ from $NODE
-    python utils/fix_cmocka_xml.py
-fi
+# Note that we are taking advantage of the NFS mount here and if that
+# should ever go away, we need to pull run_test.sh/ from $NODE
+python utils/fix_cmocka_xml.py
