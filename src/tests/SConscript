@@ -6,7 +6,8 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    libs = ['daos', 'daos_common', 'gurt', 'cart', 'uuid', 'cmocka']
+    libs = ['daos', 'daos_common', 'gurt', 'cart', 'uuid', 'cmocka',
+            'daos_tests']
 
     denv = env.Clone()
 
@@ -24,7 +25,7 @@ def scons():
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
-    libs += ['vos', 'bio', 'pthread', 'abt', 'daos_tests']
+    libs += ['vos', 'bio', 'pthread', 'abt']
 
     dts_common = denv.Object('dts_common.c')
     daos_perf = daos_build.program(denv, 'daos_perf',
