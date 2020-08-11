@@ -43,6 +43,7 @@ class DaosServerTest(TestWithServers):
         """Initialize a DaosServerTest object."""
         super(DaosServerTest, self).__init__(*args, **kwargs)
 
+    @fail_on(ServerFailed)
     @fail_on(CommandFailure)
     def restart_daos_server(self, reformat=True):
         """method to perform server stop and start.
@@ -62,6 +63,7 @@ class DaosServerTest(TestWithServers):
         self.log.info("=Restart daos_server, detect_io_server_start().")
         self.server_managers[0].detect_io_server_start()
 
+    @fail_on(ServerFailed)
     @fail_on(CommandFailure)
     def restart_daos_io_server(self, force=True):
         """method to perform io_server stop and start by dmg.
