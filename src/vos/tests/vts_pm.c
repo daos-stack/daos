@@ -1488,7 +1488,7 @@ small_sgl(void **state)
 }
 
 static void
-minor_epoch_punch(void **state)
+minor_epoch_punch_sv(void **state)
 {
 	struct io_test_args	*arg = *state;
 	int			rc = 0;
@@ -1500,8 +1500,95 @@ minor_epoch_punch(void **state)
 	daos_epoch_t		epoch = 2000;
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
+	const char		*expected = "xxxxx";
+	const char		*first = "Hello";
+	char			buf[32] = {0};
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* Set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	rex.rx_idx = 0;
+	rex.rx_nr = strlen(first);
+
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = strlen(first);
+	iod.iod_name = akey;
+	iod.iod_recxs = NULL;
+	iod.iod_nr = 1;
+
+	/* Allocate memory for the scatter-gather list */
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+
+	/* Allocate memory for the scatter-gather list */
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
+
+	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 2, &dth);
+
+	/* Write the first value */
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
+			       0 /* epoch comes from dth */, 0, 0, &dkey, 1,
+			       &iod, NULL, &sgl, dth);
+	if (rc != 0)
+		goto tx_end;
+
+	/* Punch the akey */
+	dth->dth_op_seq = 2;
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid,
+			   0 /* epoch comes from dth */, 0, 0, &dkey, 1, &akey,
+			   dth);
+tx_end:
+	xid = dth->dth_xid;
+	vts_dtx_end(dth);
+	assert_int_equal(rc, 0);
+
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
+	assert_int_equal(rc, 1);
+
+	/* Now read back original # of bytes */
+	iod.iod_size = 0;
+	memset(buf, 'x', sizeof(buf));
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1,
+			   &iod, &sgl);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(iod.iod_size, 0);
+	assert_memory_equal(buf, expected, strlen(expected));
+
+	daos_sgl_fini(&sgl, false);
+}
+
+static void
+minor_epoch_punch_array(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	daos_epoch_t		epoch = 3000;
+	struct dtx_handle	*dth;
+	struct dtx_id		 xid;
 	const char		*expected = "xxxxxLonelyWorld";
-	const char		*sexpected = "xxxxx";
 	const char		*first = "Hello";
 	const char		*second = "LonelyWorld";
 	char			buf[32] = {0};
@@ -1580,75 +1667,65 @@ tx_end:
 
 	assert_memory_equal(buf, expected, strlen(expected));
 
-	/* Now repeat the test for single value */
+	daos_sgl_fini(&sgl, false);
+}
+
+static void
+minor_epoch_punch_rebuild(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	daos_epoch_t		epoch = 2000;
+	const char		*expected = "xxxxxlonelyworld";
+	const char		*first = "hello";
+	const char		*second = "lonelyworld";
+	char			buf[32] = {0};
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_DKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 
-	iod.iod_type = DAOS_IOD_SINGLE;
-	iod.iod_size = strlen(first);
-	iod.iod_name = akey;
-	iod.iod_recxs = NULL;
-	iod.iod_nr = 1;
-
-	/* Allocate memory for the scatter-gather list */
 	rc = daos_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
 
-	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
-
-	vts_dtx_begin_ex(&oid, arg->ctx.tc_co_hdl, epoch++, 0, 2, &dth);
-
-	/* Write the first value */
-	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid,
-			       0 /* epoch comes from dth */, 0, 0, &dkey, 1,
-			       &iod, NULL, &sgl, dth);
-	if (rc != 0)
-		goto tx_end2;
-
-	/* Punch the akey */
-	dth->dth_op_seq = 2;
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid,
-			   0 /* epoch comes from dth */, 0, 0, &dkey, 1, &akey,
-			   dth);
-tx_end2:
-	xid = dth->dth_xid;
-	vts_dtx_end(dth);
-	assert_int_equal(rc, 0);
-
-	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid, 1, NULL);
-	assert_int_equal(rc, 1);
-
-	/* Now read back original # of bytes */
-	iod.iod_size = 0;
-	memset(buf, 'x', sizeof(buf));
-	d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1,
-			   &iod, &sgl);
-	assert_int_equal(rc, 0);
-
-	assert_int_equal(iod.iod_size, 0);
-	assert_memory_equal(buf, sexpected, strlen(sexpected));
-
-	/** Let's simulate replay scenario where rebuild replays a minor epoch
-	 * punch and an update with the same major epoch
-	 *
-	 * This can happen with something like the following
-	 * DTX does an update and commits at epoch 1.
-	 * DAOS takes a snapshot at epoch 2.
-	 * DTX does a distributed transaction that does punch and update at
-	 * 3.1 and 3.2, respectively and commits
-	 *
-	 * At some later time, rebuild runs.  While rebuilding the snapshot,
-	 * it will replay the future punch at 3.   Internally, on replay,
-	 * the minor epoch is set to MAX for updates and MAX - 1 for punch.
-	 */
-	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = 1;
-	iod.iod_recxs = &rex;
-	iod.iod_nr = 1;
 	rex.rx_idx = 0;
 	rex.rx_nr = strlen(first);
 
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_name = akey;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	/** let's simulate replay scenario where rebuild replays a minor epoch
+	 * punch and an update with the same major epoch
+	 *
+	 * this can happen with something like the following
+	 * dtx does an update and commits at epoch 1.
+	 * daos takes a snapshot at epoch 2.
+	 * dtx does a distributed transaction that does punch and update at
+	 * 3.1 and 3.2, respectively and commits
+	 *
+	 * at some later time, rebuild runs.  while rebuilding the snapshot,
+	 * it will replay the future punch at 3.   internally, on replay,
+	 * the minor epoch is set to max for updates and max - 1 for punch.
+	 */
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
 	epoch++;
 	/** First write the punched extent */
@@ -1706,7 +1783,11 @@ static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS809: Small SGL test", small_sgl, NULL, NULL },
 	{ "VOS810: Conditionals test", cond_test, NULL, NULL },
 	{ "VOS811: Test vos_obj_array_remove", remove_test, NULL, NULL },
-	{ "VOS812: Minor epoch punch", minor_epoch_punch, NULL, NULL },
+	{ "VOS812: Minor epoch punch sv", minor_epoch_punch_sv, NULL, NULL },
+	{ "VOS813: Minor epoch punch array", minor_epoch_punch_array, NULL,
+		NULL },
+	{ "VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
+		NULL },
 };
 
 int
