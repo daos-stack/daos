@@ -275,7 +275,7 @@ struct shard_auxi_args {
 	struct dc_object	*obj;
 	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
-	struct dc_obj_epoch	 epoch;
+	struct dtx_epoch	 epoch;
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
@@ -405,12 +405,12 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_query_key(struct dc_obj_shard *shard,
-			   struct dc_obj_epoch *epoch, uint32_t flags,
-			   struct dc_object *obj, daos_key_t *dkey,
-			   daos_key_t *akey, daos_recx_t *recx,
-			   const uuid_t coh_uuid, const uuid_t cont_uuid,
-			   struct dtx_id *dti, unsigned int *map_ver,
+int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
+			   uint32_t flags, struct dc_object *obj,
+			   daos_key_t *dkey, daos_key_t *akey,
+			   daos_recx_t *recx, const uuid_t coh_uuid,
+			   const uuid_t cont_uuid, struct dtx_id *dti,
+			   unsigned int *map_ver, daos_handle_t th,
 			   tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
@@ -440,15 +440,17 @@ obj_ptr2hdl(struct dc_object *obj)
 }
 
 static inline void
-dc_io_epoch_set(struct dc_obj_epoch *epoch)
+dc_io_epoch_set(struct dtx_epoch *epoch)
 {
 	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
 		epoch->oe_value = crt_hlc_get();
+		epoch->oe_first = epoch->oe_value;
 		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
-		epoch->oe_uncertain = false;
+		epoch->oe_flags = 0;
 	} else {
 		epoch->oe_value = DAOS_EPOCH_MAX;
-		epoch->oe_uncertain = false; /* not applicable */
+		epoch->oe_first = epoch->oe_value;
+		epoch->oe_flags = 0;
 	}
 }
 
@@ -486,9 +488,9 @@ void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
-int dc_obj_update(tse_task_t *task, struct dc_obj_epoch *epoch,
-		  uint32_t map_ver, daos_obj_update_t *args);
-int dc_obj_punch(tse_task_t *task, struct dc_obj_epoch *epoch, uint32_t map_ver,
+int dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
+		  daos_obj_update_t *args);
+int dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
 /* handles, pointers for handling I/O */
@@ -544,11 +546,22 @@ int
 dc_tx_check_pmv(daos_handle_t th);
 
 int
-dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dc_obj_epoch *epoch,
+dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
 
+/** See dc_tx_get_epoch. */
+enum dc_tx_get_epoch_rc {
+	DC_TX_GE_CHOSEN,
+	DC_TX_GE_CHOOSING,
+	DC_TX_GE_REINIT
+};
+
 int
-dc_tx_set_epoch(daos_handle_t th, daos_epoch_t epoch);
+dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch);
+
+int
+dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
+	     int rep_rc, daos_epoch_t rep_epoch);
 
 int
 dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);

@@ -28,12 +28,13 @@ package spdk
 // to specify additional dirs.
 
 /*
-#cgo LDFLAGS: -lspdk_env_dpdk -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
+#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_vmd  -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
 #cgo LDFLAGS: -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs -ldl -lnuma
 
 #include <stdlib.h>
 #include <spdk/stdinc.h>
 #include <spdk/env.h>
+#include <spdk/vmd.h>
 */
 import "C"
 
@@ -71,7 +72,7 @@ func Rc2err(label string, rc C.int) error {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *Env) InitSPDKEnv(shmID int) (err error) {
+func (e *Env) InitSPDKEnv(shmID int, pciWhiteList []string) (err error) {
 	opts := &C.struct_spdk_env_opts{}
 
 	C.spdk_env_opts_init(opts)
@@ -83,6 +84,26 @@ func (e *Env) InitSPDKEnv(shmID int) (err error) {
 
 	// quiet DPDK EAL logging by setting log level to ERROR
 	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
+
+	if len(pciWhiteList) != 0 {
+		var tmpAddr *C.struct_spdk_pci_addr
+		structSize := unsafe.Sizeof(*tmpAddr)
+
+		outAddrs := C.malloc(C.ulong(structSize) * C.ulong(len(pciWhiteList)))
+		defer C.free(unsafe.Pointer(outAddrs))
+
+		for i, inAddr := range pciWhiteList {
+			offset := uintptr(i) * structSize
+			tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
+
+			rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr))
+			if err = Rc2err("spdk_pci_addr_parse", rc); err != nil {
+				return
+			}
+		}
+
+		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(outAddrs)
+	}
 
 	rc := C.spdk_env_init(opts)
 	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
