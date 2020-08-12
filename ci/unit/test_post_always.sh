@@ -16,14 +16,12 @@ fi
 rm -rf run_test.sh vm_test
 DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
-WITH_VALGRIND="${WITH_VALGRIND:=}"
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
   "DAOS_BASE=$DAOS_BASE             \
-  WITH_VALGRIND=$WITH_VALGRIND      \
   $(cat "$mydir/test_post_always_node.sh")"
 
 # Note that we are taking advantage of the NFS mount here and if that
