@@ -923,7 +923,7 @@ def archive_config_files(avocado_logs_dir):
     base_dir = get_build_environment()["PREFIX"]
     configs_dir = get_temporary_directory(base_dir)
     archive_files(
-        destination, host_list, "{}/test_*.yaml".format(configs_dir))
+        destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
 
 
 def archive_files(destination, host_list, source_files):

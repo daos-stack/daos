@@ -8,9 +8,10 @@ rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/job-*/html/
 
 # Remove the latest avocado symlink directory to avoid inclusion in the
 # jenkins build artifacts
-unlink install/lib/daos/TESTING/ftest/avocado/job-results/latest
-rm -rf "Functional/"
-mkdir "Functional/"
+if [ -e install/lib/daos/TESTING/ftest/avocado/job-results/latest ]; then
+  unlink install/lib/daos/TESTING/ftest/avocado/job-results/latest
+fi
+
 # compress those potentially huge DAOS logs
 find install/lib/daos/TESTING/ftest/avocado/job-results/job-*/daos_logs/* \
   -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2
