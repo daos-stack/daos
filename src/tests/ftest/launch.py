@@ -530,7 +530,7 @@ def get_nvme_replacement(args):
     # Get a list of NVMe devices from each specified server host
     host_list = args.test_servers.split(",")
     command_list = [
-        "/usr/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
+        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
         command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
     command = " | ".join(command_list)
@@ -951,7 +951,7 @@ def archive_config_files(avocado_logs_dir):
         "set -eu",
         "rc=0",
         "copied=()",
-        "for file in $(ls {}/test_*.yaml)".format(config_file_dir),
+        "for file in $(ls {}/*_*_*.yaml)".format(config_file_dir),
         "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_logs_dir),
         "then copied+=($file)",
