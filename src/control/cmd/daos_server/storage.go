@@ -58,12 +58,8 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// that we should have made these Execute() methods thin
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
-		cfg := server.NewConfiguration()
-		svc, err := server.DefaultStorageControlService(cmd.log, cfg)
-		if err != nil {
-			return errors.WithMessage(err, "init control service")
-		}
-		cmd.scs = svc
+		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
+			scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
 	}
 
 	op := "Preparing"
@@ -128,10 +124,8 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
-	if err != nil {
-		return errors.WithMessage(err, "failed to init ControlService")
-	}
+	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
+		scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 
