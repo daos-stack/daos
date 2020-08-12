@@ -109,7 +109,8 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				DisableVFIO:   true,
 			},
 			expErr: errors.New(
-				"SPDK prepare: bdev_include and bdev_exclude can't be used together"),
+				"bdev prepare: re-binding ssds to attach with spdk: " +
+				"bdev_include and bdev_exclude can't be used together"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
