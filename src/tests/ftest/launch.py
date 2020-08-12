@@ -236,7 +236,7 @@ def set_test_environment(args):
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
 
 
-def get_output(cmd, check=True, ):
+def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
 
     Args:
