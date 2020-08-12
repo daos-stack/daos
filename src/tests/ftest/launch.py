@@ -1163,18 +1163,16 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             exe_magic = magic.open(magic.NONE)
             exe_magic.load()
             exe_type = exe_magic.file(corefile_fqpn)
-            exe_name_start = exe_type.find("execfn: '") + 9
             exe_name_end = 0
-            if exe_name_start > 8:
-                exe_name_end = exe_type.find("', platform:")
-            else:
-                exe_name_start = exe_type.find("from '") + 6
-                if exe_name_start > 5:
-                    exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                   exe_name_start
+            if exe_type:
+                exe_name_start = exe_type.find("execfn: '") + 9
+                if exe_name_start > 8:
+                    exe_name_end = exe_type.find("', platform:")
                 else:
-                    print("Unable to determine executable name from: "
-                          "{}\nNot creating stacktrace".format(exe_type))
+                    exe_name_start = exe_type.find("from '") + 6
+                    if exe_name_start > 5:
+                        exe_name_end = exe_type[exe_name_start:].find(" ") + \
+                                    exe_name_start
             if exe_name_end:
                 exe_name = exe_type[exe_name_start:exe_name_end]
                 cmd = [
@@ -1193,6 +1191,10 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 except IOError as error:
                     print(
                         "Error writing {}: {}".format(stack_trace_file, error))
+            else:
+                print(
+                    "Unable to determine executable name from: '{}'\nNot "
+                    "creating stacktrace".format(exe_type))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 
