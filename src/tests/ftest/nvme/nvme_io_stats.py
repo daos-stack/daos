@@ -54,18 +54,6 @@ class NvmeIOStates(IorTestBase):
 
         :avocado: tags=all,hw,medium,nvme,ib2,nvme_io_stats,full_regression
         """
-        transfer_block_size = self.params.get("transfer_block_size",
-                                              '/run/ior/iorflags/*')
-
-        # Update IOR parameter
-        self.ior_cmd.flags.update(self.params.get("ior_flags",
-                                                  '/run/ior/iorflags/*'))
-        self.ior_cmd.daos_oclass.update(self.params.get("obj_class",
-                                                        '/run/ior/iorflags/*'))
-        self.ior_cmd.api.update(self.params.get("ior_api",
-                                                '/run/ior/iorflags/*'))
-        self.ior_cmd.transfer_size.update(transfer_block_size[0])
-        self.ior_cmd.block_size.update(transfer_block_size[1])
         # run ior
         self.run_ior_with_pool()
 
