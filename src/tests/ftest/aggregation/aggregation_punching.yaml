@@ -32,13 +32,8 @@ mdtest:
   iteration: 1
   manager: "MPICH"
   mdtest_params:
-      # api
-      - DFS
-      # write 4M
-      - 4194304
-      # branching_factor
-      - 1
-      # num_of_dir_files
-      - 4000
-      # depth
-      - 0
+      api: 'DFS'
+      write_bytes: 4194304
+      branching_factor: 1
+      num_of_files_dirs: 4000
+      depth: 0

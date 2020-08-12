@@ -61,20 +61,12 @@ class AggregationPunching(MdtestBase):
         self.log.info("Disabling aggregation")
         self.pool.set_property("reclaim", "disabled")
 
-        # local params
-        params = self.params.get("mdtest_params", "/run/mdtest/*")
+        write_bytes = self.params.get("write_bytes", "/run/mdtest/*")
+        num_files = self.params.get("num_of_files_dirs", "/run/mdtest/*")
         processes = self.params.get("np", "/run/mdtest/*")
-        # update mdtest params
-        self.mdtest_cmd.api.update(params[0])
-        self.mdtest_cmd.write_bytes.update(params[1])
-        self.mdtest_cmd.branching_factor.update(params[2])
-        # if branching factor is 1 use num_of_files_dirs
-        # else use items option of mdtest
-        self.mdtest_cmd.num_of_files_dirs.update(params[3])
-        self.mdtest_cmd.depth.update(params[4])
 
-        # write bytes * num_dir_size * num_of_client_processes
-        mdtest_data_size = params[1] * params[3] * processes
+        # write bytes * num_of_files_dirs * num_of_client_processes
+        mdtest_data_size = write_bytes * num_files * processes
         # run mdtest
         self.execute_mdtest()
 
@@ -84,11 +76,11 @@ class AggregationPunching(MdtestBase):
 
         self.log.info("free_space_after_mdtest <= initial_free_space" +
                       " - mdtest_data_size")
-        self.log.info("mdtest_data_size = {}".format(mdtest_data_size))
-        self.log.info("Storage Index = {}".format(
-            "NVMe" if storage_index else "SCM"))
-        self.log.info("{} <= {}".format(
-            free_space_after_mdtest, initial_free_space-mdtest_data_size))
+        self.log.info("mdtest_data_size = %s", mdtest_data_size)
+        self.log.info("Storage Index = %s",
+                      "NVMe" if storage_index else "SCM")
+        self.log.info("%s <= %s", free_space_after_mdtest,
+                      initial_free_space-mdtest_data_size)
         self.assertTrue(free_space_after_mdtest <
                         initial_free_space - mdtest_data_size)
 
@@ -124,6 +116,5 @@ class AggregationPunching(MdtestBase):
         self.log.info("Checking if space is reclaimed")
         self.log.info("final_free_space >=" +
                       " free_space_after_mdtest + mdtest_data_size")
-        self.log.info("{} >= {}".format(
-            final_free_space, expected_free_space))
+        self.log.info("%s >= %s", final_free_space, expected_free_space)
         self.assertTrue(final_free_space >= expected_free_space)
