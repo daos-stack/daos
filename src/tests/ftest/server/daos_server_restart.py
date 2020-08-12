@@ -27,6 +27,7 @@ from avocado import fail_on
 from apricot import TestWithServers
 from daos_utils import DaosCommand
 from command_utils import CommandFailure
+from server_utils import ServerFailed
 
 
 class DaosServerTest(TestWithServers):
