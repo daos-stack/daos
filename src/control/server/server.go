@@ -255,7 +255,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			var once sync.Once
 			srv.OnStorageReady(func() (err error) {
 				once.Do(func() {
-					err = errors.Wrap(sysdb.Start(controlAddr),
+					err = errors.Wrap(sysdb.Start(ctx, controlAddr),
 						"failed to start system db",
 					)
 				})
@@ -328,7 +328,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 	mgmtSvc := newMgmtSvc(harness, membership, sysdb, &clientNetworkCfg)
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
-	sysdb.OnStart(func() error {
+	sysdb.OnLeaderGained(func(ctx context.Context) error {
 		mgmtSvc.startUpdateLoop(ctx)
 		mgmtSvc.requestGroupUpdate(ctx)
 		return nil

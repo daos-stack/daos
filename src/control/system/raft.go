@@ -101,10 +101,6 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 
 	switch op {
 	case raftOpAddMember:
-		if !m.Rank.Equals(d.NextRank) {
-			d.log.Errorf("unexpected new member rank (%d != %d)", m.Rank, d.NextRank)
-		}
-		d.NextRank++
 		d.Members.addMember(m)
 		d.log.Debugf("added member: %+v", m)
 	case raftOpUpdateMember:

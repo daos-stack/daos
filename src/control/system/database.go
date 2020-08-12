@@ -24,6 +24,7 @@
 package system
 
 import (
+	"context"
 	"net"
 	"os"
 	"path/filepath"
@@ -45,7 +46,7 @@ const (
 )
 
 type (
-	onDatabaseStartedFn func() error
+	onLeaderGainedFn func(context.Context) error
 
 	dbData struct {
 		log logging.Logger
@@ -59,16 +60,16 @@ type (
 	}
 
 	Database struct {
+		sync.Mutex
 		log            logging.Logger
 		cfg            *DatabaseConfig
 		isReplica      bool
 		resolveTCPAddr func(string, string) (*net.TCPAddr, error)
 		interfaceAddrs func() ([]net.Addr, error)
 		raft           *raft.Raft
-		onStarted      []onDatabaseStartedFn
+		onLeaderGained []onLeaderGainedFn
 
-		rankLock sync.Mutex
-		data     *dbData
+		data *dbData
 	}
 
 	DatabaseConfig struct {
@@ -152,13 +153,13 @@ func (db *Database) checkReplica(ctrlAddr *net.TCPAddr) (repAddr *net.TCPAddr, i
 		localAddrs = append(localAddrs, ctrlAddr.IP)
 	}
 
-	var idx int
-	for idx, repAddr = range repAddrs {
-		if repAddr.Port != ctrlAddr.Port {
+	for idx, candidate := range repAddrs {
+		if candidate.Port != ctrlAddr.Port {
 			continue
 		}
 		for _, localAddr := range localAddrs {
-			if repAddr.IP.Equal(localAddr) {
+			if candidate.IP.Equal(localAddr) {
+				repAddr = candidate
 				if idx == 0 {
 					isBootStrap = true
 				}
@@ -183,13 +184,13 @@ func (db *Database) checkLeader() error {
 	return nil
 }
 
-// OnStart registers callbacks to be run when the database
-// has started.
-func (db *Database) OnStart(fn onDatabaseStartedFn) {
-	db.onStarted = append(db.onStarted, fn)
+// OnLeaderGained registers callbacks to be run when this instance
+// gains the leadership role.
+func (db *Database) OnLeaderGained(fn onLeaderGainedFn) {
+	db.onLeaderGained = append(db.onLeaderGained, fn)
 }
 
-func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
+func (db *Database) Start(ctx context.Context, ctrlAddr *net.TCPAddr) error {
 	var repAddr *net.TCPAddr
 	var isBootStrap, needsBootStrap bool
 	var err error
@@ -209,6 +210,7 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 		if !os.IsNotExist(err) {
 			return errors.Wrapf(err, "can't Stat() %s", db.cfg.RaftDir)
 		}
+		needsBootStrap = true
 		if err := os.Mkdir(db.cfg.RaftDir, 0700); err != nil {
 			return errors.Wrapf(err, "failed to Mkdir() %s", db.cfg.RaftDir)
 		}
@@ -226,7 +228,7 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 	// we add real replica support over gRPC.
 	_, transport := raft.NewInmemTransport(raft.NewInmemAddr())
 
-	snaps, err := raft.NewFileSnapshotStore(db.cfg.RaftDir, 2, os.Stderr)
+	snaps, err := raft.NewFileSnapshotStoreWithLogger(db.cfg.RaftDir, 2, rc.Logger)
 	if err != nil {
 		return err
 	}
@@ -236,16 +238,10 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	ra, err := raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, transport)
+	db.raft, err = raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, transport)
 	if err != nil {
 		return err
 	}
-	db.raft = ra
-
-	needsBootStrap = func() bool {
-		_, err := os.Stat(sysDBPath)
-		return err == nil
-	}()
 
 	if isBootStrap && needsBootStrap {
 		db.log.Debugf("bootstrapping MS on %s", rc.LocalID)
@@ -257,14 +253,44 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 				},
 			},
 		}
-		db.raft.BootstrapCluster(bsc)
-	}
-
-	for _, fn := range db.onStarted {
-		if err := fn(); err != nil {
-			return errors.Wrap(err, "failure in onStarted callback")
+		if future := db.raft.BootstrapCluster(bsc); future.Error() != nil {
+			return errors.Wrapf(err, "failed to bootstrap raft instance on %s", rc.LocalID)
 		}
 	}
+
+	go func(parent context.Context) {
+		var cancel context.CancelFunc
+		for {
+			select {
+			case <-parent.Done():
+				if cancel != nil {
+					cancel()
+				}
+				return
+			case isLeader := <-db.raft.LeaderCh():
+				if !isLeader {
+					db.log.Debugf("node %s lost MS leader state", rc.LocalID)
+					if cancel != nil {
+						cancel()
+					}
+					return
+				}
+
+				db.log.Debugf("node %s gained MS leader state", rc.LocalID)
+				var ctx context.Context
+				ctx, cancel = context.WithCancel(parent)
+				for _, fn := range db.onLeaderGained {
+					if err := fn(ctx); err != nil {
+						db.log.Errorf("failure in onLeaderGained callback: %s", err)
+						cancel()
+						db.raft.LeadershipTransfer()
+						break
+					}
+				}
+
+			}
+		}
+	}(ctx)
 
 	return nil
 }
@@ -364,6 +390,9 @@ func (db *Database) RemoveMember(m *Member) error {
 	if err := db.checkLeader(); err != nil {
 		return err
 	}
+	db.Lock()
+	defer db.Unlock()
+
 	return db.submitMemberUpdate(raftOpRemoveMember, m)
 }
 
@@ -371,6 +400,9 @@ func (db *Database) AddMember(newMember *Member) error {
 	if err := db.checkLeader(); err != nil {
 		return err
 	}
+	db.Lock()
+	defer db.Unlock()
+
 	db.log.Debugf("add/rejoin: %+v", newMember)
 
 	if cur, err := db.FindMemberByUUID(newMember.UUID); err == nil {
@@ -379,17 +411,14 @@ func (db *Database) AddMember(newMember *Member) error {
 				newMember.UUID, newMember.Rank, cur.Rank)
 		}
 		db.log.Debugf("rank %d rejoined", cur.Rank)
-		return db.UpdateMember(newMember)
+		return db.submitMemberUpdate(raftOpUpdateMember, newMember)
 	}
 
 	// TODO: Should we allow the rank to be supplied for a new member?
 	// Removing this breaks the tests, but maybe the tests shouldn't be
 	// specifying rank for new members?
-	if newMember.Rank.Equals(NilRank) {
-		// Take a lock on the rank here, so that we can apply the new member
-		// with the correct rank, but increment NextRank as part of the Apply.
-		db.rankLock.Lock()
-		defer db.rankLock.Unlock()
+	needsRank := newMember.Rank.Equals(NilRank)
+	if needsRank {
 		newMember.Rank = db.data.NextRank
 	}
 
@@ -398,6 +427,9 @@ func (db *Database) AddMember(newMember *Member) error {
 	}
 
 	db.log.Debugf("added rank %d", newMember.Rank)
+	if needsRank {
+		db.data.NextRank++
+	}
 
 	return nil
 }
@@ -406,6 +438,9 @@ func (db *Database) UpdateMember(m *Member) error {
 	if err := db.checkLeader(); err != nil {
 		return err
 	}
+	db.Lock()
+	defer db.Unlock()
+
 	return db.submitMemberUpdate(raftOpUpdateMember, m)
 }
 
@@ -489,6 +524,9 @@ func (db *Database) AddPoolService(ps *PoolService) error {
 	if err := db.checkLeader(); err != nil {
 		return err
 	}
+	db.Lock()
+	defer db.Unlock()
+
 	db.log.Debugf("add pool service: %+v", ps)
 
 	if p, err := db.FindPoolServiceByUUID(ps.PoolUUID); err == nil {
@@ -508,6 +546,9 @@ func (db *Database) RemovePoolService(uuid uuid.UUID) error {
 	if err := db.checkLeader(); err != nil {
 		return err
 	}
+	db.Lock()
+	defer db.Unlock()
+
 	db.log.Debugf("remove pool service: %s", uuid)
 
 	ps, err := db.FindPoolServiceByUUID(uuid)
@@ -528,6 +569,9 @@ func (db *Database) UpdatePoolService(ps *PoolService) error {
 	if err := db.checkLeader(); err != nil {
 		return err
 	}
+	db.Lock()
+	defer db.Unlock()
+
 	db.log.Debugf("update pool service: %+v", ps)
 
 	_, err := db.FindPoolServiceByUUID(ps.PoolUUID)
