@@ -2543,8 +2543,8 @@ crt_rank_self_set(d_rank_t rank)
 {
 	int rc = 0;
 	struct crt_grp_priv	*default_grp_priv;
-	na_class_t		*na_class;
-	na_size_t		size = CRT_ADDR_STR_MAX_LEN;
+	hg_class_t		*hg_class;
+	hg_size_t		size = CRT_ADDR_STR_MAX_LEN;
 	struct crt_context	*ctx;
 	char			uri_addr[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 
@@ -2575,11 +2575,11 @@ crt_rank_self_set(d_rank_t rank)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
-		na_class =  ctx->cc_hg_ctx.chc_nacla;
+		hg_class =  ctx->cc_hg_ctx.chc_hgcla;
 
-		rc = crt_na_class_get_addr(na_class, uri_addr, &size);
+		rc = crt_hg_get_addr(hg_class, uri_addr, &size);
 		if (rc != 0) {
-			D_ERROR("crt_na_class_get_addr() failed; rc=%d\n", rc);
+			D_ERROR("crt_hg_get_addr() failed; rc=%d\n", rc);
 			D_GOTO(unlock, rc);
 		}
 
@@ -2590,7 +2590,6 @@ crt_rank_self_set(d_rank_t rank)
 				rc);
 			D_GOTO(unlock, rc);
 		}
-
 	}
 
 unlock:

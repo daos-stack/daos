@@ -34,7 +34,6 @@
 #include <mercury_proc.h>
 #include <mercury_proc_string.h>
 #include <mercury_log.h>
-#include <na.h>
 
 /** the shared HG RPC ID used for all CRT opc */
 #define CRT_HG_RPCID		(0xDA036868)
@@ -100,7 +99,6 @@ struct crt_hg_pool {
 /** HG context */
 struct crt_hg_context {
 	bool			 chc_shared_na; /* flag for shared na_class */
-	na_class_t		*chc_nacla; /* NA class */
 	hg_class_t		*chc_hgcla; /* HG class */
 	hg_context_t		*chc_hgctx; /* HG context */
 	hg_class_t		*chc_bulkcla; /* bulk class */
@@ -110,7 +108,6 @@ struct crt_hg_context {
 
 /** HG level global data */
 struct crt_hg_gdata {
-	na_class_t		*chg_nacla; /* NA class */
 	hg_class_t		*chg_hgcla; /* HG class */
 };
 
