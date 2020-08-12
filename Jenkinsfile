@@ -71,7 +71,15 @@ def pr_repos() {
     return cachedCommitPragma(pragma: 'PR-repos')
 }
 
-def daos_repo() {
+String el7_component_repos() {
+    return cachedCommitPragma(pragma: 'PR-repos-el7')
+}
+
+String leap15_component_repos() {
+    return cachedCommitPragma(pragma: 'PR-repos-leap15')
+}
+
+String daos_repo() {
     if (cachedCommitPragma(pragma: 'RPM-test-version') == '') {
         return "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
     } else {
@@ -79,15 +87,15 @@ def daos_repo() {
     }
 }
 
-def el7_daos_repos() {
+String el7_daos_repos() {
     return el7_component_repos + ' ' + pr_repos() + ' ' + daos_repo()
 }
 
-def leap15_daos_repos() {
+String leap15_daos_repos() {
     return leap15_component_repos + ' ' + pr_repos() + ' ' + daos_repo()
 }
 
-def component_repos() {
+String component_repos() {
     Map stage_info = parseStageInfo()
     if (stage_info['target'] == 'centos7') {
         return el7_component_repos + ' ' + pr_repos()
@@ -97,12 +105,12 @@ def component_repos() {
     }
 }
 
-def daos_repos() {
+String daos_repos() {
     Map stage_info = parseStageInfo()
     return daos_repos(stage_info['target'])
 }
 
-def daos_repos(String distro) {
+String daos_repos(String distro) {
     if (distro == 'centos7') {
         return el7_daos_repos()
     }
@@ -111,7 +119,7 @@ def daos_repos(String distro) {
     }
 }
 
-def unit_packages() {
+String unit_packages() {
     Map stage_info = parseStageInfo()
     if (stage_info['target'] == 'centos7') {
         String packages =  'gotestsum openmpi3 ' +
@@ -147,17 +155,23 @@ def cachedCommitPragma(Map config) {
 
 }
 
-def daos_package_version() {
+String daos_package_version() {
     stage_info = parseStageInfo()
     return daos_package_version(stage_info['target'])
 }
 
-def daos_packages_version(String distro) {
+String daos_packages_version(String distro) {
     // commit pragma has highest priority
     // TODO: this should actually be determined from the PR-repos artifacts
-    def version = cachedCommitPragma(pragma: 'RPM-test-version')
+    String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
-        return version
+        String dist
+        if (distro == "centos7") {
+            dist = "el7"
+        } else if (distro == "leap15") {
+            dist = "suse.lp152"
+        }
+        return version + "." + dist
     }
 
     // use the stash after that
@@ -182,6 +196,40 @@ def parallel_build() {
     return false
 }
 
+String hw_distro(String size) {
+    // Possible values:
+    //'leap15
+    //'centos7
+    return cachedCommitPragma(pragma: 'Func-hw-test-' + size + '-distro',
+                              def_val: cachedCommitPragma(pragma: 'Func-hw-test-distro',
+                                                          def_val: 'centos7'))
+}
+
+String functional_packages() {
+    stage_info = parseStageInfo()
+    return functional_packages(stage_info['target'])
+}
+
+String functional_packages(String distro) {
+    String rpms = "openmpi3 hwloc ndctl " +
+                  "ior-hpc-cart-4-daos-0 " +
+                  "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
+                  "testmpio-cart-4-daos-0 fio " +
+                  "m pi4py-tests-cart-4-daos-0 MACSio"
+    if (quickbuild()) {
+        rpms += " spdk_tools"
+    }
+    if (distro == "leap15") {
+        return rpms
+    } else if (distro == "centos7") {
+        // need to exclude openmpi until we remove it from the repo
+        return  "--exclude openmpi " + rpms
+    } else {
+        error 'functional_packages not implemented for ' + stage_info['target']
+    }
+}
+
+// Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -189,11 +237,6 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 def qb_inst_rpms = ""
 el7_component_repos = ""
 leap15_component_repos = ""
-def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
-                       "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
-                       "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 " +
-                       "fio MACSio"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -209,9 +252,9 @@ if (!env.CHANGE_ID &&
 cached_uid = 0
 def getuid() {
     if (cached_uid == 0)
-        cached_uid = sh label: 'getuid()',
+        cached_uid = sh(label: 'getuid()',
                         script: "id -u",
-                        returnStdout: true
+                        returnStdout: true).trim()
     return cached_uid
 }
 
@@ -235,8 +278,12 @@ def docker_build_args(Map config = [:]) {
       ret_str += ' --build-arg REPO_EL8=' + env.DAOS_STACK_EL_8_LOCAL_REPO
     }
     if (env.DAOS_STACK_LEAP_15_LOCAL_REPO) {
-      ret_str += ' --build-arg REPO_LEAP15=' +
+      ret_str += ' --build-arg REPO_LOCAL_LEAP15=' +
                  env.DAOS_STACK_LEAP_15_LOCAL_REPO
+    }
+    if (env.DAOS_STACK_LEAP_15_GROUP_REPO) {
+      ret_str += ' --build-arg REPO_GROUP_LEAP15=' +
+                 env.DAOS_STACK_LEAP_15_GROUP_REPO
     }
     if (env.HTTP_PROXY) {
       ret_str += ' --build-arg HTTP_PROXY="' + env.HTTP_PROXY + '"'
@@ -269,10 +316,20 @@ pipeline {
         BUILDARGS = docker_build_args()
         BUILDARGS_QB_CHECK = docker_build_args(qb: quickbuild())
         BUILDARGS_QB_TRUE = docker_build_args(qb: true)
-        QUICKBUILD_DEPS = sh label: 'Get Quickbuild dependencies',
-                             script: 'rpmspec -q --srpm --requires' +
-                                     ' utils/rpms/daos.spec 2>/dev/null',
-                             returnStdout: true
+        QUICKBUILD_DEPS_EL7 = sh label:'Get Quickbuild dependencies',
+                                 script: "rpmspec -q --define dist\\ .el7 " +
+                                         "--undefine suse_version " +
+                                         "--define rhel\\ 7 --srpm " +
+                                         "--requires utils/rpms/daos.spec " +
+                                         "2>/dev/null",
+                                 returnStdout: true
+        QUICKBUILD_DEPS_LEAP15 = sh label:'Get Quickbuild dependencies',
+                                    script: "rpmspec -q --define dist\\ .suse.lp151 " +
+                                            "--undefine rhel " +
+                                            "--define suse_version\\ 1501 --srpm " +
+                                            "--requires utils/rpms/daos.spec " +
+                                            "2>/dev/null",
+                                    returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
     }
 
@@ -673,7 +730,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"'
+                                  env.QUICKBUILD_DEPS_EL7 + '"'
                         }
                     }
                     steps {
@@ -788,20 +845,16 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            branch target_branch
-                            expression { ! quickbuild() }
-                        }
-                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
-                                                 '$BUILDARGS'
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_LEAP15 + '"' +
+                                ' --build-arg REPOS="' + component_repos() + '"'
                         }
                     }
                     steps {
@@ -1021,7 +1074,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Functional') {
+                stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
                         expression { ! skip_stage('func-test') }
@@ -1032,7 +1085,7 @@ pipeline {
                     steps {
                         functionalTest inst_repos: daos_repos(),
                                        inst_rpms: get_daos_packages() +
-                                                  ' ' + functional_rpms
+                                                  ' ' + functional_packages()
                     }
                     post {
                         always {
@@ -1040,6 +1093,25 @@ pipeline {
                         }
                     }
                 }
+                stage('Functional on Leap 15') {
+                    when {
+                        beforeAgent true
+                        expression { ! skip_stage('func-test-leap15') }
+                    }
+                    agent {
+                        label 'ci_vm9'
+                    }
+                    steps {
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: get_daos_packages() + 
+                                                  ' ' + functional_packages()
+                    }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    } // post
+                } // stage('Functional on Leap 15')
                 stage('Functional_Hardware_Small') {
                     when {
                         beforeAgent true
@@ -1054,16 +1126,18 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: get_daos_packages() +
-                                                  ' ' + functional_rpms
+                        functionalTest target: hw_distro("small"),
+                                       inst_repos: daos_repos(hw_distro("small")),
+                                       inst_rpms: get_daos_packages(hw_distro("small")) + 
+                                                  ' ' +
+                                                  functional_packages(hw_distro("small"))
                     }
                     post {
                         always {
                             functionalTestPost()
                         }
                     }
-                }
+                } // stage('Functional_Hardware_Small')
                 stage('Functional_Hardware_Medium') {
                     when {
                         beforeAgent true
@@ -1078,16 +1152,18 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: get_daos_packages() +
-                                                  ' ' + functional_rpms
+                        functionalTest target: hw_distro("medium"),
+                                       inst_repos: daos_repos(hw_distro("medium")),
+                                       inst_rpms: get_daos_packages(hw_distro("medium")) + 
+                                                  ' ' +
+                                                  functional_packages(hw_distro("medium"))
                    }
                     post {
                         always {
                             functionalTestPost()
                         }
                     }
-                }
+                } // stage('Functional_Hardware_Medium')
                 stage('Functional_Hardware_Large') {
                     when {
                         beforeAgent true
@@ -1102,16 +1178,18 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: get_daos_packages() +
-                                                  ' ' + functional_rpms
+                        functionalTest target: hw_distro("large"),
+                                       inst_repos: daos_repos(hw_distro("large")),
+                                       inst_rpms: get_daos_packages(hw_distro("large")) +
+                                                  ' ' +
+                                                  functional_packages(hw_distro("large"))
                     }
                     post {
                         always {
                             functionalTestPost()
                         }
                     }
-                }
+                } // stage('Functional_Hardware_Large')
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -1193,7 +1271,7 @@ pipeline {
                 } // stage('Bullseye Report')
             } // parallel
         } // stage ('Test Report')
-    }
+    } // stages
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
@@ -1201,5 +1279,5 @@ pipeline {
         unsuccessful {
             notifyBrokenBranch branches: target_branch
         }
-    }
+    } // post
 }
