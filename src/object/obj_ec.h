@@ -227,6 +227,10 @@ struct obj_ec_recov_task {
 
 /** EC obj IO failure information */
 struct obj_ec_fail_info {
+	/* the original user iods pointer, used for the case that in singv
+	 * degraded fetch, set the iod_size.
+	 */
+	daos_iod_t			*efi_uiods;
 	/* missed (to be recovered) recx list */
 	struct daos_recx_ep_list	*efi_recx_lists;
 	/* list of error targets */
@@ -506,6 +510,8 @@ obj_iod_recx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
 
 	for (i = 0; i < iod_nr; i++) {
 		iod = &iods[i];
+		if (iod->iod_type == DAOS_IOD_SINGLE)
+			continue;
 
 		rc = obj_iod_break(iod, oca);
 		if (rc != 0) {
@@ -533,6 +539,8 @@ obj_iod_idx_vos2parity(uint32_t iod_nr, daos_iod_t *iods)
 
 	for (i = 0; i < iod_nr; i++) {
 		iod = &iods[i];
+		if (iod->iod_type == DAOS_IOD_SINGLE)
+			continue;
 		for (j = 0; j < iod->iod_nr; j++) {
 			recx = &iod->iod_recxs[j];
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
@@ -550,6 +558,8 @@ obj_iod_idx_parity2vos(uint32_t iod_nr, daos_iod_t *iods)
 
 	for (i = 0; i < iod_nr; i++) {
 		iod = &iods[i];
+		if (iod->iod_type == DAOS_IOD_SINGLE)
+			continue;
 		for (j = 0; j < iod->iod_nr; j++) {
 			recx = &iod->iod_recxs[j];
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
@@ -598,6 +608,8 @@ int obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		      daos_iod_t *iods, uint32_t iod_nr);
 void obj_ec_recov_data(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		       uint32_t iod_nr);
+int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
+		       uint32_t *parity_tgt_idx, bool ignore_fail_tgt_idx);
 
 /* srv_ec.c */
 struct obj_rw_in;

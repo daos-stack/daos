@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
@@ -35,12 +36,14 @@ type (
 		formatIdx     int
 		InitErr       error
 		ResetErr      error
+		PrepareResp   *PrepareResponse
 		PrepareErr    error
 		FormatRes     *storage.NvmeController
 		FormatFailIdx int
 		FormatErr     error
 		ScanRes       storage.NvmeControllers
 		ScanErr       error
+		vmdEnabled    bool // set through public access methods
 	}
 
 	MockBackend struct {
@@ -91,9 +94,9 @@ func (mb *MockBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 		}
 	}
 
-	mockRe := regexp.MustCompile(`^pciAddr-(\d+)$`)
+	mockRe := regexp.MustCompile(`^0000:80:00.(\d+)$`)
 	if match := mockRe.FindStringSubmatch(pciAddr); match != nil {
-		idx, err := strconv.ParseInt(match[1], 10, 32)
+		idx, err := strconv.ParseInt(match[1], 16, 32)
 		if err != nil {
 			return nil, err
 		}
@@ -109,8 +112,23 @@ func (mb *MockBackend) Reset() error {
 	return mb.cfg.ResetErr
 }
 
-func (mb *MockBackend) Prepare(_ PrepareRequest) error {
-	return mb.cfg.PrepareErr
+func (mb *MockBackend) Prepare(_ PrepareRequest) (*PrepareResponse, error) {
+	if mb.cfg.PrepareErr != nil {
+		return nil, mb.cfg.PrepareErr
+	}
+	if mb.cfg.PrepareResp == nil {
+		return new(PrepareResponse), nil
+	}
+
+	return mb.cfg.PrepareResp, nil
+}
+
+func (mb *MockBackend) EnableVmd() {
+	mb.cfg.vmdEnabled = true
+}
+
+func (mb *MockBackend) IsVmdEnabled() bool {
+	return mb.cfg.vmdEnabled
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {
