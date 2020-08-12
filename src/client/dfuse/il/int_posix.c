@@ -303,8 +303,8 @@ _fetch_dfs_obj(int fd, struct dfuse_hsd_reply *hsd_reply,
 
 		rc = dfs_global2local(ioil_ioc.ioc_poh,
 				      ioil_ioc.ioc_coh,
-				0,
-				iov, &ioil_ioc.ioc_dfs);
+				      0,
+				      iov, &ioil_ioc.ioc_dfs);
 		if (rc) {
 			DFUSE_LOG_WARNING("Failed to use dfs handle %d", rc);
 			D_FREE(iov.iov_buf);
