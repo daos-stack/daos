@@ -2099,7 +2099,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 			return -DER_INVAL;
 		}
-		if (!readonly) {
+		if (sizes != NULL) {
 			if (values == NULL)
 				sizes[i] = 0;
 			else if (values[i] == NULL || sizes[i] == 0) {

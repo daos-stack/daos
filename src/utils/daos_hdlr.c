@@ -581,6 +581,9 @@ out:
  * int cont_stat_hdlr()
  */
 
+/* this routine can be used to list all snapshots or to map a snapshot name
+ * to its epoch number.
+ */
 int
 cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
 {
@@ -640,7 +643,8 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
 	} else {
 		for (i = 0; i < min(expected_count, snaps_count); i++)
 			if (strcmp(snapname, names[i]) == 0) {
-				*epoch = epochs[i];
+				if (epoch != NULL)
+					*epoch = epochs[i];
 				break;
 			}
 		if (i == min(expected_count, snaps_count)) {
