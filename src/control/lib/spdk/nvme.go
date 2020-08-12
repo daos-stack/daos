@@ -50,8 +50,8 @@ import (
 
 const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
 
-// NVME is the interface that provides SPDK NVMe functionality.
-type NVME interface {
+// Nvme is the interface that provides SPDK NVMe functionality.
+type Nvme interface {
 	// Discover NVMe controllers and namespaces, and device health info
 	Discover(logging.Logger) ([]Controller, error)
 	// Format NVMe controller namespaces
@@ -62,8 +62,8 @@ type NVME interface {
 	CleanLockfiles(logging.Logger, ...string)
 }
 
-// Nvme is an NVME interface implementation.
-type Nvme struct{}
+// NvmeImpl is an NVME interface implementation.
+type NvmeImpl struct{}
 
 // Controller struct mirrors C.struct_ctrlr_t and
 // describes a NVMe controller.
@@ -150,7 +150,7 @@ func wrapCleanError(inErr error, cleanErr error) (outErr error) {
 }
 
 // CleanLockfiles removes SPDK lockfiles after binding operations.
-func (n *Nvme) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
+func (n *NvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
 	return cleanLockfiles(log, realRemove, pciAddrs...)
 }
 
@@ -170,7 +170,7 @@ func pciAddressList(ctrlrs []Controller) []string {
 // ctrlr_t structs. These are converted and returned as Controller slices
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
-func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
+func (n *NvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
 	ctrlrs, err := processReturn(C.nvme_discover(),
 		"NVMe Discover(): C.nvme_discover")
 
@@ -185,7 +185,7 @@ func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
 // Attempt wipe of namespace #1 LBA-0 and falls back to full controller
 // format if quick format failed. Afterwards remove lockfile for formatted
 // device.
-func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
+func (n *NvmeImpl) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
 	defer func() {
 		err = wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
 	}()
@@ -217,7 +217,7 @@ func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
 //
 // Retrieves image from path and updates given firmware slot/register
 // then remove lockfile for updated device.
-func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) (ctrlrs []Controller, err error) {
+func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) (ctrlrs []Controller, err error) {
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
@@ -234,7 +234,7 @@ func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot
 
 // Cleanup unlinks and detaches any controllers or namespaces,
 // as well as cleans up optional device health information.
-func (n *Nvme) Cleanup() {
+func (n *NvmeImpl) Cleanup() {
 	C.nvme_cleanup()
 }
 

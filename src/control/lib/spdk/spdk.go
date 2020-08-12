@@ -45,13 +45,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ENV is the interface that provides SPDK environment management.
-type ENV interface {
+// Env is the interface that provides SPDK environment management.
+type Env interface {
 	InitSPDKEnv(EnvOptions) error
 }
 
-// Env is a simple ENV implementation.
-type Env struct{}
+// EnvImpl is a simple SPDKEnv implementation.
+type EnvImpl struct{}
 
 // Rc2err returns error from label and rc.
 func Rc2err(label string, rc C.int) error {
@@ -59,13 +59,13 @@ func Rc2err(label string, rc C.int) error {
 }
 
 type EnvOptions struct {
-	ShmID int // shared memory segment identifier for SPDK IPC
-	// MemSize
+	ShmID        int      // shared memory segment identifier for SPDK IPC
+	MemSize      int      // size in MiB to be allocated to SPDK proc
 	PciWhiteList []string // restrict SPDK device access
 	EnableVMD    bool     // VMD devices should be included
 }
 
-func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cPtr unsafe.Pointer, err error) {
+func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr unsafe.Pointer, err error) {
 	opts = new(C.struct_spdk_env_opts)
 
 	C.spdk_env_opts_init(opts)
@@ -74,15 +74,19 @@ func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cPtr unsafe.Pointer, er
 		opts.shm_id = C.int(o.ShmID)
 	}
 
+	if o.MemSize > 0 {
+		opts.mem_size = C.int(o.MemSize)
+	}
+
 	// quiet DPDK EAL logging by setting log level to ERROR
 	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
 
 	if len(o.PciWhiteList) > 0 {
-		cPtr, err = pciListToC(o.PciWhiteList)
+		cWhiteListPtr, err = pciListToC(o.PciWhiteList)
 		if err != nil {
 			return
 		}
-		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(cPtr)
+		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(cWhiteListPtr)
 		opts.num_pci_addr = C.ulong(len(o.PciWhiteList))
 	}
 
@@ -113,7 +117,7 @@ func pciListToC(inAddrs []string) (unsafe.Pointer, error) {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *Env) InitSPDKEnv(opts EnvOptions) error {
+func (e *EnvImpl) InitSPDKEnv(opts EnvOptions) error {
 	cOpts, toFree, err := opts.toC()
 	if toFree != nil {
 		defer C.free(unsafe.Pointer(toFree))

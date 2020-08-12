@@ -65,7 +65,8 @@ type (
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
-		ShmID      int
+		ShmID      int // shared memory segment for SPDK IPC
+		MemSize    int // size MiB memory to be used by SPDK proc
 		EnableVmd  bool
 	}
 

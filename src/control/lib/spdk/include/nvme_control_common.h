@@ -26,40 +26,40 @@
 
 #include <stdbool.h>
 
+#define BUFLEN 1024
+
 /**
  * \brief NVMECONTROL return codes
  */
-enum NvmeControlStatusCode {
-	NVMEC_SUCCESS			= 0,
-	NVMEC_ERR_CHK_SIZE		= 1,
-	NVMEC_ERR_GET_PCI_DEV		= 2,
-	NVMEC_ERR_PCI_ADDR_FMT		= 3,
-	NVMEC_ERR_PCI_ADDR_PARSE	= 4,
-	NVMEC_ERR_CTRLR_NOT_FOUND	= 5,
-	NVMEC_ERR_NS_NOT_FOUND		= 6,
-	NVMEC_ERR_NOT_SUPPORTED		= 7,
-	NVMEC_ERR_BAD_LBA		= 8,
-	NVMEC_ERR_ALLOC_IO_QPAIR	= 9,
-	NVMEC_ERR_NS_ID_UNEXPECTED	= 10,
-	NVMEC_ERR_NS_WRITE_FAIL		= 11,
-	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 12,
-	NVMEC_ERR_NULL_NS		= 13,
-	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 14,
-	NVMEC_ERR_NO_VMD_CTRLRS		= 15,
+enum nvme_control_status_code {
+	NVMEC_SUCCESS			= 0x0,
+	NVMEC_ERR_CHK_SIZE		= 0x1,
+	NVMEC_ERR_GET_PCI_DEV		= 0x2,
+	NVMEC_ERR_PCI_ADDR_FMT		= 0x3,
+	NVMEC_ERR_PCI_ADDR_PARSE	= 0x4,
+	NVMEC_ERR_CTRLR_NOT_FOUND	= 0x5,
+	NVMEC_ERR_NS_NOT_FOUND		= 0x6,
+	NVMEC_ERR_NOT_SUPPORTED		= 0x7,
+	NVMEC_ERR_BAD_LBA		= 0x8,
+	NVMEC_ERR_ALLOC_IO_QPAIR	= 0x9,
+	NVMEC_ERR_NS_ID_UNEXPECTED	= 0xA,
+	NVMEC_ERR_NS_WRITE_FAIL		= 0xB,
+	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 0xC,
+	NVMEC_ERR_NULL_NS		= 0xD,
+	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 0xE,
+	NVMEC_ERR_NO_VMD_CTRLRS		= 0xF,
 	NVMEC_LAST_STATUS_VALUE
 };
-
-#define TEXTLEN 1024
 
 /**
  * \brief NVMe controller details
  */
 struct ctrlr_t {
-	char		     model[TEXTLEN];
-	char		     serial[TEXTLEN];
-	char		     pci_addr[TEXTLEN];
-	char		     fw_rev[TEXTLEN];
-	char		     pci_type[TEXTLEN];
+	char		     model[BUFLEN];
+	char		     serial[BUFLEN];
+	char		     pci_addr[BUFLEN];
+	char		     fw_rev[BUFLEN];
+	char		     pci_type[BUFLEN];
 	int		     socket_id;
 	struct ns_t	    *nss;
 	struct dev_health_t *dev_health;
@@ -103,7 +103,7 @@ struct dev_health_t {
 struct ret_t {
 	int		rc;
 	struct ctrlr_t *ctrlrs;
-	char		info[TEXTLEN];
+	char		info[BUFLEN];
 };
 
 struct ctrlr_entry {

@@ -28,10 +28,16 @@
 #include "nvme_control.h"
 #include "nvme_control_common.h"
 
-struct wipe_sequence {
-	struct ns_entry	*ns_entry;
-	char		*buf;
-	int		 is_completed;
+enum lba0_write_result {
+	LBA0_WRITE_PENDING	= 0x0,
+	LBA0_WRITE_SUCCESS	= 0x1,
+	LBA0_WRITE_FAIL		= 0x2,
+};
+
+struct lba0_data {
+	struct ns_entry		*ns_entry;
+	char			*buf;
+	enum lba0_write_result	 was_written;
 };
 
 static void
@@ -79,45 +85,49 @@ nvme_discover(void)
 static void
 read_complete(void *arg, const struct spdk_nvme_cpl *completion)
 {
-	struct wipe_sequence *sequence = arg;
+	struct lba0_data *data = arg;
+
+	spdk_free(data->buf);
 
 	if (spdk_nvme_cpl_is_success(completion)) {
-		sequence->is_completed = 1;
+		data->was_written = LBA0_WRITE_SUCCESS;
 		return;
 	}
 
-	spdk_nvme_qpair_print_completion(sequence->ns_entry->qpair,
+	spdk_nvme_qpair_print_completion(data->ns_entry->qpair,
 					 (struct spdk_nvme_cpl *)completion);
 	fprintf(stderr, "I/O error status: %s\n",
 		spdk_nvme_cpl_get_status_string(&completion->status));
 	fprintf(stderr, "Read I/O failed, aborting run\n");
-	sequence->is_completed = 2;
+	data->was_written = LBA0_WRITE_FAIL;
 }
 
 static void
 write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 {
-	struct wipe_sequence	*sequence = arg;
-	struct ns_entry		*ns_entry = sequence->ns_entry;
+	struct lba0_data	*data = arg;
+	struct ns_entry		*ns_entry = data->ns_entry;
 	int			 rc;
 
 	if (spdk_nvme_cpl_is_success(completion)) {
 		rc = spdk_nvme_ns_cmd_read(ns_entry->ns, ns_entry->qpair,
-					   sequence->buf, 0, 1, read_complete,
-					   (void *)sequence, 0);
+					   data->buf, 0, 1, read_complete,
+					   (void *)data, 0);
 		if (rc != 0) {
 			fprintf(stderr, "starting read I/O failed (%d)\n", rc);
-			sequence->is_completed = 2;
+			data->was_written = LBA0_WRITE_FAIL;
 		}
 		return;
 	}
 
-	spdk_nvme_qpair_print_completion(sequence->ns_entry->qpair,
+	spdk_nvme_qpair_print_completion(data->ns_entry->qpair,
 					 (struct spdk_nvme_cpl *)completion);
 	fprintf(stderr, "I/O error status: %s\n",
 		spdk_nvme_cpl_get_status_string(&completion->status));
 	fprintf(stderr, "Read I/O failed, aborting run\n");
-	sequence->is_completed = 2;
+	data->was_written = LBA0_WRITE_FAIL;
+
+	spdk_free(data->buf);
 }
 
 static struct ret_t *
@@ -126,7 +136,7 @@ wipe(char *ctrlr_pci_addr)
 	struct ctrlr_entry	*centry;
 	struct ns_entry		*nentry;
 	struct ret_t		*ret;
-	struct wipe_sequence	 sequence;
+	struct lba0_data	 data;
 	int			 rc;
 
 	ret = init_ret(0);
@@ -149,33 +159,33 @@ wipe(char *ctrlr_pci_addr)
 			return ret;
 		}
 
-		sequence.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
-					    SPDK_ENV_SOCKET_ID_ANY,
-					    SPDK_MALLOC_DMA);
-		if (sequence.buf == NULL) {
+		data.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
+					SPDK_ENV_SOCKET_ID_ANY,
+					SPDK_MALLOC_DMA);
+		if (data.buf == NULL) {
 			snprintf(ret->info, sizeof(ret->info),
 				 "spdk_zmalloc()\n");
 			ret->rc = -1;
 			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 			return ret;
 		}
-		sequence.is_completed = 0;
-		sequence.ns_entry = nentry;
+		data.was_written = LBA0_WRITE_SUCCESS;
+		data.ns_entry = nentry;
 
 		rc = spdk_nvme_ns_cmd_write(nentry->ns, nentry->qpair,
-					    sequence.buf, 0, /* LBA start */
+					    data.buf, 0, /* LBA start */
 					    1, /* number of LBAs */
-					    write_complete, &sequence, 0);
+					    write_complete, &data, 0);
 		if (rc != 0) {
 			snprintf(ret->info, sizeof(ret->info),
 				 "spdk_nvme_ns_cmd_write() (%d)\n", rc);
 			ret->rc = -1;
-			spdk_free(sequence.buf);
+			spdk_free(data.buf);
 			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 			return ret;
 		}
 
-		while (!sequence.is_completed) {
+		while (!data.was_written) {
 			rc = spdk_nvme_qpair_process_completions(nentry->qpair,
 								 0);
 			if (rc < 0) {
@@ -185,20 +195,18 @@ wipe(char *ctrlr_pci_addr)
 			}
 		}
 
-		if (sequence.is_completed != 1) {
+		if (data.was_written != LBA0_WRITE_SUCCESS) {
 			snprintf(ret->info, sizeof(ret->info),
 				 "spdk_nvme_ns_cmd_write() callback\n");
 			ret->rc = -1;
-			spdk_free(sequence.buf);
 			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 			return ret;
 		}
 
 		snprintf(ret->info + sizeof(ret->info),
-			 sizeof(TEXTLEN) - strlen(ret->info), "%d ",
+			 sizeof(BUFLEN) - strnlen(ret->info, BUFLEN), "%d ",
 			 spdk_nvme_ns_get_id(nentry->ns));
 
-		spdk_free(sequence.buf);
 		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 		nentry = nentry->next;
 	}

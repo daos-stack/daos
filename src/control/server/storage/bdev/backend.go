@@ -220,11 +220,12 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 func (b *spdkBackend) formatNvmeBdev(dev string, req FormatRequest, resp *DeviceFormatResponse) error {
 	spdkOpts := spdk.EnvOptions{
 		ShmID:        req.ShmID,
-		EnableVMD:    b.IsVmdEnabled(),
+		MemSize:      req.MemSize,
 		PciWhiteList: []string{dev},
+		EnableVMD:    b.IsVmdEnabled(),
 	}
 
-	b.log.Debugf("spdk init opts: %v", spdkOpts)
+	b.log.Debugf("spdk init opts: %+v", spdkOpts)
 
 	// provide bdev as whitelist so only formatting device is bound
 	if err := b.binding.InitSPDKEnv(spdkOpts); err != nil {
@@ -232,14 +233,14 @@ func (b *spdkBackend) formatNvmeBdev(dev string, req FormatRequest, resp *Device
 	}
 
 	if err := b.binding.Format(b.log, dev); err != nil {
-		b.log.Errorf("%s format failed (%s)", req.Class, dev)
+		b.log.Errorf("%s format failed on %s", req.Class, dev)
 		resp.Error = FaultFormatError(dev, err)
 
 		return nil
 	}
 
 	resp.Formatted = true
-	b.log.Debugf("%s format successful (%s)", req.Class, dev)
+	b.log.Debugf("%s format successful on %s", req.Class, dev)
 
 	return nil
 }
@@ -257,7 +258,7 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 			devResp.Error = FaultFormatUnknownClass(req.Class.String())
 		case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
 			devResp.Formatted = true
-			b.log.Debugf("%s format for non-NVMe bdev skipped (%s)", req.Class, dev)
+			b.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, dev)
 		case storage.BdevClassNvme:
 			b.log.Debugf("%s format starting %q", req.Class, dev)
 			b.formatNvmeBdev(dev, req, devResp)

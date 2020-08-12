@@ -65,6 +65,9 @@ func DefaultMockBackend() *MockBackend {
 }
 
 func (mb *MockBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
+	if mb.cfg.ScanRes == nil {
+		mb.cfg.ScanRes = new(ScanResponse)
+	}
 	return mb.cfg.ScanRes, mb.cfg.ScanErr
 }
 
@@ -79,6 +82,10 @@ func (mb *MockBackend) Format(req FormatRequest) (*FormatResponse, error) {
 		if mb.cfg.FormatRes != nil {
 			return mb.cfg.FormatRes, nil
 		}
+	}
+
+	if len(req.DeviceList) == 0 {
+		return new(FormatResponse), nil
 	}
 
 	addr := req.DeviceList[0]
