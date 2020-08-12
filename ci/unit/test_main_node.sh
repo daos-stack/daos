@@ -24,7 +24,7 @@ sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 # set CMOCKA envs here
 export CMOCKA_MESSAGE_OUTPUT=xml
-if [ ${WITH_VALGRIND} == 'disabled']; then
+if [[ -z ${WITH_VALGRIND} ]]; then
     export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g.xml"
 else
     export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g_${WITH_VALGRIND}.xml"

@@ -16,6 +16,7 @@ fi
 rm -rf run_test.sh vm_test
 DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
+WITH_VALGRIND="${WITH_VALGRIND:=}"
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
