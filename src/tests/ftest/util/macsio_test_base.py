@@ -42,7 +42,10 @@ class MacsioTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(MacsioTestBase, self).setUp()
-        self.manager = Mpirun(None, subprocess=False, mpitype="mpich")
+
+        # Support using different job managers to launch the daos agent/servers
+        mpi_type = self.params.get("mpi_type", default="mpich")
+        self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):

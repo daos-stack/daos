@@ -31,5 +31,12 @@ macsio:
   part_size: 10M
   avg_num_parts: 2.5
   num_dumps: 2
-test_repo:
-  macsio: /usr/bin
+mpi: !mux
+  mpich:
+    mpi_type: "mpich"
+    test_repo:
+      macsio: /usr/lib64/mpich/bin
+  openmpi:
+    mpi_type: "openmpi"
+    test_repo:
+      macsio: /usr/lib64/openmpi/bin
