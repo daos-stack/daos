@@ -155,6 +155,8 @@ func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
 		d.log.Errorf("unhandled Pool Service Apply operation: %d", op)
 		return
 	}
+
+	d.MapVersion++
 }
 
 type fsm Database
@@ -227,7 +229,7 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	}()
 
 	if err != nil {
-		sink.Cancel()
+		_ = sink.Cancel()
 	}
 
 	return err

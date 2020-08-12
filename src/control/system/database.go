@@ -215,6 +215,7 @@ func (db *Database) Start(ctrlAddr *net.TCPAddr) error {
 	}
 
 	rc := raft.DefaultConfig()
+	rc.Logger = newCompatLogger(db.log)
 	rc.SnapshotThreshold = 16 // arbitrarily low to exercise snapshots
 	//rc.SnapshotInterval = 5 * time.Second
 	rc.HeartbeatTimeout = 250 * time.Millisecond
