@@ -42,7 +42,7 @@ ior:
         np_16:
             np: 16
     test_file: daos:testFile
-    repetitions: 2
+    repetitions: 20
     daos_destroy: False
     iorflags:
           ior_flags:

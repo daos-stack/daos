@@ -38,6 +38,13 @@ from test_utils_container import TestContainer
 
 from dfuse_utils import Dfuse
 
+instance_num = 0
+
+def get_inc_id():
+    """Return a unique character"""
+    global instance_num
+    instance_num += 1
+    return str(instance_num)
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -154,7 +161,8 @@ class IorTestBase(TestWithServers):
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
             self._start_dfuse()
-            test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
+            test_file = os.path.join(self.dfuse.mount_dir.value,
+                                     "testfile.{}".format(get_inc_id()))
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
 
