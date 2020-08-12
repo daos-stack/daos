@@ -51,6 +51,7 @@ class GroupTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
         self.utils.log_copy(self)
+        self.utils.dump_cart_logs()
 
     def test_group(self):
         """
