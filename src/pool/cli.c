@@ -1863,7 +1863,7 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 		for (j = 0; j < n; ++j)
 			if (sizes[j] > 0)
 				d_iov_set(&sgl.sg_iovs[i++],
-					     values[j], sizes[j]);
+					  values[j], sizes[j]);
 	}
 
 	rc = crt_bulk_create(crt_ctx, &sgl, perm, bulk);
@@ -2048,7 +2048,7 @@ dc_pool_del_attr(tse_task_t *task)
 		D_GOTO(out, rc);
 
 	rc = pool_req_prepare(args->poh, POOL_ATTR_DEL,
-			     daos_task2ctx(task), &cb_args);
+			      daos_task2ctx(task), &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2060,27 +2060,23 @@ dc_pool_del_attr(tse_task_t *task)
 	in->padi_count = args->n;
 	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
 			      daos_task2ctx(task), CRT_BULK_RO, &in->padi_bulk);
-	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_RPC, &cb_args);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
 
 	cb_args.pra_bulk = in->padi_bulk;
 	rc = tse_task_register_comp_cb(task, pool_req_complete,
 				       &cb_args, sizeof(cb_args));
-	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_BULK, &cb_args);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
 
 	crt_req_addref(cb_args.pra_rpc);
 	rc = daos_rpc_send(cb_args.pra_rpc, task);
-	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_ALL, &cb_args);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
 
 	return rc;
+cleanup:
+	pool_req_cleanup(CLEANUP_BULK, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to del pool attributes: "DF_RC"\n", DP_RC(rc));

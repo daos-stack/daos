@@ -127,7 +127,7 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 {
 	crt_bulk_t			 local_bulk;
 	daos_size_t			 bulk_size;
-	d_iov_t			 iov;
+	d_iov_t				 iov;
 	d_sg_list_t			 sgl;
 	void				*data;
 	char				*names;
@@ -141,10 +141,8 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		bulk_size);
 
 	D_ALLOC(data, bulk_size);
-	if (data == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (data == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = sgl.sg_nr;
@@ -172,7 +170,7 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		rc = rdb_tx_delete(tx, path, &key);
 		if (rc != 0) {
 			D_ERROR("%s: failed to delete attribute '%s': %d\n",
-				 svc->s_name, (char *) key.iov_buf, rc);
+				svc->s_name, (char *) key.iov_buf, rc);
 			goto out_bulk;
 		}
 	}

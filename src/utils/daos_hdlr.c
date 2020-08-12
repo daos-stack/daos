@@ -648,7 +648,8 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
 				break;
 			}
 		if (i == min(expected_count, snaps_count)) {
-			fprintf(stderr, "%s not found in snapshots list\n", snapname);
+			fprintf(stderr, "%s not found in snapshots list\n",
+				snapname);
 			rc = -DER_NONEXIST;
 		}
 	}
