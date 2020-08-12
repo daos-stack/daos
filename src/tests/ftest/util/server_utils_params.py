@@ -48,14 +48,14 @@ class DaosServerTransportCredentials(TransportCredentials):
     def get_certificate_data(self, name_list):
         """Get certificate data.
 
-           Args:
-               name_list (list): list of certificate attribute names.
+        Args:
+            name_list (list): list of certificate attribute names.
 
-           Returns:
-               data (dict): a dictionary of parameter directory name keys and
-                   value.
+        Returns:
+            data (dict): a dictionary of parameter directory name keys and
+                value.
+
         """
-
         # Ensure the client cert directory includes the required certificate
         name_list.remove("client_cert_dir")
         data = super(
@@ -331,7 +331,6 @@ class DaosServerYamlParameters(YamlParameters):
             #   log_file:               map to D_LOG_FILE env
             #   env_vars:               influences DAOS IO Server behavior
             #       Add to enable scalable endpoint:
-            #           - CRT_CREDIT_EP_CTX=0
             #           - CRT_CTX_SHARE_ADDR=1
             #           - CRT_CTX_NUM=8
             #       nvme options:
