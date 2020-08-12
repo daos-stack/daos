@@ -13,9 +13,8 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@corci-918e") _
 
-def doc_only_change() {
+boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
     }
@@ -40,7 +39,7 @@ def skip_stage(String stage, boolean def_val = false) {
                               def_val: value) == 'true'
 }
 
-def quickbuild() {
+boolean quickbuild() {
     return cachedCommitPragma(pragma: 'Quick-build') == 'true'
 }
 
@@ -50,14 +49,14 @@ def functional_post_always() {
              returnStatus: true)
 }
 
-def get_daos_packages() {
+String get_daos_packages() {
     Map stage_info = parseStageInfo()
     return get_daos_packages(stage_info['target'])
 }
 
-def get_daos_packages(String distro) {
+String get_daos_packages(String distro) {
 
-    def pkgs
+    String pkgs
     if (env.TEST_RPMS == 'true') {
         pkgs = "daos{,-{client,tests,server}}"
     } else {
@@ -71,12 +70,27 @@ def pr_repos() {
     return cachedCommitPragma(pragma: 'PR-repos')
 }
 
-String el7_component_repos() {
+String el7_pr_repos() {
     return cachedCommitPragma(pragma: 'PR-repos-el7')
 }
 
-String leap15_component_repos() {
+String leap15_pr_repos() {
     return cachedCommitPragma(pragma: 'PR-repos-leap15')
+}
+
+String unit_repos() {
+    Map stage_info = parseStageInfo()
+    return unit_repos(stage_info['target'])
+}
+
+String unit_repos(String distro) {
+    if (distro == 'centos7') {
+        return el7_pr_repos() + pr_repos()
+    }
+    if (distro == 'leap15') {
+        return leap15_daos_repos() + pr_repos()
+    }
+    error 'unit_test_repos not implemented for ' + distro
 }
 
 String daos_repo() {
@@ -88,26 +102,32 @@ String daos_repo() {
 }
 
 String el7_daos_repos() {
-    return el7_component_repos + ' ' + pr_repos() + ' ' + daos_repo()
+    return el7_pr_repos() + ' ' + pr_repos() + ' ' + daos_repo()
 }
 
 String leap15_daos_repos() {
-    return leap15_component_repos + ' ' + pr_repos() + ' ' + daos_repo()
+    return leap15_pr_repos() + ' ' + pr_repos() + ' ' + daos_repo()
 }
 
-String component_repos() {
+String hw_distro_target() {
+    if (env.STAGE_NAME.contains('Hardware')) {
+        if (env.STAGE_NAME.contains('Small')) {
+            return hw_distro('small')
+        }
+        if (env.STAGE_NAME.contains('Medium')) {
+            return hw_distro('medium')
+        }
+        if (env.STAGE_NAME.contains('Large')) {
+            return hw_distro('large')
+        }
+    }
     Map stage_info = parseStageInfo()
-    if (stage_info['target'] == 'centos7') {
-        return el7_component_repos + ' ' + pr_repos()
-    }
-    if (stage_info['target'] == 'leap15') {
-        return leap15_component_repos + ' ' + pr_repos()
-    }
+    return stage_info['target']
 }
 
 String daos_repos() {
-    Map stage_info = parseStageInfo()
-    return daos_repos(stage_info['target'])
+    String target = hw_distro_target()
+    return daos_repos('target')
 }
 
 String daos_repos(String distro) {
@@ -117,6 +137,7 @@ String daos_repos(String distro) {
     if (distro == 'leap15') {
         return leap15_daos_repos()
     }
+    error 'daos_repos not implemented for ' + distro
 }
 
 String unit_packages() {
@@ -184,7 +205,7 @@ String daos_packages_version(String distro) {
     error "Don't know how to determine package version for " + distro
 }
 
-def parallel_build() {
+boolean parallel_build() {
     // defaults to false
     // true if Quick-build: true unless Parallel-build: false
     def pb = cachedCommitPragma(pragma: 'Parallel-build')
@@ -206,24 +227,25 @@ String hw_distro(String size) {
 }
 
 String functional_packages() {
-    stage_info = parseStageInfo()
-    return functional_packages(stage_info['target'])
+    String target = hw_distro_target()
+    return functional_packages(target)
 }
 
 String functional_packages(String distro) {
-    String rpms = "openmpi3 hwloc ndctl " +
-                  "ior-hpc-cart-4-daos-0 " +
-                  "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
-                  "testmpio-cart-4-daos-0 fio " +
-                  "m pi4py-tests-cart-4-daos-0 MACSio"
+    string pkgs = get_daos_packages(distro)
+    pkgs += " openmpi3 hwloc ndctl " +
+            "ior-hpc-cart-4-daos-0 " +
+            "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
+            "testmpio-cart-4-daos-0 fio " +
+            "mpi4py-tests-cart-4-daos-0 MACSio"
     if (quickbuild()) {
-        rpms += " spdk_tools"
+        pkgs += " spdk_tools"
     }
     if (distro == "leap15") {
-        return rpms
+        return pkgs
     } else if (distro == "centos7") {
         // need to exclude openmpi until we remove it from the repo
-        return  "--exclude openmpi " + rpms
+        return  "--exclude openmpi " + pkgs
     } else {
         error 'functional_packages not implemented for ' + stage_info['target']
     }
@@ -233,10 +255,6 @@ String functional_packages(String distro) {
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
-
-def qb_inst_rpms = ""
-el7_component_repos = ""
-leap15_component_repos = ""
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -854,7 +872,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_LEAP15 + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -996,7 +1014,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
-                                 inst_repos: component_repos(),
+                                 inst_repos: unit_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
@@ -1016,7 +1034,7 @@ pipeline {
                     steps {
                         unitTest timeout_time: 60,
                                  ignore_failure: true,
-                                 inst_repos: component_repos(),
+                                 inst_repos: unit_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
@@ -1126,11 +1144,9 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest target: hw_distro("small"),
-                                       inst_repos: daos_repos(hw_distro("small")),
-                                       inst_rpms: get_daos_packages(hw_distro("small")) + 
-                                                  ' ' +
-                                                  functional_packages(hw_distro("small"))
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
@@ -1152,11 +1168,9 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        functionalTest target: hw_distro("medium"),
-                                       inst_repos: daos_repos(hw_distro("medium")),
-                                       inst_rpms: get_daos_packages(hw_distro("medium")) + 
-                                                  ' ' +
-                                                  functional_packages(hw_distro("medium"))
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
                    }
                     post {
                         always {
@@ -1178,11 +1192,9 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        functionalTest target: hw_distro("large"),
-                                       inst_repos: daos_repos(hw_distro("large")),
-                                       inst_rpms: get_daos_packages(hw_distro("large")) +
-                                                  ' ' +
-                                                  functional_packages(hw_distro("large"))
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
