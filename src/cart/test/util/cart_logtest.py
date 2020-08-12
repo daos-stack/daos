@@ -233,6 +233,47 @@ class LogTest():
         self.fi_triggered = False
         self.fi_location = None
 
+        # Records on 
+        self.log_locs = Counter()
+        self.log_mask = Counter()
+        self.log_levels = Counter()
+        self.log_count = 0
+
+    def __del__(self):
+        self.show_common_logs()
+
+    def save_log_line(self, line):
+        self.log_count += 1
+        loc = '{}:{}'.format(line.filename, line.lineno)
+        self.log_locs[loc] += 1
+        self.log_mask[line.mask] += 1
+        self.log_levels[line.level] += 1
+        
+    def show_common_logs(self):
+        """Report to stdout the most common logging locations"""
+        print('Parsed {} lines of logs'.format(self.log_count))
+        print('Most common logging locations')
+        for (loc, count) in self.log_locs.most_common(10):
+            if count < 10:
+                break
+            print('Logging used {} times at {} ({:.1f}%)'.format(count,
+                                                                 loc,
+                                                                 100*count/self.log_count))
+        print('Most common masks')
+        for (mask, count) in self.log_mask.most_common(10):
+            if count < 10:
+                break
+            print('{}: {} ({:.1f}%)'.format(mask, count,
+                                            100*count/self.log_count))
+
+        print('Most common levels')
+        for (level, count) in self.log_levels.most_common(10):
+            if count < 10:
+                break
+            print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
+                                             count,
+                                             100*count/self.log_count))
+            
     def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
 
@@ -274,6 +315,7 @@ class LogTest():
         non_trace_lines = 0
 
         for line in self._li.new_iter(pid=pid, stateful=True):
+            self.save_log_line(line)
             if abort_on_warning:
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True

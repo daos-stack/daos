@@ -63,6 +63,11 @@ LOG_LEVELS = {'FATAL' :1,
               'INFO'  :7,
               'DBUG'  :8}
 
+# Make a reverse lookup from log level to name.
+LOG_NAMES = {}
+for name in LOG_LEVELS:
+    LOG_NAMES[LOG_LEVELS[name]] = name
+    
 # pylint: disable=too-few-public-methods
 class LogRaw():
     """Class for raw (non cart log lines) in cart log files
