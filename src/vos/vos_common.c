@@ -129,9 +129,9 @@ vos_tx_publish(struct dtx_handle *dth, int err)
 	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
 	struct dtx_rsrvd_uint	*dru;
 	int			 rc;
+	int			 saved_rc = 0;
 	int			 i;
 
-again:
 	for (i = 0, rc = 0;
 	     i < dth->dth_rsrvd_cnt && (rc == 0 || err != 0); i++) {
 		dru = &dth->dth_rsrvds[i];
@@ -151,15 +151,14 @@ again:
 		if (rc == 0 || err != 0)
 			rc = vos_publish_blocks(cont, &dru->dru_nvme,
 						err == 0, VOS_IOS_GENERIC);
-		if (err != 0)
-			D_FREE(dru->dru_scm);
+		if (saved_rc == 0 && rc != 0)
+			saved_rc = rc;
+
+		D_FREE(dru->dru_scm);
 	}
 
-	/* Some publish failed, cancel all. */
-	if (err == 0 && rc != 0) {
-		err = rc;
-		goto again;
-	}
+	if (err == 0)
+		return saved_rc;
 
 	return err;
 }
@@ -183,13 +182,35 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 }
 
 int
-vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err)
+vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
+	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, int err)
 {
-	if (dth == NULL)
-		return umem_tx_end(umm, err);
+	struct dtx_handle	*dth = dth_in;
+	struct dtx_rsrvd_uint	*dru;
+	struct dtx_handle	 tmp = {0};
+	int			 rc = err;
+
+	if (dth == NULL) {
+		/** Created a dummy dth handle for publishing extents */
+		dth = &tmp;
+		tmp.dth_modification_cnt = dth->dth_op_seq = 1;
+		tmp.dth_local_tx_started = 1;
+		tmp.dth_rsrvds = &dth->dth_rsrvd_inline;
+		tmp.dth_coh = vos_cont2hdl(cont);
+	}
 
 	if (!dth->dth_local_tx_started)
 		return err;
+
+	if (rsrvd_scmp != NULL) {
+		D_ASSERT(nvme_exts != NULL);
+		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
+		dru->dru_scm = *rsrvd_scmp;
+		*rsrvd_scmp = NULL;
+
+		D_INIT_LIST_HEAD(&dru->dru_nvme);
+		d_list_splice_init(nvme_exts, &dru->dru_nvme);
+	}
 
 	/* Not the last modification. */
 	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq)
@@ -197,29 +218,20 @@ vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err)
 
 	dth->dth_local_tx_started = 0;
 
-	if (err == 0)
+	if (dth_in && err == 0)
 		err = vos_dtx_prepared(dth);
 
-	err = vos_tx_publish(dth, err);
-	if (err != 0) {
-		vos_dtx_cleanup(dth);
+	if (err == 0)
+		rc = vos_tx_publish(dth, err);
 
-		return umem_tx_abort(umm, err);
-	}
+	rc = umem_tx_end(vos_cont2umm(cont), rc);
 
-	err = umem_tx_commit(umm);
-	if (err == 0) {
-		int	i;
-
-		for (i = 0; i < dth->dth_modification_cnt; i++) {
-			struct dtx_rsrvd_uint	*dru = &dth->dth_rsrvds[i];
-
-			D_FREE(dru->dru_scm);
-		}
-	} else {
-		/* Aborted case. */
-		vos_tx_publish(dth, -DER_CANCELED);
-		vos_dtx_cleanup(dth);
+	if (rc != 0) {
+		/* The transaction aborted or failed to commit. */
+		if (err != 0) /* Only if we haven't called it already */
+			vos_tx_publish(dth, -DER_CANCELED);
+		if (dth_in)
+			vos_dtx_cleanup(dth);
 	}
 
 	return err;

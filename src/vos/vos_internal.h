@@ -932,11 +932,19 @@ void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh);
 
+/* Reserve SCM through umem_reserve() for a PMDK transaction */
+struct vos_rsrvd_scm {
+	unsigned int		rs_actv_cnt;
+	unsigned int		rs_actv_at;
+	struct pobj_action	rs_actv[0];
+};
+
 int
 vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
 
 int
-vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err);
+vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
+	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, int err);
 
 /* vos_obj.c */
 int
@@ -975,13 +983,6 @@ void
 vos_dedup_fini(struct vos_pool *pool);
 void
 vos_dedup_invalidate(struct vos_pool *pool);
-
-/* Reserve SCM through umem_reserve() for a PMDK transaction */
-struct vos_rsrvd_scm {
-	unsigned int		rs_actv_cnt;
-	unsigned int		rs_actv_at;
-	struct pobj_action	rs_actv[0];
-};
 
 umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,

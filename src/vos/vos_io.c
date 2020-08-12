@@ -1881,9 +1881,10 @@ update_cancel(struct vos_io_context *ioc)
 {
 
 	/* Cancel SCM reservations or free persistent allocations */
-	if (vos_cont2umm(ioc->ic_cont)->umm_ops->mo_reserve != NULL) {
-		vos_publish_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, false);
-	} else if (ioc->ic_umoffs_cnt != 0) {
+	if (vos_cont2umm(ioc->ic_cont)->umm_ops->mo_reserve != NULL)
+		return;
+
+	if (ioc->ic_umoffs_cnt != 0) {
 		struct umem_instance *umem = vos_ioc2umm(ioc);
 		int i;
 
@@ -1895,10 +1896,6 @@ update_cancel(struct vos_io_context *ioc)
 				umem_free(umem, ioc->ic_umoffs[i]);
 		}
 	}
-
-	/* Cancel NVMe reservations */
-	vos_publish_blocks(ioc->ic_cont, &ioc->ic_blk_exts, false,
-			   VOS_IOS_GENERIC);
 
 	/* Abort dedup entries */
 	vos_dedup_process(vos_cont2pool(ioc->ic_cont), &ioc->ic_dedup_entries,
@@ -1967,37 +1964,19 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 	}
 
-	if (dth != NULL) {
-		struct dtx_rsrvd_uint	*dru;
-
-		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
-		dru->dru_scm = ioc->ic_rsrvd_scm;
-		ioc->ic_rsrvd_scm = NULL;
-
-		D_INIT_LIST_HEAD(&dru->dru_nvme);
-		d_list_splice_init(&ioc->ic_blk_exts, &dru->dru_nvme);
-	} else {
-		/* Publish SCM reservations */
-		err = vos_publish_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, true);
-		if (err == 0)
-			/* Publish NVMe reservations */
-			err = vos_publish_blocks(ioc->ic_cont,
-						 &ioc->ic_blk_exts, true,
-						 VOS_IOS_GENERIC);
-	}
-
 abort:
-	err = vos_tx_end(dth, umem, err);
+	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
+			 &ioc->ic_blk_exts, err);
 
 out:
-	if (err != 0) {
-		update_cancel(ioc);
-	} else {
+	if (err == 0) {
 		if (daes != NULL)
 			vos_dtx_post_handle(ioc->ic_cont, daes,
 					    dth->dth_dti_cos_count, false);
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
 				  &ioc->ic_dedup_entries, false);
+	} else {
+		update_cancel(ioc);
 	}
 
 	D_FREE(daes);

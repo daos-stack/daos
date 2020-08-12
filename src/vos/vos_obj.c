@@ -240,7 +240,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 abort:
-	rc = vos_tx_end(dth, vos_cont2umm(cont), rc);
+	rc = vos_tx_end(cont, dth, NULL, NULL, rc);
 
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);

@@ -2192,6 +2192,4 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 			dtx_evict_lid(cont, dae);
 		}
 	}
-
-	vos_tx_end(dth, vos_cont2umm(cont), -DER_CANCELED);
 }
