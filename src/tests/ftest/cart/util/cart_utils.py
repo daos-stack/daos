@@ -40,35 +40,7 @@ import cart_logtest
 
 import avocado
 
-# Temporary debug function to troubleshoot write-permissions problem
-def dump_ls_output(ls_arg):
-    """Print the stdout and stderr of ls command.
-
-    Args:
-        arg (string): directory to run /bin/ls command on
-
-    Returns:
-        void
-
-    """
-
-    ls_cmd = "ls -ltrd " + ls_arg
-    out = subprocess.Popen(ls_cmd,
-               shell=True,
-               stdout=subprocess.PIPE,
-               stderr=subprocess.STDOUT)
-    stdout,stderr = out.communicate()
-    print("DEBUG: stdout of [" + ls_cmd + "]:\n {}".format(stdout))
-    print("DEBUG: stderr of [" + ls_cmd + "]:\n {}".format(stderr))
-
 import os, fnmatch
-
-def find_files(directory, pattern):
-    for root, dirs, files in os.walk(directory):
-        for basename in files:
-            if fnmatch.fnmatch(basename, pattern):
-                filename = os.path.join(root, basename)
-                yield filename
 
 class CartUtils():
     """CartUtils Class"""
@@ -90,8 +62,6 @@ class CartUtils():
         path = './hostfile'
 
         if not os.path.exists(path):
-            dump_ls_output('.')
-            dump_ls_output('*')
             os.makedirs(path)
         hostfile = path + "/hostfile" + str(unique)
 
@@ -478,7 +448,24 @@ class CartUtils():
             void
         """
 
-        for filename in find_files('.', 'cart.log*'):
-            print('Found cart.log file: ', filename)
-            log = open(filename, "r").read()
-            print(log)
+        pattern = 'cart.log*'
+
+        # Find the cart.log in one of these directories (which might differ between
+        # different testing environments)
+        directories = [
+          '.',
+          os.environ["AVOCADO_TEST_LOGDIR"],
+          os.environ["AVOCADO_TEST_OUTPUTDIR"],
+          os.environ["AVOCADO_TEST_WORKDIR"],
+          os.environ["AVOCADO_TESTS_COMMON_TMPDIR"]
+        ]
+
+        for directory in directories:
+          for root, dirs, files in os.walk(directory):
+              for basename in files:
+                  if fnmatch.fnmatch(basename, pattern):
+                      filename = os.path.join(root, basename)
+                      print('Found cart.log file: ', filename)
+                      log = open(filename, "r").read()
+                      print(log)
+                      return

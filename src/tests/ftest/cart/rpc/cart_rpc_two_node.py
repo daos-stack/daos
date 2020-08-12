@@ -48,6 +48,8 @@ class CartRpcTwoNodeTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
+        self.utils.dump_cart_logs()
+        self.utils.log_copy(self)
 
     def test_cart_rpc(self):
         """
