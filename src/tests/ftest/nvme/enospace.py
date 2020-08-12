@@ -29,7 +29,7 @@ from nvme_utils import ServerFillUp
 from avocado.core.exceptions import TestFail
 from general_utils import get_log_file, run_task
 from daos_utils import DaosCommand
-#from apricot import skipForTicket
+from apricot import skipForTicket
 from mpio_utils import MpioUtils
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
@@ -225,7 +225,7 @@ class NvmeEnospace(ServerFillUp):
             if self.out_queue.get() == "FAIL":
                 self.fail("One of the Background IOR job failed")
 
-    #@skipForTicket("DAOS-4846")
+    @skipForTicket("DAOS-4846")
     def test_enospace_lazy_with_bg(self):
         """Jira ID: DAOS-4756.
 
@@ -247,7 +247,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    #@skipForTicket("DAOS-4846")
+    @skipForTicket("DAOS-4846")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -275,7 +275,7 @@ class NvmeEnospace(ServerFillUp):
             #Delete all the containers
             self.delete_all_containers()
 
-    #@skipForTicket("DAOS-4846")
+    @skipForTicket("DAOS-4846")
     def test_enospace_time_with_bg(self):
         """Jira ID: DAOS-4756.
 
@@ -301,7 +301,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    #@skipForTicket("DAOS-4846")
+    @skipForTicket("DAOS-4846")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -332,8 +332,8 @@ class NvmeEnospace(ServerFillUp):
             #Delete all the containers
             self.delete_all_containers()
 
-    #@skipForTicket("DAOS-4846")
-    #@skipForTicket("DAOS-5430")
+    @skipForTicket("DAOS-4846")
+    @skipForTicket("DAOS-5403")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
@@ -372,9 +372,9 @@ class NvmeEnospace(ServerFillUp):
         if abs(max_mib_baseline-max_mib_latest) > (max_mib_baseline/100 * 5):
             self.fail('Latest IOR read performance is not under 5% Tolerance'
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
-                      .format(max_mib_latest, max_mib_baseline))
+                      .format(max_mib_baseline, max_mib_latest))
 
-    #@skipForTicket("DAOS-4846")
+    @skipForTicket("DAOS-4846")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
@@ -437,3 +437,4 @@ class NvmeEnospace(ServerFillUp):
 
         #Run last IO
         self.start_ior_load(storage='SCM', precent=1)
+
