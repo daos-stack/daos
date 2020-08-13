@@ -557,7 +557,11 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 	int			 rc;
 
 	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
-	umem_tx_add(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund));
+	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund),
+			  POBJ_XADD_NO_SNAPSHOT);
+	if (rc != 0)
+		return rc;
+
 	rec->rec_off = rbund->rb_off;
 	rbund->rb_off = UMOFF_NULL; /* taken over by btree */
 
