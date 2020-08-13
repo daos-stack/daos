@@ -127,6 +127,7 @@ func (svc *mgmtSvc) groupUpdateLoop(ctx context.Context) {
 			svc.log.Debug("finished group update")
 			updateRequested = false
 		case <-svc.updateReqChan:
+			svc.log.Debug("received group update request")
 			updateRequested = true
 		}
 	}
@@ -138,11 +139,14 @@ func (svc *mgmtSvc) startUpdateLoop(ctx context.Context) {
 
 func (svc *mgmtSvc) requestGroupUpdate(ctx context.Context) {
 	go func(ctx context.Context) {
+		requested := false
 		select {
 		case <-ctx.Done():
 		case svc.updateReqChan <- struct{}{}:
 			svc.log.Debug("requested group update")
+			requested = true
 		}
+		svc.log.Debugf("requestGroupUpdate(): requested? %t", requested)
 	}(ctx)
 }
 
@@ -239,6 +243,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	}
 
 	svc.requestGroupUpdate(ctx)
+	svc.log.Debugf("requested group update after rank %d joined", member.Rank)
 
 	return &mgmtpb.JoinResp{
 		State: mgmtpb.JoinResp_IN,
