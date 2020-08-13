@@ -331,6 +331,7 @@ print_usage(char *name)
 	printf("\t-v, --verbose \t\t\tPrint more info\n");
 	printf("\t-h, --help\t\t\tShow this message\n");
 }
+
 const char *s_opts = "vhs:c:";
 static int idx;
 
@@ -463,7 +464,7 @@ main(int argc, char *argv[])
 		size_t		size;
 
 		for (size = start; size <= end &&
-				   sizes_count < MAX_SIZES; size *= 2)
+		     sizes_count < MAX_SIZES; size *= 2)
 			sizes[sizes_count++] = size;
 	}
 	rc = run_timings(csum_fts, type_count, sizes, sizes_count, 1000);
