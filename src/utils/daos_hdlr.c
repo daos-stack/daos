@@ -655,8 +655,7 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
 	}
 
 out:
-	if (epochs != NULL)
-		D_FREE(epochs);
+	D_FREE(epochs);
 	if (names != NULL) {
 		for (i = 0; i < snaps_count; i++)
 			D_FREE(names[i]);
