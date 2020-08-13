@@ -127,7 +127,7 @@ String hw_distro_target() {
 
 String daos_repos() {
     String target = hw_distro_target()
-    return daos_repos('target')
+    return daos_repos(target)
 }
 
 String daos_repos(String distro) {
