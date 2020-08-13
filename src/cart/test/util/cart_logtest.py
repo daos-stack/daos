@@ -40,7 +40,6 @@ This provides consistency checking for CaRT log files.
 """
 
 import sys
-import pprint
 import tabulate
 from collections import OrderedDict, Counter
 
