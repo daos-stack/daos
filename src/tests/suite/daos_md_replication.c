@@ -44,19 +44,19 @@ mdr_stop_pool_svc(void **argv)
 		rc = dmg_pool_create(dmg_config_file,
 				     geteuid(), getegid(), arg->group,
 				     NULL, 128 * 1024 * 1024, 0,
-				     &arg->pool.svc, uuid);
+				     arg->pool.svc, uuid);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	assert_int_equal(rc, 0);
 	MPI_Bcast(uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&arg->pool.svc.rl_nr, sizeof(arg->pool.svc.rl_nr), MPI_CHAR,
+	MPI_Bcast(&arg->pool.svc->rl_nr, sizeof(arg->pool.svc->rl_nr), MPI_CHAR,
 		  0, MPI_COMM_WORLD);
 	MPI_Bcast(arg->pool.ranks,
-		  sizeof(arg->pool.ranks[0]) * arg->pool.svc.rl_nr,
+		  sizeof(arg->pool.ranks[0]) * arg->pool.svc->rl_nr,
 		  MPI_CHAR, 0, MPI_COMM_WORLD);
 
 	/* Check the number of pool service replicas. */
-	if (arg->pool.svc.rl_nr < 3) {
+	if (arg->pool.svc->rl_nr < 3) {
 		if (arg->myrank == 0)
 			print_message(">= 3 pool service replicas needed; ");
 		skip = true;
@@ -66,7 +66,7 @@ mdr_stop_pool_svc(void **argv)
 	/* Connect to the pool. */
 	if (arg->myrank == 0) {
 		print_message("connecting to pool\n");
-		rc = daos_pool_connect(uuid, arg->group, &arg->pool.svc,
+		rc = daos_pool_connect(uuid, arg->group, arg->pool.svc,
 				       DAOS_PC_RW, &poh, NULL /* info */,
 				       NULL /* ev */);
 	}
@@ -138,11 +138,11 @@ mdr_stop_cont_svc(void **argv)
 	print_message("creating pool\n");
 	rc = dmg_pool_create(dmg_config_file,
 			     geteuid(), getegid(), arg->group,
-			     NULL, 128 * 1024 * 1024, 0, &arg->pool.svc,
+			     NULL, 128 * 1024 * 1024, 0, arg->pool.svc,
 			     pool_uuid);
 	assert_int_equal(rc, 0);
 
-	if (arg->pool.svc.rl_nr < 3) {
+	if (arg->pool.svc->rl_nr < 3) {
 		if (arg->myrank == 0)
 			print_message(">= 3 pool service replicas needed; ");
 		skip = true;
@@ -150,7 +150,7 @@ mdr_stop_cont_svc(void **argv)
 	}
 
 	print_message("connecting to pool\n");
-	rc = daos_pool_connect(pool_uuid, arg->group, &arg->pool.svc,
+	rc = daos_pool_connect(pool_uuid, arg->group, arg->pool.svc,
 			       DAOS_PC_RW, &poh, NULL, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("creating container\n");
