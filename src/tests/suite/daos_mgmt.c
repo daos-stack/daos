@@ -56,7 +56,7 @@ pool_create_all(void **state)
 			     arg->group, NULL /* tgts */,
 			     128 * 1024 * 1024 /* minimal size */,
 			     0 /* nvme size */, NULL /* prop */,
-			     &arg->pool.svc /* svc */, uuid);
+			     arg->pool.svc /* svc */, uuid);
 	assert_int_equal(rc, 0);
 
 	uuid_unparse_lower(uuid, uuid_str);
@@ -95,10 +95,13 @@ setup_pools(void **state, daos_size_t npools)
 		goto err_free_lparg;
 
 	for (i = 0; i < npools; i++) {
+		d_rank_list_t	tmp_list;
+
 		/* Set some properties in the in/out tpools[i] struct */
 		lparg->tpools[i].poh = DAOS_HDL_INVAL;
-		lparg->tpools[i].svc.rl_ranks = lparg->tpools[i].ranks;
-		lparg->tpools[i].svc.rl_nr = svc_nreplicas;
+		tmp_list.rl_nr = svc_nreplicas;
+		tmp_list.rl_ranks = lparg->tpools[i].ranks;
+		d_rank_list_dup(&lparg->tpools[i].svc, &tmp_list);
 		lparg->tpools[i].pool_size = 1 << 28;	/* 256MB SCM */
 
 		/* Create the pool */
@@ -117,6 +120,8 @@ err_destroy_pools:
 		if (!uuid_is_null(lparg->tpools[i].pool_uuid) &&
 		    (arg->myrank == 0))
 			(void) pool_destroy_safe(arg, &lparg->tpools[i]);
+		if (lparg->tpools[i].svc)
+			d_rank_list_free(lparg->tpools[i].svc);
 	}
 
 	D_FREE(lparg->tpools);
@@ -207,8 +212,8 @@ find_pool(void **state, daos_mgmt_pool_info_t *pool)
 
 		uuid_match = (uuid_compare(pool->mgpi_uuid,
 					   lparg->tpools[i].pool_uuid) == 0);
-		ranks_match = d_rank_list_identical(&lparg->tpools[i].svc,
-							 pool->mgpi_svc);
+		ranks_match = d_rank_list_identical(lparg->tpools[i].svc,
+						    pool->mgpi_svc);
 
 		if (uuid_match && ranks_match) {
 			found_idx = i;
@@ -388,7 +393,7 @@ pool_create_and_destroy_retry(void **state)
 			     arg->group, NULL /* tgts */,
 			     128 * 1024 * 1024 /* minimal size */,
 			     0 /* nvme size */, NULL /* prop */,
-			     &arg->pool.svc /* svc */, uuid);
+			     arg->pool.svc /* svc */, uuid);
 	assert_int_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
