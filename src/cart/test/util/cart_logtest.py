@@ -233,7 +233,7 @@ class LogTest():
         self.fi_triggered = False
         self.fi_location = None
 
-        # Records on 
+        # Records on number, type and frequency of logging.
         self.log_locs = Counter()
         self.log_mask = Counter()
         self.log_levels = Counter()
@@ -243,12 +243,13 @@ class LogTest():
         self.show_common_logs()
 
     def save_log_line(self, line):
+        """Record a single line of logging"""
         self.log_count += 1
         loc = '{}:{}'.format(line.filename, line.lineno)
         self.log_locs[loc] += 1
         self.log_mask[line.mask] += 1
         self.log_levels[line.level] += 1
-        
+
     def show_common_logs(self):
         """Report to stdout the most common logging locations"""
         print('Parsed {} lines of logs'.format(self.log_count))
@@ -271,9 +272,9 @@ class LogTest():
             if count < 10:
                 break
             print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
-                                             count,
-                                             100*count/self.log_count))
-            
+                                            count,
+                                            100*count/self.log_count))
+
     def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
 

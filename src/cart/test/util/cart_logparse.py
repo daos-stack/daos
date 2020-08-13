@@ -43,6 +43,7 @@ This provides a way of querying CaRT logfiles for processing.
 """
 
 from collections import OrderedDict
+import bz2
 import os
 import re
 
@@ -67,7 +68,7 @@ LOG_LEVELS = {'FATAL' :1,
 LOG_NAMES = {}
 for name in LOG_LEVELS:
     LOG_NAMES[LOG_LEVELS[name]] = name
-    
+
 # pylint: disable=too-few-public-methods
 class LogRaw():
     """Class for raw (non cart log lines) in cart log files
@@ -413,25 +414,34 @@ class LogIter():
         # find and report the error, then continue with the file open as
         # latin-1
         self._fd = None
-        try:
-            self._fd = open(fname, 'r', encoding='utf-8')
-            self._fd.read()
-        except UnicodeDecodeError as err:
-            print('ERROR: Invalid data in server.log on following line')
-            self._fd = open(fname, 'r', encoding='latin-1')
-            self._fd.read(err.start - 200)
-            data = self._fd.read(199)
-            lines = data.splitlines()
-            print(lines[-1])
 
-        self._fd.seek(0)
+        allow_seek = True
+
+        if fname.endswith('.bz2'):
+            # Allow diret operation of bz2 files, although seek() does not work
+            # correct so force to in-memory operation which is not ideal.
+            self._fd = bz2.open(fname, 'rt')
+            allow_seek = False
+        else:
+            try:
+                self._fd = open(fname, 'r', encoding='utf-8')
+                self._fd.read()
+            except UnicodeDecodeError as err:
+                print('ERROR: Invalid data in server.log on following line')
+                self._fd = open(fname, 'r', encoding='latin-1')
+                self._fd.read(err.start - 200)
+                data = self._fd.read(199)
+                lines = data.splitlines()
+                print(lines[-1])
+
+            self._fd.seek(0)
         self.fname = fname
         self._data = []
         index = 0
         pids = OrderedDict()
 
         i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*20))
+        self.__from_file = bool(i.st_size > (1024*1024*20)) or not allow_seek
 
         position = 0
         for line in self._fd:
