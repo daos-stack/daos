@@ -124,18 +124,17 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 }
 
 static int
-vos_tx_publish(struct dtx_handle *dth, int err)
+vos_tx_publish(struct dtx_handle *dth, bool publish)
 {
 	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
 	struct dtx_rsrvd_uint	*dru;
 	int			 rc;
-	int			 saved_rc = 0;
 	int			 i;
 
-	for (i = 0, rc = 0;
-	     i < dth->dth_rsrvd_cnt && (rc == 0 || err != 0); i++) {
+	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
 		dru = &dth->dth_rsrvds[i];
-		rc = vos_publish_scm(cont, dru->dru_scm, err == 0);
+		rc = vos_publish_scm(cont, dru->dru_scm, publish);
+		D_FREE(dru->dru_scm);
 
 		/* FIXME: Currently, vos_publish_blocks() will release
 		 *	  reserved information in 'dru_nvme_list' from
@@ -148,19 +147,17 @@ vos_tx_publish(struct dtx_handle *dth, int err)
 		 *
 		 *	  It is not fatal, will be handled later.
 		 */
-		if (rc == 0 || err != 0)
-			rc = vos_publish_blocks(cont, &dru->dru_nvme,
-						err == 0, VOS_IOS_GENERIC);
-		if (saved_rc == 0 && rc != 0)
-			saved_rc = rc;
+		if (rc && publish)
+			return rc;
 
-		D_FREE(dru->dru_scm);
+		/** Function checks if list is empty */
+		rc = vos_publish_blocks(cont, &dru->dru_nvme,
+					publish, VOS_IOS_GENERIC);
+		if (rc && publish)
+			return rc;
 	}
 
-	if (err == 0)
-		return saved_rc;
-
-	return err;
+	return 0;
 }
 
 int
@@ -222,14 +219,13 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		err = vos_dtx_prepared(dth);
 
 	if (err == 0)
-		rc = vos_tx_publish(dth, err);
+		rc = vos_tx_publish(dth, true);
 
 	rc = umem_tx_end(vos_cont2umm(cont), rc);
 
 	if (rc != 0) {
 		/* The transaction aborted or failed to commit. */
-		if (err != 0) /* Only if we haven't called it already */
-			vos_tx_publish(dth, -DER_CANCELED);
+		vos_tx_publish(dth, false);
 		if (dth_in)
 			vos_dtx_cleanup(dth);
 	}
