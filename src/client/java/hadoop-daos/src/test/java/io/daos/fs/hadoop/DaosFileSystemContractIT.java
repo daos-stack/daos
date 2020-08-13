@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,7 +26,6 @@ import org.apache.hadoop.fs.FileSystemContractBaseTest;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import static org.junit.Assume.assumeTrue;
@@ -65,8 +64,8 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
   public void testRenameRootDirForbidden() throws Exception {
     assumeTrue(renameSupported());
     rename(super.path("/"),
-              super.path("/test/newRootDir"),
-              false, true, false);
+        super.path("/test/newRootDir"),
+        false, true, false);
   }
 
   @Test
@@ -159,13 +158,13 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     rename(src, dst, true, false, true);
 
     assertFalse("Nested file1 exists",
-            fs.exists(path("/test/hadoop/dir/file1")));
+        fs.exists(path("/test/hadoop/dir/file1")));
     assertFalse("Nested file2 exists",
-            fs.exists(path("/test/hadoop/dir/subdir/file2")));
+        fs.exists(path("/test/hadoop/dir/subdir/file2")));
     assertTrue("Renamed nested file1 exists",
-            fs.exists(path("/test/new/newdir/file1")));
+        fs.exists(path("/test/new/newdir/file1")));
     assertTrue("Renamed nested exists",
-            fs.exists(path("/test/new/newdir/subdir/file2")));
+        fs.exists(path("/test/new/newdir/subdir/file2")));
   }
 
   @Override
@@ -183,15 +182,15 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     fs.mkdirs(parent);
     rename(src, dst, true, false, true);
     assertTrue("Destination changed",
-            fs.exists(path("/test/new/dir")));
+        fs.exists(path("/test/new/dir")));
     assertFalse("Nested file1 exists",
-            fs.exists(path("/test/hadoop/dir/file1")));
+        fs.exists(path("/test/hadoop/dir/file1")));
     assertFalse("Nested file2 exists",
-            fs.exists(path("/test/hadoop/dir/subdir/file2")));
+        fs.exists(path("/test/hadoop/dir/subdir/file2")));
     assertTrue("Renamed nested file1 exists",
-            fs.exists(path("/test/new/dir")));
+        fs.exists(path("/test/new/dir")));
     assertTrue("Renamed nested exists",
-            fs.exists(path("/test/new/dir/subdir/file2")));
+        fs.exists(path("/test/new/dir/subdir/file2")));
   }
 
 
@@ -207,7 +206,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     this.fs.mkdirs(parent);
     rename(src, dst, true, false, true);
     assertTrue("Destination changed",
-            fs.exists(path("/test/new/file")));
+        fs.exists(path("/test/new/file")));
   }
 
   @Override
@@ -225,9 +224,9 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
   @Override
   public void testListStatus() throws Exception {
-    Path[] testDirs = { path("/test/hadoop/a"),
-            path("/test/hadoop/b"),
-            path("/test/hadoop/c/1"), };
+    Path[] testDirs = {path("/test/hadoop/a"),
+        path("/test/hadoop/b"),
+        path("/test/hadoop/c/1"),};
     assertFalse(fs.exists(testDirs[0]));
 
     for (Path path : testDirs) {
@@ -259,7 +258,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
     rename(src, dst, false, true, true);
     assertFalse("Destination changed",
-            fs.exists(path("/test/hadoop/dir/subdir/dir")));
+        fs.exists(path("/test/hadoop/dir/subdir/dir")));
   }
 
   public void testRenameDirMoveToItSelf() throws Exception {
@@ -271,7 +270,7 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
     rename(src, dst, false, true, true);
     assertTrue("Destination changed",
-            fs.exists(path("/test/hadoop/dir")));
+        fs.exists(path("/test/hadoop/dir")));
   }
 
   public void testRenameFileToItSelf() throws Exception {
@@ -283,6 +282,6 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
     rename(src, dst, true, true, true);
     assertTrue("Destination changed",
-            fs.exists(path("/test/hadoop/file")));
+        fs.exists(path("/test/hadoop/file")));
   }
 }

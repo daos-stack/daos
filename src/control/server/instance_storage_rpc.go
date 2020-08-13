@@ -25,7 +25,6 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pkg/errors"
 
@@ -95,9 +94,8 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 		return
 	}
 
-	bdevListStr := strings.Join(cfg.DeviceList, ",")
-	srv.log.Infof("Instance %d: starting format of %s block devices (%s)",
-		srvIdx, cfg.Class, bdevListStr)
+	srv.log.Infof("Instance %d: starting format of %s block devices %v",
+		srvIdx, cfg.Class, cfg.DeviceList)
 
 	res, err := p.Format(bdev.FormatRequest{
 		Class:      cfg.Class,
@@ -125,13 +123,13 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 			srv.newCret(dev, ctlpbStatus, errMsg, infoMsg))
 	}
 
-	srv.log.Infof("Instance %d: finished format of %s block devices (%s)",
-		srvIdx, cfg.Class, bdevListStr)
+	srv.log.Infof("Instance %d: finished format of %s block devices %v",
+		srvIdx, cfg.Class, cfg.DeviceList)
 
 	return
 }
 
-// StorageFormatScm performs format on SCM and identifies if superblock needs
+// StorageFormatSCM performs format on SCM and identifies if superblock needs
 // writing.
 func (srv *IOServerInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
 	srvIdx := srv.Index()

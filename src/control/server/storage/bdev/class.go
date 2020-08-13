@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,16 +72,16 @@ const (
 type bdev struct {
 	templ   string
 	vosEnv  string
-	isEmpty func(storage.BdevConfig) string                // check no elements
-	isValid func(storage.BdevConfig) string                // check valid elements
-	prep    func(logging.Logger, storage.BdevConfig) error // prerequisite actions
+	isEmpty func(*storage.BdevConfig) string                // check no elements
+	isValid func(*storage.BdevConfig) string                // check valid elements
+	init    func(logging.Logger, *storage.BdevConfig) error // prerequisite actions
 }
 
-func nilValidate(c storage.BdevConfig) string { return "" }
+func nilValidate(_ *storage.BdevConfig) string { return "" }
 
-func nilPrep(l logging.Logger, c storage.BdevConfig) error { return nil }
+func nilInit(_ logging.Logger, _ *storage.BdevConfig) error { return nil }
 
-func isEmptyList(c storage.BdevConfig) string {
+func isEmptyList(c *storage.BdevConfig) string {
 	if len(c.DeviceList) == 0 {
 		return "bdev_list empty " + msgBdevNone
 	}
@@ -89,7 +89,7 @@ func isEmptyList(c storage.BdevConfig) string {
 	return ""
 }
 
-func isEmptyNumber(c storage.BdevConfig) string {
+func isEmptyNumber(c *storage.BdevConfig) string {
 	if c.DeviceCount == 0 {
 		return "bdev_number == 0 " + msgBdevNone
 	}
@@ -97,7 +97,7 @@ func isEmptyNumber(c storage.BdevConfig) string {
 	return ""
 }
 
-func isValidList(c storage.BdevConfig) string {
+func isValidList(c *storage.BdevConfig) string {
 	for i, elem := range c.DeviceList {
 		if elem == "" {
 			return fmt.Sprintf("%s (index %d)", msgBdevEmpty, i)
@@ -107,7 +107,7 @@ func isValidList(c storage.BdevConfig) string {
 	return ""
 }
 
-func isValidSize(c storage.BdevConfig) string {
+func isValidSize(c *storage.BdevConfig) string {
 	if c.FileSize < 1 {
 		return msgBdevBadSize
 	}
@@ -145,13 +145,13 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 	return nil
 }
 
-func prepBdevFile(l logging.Logger, c storage.BdevConfig) error {
+func bdevFileInit(log logging.Logger, c *storage.BdevConfig) error {
 	// truncate or create files for SPDK AIO emulation,
 	// requested size aligned with block size
 	size := (int64(c.FileSize*gbyte) / int64(blkSize)) * int64(blkSize)
 
 	for _, path := range c.DeviceList {
-		err := createEmptyFile(l, path, size)
+		err := createEmptyFile(log, path, size)
 		if err != nil {
 			return err
 		}
@@ -162,35 +162,45 @@ func prepBdevFile(l logging.Logger, c storage.BdevConfig) error {
 
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func genFromTempl(cfg storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
+func genFromTempl(cfg *storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
 	t := template.Must(template.New(confOut).Parse(templ))
 	err = t.Execute(&out, cfg)
+
 	return
 }
 
 // ClassProvider implements functionality for a given bdev class
 type ClassProvider struct {
 	log     logging.Logger
-	cfg     storage.BdevConfig
+	cfg     *storage.BdevConfig
 	cfgPath string
 	bdev    bdev
 }
 
+// NewClassProvider returns a new ClassProvider reference for given bdev type.
 func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig) (*ClassProvider, error) {
 	p := &ClassProvider{
 		log: log,
-		cfg: *cfg,
+		cfg: cfg,
 	}
 
 	switch cfg.Class {
-	case storage.BdevClassNone, storage.BdevClassNvme:
-		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilPrep}
+	case storage.BdevClassNone:
+		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilInit}
+	case storage.BdevClassNvme:
+		p.bdev = bdev{nvmeTempl, "NVME", isEmptyList, isValidList, nilInit}
+		if cfg.VmdEnabled {
+			p.bdev.templ = `[Vmd]
+    Enable True
+
+` + p.bdev.templ
+		}
 	case storage.BdevClassMalloc:
-		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep}
+		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilInit}
 	case storage.BdevClassKdev:
-		p.bdev = bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilPrep}
+		p.bdev = bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilInit}
 	case storage.BdevClassFile:
-		p.bdev = bdev{fileTempl, "AIO", isEmptyList, isValidSize, prepBdevFile}
+		p.bdev = bdev{fileTempl, "AIO", isEmptyList, isValidSize, bdevFileInit}
 	default:
 		return nil, errors.Errorf("unable to map %q to BdevClass", cfg.Class)
 	}
@@ -218,13 +228,15 @@ func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig
 	return p, nil
 }
 
-func (p *ClassProvider) PrepareDevices() error {
-	return p.bdev.prep(p.log, p.cfg)
-}
-
-func (p *ClassProvider) GenConfigFile() (err error) {
+// GenConfigFile generates nvme config file for given bdev type to be consumed
+// by spdk.
+func (p *ClassProvider) GenConfigFile() error {
 	if p.cfgPath == "" {
 		return nil
+	}
+
+	if err := p.bdev.init(p.log, p.cfg); err != nil {
+		return errors.Wrap(err, "bdev device init")
 	}
 
 	confBytes, err := genFromTempl(p.cfg, p.bdev.templ)
