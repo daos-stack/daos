@@ -1,0 +1,36 @@
+hosts:
+    test_servers:
+        - server-A
+    test_clients:
+        - client-B
+timeout: 1800
+server_config:
+    name: daos_server
+    servers:
+        scm_class: ram 
+        scm_size: 96
+    transport_config:
+        allow_insecure: True
+agent_config:
+    transport_config:
+        allow_insecure: True
+dmg:
+    transport_config:
+        allow_insecure: True
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 30000000000
+    nvme_size: 40000000000
+    svcn: 1
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
+
+daos_vol:
+    test: "h5_partest_t_shapesame"
+    client_processes: 6
+    mpi_type: openmpi
