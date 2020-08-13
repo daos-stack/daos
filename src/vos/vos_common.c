@@ -230,7 +230,10 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 			vos_dtx_cleanup(dth);
 	}
 
-	return err;
+	if (err != 0)
+		return err;
+
+	return rc;
 }
 
 /**
