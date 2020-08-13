@@ -48,7 +48,7 @@ class CartCtlOneNodeTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
-        self.utils.dump_cart_logs()
+        self.utils.dump_cart_logs_static()
         self.utils.log_copy(self)
 
     def test_cart_ctl(self):

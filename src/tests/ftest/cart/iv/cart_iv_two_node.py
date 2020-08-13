@@ -104,7 +104,7 @@ class CartIvTwoNodeTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
-        self.utils.dump_cart_logs()
+        self.utils.dump_cart_logs_static()
         self.utils.log_copy(self)
 
     def _verify_action(self, action):

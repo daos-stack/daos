@@ -52,9 +52,11 @@ class CartUtils():
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
+        self.cart_logs_dumped_already = False
 
     @staticmethod
     def write_host_file(hostlist, slots=1):
+        print("Entering write_host_file")
         """ write out a hostfile suitable for orterun """
 
         unique = random.randint(1, 100000)
@@ -81,6 +83,7 @@ class CartUtils():
 
     @staticmethod
     def check_process(proc):
+        print("Entering check_process")
         """ check if a process is still running"""
         proc.poll()
         procrtn = proc.returncode
@@ -90,6 +93,7 @@ class CartUtils():
 
     @staticmethod
     def wait_process(proc, wait_time):
+        print("Entering wait_process")
         """ wait for process to terminate """
         i = wait_time
         procrtn = None
@@ -105,7 +109,8 @@ class CartUtils():
         return procrtn
 
     @staticmethod
-    def stop_process(proc):
+    def stop_process(proc, self):
+        print("Entering stop_process")
         """ wait for process to terminate """
         i = 60
         procrtn = None
@@ -125,9 +130,14 @@ class CartUtils():
             except Exception:
                 proc.kill()
 
+        # Putting this in the tearDown section of the test .py file, might
+        # not be enough.  Copy logs over when test procs are reaped.
+        self.dump_cart_logs()
+
         return procrtn
 
     def get_env(self, cartobj):
+        self.stdout.info("Entering get_env")
         """ return basic env setting in yaml """
         env_CCSA = cartobj.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = cartobj.params.get("name", "/run/tests/*/")
@@ -185,6 +195,7 @@ class CartUtils():
 
     @staticmethod
     def get_srv_cnt(cartobj, host):
+        print("Entering get_srv_cnt")
         """ get server count """
         hostlist = cartobj.params.get("{}".format(host), "/run/hosts/*/")
 
@@ -195,6 +206,7 @@ class CartUtils():
         return srvcnt
 
     def build_cmd(self, cartobj, env, host):
+        self.stdout.info("Entering build_cmd")
         """ build command """
         tst_cmd = ""
 
@@ -264,19 +276,20 @@ class CartUtils():
         return tst_cmd
 
     def launch_srv_cli_test(self, cartobj, srvcmd, clicmd):
+        self.stdout.info("Entering launch_srv_cli_test")
         """ launches sever in the background and client in the foreground """
 
         srv_rtn = self.launch_cmd_bg(cartobj, srvcmd)
 
         # Verify the server is still running.
         if not self.check_process(srv_rtn):
-            procrtn = self.stop_process(srv_rtn)
+            procrtn = self.stop_process(srv_rtn, self)
             cartobj.fail("Server did not launch, return code %s" \
                        % procrtn)
 
         cli_rtn = self.launch_test(cartobj, clicmd, srv_rtn)
 
-        srv_rtn = self.stop_process(srv_rtn)
+        srv_rtn = self.stop_process(srv_rtn, self)
 
         if srv_rtn:
             cartobj.fail("Failed, return codes client %d " % cli_rtn + \
@@ -285,6 +298,7 @@ class CartUtils():
         return 0
 
     def init_mpi_old(self, mpi):
+        self.stdout.info("Entering init_mpi_old")
         """load mpi with older environment-modules"""
         self.print("Loading old %s" % mpi)
         self.module('purge')
@@ -292,6 +306,7 @@ class CartUtils():
         return True
 
     def init_mpi(self, mpi):
+        self.stdout.info("Entering init_mpi")
         """load mpi"""
 
         mpich = ['mpi/mpich-x86_64']
@@ -351,6 +366,7 @@ class CartUtils():
         return False
 
     def launch_test(self, cartobj, cmd, srv1=None, srv2=None):
+        self.stdout.info("Entering launch_test")
         """ launches test """
 
         self.print("\nCMD : %s\n" % cmd)
@@ -365,16 +381,17 @@ class CartUtils():
 
         if rtn:
             if srv1 is not None:
-                self.stop_process(srv1)
+                self.stop_process(srv1, self)
 
             if srv2 is not None:
-                self.stop_process(srv2)
+                self.stop_process(srv2, self)
 
             cartobj.fail("Failed, return codes %d " % rtn)
 
         return rtn
 
     def launch_cmd_bg(self, cartobj, cmd):
+        self.stdout.info("Entering launch_cmd_bg")
         """ launches the given cmd in background """
 
         self.print("\nCMD : %s\n" % cmd)
@@ -389,6 +406,7 @@ class CartUtils():
         return rtn
 
     def print(self, cmd):
+        self.stdout.info("Entering print")
         """ prints the given cmd at runtime and stdout """
 
         self.stdout.info(cmd)
@@ -396,6 +414,7 @@ class CartUtils():
 
     @staticmethod
     def log_copy(cartobj):
+        print("Entering log_copy")
         """Copy cart log files to Jenkins-accessible directory """
 
         import shutil
@@ -417,6 +436,7 @@ class CartUtils():
 
     @staticmethod
     def log_check(cartobj):
+        print("Entering log_check")
         """Check log files for consistency """
 
         logparse = cartobj.params.get("logparse", "/run/tests/*/")
@@ -440,13 +460,17 @@ class CartUtils():
             c_log_test = cart_logtest.LogTest(cl)
             c_log_test.check_log_file(strict_test)
 
-    @staticmethod
-    def dump_cart_logs():
+    def dump_cart_logs(self):
+        print("Entering dump_cart_logs")
         """Print contents of cart.log
 
         Returns:
             void
         """
+
+        if self.cart_logs_dumped_already:
+          print ("We already dumped the cart.log. No need to repeat.")
+          return
 
         pattern = 'cart.log*'
 
@@ -468,4 +492,16 @@ class CartUtils():
                       print('Found cart.log file: ', filename)
                       log = open(filename, "r").read()
                       print(log)
+                      self.cart_logs_dumped_already = True
+
+                      # Assume there's only one cart.log per test process
                       return
+
+    @staticmethod
+    def dump_cart_logs_static(self):
+        """Static wrapper for dump_cart_logs
+
+        Returns:
+            void
+        """
+        self.dump_cart_logs()
