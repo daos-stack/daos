@@ -188,6 +188,21 @@ typedef struct {
 	int		 (*mo_tx_add)(struct umem_instance *umm,
 				      umem_off_t umoff, uint64_t offset,
 				      size_t size);
+
+	/**
+	 * Add the specified range of umoff to current memory transaction but
+	 * with flags.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param umoff	[IN]	memory offset to be added to transaction.
+	 * \param offset [IN]	start offset of \a umoff tracked by the
+	 *			transaction.
+	 * \param size	[IN]	size of \a umoff tracked by the transaction.
+	 * \param flags [IN]	PMDK flags
+	 */
+	int		 (*mo_tx_xadd)(struct umem_instance *umm,
+				       umem_off_t umoff, uint64_t offset,
+				       size_t size, uint64_t flags);
 	/**
 	 * Add the directly accessible pointer to current memory transaction.
 	 *
@@ -400,6 +415,17 @@ umem_tx_add_range(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
 }
 
 static inline int
+umem_tx_xadd_range(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
+		   size_t size, uint64_t flags)
+{
+	if (umm->umm_ops->mo_tx_xadd)
+		return umm->umm_ops->mo_tx_xadd(umm, umoff, offset, size,
+						flags);
+	else
+		return 0;
+}
+
+static inline int
 umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
 	if (umm->umm_ops->mo_tx_add_ptr)
@@ -408,8 +434,20 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 		return 0;
 }
 
+static inline int
+umem_tx_xadd_ptr(struct umem_instance *umm, void *ptr, size_t size,
+		 uint64_t flags)
+{
+	umem_off_t	offset = umem_ptr2off(umm, ptr);
+
+	return umem_tx_xadd_range(umm, offset, 0, size, flags);
+}
+
 #define umem_tx_add(umm, umoff, size)					\
 	umem_tx_add_range(umm, umoff, 0, size)
+
+#define umem_tx_xadd(umm, umoff, size, flags)				\
+	umem_tx_xadd_range(umm, umoff, 0, size, flags)
 
 static inline int
 umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
