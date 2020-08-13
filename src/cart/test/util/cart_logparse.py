@@ -415,13 +415,14 @@ class LogIter():
         # latin-1
         self._fd = None
 
-        allow_seek = True
+        self.bz2 = False
 
         if fname.endswith('.bz2'):
-            # Allow diret operation of bz2 files, although seek() does not work
-            # correct so force to in-memory operation which is not ideal.
+            # Allow diret operation of bz2 files.  Supports multiple pids
+            # per file as normal, however does not try and seek to file
+            # postions, rather walks the entire file for each pid.
             self._fd = bz2.open(fname, 'rt')
-            allow_seek = False
+            self.bz2 = True
         else:
             try:
                 self._fd = open(fname, 'r', encoding='utf-8')
@@ -441,7 +442,7 @@ class LogIter():
         pids = OrderedDict()
 
         i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*20)) or not allow_seek
+        self.__from_file = bool(i.st_size > (1024*1024*20))
 
         position = 0
         for line in self._fd:
@@ -500,8 +501,11 @@ class LogIter():
                 self._iter_pid = self._pids[pid]
             except KeyError:
                 raise InvalidPid
-            self._iter_last_index = self._iter_pid['last_index'] - \
-                                    self._iter_pid['first_index'] + 1
+            if self.bz2:
+                self._iter_last_index = self._iter_pid['last_index']
+            else:
+                self._iter_last_index = self._iter_pid['last_index'] - \
+                                        self._iter_pid['first_index'] + 1
             self._pid = pid
         else:
             self._pid = None
@@ -521,10 +525,10 @@ class LogIter():
         self._iter_index = 0
         self._iter_count = 0
         if self.__from_file:
-            if self._pid:
-                self._fd.seek(self._iter_pid['file_pos'])
-            else:
+            if not self._pid or self.bz2:
                 self._fd.seek(0)
+            else:
+                self._fd.seek(self._iter_pid['file_pos'])
         else:
             self._offset = 0
         return self
