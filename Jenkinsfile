@@ -125,6 +125,17 @@ String hw_distro_target() {
     return stage_info['target']
 }
 
+String quickbuild_deps() {
+    String target = hw_distro_target()
+    if (target == 'centos7') {
+        return env.QUCKBUILD_DEPS_EL7
+    }
+    if (target == 'leap15') {
+        return env.QUICKBUILD_DEPS_LEAP15
+    }
+    error 'quickbuild_deps not implemented for ' + target
+}
+
 String daos_repos() {
     String target = hw_distro_target()
     return daos_repos('target')
@@ -564,7 +575,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  quickbuild_deps() + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -612,7 +623,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  quickbuild_deps() + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -658,7 +669,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  quickbuild_deps() + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -703,7 +714,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  quickbuild_deps() + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -748,7 +759,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"'
+                                  quickbuild_deps() + '"'
                         }
                     }
                     steps {
@@ -871,7 +882,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_LEAP15 + '"' +
+                                  quickbuild_deps() + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -1004,7 +1015,7 @@ pipeline {
                 }
             }
             parallel {
-                stage('run_test.sh') {
+                stage('run_test.sh') {  // rename to 'Unit Test' or 'Unit Test on CentOS 7'
                     when {
                       beforeAgent true
                       expression { ! skip_stage('run_test') }
@@ -1075,7 +1086,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  quickbuild_deps() + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -1121,7 +1132,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: get_daos_packages() + 
+                                       inst_rpms: get_daos_packages() +
                                                   ' ' + functional_packages()
                     }
                     post {
@@ -1268,7 +1279,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
+                                  quickbuild_deps() + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
