@@ -57,7 +57,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 
 	DFUSE_TRA_UP(ev, oh, "write");
 
-	/* Allocate temporary space for the data whilst they asyncronous
+	/* Allocate temporary space for the data whilst they asynchronous
 	 * operation is happening.
 	 */
 	D_ALLOC(ev->de_buff, len);

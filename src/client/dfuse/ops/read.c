@@ -148,7 +148,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		fb.buf[0].size = ev->de_len - len;
 
 		DFUSE_TRA_INFO(oh, "%#zx-%#zx was readahead",
-			position + len, position + ev->de_len - 1);
+			       position + len, position + ev->de_len - 1);
 
 		rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session,
 						ino, position + len, &fb, 0);
