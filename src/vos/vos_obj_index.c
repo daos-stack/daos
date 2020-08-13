@@ -309,7 +309,8 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 		DP_UOID(oid), epoch);
 
 	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, NULL,
-			    info, ts_set, true);
+			    info, ts_set, true,
+			    (flags & VOS_OF_REPLAY_PC) != 0);
 
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;

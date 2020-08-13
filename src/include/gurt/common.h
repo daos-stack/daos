@@ -20,6 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+
 /**
  * \file
  * GURT Common functions and types.
@@ -43,9 +44,9 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#include <daos_errno.h>
 
 #include <gurt/types.h>
-#include <gurt/errno.h>
 #include <gurt/debug.h>
 #include <gurt/fault_inject.h>
 
@@ -311,6 +312,8 @@ int d_sgl_init(d_sg_list_t *sgl, unsigned int nr);
 void d_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
+int d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
+void d_free_string(struct d_string_buffer_t *buf);
 
 
 #if !defined(container_of)

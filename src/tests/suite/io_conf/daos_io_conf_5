@@ -74,3 +74,11 @@ update --tx 6 -r "[264559, 524111]11"
 fail_shard_fetch set 3 4
 fetch --tx 7 -r "[0, 524277]"
 fail_shard_fetch clear
+
+akey akey_single_1
+iod_size 10240
+obj_class ec OC_EC_4P2G1
+update --tx 11 -s -u 17
+fail_shard_fetch set 2 4
+fetch --tx 11 -s
+fail_shard_fetch clear

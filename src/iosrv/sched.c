@@ -52,6 +52,7 @@ struct sched_pool_info {
 	int			spi_gc_ults;
 	int			spi_gc_sleeping;
 	int			spi_ref;
+	uint32_t		spi_req_cnt;
 };
 
 struct sched_request {
@@ -143,36 +144,48 @@ sched_set_throttle(unsigned int type, unsigned int percent)
 }
 
 struct pressure_ratio {
-	int	pr_free;	/* free space ratio */
-	int	pr_throttle;	/* update throttle ratio */
-	int	pr_pressure;	/* index in pressure_gauge */
+	unsigned int	pr_free;	/* free space ratio */
+	unsigned int	pr_throttle;	/* update throttle ratio */
+	unsigned int	pr_delay;	/* update being delayed in msec */
+	unsigned int	pr_pressure;	/* index in pressure_gauge */
 };
 
 static struct pressure_ratio pressure_gauge[] = {
 	{	/* free space > 40%, no space pressure */
 		.pr_free	= 40,
 		.pr_throttle	= 100,
+		.pr_delay	= 0,
 		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
 	},
 	{	/* free space > 30% */
 		.pr_free	= 30,
 		.pr_throttle	= 70,
+		.pr_delay	= 2000, /* msecs */
 		.pr_pressure	= 1,
 	},
 	{	/* free space > 20% */
 		.pr_free	= 20,
 		.pr_throttle	= 40,
+		.pr_delay	= 4000, /* msecs */
 		.pr_pressure	= 2,
 	},
 	{	/* free space > 10% */
 		.pr_free	= 10,
 		.pr_throttle	= 20,
+		.pr_delay	= 8000, /* msecs */
 		.pr_pressure	= 3,
 	},
-	{	/* free space <= 10% */
+	{	/* free space > 5% */
+		.pr_free	= 5,
+		.pr_throttle	= 10,
+		.pr_delay	= 12000, /* msecs */
+		.pr_pressure	= 4,
+	},
+	{	/* free space <= 5% */
 		.pr_free	= 0,
 		.pr_throttle	= 5,
-		.pr_pressure	= 4,
+		.pr_delay	= 20000, /* msecs */
+		.pr_pressure	= 5,
 	},
 };
 
@@ -239,7 +252,8 @@ spi_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	unsigned int		 type;
 
 	for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX; type++) {
-		D_ASSERT(pool2req_cnt(spi, type) == 0);
+		D_ASSERTF(pool2req_cnt(spi, type) == 0, "type:%u cnt:%u\n",
+			  type, pool2req_cnt(spi, type));
 		D_ASSERT(d_list_empty(pool2req_list(spi, type)));
 	}
 
@@ -268,16 +282,42 @@ static void
 prune_purge_list(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_pool_info	*spi;
 	struct purge_item	*pi, *tmp;
+	d_list_t		*rlink;
 	bool			 deleted;
 
 	d_list_for_each_entry_safe(pi, tmp, &info->si_purge_list, pi_link) {
-		deleted = d_hash_rec_delete(info->si_pool_hash, pi->pi_pool_id,
-					    sizeof(uuid_t));
-		if (!deleted)
-			D_ERROR("XS(%d): Purge "DF_UUID" failed.\n",
-				dx->dx_xs_id, DP_UUID(pi->pi_pool_id));
+		rlink = d_hash_rec_find(info->si_pool_hash, pi->pi_pool_id,
+					sizeof(uuid_t));
+		if (rlink == NULL)
+			goto next;
 
+		spi = sched_rlink2spi(rlink);
+		D_ASSERT(spi->spi_ref > 1);
+		d_hash_rec_decref(info->si_pool_hash, rlink);
+		if (spi->spi_req_cnt == 0) {
+			deleted = d_hash_rec_delete(info->si_pool_hash,
+						    pi->pi_pool_id,
+						    sizeof(uuid_t));
+			if (!deleted)
+				D_ERROR("XS(%d): Purge "DF_UUID" failed.\n",
+					dx->dx_xs_id, DP_UUID(pi->pi_pool_id));
+		} else {
+			unsigned int type;
+
+			D_ERROR("XS(%d): Pool "DF_UUID", req_cnt:%u\n",
+				dx->dx_xs_id, DP_UUID(pi->pi_pool_id),
+				spi->spi_req_cnt);
+
+			for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX;
+			     type++) {
+				if (pool2req_cnt(spi, type) != 0)
+					D_ERROR("type:%u, req_cnt:%u\n", type,
+						pool2req_cnt(spi, type));
+			}
+		}
+next:
 		d_list_del_init(&pi->pi_link);
 		D_FREE(pi);
 	}
@@ -288,6 +328,20 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct purge_item	*pi;
+
+	D_CDEBUG(spi->spi_req_cnt == 0, DB_TRACE, DLOG_ERR,
+		 "XS(%d): vos pool:"DF_UUID" is destroyed. req_cnt:%u\n",
+		 dx->dx_xs_id, DP_UUID(spi->spi_pool_id), spi->spi_req_cnt);
+
+	/* Don't purge the spi when there is queued request */
+	if (spi->spi_req_cnt != 0)
+		return;
+
+	d_list_for_each_entry(pi, &info->si_purge_list, pi_link) {
+		/* Already in purge list */
+		if (uuid_compare(pi->pi_pool_id, spi->spi_pool_id) == 0)
+			return;
+	}
 
 	D_ALLOC_PTR(pi);
 	if (pi == NULL) {
@@ -514,6 +568,8 @@ req_kickoff(struct dss_xstream *dx, struct sched_request *req)
 
 	D_ASSERT(sri->sri_req_cnt > 0);
 	sri->sri_req_cnt--;
+	D_ASSERT(spi->spi_req_cnt > 0);
+	spi->spi_req_cnt--;
 	D_ASSERT(info->si_req_cnt > 0);
 	info->si_req_cnt--;
 
@@ -526,12 +582,11 @@ req_kickoff(struct dss_xstream *dx, struct sched_request *req)
 #define SCHED_SPACE_AGE_MAX	2000	/* 2000 msecs */
 
 static int
-check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
-		     bool purge)
+check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left, nvme_left;
+	uint64_t		 scm_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -542,11 +597,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
 
 	rc = vos_pool_query_space(spi->spi_pool_id, &vps);
 	if (rc == -DER_NONEXIST) {	/* vos pool is destroyed */
-		D_CDEBUG(purge, DB_TRACE, DLOG_ERR,
-			 "XS(%d): vos pool:"DF_UUID" is destroyed.\n",
-			 dx->dx_xs_id, DP_UUID(spi->spi_pool_id));
-		if (purge)
-			add_purge_list(dx, spi);
+		add_purge_list(dx, spi);
 		goto out;
 	} else if (rc) {
 		D_ERROR("XS(%d): query pool:"DF_UUID" space failed. "DF_RC"\n",
@@ -564,17 +615,9 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
 	else
 		scm_left = 0;
 
-	if (NVME_TOTAL(&vps) == 0)	/* NVMe not enabled */
-		nvme_left = UINT64_MAX;
-	else if (NVME_FREE(&vps) > NVME_SYS(&vps))
-		nvme_left = NVME_FREE(&vps) - NVME_SYS(&vps);
-	else
-		nvme_left = 0;
-
 	orig_pressure = spi->spi_space_pressure;
 	for (pr = &pressure_gauge[0]; pr->pr_free != 0; pr++) {
-		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100) &&
-		    nvme_left > (NVME_TOTAL(&vps) * pr->pr_free / 100))
+		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100))
 			break;
 	}
 	spi->spi_space_pressure = pr->pr_pressure;
@@ -602,6 +645,7 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_info	*sri;
 	unsigned int		 req_type = req->sr_attr.sra_type;
+	unsigned int		 delay_msecs;
 
 	D_ASSERT(spi != NULL);
 	D_ASSERT(req_type < SCHED_REQ_MAX);
@@ -615,9 +659,21 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	if (sri->sri_req_kicked < sri->sri_req_limit)
 		goto kickoff;
 
+	if (req->sr_attr.sra_flags & SCHED_REQ_FL_NO_DELAY)
+		goto kickoff;
+
+	if (req_type == SCHED_REQ_UPDATE) {
+		struct pressure_ratio *pr;
+
+		pr = &pressure_gauge[spi->spi_space_pressure];
+		delay_msecs = pr->pr_delay;
+	} else {
+		delay_msecs = max_delay_msecs[req_type];
+	}
+
 	/* Request expired */
 	D_ASSERT(info->si_cur_ts >= req->sr_enqueue_ts);
-	if ((info->si_cur_ts - req->sr_enqueue_ts) > max_delay_msecs[req_type])
+	if ((info->si_cur_ts - req->sr_enqueue_ts) > delay_msecs)
 		goto kickoff;
 
 	/* Remaining requests are not expired */
@@ -673,6 +729,23 @@ is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
 	return (info->si_cur_ts - spi->spi_pressure_ts) < SCHED_DELAY_THRESH;
 }
 
+static inline unsigned int
+throttle_update(unsigned int u_max, struct pressure_ratio *pr)
+{
+	if (u_max == 0)
+		return 0;
+
+	/* Severe space pressure */
+	if (pr->pr_free == 0)
+		return u_max * pr->pr_throttle / 100;
+
+	/* Keep IO flow moving when there are only few inflight updates */
+	if ((u_max * pr->pr_throttle / 100) == 0)
+		return 1;
+
+	return u_max * pr->pr_throttle / 100;
+}
+
 static int
 process_pool_cb(d_list_t *rlink, void *arg)
 {
@@ -697,7 +770,7 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	gc_max	= pool2req_cnt(spi, SCHED_REQ_GC);
 	mig_max	= pool2req_cnt(spi, SCHED_REQ_MIGRATE);
 
-	press = check_space_pressure(dx, spi, true);
+	press = check_space_pressure(dx, spi);
 
 	if (press == SCHED_SPACE_PRESS_NONE) {
 		/* Throttle GC & aggregation */
@@ -707,22 +780,23 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	}
 
 	pr = &pressure_gauge[press];
-	D_ASSERT(pr->pr_throttle >= 0 && pr->pr_throttle < 100);
+	D_ASSERT(pr->pr_throttle < 100);
 
 	if (pr->pr_free != 0) {	/* Light space pressure */
 		/* Throttle updates when there is space to be reclaimed */
 		if (is_gc_pending(spi)) {
-			u_max	= u_max * pr->pr_throttle / 100;
+			u_max	= throttle_update(u_max, pr);
 			io_max	= u_max + f_max;
 		}
 	} else {		/* Severe space pressure */
 		/*
-		 * To avoid update throttling being skipped before the GC ULTs
-		 * are woke up in time, an extra paranoid is_pressure_recent()
-		 * check is added for this severe space pressure situation.
+		 * If space pressure stays in highest level for a while, we
+		 * can assume that no available space could be reclaimed, so
+		 * throttling can be stopped and ENOSPACE could be returned
+		 * to client sooner.
 		 */
-		if (is_gc_pending(spi) || is_pressure_recent(info, spi)) {
-			u_max	= u_max * pr->pr_throttle / 100;
+		if (is_pressure_recent(info, spi)) {
+			u_max	= throttle_update(u_max, pr);
 			/*
 			 * Delay all rebuild and reintegration requests for
 			 * this moment, since we can't tell if they are for
@@ -830,11 +904,12 @@ static void
 req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_attr	*attr = &req->sr_attr;
 	struct sched_req_info	*sri;
 
-	D_ASSERT(req->sr_pool_info != NULL);
-	sri = &req->sr_pool_info->spi_req_array[attr->sra_type];
+	D_ASSERT(spi != NULL);
+	sri = &spi->spi_req_array[attr->sra_type];
 
 	D_ASSERT(d_list_empty(&req->sr_link));
 	if (attr->sra_type == SCHED_REQ_UPDATE ||
@@ -847,6 +922,7 @@ req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 	req->sr_enqueue_ts = info->si_cur_ts;
 
 	sri->sri_req_cnt++;
+	spi->spi_req_cnt++;
 	info->si_req_cnt++;
 }
 
@@ -979,7 +1055,7 @@ sched_req_space_check(struct sched_request *req)
 	struct dss_xstream	*dx = dss_current_xstream();
 
 	D_ASSERT(req != NULL && req->sr_pool_info != NULL);
-	return check_space_pressure(dx, req->sr_pool_info, false);
+	return check_space_pressure(dx, req->sr_pool_info);
 }
 
 static void
