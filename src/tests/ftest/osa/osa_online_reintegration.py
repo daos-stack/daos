@@ -35,6 +35,7 @@ from job_manager_utils import Mpirun
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from mpio_utils import MpioUtils
+from daos_racer_utils import DaosRacerCommand
 
 try:
     # python 3.x
@@ -70,6 +71,7 @@ class OSAOnlineReintegration(TestWithServers):
             self.hostlist_clients, self.workdir, None)
         self.pool = None
         self.out_queue = queue.Queue()
+        self.daos_racer = None
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -90,6 +92,13 @@ class OSAOnlineReintegration(TestWithServers):
         kwargs = {"pool": self.pool.uuid}
         out = self.dmg_command.get_output("pool_query", **kwargs)
         return int(out[0][4])
+
+    def daos_racer_thread(self):
+        self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
+        self.daos_racer.get_params(self)
+        self.daos_racer.set_environment(
+            self.daos_racer.get_environment(self.server_managers[0]))
+        self.daos_racer.run()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
@@ -178,6 +187,10 @@ class OSAOnlineReintegration(TestWithServers):
             pool[val].create()
             pool_uuid.append(pool[val].uuid)
 
+        # Start the daos_racer thread
+        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
+        daos_racer_thread.start()
+
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
             for oclass, api, test, flags in product(self.ior_daos_oclass,
@@ -240,6 +253,13 @@ class OSAOnlineReintegration(TestWithServers):
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
+
+        # TODO: Check data consistency for IOR in future
+        # Presently, we are running daos_racer in parallel
+        # to IOR and checking the data consistency only
+        # for the daos_racer objects after exclude
+        # and reintegration.
+        daos_racer_thread.join()
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
