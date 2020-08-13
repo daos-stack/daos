@@ -563,7 +563,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		init_info.na_init_info.progress_mode = 0;
 		init_info.na_init_info.max_contexts = 1;
 
-		hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
+		hg_class = HG_Init_opt(info_string, crt_is_service(),
+				       &init_info);
 		if (hg_class == NULL) {
 			D_ERROR("Could not initialize HG class.\n");
 			D_GOTO(out, rc = -DER_HG);
