@@ -726,7 +726,18 @@ d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *link)
 		ch_rec_free(htable, link);
 	return rc;
 }
+d_list_t *
+d_hash_rec_first(struct d_hash_table *htable)
+{
+	d_list_t	*link = NULL;
+	int		 rc;
 
+	rc = d_hash_table_traverse(htable, d_hash_find_single, &link);
+	if (rc < 0)
+		return NULL;
+
+	return link;
+}
 /* Find an entry in the hash table.
  *
  * As d_hash_table_traverse() does not support removal from the callback
@@ -742,20 +753,6 @@ d_hash_find_single(d_list_t *link, void *arg)
 	*p = link;
 	return 1;
 }
-
-d_list_t *
-d_hash_rec_first(struct d_hash_table *htable)
-{
-	d_list_t	*link = NULL;
-	int		 rc;
-
-	rc = d_hash_table_traverse(htable, d_hash_find_single, &link);
-	if (rc < 0)
-		return NULL;
-
-	return link;
-}
-
 int
 d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 			    d_hash_table_ops_t *hops,
