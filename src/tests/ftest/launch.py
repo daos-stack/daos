@@ -937,13 +937,13 @@ def archive_files(destination, host_list, source_files):
     this_host = socket.gethostname().split(".")[0]
 
     # Create the destination directory
-    get_output(["mkdir", destination], check=False)
+    get_output(["mkdir", destination])
 
     # Display available disk space prior to copy.  Allow commands to fail w/o
     # exiting this program.  Any disk space issues preventing the creation of a
     # directory will be caught in the archiving of the source files.
     print("Current disk space usage of {}".format(destination))
-    print(get_output(["df", "-h", destination], check=False))
+    print(get_output(["df", "-h", destination]))
 
     # Copy any source files that exist on the remote hosts and remove them from
     # the remote host if the copy is successful.  Attempt all of the commands
