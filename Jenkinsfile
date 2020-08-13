@@ -927,10 +927,10 @@ pipeline {
                         }
                     }
                 } // End run_test.sh stage
-                stage('run_test.sh with memcheck') {
+                stage('Unit Test with memcheck') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('run_test') }
+                      expression { ! skip_stage('unit_test_memcheck') }
                     }
                     agent {
                         label 'ci_vm1'
@@ -953,7 +953,9 @@ pipeline {
                     }
                     post {
                       always {
-                          unitTestPost()
+                          unitTestPost valgrind_stash: 'centos7-gcc-unit-valg',
+                                       valgrind_pattern: 'run_test_memcheck.sh/*memcheck.xml',
+                                       artifacts: ['run_test_memcheck.sh']
                         }
                     }
                 } // End run_test.sh with memcheck stage
