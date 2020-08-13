@@ -21,14 +21,16 @@ pool:
     svcn: 1
     control_method: dmg
 ior:
-    client_processes:
-        np_16:
-            np: 16
-    test_file: daos:testFile
-    repetitions: 2
-    daos_destroy: False
-    iorflags:
-          ior_flags: "-v -W -w -r -R"
-          ior_api: DAOS
-          transfer_block_size: [1M, 2G]
-          obj_class: "SX"
+  api: "DAOS"
+  client_processes:
+    np: 16
+  daos_destroy: False
+  iorflags:
+      flags: "-v -W -w -r -R"
+  test_file: daos:testFile
+  repetitions: 2
+  transfer_size: '1M'
+  block_size: '1G'
+  objectclass:
+    SX:
+      daos_oclass: "SX"
