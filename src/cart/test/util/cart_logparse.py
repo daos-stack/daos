@@ -420,7 +420,7 @@ class LogIter():
         if fname.endswith('.bz2'):
             # Allow diret operation of bz2 files.  Supports multiple pids
             # per file as normal, however does not try and seek to file
-            # postions, rather walks the entire file for each pid.
+            # positions, rather walks the entire file for each pid.
             self._fd = bz2.open(fname, 'rt')
             self.bz2 = True
         else:
