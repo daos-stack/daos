@@ -36,7 +36,7 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
-		EnableVmd bool
+		DisableVMD bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -67,7 +67,15 @@ type (
 		DeviceList []string
 		ShmID      int // shared memory segment for SPDK IPC
 		MemSize    int // size MiB memory to be used by SPDK proc
-		EnableVmd  bool
+		DisableVMD bool
+	}
+
+	// DeviceFormatRequest designs the parameters for a device-specific format.
+	DeviceFormatRequest struct {
+		ShmID   int // shared memory segment for SPDK IPC
+		MemSize int // size MiB memory to be used by SPDK proc
+		Device  string
+		Class   storage.BdevClass
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
@@ -89,9 +97,9 @@ type (
 		PrepareReset() error
 		Prepare(PrepareRequest) (*PrepareResponse, error)
 		Scan(ScanRequest) (*ScanResponse, error)
-		Format(FormatRequest) (*FormatResponse, error)
-		EnableVmd()
-		IsVmdEnabled() bool
+		Format(DeviceFormatRequest) (*DeviceFormatResponse, error)
+		DisableVMD()
+		IsVMDDisabled() bool
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -127,24 +135,24 @@ func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
 	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
-func (p *Provider) enableVmd() {
-	p.backend.EnableVmd()
+func (p *Provider) disableVMD() {
+	p.backend.DisableVMD()
 }
 
-// IsVmdEnabled returns true if provider is VMD device aware.
-func (p *Provider) IsVmdEnabled() bool {
-	return p.backend.IsVmdEnabled()
+// IsVMDDisabled returns true if provider has disabled VMD device awareness.
+func (p *Provider) IsVMDDisabled() bool {
+	return p.backend.IsVMDDisabled()
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.shouldForward(req) {
-		req.EnableVmd = p.IsVmdEnabled()
+		req.DisableVMD = p.IsVMDDisabled()
 		return p.fwd.Scan(req)
 	}
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.EnableVmd {
-		p.enableVmd()
+	if req.IsForwarded() && req.DisableVMD {
+		p.disableVMD()
 	}
 
 	return p.backend.Scan(req)
@@ -156,8 +164,8 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	if p.shouldForward(req) {
 		resp, err := p.fwd.Prepare(req)
 		// set vmd state on local provider after forwarding request
-		if err == nil && resp.VmdDetected {
-			p.enableVmd()
+		if err == nil && !resp.VmdDetected {
+			p.disableVMD()
 		}
 
 		return resp, err
@@ -184,15 +192,31 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 
 	if p.shouldForward(req) {
-		req.EnableVmd = p.IsVmdEnabled()
+		req.DisableVMD = p.IsVMDDisabled()
 		return p.fwd.Format(req)
 	}
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.EnableVmd {
-		p.enableVmd()
+	if req.IsForwarded() && req.DisableVMD {
+		p.disableVMD()
 	}
 
 	// TODO (DAOS-3844): Kick off device formats parallel?
+	resp := &FormatResponse{
+		DeviceResponses: make(DeviceFormatResponses),
+	}
 
-	return p.backend.Format(req)
+	for _, dev := range req.DeviceList {
+		devResp, err := p.backend.Format(DeviceFormatRequest{
+			ShmID:   req.ShmID,
+			MemSize: req.MemSize,
+			Class:   req.Class,
+			Device:  dev,
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp.DeviceResponses[dev] = devResp
+	}
+
+	return resp, nil
 }

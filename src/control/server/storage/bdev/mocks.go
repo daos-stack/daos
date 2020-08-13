@@ -24,11 +24,8 @@
 package bdev
 
 import (
-	"regexp"
-	"strconv"
-
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/pkg/errors"
 )
 
 type (
@@ -37,12 +34,12 @@ type (
 		PrepareResetErr error
 		PrepareResp     *PrepareResponse
 		PrepareErr      error
-		FormatRes       *FormatResponse
+		DevFormatRes    *DeviceFormatResponse
 		FormatFailIdx   int
 		FormatErr       error
 		ScanRes         *ScanResponse
 		ScanErr         error
-		vmdEnabled      bool // set through public access methods
+		vmdDisabled     bool // set through public access methods
 	}
 
 	MockBackend struct {
@@ -71,40 +68,22 @@ func (mb *MockBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
 	return mb.cfg.ScanRes, mb.cfg.ScanErr
 }
 
-func (mb *MockBackend) Format(req FormatRequest) (*FormatResponse, error) {
-	if mb.cfg.FormatRes != nil || mb.cfg.FormatErr != nil {
+func (mb *MockBackend) Format(req DeviceFormatRequest) (*DeviceFormatResponse, error) {
+	if mb.cfg.DevFormatRes != nil || mb.cfg.FormatErr != nil {
 		if mb.cfg.FormatErr != nil && mb.cfg.FormatFailIdx == mb.cfg.formatIdx {
 			mb.cfg.formatIdx++
-			return nil, mb.cfg.FormatErr
+			return &DeviceFormatResponse{
+				Error: FaultFormatError(req.Device, errors.New("format failed")),
+			}, nil
 		}
 		mb.cfg.formatIdx++
 
-		if mb.cfg.FormatRes != nil {
-			return mb.cfg.FormatRes, nil
+		if mb.cfg.DevFormatRes != nil {
+			return mb.cfg.DevFormatRes, nil
 		}
 	}
 
-	if len(req.DeviceList) == 0 {
-		return new(FormatResponse), nil
-	}
-
-	addr := req.DeviceList[0]
-	mockRe := regexp.MustCompile(`^0000:80:00.(\d+)$`)
-	if match := mockRe.FindStringSubmatch(addr); match != nil {
-		idx, err := strconv.ParseInt(match[1], 16, 32)
-		if err != nil {
-			return nil, err
-		}
-		addr = storage.MockNvmeController(int32(idx)).PciAddr
-	}
-
-	return &FormatResponse{
-		DeviceResponses: DeviceFormatResponses{
-			addr: &DeviceFormatResponse{
-				Formatted: true,
-			},
-		},
-	}, nil
+	return &DeviceFormatResponse{Formatted: true}, nil
 }
 
 func (mb *MockBackend) PrepareReset() error {
@@ -122,12 +101,12 @@ func (mb *MockBackend) Prepare(_ PrepareRequest) (*PrepareResponse, error) {
 	return mb.cfg.PrepareResp, nil
 }
 
-func (mb *MockBackend) EnableVmd() {
-	mb.cfg.vmdEnabled = true
+func (mb *MockBackend) DisableVMD() {
+	mb.cfg.vmdDisabled = true
 }
 
-func (mb *MockBackend) IsVmdEnabled() bool {
-	return mb.cfg.vmdEnabled
+func (mb *MockBackend) IsVMDDisabled() bool {
+	return mb.cfg.vmdDisabled
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {

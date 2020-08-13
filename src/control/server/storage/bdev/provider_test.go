@@ -35,12 +35,12 @@ import (
 
 func TestBdevScan(t *testing.T) {
 	for name, tc := range map[string]struct {
-		req           ScanRequest
-		forwarded     bool
-		mbc           *MockBackendConfig
-		expRes        *ScanResponse
-		expErr        error
-		expVmdEnabled bool
+		req            ScanRequest
+		forwarded      bool
+		mbc            *MockBackendConfig
+		expRes         *ScanResponse
+		expErr         error
+		expVMDDisabled bool
 	}{
 		"no devices": {
 			req:    ScanRequest{},
@@ -78,8 +78,8 @@ func TestBdevScan(t *testing.T) {
 				},
 			},
 		},
-		"multiple devices with vmd enabled": {
-			req:       ScanRequest{EnableVmd: true},
+		"multiple devices with vmd disabled": {
+			req:       ScanRequest{DisableVMD: true},
 			forwarded: true,
 			mbc: &MockBackendConfig{
 				ScanRes: &ScanResponse{
@@ -97,7 +97,7 @@ func TestBdevScan(t *testing.T) {
 					storage.MockNvmeController(3),
 				},
 			},
-			expVmdEnabled: true,
+			expVMDDisabled: true,
 		},
 		"failure": {
 			req: ScanRequest{},
@@ -124,7 +124,7 @@ func TestBdevScan(t *testing.T) {
 			if diff := cmp.Diff(tc.expRes, gotRes, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, tc.expVmdEnabled, p.IsVmdEnabled(), "vmd enabled")
+			common.AssertEqual(t, tc.expVMDDisabled, p.IsVMDDisabled(), "vmd disabled")
 		})
 	}
 }
@@ -198,58 +198,59 @@ func TestBdevFormat(t *testing.T) {
 			req:    FormatRequest{},
 			expErr: errors.New("empty DeviceList"),
 		},
-		"unknown device class": {
-			req: FormatRequest{
-				Class:      storage.BdevClass("whoops"),
-				DeviceList: []string{"foo"},
-			},
-			expRes: &FormatResponse{
-				DeviceResponses: DeviceFormatResponses{
-					"foo": &DeviceFormatResponse{
-						Error: FaultFormatUnknownClass("whoops"),
-					},
-				},
-			},
-		},
-		"kdev": {
-			req: FormatRequest{
-				Class:      storage.BdevClassKdev,
-				DeviceList: []string{"foo"},
-			},
-			expRes: &FormatResponse{
-				DeviceResponses: DeviceFormatResponses{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
-					},
-				},
-			},
-		},
-		"malloc": {
-			req: FormatRequest{
-				Class:      storage.BdevClassMalloc,
-				DeviceList: []string{"foo"},
-			},
-			expRes: &FormatResponse{
-				DeviceResponses: DeviceFormatResponses{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
-					},
-				},
-			},
-		},
-		"file": {
-			req: FormatRequest{
-				Class:      storage.BdevClassFile,
-				DeviceList: []string{"foo"},
-			},
-			expRes: &FormatResponse{
-				DeviceResponses: DeviceFormatResponses{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
-					},
-				},
-			},
-		},
+		// TODO: these tests are to be moved to backend_test.go
+		//		"unknown device class": {
+		//			req: FormatRequest{
+		//				Class:      storage.BdevClass("whoops"),
+		//				DeviceList: []string{"foo"},
+		//			},
+		//			expRes: &FormatResponse{
+		//				DeviceResponses: DeviceFormatResponses{
+		//					"foo": &DeviceFormatResponse{
+		//						Error: FaultFormatUnknownClass("whoops"),
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"kdev": {
+		//			req: FormatRequest{
+		//				Class:      storage.BdevClassKdev,
+		//				DeviceList: []string{"foo"},
+		//			},
+		//			expRes: &FormatResponse{
+		//				DeviceResponses: DeviceFormatResponses{
+		//					"foo": &DeviceFormatResponse{
+		//						Formatted: true,
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"malloc": {
+		//			req: FormatRequest{
+		//				Class:      storage.BdevClassMalloc,
+		//				DeviceList: []string{"foo"},
+		//			},
+		//			expRes: &FormatResponse{
+		//				DeviceResponses: DeviceFormatResponses{
+		//					"foo": &DeviceFormatResponse{
+		//						Formatted: true,
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"file": {
+		//			req: FormatRequest{
+		//				Class:      storage.BdevClassFile,
+		//				DeviceList: []string{"foo"},
+		//			},
+		//			expRes: &FormatResponse{
+		//				DeviceResponses: DeviceFormatResponses{
+		//					"foo": &DeviceFormatResponse{
+		//						Formatted: true,
+		//					},
+		//				},
+		//			},
+		//		},
 		"NVMe single success": {
 			req: FormatRequest{
 				Class:      storage.BdevClassNvme,
@@ -329,12 +330,12 @@ func TestBdevFormat(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(common.CmpErrBool),
-			}
-			cmpOpts = append(cmpOpts, defCmpOpts()...)
-			if diff := cmp.Diff(tc.expRes, gotRes, cmpOpts...); diff != "" {
-				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
+			common.AssertEqual(t, len(tc.expRes.DeviceResponses),
+				len(gotRes.DeviceResponses), "number of device responses")
+			for addr, resp := range tc.expRes.DeviceResponses {
+
+				common.AssertEqual(t, resp, gotRes.DeviceResponses[addr],
+					"device response")
 			}
 		})
 	}

@@ -42,12 +42,13 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
 // Env is the interface that provides SPDK environment management.
 type Env interface {
-	InitSPDKEnv(EnvOptions) error
+	InitSPDKEnv(logging.Logger, EnvOptions) error
 }
 
 // EnvImpl is a simple SPDKEnv implementation.
@@ -62,10 +63,10 @@ type EnvOptions struct {
 	ShmID        int      // shared memory segment identifier for SPDK IPC
 	MemSize      int      // size in MiB to be allocated to SPDK proc
 	PciWhiteList []string // restrict SPDK device access
-	EnableVMD    bool     // VMD devices should be included
+	DisableVMD   bool     // VMD devices should not be included
 }
 
-func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr unsafe.Pointer, err error) {
+func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr *unsafe.Pointer, err error) {
 	opts = new(C.struct_spdk_env_opts)
 
 	C.spdk_env_opts_init(opts)
@@ -86,14 +87,14 @@ func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr unsafe.Po
 		if err != nil {
 			return
 		}
-		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(cWhiteListPtr)
+		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(*cWhiteListPtr)
 		opts.num_pci_addr = C.ulong(len(o.PciWhiteList))
 	}
 
 	return
 }
 
-func pciListToC(inAddrs []string) (unsafe.Pointer, error) {
+func pciListToC(inAddrs []string) (*unsafe.Pointer, error) {
 	var tmpAddr *C.struct_spdk_pci_addr
 	structSize := unsafe.Sizeof(*tmpAddr)
 
@@ -109,7 +110,7 @@ func pciListToC(inAddrs []string) (unsafe.Pointer, error) {
 		}
 	}
 
-	return outAddrs, nil
+	return &outAddrs, nil
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -117,11 +118,10 @@ func pciListToC(inAddrs []string) (unsafe.Pointer, error) {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *EnvImpl) InitSPDKEnv(opts EnvOptions) error {
+func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
+	log.Debugf("spdk init go opts: %+v", opts)
+
 	cOpts, toFree, err := opts.toC()
-	if toFree != nil {
-		defer C.free(unsafe.Pointer(toFree))
-	}
 	if err != nil {
 		return errors.Wrap(err, "convert spdk env opts to C")
 	}
@@ -130,7 +130,13 @@ func (e *EnvImpl) InitSPDKEnv(opts EnvOptions) error {
 		return Rc2err("spdk_env_init()", rc)
 	}
 
-	if !opts.EnableVMD {
+	log.Debugf("spdk init c opts: %+v", cOpts)
+
+	if toFree != nil {
+		defer C.free(unsafe.Pointer(*toFree))
+	}
+
+	if opts.DisableVMD {
 		return nil
 	}
 

@@ -27,6 +27,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -46,7 +47,7 @@ type (
 		controllers []spdk.Controller
 
 		initialized bool
-		vmdEnabled  bool
+		vmdDisabled bool
 	}
 
 	spdkBackend struct {
@@ -102,10 +103,8 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (err er
 	}
 	defer restore()
 
-	log.Debugf("spdk init opts: %v", spdkOpts)
-
 	// provide empty whitelist on init so all devices are discovered
-	if err := w.InitSPDKEnv(spdkOpts); err != nil {
+	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
@@ -135,7 +134,7 @@ func convertController(in spdk.Controller, out *storage.NvmeController) error {
 func newBackend(log logging.Logger, sr *spdkSetupScript) *spdkBackend {
 	return &spdkBackend{
 		log:     log,
-		binding: &spdkWrapper{},
+		binding: &spdkWrapper{Env: &spdk.EnvImpl{}, Nvme: &spdk.NvmeImpl{}},
 		script:  sr,
 	}
 }
@@ -144,14 +143,14 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
-// EnableVmd turns on VMD device awareness.
-func (b *spdkBackend) EnableVmd() {
-	b.binding.vmdEnabled = true
+// DisableVMD turns off VMD device awareness.
+func (b *spdkBackend) DisableVMD() {
+	b.binding.vmdDisabled = true
 }
 
-// IsVmdEnabled checks for VMD device awareness.
-func (b *spdkBackend) IsVmdEnabled() bool {
-	return b.binding.vmdEnabled
+// IsVMDDisabled checks for VMD device awareness.
+func (b *spdkBackend) IsVMDDisabled() bool {
+	return b.binding.vmdDisabled
 }
 
 func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error) {
@@ -172,7 +171,7 @@ func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
 	spdkOpts := spdk.EnvOptions{
-		EnableVMD: b.IsVmdEnabled(),
+		DisableVMD: b.IsVMDDisabled(),
 	}
 
 	if err := b.binding.init(b.log, spdkOpts); err != nil {
@@ -217,62 +216,54 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	return scs[0], nil
 }
 
-func (b *spdkBackend) formatNvmeBdev(dev string, req FormatRequest, resp *DeviceFormatResponse) error {
+func (b *spdkBackend) formatNvmeBdev(req DeviceFormatRequest, resp *DeviceFormatResponse) error {
+	msg := fmt.Sprintf("%s format on %q", req.Class, req.Device)
+	defer b.log.Debug(msg)
+
 	spdkOpts := spdk.EnvOptions{
 		ShmID:        req.ShmID,
 		MemSize:      req.MemSize,
-		PciWhiteList: []string{dev},
-		EnableVMD:    b.IsVmdEnabled(),
+		PciWhiteList: []string{req.Device},
+		DisableVMD:   b.IsVMDDisabled(),
 	}
 
-	b.log.Debugf("spdk init opts: %+v", spdkOpts)
-
 	// provide bdev as whitelist so only formatting device is bound
-	if err := b.binding.InitSPDKEnv(spdkOpts); err != nil {
+	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
-	if err := b.binding.Format(b.log, dev); err != nil {
-		b.log.Errorf("%s format failed on %s", req.Class, dev)
-		resp.Error = FaultFormatError(dev, err)
+	if err := b.binding.Format(b.log, req.Device); err != nil {
+		msg = fmt.Sprintf("%s failed (%s)", msg, err)
+		resp.Error = FaultFormatError(req.Device, err)
 
 		return nil
 	}
 
 	resp.Formatted = true
-	b.log.Debugf("%s format successful on %s", req.Class, dev)
+	msg = fmt.Sprintf("%s successful", msg)
 
 	return nil
 }
 
-func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
-	res := &FormatResponse{
-		DeviceResponses: make(DeviceFormatResponses),
+func (b *spdkBackend) Format(req DeviceFormatRequest) (*DeviceFormatResponse, error) {
+	resp := new(DeviceFormatResponse)
+
+	switch req.Class {
+	default:
+		resp.Error = FaultFormatUnknownClass(req.Class.String())
+	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
+		resp.Formatted = true
+		b.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, req.Device)
+	case storage.BdevClassNvme:
+		b.formatNvmeBdev(req, resp)
 	}
 
-	for _, dev := range req.DeviceList {
-		devResp := new(DeviceFormatResponse)
-
-		switch req.Class {
-		default:
-			devResp.Error = FaultFormatUnknownClass(req.Class.String())
-		case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
-			devResp.Formatted = true
-			b.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, dev)
-		case storage.BdevClassNvme:
-			b.log.Debugf("%s format starting %q", req.Class, dev)
-			b.formatNvmeBdev(dev, req, devResp)
-		}
-
-		res.DeviceResponses[dev] = devResp
-	}
-
-	return res, nil
+	return resp, nil
 }
 
-// detectVmd returns whether VMD devices have been found and a slice of VMD
+// detectVMD returns whether VMD devices have been found and a slice of VMD
 // PCI addresses if found.
-func detectVmd() ([]string, error) {
+func detectVMD() ([]string, error) {
 	// Check available VMD devices with command:
 	// "$lspci | grep  -i -E "201d | Volume Management Device"
 	lspciCmd := exec.Command("lspci")
@@ -321,7 +312,7 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return resp, nil
 	}
 
-	vmdDevs, err := detectVmd()
+	vmdDevs, err := detectVMD()
 	if err != nil {
 		return nil, errors.Wrap(err, "VMD could not be enabled")
 	}
@@ -336,13 +327,13 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	//
 	// TODO: ignore devices not in include list
 	vmdReq.PCIWhitelist = strings.Join(vmdDevs, " ")
-	b.log.Debugf("VMD enabled, unbinding %v", vmdDevs)
 
 	if err := b.script.Prepare(vmdReq); err != nil {
 		return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 	}
 
 	resp.VmdDetected = true
+	b.log.Debugf("volume management devices detected: %v", vmdDevs)
 
 	return resp, nil
 }

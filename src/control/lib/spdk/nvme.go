@@ -59,7 +59,7 @@ type Nvme interface {
 	// Cleanup NVMe object references
 	Cleanup()
 	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
-	CleanLockfiles(logging.Logger, ...string)
+	CleanLockfiles(logging.Logger, ...string) error
 }
 
 // NvmeImpl is an NVME interface implementation.
