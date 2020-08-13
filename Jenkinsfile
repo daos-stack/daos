@@ -125,17 +125,6 @@ String hw_distro_target() {
     return stage_info['target']
 }
 
-String quickbuild_deps() {
-    String target = hw_distro_target()
-    if (target == 'centos7') {
-        return env.QUCKBUILD_DEPS_EL7
-    }
-    if (target == 'leap15') {
-        return env.QUICKBUILD_DEPS_LEAP15
-    }
-    error 'quickbuild_deps not implemented for ' + target
-}
-
 String daos_repos() {
     String target = hw_distro_target()
     return daos_repos('target')
@@ -575,7 +564,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  quickbuild_deps() + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -623,7 +612,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  quickbuild_deps() + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -669,7 +658,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  quickbuild_deps() + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -714,7 +703,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  quickbuild_deps() + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -759,7 +748,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  quickbuild_deps() + '"'
+                                  env.QUICKBUILD_DEPS_EL7 + '"'
                         }
                     }
                     steps {
@@ -882,7 +871,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  quickbuild_deps() + '"' +
+                                  env.QUICKBUILD_DEPS_LEAP15 + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -1086,7 +1075,7 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  quickbuild_deps() + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -1279,7 +1268,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  quickbuild_deps() + '"' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
