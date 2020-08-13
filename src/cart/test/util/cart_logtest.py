@@ -156,9 +156,6 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'notify_ready': ('req.uri'),
                     'get_tgt_rank': ('tgts')}
 
-mismatch_alloc_seen = {}
-mismatch_free_seen = {}
-
 wf = None
 
 def show_line(line, sev, msg):
@@ -177,18 +174,6 @@ def show_line(line, sev, msg):
     if wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
-
-def add_line_count_to_dict(line, target):
-    """Add entry for a output line into a dict"""
-
-    # This is used for keeping tabs on how many allocations/frees there
-    # have been.
-    if line.function not in target:
-        target[line.function] = {}
-    var = line.get_field(3).strip("':")
-    if var not in target[line.function]:
-        target[line.function][var] = 0
-    target[line.function][var] += 1
 
 class hwm_counter():
     """Class to track integer values, with high-water mark"""
@@ -386,9 +371,6 @@ class LogTest():
                                 show_line(line, 'LOW',
                                           'mask mismatch in alloc/free')
                                 err_count += 1
-                            add_line_count_to_dict(line, mismatch_free_seen)
-                            add_line_count_to_dict(regions[pointer],
-                                                   mismatch_alloc_seen)
                         if line.level != regions[pointer].level:
                             show_line(regions[pointer], 'LOW',
                                       'level mismatch in alloc/free')
@@ -439,15 +421,6 @@ class LogTest():
                                                                   p_trace))
 
         print("Memsize: {}".format(memsize))
-
-        if False:
-            pp = pprint.PrettyPrinter()
-            if mismatch_alloc_seen:
-                print('Mismatched allocations were allocated here:')
-                print(pp.pformat(mismatch_alloc_seen))
-            if mismatch_free_seen:
-                print('Mismatched allocations were freed here:')
-                print(pp.pformat(mismatch_free_seen))
 
         # Special case the fuse arg values as these are allocated by IOF
         # but freed by fuse itself.
