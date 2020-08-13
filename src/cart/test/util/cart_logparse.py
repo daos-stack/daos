@@ -101,7 +101,7 @@ class LogLine():
     # Match a truncated uuid from DF_UUID
     re_uuid = re.compile(r"[0-9a-f]{8}(:?)")
     # Match a truncated uuid[rank] from DF_DB
-    re_uuid_rank = re.compile(r"[0-9,a-f]{8}\[\d+\]\$")
+    re_uuid_rank = re.compile(r"[0-9,a-f]{8}\[\d+\](:?)")
 
     def __init__(self, line):
         fields = line.split()
@@ -215,7 +215,7 @@ class LogLine():
             if not field:
                 r = self.re_uuid_rank.fullmatch(entry)
                 if r:
-                    field = 'uuid/rank'
+                    field = 'uuid/rank{}'.format(r.group(1))
             if field:
                 fields.append(field)
             else:
