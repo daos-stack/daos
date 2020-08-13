@@ -235,7 +235,7 @@ class LogTest():
 
         # Records on number, type and frequency of logging.
         self.log_locs = Counter()
-        self.log_mask = Counter()
+        self.log_fac = Counter()
         self.log_levels = Counter()
         self.log_count = 0
 
@@ -247,7 +247,7 @@ class LogTest():
         self.log_count += 1
         loc = '{}:{}'.format(line.filename, line.lineno)
         self.log_locs[loc] += 1
-        self.log_mask[line.mask] += 1
+        self.log_fac[line.fac] += 1
         self.log_levels[line.level] += 1
 
     def show_common_logs(self):
@@ -260,11 +260,11 @@ class LogTest():
             print('Logging used {} times at {} ({:.1f}%)'.format(count,
                                                                  loc,
                                                                  100*count/self.log_count))
-        print('Most common masks')
-        for (mask, count) in self.log_mask.most_common(10):
+        print('Most common facilities')
+        for (fac, count) in self.log_fac.most_common(10):
             if count < 10:
                 break
-            print('{}: {} ({:.1f}%)'.format(mask, count,
+            print('{}: {} ({:.1f}%)'.format(fac, count,
                                             100*count/self.log_count))
 
         print('Most common levels')
@@ -412,7 +412,7 @@ class LogTest():
                     if pointer in active_desc:
                         del active_desc[pointer]
                     if pointer in regions:
-                        if line.mask != regions[pointer].mask:
+                        if line.fac != regions[pointer].fac:
                             fvar = line.get_field(3).strip("'")
                             afunc = regions[pointer].function
                             avar = regions[pointer].get_field(3).strip("':")
@@ -423,9 +423,9 @@ class LogTest():
                                 pass
                             else:
                                 show_line(regions[pointer], 'LOW',
-                                          'mask mismatch in alloc/free')
+                                          'facility mismatch in alloc/free')
                                 show_line(line, 'LOW',
-                                          'mask mismatch in alloc/free')
+                                          'facility mismatch in alloc/free')
                                 err_count += 1
                             add_line_count_to_dict(line, mismatch_free_seen)
                             add_line_count_to_dict(regions[pointer],

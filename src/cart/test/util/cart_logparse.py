@@ -105,7 +105,7 @@ class LogLine():
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
-        self.mask = fields[3]
+        self.fac = fields[3]
         try:
             self.level = LOG_LEVELS[fields[4]]
         except KeyError:
@@ -122,7 +122,7 @@ class LogLine():
 
         if self.trace:
             if self.level == 7 or self.level == 3:
-                if self.mask == 'rpc' or self.mask == 'hg':
+                if self.fac == 'rpc' or self.fac == 'hg':
                     del self._fields[2:5]
 
         if self.trace:
@@ -418,7 +418,7 @@ class LogIter():
         self.bz2 = False
 
         if fname.endswith('.bz2'):
-            # Allow diret operation of bz2 files.  Supports multiple pids
+            # Allow direct operation on bz2 files.  Supports multiple pids
             # per file as normal, however does not try and seek to file
             # positions, rather walks the entire file for each pid.
             self._fd = bz2.open(fname, 'rt')
