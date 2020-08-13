@@ -98,7 +98,8 @@ struct crt_hg_pool {
 
 /** HG context */
 struct crt_hg_context {
-	bool			 chc_shared_na; /* flag for shared na_class */
+	/* Flag indicating whether hg class is shared; true for SEP mode */
+	bool			 chc_shared_hg_class;
 	hg_class_t		*chc_hgcla; /* HG class */
 	hg_context_t		*chc_hgctx; /* HG context */
 	hg_class_t		*chc_bulkcla; /* bulk class */

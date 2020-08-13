@@ -428,7 +428,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		D_GOTO(out, rc);
 
 	init_info.na_init_info.progress_mode = 0;
-	if (crt_gdata.cg_share_na == false)
+	if (crt_gdata.cg_sep_mode == false)
 		/* one context per NA class */
 		init_info.na_init_info.max_contexts = 1;
 	else
@@ -530,9 +530,9 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	D_ASSERT(hg_ctx != NULL);
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
-	D_DEBUG(DB_NET, "crt_gdata.cg_share_na %d, crt_is_service() %d\n",
-			crt_gdata.cg_share_na, crt_is_service());
-	if (idx == 0 || crt_gdata.cg_share_na == true) {
+	D_DEBUG(DB_NET, "crt_gdata.cg_sep_mode %d, crt_is_service() %d\n",
+			crt_gdata.cg_sep_mode, crt_is_service());
+	if (idx == 0 || crt_gdata.cg_sep_mode == true) {
 		hg_context = HG_Context_create_id(crt_gdata.cg_hg->chg_hgcla,
 						  idx);
 		if (hg_context == NULL) {
@@ -551,7 +551,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 
 		hg_ctx->chc_hgcla = crt_gdata.cg_hg->chg_hgcla;
 		D_DEBUG(DB_NET, "hg_ctx->chc_hgcla %p\n", hg_ctx->chc_hgcla);
-		hg_ctx->chc_shared_na = true;
+		hg_ctx->chc_shared_hg_class = true;
 	} else {
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 		na_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
@@ -608,7 +608,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		}
 
 		hg_ctx->chc_hgcla = hg_class;
-		hg_ctx->chc_shared_na = false;
+		hg_ctx->chc_shared_hg_class = false;
 	}
 
 	hg_ctx->chc_hgctx = hg_context;
@@ -650,7 +650,7 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	if (hg_ctx->chc_shared_na == true)
+	if (hg_ctx->chc_shared_hg_class == true)
 		goto out;
 
 	/* the hg_context destroyed, ignore below errors with warn msg */
@@ -877,7 +877,8 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			rc = -DER_HG;
 		}
 	}
-	if (crt_gdata.cg_share_na == true) {
+
+	if (crt_gdata.cg_sep_mode == true) {
 		hg_ret = HG_Set_target_id(rpc_priv->crp_hg_hdl,
 					  rpc_priv->crp_pub.cr_ep.ep_tag);
 		if (hg_ret != HG_SUCCESS) {

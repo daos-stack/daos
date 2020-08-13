@@ -783,7 +783,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_gdata.cg_share_na == true)
+	if (crt_gdata.cg_sep_mode == true)
 		tag = 0;
 
 	grp_priv = passed_grp_priv;
@@ -852,7 +852,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	D_ASSERT(uri != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
-	if (crt_gdata.cg_share_na == true)
+	if (crt_gdata.cg_sep_mode == true)
 		tag = 0;
 
 	default_grp_priv = grp_priv;
