@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
 type ErrNotReplica struct {
@@ -40,6 +41,11 @@ func (err *ErrNotReplica) Error() string {
 		strings.Join(err.Replicas, ","))
 }
 
+func IsNotReplica(err error) bool {
+	_, ok := errors.Cause(err).(*ErrNotReplica)
+	return ok
+}
+
 type ErrNotLeader struct {
 	LeaderHint string
 	Replicas   []string
@@ -48,6 +54,11 @@ type ErrNotLeader struct {
 func (err *ErrNotLeader) Error() string {
 	return fmt.Sprintf("not the system db leader (try %s or one of %s)",
 		err.LeaderHint, strings.Join(err.Replicas, ","))
+}
+
+func IsNotLeader(err error) bool {
+	_, ok := errors.Cause(err).(*ErrNotLeader)
+	return ok
 }
 
 type ErrMemberExists struct {
