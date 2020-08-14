@@ -49,7 +49,7 @@ ior:
             - "-v -W -w -r -R"
             - "-v -W -w -r -R -F"
           ior_api:
-            - DAOS
+            - DFS
             - MPIIO
             - POSIX
           transfer_block_size:

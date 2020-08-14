@@ -48,9 +48,10 @@ pool:
     scm_size: 53687091200 #50GB
     control_method: dmg
 container:
+    type: POSIX
     control_method: daos
 ior:
-  api: "DAOS"
+  api: "DFS"
   client_processes:
     np: 16
   daos_destroy: False

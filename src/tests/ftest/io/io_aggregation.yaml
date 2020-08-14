@@ -32,7 +32,7 @@ container:
   type: POSIX
   control_method: daos
 ior:
-  api: "DAOS"
+  api: "DFS"
   client_processes:
     np: 1
   daos_destroy: False

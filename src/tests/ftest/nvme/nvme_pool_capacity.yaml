@@ -21,6 +21,9 @@ pool:
     name: daos_server
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 ior:
     no_parallel_job: 10
     clientslots:
@@ -32,7 +35,7 @@ ior:
           ior_flags:
             - "-w -r -R -k -G 1"
           ior_api:
-            - DAOS
+            - DFS
           obj_class:
             - "SX"
     ior_test_sequence:

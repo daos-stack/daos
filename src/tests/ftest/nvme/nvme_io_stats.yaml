@@ -20,8 +20,11 @@ pool:
     nvme_size: 107374182400 #100G
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 ior:
-  api: "DAOS"
+  api: "DFS"
   client_processes:
     np: 16
   daos_destroy: False

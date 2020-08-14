@@ -64,7 +64,7 @@ ior:
       F: "-v -W -w -r -R -F"
   ior_api: !mux
     daos:
-      api: DAOS
+      api: DFS
     mpiio:
       api: MPIIO
     posix:

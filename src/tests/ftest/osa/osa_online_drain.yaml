@@ -25,8 +25,9 @@ pool:
     svcn: 4
     control_method: dmg
 container:
-  properties:
-    enable_checksum: True
+    type: POSIX
+    control_method: daos
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 ior:
     no_parallel_job: 5
     clientslots:
@@ -38,7 +39,7 @@ ior:
       ior_flags:
         - "-w -r -R -k -G 1"
       ior_api:
-        - DAOS
+        - DFS
       obj_class:
         - "RP_2GX"
     ior_test_sequence:

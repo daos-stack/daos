@@ -37,7 +37,7 @@ ior:
     daos_destroy: False
     iorflags:
         flags: "-v -w -W -r -R -k"
-    api: DAOS
+    api: DFS
     transfer_size: '1M'
     block_size: '8G'
     objectclass: !mux

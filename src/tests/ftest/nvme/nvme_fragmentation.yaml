@@ -39,6 +39,9 @@ pool:
     nvme_size: 700000000000
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 ior:
     no_parallel_job: 10
     clientslots:
@@ -50,7 +53,7 @@ ior:
           ior_flags:
             - "-w -r -R -k -G 1"
           ior_api:
-            - DAOS
+            - DFS
           transfer_block_size:
             - [2048, 128M]
             - [256K, 128M]

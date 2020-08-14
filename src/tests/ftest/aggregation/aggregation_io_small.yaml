@@ -37,7 +37,7 @@ ior:
     daos_destroy: False
     iorflags:
         flags: "-v -w -W -k"
-    api: DAOS
+    api: DFS
     transfer_size: '1K'
     block_size: '256M'
     objectclass:
