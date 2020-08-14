@@ -46,7 +46,7 @@ from server_utils_params import \
 from dmg_utils_params import \
     DmgYamlParameters, DmgTransportCredentials
 from dmg_utils import DmgCommand
-from daos_command import DaosCommand
+from daos_utils import DaosCommand
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
