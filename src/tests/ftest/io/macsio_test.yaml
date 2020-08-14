@@ -34,9 +34,7 @@ macsio:
 mpi: !mux
   mpich:
     mpi_type: "mpich"
-    test_repo:
-      macsio: /usr/lib64/mpich/bin
+    macsio_path: /usr/lib64/mpich/bin
   openmpi:
     mpi_type: "openmpi"
-    test_repo:
-      macsio: /usr/lib64/openmpi/bin
+    macsio_path: /usr/lib64/openmpi/bin

@@ -32,13 +32,13 @@ class MacsioTest(MacsioTestBase):
     :avocado: recursive
     """
 
-    def setup(self):
+    def setUp(self):
         """Set up each test case."""
         # Cancel any test using MPICH w/ MACSio due to DAOS-5265
         mpi_type = self.params.get("mpi_type")
         if mpi_type == "mpich":
             self.cancelForTicket("DAOS-5265")
-        super(MacsioTest, self).setup()
+        super(MacsioTest, self).setUp()
 
     def test_macsio(self):
         """JIRA ID: DAOS-3658.

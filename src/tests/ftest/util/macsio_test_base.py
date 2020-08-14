@@ -56,8 +56,8 @@ class MacsioTestBase(TestWithServers):
 
         """
         # Create the macsio command
-        test_repo = self.params.get("macsio", "/run/test_repo/*", "")
-        macsio = MacsioCommand(test_repo)
+        path = self.params.get("macsio_path", default="")
+        macsio = MacsioCommand(path)
         macsio.get_params(self)
 
         # Create all the macsio output files in the same directory as the other
