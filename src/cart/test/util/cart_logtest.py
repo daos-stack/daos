@@ -368,8 +368,8 @@ class LogTest():
         for pid in self._li.get_pids():
 
             client_pids = OrderedDict()
-
             for line in self._li.new_iter(pid=pid):
+                self.save_log_line(line)
                 if line.filename != 'src/client/dfuse/ops/read.c':
                     continue
                 if line.get_field(3) != 'requested':
