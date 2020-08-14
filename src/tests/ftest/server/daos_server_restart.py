@@ -105,7 +105,6 @@ class DaosServerTest(TestWithServers):
             uuid = result['uuid']
             svc = result['svc']
             daos_cmd = DaosCommand(self.bin)
-            daos_cmd.exit_status_exception = False
             for _ in range(container_per_pool):
                 result = daos_cmd.container_create(pool=uuid, svc=svc)
                 self.log.info("container create status: %s", result)
