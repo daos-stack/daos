@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,9 +43,6 @@
 #include <daos_srv/vos.h>
 #include <daos_test.h>
 #include "dts_common.h"
-
-/* path to dmg config file */
-const char *dmg_config_file;
 
 enum {
 	DTS_INIT_NONE,		/* nothing has been initialized */
@@ -230,10 +227,10 @@ pool_init(struct dts_context *tsc)
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode and rank zero */
 		d_rank_list_t	*svc = &tsc->tsc_svc;
 
-		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(),
-				     NULL, NULL,
-				     tsc->tsc_scm_size, tsc->tsc_nvme_size,
-				     svc, tsc->tsc_pool_uuid);
+		rc = daos_pool_create(0731, geteuid(), getegid(),
+				      NULL, NULL, "pmem",
+				      tsc->tsc_scm_size, tsc->tsc_nvme_size,
+				      NULL, svc, tsc->tsc_pool_uuid, NULL);
 		if (rc)
 			goto bcast;
 
@@ -272,8 +269,8 @@ pool_fini(struct dts_context *tsc)
 		daos_pool_disconnect(tsc->tsc_poh, NULL);
 		MPI_Barrier(MPI_COMM_WORLD);
 		if (tsc->tsc_mpi_rank == 0) {
-			rc = dmg_pool_destroy(dmg_config_file,
-					      tsc->tsc_pool_uuid, NULL, true);
+			rc = daos_pool_destroy(tsc->tsc_pool_uuid, NULL, true,
+					       NULL);
 			D_ASSERTF(rc == 0 || rc == -DER_NONEXIST ||
 				  rc == -DER_TIMEDOUT, "rc="DF_RC"\n",
 				  DP_RC(rc));

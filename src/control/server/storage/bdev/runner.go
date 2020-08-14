@@ -39,6 +39,7 @@ const (
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
 	pciWhiteListEnv    = "_PCI_WHITELIST"
+	pciBlackListEnv    = "_PCI_BLACKLIST"
 	driverOverrideEnv  = "_DRIVER_OVERRIDE"
 	vfioDisabledDriver = "uio_pci_generic"
 )
@@ -131,8 +132,16 @@ func (s *spdkSetupScript) Prepare(req PrepareRequest) error {
 		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
 		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
 	}
+
+	if req.PCIWhitelist != "" && req.PCIBlacklist != "" {
+		return errors.New("bdev_include and bdev_exclude can't be used together\n")
+	}
+
 	if req.PCIWhitelist != "" {
 		env = append(env, fmt.Sprintf("%s=%s", pciWhiteListEnv, req.PCIWhitelist))
+	}
+	if req.PCIBlacklist != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciBlackListEnv, req.PCIBlacklist))
 	}
 	if req.DisableVFIO {
 		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))

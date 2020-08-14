@@ -49,6 +49,7 @@ type (
 		pbin.ForwardableRequest
 		HugePageCount int
 		PCIWhitelist  string
+		PCIBlacklist  string
 		TargetUser    string
 		ResetOnly     bool
 		DisableVFIO   bool
