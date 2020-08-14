@@ -60,6 +60,7 @@ type (
 // suppressOutput is a horrible, horrible hack necessitated by the fact that
 // SPDK blathers to stdout, causing console spam and messing with our secure
 // communications channel between the server and privileged helper.
+
 func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	realStdout, dErr := syscall.Dup(syscall.Stdout)
 	if dErr != nil {
@@ -99,18 +100,18 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (err er
 
 	restore, err := w.suppressOutput()
 	if err != nil {
-		return errors.Wrap(err, "failed to suppress SPDK output")
+		return errors.Wrap(err, "failed to suppress spdk output")
 	}
 	defer restore()
 
 	// provide empty whitelist on init so all devices are discovered
 	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
-		return errors.Wrap(err, "failed to initialize SPDK")
+		return errors.Wrap(err, "failed to init spdk")
 	}
 
 	cs, err := w.Discover(log)
 	if err != nil {
-		return errors.Wrap(err, "failed to discover NVMe")
+		return errors.Wrap(err, "failed to discover nvme")
 	}
 	w.controllers = cs
 
@@ -159,7 +160,8 @@ func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error
 	for _, bc := range bcs {
 		sc := &storage.NvmeController{}
 		if err := convertController(bc, sc); err != nil {
-			return nil, errors.Wrapf(err, "failed to convert spdk Controller %+v", bc)
+			return nil, errors.Wrapf(err,
+				"failed to convert spdk controller %+v", bc)
 		}
 
 		scs = append(scs, sc)

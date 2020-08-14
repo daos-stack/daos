@@ -27,7 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// MockEnvCfg controls the behaviour of the MockEnvImpl.
+// MockEnvCfg controls the behavior of the MockEnvImpl.
 type MockEnvCfg struct {
 	InitErr error
 }
@@ -45,7 +45,7 @@ func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
 	return e.Cfg.InitErr
 }
 
-// MockNvmeCfg controls the behaviour of the MockNvmeImpl.
+// MockNvmeCfg controls the behavior of the MockNvmeImpl.
 type MockNvmeCfg struct {
 	DiscoverCtrlrs []Controller
 	DiscoverErr    error

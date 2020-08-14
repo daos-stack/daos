@@ -37,7 +37,7 @@ enum lba0_write_result {
 struct lba0_data {
 	struct ns_entry		*ns_entry;
 	char			*buf;
-	enum lba0_write_result	 was_written;
+	enum lba0_write_result	 write_result;
 };
 
 static void
@@ -90,7 +90,7 @@ read_complete(void *arg, const struct spdk_nvme_cpl *completion)
 	spdk_free(data->buf);
 
 	if (spdk_nvme_cpl_is_success(completion)) {
-		data->was_written = LBA0_WRITE_SUCCESS;
+		data->write_result = LBA0_WRITE_SUCCESS;
 		return;
 	}
 
@@ -99,7 +99,7 @@ read_complete(void *arg, const struct spdk_nvme_cpl *completion)
 	fprintf(stderr, "I/O error status: %s\n",
 		spdk_nvme_cpl_get_status_string(&completion->status));
 	fprintf(stderr, "Read I/O failed, aborting run\n");
-	data->was_written = LBA0_WRITE_FAIL;
+	data->write_result = LBA0_WRITE_FAIL;
 }
 
 static void
@@ -115,7 +115,7 @@ write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 					   (void *)data, 0);
 		if (rc != 0) {
 			fprintf(stderr, "starting read I/O failed (%d)\n", rc);
-			data->was_written = LBA0_WRITE_FAIL;
+			data->write_result = LBA0_WRITE_FAIL;
 		}
 		return;
 	}
@@ -125,7 +125,7 @@ write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 	fprintf(stderr, "I/O error status: %s\n",
 		spdk_nvme_cpl_get_status_string(&completion->status));
 	fprintf(stderr, "Read I/O failed, aborting run\n");
-	data->was_written = LBA0_WRITE_FAIL;
+	data->write_result = LBA0_WRITE_FAIL;
 
 	spdk_free(data->buf);
 }
@@ -137,7 +137,8 @@ wipe(char *ctrlr_pci_addr)
 	struct ns_entry		*nentry;
 	struct ret_t		*ret;
 	struct lba0_data	 data;
-	int			 rc;
+	int			 rc, len, existing;
+	char			 buf[BUFLEN];
 
 	ret = init_ret(0);
 
@@ -169,7 +170,7 @@ wipe(char *ctrlr_pci_addr)
 			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 			return ret;
 		}
-		data.was_written = LBA0_WRITE_SUCCESS;
+		data.write_result = LBA0_WRITE_PENDING;
 		data.ns_entry = nentry;
 
 		rc = spdk_nvme_ns_cmd_write(nentry->ns, nentry->qpair,
@@ -185,7 +186,7 @@ wipe(char *ctrlr_pci_addr)
 			return ret;
 		}
 
-		while (!data.was_written) {
+		while (data.write_result == LBA0_WRITE_PENDING) {
 			rc = spdk_nvme_qpair_process_completions(nentry->qpair,
 								 0);
 			if (rc < 0) {
@@ -195,7 +196,7 @@ wipe(char *ctrlr_pci_addr)
 			}
 		}
 
-		if (data.was_written != LBA0_WRITE_SUCCESS) {
+		if (data.write_result != LBA0_WRITE_SUCCESS) {
 			snprintf(ret->info, sizeof(ret->info),
 				 "spdk_nvme_ns_cmd_write() callback\n");
 			ret->rc = -1;
@@ -203,9 +204,16 @@ wipe(char *ctrlr_pci_addr)
 			return ret;
 		}
 
-		snprintf(ret->info + sizeof(ret->info),
-			 sizeof(BUFLEN) - strnlen(ret->info, BUFLEN), "%d ",
-			 spdk_nvme_ns_get_id(nentry->ns));
+		snprintf(buf, BUFLEN, "%d ", spdk_nvme_ns_get_id(nentry->ns));
+		len = strnlen(buf, BUFLEN);
+		existing = strnlen(ret->info, BUFLEN);
+		fprintf(stderr, "buflen: %d, existing: %d\n", len, existing);
+		if ((existing + len) < BUFLEN) {
+		//if ((strnlen(ret->info, BUFLEN) + buflen) < BUFLEN) {
+			strncat(ret->info, buf, BUFLEN - existing - 1);
+			//sprintf("%d ", spdk_nvme_ns_get_id(nentry->ns);
+		} else
+			fprintf(stderr, "buffer length exceeded (%d)\n", BUFLEN);
 
 		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 		nentry = nentry->next;

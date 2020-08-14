@@ -125,16 +125,15 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
 	if err != nil {
 		return errors.Wrap(err, "convert spdk env opts to C")
 	}
+	if toFree != nil {
+		defer C.free(unsafe.Pointer(*toFree))
+	}
 
 	if rc := C.spdk_env_init(cOpts); rc != 0 {
 		return Rc2err("spdk_env_init()", rc)
 	}
 
 	log.Debugf("spdk init c opts: %+v", cOpts)
-
-	if toFree != nil {
-		defer C.free(unsafe.Pointer(*toFree))
-	}
 
 	if opts.DisableVMD {
 		return nil
