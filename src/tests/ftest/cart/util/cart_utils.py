@@ -478,6 +478,11 @@ class CartUtils():
 
         pattern = 'cart.log*'
 
+        # DEBUGGING
+        import os
+        print("\ndump_cart_logs:483: ENV : %s\n" % os.environ)
+        print("\ndump_cart_logs:483: os.getcwd() : %s\n" % os.getcwd())
+
         # Find the cart.log in one of these directories (which might differ between
         # different testing environments)
         directories = [
@@ -489,8 +494,11 @@ class CartUtils():
         ]
 
         for directory in directories:
+          print("Line 492: for directory ", directory)
           for root, dirs, files in os.walk(directory):
+              print("Line 492: for root: ", root)
               for basename in files:
+                  print("Line 492: for basename: ", basename)
                   if fnmatch.fnmatch(basename, pattern):
                       filename = os.path.join(root, basename)
                       print('Found cart.log file: ', filename)
