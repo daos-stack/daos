@@ -37,6 +37,7 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 set -ex -o pipefail
+set +x
 
 # shellcheck disable=SC1091
 if [ -f .localenv ]; then
