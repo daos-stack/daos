@@ -58,6 +58,7 @@ class RootContainerTest(TestWithServers):
         # Start the servers and agents
         super(RootContainerTest, self).setUp()
         self.dfuse = None
+        self.dfuse_hosts = None
 
     def tearDown(self):
         """Tear down each test case."""
@@ -105,7 +106,7 @@ class RootContainerTest(TestWithServers):
         """
 
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
+        self.dfuse = Dfuse(self.dfuse_hosts, self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -143,11 +144,12 @@ class RootContainerTest(TestWithServers):
         # Create a pool and start dfuse.
         pool = self._create_pool()
         container = self._create_cont(pool)
+        self.dfuse_hosts = self.agent_managers[0].hosts
         # mount fuse
         self._start_dfuse(pool, container)
         # Create another container and add it as sub container under
         # root container
-        sub_container = self.dfuse.mount_dir.value + "/cont0"
+        sub_container = str(self.dfuse.mount_dir.value + "/cont0")
         container = self._create_cont(pool, path=sub_container)
         #Insert files into root container
         self.insert_files_and_verify("")
@@ -166,9 +168,9 @@ class RootContainerTest(TestWithServers):
         for i in range(pool_count):
             pool = self._create_pool()
             for j in range(self.cont_count):
-                cont_name = "/cont{}{}".format(i, j)
-                sub_cont = self.dfuse.mount_dir.value + cont_name
-                self._create_cont(pool, path=sub_cont)
+                cont_name = str("/cont_{}{}".format(i, j))
+                sub_cont = str(self.dfuse.mount_dir.value + cont_name)
+                self._create_cont(pool=pool, path=sub_cont)
                 self.insert_files_and_verify(cont_name)
 
     def verify_create_delete_containers(self, pool, cont_count):
@@ -184,7 +186,7 @@ class RootContainerTest(TestWithServers):
         pool_space_before = pool.get_pool_free_space(self.device)
         self.log.info("Pool space before = %s", pool_space_before)
         for i in range(cont_count):
-            sub_cont = self.dfuse.mount_dir.value + "/cont{}".format(i+1)
+            sub_cont = str(self.dfuse.mount_dir.value + "/cont{}".format(i+1))
             self._create_cont(pool, path=sub_cont)
             self.insert_files_and_verify("cont{}".format(i+1))
         expected = pool_space_before - \
@@ -222,7 +224,7 @@ class RootContainerTest(TestWithServers):
         """
         cont_dir = self.dfuse.mount_dir.value
         if container_name:
-            cont_dir += "/" + container_name
+            cont_dir = str("{}/{}".format(cont_dir, container_name))
 
         cmds = []
         ls_cmds = []
@@ -252,7 +254,7 @@ class RootContainerTest(TestWithServers):
         try:
             # execute bash cmds
             ret = pcmd(
-                self.hostlist_clients, cmd, verbose=True, timeout=30)
+                self.dfuse_hosts, cmd, verbose=True, timeout=30)
             if 0 not in ret:
                 error_hosts = NodeSet(
                     ",".join(
