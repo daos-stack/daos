@@ -51,7 +51,7 @@ type Env interface {
 	InitSPDKEnv(logging.Logger, EnvOptions) error
 }
 
-// EnvImpl is a simple SPDKEnv implementation.
+// EnvImpl is a an implementation of the Env interface.
 type EnvImpl struct{}
 
 // Rc2err returns error from label and rc.

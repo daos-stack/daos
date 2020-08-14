@@ -62,7 +62,7 @@ type Nvme interface {
 	CleanLockfiles(logging.Logger, ...string) error
 }
 
-// NvmeImpl is an NVME interface implementation.
+// NvmeImpl is an implementation of the Nvme interface.
 type NvmeImpl struct{}
 
 // Controller struct mirrors C.struct_ctrlr_t and

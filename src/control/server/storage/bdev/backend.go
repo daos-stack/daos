@@ -229,7 +229,7 @@ func (b *spdkBackend) formatNvmeBdev(req DeviceFormatRequest, resp *DeviceFormat
 
 	// provide bdev as whitelist so only formatting device is bound
 	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
-		return errors.Wrap(err, "failed to initialize SPDK")
+		return errors.Wrap(err, "failed to init spdk")
 	}
 
 	if err := b.binding.Format(b.log, req.Device); err != nil {
@@ -246,16 +246,22 @@ func (b *spdkBackend) formatNvmeBdev(req DeviceFormatRequest, resp *DeviceFormat
 }
 
 func (b *spdkBackend) Format(req DeviceFormatRequest) (*DeviceFormatResponse, error) {
+	if req.Device == "" {
+		return nil, errors.New("empty pci address in device format request")
+	}
+
 	resp := new(DeviceFormatResponse)
 
 	switch req.Class {
-	default:
-		resp.Error = FaultFormatUnknownClass(req.Class.String())
 	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
 		resp.Formatted = true
 		b.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, req.Device)
 	case storage.BdevClassNvme:
-		b.formatNvmeBdev(req, resp)
+		if err := b.formatNvmeBdev(req, resp); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, FaultFormatUnknownClass(req.Class.String())
 	}
 
 	return resp, nil

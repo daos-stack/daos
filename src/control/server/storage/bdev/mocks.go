@@ -25,7 +25,6 @@ package bdev
 
 import (
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/pkg/errors"
 )
 
 type (
@@ -35,6 +34,7 @@ type (
 		PrepareResp     *PrepareResponse
 		PrepareErr      error
 		DevFormatRes    *DeviceFormatResponse
+		DevFormatErr    error
 		FormatFailIdx   int
 		FormatErr       error
 		ScanRes         *ScanResponse
@@ -69,11 +69,15 @@ func (mb *MockBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
 }
 
 func (mb *MockBackend) Format(req DeviceFormatRequest) (*DeviceFormatResponse, error) {
-	if mb.cfg.DevFormatRes != nil || mb.cfg.FormatErr != nil {
-		if mb.cfg.FormatErr != nil && mb.cfg.FormatFailIdx == mb.cfg.formatIdx {
+	if mb.cfg.FormatErr != nil {
+		return nil, mb.cfg.FormatErr
+	}
+
+	if mb.cfg.DevFormatRes != nil || mb.cfg.DevFormatErr != nil {
+		if mb.cfg.DevFormatErr != nil && mb.cfg.FormatFailIdx == mb.cfg.formatIdx {
 			mb.cfg.formatIdx++
 			return &DeviceFormatResponse{
-				Error: FaultFormatError(req.Device, errors.New("format failed")),
+				Error: FaultFormatError(req.Device, mb.cfg.DevFormatErr),
 			}, nil
 		}
 		mb.cfg.formatIdx++

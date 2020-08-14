@@ -28,9 +28,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -151,6 +153,111 @@ func TestBdevBackendGetController(t *testing.T) {
 			if diff := cmp.Diff(tc.expSc, gotSc, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.MockNvmeCfg) *spdkBackend {
+	return &spdkBackend{
+		log: log,
+		binding: &spdkWrapper{
+			Env:  &spdk.MockEnvImpl{Cfg: mec},
+			Nvme: &spdk.MockNvmeImpl{Cfg: mnc},
+		},
+	}
+}
+
+func TestBdevBackendFormat(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req     DeviceFormatRequest
+		mec     spdk.MockEnvCfg
+		mnc     spdk.MockNvmeCfg
+		expResp *DeviceFormatResponse
+		expErr  error
+	}{
+		"empty input": {
+			req:    DeviceFormatRequest{},
+			expErr: errors.New("empty pci address in device format request"),
+		},
+		"unknown device class": {
+			req: DeviceFormatRequest{
+				Class:  storage.BdevClass("whoops"),
+				Device: "foo",
+			},
+			expErr: FaultFormatUnknownClass("whoops"),
+		},
+		"binding format fail": {
+			mnc: spdk.MockNvmeCfg{
+				FormatErr: errors.New("spdk says no"),
+			},
+			req: DeviceFormatRequest{
+				Class:  storage.BdevClassNvme,
+				Device: "foo",
+			},
+			expResp: &DeviceFormatResponse{
+				Error: FaultFormatError("foo", errors.New("spdk says no")),
+			},
+		},
+		"binding init fail": {
+			mec: spdk.MockEnvCfg{
+				InitErr: errors.New("spdk init says no"),
+			},
+			req: DeviceFormatRequest{
+				Class:  storage.BdevClassNvme,
+				Device: "foo",
+			},
+			expErr: errors.New("failed to init spdk: spdk init says no"),
+		},
+		"binding format success": {
+			req: DeviceFormatRequest{
+				Class:  storage.BdevClassNvme,
+				Device: "foo",
+			},
+			expResp: &DeviceFormatResponse{
+				Formatted: true,
+			},
+		},
+		"kdev": {
+			req: DeviceFormatRequest{
+				Class:  storage.BdevClassKdev,
+				Device: "foo",
+			},
+			expResp: &DeviceFormatResponse{
+				Formatted: true,
+			},
+		},
+		"file": {
+			req: DeviceFormatRequest{
+				Class:  storage.BdevClassFile,
+				Device: "foo",
+			},
+			expResp: &DeviceFormatResponse{
+				Formatted: true,
+			},
+		},
+		"malloc": {
+			req: DeviceFormatRequest{
+				Class:  storage.BdevClassMalloc,
+				Device: "foo",
+			},
+			expResp: &DeviceFormatResponse{
+				Formatted: true,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+
+			gotResp, gotErr := b.Format(tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			common.AssertEqual(t, tc.expResp, gotResp, "device response")
 		})
 	}
 }

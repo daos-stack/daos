@@ -528,6 +528,22 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 				},
 			},
 		},
+		"BdevFormat device failure": {
+			req: &pbin.Request{
+				Method:  "BdevFormat",
+				Payload: bdevFormatReqPayload,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				DevFormatErr: bdev.FaultUnknown,
+			},
+			expPayload: &bdev.FormatResponse{
+				DeviceResponses: bdev.DeviceFormatResponses{
+					"foo": &bdev.DeviceFormatResponse{
+						Error: bdev.FaultFormatError("foo", bdev.FaultUnknown),
+					},
+				},
+			},
+		},
 		"BdevFormat failure": {
 			req: &pbin.Request{
 				Method:  "BdevFormat",

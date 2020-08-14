@@ -198,59 +198,18 @@ func TestBdevFormat(t *testing.T) {
 			req:    FormatRequest{},
 			expErr: errors.New("empty DeviceList"),
 		},
-		// TODO: these tests are to be moved to backend_test.go
-		//		"unknown device class": {
-		//			req: FormatRequest{
-		//				Class:      storage.BdevClass("whoops"),
-		//				DeviceList: []string{"foo"},
-		//			},
-		//			expRes: &FormatResponse{
-		//				DeviceResponses: DeviceFormatResponses{
-		//					"foo": &DeviceFormatResponse{
-		//						Error: FaultFormatUnknownClass("whoops"),
-		//					},
-		//				},
-		//			},
-		//		},
-		//		"kdev": {
-		//			req: FormatRequest{
-		//				Class:      storage.BdevClassKdev,
-		//				DeviceList: []string{"foo"},
-		//			},
-		//			expRes: &FormatResponse{
-		//				DeviceResponses: DeviceFormatResponses{
-		//					"foo": &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//				},
-		//			},
-		//		},
-		//		"malloc": {
-		//			req: FormatRequest{
-		//				Class:      storage.BdevClassMalloc,
-		//				DeviceList: []string{"foo"},
-		//			},
-		//			expRes: &FormatResponse{
-		//				DeviceResponses: DeviceFormatResponses{
-		//					"foo": &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//				},
-		//			},
-		//		},
-		//		"file": {
-		//			req: FormatRequest{
-		//				Class:      storage.BdevClassFile,
-		//				DeviceList: []string{"foo"},
-		//			},
-		//			expRes: &FormatResponse{
-		//				DeviceResponses: DeviceFormatResponses{
-		//					"foo": &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//				},
-		//			},
-		//		},
+		"init fails": {
+			mbc: &MockBackendConfig{
+				FormatErr: errors.New("spdk init fail"),
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{mockSingle.PciAddr},
+				ShmID:      1,
+				MemSize:    1024,
+			},
+			expErr: errors.New("spdk init fail"),
+		},
 		"NVMe single success": {
 			req: FormatRequest{
 				Class:      storage.BdevClassNvme,
@@ -290,7 +249,7 @@ func TestBdevFormat(t *testing.T) {
 		"NVMe two success, one failure": {
 			mbc: &MockBackendConfig{
 				FormatFailIdx: 1,
-				FormatErr:     errors.New("format failed"),
+				DevFormatErr:  errors.New("format failed"),
 			},
 			req: FormatRequest{
 				Class: storage.BdevClassNvme,
