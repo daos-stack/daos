@@ -27,7 +27,6 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
-#include <daos/btree_class.h>
 #include <daos/btree.h>
 #include <daos/mem.h>
 #include <daos/object.h>
@@ -558,7 +557,11 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 	int			 rc;
 
 	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
-	umem_tx_add(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund));
+	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund),
+			  POBJ_XADD_NO_SNAPSHOT);
+	if (rc != 0)
+		return rc;
+
 	rec->rec_off = rbund->rb_off;
 	rbund->rb_off = UMOFF_NULL; /* taken over by btree */
 
@@ -715,13 +718,6 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 		.ta_feats	= BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "singv",
 		.ta_ops		= &singv_btr_ops,
-	},
-	{
-		.ta_class	= DBTREE_CLASS_IV,
-		.ta_order	= VEA_TREE_ODR,
-		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
-		.ta_name	= "vea",
-		.ta_ops		= &dbtree_iv_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_END,
