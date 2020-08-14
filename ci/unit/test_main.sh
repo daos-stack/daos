@@ -2,7 +2,7 @@
 
 # This is the script used for the run_tests.sh stage in CI
 # for doing unit testing.
-set -ex
+set -uex
 
 # JENKINS-52781 tar function is breaking symlinks
 rm -rf test_results

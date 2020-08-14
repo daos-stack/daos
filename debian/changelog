@@ -1,0 +1,5 @@
+daos (1.1.0-33) unstable; urgency=medium
+  [ Brian J. Murrell ]
+   * 1.1.0-33 version of DAOS
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 18 Aug 2020 11:27:03 -0400

@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       33%{?relval}%{?dist}
+Release:       34%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -57,12 +57,14 @@ BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
+BuildRequires: python-devel
+BuildRequires: python-distro
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
-BuildRequires: python-devel python36-devel
+BuildRequires: python36-devel
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -78,7 +80,8 @@ BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
-BuildRequires: python-devel python3-devel
+BuildRequires: python3-devel
+BuildRequires: python3-distro
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
@@ -125,7 +128,7 @@ Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.8.0
-%systemd_requires
+%{?systemd_requires}
 
 %description server
 This is the package needed to run a DAOS server
@@ -143,7 +146,7 @@ Requires: libfuse3-3 >= 3.4.2
 # get it when fuse3 Requires: /etc/fuse.conf
 Requires: fuse < 3, fuse3-libs >= 3.4.2
 %endif
-%systemd_requires
+%{?systemd_requires}
 
 %description client
 This is the package needed to run a DAOS client
@@ -152,6 +155,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: python-distro
 Requires: fio
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
@@ -186,7 +190,7 @@ Summary: The DAOS development libraries and headers
 This is the package needed to build software with the DAOS library.
 
 %prep
-%setup -q
+%autosetup
 
 %build
 
@@ -254,7 +258,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
-%{_prefix}/etc/memcheck-cart.supp
+%{_prefix}/%{_sysconfdir}/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %dir %{_sysconfdir}/bash_completion.d
@@ -364,6 +368,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_prefix}/lib/cart/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
+%exclude %{_bindir}/self_test
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/daos_perf
@@ -384,6 +389,10 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Wed Sep 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-34
+- Use %%autosetup
+- Only use systemd_requires if it exists
+
 * Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
 - Update OFI to v1.11.0
 
