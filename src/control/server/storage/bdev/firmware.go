@@ -166,7 +166,7 @@ func NewFirmwareForwarder(log logging.Logger) *FirmwareForwarder {
 
 // checkSupport verifies that the firmware support binary is installed.
 func (f *FirmwareForwarder) checkSupport() error {
-	if f.Forwarder.CanForward() {
+	if f.CanForward() {
 		return nil
 	}
 

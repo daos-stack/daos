@@ -122,11 +122,13 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
 		fwd:     NewForwarder(log),
 	}
+	p.setupFirmwareProvider(log)
+	return p
 }
 
 // WithForwardingDisabled returns a provider with forwarding disabled.
