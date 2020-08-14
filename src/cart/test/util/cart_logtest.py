@@ -40,7 +40,13 @@ This provides consistency checking for CaRT log files.
 """
 
 import sys
-import tabulate
+import time
+import argparse
+HAVE_TABULATE=True
+try:
+    import tabulate
+except ImportError:
+    HAVE_TABULATE=False
 from collections import OrderedDict, Counter
 
 import cart_logparse
@@ -64,6 +70,89 @@ class ActiveDescriptors(LogCheckError):
 
 class LogError(LogCheckError):
     """Errors detected in log file"""
+
+class RegionContig():
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def len(self):
+        return self.end - self.start + 1
+
+    def __str__(self):
+        return '0x{:x}-0x{:x}'.format(self.start, self.end)
+
+    def __eq__(self, other):
+        if not isinstance(other, RegionContig):
+            return False
+        return self.start == other.start and self.end == other.end
+
+class RegionCounter():
+
+    def __init__(self, start, end, ts):
+        self.start = start
+        self.end = end
+        self.reads = 1
+        self.first_ts = ts
+        self.last_ts = ts
+        self.regions = []
+
+    def add(self, start, end, ts):
+        self.reads += 1
+        if start == self.end + 1:
+            self.end = end
+        else:
+            self.regions.append(RegionContig(self.start, self.end))
+            self.start = start
+            self.end = end
+        self.last_ts = ts
+
+    def _ts_to_float(self, ts):
+        int_part = time.mktime(time.strptime(ts[:-3], '%m/%d-%H:%M:%S'))
+        float_part = int(ts[-2:])/100
+        return int_part + float_part
+
+    def __str__(self):
+        bytes_count = 0
+
+        # Make a list of the current regions, being careful not to
+        # modify them.
+        all_regions = list(self.regions)
+        all_regions.append(RegionContig(self.start, self.end))
+
+        regions = []
+        prev_region = None
+        rep_count = 0
+        for region in all_regions:
+            bytes_count += region.len()
+            if not prev_region or region == prev_region:
+                rep_count += 1
+                prev_region = region
+                continue
+            if rep_count > 0:
+                regions.append('{}x{}'.format(str(region), rep_count))
+            else:
+                regions.append(str(region))
+            rep_count = 1
+            prev_region = region
+        if rep_count > 0:
+            regions.append('{}x{}'.format(str(region), rep_count))
+
+        data = ','.join(regions)
+
+        start_time = self._ts_to_float(self.first_ts)
+        end_time = self._ts_to_float(self.last_ts)
+
+        mb = int(bytes_count / (1024*1024))
+        if mb * 1024 * 1024 == bytes_count:
+            bytes_str = '{}Mb'.format(mb)
+        else:
+            bytes_str = '{:.1f}Mb'.format(bytes_count / (1024*1024))
+
+        return '{} reads, {} {:.1f}Seconds {}'.format(self.reads,
+                                                      bytes_str,
+                                                      end_time - start_time,
+                                                      data)
 
 # CaRT Error numbers to convert to strings.
 C_ERRNOS = {0: '-DER_SUCCESS',
@@ -230,6 +319,34 @@ class LogTest():
                 wf.reset_pending()
             self._check_pid_from_log_file(pid, abort_on_warning,
                                           show_memleaks=show_memleaks)
+
+    def check_dfuse_io(self):
+        """Parse dfuse i/o"""
+
+        for pid in self._li.get_pids():
+
+            client_pids = OrderedDict()
+
+            for line in self._li.new_iter(pid=pid):
+                if line.filename != 'src/client/dfuse/ops/read.c':
+                    continue
+                if line.get_field(3) != 'requested':
+                    show_line(line, line.mask, "Extra output")
+                    continue
+                reg = line.re_region.fullmatch(line.get_field(2))
+                start = int(reg.group(1),base=16)
+                end = int(reg.group(2),base=16)
+                reg = line.re_pid.fullmatch(line.get_field(4))
+
+                pid = reg.group(1)
+
+                if pid not in client_pids:
+                    client_pids[pid] = RegionCounter(start, end, line.ts)
+                else:
+                    client_pids[pid].add(start, end, line.ts)
+
+            for pid in client_pids:
+                print('{}:{}'.format(pid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning,
@@ -555,22 +672,29 @@ class LogTest():
                                      counts['ALLOCATED'],
                                      counts['DEALLOCATED']))
 
-        print('Opcode State Transition Tally')
-        print(tabulate.tabulate(table,
-                                headers=headers,
-                                stralign='right'))
+        if HAVE_TABULATE:
+            print('Opcode State Transition Tally')
+            print(tabulate.tabulate(table,
+                                    headers=headers,
+                                    stralign='right'))
 
         if errors:
             for error in errors:
                 print(error)
 
 
-def trace_one_file(filename):
+def run():
     """Trace a single file"""
-    log_iter = cart_logparse.LogIter(filename)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dfuse', help='Summarise dfuse I/O', action='store_true')
+    parser.add_argument('file', help='input file')
+    args = parser.parse_args()
+    log_iter = cart_logparse.LogIter(args.file)
     test_iter = LogTest(log_iter)
-    test_iter.check_log_file(False)
+    if args.dfuse:
+        test_iter.check_dfuse_io()
+    else:
+        test_iter.check_log_file(False)
 
 if __name__ == '__main__':
-    if len(sys.argv) == 2:
-        trace_one_file(sys.argv[1])
+    run()

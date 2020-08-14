@@ -92,11 +92,11 @@ class LogLine():
     """
 
     # Match an address range, a region in memory.
-    re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-0x[0-9a-f]{1,16}")
+    re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
     # Match a pointer, with optional ) or . suffix.
     re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.)?)")
     # Match a pid marker
-    re_pid = re.compile(r"pid=\d+")
+    re_pid = re.compile(r"pid=(\d+)")
 
     # Match a truncated uuid from DF_UUID
     re_uuid = re.compile(r"[0-9a-f]{8}(:?)")
@@ -118,6 +118,7 @@ class LogLine():
         except KeyError:
             raise InvalidLogFile(fields[4])
 
+        self.ts = fields[0]
         self._fields = fields[5:]
         if self._fields[1][-2:] == '()':
             self.trace = False
@@ -532,8 +533,11 @@ class LogIter():
                 self._iter_pid = self._pids[pid]
             except KeyError:
                 raise InvalidPid
-            self._iter_last_index = self._iter_pid['last_index'] - \
-                                    self._iter_pid['first_index'] + 1
+            if self.__from_file:
+                self._iter_last_index = self._iter_pid['last_index'] - \
+                                        self._iter_pid['first_index'] + 1
+            else:
+                self._iter_last_index = self._iter_pid['last_index']
             self._pid = pid
         else:
             self._pid = None
