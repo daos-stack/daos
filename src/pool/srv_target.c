@@ -225,7 +225,7 @@ pool_child_add_one(void *varg)
 		return rc;
 	}
 
-	rc = vos_pool_open(path, arg->pla_uuid, &child->spc_hdl);
+	rc = vos_pool_open(path, arg->pla_uuid, false, &child->spc_hdl);
 
 	D_FREE(path);
 
