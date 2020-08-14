@@ -120,6 +120,14 @@ pmem_tx_add(struct umem_instance *umm, umem_off_t umoff,
 	return pmemobj_tx_add_range(umem_off2id(umm, umoff), offset, size);
 }
 
+static int
+pmem_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
+	     size_t size, uint64_t flags)
+{
+	return pmemobj_tx_xadd_range(umem_off2id(umm, umoff), offset, size,
+				     flags);
+}
+
 
 static int
 pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
@@ -345,6 +353,7 @@ static umem_ops_t	pmem_ops = {
 	.mo_tx_free		= pmem_tx_free,
 	.mo_tx_alloc		= pmem_tx_alloc,
 	.mo_tx_add		= pmem_tx_add,
+	.mo_tx_xadd		= pmem_tx_xadd,
 	.mo_tx_add_ptr		= pmem_tx_add_ptr,
 	.mo_tx_abort		= pmem_tx_abort,
 	.mo_tx_begin		= pmem_tx_begin,
