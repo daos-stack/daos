@@ -220,11 +220,12 @@ class CartUtils():
 
 
         self.init_mpi("openmpi")
+
+        import os
         orterun_bin = find_executable("orterun", os.environ["PATH"] + ":/usr/lib64/openmpi3/bin")
         if orterun_bin is None:
             orterun_bin = "orterun_not_installed"
 
-        import os
         self.print("\nbuild_cmd:227: ENV : %s\n" % os.environ)
 
         tst_bin = cartobj.params.get("{}_bin".format(host),
