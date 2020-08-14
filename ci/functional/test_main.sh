@@ -26,6 +26,11 @@ clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
 trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 '"set -x; umount /mnt/share"' EXIT
 
+# Setup the Jenkins build artifacts directory before running the tests to ensure
+# there is enough disk space to report the results.
+rm -rf "Functional/"
+mkdir "Functional/"
+
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml

@@ -379,8 +379,10 @@ vos_mod_init(void)
 	}
 
 	rc = obj_tree_register();
-	if (rc)
+	if (rc) {
 		D_ERROR("Failed to register vos trees\n");
+		return rc;
+	}
 
 	rc = vos_ilog_init();
 	if (rc)

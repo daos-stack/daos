@@ -454,7 +454,6 @@ racer_valid_oid(daos_obj_id_t oid, daos_pool_info_t *pinfo)
 }
 
 static struct option ts_ops[] = {
-	{ "dmg_config",	required_argument,	NULL,	'n' },
 	{ "pool_uuid",	required_argument,	NULL,	'p' },
 	{ "cont_uuid",	required_argument,	NULL,	'c' },
 	{ "time",	required_argument,	NULL,	't' },
@@ -479,7 +478,7 @@ main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 	while ((rc = getopt_long(argc, argv,
-				 "n:p:c:t:",
+				 "p:c:t:",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -487,9 +486,6 @@ main(int argc, char **argv)
 		default:
 			fprintf(stderr, "Unknown option %c\n", rc);
 			return -1;
-		case 'n':
-			dmg_config_file = optarg;
-			break;
 		case 'p':
 			rc = uuid_parse(optarg, ts_ctx.tsc_pool_uuid);
 			if (rc)
