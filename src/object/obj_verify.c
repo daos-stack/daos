@@ -546,11 +546,13 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->dkey, &cur_b->dkey)) {
+#if 0
 		D_INFO(DF_OID" (reps %u, inconsistent) "
 		       "shard %u has dkey %s, but shard %u has dkey %s.\n",
 		       DP_OID(oid), reps,
 		       shard_a, (char *)cur_a->dkey.iov_buf,
 		       shard_b, (char *)cur_b->dkey.iov_buf);
+#endif
 		return -DER_MISMATCH;
 	}
 

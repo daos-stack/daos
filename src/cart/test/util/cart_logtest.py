@@ -320,13 +320,19 @@ class LogTest():
     def save_log_line(self, line):
         """Record a single line of logging"""
         self.log_count += 1
-        loc = '{}:{}'.format(line.filename, line.lineno)
+        function = getattr(line, 'filename', None)
+        if function:
+            loc = '{}:{}'.format(line.filename, line.lineno)
+        else:
+            loc = 'Unknown'
         self.log_locs[loc] += 1
         self.log_fac[line.fac] += 1
         self.log_levels[line.level] += 1
 
     def show_common_logs(self):
         """Report to stdout the most common logging locations"""
+        if self.log_count == 0:
+            return
         print('Parsed {} lines of logs'.format(self.log_count))
         print('Most common logging locations')
         for (loc, count) in self.log_locs.most_common(10):
@@ -627,6 +633,9 @@ class LogTest():
             rpc_state = None
             opcode = None
 
+            function = getattr(line, 'function', None)
+            if not function:
+                continue
             if line.is_new_rpc():
                 rpc_state = 'ALLOCATED'
                 opcode = line.get_field(-4)
@@ -636,7 +645,7 @@ class LogTest():
                 rpc_state = 'DEALLOCATED'
             elif line.endswith('submitted.'):
                 rpc_state = 'SUBMITTED'
-            elif line.function == 'crt_hg_req_send' and \
+            elif function == 'crt_hg_req_send' and \
                  line.get_field(-6) == ('sent'):
                 rpc_state = 'SENT'
 
