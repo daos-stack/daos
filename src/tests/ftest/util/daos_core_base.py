@@ -22,8 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-import write_host_file
 import os
+import write_host_file
 
 from avocado import fail_on
 from avocado.utils import process
@@ -31,6 +31,7 @@ from apricot import TestWithServers
 from env_modules import load_mpi
 from general_utils import get_log_file
 from command_utils import CommandFailure
+from agent_utils import include_local_host
 
 
 class DaosCoreBase(TestWithServers):
@@ -59,13 +60,13 @@ class DaosCoreBase(TestWithServers):
         self.update_log_file_names(self.subtest_name)
 
         super(DaosCoreBase, self).setUp()
-        self.hostfile_clients_slots = None
-        # single client for all tests except for 'daos_test -F'
-        if not self.subtest_name == "DAOS File System tests":
-            self.hostlist_clients = [self.hostlist_clients[0]]
+
+        # if no client specified update self.hostlist_clients to local host
+        # and create a new self.hostfile_clients.
+        if self.hostlist_clients is None:
+            self.hostlist_clients = include_local_host(self.hostlist_clients)
             self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
+                self.hostlist_clients, self.workdir, None)
 
     @fail_on(CommandFailure)
     def start_server_managers(self):
@@ -113,10 +114,6 @@ class DaosCoreBase(TestWithServers):
         args = self.params.get("args", self.TEST_PATH, "")
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
-
-        # for 'daos_test -F' increase the number of client processes to 16
-        if subtest == "F":
-            num_clients = 16
 
         cmd = " ".join(
             [

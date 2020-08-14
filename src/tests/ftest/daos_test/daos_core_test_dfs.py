@@ -24,20 +24,26 @@
 
 from daos_core_base import DaosCoreBase
 
-class DaosCoreTest(DaosCoreBase):
+class DaosCoreTestDfs(DaosCoreBase):
     """
-    Runs just the non-rebuild daos_test tests
+    Runs just DAOS file system tests.
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize the DaosCoreBase object."""
+        super(DaosCoreTestDfs, self).__init__(*args, **kwargs)
+        self.hostfile_clients_slots = None
+
     def test_subtest(self):
         """
-        Test ID: DAOS-1568
+        Test ID: DAOS-5409
 
-        Test Description: Run daos_test with a subtest argument
+        Test Description: Run DAOS file system tests 'daos_test -F' in parallel
 
-        Use Cases: core tests for daos_test
+        Use Cases: Daos File system tests
 
-        :avocado: tags=all,pr,hw,ib2,medium,daos_test
+        :avocado: tags=all,pr,hw,large,daos_test_dfs
         """
         DaosCoreBase.run_subtest(self)

@@ -6,9 +6,6 @@ hosts:
     - server-B
     - server-C
     - server-D
-  test_clients:
-    - client-E
-    - client-F
 # Note that subtests below can set their own timeout so this
 # should be a general average of all tests not including outliers
 # (I'm looking at you "rebuild tests")
@@ -92,9 +89,6 @@ daos_tests:
     test_K:
       daos_test: K
       test_name: DAOS KV tests
-    test_F:
-      daos_test: F
-      test_name: DAOS File System tests
     test_C:
       daos_test: C
       test_name: DAOS capability tests
