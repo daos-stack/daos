@@ -934,7 +934,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "set -eu",
         "rc=0",
         "copied=()",
-        "for file in $(ls {}/*.log)".format(logs_dir),
+        "for file in $(ls {}/*.log*)".format(logs_dir),
         "do ls -sh $file",
         "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_logs_dir),
