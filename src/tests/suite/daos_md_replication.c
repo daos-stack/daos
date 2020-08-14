@@ -44,7 +44,7 @@ mdr_stop_pool_svc(void **argv)
 		rc = dmg_pool_create(dmg_config_file,
 				     geteuid(), getegid(), arg->group,
 				     NULL, 128 * 1024 * 1024, 0,
-				     &arg->pool.svc, uuid);
+				     NULL, &arg->pool.svc, uuid);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	assert_int_equal(rc, 0);
@@ -138,8 +138,8 @@ mdr_stop_cont_svc(void **argv)
 	print_message("creating pool\n");
 	rc = dmg_pool_create(dmg_config_file,
 			     geteuid(), getegid(), arg->group,
-			     NULL, 128 * 1024 * 1024, 0, &arg->pool.svc,
-			     pool_uuid);
+			     NULL, 128 * 1024 * 1024, 0,
+			     NULL, &arg->pool.svc, pool_uuid);
 	assert_int_equal(rc, 0);
 
 	if (arg->pool.svc.rl_nr < 3) {

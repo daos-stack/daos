@@ -311,17 +311,58 @@ rank_list_to_string(const d_rank_list_t *rank_list)
 	return ranks_str;
 }
 
+static int
+print_acl_entry(FILE *outstream, struct daos_prop_entry *acl_entry)
+{
+	struct daos_acl		*acl = NULL;
+	char			**acl_str = NULL;
+	size_t			nr_acl_str = 0;
+	size_t			i;
+	int			rc = 0;
+
+	if (outstream == NULL || acl_entry == NULL)
+		return -DER_INVAL;
+
+	/*
+	 * Validate the ACL before we start printing anything out.
+	 */
+	if (acl_entry->dpe_val_ptr != NULL) {
+		acl = acl_entry->dpe_val_ptr;
+		rc = daos_acl_to_strs(acl, &acl_str, &nr_acl_str);
+		if (rc != 0) {
+			D_ERROR("invalid ACL\n");
+			goto out;
+		}
+	}
+
+	for (i = 0; i < nr_acl_str; i++) {
+		fprintf(outstream, "%s\n", acl_str[i]);
+	}
+
+	for (i = 0; i < nr_acl_str; i++) {
+		D_FREE(acl_str[i]);
+	}
+	D_FREE(acl_str);
+
+out:
+	return rc;
+}
+
 int
 dmg_pool_create(const char *dmg_config_file,
 		uid_t uid, gid_t gid, const char *grp,
 		const d_rank_list_t *tgts,
 		daos_size_t scm_size, daos_size_t nvme_size,
+		daos_prop_t *prop,
 		d_rank_list_t *svc, uuid_t uuid)
 {
 	int			argcount = 0;
 	char			**args = NULL;
 	struct passwd		*passwd = NULL;
 	struct group		*group = NULL;
+	struct daos_prop_entry	*entry;
+	char			tmp_buf[L_tmpnam], *tmp_name = tmp_buf;
+	FILE			*tmp_file = NULL;
 	daos_mgmt_pool_info_t	pool_info = {};
 	struct json_object	*dmg_out = NULL;
 	int			rc = 0;
@@ -381,6 +422,33 @@ dmg_pool_create(const char *dmg_config_file,
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	if (prop != NULL) {
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+		if (entry != NULL) {
+			tmp_name = tmpnam(tmp_buf);
+			if (tmp_name == NULL) {
+				D_ERROR("failed to create tmpfile name\n");
+				D_GOTO(out_cmd, rc = -DER_NOMEM);
+			}
+			tmp_file = fopen(tmp_name, "w");
+			if (tmp_file == NULL) {
+				D_ERROR("failed to open %s\n", tmp_name);
+				D_GOTO(out_cmd, rc = -DER_MISC);
+			}
+
+			rc = print_acl_entry(tmp_file, entry);
+			fclose(tmp_file);
+			if (rc != 0) {
+				D_ERROR("failed to write ACL to tmpfile\n");
+				goto out_cmd;
+			}
+			args = cmd_push_arg(args, &argcount,
+					    "--acl-file=%s ", tmp_name);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+	}
+
 	rc = daos_dmg_json_pipe("pool create", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
@@ -412,6 +480,8 @@ out_json:
 out_cmd:
 	cmd_free_args(args, argcount);
 out:
+	if (tmp_file != NULL)
+		unlink(tmp_name);
 	return rc;
 }
 

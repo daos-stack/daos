@@ -57,7 +57,7 @@ int		dt_obj_class;
  */
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-		       struct test_pool *opool)
+		       struct test_pool *opool, daos_prop_t *prop)
 {
 	test_arg_t		*arg = *state;
 	struct test_pool	*outpool;
@@ -112,7 +112,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		rc = dmg_pool_create(dmg_config_file,
 				     arg->uid, arg->gid, arg->group,
 				     NULL, outpool->pool_size, nvme_size,
-				     &outpool->svc, outpool->pool_uuid);
+				     prop, &outpool->svc, outpool->pool_uuid);
 		if (rc)
 			print_message("dmg_pool_create failed, rc: %d\n", rc);
 		else
@@ -262,7 +262,8 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool, NULL /*opool */);
+		return test_setup_pool_create(state, pool,
+					      NULL /*opool */, po_prop);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
