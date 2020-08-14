@@ -402,6 +402,9 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 		total_acts += iod->iod_nr;
 	}
 
+	/** Also reserve space for potential deferred free */
+	total_acts = total_acts * 2;
+
 	D_ALLOC_ARRAY(ioc->ic_umoffs, total_acts);
 	if (ioc->ic_umoffs == NULL)
 		return -DER_NOMEM;

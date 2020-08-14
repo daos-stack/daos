@@ -592,18 +592,31 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 }
 
 static int
-svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
+		      bool overwrite)
 {
 	daos_epoch_t		*epc = (daos_epoch_t *)&rec->rec_hkey[0];
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	bio_addr_t		*addr = &irec->ir_ex_addr;
+	struct dtx_handle	*dth = NULL;
+	struct dtx_rsrvd_uint	*dru = NULL;
+	struct vos_rsrvd_scm	*rsrvd_scm;
+	struct pobj_action	*act;
+	int			 i;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
+	if (overwrite) {
+		dth = vos_dth_get();
+		if (dth == NULL)
+			return -DER_NO_PERM; /* Not allowed */
+	}
+
 	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
 				  irec->ir_dtx, *epc, rec->rec_off);
 
+	/** TODO: handle NVME */
 	/* SCM value is stored together with vos_irec_df */
 	if (addr->ba_type == DAOS_MEDIA_NVME) {
 		struct vos_pool *pool = tins->ti_priv;
@@ -612,7 +625,35 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		vos_bio_addr_free(pool, addr, irec->ir_size);
 	}
 
-	return umem_free(&tins->ti_umm, rec->rec_off);
+	if (!overwrite)
+		return umem_free(&tins->ti_umm, rec->rec_off);
+
+	/** Find an empty slot for the deferred free */
+	for (i = dth->dth_rsrvd_cnt - 1; i >= 0; i--) {
+		dru = &dth->dth_rsrvds[i];
+		if (dru->dru_scm == NULL)
+			continue;
+
+		rsrvd_scm = dru->dru_scm;
+		if (rsrvd_scm->rs_actv_at >= rsrvd_scm->rs_actv_cnt)
+			continue; /* Can't really be > but keep it simple */
+
+		act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
+		umem_defer_free(&tins->ti_umm, rec->rec_off, act);
+		rsrvd_scm->rs_actv_at++;
+		return 0;
+	}
+
+	/** We didn't reserve enough space */
+	D_ASSERT(0);
+
+	return -DER_MISC;
+}
+
+static int
+svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+{
+	return svt_rec_free_internal(tins, rec, false);
 }
 
 static int
@@ -650,7 +691,7 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	D_DEBUG(DB_IO, "Overwrite epoch "DF_X64".%d\n", skey->sk_epoch,
 		skey->sk_minor_epc);
 
-	rc = svt_rec_free(tins, rec, NULL);
+	rc = svt_rec_free_internal(tins, rec, true);
 	if (rc != 0)
 		return rc;
 
