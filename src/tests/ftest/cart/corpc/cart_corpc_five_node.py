@@ -48,7 +48,7 @@ class CartCoRpcFiveNodeTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
-        self.utils.dump_cart_logs_static()
+        self.utils.dump_cart_logs_static(self.utils)
 
     def test_cart_corpc(self):
         """

@@ -50,7 +50,7 @@ class CartNoPmixLauncherOneNodeTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
-        self.utils.dump_cart_logs_static()
+        self.utils.dump_cart_logs_static(self.utils)
         self.utils.log_copy(self)
 
     def test_cart_no_pmix_launcher(self):
