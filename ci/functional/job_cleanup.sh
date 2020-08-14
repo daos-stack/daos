@@ -4,6 +4,15 @@
 
 set -ex
 
+if $TEST_RPMS; then
+    # now collect up the logs and store them like non-RPM test does
+    mkdir -p install/lib/daos/TESTING/
+    first_node=${NODELIST%%,*}
+    # scp doesn't copy symlinks, it resolves them
+    ssh -i ci_key -l jenkins "${first_node}" tar -C /var/tmp/ -czf - ftest |
+        tar -C install/lib/daos/TESTING/ -xzf -
+fi
+
 rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/job-*/html/
 
 # Remove the latest avocado symlink directory to avoid inclusion in the
