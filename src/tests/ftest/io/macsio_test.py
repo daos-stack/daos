@@ -48,7 +48,7 @@ class MacsioTest(MacsioTestBase):
             MPICH, HDF5, and MACSio.
 
         Use case:
-            Six client and two servers.
+            Six clients and two servers.
 
         :avocado: tags=all,pr,hw,large,io,macsio
         """
@@ -61,6 +61,38 @@ class MacsioTest(MacsioTestBase):
 
         # Run macsio
         self.log.info("Running MACSio")
+        status = self.macsio.check_results(
+            self.run_macsio(
+                self.pool.uuid, convert_list(self.pool.svc_ranks),
+                self.container.uuid))
+        if status:
+            self.log.info("Test passed")
+
+    def test_macsio_daos_vol(self):
+        """JIRA ID: DAOS-4983.
+
+        Test Description:
+            Purpose of this test is to check basic functionality for DAOS,
+            MPICH, HDF5, and MACSio with DAOS VOL connector.
+
+        Use case:
+            Six clients and two servers.
+
+        :avocado: tags=all,pr,hw,large,io,macsio_daos_vol
+        """
+        # Create a pool
+        self.add_pool()
+        self.pool.display_pool_daos_space()
+
+        # Create a container
+        self.add_container(self.pool)
+
+        # Create dfuse mount point
+
+        # Update mpirun command environment
+
+        # Run macsio
+        self.log.info("Running MACSio with DAOS VOL connector")
         status = self.macsio.check_results(
             self.run_macsio(
                 self.pool.uuid, convert_list(self.pool.svc_ranks),
