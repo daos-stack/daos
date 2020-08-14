@@ -490,7 +490,7 @@ class LogIter():
             fields = line.split(' ', 8)
             index += 1
             l_pid = None
-            if len(fields) < 6 or len(fields[0]) != 17:
+            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 self._data.append(LogRaw(line))
             else:
                 l_obj = LogLine(line)
