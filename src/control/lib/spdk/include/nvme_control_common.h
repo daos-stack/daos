@@ -116,7 +116,6 @@ struct ctrlr_entry {
 };
 
 struct ns_entry {
-	struct spdk_nvme_ctrlr *ctrlr;
 	struct spdk_nvme_ns	*ns;
 	struct spdk_nvme_qpair	*qpair;
 	struct ns_entry		*next;
@@ -129,7 +128,6 @@ struct dev_health_entry {
 };
 
 extern struct ctrlr_entry	*g_controllers;
-extern struct ns_entry		*g_namespaces;
 
 bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,

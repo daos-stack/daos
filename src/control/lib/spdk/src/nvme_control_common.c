@@ -29,7 +29,6 @@
 #include "nvme_control_common.h"
 
 struct ctrlr_entry	*g_controllers;
-struct ns_entry		*g_namespaces;
 
 bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
@@ -41,7 +40,7 @@ probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 void
 register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 {
-	struct ns_entry				*nentry, *ngentry;
+	struct ns_entry				*nentry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 
 	/*
@@ -69,17 +68,6 @@ register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 	nentry->ns = ns;
 	nentry->next = centry->nss;
 	centry->nss = nentry;
-
-	ngentry = malloc(sizeof(struct ns_entry));
-	if (ngentry == NULL) {
-		perror("ns_entry malloc");
-		exit(1);
-	}
-
-	ngentry->ctrlr =  centry->ctrlr;
-	ngentry->ns = ns;
-	ngentry->next = g_namespaces;
-	g_namespaces = ngentry;
 }
 
 void

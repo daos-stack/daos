@@ -137,7 +137,7 @@ wipe(char *ctrlr_pci_addr)
 	struct ns_entry		*nentry;
 	struct ret_t		*ret;
 	struct lba0_data	 data;
-	int			 rc, len, existing;
+	int			 rc, info_len;
 	char			 buf[BUFLEN];
 
 	ret = init_ret(0);
@@ -151,7 +151,7 @@ wipe(char *ctrlr_pci_addr)
 
 	nentry = centry->nss;
 	while (nentry != NULL) {
-		nentry->qpair = spdk_nvme_ctrlr_alloc_io_qpair(nentry->ctrlr,
+		nentry->qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr,
 							       NULL, 0);
 		if (nentry->qpair == NULL) {
 			snprintf(ret->info, sizeof(ret->info),
@@ -205,14 +205,10 @@ wipe(char *ctrlr_pci_addr)
 		}
 
 		snprintf(buf, BUFLEN, "%d ", spdk_nvme_ns_get_id(nentry->ns));
-		len = strnlen(buf, BUFLEN);
-		existing = strnlen(ret->info, BUFLEN);
-		fprintf(stderr, "buflen: %d, existing: %d\n", len, existing);
-		if ((existing + len) < BUFLEN) {
-		//if ((strnlen(ret->info, BUFLEN) + buflen) < BUFLEN) {
-			strncat(ret->info, buf, BUFLEN - existing - 1);
-			//sprintf("%d ", spdk_nvme_ns_get_id(nentry->ns);
-		} else
+		info_len = strnlen(ret->info, BUFLEN);
+		if ((strnlen(buf, BUFLEN) + info_len) < BUFLEN)
+			strncat(ret->info, buf, BUFLEN - info_len - 1);
+		else
 			fprintf(stderr, "buffer length exceeded (%d)\n", BUFLEN);
 
 		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
@@ -220,28 +216,6 @@ wipe(char *ctrlr_pci_addr)
 	}
 
 	return ret;
-}
-
-static void
-wipe_cleanup(void)
-{
-	struct ns_entry		*ns_entry = g_namespaces;
-	struct ctrlr_entry	*ctrlr_entry = g_controllers;
-
-	while (ns_entry) {
-		struct ns_entry *next = ns_entry->next;
-
-		free(ns_entry);
-		ns_entry = next;
-	}
-
-	while (ctrlr_entry) {
-		struct ctrlr_entry *next = ctrlr_entry->next;
-
-		spdk_nvme_detach(ctrlr_entry->ctrlr);
-		free(ctrlr_entry);
-		ctrlr_entry = next;
-	}
 }
 
 struct ret_t *
@@ -263,7 +237,7 @@ nvme_wipe_namespaces(char *ctrlr_pci_addr)
 	if (rc < 0) {
 		snprintf(ret->info, sizeof(ret->info),
 			 "spdk_nvme_probe() (%d)\n", rc);
-		wipe_cleanup();
+		cleanup(true);
 		ret->rc = -1;
 		return ret;
 	}
@@ -271,13 +245,13 @@ nvme_wipe_namespaces(char *ctrlr_pci_addr)
 	if (g_controllers == NULL) {
 		snprintf(ret->info, sizeof(ret->info),
 			 "no controllers found\n");
-		wipe_cleanup();
+		cleanup(true);
 		ret->rc = -1;
 		return ret;
 	}
 
 	ret = wipe(ctrlr_pci_addr);
-	wipe_cleanup();
+	cleanup(true);
 	return ret;
 }
 
