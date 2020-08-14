@@ -178,7 +178,7 @@ def cachedCommitPragma(Map config) {
 
 String daos_packages_version() {
     stage_info = parseStageInfo()
-    return daos_package_version(stage_info['target'])
+    return daos_packages_version(stage_info['target'])
 }
 
 String daos_packages_version(String distro) {
@@ -1004,10 +1004,13 @@ pipeline {
                 }
             }
             parallel {
-                stage('run_test.sh') {  // rename to 'Unit Test' or 'Unit Test on CentOS 7'
+                stage('run_test.sh') {  // rename to 'Unit Test' before merge
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('run_test') }
+                      allOf {
+                          expression { ! skip_stage('unit-test')}
+                          expression { ! skip_stage('run_test') }
+                      }
                     }
                     agent {
                         label 'ci_vm1'
@@ -1095,7 +1098,10 @@ pipeline {
                 stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('func-test') }
+                        allOf {
+                            expression { ! skip_stage('func-test') }
+                            expression { ! skip_stage('func-test-el7')}
+                        }
                     }
                     agent {
                         label 'ci_vm9'
@@ -1114,7 +1120,10 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('func-test-leap15') }
+                        allOf {
+                            expression { ! skip_stage('func-test') }
+                            expression { ! skip_stage('func-test-leap15') }
+                        }
                     }
                     agent {
                         label 'ci_vm9'
