@@ -176,7 +176,7 @@ def cachedCommitPragma(Map config) {
 
 }
 
-String daos_package_version() {
+String daos_packages_version() {
     stage_info = parseStageInfo()
     return daos_package_version(stage_info['target'])
 }
