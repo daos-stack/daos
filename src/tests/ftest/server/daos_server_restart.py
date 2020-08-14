@@ -59,7 +59,6 @@ class DaosServerTest(TestWithServers):
         self.log.info("=Restart daos_server, detect_format_ready().")
         self.server_managers[0].detect_format_ready()
         self.log.info("=Restart daos_server, dmg storage_format.")
-        self.server_managers[0].dmg.exit_status_exception = False
         self.server_managers[0].dmg.storage_format(reformat)
         self.log.info("=Restart daos_server, detect_io_server_start().")
         self.server_managers[0].detect_io_server_start()
