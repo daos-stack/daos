@@ -7,30 +7,47 @@ timeout: 1800
 server_config:
     name: daos_server
     servers:
-        scm_class: ram 
-        scm_size: 96
-    transport_config:
-        allow_insecure: True
-agent_config:
-    transport_config:
-        allow_insecure: True
-dmg:
-    transport_config:
-        allow_insecure: True
+        bdev_class: nvme
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 30000000000
-    nvme_size: 40000000000
-    svcn: 1
     control_method: dmg
+    mode: 511
+    name: daos_server
+    scm_size: 5G
+    nvme_size: 10G
 container:
     type: POSIX
     control_method: daos
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
 
-daos_vol:
-    test: "h5_partest_t_shapesame"
-    client_processes: 6
-    mpi_type: openmpi
+mpi: !mux
+    mpich:
+        mpi_type: mpich
+        plugin_path: /usr/lib64/mpich/lib
+        daos_vol_repo: /usr/lib64/hdf5_vol_daos/mpich/tests
+    openmpi:
+        mpi_type: openmpi
+        plugin_path: /usr/lib64/openmpi3/lib
+        daos_vol_repo: /usr/lib64/hdf5_vol_daos/openmpi3/tests
+daos_vol_tests:  !mux
+    test1:
+        testname: h5_partest_t_shapesame
+        client_processes: 6
+    test2:
+        testname: h5vl_test_parallel
+        client_processes: 6
+    test3:
+        testname: h5vl_test
+        client_processes: 1
+    test4:
+        testname: h5_test_testhdf5
+        client_processes: 1
+    test5:
+        testname: h5_partest_t_bigio
+        client_processes: 6
+    test6:
+        testname: h5_partest_testphdf5
+        client_processes: 6

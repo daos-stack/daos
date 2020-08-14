@@ -46,6 +46,7 @@ from server_utils_params import \
 from dmg_utils_params import \
     DmgYamlParameters, DmgTransportCredentials
 from dmg_utils import DmgCommand
+from daos_utils import DaosCommand
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
@@ -787,6 +788,15 @@ class TestWithServers(TestWithoutServers):
         dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
 
+    def get_daos_command(self):
+        """Get a DaosCommand object.
+
+        Returns:
+            DaosCommand: DaosCommand obj
+
+        """
+        return DaosCommand(self.bin)
+
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.
 
@@ -855,7 +865,7 @@ class TestWithServers(TestWithoutServers):
             TestContainer: the created test container object.
 
         """
-        container = TestContainer(pool)
+        container = TestContainer(pool, daos_command=self.get_daos_command())
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
