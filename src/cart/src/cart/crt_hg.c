@@ -282,34 +282,6 @@ crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 	return 0;
 }
 
-int
-crt_na_class_get_addr(na_class_t *na_class, char *addr_str, na_size_t *str_size)
-{
-	na_addr_t	self_addr;
-	na_return_t	na_ret;
-	int		rc = 0;
-
-	D_ASSERT(na_class != NULL);
-	D_ASSERT(addr_str != NULL && str_size != NULL);
-
-	na_ret = NA_Addr_self(na_class, &self_addr);
-	if (na_ret != NA_SUCCESS) {
-		D_ERROR("NA_Addr_self failed, na_ret: %d.\n", na_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-
-	na_ret = NA_Addr_to_string(na_class, addr_str, str_size, self_addr);
-	if (na_ret != NA_SUCCESS) {
-		D_ERROR("NA_Addr_to_string failed, na_ret: %d.\n",
-			na_ret);
-		NA_Addr_free(na_class, self_addr);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	NA_Addr_free(na_class, self_addr);
-
-out:
-	return rc;
-}
 
 int
 crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size)
@@ -434,7 +406,6 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 {
 	char			*info_string = NULL;
 	struct crt_hg_gdata	*hg_gdata = NULL;
-	na_class_t		*na_class = NULL;
 	hg_class_t		*hg_class = NULL;
 	struct hg_init_info	 init_info = HG_INIT_INFO_INITIALIZER;
 	int			 rc = 0;
@@ -457,37 +428,26 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		D_GOTO(out, rc);
 
 	init_info.na_init_info.progress_mode = 0;
-	if (crt_gdata.cg_share_na == false)
+	if (crt_gdata.cg_sep_mode == false)
 		/* one context per NA class */
 		init_info.na_init_info.max_contexts = 1;
 	else
 		init_info.na_init_info.max_contexts = crt_gdata.cg_ctx_max_num;
 
 	D_DEBUG(DB_NET, "info_string: %s\n", info_string);
-	na_class = NA_Initialize_opt(info_string, server,
-				     &init_info.na_init_info);
-	if (na_class == NULL) {
-		D_ERROR("Could not initialize NA class.\n");
-		D_GOTO(out, rc = -DER_HG);
-	}
 
-	init_info.na_class = na_class;
-	/* first two args unused because init_info.na_class is not NULL. */
-	hg_class = HG_Init_opt(NULL, server, &init_info);
+	hg_class = HG_Init_opt(info_string, server, &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
-		NA_Finalize(na_class);
 		D_GOTO(out, rc = -DER_HG);
 	}
 
 	D_ALLOC_PTR(hg_gdata);
 	if (hg_gdata == NULL) {
 		HG_Finalize(hg_class);
-		NA_Finalize(na_class);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	hg_gdata->chg_nacla = na_class;
 	hg_gdata->chg_hgcla = hg_class;
 
 	/* register the shared RPCID */
@@ -495,26 +455,23 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	if (rc != 0) {
 		D_ERROR("crt_hg_reg_rpcid failed, rc: %d.\n", rc);
 		HG_Finalize(hg_class);
-		NA_Finalize(na_class);
 		D_GOTO(out, rc);
 	}
 
 	if (*addr == NULL) {
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-		na_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
+		hg_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
-		rc = crt_na_class_get_addr(na_class, addr_str, &str_size);
+		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
 		if (rc != 0) {
-			D_ERROR("crt_na_class_get_addr failed, rc: %d.\n", rc);
+			D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
-			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);
 		}
 
 		D_STRNDUP(*addr, addr_str, CRT_ADDR_STR_MAX_LEN);
 		if (*addr == NULL) {
 			HG_Finalize(hg_class);
-			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	}
@@ -540,15 +497,11 @@ out:
 int
 crt_hg_fini()
 {
-	na_class_t	*na_class;
 	hg_class_t	*hg_class;
 	hg_return_t	hg_ret;
-	na_return_t	na_ret;
 	int		rc = DER_SUCCESS;
 
-	na_class = crt_gdata.cg_hg->chg_nacla;
 	hg_class = crt_gdata.cg_hg->chg_hgcla;
-	D_ASSERT(na_class != NULL);
 	D_ASSERT(hg_class != NULL);
 
 	D_DEBUG(DB_NET, "Calling HG_Finalize\n");
@@ -556,13 +509,6 @@ crt_hg_fini()
 	hg_ret = HG_Finalize(hg_class);
 	if (hg_ret != HG_SUCCESS) {
 		D_WARN("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
-		rc = -DER_HG;
-	}
-
-	D_DEBUG(DB_NET, "Calling NA_Finalize\n");
-	na_ret = NA_Finalize(na_class);
-	if (na_ret != NA_SUCCESS) {
-		D_WARN("Could not finalize NA class, na_ret: %d.\n", na_ret);
 		rc = -DER_HG;
 	}
 
@@ -574,7 +520,6 @@ int
 crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 {
 	struct crt_context	*crt_ctx;
-	na_class_t		*na_class = NULL;
 	hg_class_t		*hg_class = NULL;
 	hg_context_t		*hg_context = NULL;
 	char			*info_string = NULL;
@@ -585,9 +530,9 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	D_ASSERT(hg_ctx != NULL);
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
-	D_DEBUG(DB_NET, "crt_gdata.cg_share_na %d, crt_is_service() %d\n",
-			crt_gdata.cg_share_na, crt_is_service());
-	if (idx == 0 || crt_gdata.cg_share_na == true) {
+	D_DEBUG(DB_NET, "crt_gdata.cg_sep_mode %d, crt_is_service() %d\n",
+			crt_gdata.cg_sep_mode, crt_is_service());
+	if (idx == 0 || crt_gdata.cg_sep_mode == true) {
 		hg_context = HG_Context_create_id(crt_gdata.cg_hg->chg_hgcla,
 						  idx);
 		if (hg_context == NULL) {
@@ -604,10 +549,9 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			D_GOTO(out, rc = -DER_HG);
 		}
 
-		hg_ctx->chc_nacla = crt_gdata.cg_hg->chg_nacla;
 		hg_ctx->chc_hgcla = crt_gdata.cg_hg->chg_hgcla;
 		D_DEBUG(DB_NET, "hg_ctx->chc_hgcla %p\n", hg_ctx->chc_hgcla);
-		hg_ctx->chc_shared_na = true;
+		hg_ctx->chc_shared_hg_class = true;
 	} else {
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 		na_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
@@ -618,37 +562,27 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 
 		init_info.na_init_info.progress_mode = 0;
 		init_info.na_init_info.max_contexts = 1;
-		na_class = NA_Initialize_opt(info_string, crt_is_service(),
-					     &init_info.na_init_info);
-		if (na_class == NULL) {
-			D_ERROR("Could not initialize NA class.\n");
-			D_GOTO(out, rc = -DER_HG);
-		}
 
-		rc = crt_na_class_get_addr(na_class, addr_str, &str_size);
-		if (rc != 0) {
-			D_ERROR("crt_na_class_get_addr failed, rc: %d.\n", rc);
-			NA_Finalize(na_class);
-			D_GOTO(out, rc = -DER_HG);
-		}
-		D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
-			idx, addr_str);
-
-		init_info.na_class = na_class;
-		/* first two args unused because init_info.na_class is not NULL.
-		 */
-		hg_class = HG_Init_opt(NULL, false, &init_info);
+		hg_class = HG_Init_opt(info_string, crt_is_service(),
+				       &init_info);
 		if (hg_class == NULL) {
 			D_ERROR("Could not initialize HG class.\n");
-			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);
 		}
+
+		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
+		if (rc != 0) {
+			D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
+			D_GOTO(out, rc = -DER_HG);
+		}
+
+		D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
+			idx, addr_str);
 
 		hg_context = HG_Context_create(hg_class);
 		if (hg_context == NULL) {
 			D_ERROR("Could not create HG context.\n");
 			HG_Finalize(hg_class);
-			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);
 		}
 
@@ -658,7 +592,6 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			D_ERROR("crt_hg_reg_rpcid failed, rc: %d.\n", rc);
 			HG_Context_destroy(hg_context);
 			HG_Finalize(hg_class);
-			NA_Finalize(na_class);
 			D_GOTO(out, rc);
 		}
 
@@ -671,13 +604,11 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 				hg_ret);
 			HG_Context_destroy(hg_context);
 			HG_Finalize(hg_class);
-			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);
 		}
 
-		hg_ctx->chc_nacla = na_class;
 		hg_ctx->chc_hgcla = hg_class;
-		hg_ctx->chc_shared_na = false;
+		hg_ctx->chc_shared_hg_class = false;
 	}
 
 	hg_ctx->chc_hgctx = hg_context;
@@ -703,7 +634,6 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 {
 	hg_context_t	*hg_context;
 	hg_return_t	hg_ret = HG_SUCCESS;
-	na_return_t	na_ret;
 	int		rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
@@ -720,17 +650,13 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	if (hg_ctx->chc_shared_na == true)
+	if (hg_ctx->chc_shared_hg_class == true)
 		goto out;
 
 	/* the hg_context destroyed, ignore below errors with warn msg */
 	hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
 	if (hg_ret != HG_SUCCESS)
 		D_WARN("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
-
-	na_ret = NA_Finalize(hg_ctx->chc_nacla);
-	if (na_ret != NA_SUCCESS)
-		D_WARN("Could not finalize NA class, na_ret: %d.\n", na_ret);
 
 out:
 	return rc;
@@ -951,7 +877,8 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 			rc = -DER_HG;
 		}
 	}
-	if (crt_gdata.cg_share_na == true) {
+
+	if (crt_gdata.cg_sep_mode == true) {
 		hg_ret = HG_Set_target_id(rpc_priv->crp_hg_hdl,
 					  rpc_priv->crp_pub.cr_ep.ep_tag);
 		if (hg_ret != HG_SUCCESS) {
