@@ -230,6 +230,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         kwargs = {
+            "verbose": verbose,
             "reformat": reformat,
             "system": system,
             "ranks": ranks,

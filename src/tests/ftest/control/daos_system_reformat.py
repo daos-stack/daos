@@ -23,10 +23,7 @@
 """
 from __future__ import print_function
 
-import random
-
 from avocado import fail_on
-from daos_utils import DaosCommand
 from server_utils import ServerFailed
 from command_utils import CommandFailure
 from control_test_base import ControlTestBase
@@ -65,11 +62,11 @@ class DmgStorageReformatTest(ControlTestBase):
                 self.server_managers[-1].dmg.result.stderr))
 
         self.log.info("Perform dmg storage format on all system ranks:")
-        format_data = self.server_manager[-1].dmg.storage_format(system=True)
+        format_data = self.server_managers[-1].dmg.storage_format(system=True)
 
         # Verify
         if not format_data:
-            self.fail("Detected issues perfoming storage format: {}".format(
+            self.fail("Detected issues performing storage format: {}".format(
                 self.server_managers[-1].dmg.result.stderr))
 
         # Check that io_servers start up again
