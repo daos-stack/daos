@@ -206,14 +206,20 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def storage_format(self, reformat=False):
+    def storage_format(self, verbose=False, reformat=False, system=False,
+                       ranks=None):
         """Get the result of the dmg storage format command.
 
         Args:
+            verbose (bool): Show results of each SCM & NVMe device format
+                operation.
             reformat (bool): always reformat storage, could be destructive.
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
                 formattable.
+            system (bool): Perform reformat of stopped DAOS servers in system
+            ranks (str): Comma separated list of system ranks to format,
+                Default is all ranks.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -223,7 +229,12 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage format command fails.
 
         """
-        return self._get_result(("storage", "format"), reformat=reformat)
+        kwargs = {
+            "reformat": reformat,
+            "system": system,
+            "ranks": ranks,
+        }
+        return self._get_result(("storage", "format"), **kwargs)
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
@@ -509,14 +520,14 @@ class DmgCommand(DmgCommandBase):
         """List pools.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            list: a list containing pool uuids.
 
         Raises:
             CommandFailure: if the dmg pool delete-acl command fails.
 
         """
-        return self._get_result(("pool", "list"))
+        self._get_result(("pool", "list"))
+        return re.findall(r"(?:([0-9a-fA-F-]+) +([0-9,]+))", self.result.stdout)
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.
@@ -635,14 +646,16 @@ class DmgCommand(DmgCommandBase):
                 False.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            list: a list containing system rank information.
 
         Raises:
             CommandFailure: if the dmg system stop command fails.
 
         """
-        return self._get_result(("system", "stop"), force=force)
+        self._get_result(("system", "stop"), force=force)
+        return re.findall(
+            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
+            self.result.stdout)
 
 
 def check_system_query_status(stdout_str):
@@ -675,6 +688,7 @@ def check_system_query_status(stdout_str):
             print("Rank {} failed with state '{}'".format(out[0], out[3]))
         check = False
     return check
+
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     """Get Pool UUID and Service replicas from stdout.

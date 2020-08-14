@@ -1,0 +1,20 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+  test_clients:
+    - server-G
+timeout: 360
+server_config:
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
