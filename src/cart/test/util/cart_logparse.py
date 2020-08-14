@@ -43,6 +43,7 @@ This provides a way of querying CaRT logfiles for processing.
 """
 
 from collections import OrderedDict
+import bz2
 import os
 import re
 
@@ -62,6 +63,11 @@ LOG_LEVELS = {'FATAL' :1,
               'NOTE'  :6,
               'INFO'  :7,
               'DBUG'  :8}
+
+# Make a reverse lookup from log level to name.
+LOG_NAMES = {}
+for name in LOG_LEVELS:
+    LOG_NAMES[LOG_LEVELS[name]] = name
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -112,7 +118,7 @@ class LogLine():
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
-        self.mask = fields[3]
+        self.fac = fields[3]
         try:
             self.level = LOG_LEVELS[fields[4]]
         except KeyError:
@@ -130,7 +136,7 @@ class LogLine():
 
         if self.trace:
             if self.level == 7 or self.level == 3:
-                if self.mask == 'rpc' or self.mask == 'hg':
+                if self.fac == 'rpc' or self.fac == 'hg':
                     del self._fields[2:5]
 
         if self.trace:
@@ -425,27 +431,37 @@ class LogIter():
         # Try and open the file as utf-8, but if that doesn't work then
         # find and report the error, then continue with the file open as
         # latin-1
+        self._fd = None
 
-        if check_encoding:
-            self._fd = None
-            try:
-                self._fd = open(fname, 'r', encoding='utf-8')
-                self._fd.read()
-            except UnicodeDecodeError as err:
-                print('ERROR: Invalid data in server.log on following line')
-                self._fd = open(fname, 'r', encoding='latin-1')
-                self._fd.read(err.start - 200)
-                data = self._fd.read(199)
-                lines = data.splitlines()
-                print(lines[-1])
-            self._fd.seek(0)
+        self.bz2 = False
+
+        if fname.endswith('.bz2'):
+            # Allow direct operation on bz2 files.  Supports multiple pids
+            # per file as normal, however does not try and seek to file
+            # positions, rather walks the entire file for each pid.
+            self._fd = bz2.open(fname, 'rt')
+            self.bz2 = True
         else:
-            self._fd = open(fname, 'r', encoding='utf-8')
+            if check_encoding:
+                try:
+                    self._fd = open(fname, 'r', encoding='utf-8')
+                    self._fd.read()
+                except UnicodeDecodeError as err:
+                    print('ERROR: Invalid data in server.log on following line')
+                    self._fd = open(fname, 'r', encoding='latin-1')
+                    self._fd.read(err.start - 200)
+                    data = self._fd.read(199)
+                    lines = data.splitlines()
+                    print(lines[-1])
+                self._fd.seek(0)
+            else:
+                self._fd = open(fname, 'r', encoding='utf-8')
+
         self.fname = fname
         self._data = []
 
         i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*20))
+        self.__from_file = bool(i.st_size > (1024*1024*20)) or self.bz2
 
         if self.__from_file:
             self._load_pids()
@@ -533,11 +549,16 @@ class LogIter():
                 self._iter_pid = self._pids[pid]
             except KeyError:
                 raise InvalidPid
+
             if self.__from_file:
-                self._iter_last_index = self._iter_pid['last_index'] - \
-                                        self._iter_pid['first_index'] + 1
+                if self.bz2:
+                    self._iter_last_index = self._iter_pid['last_index']
+                else:
+                    self._iter_last_index = self._iter_pid['last_index'] - \
+                                            self._iter_pid['first_index'] + 1
             else:
                 self._iter_last_index = self._iter_pid['last_index']
+
             self._pid = pid
         else:
             self._pid = None
@@ -557,10 +578,10 @@ class LogIter():
         self._iter_index = 0
         self._iter_count = 0
         if self.__from_file:
-            if self._pid:
-                self._fd.seek(self._iter_pid['file_pos'])
-            else:
+            if not self._pid or self.bz2:
                 self._fd.seek(0)
+            else:
+                self._fd.seek(self._iter_pid['file_pos'])
         else:
             self._offset = 0
         return self
