@@ -85,10 +85,10 @@ String unit_repos() {
 
 String unit_repos(String distro) {
     if (distro == 'centos7') {
-        return el7_pr_repos() + pr_repos()
+        return el7_pr_repos() + ' ' + pr_repos()
     }
     if (distro == 'leap15') {
-        return leap15_daos_repos() + pr_repos()
+        return leap15_daos_repos() + ' ' + pr_repos()
     }
     error 'unit_test_repos not implemented for ' + distro
 }
@@ -155,7 +155,7 @@ String unit_packages() {
                            'python36-tabulate '
         if (quickbuild()) {
             // TODO: these should be gotten from the Requires: of RPM
-            packages += " spdk-tools mercury boost-devel"
+            packages += " spdk-tools mercury boost-devel libisa-l_crypto"
         }
         return packages
     } else {
@@ -990,7 +990,7 @@ pipeline {
                 }
             }
         }
-        stage('Unit Test') {
+        stage('Unit Tests') {
             when {
                 beforeAgent true
                 allOf {
@@ -1004,7 +1004,7 @@ pipeline {
                 }
             }
             parallel {
-                stage('run_test.sh') {  // rename to 'Unit Test' before merge
+                stage('Unit Test') {
                     when {
                       beforeAgent true
                       allOf {
@@ -1041,12 +1041,12 @@ pipeline {
                                  inst_rpms: unit_packages()
                     }
                     post {
-                      always {
-                        // These are only set while dealing with issues
-                        // caused by code coverage instrumentation affecting
-                        // test results, and while code coverate is being
-                        // added.
-                        unitTestPost ignore_failure: true
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPost ignore_failure: true
                         }
                     }
                 } // stage('Unit test Bullseye')
@@ -1108,8 +1108,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: get_daos_packages() +
-                                                  ' ' + functional_packages()
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
@@ -1130,8 +1129,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: get_daos_packages() +
-                                                  ' ' + functional_packages()
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
@@ -1282,6 +1280,8 @@ pipeline {
                         }
                     }
                     steps {
+                        // The coverage_healthy is primarily set here
+                        // while the code coverage feature is being implemented.
                         cloverReportPublish(
                                    coverage_stashes: ['centos7-covc-unit-cov'],
                                    coverage_healthy: [methodCoverage: 0,
