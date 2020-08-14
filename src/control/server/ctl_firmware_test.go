@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -42,6 +43,19 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func getPBNvmeQueryResults(t *testing.T, devs storage.NvmeControllers) []*ctlpb.NvmeFirmwareQueryResp {
+	results := make([]*ctlpb.NvmeFirmwareQueryResp, 0, len(devs))
+	for _, dev := range devs {
+		devPB := &ctlpb.NvmeFirmwareQueryResp{}
+		if err := convert.Types(dev, &devPB.Device); err != nil {
+			t.Fatalf("unable to convert NvmeController: %s", err)
+		}
+		results = append(results, devPB)
+	}
+
+	return results
+}
+
 func TestCtlSvc_FirmwareQuery(t *testing.T) {
 	testFWInfo := &storage.ScmFirmwareInfo{
 		ActiveVersion:     "MyActiveVersion",
@@ -49,6 +63,9 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 		ImageMaxSizeBytes: 1024,
 		UpdateStatus:      storage.ScmUpdateStatusStaged,
 	}
+
+	testNVMeDevs := storage.MockNvmeControllers(3)
+	testNVMePB := getPBNvmeQueryResults(t, testNVMeDevs)
 
 	for name, tc := range map[string]struct {
 		bmbc    *bdev.MockBackendConfig
@@ -138,6 +155,35 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 						Error:  "mock query",
 					},
 				},
+			},
+		},
+		"NVMe - discovery failed": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("mock scan failed"),
+			},
+			expErr: errors.New("mock scan failed"),
+		},
+		"NVMe - no devices": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+			},
+			bmbc: &bdev.MockBackendConfig{},
+			expResp: &ctlpb.FirmwareQueryResp{
+				NvmeResults: []*ctlpb.NvmeFirmwareQueryResp{},
+			},
+		},
+		"NVMe - success with devices": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: testNVMeDevs,
+			},
+			expResp: &ctlpb.FirmwareQueryResp{
+				NvmeResults: testNVMePB,
 			},
 		},
 	} {
