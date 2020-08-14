@@ -281,10 +281,23 @@ class Mpirun(JobManager):
         super(Mpirun, self).__init__(
             "/run/mpirun", "mpirun", job, path, subprocess)
 
+        mca_default = None
+        if mpitype == "openmpi":
+            # Default mca values to avoid queue pair errors w/ OpenMPI
+            mca_default = {
+                "btl_openib_warn_default_gid_prefix": "0",
+                "btl": "tcp,self",
+                "oob": "tcp",
+                "pml": "ob1",
+            }
+
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
-        self.envlist = FormattedParameter("-envlist {}", None)
+        self.export = FormattedParameter("-x {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
+        self.working_dir = FormattedParameter("-wd {}", None)
+
         self.mpitype = mpitype
 
     def assign_hosts(self, hosts, path=None, slots=None):
@@ -319,13 +332,20 @@ class Mpirun(JobManager):
             append (bool): whether to assign (False) or append (True) the
                 specified environment variables
         """
-        # Pass the environment variables via the process.run method env argument
-        if append and self.env is not None:
-            # Update the existing dictionary with the new values
-            self.env.update(env_vars)
+        if append and self.export.value is not None:
+            # Convert the current list of environmental variable assignments
+            # into an EnvironmentVariables (dict) object.  Then update the
+            # dictionary keys with the specified values or add new key value
+            # pairs to the dictionary.  Finally convert the updated dictionary
+            # back to a list for the parameter assignment.
+            original = EnvironmentVariables({
+                item.split("=")[0]: item.split("=")[1] if "=" in item else None
+                for item in self.export.value})
+            original.update(env_vars)
+            self.export.value = original.get_list()
         else:
-            # Overwrite/create the dictionary of environment variables
-            self.env = EnvironmentVariables(env_vars)
+            # Overwrite the environmental variable assignment
+            self.export.value = env_vars.get_list()
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -334,7 +354,7 @@ class Mpirun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.envlist.update_default(env_vars.get_list())
+        self.export.update_default(env_vars.get_list())
 
     def run(self):
         """Run the mpirun command.

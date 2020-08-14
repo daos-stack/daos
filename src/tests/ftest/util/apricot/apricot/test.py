@@ -788,7 +788,7 @@ class TestWithServers(TestWithoutServers):
         dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
 
-    def get_daos_command(self, index=0):
+    def get_daos_command(self):
         """Get a DaosCommand object.
 
         Returns:

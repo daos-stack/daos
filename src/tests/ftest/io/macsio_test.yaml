@@ -37,4 +37,4 @@ mpi: !mux
     macsio_path: /usr/lib64/mpich/bin
   openmpi:
     mpi_type: "openmpi"
-    macsio_path: /usr/lib64/openmpi/bin
+    macsio_path: /usr/lib64/openmpi3/bin
