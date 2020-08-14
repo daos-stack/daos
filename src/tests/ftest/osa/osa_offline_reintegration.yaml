@@ -15,6 +15,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      log_mask: DEBUG,RPC=ERR,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,dsms,any
   transport_config:
     allow_insecure: True
 agent_config:
