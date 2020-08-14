@@ -22,7 +22,6 @@ container:
     control_method: daos
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
-
 mpi: !mux
     mpich:
         mpi_type: mpich
