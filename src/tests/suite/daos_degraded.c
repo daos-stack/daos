@@ -131,7 +131,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		if (op_kill == UPDATE && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
 			daos_kill_server(arg, arg->pool.pool_uuid,
-					 arg->group, arg->pool.svc, -1);
+					 arg->group, &arg->pool.svc, -1);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -160,7 +160,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		if (op_kill == LOOKUP && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
 			daos_kill_server(arg, arg->pool.pool_uuid,
-					 arg->group, arg->pool.svc, -1);
+					 arg->group, &arg->pool.svc, -1);
 	}
 	D_FREE(rec_verify);
 
@@ -207,7 +207,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		if (op_kill == ENUMERATE && rank == 0 && enum_op &&
 		    g_dkeys > 1 && (key_nr  >= g_dkeys/2)) {
 			daos_kill_server(arg, arg->pool.pool_uuid,
-					 arg->group, arg->pool.svc, -1);
+					 arg->group, &arg->pool.svc, -1);
 			enum_op = 0;
 		}
 
