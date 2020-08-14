@@ -57,7 +57,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 			position + len <= oh->doh_ie->ie_start_off)) {
 		off_t pos_ra = position + len + READAHEAD_SIZE;
 
-		DFUSE_TRA_DEBUG(oh, "Returning zeros");
+		DFUSE_TRA_INFO(oh, "Returning zeros");
 		skip_read = true;
 
 		if (pos_ra <= oh->doh_ie->ie_stat.st_size &&
