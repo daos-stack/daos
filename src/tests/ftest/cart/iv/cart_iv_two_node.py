@@ -232,7 +232,7 @@ class CartIvTwoNodeTest(Test):
 
         # Verify the server is still running.
         if not self.utils.check_process(srv_rtn):
-            procrtn = self.utils.stop_process(srv_rtn)
+            procrtn = self.utils.stop_process(srv_rtn, self.utils)
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
@@ -264,7 +264,7 @@ class CartIvTwoNodeTest(Test):
             self._iv_test_actions(clicmd, actions)
         except ValueError as exception:
             failed = True
-            self.utils.print("TEST FAILED: %s", str(exception))
+            self.utils.print("TEST FAILED: %s" % str(exception))
 
         ########## Shutdown Servers ##########
 
@@ -299,7 +299,7 @@ class CartIvTwoNodeTest(Test):
         # Stop the server if it is still running
         if self.utils.check_process(srv_rtn):
             # Return value is meaningless with --continuous
-            self.utils.stop_process(srv_rtn)
+            self.utils.stop_process(srv_rtn, self.utils)
 
         if failed:
             self.fail("Test failed.\n")

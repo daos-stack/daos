@@ -68,7 +68,7 @@ class CartSelfThreeNodeTest(Test):
 
         # Verify the server is still running.
         if not self.utils.check_process(srv_rtn):
-            procrtn = self.utils.stop_process(srv_rtn)
+            procrtn = self.utils.stop_process(srv_rtn, self.utils)
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 

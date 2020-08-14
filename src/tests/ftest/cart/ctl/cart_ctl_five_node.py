@@ -69,7 +69,7 @@ class CartCtlFiveNodeTest(Test):
 
         # Verify the server is still running.
         if not self.utils.check_process(srv_rtn):
-            procrtn = self.utils.stop_process(srv_rtn)
+            procrtn = self.utils.stop_process(srv_rtn, self.utils)
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
@@ -80,7 +80,7 @@ class CartCtlFiveNodeTest(Test):
         clicmd = self.utils.build_cmd(self, self.env, "cli2")
         self.utils.launch_test(self, clicmd, srv_rtn)
 
-        self.utils.stop_process(srv_rtn)
+        self.utils.stop_process(srv_rtn, self.utils)
 
         self.utils.log_copy(self)
 

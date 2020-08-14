@@ -232,7 +232,7 @@ class CartIvOneNodeTest(Test):
 
         # Verify the server is still running.
         if not self.utils.check_process(srv_rtn):
-            procrtn = self.utils.stop_process(srv_rtn)
+            procrtn = self.utils.stop_process(srv_rtn, self.utils)
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
@@ -299,7 +299,7 @@ class CartIvOneNodeTest(Test):
         # Stop the server if it is still running
         if self.utils.check_process(srv_rtn):
             # Return value is meaningless with --continuous
-            self.utils.stop_process(srv_rtn)
+            self.utils.stop_process(srv_rtn, self.utils)
 
         if failed:
             self.fail("Test failed.\n")
