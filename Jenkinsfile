@@ -1104,7 +1104,8 @@ pipeline {
                                        inst_repos: daos_repos('leap15'),
                                        inst_rpms: get_daos_packages('leap15') + ' ' +
                                                   functional_rpms('leap15') + ' ' +
-                                                  qb_inst_rpms_functional()
+                                                  qb_inst_rpms_functional() +
+                                                  ' python2-tabulate '
                     }
                     post {
                         always {
