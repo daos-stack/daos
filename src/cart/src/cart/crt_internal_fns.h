@@ -37,11 +37,6 @@ void crt_opc_map_destroy(struct crt_opc_map *map);
 struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 				    int locked);
 
-/** crt_hg.c */
-int
-crt_na_class_get_addr(na_class_t *na_class,
-		char *addr_str, na_size_t *str_size);
-
 /** crt_context.c */
 /* return values of crt_context_req_track, in addition to standard
  * gurt error values.
