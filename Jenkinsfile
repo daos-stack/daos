@@ -1033,7 +1033,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
-                                 inst_repos: el7_component_repos + ' ' +
+                                 inst_repos: el7_component_repos() + ' ' +
                                              component_repos(),
                                  inst_rpms: 'gotestsum openmpi3 ' +
                                             'hwloc-devel argobots ' +
@@ -1045,7 +1045,7 @@ pipeline {
                                             'pmix numactl-devel ' +
                                             'libipmctl-devel ' +
                                             'python36-tabulate' +
-                                            qb_inst_rpms
+                                            qb_inst_rpms_run_test()
                     }
                     post {
                       always {
