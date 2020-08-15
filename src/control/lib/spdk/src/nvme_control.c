@@ -22,7 +22,6 @@
 */
 
 #include <spdk/stdinc.h>
-#include <spdk/string.h>
 #include <spdk/nvme.h>
 #include <spdk/env.h>
 
