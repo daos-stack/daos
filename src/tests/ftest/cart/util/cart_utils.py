@@ -143,13 +143,20 @@ class CartUtils():
         test_name = cartobj.params.get("name", "/run/tests/*/")
         host_cfg = cartobj.params.get("config", "/run/hosts/*/")
 
+        self.stdout.info("\ncart_utils: line 146, ENV : %s\n" % os.environ)
+
         if env_CCSA is not None:
             log_dir = "{}-{}".format(test_name, env_CCSA)
         else:
             log_dir = "{}".format(test_name)
 
-        log_path = os.path.join("testLogs", log_dir)
+        # log_path = os.path.join("testLogs", log_dir)
+        # ???
+        log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_file = os.path.join(log_path, "cart.log")
+
+        print('cart_utils: line 156, log_file  = ', log_file )
+        print('cart_utils: line 156, log_path  = ', log_path )
 
         log_mask = cartobj.params.get("D_LOG_MASK", "/run/defaultENV/")
         self.provider = cartobj.params.get("CRT_PHY_ADDR_STR",
