@@ -435,6 +435,11 @@ class LogIter():
 
         self.bz2 = False
 
+        # Force check encoding for smaller files.
+        i = os.stat(fname)
+        if i.st_size < (1024*1024*20):
+            check_encoding = True
+
         if fname.endswith('.bz2'):
             # Allow direct operation on bz2 files.  Supports multiple pids
             # per file as normal, however does not try and seek to file

@@ -42,11 +42,11 @@ This provides consistency checking for CaRT log files.
 import sys
 import time
 import argparse
-HAVE_TABULATE=True
+HAVE_TABULATE = True
 try:
     import tabulate
 except ImportError:
-    HAVE_TABULATE=False
+    HAVE_TABULATE = False
 from collections import OrderedDict, Counter
 
 import cart_logparse
@@ -72,11 +72,13 @@ class LogError(LogCheckError):
     """Errors detected in log file"""
 
 class RegionContig():
+    """Class to represent a memory region"""
     def __init__(self, start, end):
         self.start = start
         self.end = end
 
     def len(self):
+        """Return the length of the region"""
         return self.end - self.start + 1
 
     def __str__(self):
@@ -87,8 +89,13 @@ class RegionContig():
             return False
         return self.start == other.start and self.end == other.end
 
-class RegionCounter():
+def _ts_to_float(ts):
+    int_part = time.mktime(time.strptime(ts[:-3], '%m/%d-%H:%M:%S'))
+    float_part = int(ts[-2:])/100
+    return int_part + float_part
 
+class RegionCounter():
+    """Class to represent regions read/written to a file"""
     def __init__(self, start, end, ts):
         self.start = start
         self.end = end
@@ -98,6 +105,7 @@ class RegionCounter():
         self.regions = []
 
     def add(self, start, end, ts):
+        """Record a new I/O operation"""
         self.reads += 1
         if start == self.end + 1:
             self.end = end
@@ -106,11 +114,6 @@ class RegionCounter():
             self.start = start
             self.end = end
         self.last_ts = ts
-
-    def _ts_to_float(self, ts):
-        int_part = time.mktime(time.strptime(ts[:-3], '%m/%d-%H:%M:%S'))
-        float_part = int(ts[-2:])/100
-        return int_part + float_part
 
     def __str__(self):
         bytes_count = 0
@@ -123,6 +126,7 @@ class RegionCounter():
         regions = []
         prev_region = None
         rep_count = 0
+        region = None
         for region in all_regions:
             bytes_count += region.len()
             if not prev_region or region == prev_region:
@@ -140,8 +144,8 @@ class RegionCounter():
 
         data = ','.join(regions)
 
-        start_time = self._ts_to_float(self.first_ts)
-        end_time = self._ts_to_float(self.last_ts)
+        start_time = _ts_to_float(self.first_ts)
+        end_time = _ts_to_float(self.last_ts)
 
         mb = int(bytes_count / (1024*1024))
         if mb * 1024 * 1024 == bytes_count:
@@ -382,8 +386,8 @@ class LogTest():
                     show_line(line, line.mask, "Extra output")
                     continue
                 reg = line.re_region.fullmatch(line.get_field(2))
-                start = int(reg.group(1),base=16)
-                end = int(reg.group(2),base=16)
+                start = int(reg.group(1), base=16)
+                end = int(reg.group(2), base=16)
                 reg = line.re_pid.fullmatch(line.get_field(4))
 
                 pid = reg.group(1)
@@ -738,7 +742,9 @@ class LogTest():
 def run():
     """Trace a single file"""
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dfuse', help='Summarise dfuse I/O', action='store_true')
+    parser.add_argument('--dfuse',
+                        help='Summarise dfuse I/O',
+                        action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
     log_iter = cart_logparse.LogIter(args.file)

@@ -309,8 +309,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	DFUSE_TRA_INFO(fs_handle,
-		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(fs_handle,
+			"Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
