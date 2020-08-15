@@ -35,6 +35,8 @@ import time
 import yaml
 import errno
 
+import avocado
+
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -930,25 +932,41 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # test host if the copy is successful.  Attempt all of the commands and
     # report status at the end of the loop.  Include a listing of the file
     # related to any failed command.
-    commands = [
-        "set -eu",
-        "rc=0",
-        "copied=()",
-        "for file in $(ls {}/*.log*)".format(logs_dir),
-        "do ls -sh $file",
-        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, daos_logs_dir),
-        "then copied+=($file)",
-        "if ! sudo rm -fr $file",
-        "then ((rc++))",
-        "ls -al $file",
-        "fi",
-        "fi",
-        "done",
-        "echo Copied ${copied[@]:-no files}",
-        "exit $rc",
+
+    # Start with the DAOS logs dir
+    logs_dirs = [
+      logs_dir,
+      avocado.core.data_dir.get_data_dir(),
+      avocado.core.data_dir.get_logs_dir(),
+      avocado.core.data_dir.get_test_dir(),
+      avocado.core.data_dir.get_tmp_dir()
     ]
-    spawn_commands(host_list, "; ".join(commands), 900)
+
+    print('EAM log: line 935, logs_dirs  = ', logs_dirs )
+
+    # Make sure we archive both DAOS and CaRT logs
+    for logs_dir in logs_dirs:
+      commands = [
+          "set -eu",
+          "set +x",
+          "env",
+          "rc=0",
+          "copied=()",
+          "for file in $(ls {}/*.log*)".format(logs_dir),
+          "do ls -sh $file",
+            "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+                this_host, daos_logs_dir),
+              "then copied+=($file)",
+              "if ! sudo rm -fr $file",
+                "then ((rc++))",
+                "ls -al $file",
+              "fi",
+            "fi",
+          "done",
+          "echo Copied ${copied[@]:-no files}",
+          "exit $rc",
+      ]
+      spawn_commands(host_list, "; ".join(commands), 900)
 
 
 def archive_config_files(avocado_logs_dir):
