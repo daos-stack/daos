@@ -33,6 +33,7 @@ package spdk
 
 #include <stdlib.h>
 #include <spdk/stdinc.h>
+#include <spdk/string.h>
 #include <spdk/env.h>
 #include <spdk/vmd.h>
 */
@@ -98,7 +99,7 @@ func pciListToC(inAddrs []string) (*unsafe.Pointer, error) {
 	var tmpAddr *C.struct_spdk_pci_addr
 	structSize := unsafe.Sizeof(*tmpAddr)
 
-	outAddrs := C.malloc(C.ulong(structSize) * C.ulong(len(inAddrs)))
+	outAddrs := C.calloc(C.ulong(len(inAddrs)), C.ulong(structSize))
 
 	for i, inAddr := range inAddrs {
 		offset := uintptr(i) * structSize

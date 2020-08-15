@@ -583,7 +583,6 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 {
 	struct common_cp_arg *cp_arg = arg;
 
-	D_DEBUG(DB_MGMT, "callback bs rc %d\n", rc);
 	D_ASSERT(cp_arg->cca_inflights == 1);
 	D_ASSERT(cp_arg->cca_rc == 0);
 	D_ASSERT(cp_arg->cca_bs == NULL);
