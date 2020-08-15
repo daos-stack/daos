@@ -101,6 +101,7 @@ class DaosCoreBase(TestWithServers):
         num_replicas = self.params.get("num_replicas",
                                        '/run/daos_tests/num_replicas/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
+        nvme_size = self.params.get("nvme_size", '/run/pool/*')
         args = self.params.get("args", self.TEST_PATH, "")
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
@@ -125,6 +126,9 @@ class DaosCoreBase(TestWithServers):
         env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir, "%g_results.xml")
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
         env['POOL_SCM_SIZE'] = "{}".format(scm_size)
+        if not nvme_size:
+            nvme_size = 0
+        env['POOL_NVME_SIZE'] = "{}".format(nvme_size)
 
         load_mpi("openmpi")
         try:
