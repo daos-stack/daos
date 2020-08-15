@@ -22,6 +22,7 @@
 */
 
 #include <spdk/stdinc.h>
+#include <spdk/string.h>
 #include <spdk/nvme.h>
 #include <spdk/env.h>
 
@@ -137,8 +138,9 @@ wipe(char *ctrlr_pci_addr)
 	struct ns_entry		*nentry;
 	struct ret_t		*ret;
 	struct lba0_data	 data;
-	int			 rc, info_len;
+	int			 rc;
 	char			 buf[BUFLEN];
+	size_t			 info_len;
 
 	ret = init_ret(0);
 
@@ -209,7 +211,8 @@ wipe(char *ctrlr_pci_addr)
 		if ((strnlen(buf, BUFLEN) + info_len) < BUFLEN)
 			strncat(ret->info, buf, BUFLEN - info_len - 1);
 		else
-			fprintf(stderr, "buffer length exceeded (%d)\n", BUFLEN);
+			fprintf(stderr, "buffer length exceeded (%d)\n",
+				BUFLEN);
 
 		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 		nentry = nentry->next;

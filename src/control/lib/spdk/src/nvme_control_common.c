@@ -59,9 +59,9 @@ register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 		return;
 	}
 
-	nentry = malloc(sizeof(struct ns_entry));
+	nentry = calloc(1, sizeof(struct ns_entry));
 	if (nentry == NULL) {
-		perror("ns_entry malloc");
+		perror("ns_entry calloc");
 		exit(1);
 	}
 
@@ -79,9 +79,9 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	struct spdk_nvme_ns	*ns;
 	int			 nsid, num_ns;
 
-	entry = malloc(sizeof(struct ctrlr_entry));
+	entry = calloc(1, sizeof(struct ctrlr_entry));
 	if (entry == NULL) {
-		perror("ctrlr_entry malloc");
+		perror("ctrlr_entry calloc");
 		exit(1);
 	}
 
@@ -117,9 +117,9 @@ init_ret(int rc)
 {
 	struct ret_t *ret = NULL;
 
-	ret = malloc(sizeof(struct ret_t));
+	ret = calloc(1, sizeof(struct ret_t));
 	if (ret == NULL) {
-		perror("ret malloc");
+		perror("ret calloc");
 		exit(1);
 	}
 	ret->rc = rc;
@@ -203,7 +203,7 @@ _discover(prober probe, bool detach, health_getter get_health)
 	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		health_entry = malloc(sizeof(struct dev_health_entry));
+		health_entry = calloc(1, sizeof(struct dev_health_entry));
 		if (health_entry == NULL) {
 			rc = -ENOMEM;
 			goto fail;
@@ -259,9 +259,9 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 	struct ns_t	*ns_tmp;
 
 	while (ns_entry) {
-		ns_tmp = malloc(sizeof(struct ns_t));
+		ns_tmp = calloc(1, sizeof(struct ns_t));
 		if (ns_tmp == NULL) {
-			perror("ns_t malloc");
+			perror("ns_t calloc");
 			return -ENOMEM;
 		}
 
@@ -283,9 +283,9 @@ collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 	struct spdk_nvme_health_information_page  health_pg;
 	union spdk_nvme_critical_warning_state	  cwarn;
 
-	h_tmp = malloc(sizeof(struct dev_health_t));
+	h_tmp = calloc(1, sizeof(struct dev_health_t));
 	if (h_tmp == NULL) {
-		perror("dev_health_t malloc");
+		perror("dev_health_t calloc");
 		return -ENOMEM;
 	}
 
@@ -326,9 +326,9 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		ctrlr_tmp = malloc(sizeof(struct ctrlr_t));
+		ctrlr_tmp = calloc(1, sizeof(struct ctrlr_t));
 		if (!ctrlr_tmp) {
-			perror("ctrlr_t malloc");
+			perror("ctrlr_t calloc");
 			rc = -ENOMEM;
 			goto fail;
 		}
