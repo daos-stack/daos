@@ -60,8 +60,6 @@ class CartNoPmixOneNodeTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
-        self.utils.dump_cart_logs_static(self.utils)
-        self.utils.log_copy(self)
 
     def test_cart_no_pmix(self):
         """
@@ -84,7 +82,6 @@ class CartNoPmixOneNodeTest(Test):
 
         self.utils.print("Finished waiting for {}".format(p))
 
-        self.utils.log_copy(self)
 
 if __name__ == "__main__":
     main()

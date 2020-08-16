@@ -130,10 +130,6 @@ class CartUtils():
             except Exception:
                 proc.kill()
 
-        # Putting this in the tearDown section of the test .py file, might
-        # not be enough.  Copy logs over when test procs are reaped.
-        self.dump_cart_logs()
-
         return procrtn
 
     def get_env(self, cartobj):
@@ -424,28 +420,6 @@ class CartUtils():
         self.progress_log.info(cmd)
 
     @staticmethod
-    def log_copy(cartobj):
-        print("Entering log_copy")
-        """Copy cart log files to Jenkins-accessible directory """
-
-        import shutil
-        import tempfile
-
-        print("Copy log path", cartobj.log_path, " to ", os.environ["AVOCADO_TEST_LOGDIR"])
-        # Copy log files to jenkins dir
-
-        # Source path  
-        src = cartobj.log_path
-
-        # Destination path  
-        _dest = os.environ["AVOCADO_TEST_LOGDIR"]
-        dest = tempfile.mkdtemp(dir = _dest)
-
-        # Copy the content of source to destination  
-        rc = shutil.copytree(src, dest + "-testLogs")
-        print("shutil.copytree: ", src, " to ", dest, ",  rc = ", rc)
-
-    @staticmethod
     def log_check(cartobj):
         print("Entering log_check")
         """Check log files for consistency """
@@ -470,57 +444,3 @@ class CartUtils():
             cl = cart_logparse.LogIter(log_file)
             c_log_test = cart_logtest.LogTest(cl)
             c_log_test.check_log_file(strict_test)
-
-    def dump_cart_logs(self):
-        print("Entering dump_cart_logs")
-        """Print contents of cart.log
-
-        Returns:
-            void
-        """
-
-        if self.cart_logs_dumped_already:
-          print ("We already dumped the cart.log. No need to repeat.")
-          return
-
-        pattern = 'cart.log*'
-
-        # DEBUGGING
-        import os
-        print("\ndump_cart_logs:483: ENV : %s\n" % os.environ)
-        print("\ndump_cart_logs:483: os.getcwd() : %s\n" % os.getcwd())
-
-        # Find the cart.log in one of these directories (which might differ between
-        # different testing environments)
-        directories = [
-          '.',
-          os.environ["AVOCADO_TEST_LOGDIR"],
-          os.environ["AVOCADO_TEST_OUTPUTDIR"],
-          os.environ["AVOCADO_TEST_WORKDIR"],
-          os.environ["AVOCADO_TESTS_COMMON_TMPDIR"]
-        ]
-
-        for directory in directories:
-          print("Line 492: for directory ", directory)
-          for root, dirs, files in os.walk(directory):
-              print("Line 492: for root: ", root)
-              for basename in files:
-                  print("Line 492: for basename: ", basename)
-                  if fnmatch.fnmatch(basename, pattern):
-                      filename = os.path.join(root, basename)
-                      print('Found cart.log file: ', filename)
-                      log = open(filename, "r").read()
-                      print(log)
-                      self.cart_logs_dumped_already = True
-
-                      # Assume there's only one cart.log per test process
-                      return
-
-    @staticmethod
-    def dump_cart_logs_static(self):
-        """Static wrapper for dump_cart_logs
-
-        Returns:
-            void
-        """
-        self.dump_cart_logs()

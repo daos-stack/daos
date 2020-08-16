@@ -104,8 +104,6 @@ class CartIvTwoNodeTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
-        self.utils.dump_cart_logs_static(self.utils)
-        self.utils.log_copy(self)
 
     def _verify_action(self, action):
         """verify the action"""
@@ -304,7 +302,6 @@ class CartIvTwoNodeTest(Test):
         if failed:
             self.fail("Test failed.\n")
 
-        self.utils.log_copy(self)
 
 if __name__ == "__main__":
     main()

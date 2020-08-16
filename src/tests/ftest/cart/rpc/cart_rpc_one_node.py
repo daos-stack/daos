@@ -48,8 +48,6 @@ class CartRpcOneNodeTest(Test):
     def tearDown(self):
         """ Test tear down """
         print("Run TearDown\n")
-        self.utils.dump_cart_logs_static(self.utils)
-        self.utils.log_copy(self)
 
     def test_cart_rpc(self):
         """
@@ -61,7 +59,6 @@ class CartRpcOneNodeTest(Test):
         clicmd = self.utils.build_cmd(self, self.env, "test_clients")
 
         self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
-        self.utils.log_copy(self)
         self.utils.log_check(self)
 
 if __name__ == "__main__":

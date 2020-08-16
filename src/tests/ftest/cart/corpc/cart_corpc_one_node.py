@@ -48,7 +48,6 @@ class CartCoRpcOneNodeTest(Test):
     def tearDown(self):
         """ Test teardown """
         print("Run TearDown\n")
-        self.utils.dump_cart_logs_static(self.utils)
 
     def test_cart_corpc(self):
         """
@@ -61,7 +60,6 @@ class CartCoRpcOneNodeTest(Test):
 
         self.utils.launch_test(self, cmd)
 
-        self.utils.log_copy(self)
 
 if __name__ == "__main__":
     main()
