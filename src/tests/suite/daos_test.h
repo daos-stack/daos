@@ -100,12 +100,12 @@ struct test_pool {
 	/* Updated if some ranks are killed during degraged or rebuild
 	 * test, so we know whether some tests is allowed to be run.
 	 */
-	d_rank_list_t		*alive_svc;
+	d_rank_list_t		alive_svc;
 	/* Used for all pool related operation, since client will
 	 * use this rank list to find out the real leader, so it
 	 * can not be changed.
 	 */
-	d_rank_list_t		*svc;
+	d_rank_list_t		svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
 	bool			destroyed;
@@ -224,7 +224,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-		       struct test_pool *opool);
+		       struct test_pool *opool, daos_prop_t *prop);
 int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
@@ -382,6 +382,9 @@ int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
+/* dmg cmd json output parser APIs */
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+			daos_mgmt_pool_info_t *pools);
 static inline void
 daos_test_print(int rank, char *message)
 {
