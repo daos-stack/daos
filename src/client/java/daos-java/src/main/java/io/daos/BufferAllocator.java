@@ -67,7 +67,7 @@ public class BufferAllocator {
    * buffer size
    * @return pooled unsafe direct byte buffer
    */
-//  public static ByteBuf directBuffer(int size) {
-//    return bufAllocatorObj.buffer(size);
-//  }
+  public static ByteBuf directNettyBuf(int size) {
+    return bufAllocatorObj.buffer(size);
+  }
 }

@@ -26,6 +26,7 @@ package io.daos.fs.hadoop;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.net.URI;
+import java.net.URL;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -74,8 +75,11 @@ public class DaosConfigFile {
   private DaosConfigFile() {
     defaultConfig = new Configuration(false);
     defaultConfig.addResource(Constants.DAOS_CONFIG_FILE_NAME);
+    URL url = this.getClass().getClassLoader().getResource(Constants.DAOS_CONFIG_FILE_NAME);
+    log.info(url == null ? "no " + Constants.DAOS_CONFIG_FILE_NAME : "loaded " + Constants.DAOS_CONFIG_FILE_NAME +
+            " from " + url);
     if (log.isDebugEnabled()) {
-      log.debug("configs from " + Constants.DAOS_CONFIG_FILE_NAME);
+      log.debug("daos fs configs from " + Constants.DAOS_CONFIG_FILE_NAME);
       Iterator<Map.Entry<String, String>> it = defaultConfig.iterator();
       while (it.hasNext()) {
         Map.Entry<String, String> item = it.next();

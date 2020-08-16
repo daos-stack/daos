@@ -106,7 +106,7 @@ public final class DaosFsClient extends SharableClient implements ForceCloseable
     super(poolId, contId, builder);
   }
 
-  private synchronized void init() throws IOException {
+  private void init() throws IOException {
     if (isInited()) {
       return;
     }
@@ -195,10 +195,12 @@ public final class DaosFsClient extends SharableClient implements ForceCloseable
     DaosFsClientBuilder builder = getBuilder();
     if (force || getRefCnt() <= 0) {
       if (isInited() && dfsPtr != 0) {
+        log.debug("dfsptr: " + dfsPtr);
         cleanerExe.shutdownNow();
         if (log.isDebugEnabled()) {
           log.debug("cleaner stopped");
         }
+        log.debug("dfsptr: " + dfsPtr);
         if (contPtr == -1) {
           dfsUnmountFsOnRoot(dfsPtr);
           if (log.isDebugEnabled()) {
@@ -1088,8 +1090,10 @@ public final class DaosFsClient extends SharableClient implements ForceCloseable
         }
         fsClient = pcFsMap.get(key);
       }
-      fsClient.init();
-      fsClient.incrementRef();
+      synchronized (fsClient) {
+        fsClient.init();
+        fsClient.incrementRef();
+      }
       return fsClient;
     }
 

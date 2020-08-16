@@ -31,7 +31,7 @@ import java.io.IOException;
  * It also maintains state of client, like initialized and reference count, so that client can be
  * correctly shared and closed.
  */
-public abstract class SharableClient implements ForceCloseable {
+public abstract class SharableClient extends Sharable implements ForceCloseable {
 
   private String poolId;
 
@@ -40,10 +40,6 @@ public abstract class SharableClient implements ForceCloseable {
   private DaosClient client;
 
   private DaosClient.DaosClientBuilder builder;
-
-  private volatile boolean inited;
-
-  private int refCnt;
 
   protected SharableClient(String poolId, String contId, DaosClient.DaosClientBuilder builder) {
     this.poolId = poolId;
@@ -83,42 +79,6 @@ public abstract class SharableClient implements ForceCloseable {
     this.builder = builder;
   }
 
-  protected boolean isInited() {
-    return inited;
-  }
-
-  protected void setInited(boolean inited) {
-    this.inited = inited;
-  }
-
-  /**
-   * increase reference count by one.
-   *
-   * @throws IllegalStateException if this client is disconnected.
-   */
-  protected synchronized void incrementRef() {
-    if (!inited) {
-      throw new IllegalStateException("DaosFsClient is not initialized or disconnected.");
-    }
-    refCnt++;
-  }
-
-  /**
-   * decrease reference count by one.
-   */
-  protected synchronized void decrementRef() {
-    refCnt--;
-  }
-
-  /**
-   * get reference count.
-   *
-   * @return reference count
-   */
-  public synchronized int getRefCnt() {
-    return refCnt;
-  }
-
   /**
    * close client if there is no more reference to this client.
    *
@@ -154,8 +114,8 @@ public abstract class SharableClient implements ForceCloseable {
         "poolId='" + poolId + '\'' +
         ", contId='" + contId + '\'' +
         ", client=" + client +
-        ", inited=" + inited +
-        ", refCnt=" + refCnt +
+        ", inited=" + isInited() +
+        ", refCnt=" + getRefCnt() +
         '}';
   }
 }

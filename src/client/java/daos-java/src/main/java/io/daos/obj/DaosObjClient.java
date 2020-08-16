@@ -54,7 +54,7 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
     super(poolId, contId, builder);
   }
 
-  private synchronized void init() throws IOException {
+  private void init() throws IOException {
     if (isInited()) {
       return;
     }
@@ -350,8 +350,10 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
         }
         objClient = pcObjMap.get(key);
       }
-      objClient.init();
-      objClient.incrementRef();
+      synchronized (objClient) {
+        objClient.init();
+        objClient.incrementRef();
+      }
       return objClient;
     }
 

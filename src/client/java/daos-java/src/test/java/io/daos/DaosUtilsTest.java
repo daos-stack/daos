@@ -1,5 +1,6 @@
 package io.daos;
 
+import io.netty.buffer.ByteBuf;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.junit.Assert;
 import org.junit.Test;
@@ -129,5 +130,20 @@ public class DaosUtilsTest {
     String evalue = DaosUtils.escapeUnsValue(value);
     Assert.assertEquals("ab\\u003ac\\u003d\\u003adef\\u003d", evalue);
     Assert.assertEquals(value, StringEscapeUtils.unescapeJava(evalue));
+  }
+
+  @Test
+  public void testBufferLeak() throws Exception {
+    ByteBuf buff = BufferAllocator.directNettyBuf(10);
+    ByteBuf buf = buff.order(Constants.DEFAULT_ORDER);
+    if (buff == buf) {
+      System.out.println("same");
+    }
+    Assert.assertEquals(1, buf.refCnt());
+    buf.release();
+    Assert.assertEquals(0, buf.refCnt());
+
+    Assert.assertEquals(0, buff.refCnt());
+
   }
 }

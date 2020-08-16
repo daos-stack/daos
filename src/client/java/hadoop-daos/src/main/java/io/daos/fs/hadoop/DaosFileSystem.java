@@ -176,7 +176,7 @@ public class DaosFileSystem extends FileSystem {
         LOG.debug("daos finalizer relocated to hadoop ShutdownHookManager");
       }
     } else {
-      LOG.error("failed to relocate daos finalizer");
+      LOG.warn("failed to relocate daos finalizer. Could have been relocated to somewhere else already.");
     }
   }
 
@@ -190,14 +190,19 @@ public class DaosFileSystem extends FileSystem {
       throw new IllegalArgumentException("schema should be " + getScheme());
     }
     DunsInfo info = searchUnsPath(name.getPath());
-    if (info != null) {
-      LOG.info("initializing from uns path, " + name);
-      uns = true;
-      initializeFromUns(name, conf, info);
-    } else {
-      LOG.info("initializing from config file, " + name);
-      uns = false;
-      initializeFromConfigFile(name, conf);
+    try {
+      if (info != null) {
+        LOG.info("initializing from uns path, " + name);
+        uns = true;
+        initializeFromUns(name, conf, info);
+      } else {
+        LOG.info("initializing from config file, " + name);
+        uns = false;
+        initializeFromConfigFile(name, conf);
+      }
+    } catch (Exception e) {
+      LOG.error("failed to initialize DaosFileSystem for " + name, e);
+      throw e;
     }
   }
 

@@ -52,9 +52,9 @@ public class DaosClient implements ForceCloseable {
 
   private DaosClientBuilder builder;
 
-  private long poolPtr;
+  private DaosPool pool;
 
-  private long contPtr;
+  private DaosContainer container;
 
   private volatile boolean inited;
 
@@ -206,18 +206,12 @@ public class DaosClient implements ForceCloseable {
       return;
     }
 
-    poolPtr = daosOpenPool(builder.poolId, builder.serverGroup,
+    pool = DaosPool.getInstance(builder.poolId, builder.serverGroup,
       builder.ranks,
       builder.poolFlags);
-    if (log.isDebugEnabled()) {
-      log.debug("opened pool {}", poolPtr);
-    }
 
     if (builder.contId != null) {
-      contPtr = daosOpenCont(poolPtr, builder.contId, builder.containerFlags);
-      if (log.isDebugEnabled()) {
-        log.debug("opened container {}", contPtr);
-      }
+      container = DaosContainer.getInstance(builder.contId, pool.getPoolPtr(), builder.containerFlags);
     } else {
       log.warn("container UUID is not set");
     }
@@ -227,11 +221,11 @@ public class DaosClient implements ForceCloseable {
   }
 
   public long getPoolPtr() {
-    return poolPtr;
+    return pool == null ? 0 : pool.getPoolPtr();
   }
 
   public long getContPtr() {
-    return contPtr;
+    return container == null ? 0 : container.getContPtr();
   }
 
   /**
@@ -255,15 +249,12 @@ public class DaosClient implements ForceCloseable {
   }
 
   private synchronized void disconnect() throws IOException {
-    if (inited && poolPtr != 0) {
-      if (contPtr != 0) {
-        daosCloseContainer(contPtr);
-        if (log.isDebugEnabled()) {
-          log.debug("closed container {}", contPtr);
-        }
+    if (inited && pool != null) {
+      if (container != null) {
+        container.close();
       }
-      daosClosePool(poolPtr);
-      log.info("DaosFsClient for {}, {} disconnected", builder.poolId, builder.contId);
+      pool.close();
+      log.info("DaosClient for {}, {} disconnected", builder.poolId, builder.contId);
     }
     inited = false;
   }
