@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import os
 import re
+import random
 from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
@@ -46,7 +47,6 @@ class ZeroConfigTest(TestWithServers):
     def setUp(self):
         """Set up for zero-config test."""
         self.setup_start_servers = False
-        self.setup_start_agents = False
         super(ZeroConfigTest, self).setUp()
 
     def get_port_cnt(self, hosts, dev, port_counter):
@@ -87,7 +87,7 @@ class ZeroConfigTest(TestWithServers):
             bool: status of whether correct device was used.
 
         """
-        cmd = "cat {}".format(log_file)
+        cmd = "head -50 {}".format(log_file)
         err = "Error getting log data."
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
@@ -179,57 +179,33 @@ class ZeroConfigTest(TestWithServers):
         :avocado: tags=all,pr,hw,small,zero_config,env_set
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
-        devs = ["ib0", "ib1"]
-        ports = [31416, 31417]
-        for idx, (exp_iface, port) in enumerate(zip(devs, ports)):
-            # Setup the agents
-            self.add_agent_manager()
-            self.configure_manager(
-                "agent",
-                self.agent_managers[0],
-                include_local_host(self.hostlist_clients),
-                self.hostfile_clients_slots)
+        dev_info = {"ib0": 0, "ib1": 1}
+        exp_iface = random.choice(dev_info.keys())
 
-            # Start agent
-            self.start_agent_managers()
+        # Configure the daos server
+        config_file = self.get_config_file(self.server_group, "server")
+        self.add_server_manager(config_file)
+        self.configure_manager(
+            "server",
+            self.server_managers[0],
+            self.hostlist_servers,
+            self.hostfile_servers_slots,
+            self.hostlist_servers)
+        self.assertTrue(
+            self.server_managers[0].set_config_value(
+                "fabric_iface", exp_iface),
+            "Error updating daos_server 'fabric_iface' config opt")
+        self.assertTrue(
+            self.server_managers[0].set_config_value(
+                "pinned_numa_node", dev_info[exp_iface]),
+            "Error updating daos_server 'pinned_numa_node' config opt")
 
-            # Configure the daos server
-            config_file = self.get_config_file(self.server_group, "server")
-            self.add_server_manager(config_file)
-            self.configure_manager(
-                "server",
-                self.server_managers[0],
-                self.hostlist_servers,
-                self.hostfile_servers_slots,
-                self.hostlist_servers)
-            self.assertTrue(
-                self.server_managers[0].set_config_value(
-                    "fabric_iface", exp_iface),
-                "Error updating daos_server 'fabric_iface' config opt")
-            self.assertTrue(
-                self.server_managers[0].set_config_value(
-                    "fabric_iface_port", port),
-                "Error updating daos_server 'fabric_iface_port' config opt")
-            self.assertTrue(
-                self.server_managers[0].set_config_value(
-                    "pinned_numa_node", idx),
-                "Error updating daos_server 'pinned_numa_node' config opt")
+        # Start the daos server
+        self.start_server_managers()
 
-            # Start the daos server
-            self.start_server_managers()
-
-            # Verify
-            err = []
-            if not self.verify_client_run(exp_iface, env_state):
-                err.append("Failed run with expected dev: {}".format(exp_iface))
-
-            # Stop the agent and server
-            self.stop_agents()
-            self.stop_servers()
-
-            # Remove server manager from list so we don't start 2 servers on the
-            # next iteration.
-            self.agent_managers.pop()
-            self.server_managers.pop()
+        # Verify
+        err = []
+        if not self.verify_client_run(exp_iface, env_state):
+            err.append("Failed run with expected dev: {}".format(exp_iface))
 
         self.assertEqual(len(err), 0, "{}".format("\n".join(err)))

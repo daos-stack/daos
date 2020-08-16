@@ -258,7 +258,7 @@ struct crt_grp_gdata {
 
 void crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 int crt_grp_detach(crt_group_t *attached_grp);
-int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
+void crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
 		      hg_addr_t *hg_addr);
 int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
