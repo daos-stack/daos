@@ -35,8 +35,6 @@ import time
 import yaml
 import errno
 
-import avocado
-
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -237,6 +235,7 @@ def set_test_environment(args):
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+
 
 def get_output(cmd, check=True):
     """Get the output of given command executed on this host.
@@ -899,55 +898,13 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Create a subdirectory in the avocado logs directory for this test
     destination = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
-<<<<<<< HEAD
-    # Copy any log files that exist on the test hosts and remove them from the
-    # test host if the copy is successful.  Attempt all of the commands and
-    # report status at the end of the loop.  Include a listing of the file
-    # related to any failed command.
-
-    # Start with the DAOS logs dir
-    logs_dirs = [
-      logs_dir,
-      avocado.core.data_dir.get_data_dir(),
-      avocado.core.data_dir.get_logs_dir(),
-      avocado.core.data_dir.get_test_dir(),
-      avocado.core.data_dir.get_tmp_dir()
-    ]
-
-    print('EAM log: line 935, logs_dirs  = ', logs_dirs )
-
-    # Make sure we archive both DAOS and CaRT logs
-    for logs_dir in logs_dirs:
-      commands = [
-          "set -eu",
-          "set +x",
-          "env",
-          "rc=0",
-          "copied=()",
-          "for file in $(ls {}/*.log*)".format(logs_dir),
-          "do ls -sh $file",
-            "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-                this_host, daos_logs_dir),
-              "then copied+=($file)",
-              "if ! sudo rm -fr $file",
-                "then ((rc++))",
-                "ls -al $file",
-              "fi",
-            "fi",
-          "done",
-          "echo Copied ${copied[@]:-no files}",
-          "exit $rc",
-      ]
-      spawn_commands(host_list, "; ".join(commands), 900)
-=======
     # Copy any DAOS logs created on any host under test
     host_list = get_hosts_from_yaml(test_yaml, args)
     print("Archiving host logs from {} in {}".format(host_list, destination))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    archive_files(destination, host_list, "{}/*.log".format(logs_dir))
->>>>>>> 49a5ea2bd850887321ed22ed609e597c775632c9
+    archive_files(destination, host_list, "{}/*.log*".format(logs_dir))
 
 
 def archive_config_files(avocado_logs_dir):
