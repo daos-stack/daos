@@ -138,8 +138,6 @@ wipe(char *ctrlr_pci_addr)
 	struct ret_t		*ret;
 	struct lba0_data	 data;
 	int			 rc;
-	char			 buf[BUFLEN];
-	size_t			 info_len;
 
 	ret = init_ret(0);
 
@@ -204,14 +202,6 @@ wipe(char *ctrlr_pci_addr)
 			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 			return ret;
 		}
-
-		snprintf(buf, BUFLEN, "%d ", spdk_nvme_ns_get_id(nentry->ns));
-		info_len = strnlen(ret->info, BUFLEN);
-		if ((strnlen(buf, BUFLEN) + info_len) < BUFLEN)
-			strncat(ret->info, buf, BUFLEN - info_len - 1);
-		else
-			fprintf(stderr, "buffer length exceeded (%d)\n",
-				BUFLEN);
 
 		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 		nentry = nentry->next;

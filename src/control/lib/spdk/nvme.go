@@ -198,8 +198,8 @@ func (n *NvmeImpl) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
 
 	retPtr := C.nvme_wipe_namespaces(csPci)
 	if retPtr.rc == 0 {
-		log.Debugf("NVMe Format(): wiped namespaces [%s] on %s",
-			C.GoString(&retPtr.info[0]), ctrlrPciAddr)
+		log.Debugf("NVMe Format(): successfully wiped all namespaces on %s",
+			ctrlrPciAddr)
 	}
 	if _, err = processReturn(retPtr, wipeMsg); err == nil {
 		return // quick format succeeded
