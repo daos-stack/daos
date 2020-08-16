@@ -1,0 +1,57 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  test_clients:
+    - client-E
+    - client-F
+timeout: 300
+server_config:
+  name: daos_server
+  servers:
+    log_mask: ERR
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+pool:
+  createmode:
+    mode_RW:
+      mode: 146
+  createset:
+    setname: daos_server
+  createsize:
+    scm_size: 5000000000
+    nvme_size: 20000000000
+  createsvc:
+    svcn: 1
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  client_processes:
+      np: 10
+  io_consistency: !mux
+    FPP:
+      api_flag:
+        - [DFS , "-v -w -k -F"]
+        - [POSIX, "-v -r -R -F"]
+    SSF:
+      api_flag:
+        - [DFS , "-v -w -k"]
+        - [POSIX, "-v -r -R"]
+  dfs_destroy: False
+  test_file: /testFile
+  signature: 5
+  repetitions: 1
+  transfersize_blocksize:
+    1M:
+      transfer_size: '1M'
+      block_size: '2G'
+  objectclass:
+    SX:
+      daos_oclass: "SX"
+dfuse:
+  mount_dir: "/tmp/daos_dfuse/"
