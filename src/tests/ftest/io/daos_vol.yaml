@@ -50,3 +50,12 @@ daos_vol_tests:  !mux
     test6:
         testname: h5_partest_testphdf5
         client_processes: 6
+    test7:
+        testname: h5daos_test_map
+        client_processes: 1
+    test8:
+        testname: h5daos_test_map_parallel
+        client_processes: 6
+    test9:
+        testname: h5daos_test_oclass
+        client_processes: 1
