@@ -13,7 +13,7 @@ else
   exit 1
 fi
 
-rm -rf run_test.sh vm_test
+rm -rf run_test.sh vm_test run_test_memcheck.sh
 DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
 
