@@ -54,14 +54,20 @@ class NLT_Conf():
         return self.bc[key]
 
 class BoolRatchet():
+    """Used for saving test results"""
+
+    # Any call to fail() of add_result with a True value will result
+    # in errors being True.
 
     def __init__(self):
         self.errors = False
 
     def fail(self):
+        """Mark as failure"""
         self.errors = True
 
     def add_result(self, result):
+        """Save result, keep record of failure"""
         if result:
             self.fail()
 
@@ -549,7 +555,7 @@ class DFuse():
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
-            if (ret != 0):
+            if ret != 0:
                 fatal_errors = True
         except subprocess.TimeoutExpired:
             self._sp.send_signal(signal.SIGTERM)

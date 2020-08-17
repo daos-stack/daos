@@ -4,6 +4,8 @@ set -uex
 
 cd "$DAOS_BASE"
 mkdir run_test.sh
+ls
+mkdir -p vm_test
 if ls /tmp/daos*.log > /dev/null; then
   mv /tmp/daos*.log run_test.sh/
 fi
