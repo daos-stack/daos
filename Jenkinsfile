@@ -1052,7 +1052,7 @@ pipeline {
                       always {
                           unitTestPost valgrind_stash: 'centos7-gcc-unit-valg',
                                        valgrind_pattern: 'run_test_memcheck.sh/*memcheck.xml',
-                                       artifacts: ['run_test_memcheck.sh']
+                                       artifacts: ['run_test_memcheck.sh/*']
                         }
                     }
                 } // End run_test.sh with memcheck stage
