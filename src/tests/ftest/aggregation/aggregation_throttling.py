@@ -73,7 +73,7 @@ class DaosAggregationThrottling(IorTestBase):
 
         # Run ior the second time on the same pool and container, so another
         # copy of the file is inserted in DAOS.
-        out = self.run_ior_with_pool(update=False)
+        out = self.run_ior_with_pool(create_pool=False)
 
         # wait 90 seconds for files to get old enough for aggregation
         self.log.info("Waiting for 90 seconds for aggregation to start")
@@ -83,7 +83,7 @@ class DaosAggregationThrottling(IorTestBase):
 
         # Run ior the third time while the aggregation of first two runs
         # are running in the background.
-        out = self.run_ior_with_pool(update=False)
+        out = self.run_ior_with_pool(create_pool=False)
         metric_after_aggregate = IorCommand.get_ior_metrics(out)
 
         # When DAOS-5057 is fixed, adjust the percentage. For now,

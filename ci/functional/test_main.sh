@@ -42,11 +42,6 @@ if $TEST_RPMS; then
        TNODES=\"$tnodes\"                            \
        FTEST_ARG=\"$FTEST_ARG\"                      \
        $(cat ci/functional/test_main_node.sh)"
-    # now collect up the logs and store them like non-RPM test does
-    mkdir -p install/lib/daos/TESTING/
-    # scp doesn't copy symlinks, it resolves them
-    ssh -i ci_key -l jenkins "${first_node}" tar -C /var/tmp/ -czf - ftest |
-        tar -C install/lib/daos/TESTING/ -xzf -
 else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
 fi
