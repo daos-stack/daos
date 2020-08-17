@@ -29,7 +29,7 @@ from command_utils import CommandFailure
 from control_test_base import ControlTestBase
 
 
-class DmgStorageReformatTest(ControlTestBase):
+class DmgSystemReformatTest(ControlTestBase):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
 
