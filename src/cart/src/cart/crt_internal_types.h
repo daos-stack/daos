@@ -46,12 +46,8 @@ struct crt_gdata {
 	crt_phy_addr_t		cg_addr;
 
 	bool			cg_server;
-	/*
-	 * share NA addr flag, true means all contexts share one NA class, fasle
-	 * means each context has its own NA class.  Each NA class has an
-	 * independent listening address.
-	 */
-	bool			cg_share_na;
+	/* Flag indicating whether scalable endpoint mode is enabled */
+	bool			cg_sep_mode;
 	int			cg_na_plugin; /* NA plugin type */
 
 	/* global timeout value (second) for all RPCs */
