@@ -455,6 +455,7 @@ calc_hash:
 	}
 
 set_params:
+	D_ASSERT(ts_set->ts_init_count >= 1);
 	se = &ts_set->ts_entries[ts_set->ts_init_count - 1];
 	se->se_etype = ts_set->ts_etype;
 	if (se->se_etype > ts_set->ts_max_type)

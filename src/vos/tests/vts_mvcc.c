@@ -42,8 +42,6 @@ struct tx_helper {
 	uint32_t		 th_nr_mods;
 	/** Current op number */
 	uint32_t		 th_op_seq;
-	/** Has PMDK commits to undo if operation fails */
-	bool			 th_has_committed;
 };
 
 struct mvcc_arg {
@@ -221,19 +219,13 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 {
 	struct dtx_handle	*dth = txh->th_dth;
 	struct dtx_id		 xid;
-	bool			 has_committed = txh->th_has_committed;
 	int			 err;
 
 	if (txh == NULL)
 		return;
 
-	/** Mark if PMDK transaction would have committed so we know to abort */
-	if (write) {
-		if (success && dth->dth_modification_cnt &&
-		    dth->dth_op_seq == dth->dth_modification_cnt)
-			has_committed = true;
+	if (write)
 		dth->dth_op_seq++;
-	}
 
 	if (txh->th_nr_ops == txh->th_op_seq) {
 		xid = dth->dth_xid;
@@ -242,18 +234,10 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 			if (success) {
 				err = vos_dtx_commit(coh, &xid, 1, NULL);
 				assert_int_equal(err, 1);
-			} else {
-				if (txh->th_has_committed) {
-					err = vos_dtx_abort(coh, DAOS_EPOCH_MAX,
-							    &xid, 1);
-					assert_int_equal(err, 1);
-				}
-				has_committed = false;
 			}
 		}
 	}
 
-	txh->th_has_committed = has_committed;
 	txh->th_op_seq++;
 }
 

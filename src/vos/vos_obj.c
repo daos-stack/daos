@@ -206,7 +206,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	}
 
-	rc = vos_ts_set_allocate(&ts_set, flags, clfags, akey_nr,
+	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr,
 				 dtx_is_valid_handle(dth) ?
 				 &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
