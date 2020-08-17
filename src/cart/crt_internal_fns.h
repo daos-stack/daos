@@ -56,6 +56,10 @@ int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
 void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);
 void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
 
+/** crt_hlct.c */
+uint64_t crt_hlct_get(void);
+void crt_hlct_sync(uint64_t msg);
+
 /** some simple helper functions */
 
 static inline bool
