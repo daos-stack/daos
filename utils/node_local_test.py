@@ -9,7 +9,7 @@ import uuid
 import yaml
 import json
 import signal
-import argparse #DM
+import argparse
 import subprocess
 import tempfile
 import pickle
@@ -1200,15 +1200,14 @@ def test_alloc_fail(conf):
 def main():
     """Main entry point"""
 
-    parser = argparse.ArgumentParser() #DM
-    parser.add_argument('--output-file', default='nlt-errors.json') #DM
-    parser.add_argument('mode', nargs='?') #DM
-    args = parser.parse_args() #DM
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output-file', default='nlt-errors.json')
+    parser.add_argument('mode', nargs='?')
+    args = parser.parse_args()
 
     conf = load_conf()
 
-    #wf = WarningsFactory('nlt-errors.json') #DM
-    wf = WarningsFactory(args.output_file) #DM
+    wf = WarningsFactory(args.output_file)
 
     conf.set_wf(wf)
     setup_log_test(conf)
@@ -1218,23 +1217,17 @@ def main():
 
     fatal_errors = False
 
-    #if len(sys.argv) == 2 and sys.argv[1] == 'launch': #DM
-    if args.mode == 'launch': #DM
+    if args.mode == 'launch':
         run_in_fg(server, conf)
-    #elif len(sys.argv) == 2 and sys.argv[1] == 'il': #DM
-    elif args.mode == 'il': #DM
+    elif args.mode == 'il':
         run_il_test(server, conf)
-    #elif len(sys.argv) == 2 and sys.argv[1] == 'kv': #DM
-    elif args.mode == 'kv': #DM
+    elif args.mode == 'kv':
         test_pydaos_kv(server, conf)
-    #elif len(sys.argv) == 2 and sys.argv[1] == 'overlay': #DM
-    elif args.mode == 'overlay': #DM
+    elif args.mode == 'overlay':
         run_duns_overlay_test(server, conf)
-    #elif len(sys.argv) == 2 and sys.argv[1] == 'fi': #DM
-    elif args.mode == 'fi': #DM
+    elif args.mode == 'fi':
         fatal_errors = test_alloc_fail(conf)
-    #elif len(sys.argv) == 2 and sys.argv[1] == 'all': #DM
-    elif args.mode == 'all': #DM
+    elif args.mode == 'all':
         run_il_test(server, conf)
         run_dfuse(server, conf)
         run_duns_overlay_test(server, conf)
