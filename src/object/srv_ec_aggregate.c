@@ -1026,8 +1026,8 @@ agg_peer_update(struct ec_agg_entry *entry)
 	*/
 	tgt_ep.ep_rank = entry->ae_peer_rank;
 	D_PRINT("target rank: %u\n", tgt_ep.ep_rank);
-	//tgt_ep.ep_tag = target->ta_comp.co_index;
-	D_PRINT("tgt_ep.ep_tag: %u\n", tgt_ep.ep_tag);
+	tgt_ep.ep_tag = 1;
+	//D_PRINT("tgt_ep.ep_tag: %u\n", tgt_ep.ep_tag);
 	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_AGGREGATE, DAOS_OBJ_MODULE,
 				 DAOS_OBJ_VERSION);
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
@@ -1479,18 +1479,16 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	}
 
 	rc = dsc_pool_open(agg_param.ap_pool_info.api_pool_uuid,
-			   agg_param.ap_pool_info.api_poh_uuid, 0, NULL,
-			   agg_param.ap_pool_info.api_pool->sp_map,
+			   agg_param.ap_pool_info.api_poh_uuid, DAOS_PC_RW,
+			   NULL, agg_param.ap_pool_info.api_pool->sp_map,
 			   agg_param.ap_pool_info.api_svc_list, &ph);
-	daos_prop_entries_free(agg_param.ap_prop);
-	D_FREE(agg_param.ap_prop);
 	if (rc) {
 		D_ERROR("dsc_pool_open failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	rc = dsc_cont_open(ph, agg_param.ap_pool_info.api_cont_uuid,
-			   agg_param.ap_pool_info.api_coh_uuid, 0,
+			   agg_param.ap_pool_info.api_coh_uuid, DAOS_COO_RW,
 			   &agg_param.ap_pool_info.api_cont_hdl);
 	if (rc) {
 		D_ERROR("dsc_cont_open failed: "DF_RC"\n", DP_RC(rc));
@@ -1504,6 +1502,8 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
 out:
+	daos_prop_entries_free(agg_param.ap_prop);
+	D_FREE(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	D_FREE(agg_param.ap_agg_entry);
 	agg_sgl_fini(&agg_param.ap_sgl);

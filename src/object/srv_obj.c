@@ -1636,7 +1636,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 {
 	struct obj_ec_agg_in	*oea = crt_req_get(rpc);
 	struct obj_ec_agg_out	*oeao = crt_reply_get(rpc);
-	struct obj_io_context	ioc;
+	daos_key_t		*dkey;
+	struct obj_io_context	 ioc;
 	int			 rc;
 
 	D_ASSERT(oea != NULL);
@@ -1646,6 +1647,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	rc = obj_ioc_begin(oea->ea_oid, oea->ea_map_ver,
 			   oea->ea_pool_uuid, oea->ea_coh_uuid,
 			   oea->ea_cont_uuid, opc_get(rpc->cr_opc), &ioc);
+		/*
 	if (!rc)
 		D_PRINT("dedup: %d, dedup_size: %u\n",
 			      ioc.ioc_coc->sc_props.dcp_dedup,
@@ -1653,10 +1655,13 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 
 	else
 		D_PRINT("ioc_begin failed: %d\n", rc);
-		/*
 		goto out;
-	rc = vos_update_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
-			      orw->orw_epoch, orw->orw_api_flags,
+		*/
+	dkey = (daos_key_t *)&oea->ea_dkey;
+	D_PRINT("dkey "DF_KEY" \n", DP_KEY(dkey));
+	/*
+	rc = vos_update_begin(ioc->ioc_coc->sc_hdl, oea->orw_oid,
+			      oea->orw_epoch, oea->orw_api_flags,
 			      dkey, orw->orw_nr, iods,
 			      iod_csums,
 			      ioc->ioc_coc->sc_props.dcp_dedup,
