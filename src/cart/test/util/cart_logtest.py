@@ -509,7 +509,7 @@ class LogTest():
                         error_files.add(line.filename)
                         err_count += 1
             elif len(line._fields) > 2:
-                # is_calloc() doens't work on truncated output so only test if
+                # is_calloc() doesn't work on truncated output so only test if
                 # there are more than two fields to work with.
                 non_trace_lines += 1
                 if line.is_calloc():
