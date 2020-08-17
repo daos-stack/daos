@@ -241,7 +241,8 @@ typedef struct {
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 */
 	void		 (*mo_defer_free)(struct umem_instance *umm,
-				       umem_off_t off, struct pobj_action *act);
+					  umem_off_t off,
+					  struct pobj_action *act);
 
 	/**
 	 * Cancel the reservation.
