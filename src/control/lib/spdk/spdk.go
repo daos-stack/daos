@@ -50,6 +50,7 @@ import (
 // Env is the interface that provides SPDK environment management.
 type Env interface {
 	InitSPDKEnv(logging.Logger, EnvOptions) error
+	FiniSPDKEnv(logging.Logger, EnvOptions) error
 }
 
 // EnvImpl is a an implementation of the Env interface.
@@ -60,11 +61,13 @@ func Rc2err(label string, rc C.int) error {
 	return fmt.Errorf("%s: %d", label, rc)
 }
 
+// EnvOptions describe paramaters to be used when initializing a process'
+// SPDK environment.
 type EnvOptions struct {
 	ShmID        int      // shared memory segment identifier for SPDK IPC
 	MemSize      int      // size in MiB to be allocated to SPDK proc
 	PciWhiteList []string // restrict SPDK device access
-	DisableVMD   bool     // VMD devices should not be included
+	DisableVMD   bool     // flag if VMD devices should not be included
 }
 
 func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr *unsafe.Pointer, err error) {
@@ -143,6 +146,24 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
 	if rc := C.spdk_vmd_init(); rc != 0 {
 		return Rc2err("spdk_vmd_init()", rc)
 	}
+
+	return nil
+}
+
+// FiniSPDKEnv initializes the SPDK environment.
+func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) error {
+	log.Debugf("spdk fini go opts: %+v", opts)
+
+	C.spdk_env_fini()
+
+	// TODO: enable when vmd_fini supported in daos spdk version
+	//	if opts.DisableVMD {
+	//		return nil
+	//	}
+	//
+	//	if rc := C.spdk_vmd_fini(); rc != 0 {
+	//		return Rc2err("spdk_vmd_fini()", rc)
+	//	}
 
 	return nil
 }

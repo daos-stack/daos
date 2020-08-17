@@ -106,7 +106,7 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (err er
 
 	// provide empty whitelist on init so all devices are discovered
 	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
-		return errors.Wrap(err, "failed to init spdk")
+		return errors.Wrap(err, "failed to init spdk env")
 	}
 
 	cs, err := w.Discover(log)
@@ -114,8 +114,13 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (err er
 		return errors.Wrap(err, "failed to discover nvme")
 	}
 	w.controllers = cs
-
 	w.initialized = true
+	w.Cleanup()
+
+	if err := w.FiniSPDKEnv(log, spdkOpts); err != nil {
+		return errors.Wrap(err, "failed to close spdk env")
+	}
+
 	return nil
 }
 
@@ -219,8 +224,10 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) formatNvmeBdev(req DeviceFormatRequest, resp *DeviceFormatResponse) error {
-	msg := fmt.Sprintf("%s format on %q", req.Class, req.Device)
-	defer b.log.Debug(msg)
+	msg := fmt.Sprintf("%s device format on %q", req.Class, req.Device)
+	defer func() {
+		b.log.Debug(msg)
+	}()
 
 	spdkOpts := spdk.EnvOptions{
 		ShmID:        req.ShmID,
@@ -231,14 +238,22 @@ func (b *spdkBackend) formatNvmeBdev(req DeviceFormatRequest, resp *DeviceFormat
 
 	// provide bdev as whitelist so only formatting device is bound
 	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
-		return errors.Wrap(err, "failed to init spdk")
+		msg = fmt.Sprintf("%s failed InitSPDKEnv() (%s)", msg, err)
+
+		return errors.Wrap(err, "failed to init spdk env")
 	}
 
 	if err := b.binding.Format(b.log, req.Device); err != nil {
-		msg = fmt.Sprintf("%s failed (%s)", msg, err)
+		msg = fmt.Sprintf("%s failed Format() (%s)", msg, err)
 		resp.Error = FaultFormatError(req.Device, err)
 
 		return nil
+	}
+
+	if err := b.binding.FiniSPDKEnv(b.log, spdkOpts); err != nil {
+		msg = fmt.Sprintf("%s failed FiniSPDKEnv() (%s)", msg, err)
+
+		return errors.Wrap(err, "failed to close spdk env")
 	}
 
 	resp.Formatted = true
