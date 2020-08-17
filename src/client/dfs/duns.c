@@ -276,9 +276,9 @@ check_direct_format(const char *path, bool no_prefix)
 
 	if (no_prefix)
 		rc = regcomp(&regx, DAOS_FORMAT_NO_PREFIX,
-			     REG_EXTENDED|REG_ICASE);
+			     REG_EXTENDED | REG_ICASE);
 	else
-		rc = regcomp(&regx, DAOS_FORMAT, REG_EXTENDED|REG_ICASE);
+		rc = regcomp(&regx, DAOS_FORMAT, REG_EXTENDED | REG_ICASE);
 	if (rc)
 		return -DER_INVAL;
 

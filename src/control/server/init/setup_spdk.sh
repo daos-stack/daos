@@ -77,6 +77,7 @@ if [[ $1 == reset ]]; then
 else
 	# avoid shadowing by prefixing input envars
 	PCI_WHITELIST="$_PCI_WHITELIST" \
+	PCI_BLACKLIST="$_PCI_BLACKLIST" \
 	NRHUGE="$_NRHUGE" \
 	TARGET_USER="$_TARGET_USER" \
 	DRIVER_OVERRIDE="$_DRIVER_OVERRIDE" \
