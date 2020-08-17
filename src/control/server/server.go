@@ -133,6 +133,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
 		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
+		PCIBlacklist:  strings.Join(cfg.BdevExclude, " "),
 		DisableVFIO:   cfg.DisableVFIO,
 		DisableVMD:    cfg.DisableVMD || cfg.DisableVFIO || iommuDisabled,
 		// TODO: pass vmd include/white list

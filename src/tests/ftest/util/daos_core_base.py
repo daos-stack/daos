@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+import os
+
 from avocado import fail_on
 from avocado.utils import process
 from apricot import TestWithServers
@@ -120,7 +122,7 @@ class DaosCoreBase(TestWithServers):
         )
 
         env = {}
-        env['CMOCKA_XML_FILE'] = "%g_results.xml"
+        env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir, "%g_results.xml")
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
         env['POOL_SCM_SIZE'] = "{}".format(scm_size)
 
@@ -130,9 +132,23 @@ class DaosCoreBase(TestWithServers):
         except process.CmdError as result:
             if result.result.exit_status != 0:
                 # fake a JUnit failure output
-                with open(self.subtest_name +
-                          "_results.xml", "w") as results_xml:
-                    results_xml.write('''<?xml version="1.0" encoding="UTF-8"?>
+                self.create_results_xml(self.subtest_name, result)
+                self.fail(
+                    "{0} failed with return code={1}.\n".format(
+                        cmd, result.result.exit_status))
+
+    def create_results_xml(self, testname, result):
+        """Create a JUnit result.xml file for the failed command.
+
+        Args:
+            testname (str): name of the test
+            result (CmdResult): result of the failed command.
+        """
+        filename = "".join([testname, "_results.xml"])
+        filename = os.path.join(self.outputdir, filename)
+        try:
+            with open(filename, "w") as results_xml:
+                results_xml.write('''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="{0}" errors="1" failures="0" skipped="0" tests="1" time="0.0">
   <testcase name="ALL" time="0.0" >
     <error message="Test failed to start up"/>
@@ -143,7 +159,6 @@ class DaosCoreBase(TestWithServers):
 <![CDATA[{2}]]>
     </system-err>
   </testcase>
-</testsuite>'''.format(self.subtest_name, result.result.stdout,
-                       result.result.stderr))
-                self.fail("{0} failed with return code={1}.\n"
-                          .format(cmd, result.result.exit_status))
+</testsuite>'''.format(testname, result.result.stdout, result.result.stderr))
+        except IOError as error:
+            self.log.error("Error creating %s: %s", filename, error)
