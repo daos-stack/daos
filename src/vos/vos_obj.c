@@ -174,9 +174,14 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
-	daos_epoch_range_t	 epr = {0, dth ? dth->dth_epoch : epoch};
+	daos_epoch_range_t	 epr = { 0 };
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
+
+	if (dtx_is_valid_handle(dth))
+		epr.epr_hi = dth->dth_epoch;
+	else
+		epr.epr_hi = epoch;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
 		DP_UOID(oid), epr.epr_hi);
@@ -184,7 +189,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
-	if (dth != NULL) {
+	if (dtx_is_valid_handle(dth)) {
 		if (akey_nr) {
 			cflags = VOS_TS_WRITE_AKEY;
 			if (flags & VOS_OF_COND_PUNCH)
@@ -201,8 +206,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	}
 
-	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr,
-				 dth ? &dth->dth_xid.dti_uuid : NULL);
+	rc = vos_ts_set_allocate(&ts_set, flags, clfags, akey_nr,
+				 dtx_is_valid_handle(dth) ?
+				 &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto reset;
 
@@ -215,7 +221,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, rc = -DER_NOMEM);

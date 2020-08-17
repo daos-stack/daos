@@ -165,7 +165,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 {
 	int	rc;
 
-	if (dth == NULL)
+	if (!dtx_is_valid_handle(dth))
 		return umem_tx_begin(umm, vos_txd_get());
 
 	if (dth->dth_local_tx_started)
@@ -187,7 +187,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	struct dtx_handle	 tmp = {0};
 	int			 rc = err;
 
-	if (dth == NULL) {
+	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
 		dth = &tmp;
 		tmp.dth_modification_cnt = dth->dth_op_seq = 1;

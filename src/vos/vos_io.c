@@ -495,7 +495,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (rc != 0)
 		goto error;
 
-	if (dth != NULL) {
+	if (dtx_is_valid_handle(dth)) {
 		if (read_only) {
 			cflags = VOS_TS_READ_AKEY;
 			if (cond_flags & VOS_OF_COND_DKEY_FETCH)
@@ -510,7 +510,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	}
 
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, cond_flags, cflags, iod_nr,
-				 dth ? &dth->dth_xid.dti_uuid : NULL);
+				 dtx_is_valid_handle(dth) ?
+				 &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto error;
 
@@ -1207,6 +1208,8 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
+	vos_dth_set(dth);
+
 	rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
 
@@ -1241,6 +1244,8 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	*ioh = vos_ioc2ioh(ioc);
 
 out:
+	vos_dth_set(NULL);
+
 	if (rc == -DER_NONEXIST || rc == 0)
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
 
@@ -1932,7 +1937,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	vos_dth_set(dth);
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
@@ -1951,7 +1956,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ?
+	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?
 			  dth->dth_op_seq : VOS_MINOR_EPC_MAX);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
@@ -2010,9 +2015,11 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		"\n", DP_UOID(oid), iod_nr, dth ? dth->dth_epoch :  epoch);
+		"\n", DP_UOID(oid), iod_nr,
+		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch);
 
-	rc = vos_ioc_create(coh, oid, false, dth ? dth->dth_epoch : epoch,
+	rc = vos_ioc_create(coh, oid, false,
+			    dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch,
 			    flags, iod_nr, iods, iods_csums, 0, NULL, dedup,
 			    dedup_th, dth, &ioc);
 	if (rc != 0)
