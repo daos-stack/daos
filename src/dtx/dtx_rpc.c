@@ -36,22 +36,6 @@
 #include <daos_srv/daos_server.h>
 #include "dtx_internal.h"
 
-static int
-crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
-{
-	int rc;
-
-	rc = crt_proc_uuid_t(proc, &dti->dti_uuid);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint64_t(proc, &dti->dti_hlc);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
 CRT_RPC_DEFINE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
 #define X_RPC(a, b, c, d, e)	\

@@ -114,7 +114,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_addr = NULL;
 	crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
-	crt_gdata.cg_share_na = false;
+	crt_gdata.cg_sep_mode = false;
 
 	srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)rand()) << 32;
@@ -180,23 +180,23 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	if (opt && opt->cio_sep_override) {
 		if (opt->cio_use_sep) {
-			crt_gdata.cg_share_na = true;
-			D_DEBUG(DB_ALL, "crt_gdata.cg_share_na turned on.\n");
+			crt_gdata.cg_sep_mode = true;
+			D_DEBUG(DB_ALL, "crt_gdata.cg_sep_mode turned on.\n");
 		}
 		crt_gdata.cg_ctx_max_num = opt->cio_ctx_max_num;
 	} else {
 		d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
 		if (share_addr) {
-			crt_gdata.cg_share_na = true;
-			D_DEBUG(DB_ALL, "crt_gdata.cg_share_na turned on.\n");
+			crt_gdata.cg_sep_mode = true;
+			D_DEBUG(DB_ALL, "crt_gdata.cg_sep_mode turned on.\n");
 		}
 
 		d_getenv_int("CRT_CTX_NUM", &ctx_num);
 		crt_gdata.cg_ctx_max_num = ctx_num;
 	}
-	D_DEBUG(DB_ALL, "set cg_share_na %d, cg_ctx_max_num %d.\n",
-		crt_gdata.cg_share_na, crt_gdata.cg_ctx_max_num);
-	if (crt_gdata.cg_share_na == false && crt_gdata.cg_ctx_max_num > 1)
+	D_DEBUG(DB_ALL, "set cg_sep_mode %d, cg_ctx_max_num %d.\n",
+		crt_gdata.cg_sep_mode, crt_gdata.cg_ctx_max_num);
+	if (crt_gdata.cg_sep_mode == false && crt_gdata.cg_ctx_max_num > 1)
 		D_WARN("CRT_CTX_NUM has no effect because CRT_CTX_SHARE_ADDR "
 		       "is not set or set to 0\n");
 
@@ -366,10 +366,10 @@ do_init:
 		if ((crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS_RXM ||
 		     crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS ||
 		     crt_gdata.cg_na_plugin == CRT_NA_OFI_TCP_RXM) &&
-		    crt_gdata.cg_share_na) {
+		    crt_gdata.cg_sep_mode) {
 			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 			       "for current provider, ignore it.\n");
-			crt_gdata.cg_share_na = false;
+			crt_gdata.cg_sep_mode = false;
 		}
 
 		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS_RXM ||
