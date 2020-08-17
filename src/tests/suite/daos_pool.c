@@ -457,9 +457,11 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
+#if 0
 	char			*label = "test_pool_properties";
 	uint64_t		 space_rb = 36;
-	daos_prop_t		*prop;
+#endif
+	daos_prop_t		*prop = NULL;
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
 	daos_pool_info_t	 info = {0};
@@ -472,11 +474,14 @@ pool_properties(void **state)
 			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
+/* FIXME (DAOS-5456): label/space_rb props not supported with dmg */
+#if 0
 	prop = daos_prop_alloc(2);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	prop->dpp_entries[0].dpe_str = strdup(label);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SPACE_RB;
 	prop->dpp_entries[1].dpe_val = space_rb;
+#endif
 
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
@@ -496,6 +501,7 @@ pool_properties(void **state)
 	assert_int_equal(rc, 0);
 
 	assert_int_equal(prop_query->dpp_nr, DAOS_PROP_PO_NUM);
+#if 0
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
@@ -507,6 +513,7 @@ pool_properties(void **state)
 		print_message("space_rb verification filed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+#endif
 	/* not set properties should get default value */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SELF_HEAL);
 	if (entry == NULL ||
