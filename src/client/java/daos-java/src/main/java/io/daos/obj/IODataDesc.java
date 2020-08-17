@@ -374,8 +374,6 @@ public class IODataDesc {
     private int actualSize; // to get from value buffer
     private int actualRecSize;
 
-    private static final Logger log = LoggerFactory.getLogger(Entry.class);
-
     /**
      * construction for fetch.
      *
