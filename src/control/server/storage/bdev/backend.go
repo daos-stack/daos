@@ -220,7 +220,7 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) formatNvmeBdev(req DeviceFormatRequest, resp *DeviceFormatResponse) error {
-	cmdOut, err := exec.Command("ps ax").CombinedOutput()
+	cmdOut, err := exec.Command("/bin/ps", "ax").CombinedOutput()
 	if err != nil {
 		b.log.Error(err.Error())
 	}
