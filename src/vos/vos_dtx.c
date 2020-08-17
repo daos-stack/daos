@@ -108,10 +108,31 @@ dtx_set_aborted(uint32_t *tx_lid)
 }
 
 static inline int
-dtx_inprogress(struct vos_dtx_act_ent *dae, int pos)
+dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
+	       bool for_read)
 {
-	D_DEBUG(DB_IO, "Hit uncommitted DTX "DF_DTI" lid=%d at %d\n",
-		DP_DTI(&DAE_XID(dae)), DAE_LID(dae), pos);
+	/* If the modifications crosses multiple redundancy groups, then it
+	 * is possible that the sub modifications on the DTX leader are not
+	 * the same as the ones on non-leaders. Under such case, if someone
+	 * wants to read the data on some non-leader but hits non-committed
+	 * DTX, then asking the client to retry with leader maybe not help.
+	 * Instead, we can ask make the client to retry the read again (and
+	 * again) sometime later. We do sync commit the DTX with 'DTE_BLOCK'
+	 * flag. So it will not cause the client to retry read for too many
+	 * times unless such DTX hit some trouble (such as client or server
+	 * failure) that may cause current readers to be blocked until such
+	 * DTX has been handled by the new leader via DTX recovery.
+	 */
+	if (DAE_FLAGS(dae) & DTE_BLOCK && for_read && dth != NULL &&
+	    dth->dth_modification_cnt == 0)
+		dth->dth_local_retry = 1;
+	else if (dth != NULL)
+		dth->dth_local_retry = 0;
+
+	D_DEBUG(DB_IO,
+		"Hit uncommitted DTX "DF_DTI" lid=%d, need %s retry\n",
+		DP_DTI(&DAE_XID(dae)), DAE_LID(dae),
+		(dth != NULL && dth->dth_local_retry) ? "local" : "remote");
 
 	return -DER_INPROGRESS;
 }
@@ -778,7 +799,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
 
-		D_ASSERT(dth != NULL);
+		D_ASSERT(dtx_is_valid_handle(dth));
 
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = epoch;
@@ -1115,7 +1136,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		return ALB_UNAVAILABLE;
 
 	/* The DTX owner can always see the DTX. */
-	if (dth != NULL && dth->dth_ent != NULL) {
+	if (dtx_is_valid_handle(dth) && dth->dth_ent != NULL) {
 		dae = dth->dth_ent;
 		if (DAE_LID(dae) == entry && DAE_EPOCH(dae) == epoch)
 			return ALB_AVAILABLE_CLEAN;
@@ -1156,7 +1177,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			 * -DER_INPROGRESS, then the caller will retry
 			 * the RPC with leader replica.
 			 */
-			return dtx_inprogress(dae, 1);
+			return dtx_inprogress(dae, dth, true);
 		}
 
 		/* For leader, non-committed DTX is unavailable. */
@@ -1167,7 +1188,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		  "Unexpected intent (1) %u\n", intent);
 
 	if (type == DTX_RT_ILOG) {
-		if (dth == NULL)
+		if (!dtx_is_valid_handle(dth))
 			/* XXX: For rebuild case, if some normal IO has
 			 *	generated related record by race before
 			 *	rebuild logic handling it. Then rebuild
@@ -1179,7 +1200,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			 */
 			return ALB_UNAVAILABLE;
 
-		return dtx_inprogress(dae, 2);
+		return dtx_inprogress(dae, dth, false);
 	}
 
 	D_ASSERTF(intent == DAOS_INTENT_UPDATE,
@@ -1199,7 +1220,7 @@ vos_dtx_get(void)
 	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_dtx_act_ent	*dae;
 
-	if (dth == NULL || dth->dth_ent == NULL)
+	if (!dtx_is_valid_handle(dth) || dth->dth_ent == NULL)
 		return DTX_LID_COMMITTED;
 
 	dae = dth->dth_ent;
@@ -1215,7 +1236,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct dtx_handle	*dth = vos_dth_get();
 	int			 rc = 0;
 
-	if (dth == NULL) {
+	if (!dtx_is_valid_handle(dth)) {
 		*tx_id = DTX_LID_COMMITTED;
 		return 0;
 	}
@@ -2174,7 +2195,7 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 	d_iov_t			 kiov;
 	int			 rc;
 
-	if (dth == NULL || !dth->dth_active)
+	if (!dtx_is_valid_handle(dth) || !dth->dth_active)
 		return;
 
 	dth->dth_active = 0;

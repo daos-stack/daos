@@ -169,7 +169,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 {
 	int	rc;
 
-	if (dth == NULL)
+	if (!dtx_is_valid_handle(dth))
 		return umem_tx_begin(umm, vos_txd_get());
 
 	if (dth->dth_local_tx_started)
@@ -185,7 +185,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 int
 vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err)
 {
-	if (dth == NULL)
+	if (!dtx_is_valid_handle(dth))
 		return umem_tx_end(umm, err);
 
 	if (!dth->dth_local_tx_started)
