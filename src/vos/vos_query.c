@@ -294,7 +294,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
 		  daos_recx_t *recx, struct dtx_handle *dth)
 {
-	struct vos_object	*obj;
+	struct vos_object	*obj = NULL;
 	struct open_query	 query;
 	daos_epoch_range_t	 dkey_epr;
 	struct vos_punch_record	 dkey_punch;
@@ -340,11 +340,13 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		return -DER_INVAL;
 	}
 
+	vos_dth_set(dth);
+
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
 			  &obj_epr, true, DAOS_INTENT_DEFAULT, true, &obj, 0);
 	if (rc != 0) {
 		LOG_RC(rc, "Could not hold object: %s\n", d_errstr(rc));
-		return rc;
+		goto out;
 	}
 
 	D_ASSERT(obj != NULL);
@@ -431,6 +433,10 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	if (!daos_handle_is_inval(query.qt_dkey_toh))
 		dbtree_close(query.qt_dkey_toh);
 out:
-	vos_obj_release(vos_obj_cache_current(), obj, false);
+	if (obj != NULL)
+		vos_obj_release(vos_obj_cache_current(), obj, false);
+
+	vos_dth_set(NULL);
+
 	return rc;
 }
