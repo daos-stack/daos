@@ -30,6 +30,7 @@
 #ifndef __VOS_TS__
 #define __VOS_TS__
 
+#include <daos/dtx.h>
 #include <lru_array.h>
 #include <vos_tls.h>
 
@@ -50,6 +51,17 @@ struct vos_ts_info {
 	uint32_t		ti_count;
 };
 
+struct vos_ts_pair {
+	/** Low read time or read time for the object/key */
+	daos_epoch_t	tp_ts_rl;
+	/** High read time or read time for the object/key */
+	daos_epoch_t	tp_ts_rh;
+	/** Low read tx */
+	struct dtx_id	tp_tx_rl;
+	/** High read tx */
+	struct dtx_id	tp_tx_rh;
+};
+
 struct vos_ts_entry {
 	struct vos_ts_info	*te_info;
 	/** Key for current occupant */
@@ -58,18 +70,8 @@ struct vos_ts_entry {
 	uint32_t		*te_parent_ptr;
 	/** negative entry cache */
 	uint32_t		*te_miss_idx;
-	/** Low read time or read time for the object/key */
-	daos_epoch_t		 te_ts_rl;
-	/** Max read time for subtrees */
-	daos_epoch_t		 te_ts_rh;
-	/** uuid's of transactions.  These can potentially be changed
-	 *  to 16 bits and save some space here.  But for now, stick
-	 *  with the full id.
-	 */
-	/** Low read tx */
-	uuid_t			 te_tx_rl;
-	/** high read tx */
-	uuid_t			 te_tx_rh;
+	/** The timestamps for the entry */
+	struct vos_ts_pair	 te_ts;
 	/** Hash index in parent */
 	uint32_t		 te_hash_idx;
 };
@@ -127,7 +129,7 @@ struct vos_ts_set {
 	/** Max type */
 	uint16_t		 ts_max_type;
 	/** Transaction that owns the set */
-	uuid_t			 ts_tx_id;
+	struct dtx_id		 ts_tx_id;
 	/** size of the set */
 	uint32_t		 ts_set_size;
 	/** Number of initialized entries */
@@ -160,9 +162,9 @@ struct vos_ts_table {
 	/** Global read high timestamp for type */
 	daos_epoch_t		tt_ts_rh;
 	/** Transaciton id associated with global read low timestamp */
-	uuid_t			tt_tx_rl;
+	struct dtx_id		tt_tx_rl;
 	/** Transaciton id associated with global read high timestamp */
-	uuid_t			tt_tx_rh;
+	struct dtx_id		tt_tx_rh;
 	/** Miss index table */
 	uint32_t		*tt_misses;
 	/** Timestamp table pointers for a type */
@@ -560,7 +562,8 @@ vos_ts_table_free(struct vos_ts_table **ts_table);
  */
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
-		    uint32_t cflags, uint32_t akey_nr, uuid_t *tx_id);
+		    uint32_t cflags, uint32_t akey_nr,
+		    const struct dtx_id *tx_id);
 
 /** Upgrade any negative entries in the set now that the associated
  *  update/punch has committed
@@ -580,28 +583,38 @@ vos_ts_set_free(struct vos_ts_set *ts_set)
 	D_FREE(ts_set);
 }
 
+/** Internal API to copy timestamp */
+static inline void
+vos_ts_copy(daos_epoch_t *dest_epc, struct dtx_id *dest_id,
+	    daos_epoch_t src_epc, const struct dtx_id *src_id)
+{
+	*dest_epc = src_epc;
+	uuid_copy(dest_id->dti_uuid, src_id->dti_uuid);
+	dest_id->dti_hlc = src_id->dti_hlc;
+}
+
 /** Internal API to update low read timestamp and tx id */
 static inline void
 vos_ts_rl_update(struct vos_ts_entry *entry, daos_epoch_t read_time,
-		 const uuid_t tx_id)
+		 const struct dtx_id *tx_id)
 {
-	if (entry == NULL || read_time < entry->te_ts_rl)
+	if (entry == NULL || read_time < entry->te_ts.tp_ts_rl)
 		return;
 
-	entry->te_ts_rl = read_time;
-	uuid_copy(entry->te_tx_rl, tx_id);
+	vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
+		    read_time, tx_id);
 }
 
 /** Internal API to update high read timestamp and tx id */
 static inline void
 vos_ts_rh_update(struct vos_ts_entry *entry, daos_epoch_t read_time,
-		 const uuid_t tx_id)
+		 const struct dtx_id *tx_id)
 {
-	if (entry == NULL || read_time < entry->te_ts_rh)
+	if (entry == NULL || read_time < entry->te_ts.tp_ts_rh)
 		return;
 
-	entry->te_ts_rh = read_time;
-	uuid_copy(entry->te_tx_rh, tx_id);
+	vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
+		    read_time, tx_id);
 }
 
 /** Internal API to check read conflict of a given entry */
@@ -686,10 +699,10 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 
 		if (ts_set->ts_cflags & high_mask)
 			vos_ts_rh_update(se->se_entry, read_time,
-					 ts_set->ts_tx_id);
+					 &ts_set->ts_tx_id);
 		if (ts_set->ts_cflags & low_mask)
 			vos_ts_rl_update(se->se_entry, read_time,
-					 ts_set->ts_tx_id);
+					 &ts_set->ts_tx_id);
 	}
 }
 
