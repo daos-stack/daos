@@ -50,7 +50,7 @@ import (
 // Env is the interface that provides SPDK environment management.
 type Env interface {
 	InitSPDKEnv(logging.Logger, EnvOptions) error
-	FiniSPDKEnv(logging.Logger, EnvOptions) error
+	FiniSPDKEnv(logging.Logger, EnvOptions)
 }
 
 // EnvImpl is a an implementation of the Env interface.
@@ -151,7 +151,7 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
 }
 
 // FiniSPDKEnv initializes the SPDK environment.
-func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) error {
+func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) {
 	log.Debugf("spdk fini go opts: %+v", opts)
 
 	C.spdk_env_fini()
@@ -164,6 +164,4 @@ func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) error {
 	//	if rc := C.spdk_vmd_fini(); rc != 0 {
 	//		return Rc2err("spdk_vmd_fini()", rc)
 	//	}
-
-	return nil
 }

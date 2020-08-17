@@ -45,6 +45,10 @@ func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
 	return e.Cfg.InitErr
 }
 
+// FiniSPDKEnv finalizes the SPDK environment.
+func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) {
+}
+
 // MockNvmeCfg controls the behavior of the MockNvmeImpl.
 type MockNvmeCfg struct {
 	DiscoverCtrlrs []Controller

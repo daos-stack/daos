@@ -116,10 +116,7 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (err er
 	w.controllers = cs
 	w.initialized = true
 	w.Cleanup()
-
-	if err := w.FiniSPDKEnv(log, spdkOpts); err != nil {
-		return errors.Wrap(err, "failed to close spdk env")
-	}
+	w.FiniSPDKEnv(log, spdkOpts)
 
 	return nil
 }
@@ -250,14 +247,9 @@ func (b *spdkBackend) formatNvmeBdev(req DeviceFormatRequest, resp *DeviceFormat
 		return nil
 	}
 
-	if err := b.binding.FiniSPDKEnv(b.log, spdkOpts); err != nil {
-		msg = fmt.Sprintf("%s failed FiniSPDKEnv() (%s)", msg, err)
-
-		return errors.Wrap(err, "failed to close spdk env")
-	}
-
 	resp.Formatted = true
 	msg = fmt.Sprintf("%s successful", msg)
+	b.binding.FiniSPDKEnv(b.log, spdkOpts)
 
 	return nil
 }

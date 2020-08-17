@@ -206,7 +206,7 @@ func TestBdevBackendFormat(t *testing.T) {
 				Class:  storage.BdevClassNvme,
 				Device: "foo",
 			},
-			expErr: errors.New("failed to init spdk: spdk init says no"),
+			expErr: errors.New("failed to init spdk env: spdk init says no"),
 		},
 		"binding format success": {
 			req: DeviceFormatRequest{
