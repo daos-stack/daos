@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <daos/tests_lib.h>
 #include <daos.h>
 #include "suite/daos_test.h"
 #include <mpi.h>
@@ -137,22 +136,25 @@ pool_create(void)
 
 	/**
 	 * allocate list of service nodes, returned as output parameter of
-	 * dmg_pool_create() and used to connect
+	 * daos_pool_create() and used to connect
 	 */
 
 	/** create pool over all the storage targets */
 	svcl.rl_nr	= 3;
 	ASSERT(ARRAY_SIZE(svc) >= svcl.rl_nr);
 	svcl.rl_ranks	= svc;
-	rc = dmg_pool_create(NULL /* config file */,
-			     geteuid() /* user owner */,
-			     getegid() /* group owner */,
-			     DSS_PSETID /* daos server process set ID */,
-			     NULL /* list of targets, NULL = all */,
-			     10ULL << 30 /* target SCM size, 10G */,
-			     40ULL << 30 /* target NVMe size, 40G */,
-			     &svcl /* pool service nodes, used for connect */,
-			     pool_uuid /* the uuid of the pool created */);
+	rc = daos_pool_create(0731 /* mode */,
+			      geteuid() /* user owner */,
+			      getegid() /* group owner */,
+			      DSS_PSETID /* daos server process set ID */,
+			      NULL /* list of targets, NULL = all */,
+			      NULL /* storage type to use, use default */,
+			      10ULL << 30 /* target SCM size, 10G */,
+			      40ULL << 30 /* target NVMe size, 40G */,
+			      NULL, /* pool properties */
+			      &svcl /* pool service nodes, used for connect */,
+			      pool_uuid, /* the uuid of the pool created */
+			      NULL /* event, use blocking call for now */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
 }
 
@@ -162,7 +164,8 @@ pool_destroy(void)
 	int	rc;
 
 	/** destroy the pool created in pool_create */
-	rc = dmg_pool_destroy(NULL, pool_uuid, DSS_PSETID, 1 /* force */);
+	rc = daos_pool_destroy(pool_uuid, DSS_PSETID, 1 /* force */,
+			       NULL /* event */);
 	ASSERT(rc == 0, "pool destroy failed with %d", rc);
 }
 

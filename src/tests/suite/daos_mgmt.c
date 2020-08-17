@@ -42,31 +42,53 @@ pool_create_all(void **state)
 	test_arg_t	*arg = *state;
 	uuid_t		 uuid;
 	char		 uuid_str[64];
+	daos_event_t	 ev;
+	daos_event_t	*evp;
 	int		 rc;
 
 	if (arg->async) {
-		print_message("async not supported");
-		return;
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_int_equal(rc, 0);
 	}
 
+
 	/** create container */
-	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file,
-			     geteuid(), getegid(),
-			     arg->group, NULL /* tgts */,
-			     128 * 1024 * 1024 /* minimal size */,
-			     0 /* nvme size */,
-			     arg->pool.svc /* svc */, uuid);
+	print_message("creating pool %ssynchronously ... ",
+		      arg->async ? "a" : "");
+	rc = daos_pool_create(0700 /* mode */, 0 /* uid */, 0 /* gid */,
+			      arg->group, NULL /* tgts */, "pmem" /* dev */,
+			      0 /* minimal size */, 0 /* nvme size */,
+			      NULL /* properties */, &arg->pool.svc /* svc */,
+			      uuid, arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
+
+	if (arg->async) {
+		/** wait for container creation */
+		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(ev.ev_error, 0);
+	}
 
 	uuid_unparse_lower(uuid, uuid_str);
 	print_message("success uuid = %s\n", uuid_str);
 
 	/** destroy container */
-	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	print_message("destroying pool %ssynchronously ... ",
+		      arg->async ? "a" : "");
+	rc = daos_pool_destroy(uuid, arg->group, 1, arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 
+	if (arg->async) {
+		/** for container destroy */
+		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(ev.ev_error, 0);
+
+		rc = daos_event_fini(&ev);
+		assert_int_equal(rc, 0);
+	}
 	print_message("success\n");
 }
 
@@ -95,18 +117,15 @@ setup_pools(void **state, daos_size_t npools)
 		goto err_free_lparg;
 
 	for (i = 0; i < npools; i++) {
-		d_rank_list_t	tmp_list;
-
 		/* Set some properties in the in/out tpools[i] struct */
 		lparg->tpools[i].poh = DAOS_HDL_INVAL;
-		tmp_list.rl_nr = svc_nreplicas;
-		tmp_list.rl_ranks = lparg->tpools[i].ranks;
-		d_rank_list_dup(&lparg->tpools[i].svc, &tmp_list);
+		lparg->tpools[i].svc.rl_ranks = lparg->tpools[i].ranks;
+		lparg->tpools[i].svc.rl_nr = svc_nreplicas;
 		lparg->tpools[i].pool_size = 1 << 28;	/* 256MB SCM */
 
 		/* Create the pool */
 		rc = test_setup_pool_create(state, NULL /* ipool */,
-					    &lparg->tpools[i]);
+				&lparg->tpools[i], NULL /* prop */);
 		if (rc != 0)
 			goto err_destroy_pools;
 	}
@@ -120,8 +139,6 @@ err_destroy_pools:
 		if (!uuid_is_null(lparg->tpools[i].pool_uuid) &&
 		    (arg->myrank == 0))
 			(void) pool_destroy_safe(arg, &lparg->tpools[i]);
-		if (lparg->tpools[i].svc)
-			d_rank_list_free(lparg->tpools[i].svc);
 	}
 
 	D_FREE(lparg->tpools);
@@ -212,8 +229,8 @@ find_pool(void **state, daos_mgmt_pool_info_t *pool)
 
 		uuid_match = (uuid_compare(pool->mgpi_uuid,
 					   lparg->tpools[i].pool_uuid) == 0);
-		ranks_match = d_rank_list_identical(lparg->tpools[i].svc,
-						    pool->mgpi_svc);
+		ranks_match = d_rank_list_identical(&lparg->tpools[i].svc,
+							 pool->mgpi_svc);
 
 		if (uuid_match && ranks_match) {
 			found_idx = i;
@@ -228,9 +245,9 @@ find_pool(void **state, daos_mgmt_pool_info_t *pool)
 }
 
 /* Verify pool info returned by DAOS API
- * rc_ret:	return code from dmg_list_pool()
- * npools_in:	npools input argument to dmg_list_pool()
- * npools_out:	npools output argument value after dmg_list_pool()
+ * rc_ret:	return code from daos_json_list_pool()
+ * npools_in:	npools input argument to daos_json_list_pool()
+ * npools_out:	npools output argument value after daos_json_list_pool()
  */
 static void
 verify_pool_info(void **state, int rc_ret, daos_size_t npools_in,
@@ -288,7 +305,7 @@ list_pools_test(void **state)
 	/***** Test: retrieve number of pools in system *****/
 	npools = npools_orig = 0xABC0; /* Junk value (e.g., uninitialized) */
 	/* test only */
-	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, NULL);
+	rc = daos_json_list_pool(arg, &npools, NULL /* pools */);
 	assert_int_equal(rc, 0);
 	verify_pool_info(state, rc, npools_orig, NULL /* pools */, npools);
 	print_message("success t%d: output npools=%zu\n", tnum++,
@@ -303,7 +320,7 @@ list_pools_test(void **state)
 	 * and that many items in pools[] filled
 	 *****/
 	npools = npools_alloc;
-	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
+	rc = daos_json_list_pool(arg, &npools, pools);
 	assert_int_equal(rc, 0);
 	verify_pool_info(state, rc, npools_alloc, pools, npools);
 	clean_pool_info(npools_alloc, pools);
@@ -311,11 +328,8 @@ list_pools_test(void **state)
 
 	/***** Test: provide npools=0, non-NULL pools  ****/
 	npools = 0;
-	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
-	if (lparg->nsyspools > 0)
-		assert_int_equal(rc, -DER_TRUNC);
-	else
-		assert_int_equal(rc, 0);
+	rc = daos_json_list_pool(arg, &npools, pools);
+	assert_int_equal(rc, 0);
 	assert_int_equal(npools, lparg->nsyspools);
 	print_message("success t%d: npools=0, non-NULL pools[] rc=%d\n",
 		      tnum++, rc);
@@ -325,7 +339,7 @@ list_pools_test(void **state)
 	pools = NULL;
 
 	/***** Test: invalid npools=NULL *****/
-	rc = dmg_pool_list(dmg_config_file, arg->group, NULL, NULL);
+	rc = daos_json_list_pool(arg, NULL /* npools */, NULL /* pools */);
 	assert_int_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &npools NULL, -DER_INVAL\n", tnum++);
 
@@ -340,7 +354,7 @@ list_pools_test(void **state)
 
 		/* Test: Exact size buffer */
 		npools = npools_alloc;
-		rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
+		rc = daos_json_list_pool(arg, &npools, pools);
 		assert_int_equal(rc, 0);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
 
@@ -357,7 +371,7 @@ list_pools_test(void **state)
 
 		/* Test: Under-sized buffer */
 		npools = npools_alloc;
-		rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
+		rc = daos_json_list_pool(arg, &npools, pools);
 		assert_int_equal(rc, -DER_TRUNC);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
 		print_message("success t%d: pools[] under-sized\n", tnum++);
@@ -388,12 +402,11 @@ pool_create_and_destroy_retry(void **state)
 	print_message("success\n");
 
 	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file,
-			     geteuid(), getegid(),
-			     arg->group, NULL /* tgts */,
-			     128 * 1024 * 1024 /* minimal size */,
-			     0 /* nvme size */,
-			     arg->pool.svc /* svc */, uuid);
+	rc = daos_pool_create(0700 /* mode */, 0 /* uid */, 0 /* gid */,
+			      arg->group, NULL /* tgts */, "pmem" /* dev */,
+			      0 /* minimal size */, 0 /* nvme size */,
+			      NULL /* properties */, &arg->pool.svc /* svc */,
+			      uuid, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
@@ -405,7 +418,7 @@ pool_create_and_destroy_retry(void **state)
 	print_message("success\n");
 
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	rc = daos_pool_destroy(uuid, arg->group, 1, NULL);
 #if 0 /* see pool_create_cp */
 	assert_int_equal(rc, 0);
 #else
