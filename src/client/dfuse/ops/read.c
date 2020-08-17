@@ -104,6 +104,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	}
 
 	if (size <= len) {
+		if (size != len)
+			DFUSE_TRA_INFO(oh, "Truncated read, %#zx-%#zx"
+				       position, position + size -1);
 		DFUSE_REPLY_BUF(oh, req, buff, size);
 		D_FREE(buff);
 		return;
