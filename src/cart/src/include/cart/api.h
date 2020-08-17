@@ -497,9 +497,9 @@ crt_hlc_epsilon_get(void);
 /**
  * Get the upper bound of the HLC timestamp of an event happened before
  * (through out of band communication) the event at \a hlc.
- * 
+ *
  * \param[in] hlc              HLC timestamp
- * 
+ *
  * \return                     Upper bound HLC timestamp
  */
 uint64_t
