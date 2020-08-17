@@ -1286,9 +1286,9 @@ pipeline {
         } // stage ('Test Report')
     } // stages
     post {
-        always {
+        /* always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
-        }
+        } */
         unsuccessful {
             notifyBrokenBranch branches: target_branch
         }
