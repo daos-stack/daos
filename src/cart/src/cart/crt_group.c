@@ -783,7 +783,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_gdata.cg_share_na == true)
+	if (crt_gdata.cg_sep_mode == true)
 		tag = 0;
 
 	grp_priv = passed_grp_priv;
@@ -851,7 +851,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	D_ASSERT(uri != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
-	if (crt_gdata.cg_share_na == true)
+	if (crt_gdata.cg_sep_mode == true)
 		tag = 0;
 
 	default_grp_priv = grp_priv;
@@ -2407,8 +2407,8 @@ crt_rank_self_set(d_rank_t rank)
 {
 	int rc = 0;
 	struct crt_grp_priv	*default_grp_priv;
-	na_class_t		*na_class;
-	na_size_t		size = CRT_ADDR_STR_MAX_LEN;
+	hg_class_t		*hg_class;
+	hg_size_t		size = CRT_ADDR_STR_MAX_LEN;
 	struct crt_context	*ctx;
 	char			uri_addr[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 
@@ -2439,11 +2439,11 @@ crt_rank_self_set(d_rank_t rank)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
-		na_class =  ctx->cc_hg_ctx.chc_nacla;
+		hg_class =  ctx->cc_hg_ctx.chc_hgcla;
 
-		rc = crt_na_class_get_addr(na_class, uri_addr, &size);
+		rc = crt_hg_get_addr(hg_class, uri_addr, &size);
 		if (rc != 0) {
-			D_ERROR("crt_na_class_get_addr() failed; rc=%d\n", rc);
+			D_ERROR("crt_hg_get_addr() failed; rc=%d\n", rc);
 			D_GOTO(unlock, rc);
 		}
 
@@ -2454,7 +2454,6 @@ crt_rank_self_set(d_rank_t rank)
 				rc);
 			D_GOTO(unlock, rc);
 		}
-
 	}
 
 unlock:
