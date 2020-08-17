@@ -227,7 +227,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		/* The transaction aborted or failed to commit. */
 		vos_tx_publish(dth, false);
 		if (dth_in)
-			vos_dtx_cleanup(dth);
+			vos_dtx_cleanup_internal(dth);
 	}
 
 	if (err != 0)

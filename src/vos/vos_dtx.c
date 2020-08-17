@@ -2187,8 +2187,8 @@ out:
 	return rc;
 }
 
-void
-vos_dtx_cleanup(struct dtx_handle *dth)
+struct vos_container *
+vos_dtx_cleanup_internal(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae = NULL;
@@ -2196,7 +2196,7 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 	int			 rc;
 
 	if (!dtx_is_valid_handle(dth) || !dth->dth_active)
-		return;
+		return NULL;
 
 	dth->dth_active = 0;
 	cont = vos_hdl2cont(dth->dth_coh);
@@ -2213,4 +2213,21 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 			dtx_evict_lid(cont, dae);
 		}
 	}
+
+	return cont;
+}
+
+void
+vos_dtx_cleanup(struct dtx_handle *dth)
+{
+	struct vos_container	*cont;
+
+	if (!dtx_is_valid_handle(dth) || !dth->dth_active)
+		return;
+
+	cont = vos_hdl2cont(dth->dth_coh);
+	/** This will abort the transaction and callback to
+	 *  vos_dtx_cleanup_internal
+	 */
+	vos_tx_end(cont, dth, NULL, NULL, -DER_CANCELED);
 }

@@ -396,6 +396,12 @@ vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 int
 vos_dtx_table_register(void);
 
+/** Cleanup the dtx handle when aborting a transaction.  If dth is active,
+ *  returns a pointer to the container
+ */
+struct vos_container *
+vos_dtx_cleanup_internal(struct dtx_handle *dth);
+
 /**
  * Check whether the record (to be accessible) is available to outside or not.
  *
