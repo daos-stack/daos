@@ -99,10 +99,14 @@ class ServerFillUp(IorTestBase):
         # Start the servers and agents
         super(ServerFillUp, self).setUp()
         self.hostfile_clients = None
+        self.ior_default_flags = self.ior_cmd.flags.value
+        self.ior_scm_xfersize = self.ior_cmd.transfer_size.value
         self.ior_read_flags = self.params.get("read_flags",
                                               '/run/ior/iorflags/*',
                                               '-r -R -k -G 1')
-        self.ior_default_flags = self.ior_cmd.flags.value
+        self.ior_nvme_xfersize = self.params.get(
+            "nvme_transfer_size", '/run/ior/transfersize_blocksize/*',
+            '16777216')
         #Get the number of daos_io_servers
         self.daos_io_servers = (self.server_managers[0].manager
                                 .job.yaml.server_params)
@@ -323,8 +327,10 @@ class ServerFillUp(IorTestBase):
         print('Replica Server = {}'.format(replica_server))
         if self.scm_fill:
             free_space = self.pool.get_pool_daos_space()["s_total"][0]
+            self.ior_cmd.transfer_size.value = self.ior_scm_xfersize
         elif self.nvme_fill:
             free_space = self.pool.get_pool_daos_space()["s_total"][1]
+            self.ior_cmd.transfer_size.value = self.ior_nvme_xfersize
         else:
             self.fail('Provide storage type (SCM/NVMe) to be filled')
 

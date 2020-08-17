@@ -131,7 +131,7 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.set_daos_params(self.server_group, self.pool)
         ior_bg_cmd.daos_oclass.update(self.ior_cmd.daos_oclass.value)
         ior_bg_cmd.api.update(self.ior_cmd.api.value)
-        ior_bg_cmd.transfer_size.update(self.ior_cmd.transfer_size.value)
+        ior_bg_cmd.transfer_size.update(self.ior_scm_xfersize)
         ior_bg_cmd.block_size.update(self.ior_cmd.block_size.value)
         ior_bg_cmd.flags.update(self.ior_cmd.flags.value)
 
@@ -163,15 +163,15 @@ class NvmeEnospace(ServerFillUp):
         """
         Function to run test and validate DER_ENOSPACE and expected storage size
         """
-        #Fill 75% of SCM pool, Aggregation is Enabled so one point of time, data
-        #will be aggregated and moved from SCM to NVMe.
+        #Fill 75% more of SCM pool,Aggregation is Enabled so NVMe space will be
+        #start filling
         print('Starting main IOR load')
         self.start_ior_load(storage='SCM', precent=75)
         print(self.pool.pool_percentage_used())
 
-        #Fill 75% more of SCM pool,Aggregation is Enabled so NVMe space will be
+        #Fill 50% more of SCM pool,Aggregation is Enabled so NVMe space will be
         #filled
-        self.start_ior_load(storage='SCM', precent=75)
+        self.start_ior_load(storage='SCM', precent=50)
         print(self.pool.pool_percentage_used())
 
         #Fill 60% more of SCM pool, now NVMe will be Full so data will not be
@@ -193,13 +193,13 @@ class NvmeEnospace(ServerFillUp):
 
         #Check both NVMe and SCM are full.
         pool_usage = self.pool.pool_percentage_used()
-        #NVM should be 99% full if not test will fail.
-        if pool_usage['nvme'] > 1:
-            self.fail('Pool NVMe used percentage should be < 1%, instead {}'.
+        #NVM should be almost full if not test will fail.
+        if pool_usage['nvme'] > 5:
+            self.fail('Pool NVMe used percentage should be < 5%, instead {}'.
                       format(pool_usage['nvme']))
         #For SCM some % space used for system so it wont be 100% full.
-        if pool_usage['scm'] > 25:
-            self.fail('Pool SCM used percentage should be < 20%, instead {}'.
+        if pool_usage['scm'] > 50:
+            self.fail('Pool SCM used percentage should be < 50%, instead {}'.
                       format(pool_usage['scm']))
 
     def run_enospace_with_bg_job(self):
@@ -225,7 +225,6 @@ class NvmeEnospace(ServerFillUp):
             if self.out_queue.get() == "FAIL":
                 self.fail("One of the Background IOR job failed")
 
-    @skipForTicket("DAOS-4846")
     def test_enospace_lazy_with_bg(self):
         """Jira ID: DAOS-4756.
 
@@ -237,7 +236,8 @@ class NvmeEnospace(ServerFillUp):
                   next fill 75% more which should fill NVMe. Try to fill 60%
                   more and now SCM size will be full too.
                   verify that last IO fails with DER_NOSPACE and SCM/NVMe pool
-                  capacity is full.
+                  capacity is full.One background IO job will be running
+                  continuously.
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=der_enospace,enospc_lazy,enospc_lazy_bg
@@ -247,7 +247,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-4846")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -270,12 +269,17 @@ class NvmeEnospace(ServerFillUp):
 
         #Repeat the test in loop.
         for _loop in range(10):
+            print("-------enospc_lazy_fg Loop--------- {}".format(_loop))
             #Run IOR to fill the pool.
             self.run_enospace_foreground()
             #Delete all the containers
             self.delete_all_containers()
+            #Delete container will take some time to release the space
+            time.sleep(60)
 
-    @skipForTicket("DAOS-4846")
+        #Run last IO
+        self.start_ior_load(storage='SCM', precent=1)
+
     def test_enospace_time_with_bg(self):
         """Jira ID: DAOS-4756.
 
@@ -284,11 +288,12 @@ class NvmeEnospace(ServerFillUp):
                           set on time mode.
 
         Use Case: This tests will create the pool. Set Aggregation mode to Time.
-                  Fill 75% of SCM size which will trigger the aggregation
-                  because mode set to time, next fill 75% more which will fill
-                  up NVMe. Try to fill 60% more and now SCM size will be full
-                  too. Verify last IO fails with DER_NOSPACE and SCM/NVMe
-                  pool capacity is full.
+                  Start filling 75% of SCM size. Aggregation will be triggered
+                  time to time, next fill 75% more which will fill up NVMe.
+                  Try to fill 60% more and now SCM size will be full too.
+                  Verify last IO fails with DER_NOSPACE and SCM/NVMe pool
+                  capacity is full.One background IO job will be running
+                  continuously.
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
         :avocado: tags=der_enospace,enospc_time,enospc_time_bg
@@ -301,7 +306,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-4846")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -310,11 +314,11 @@ class NvmeEnospace(ServerFillUp):
                           the space.
 
         Use Case: This tests will create the pool. Set Aggregation mode to Time.
-                  Fill 75% of SCM size which will trigger the aggregation
-                  because mode set to time, next fill 75% more which will fill
-                  up NVMe. Try to fill 60% more and now SCM size will be full
-                  too. Verify last IO fails with DER_NOSPACE and SCM/NVMe
-                  pool capacity is full. Delete all the containers.
+                  Start filling 75% of SCM size. Aggregation will be triggered
+                  time to time, next fill 75% more which will fill up NVMe.
+                  Try to fill 60% more and now SCM size will be full too.
+                  Verify last IO fails with DER_NOSPACE and SCM/NVMe pool
+                  capacity is full. Delete all the containers.
                   Do this in loop for 10 times and verify space is released.
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
@@ -327,12 +331,17 @@ class NvmeEnospace(ServerFillUp):
 
         #Repeat the test in loop.
         for _loop in range(10):
+            print("-------enospc_time_fg Loop--------- {}".format(_loop))
             #Run IOR to fill the pool.
             self.run_enospace_with_bg_job()
             #Delete all the containers
             self.delete_all_containers()
+            #Delete container will take some time to release the space
+            time.sleep(60)
 
-    @skipForTicket("DAOS-4846")
+        #Run last IO
+        self.start_ior_load(storage='SCM', precent=1)
+
     @skipForTicket("DAOS-5403")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
@@ -341,8 +350,8 @@ class NvmeEnospace(ServerFillUp):
 
         Use Case: This tests will create the pool. Run small set of IOR as
                   baseline.Start IOR with < 4K which will start filling SCM
-                  and trigger aggregation and start fill up NVMe.
-                  Check the IOR baseline read number and make sure it's close
+                  and trigger aggregation and start filling up NVMe.
+                  Check the IOR baseline read number and make sure it's +- 5%
                   to the number ran prior system storage was full.
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
@@ -374,7 +383,6 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
-    @skipForTicket("DAOS-4846")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
@@ -430,11 +438,10 @@ class NvmeEnospace(ServerFillUp):
             time.sleep(60)
             print(pool_usage)
             #SCM pool size should be released (some still be used for system)
-            #Pool SCM free % should not be less than 95%
-            if pool_usage['scm'] < 95:
-                self.fail('SCM pool used percentage should be < 95, instead {}'.
+            #Pool SCM free % should not be less than 50%
+            if pool_usage['scm'] > 50:
+                self.fail('SCM pool used percentage should be < 50, instead {}'.
                           format(pool_usage['scm']))
 
         #Run last IO
         self.start_ior_load(storage='SCM', precent=1)
-

@@ -22,6 +22,7 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      targets: 1
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -32,11 +33,12 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
+      targets: 1
 pool:
     mode: 146
     name: daos_server
-    scm_size: 10737418240 #10G
-    nvme_size: 10737418240 #10G
+    scm_size: 5368709120 #5G
+    nvme_size: 5368709120 #5G
     control_method: dmg
 container:
     control_method: daos
@@ -51,8 +53,10 @@ ior:
   test_file: daos:testFile
   repetitions: 1
   transfersize_blocksize:
-    16M:
+    2K:
       transfer_size: 2048 #2K
+    16M:
+      nvme_transfer_size: 16777216 #16M
   objectclass:
     S1:
       obj_class: "S1"
