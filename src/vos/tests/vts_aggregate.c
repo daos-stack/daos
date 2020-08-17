@@ -1831,7 +1831,8 @@ aggregate_14(void **state)
 	assert_int_equal(rc, 0);
 	print_space_info(&pool_info, "FINAL");
 
-	assert_int_equal(i, repeat_cnt);
+	assert_int_equal(1, 2); /* DM */
+	/* assert_int_equal(i, repeat_cnt); //DM */
 }
 
 static void
