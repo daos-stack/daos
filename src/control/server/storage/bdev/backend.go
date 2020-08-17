@@ -115,7 +115,7 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (err er
 	}
 	w.controllers = cs
 	w.initialized = true
-	w.FiniSPDKEnv(log, spdkOpts)
+	// TODO: w.FiniSPDKEnv(log, spdkOpts)
 
 	return nil
 }
