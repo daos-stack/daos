@@ -268,6 +268,7 @@ ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 void
 ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__GroupUpdateReq	*req = NULL;
 	Mgmt__GroupUpdateResp	resp = MGMT__GROUP_UPDATE_RESP__INIT;
 	struct mgmt_grp_up_in	in = {};
@@ -277,9 +278,9 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__group_update_req__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
+		&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
-	if (req == NULL) {
+	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (group_update)\n");
 		return;
@@ -317,7 +318,7 @@ out:
 		drpc_resp->body.data = body;
 	}
 
-	mgmt__group_update_req__free_unpacked(req, NULL);
+	mgmt__group_update_req__free_unpacked(req, &alloc.alloc);
 }
 
 static int
