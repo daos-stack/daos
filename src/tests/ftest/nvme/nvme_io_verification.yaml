@@ -33,7 +33,7 @@ ior:
  repetitions: 1
  api: DFS
  object_type: 'SX'
- daos_destroy: False
+ dfs_destroy: False
  transfersize: !mux
    case1:
      block_size: 30000000

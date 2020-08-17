@@ -114,14 +114,14 @@ ior_harasser:
         - '128k'
         - '1m'
     segment_count: 1
-    daos_oclass:
+    dfs_oclass:
         - 'SX'
 rebuild:
     rebuild_timeout: 30
     ranks_to_kill:
         - 2
     svcl: 1
-    daos_oclass:
+    dfs_oclass:
         - "RP_2GX"
 dmg_create_destroy:
     size:

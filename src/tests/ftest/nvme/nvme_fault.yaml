@@ -54,7 +54,7 @@ ior:
   api: "DFS"
   client_processes:
     np: 16
-  daos_destroy: False
+  dfs_destroy: False
   iorflags:
       flags: "-w -F -r -R -k -G 1"
   test_file: daos:testFile
@@ -64,7 +64,7 @@ ior:
       transfer_size: 16777216 #16M
   objectclass:
     RP_2G1:
-      daos_oclass: "RP_2G1"
+      dfs_oclass: "RP_2G1"
 faulttests:
   pool_capacity:
     10_Percent:

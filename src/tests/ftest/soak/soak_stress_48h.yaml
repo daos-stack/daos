@@ -128,7 +128,7 @@ ior_stress:
         - '1m'
         - '512K'
         - '64k'
-    daos_oclass:
+    dfs_oclass:
         - "SX"
 fio_stress:
   names:

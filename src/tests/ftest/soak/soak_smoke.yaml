@@ -119,7 +119,7 @@ ior_smoke:
         - '128k'
         - '1m'
     segment_count: 1
-    daos_oclass:
+    dfs_oclass:
         - 'SX'
 fio_smoke:
   names:
