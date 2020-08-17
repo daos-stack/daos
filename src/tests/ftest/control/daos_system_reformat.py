@@ -46,7 +46,7 @@ class DmgStorageReformatTest(ControlTestBase):
 
         Test Description: Test dmg system reformat functionality.
 
-        :avocado: tags=all,small,pr,hw,control,sys-reformat,dmg,basic
+        :avocado: tags=all,small,pr,hw,control,sys_reformat,dmg
         """
 
         # Create pool and container

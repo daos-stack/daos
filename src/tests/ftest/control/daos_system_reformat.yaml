@@ -4,10 +4,6 @@ hosts:
   test_servers:
     - server-A
     - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
   test_clients:
     - server-G
 timeout: 360
