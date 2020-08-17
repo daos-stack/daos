@@ -16,6 +16,7 @@
 #  Note: New tests should return non-zero if there are any
 #    failures.
 
+set -x
 #check for existence of /mnt/daos first:
 failed=0
 failures=()
