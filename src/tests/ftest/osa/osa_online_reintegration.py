@@ -93,11 +93,17 @@ class OSAOnlineReintegration(TestWithServers):
         out = self.dmg_command.get_output("pool_query", **kwargs)
         return int(out[0][4])
 
-    def daos_racer_thread(self):
+    def daos_racer_thread(self, num_pool):
+        """Start the daos_racer thread.
+            Args:
+            num_pool (int) : total pools to create for testing purposes.
+        """
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
         self.daos_racer.get_params(self)
         self.daos_racer.set_environment(
             self.daos_racer.get_environment(self.server_managers[0]))
+        temp = self.daos_racer.runtime
+        self.daos_racer.runtime = temp * num_pool
         self.daos_racer.run()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
@@ -188,7 +194,8 @@ class OSAOnlineReintegration(TestWithServers):
             pool_uuid.append(pool[val].uuid)
 
         # Start the daos_racer thread
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
+        daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
+                                             kwargs={"num_pool": val+1})
         daos_racer_thread.start()
 
         # Exclude and reintegrate the pool_uuid, rank and targets
@@ -254,7 +261,7 @@ class OSAOnlineReintegration(TestWithServers):
             for thrd in threads:
                 thrd.join()
 
-        # TODO: Check data consistency for IOR in future
+        # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel
         # to IOR and checking the data consistency only
         # for the daos_racer objects after exclude

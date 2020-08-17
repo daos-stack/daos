@@ -752,16 +752,6 @@ class DaosObj(object):
             raise DaosApiError("Object open returned non-zero. RC: {0}"
                                .format(ret))
 
-    def verify(self):
-        """Verify the object data consistency."""
-        epoch = ctypes.c_uint64(~0)
-
-        func = self.context.get_function('verify-obj')
-        ret = func(self.container.coh, self.c_oid, epoch)
-        if ret != 0:
-            raise DaosApiError("Object verify returned non-zero. RC: {0}"
-                               .format(ret))
-
     def close(self):
         """Close this object."""
         if self.obj_handle is not None:
@@ -2325,7 +2315,6 @@ class DaosContext(object):
             'punch-akeys':     self.libdaos.daos_obj_punch_akeys,
             'punch-dkeys':     self.libdaos.daos_obj_punch_dkeys,
             'punch-obj':       self.libdaos.daos_obj_punch,
-            'verify-obj':      self.libdaos.daos_obj_verify,
             'query-cont':      self.libdaos.daos_cont_query,
             'query-obj':       self.libdaos.daos_obj_query,
             'query-pool':      self.libdaos.daos_pool_query,
