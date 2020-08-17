@@ -387,11 +387,12 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 }
 
 static int
-vos_ioc_reserve_init(struct vos_io_context *ioc)
+vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 {
-	size_t	size;
-	int	total_acts = 0;
-	int	i;
+	struct vos_rsrvd_scm	*scm;
+	size_t			 size;
+	int			 total_acts = 0;
+	int			 i;
 
 	if (!ioc->ic_update)
 		return 0;
@@ -401,9 +402,6 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 
 		total_acts += iod->iod_nr;
 	}
-
-	/** Also reserve space for potential deferred free */
-	total_acts = total_acts * 2;
 
 	D_ALLOC_ARRAY(ioc->ic_umoffs, total_acts);
 	if (ioc->ic_umoffs == NULL)
@@ -419,6 +417,20 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 		return -DER_NOMEM;
 
 	ioc->ic_rsrvd_scm->rs_actv_cnt = total_acts;
+
+	if (!dtx_is_valid_handle(dth) || dth->dth_deferred == NULL)
+		return 0;
+
+	/** Reserve enough space for any deferred actions */
+	D_ALLOC(scm, size);
+	if (scm == NULL) {
+		D_FREE(ioc->ic_rsrvd_scm);
+		return -DER_NOMEM;
+	}
+
+	scm->rs_actv_cnt = total_acts;
+	dth->dth_deferred[dth->dth_deferred_cnt++] = scm;
+
 	return 0;
 }
 
@@ -491,7 +503,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_shadows = shadows;
 	D_INIT_LIST_HEAD(&ioc->ic_dedup_entries);
 
-	rc = vos_ioc_reserve_init(ioc);
+	rc = vos_ioc_reserve_init(ioc, dth);
 	if (rc != 0)
 		goto error;
 
@@ -511,7 +523,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, cond_flags, cflags, iod_nr,
 				 dtx_is_valid_handle(dth) ?
-				 &dth->dth_xid.dti_uuid : NULL);
+				 &dth->dth_xid : NULL);
 	if (rc != 0)
 		goto error;
 

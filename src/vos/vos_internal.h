@@ -1148,4 +1148,5 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 	return false;
 }
 
+
 #endif /* __VOS_INTERNAL_H__ */

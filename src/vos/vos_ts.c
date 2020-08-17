@@ -49,8 +49,8 @@ static const uint32_t type_counts[] = {
 #define TS_TRACE(action, entry, idx, type)				\
 	D_DEBUG(DB_TRACE, "%s %s at idx %d(%p), read.hi="DF_U64		\
 		" read.lo="DF_U64"\n", action, type_strs[type], idx,	\
-		(entry)->te_record_ptr, (entry)->te_ts_rh,		\
-		(entry)->te_ts_rl)
+		(entry)->te_record_ptr, (entry)->te_ts.tp_ts_rh,	\
+		(entry)->te_ts.tp_ts_rl)
 
 /** This probably needs more thought */
 static bool
@@ -84,19 +84,21 @@ ts_update_on_evict(struct vos_ts_table *ts_table, struct vos_ts_entry *entry)
 	}
 
 	if (other == NULL) {
-		if (entry->te_ts_rl > ts_table->tt_ts_rl) {
-			ts_table->tt_ts_rl = entry->te_ts_rl;
-			uuid_copy(ts_table->tt_tx_rl, entry->te_tx_rl);
+		if (entry->te_ts.tp_ts_rl > ts_table->tt_ts_rl) {
+			vos_ts_copy(&ts_table->tt_ts_rl, &ts_table->tt_tx_rl,
+				    entry->te_ts.tp_ts_rl,
+				    &entry->te_ts.tp_tx_rl);
 		}
-		if (entry->te_ts_rh > ts_table->tt_ts_rh) {
-			ts_table->tt_ts_rh = entry->te_ts_rh;
-			uuid_copy(ts_table->tt_tx_rh, entry->te_tx_rh);
+		if (entry->te_ts.tp_ts_rh > ts_table->tt_ts_rh) {
+			vos_ts_copy(&ts_table->tt_ts_rh, &ts_table->tt_tx_rh,
+				    entry->te_ts.tp_ts_rh,
+				    &entry->te_ts.tp_tx_rh);
 		}
 		return true;
 	}
 
-	vos_ts_rl_update(other, entry->te_ts_rl, entry->te_tx_rl);
-	vos_ts_rh_update(other, entry->te_ts_rh, entry->te_tx_rh);
+	vos_ts_rl_update(other, entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl);
+	vos_ts_rh_update(other, entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh);
 
 	return true;
 }
@@ -184,8 +186,8 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 
 	ts_table->tt_ts_rl = vos_start_epoch;
 	ts_table->tt_ts_rh = vos_start_epoch;
-	uuid_clear(ts_table->tt_tx_rl);
-	uuid_clear(ts_table->tt_tx_rh);
+	uuid_clear(ts_table->tt_tx_rl.dti_uuid);
+	uuid_clear(ts_table->tt_tx_rh.dti_uuid);
 	miss_cursor = ts_table->tt_misses;
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++) {
 		info = &ts_table->tt_type_info[i];
@@ -266,10 +268,10 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 
 	if (parent == NULL) {
 		/** Use global timestamps for the type to initialize it */
-		entry->te_ts_rl = ts_table->tt_ts_rl;
-		entry->te_ts_rh = ts_table->tt_ts_rh;
-		uuid_copy(entry->te_tx_rl, ts_table->tt_tx_rl);
-		uuid_copy(entry->te_tx_rh, ts_table->tt_tx_rh);
+		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
+			    ts_table->tt_ts_rl, &ts_table->tt_tx_rl);
+		vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
+			    ts_table->tt_ts_rh, &ts_table->tt_tx_rh);
 		entry->te_parent_ptr = NULL;
 	} else {
 		entry->te_parent_ptr = parent->te_record_ptr;
@@ -281,10 +283,12 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 		if (ts_source == NULL) /* for negative and uncached entries */
 			ts_source = parent;
 
-		entry->te_ts_rl = ts_source->te_ts_rl;
-		entry->te_ts_rh = ts_source->te_ts_rh;
-		uuid_copy(entry->te_tx_rl, ts_source->te_tx_rl);
-		uuid_copy(entry->te_tx_rh, ts_source->te_tx_rh);
+		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
+			    ts_source->te_ts.tp_ts_rl,
+			    &ts_source->te_ts.tp_tx_rl);
+		vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
+			    ts_source->te_ts.tp_ts_rh,
+			    &ts_source->te_ts.tp_tx_rh);
 	}
 
 	/** Set the lower bounds for the entry */
@@ -299,7 +303,8 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
-		    uint32_t cflags, uint32_t akey_nr, uuid_t *tx_id)
+		    uint32_t cflags, uint32_t akey_nr,
+		    const struct dtx_id *tx_id)
 {
 	uint32_t	size;
 	uint64_t	array_size;
@@ -332,7 +337,8 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		break;
 	}
 	(*ts_set)->ts_set_size = size;
-	uuid_copy((*ts_set)->ts_tx_id, *tx_id);
+	uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
+	(*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
 
 	return 0;
 }
@@ -376,8 +382,8 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 }
 
 static inline bool
-vos_ts_check_conflict(daos_epoch_t read_time, const uuid_t read_id,
-		      daos_epoch_t write_time, const uuid_t write_id)
+vos_ts_check_conflict(daos_epoch_t read_time, const struct dtx_id *read_id,
+		      daos_epoch_t write_time, const struct dtx_id *write_id)
 
 {
 	if (write_time > read_time)
@@ -386,7 +392,10 @@ vos_ts_check_conflict(daos_epoch_t read_time, const uuid_t read_id,
 	if (write_time != read_time)
 		return true;
 
-	return uuid_compare(read_id, write_id) != 0;
+	if (read_id->dti_hlc != write_id->dti_hlc)
+		return true;
+
+	return uuid_compare(read_id->dti_uuid, write_id->dti_uuid) != 0;
 }
 
 bool
@@ -403,13 +412,15 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 
 	if (se->se_etype < ts_set->ts_wr_level) {
 		/* check the low time */
-		return vos_ts_check_conflict(entry->te_ts_rl, entry->te_tx_rl,
-					     write_time, ts_set->ts_tx_id);
+		return vos_ts_check_conflict(entry->te_ts.tp_ts_rl,
+					     &entry->te_ts.tp_tx_rl,
+					     write_time, &ts_set->ts_tx_id);
 	}
 
 	D_ASSERT(se->se_etype == ts_set->ts_wr_level);
 
 	/* check the high time */
-	return vos_ts_check_conflict(entry->te_ts_rh, entry->te_tx_rh,
-				     write_time, ts_set->ts_tx_id);
+	return vos_ts_check_conflict(entry->te_ts.tp_ts_rh,
+				     &entry->te_ts.tp_tx_rh,
+				     write_time, &ts_set->ts_tx_id);
 }

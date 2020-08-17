@@ -599,7 +599,6 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	bio_addr_t		*addr = &irec->ir_ex_addr;
 	struct dtx_handle	*dth = NULL;
-	struct dtx_rsrvd_uint	*dru = NULL;
 	struct vos_rsrvd_scm	*rsrvd_scm;
 	struct pobj_action	*act;
 	int			 i;
@@ -629,18 +628,17 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 		return umem_free(&tins->ti_umm, rec->rec_off);
 
 	/** Find an empty slot for the deferred free */
-	for (i = dth->dth_rsrvd_cnt - 1; i >= 0; i--) {
-		dru = &dth->dth_rsrvds[i];
-		if (dru->dru_scm == NULL)
-			continue;
+	for (i = 0; i < dth->dth_deferred_cnt; i++) {
+		rsrvd_scm = dth->dth_deferred[i];
+		D_ASSERT(rsrvd_scm != NULL);
 
-		rsrvd_scm = dru->dru_scm;
 		if (rsrvd_scm->rs_actv_at >= rsrvd_scm->rs_actv_cnt)
 			continue; /* Can't really be > but keep it simple */
 
 		act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
 		umem_defer_free(&tins->ti_umm, rec->rec_off, act);
 		rsrvd_scm->rs_actv_at++;
+
 		return 0;
 	}
 

@@ -128,6 +128,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 {
 	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
 	struct dtx_rsrvd_uint	*dru;
+	struct vos_rsrvd_scm	*scm;
 	int			 rc;
 	int			 i;
 
@@ -153,6 +154,15 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 		/** Function checks if list is empty */
 		rc = vos_publish_blocks(cont, &dru->dru_nvme,
 					publish, VOS_IOS_GENERIC);
+		if (rc && publish)
+			return rc;
+	}
+
+	for (i = 0; i < dth->dth_deferred_cnt; i++) {
+		scm = dth->dth_deferred[i];
+		rc = vos_publish_scm(cont, scm, publish);
+		D_FREE(dth->dth_deferred[i]);
+
 		if (rc && publish)
 			return rc;
 	}
