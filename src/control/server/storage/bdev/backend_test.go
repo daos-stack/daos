@@ -169,20 +169,20 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 
 func TestBdevBackendFormat(t *testing.T) {
 	for name, tc := range map[string]struct {
-		req     DeviceFormatRequest
+		req     FormatRequest
 		mec     spdk.MockEnvCfg
 		mnc     spdk.MockNvmeCfg
-		expResp *DeviceFormatResponse
+		expResp *FormatResponse
 		expErr  error
 	}{
 		"empty input": {
-			req:    DeviceFormatRequest{},
+			req:    FormatRequest{},
 			expErr: errors.New("empty pci address in device format request"),
 		},
 		"unknown device class": {
-			req: DeviceFormatRequest{
-				Class:  storage.BdevClass("whoops"),
-				Device: "foo",
+			req: FormatRequest{
+				Class:      storage.BdevClass("whoops"),
+				DeviceList: []string{"foo"},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
 		},
@@ -190,21 +190,25 @@ func TestBdevBackendFormat(t *testing.T) {
 			mnc: spdk.MockNvmeCfg{
 				FormatErr: errors.New("spdk says no"),
 			},
-			req: DeviceFormatRequest{
-				Class:  storage.BdevClassNvme,
-				Device: "foo",
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{"foo"},
 			},
-			expResp: &DeviceFormatResponse{
-				Error: FaultFormatError("foo", errors.New("spdk says no")),
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					"foo": &DeviceFormatResponse{
+						Error: FaultFormatError("foo", errors.New("spdk says no")),
+					},
+				},
 			},
 		},
 		"binding init fail": {
 			mec: spdk.MockEnvCfg{
 				InitErr: errors.New("spdk init says no"),
 			},
-			req: DeviceFormatRequest{
-				Class:  storage.BdevClassNvme,
-				Device: "foo",
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{"foo"},
 			},
 			expErr: errors.New("failed to init spdk env: spdk init says no"),
 		},

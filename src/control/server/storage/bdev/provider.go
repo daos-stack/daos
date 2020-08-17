@@ -98,7 +98,7 @@ type (
 		PrepareReset() error
 		Prepare(PrepareRequest) (*PrepareResponse, error)
 		Scan(ScanRequest) (*ScanResponse, error)
-		Format(DeviceFormatRequest) (*DeviceFormatResponse, error)
+		Format(FormatRequest) (*FormatResponse, error)
 		DisableVMD()
 		IsVMDDisabled() bool
 	}
@@ -201,23 +201,5 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		p.disableVMD()
 	}
 
-	// TODO (DAOS-3844): Kick off device formats parallel?
-	resp := &FormatResponse{
-		DeviceResponses: make(DeviceFormatResponses),
-	}
-
-	for _, dev := range req.DeviceList {
-		devResp, err := p.backend.Format(DeviceFormatRequest{
-			ShmID:   req.ShmID,
-			MemSize: req.MemSize,
-			Class:   req.Class,
-			Device:  dev,
-		})
-		if err != nil {
-			return nil, err
-		}
-		resp.DeviceResponses[dev] = devResp
-	}
-
-	return resp, nil
+	return p.backend.Format(req)
 }

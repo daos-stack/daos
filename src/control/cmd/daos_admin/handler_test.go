@@ -534,7 +534,7 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 				Payload: bdevFormatReqPayload,
 			},
 			bmbc: &bdev.MockBackendConfig{
-				DevFormatErr: bdev.FaultUnknown,
+				FormatErr: bdev.FaultUnknown,
 			},
 			expPayload: &bdev.FormatResponse{
 				DeviceResponses: bdev.DeviceFormatResponses{

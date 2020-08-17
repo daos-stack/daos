@@ -33,8 +33,7 @@ type (
 		PrepareResetErr error
 		PrepareResp     *PrepareResponse
 		PrepareErr      error
-		DevFormatRes    *DeviceFormatResponse
-		DevFormatErr    error
+		FormatRes       *FormatResponse
 		FormatFailIdx   int
 		FormatErr       error
 		ScanRes         *ScanResponse
@@ -68,26 +67,36 @@ func (mb *MockBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
 	return mb.cfg.ScanRes, mb.cfg.ScanErr
 }
 
-func (mb *MockBackend) Format(req DeviceFormatRequest) (*DeviceFormatResponse, error) {
-	if mb.cfg.FormatErr != nil {
-		return nil, mb.cfg.FormatErr
-	}
+func (mb *MockBackend) Format(req FormatRequest) (*FormatResponse, error) {
+	//	if mb.cfg.FormatErr != nil {
+	//		return nil, mb.cfg.FormatErr
+	//	}
 
-	if mb.cfg.DevFormatRes != nil || mb.cfg.DevFormatErr != nil {
-		if mb.cfg.DevFormatErr != nil && mb.cfg.FormatFailIdx == mb.cfg.formatIdx {
+	if mb.cfg.FormatRes != nil || mb.cfg.FormatErr != nil {
+		if mb.cfg.FormatErr != nil && mb.cfg.FormatFailIdx == mb.cfg.formatIdx {
 			mb.cfg.formatIdx++
-			return &DeviceFormatResponse{
-				Error: FaultFormatError(req.Device, mb.cfg.DevFormatErr),
+			return &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					req.DeviceList[0]: &DeviceFormatResponse{
+						Error: FaultFormatError(req.DeviceList[0], mb.cfg.FormatErr),
+					},
+				},
 			}, nil
 		}
 		mb.cfg.formatIdx++
 
-		if mb.cfg.DevFormatRes != nil {
-			return mb.cfg.DevFormatRes, nil
+		if mb.cfg.FormatRes != nil {
+			return mb.cfg.FormatRes, nil
 		}
 	}
 
-	return &DeviceFormatResponse{Formatted: true}, nil
+	return &FormatResponse{
+		DeviceResponses: map[string]*DeviceFormatResponse{
+			req.DeviceList[0]: &DeviceFormatResponse{
+				Formatted: true,
+			},
+		},
+	}, nil
 }
 
 func (mb *MockBackend) PrepareReset() error {

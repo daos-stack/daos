@@ -219,63 +219,67 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	return scs[0], nil
 }
 
-func (b *spdkBackend) formatNvmeBdev(req DeviceFormatRequest, resp *DeviceFormatResponse) error {
-	cmdOut, err := exec.Command("/bin/ps", "ax").CombinedOutput()
-	if err != nil {
-		b.log.Error(err.Error())
+func (b *spdkBackend) formatNvmeBdev(pciAddr string, resp *DeviceFormatResponse) error {
+
+	return nil
+}
+
+func (b *spdkBackend) deviceFormat(class storage.BdevClass, device string) (*DeviceFormatResponse, error) {
+	if device == "" {
+		return nil, errors.New("empty pci address in device list")
 	}
 
-	msg := fmt.Sprintf("%s device format on %q\n\n%s\n\n", req.Class, req.Device, cmdOut)
-	defer func() {
-		b.log.Debug(msg)
-	}()
+	resp := new(DeviceFormatResponse)
 
+	switch class {
+	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
+		resp.Formatted = true
+		b.log.Debugf("%s format for non-NVMe bdev skipped on %s", class, device)
+	case storage.BdevClassNvme:
+		msg := fmt.Sprintf("%s device format on %q", class, device)
+
+		if err := b.binding.Format(b.log, device); err != nil {
+			resp.Error = FaultFormatError(device, err)
+			b.log.Debugf("%s failed Format() (%s)", msg, err)
+			break
+		}
+
+		resp.Formatted = true
+		b.log.Debugf("%s successful", msg)
+	default:
+		return nil, FaultFormatUnknownClass(class.String())
+	}
+
+	return resp, nil
+}
+
+func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	spdkOpts := spdk.EnvOptions{
 		ShmID:        req.ShmID,
 		MemSize:      req.MemSize,
-		PciWhiteList: []string{req.Device},
+		PciWhiteList: req.DeviceList,
 		DisableVMD:   b.IsVMDDisabled(),
 	}
 
 	// provide bdev as whitelist so only formatting device is bound
 	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
-		msg = fmt.Sprintf("%s failed InitSPDKEnv() (%s)", msg, err)
-
-		return errors.Wrap(err, "failed to init spdk env")
+		return nil, errors.Wrap(err, "failed to init spdk env")
 	}
 
-	if err := b.binding.Format(b.log, req.Device); err != nil {
-		msg = fmt.Sprintf("%s failed Format() (%s)", msg, err)
-		resp.Error = FaultFormatError(req.Device, err)
-
-		return nil
+	// TODO (DAOS-3844): Kick off device formats parallel?
+	resp := &FormatResponse{
+		DeviceResponses: make(DeviceFormatResponses),
 	}
 
-	resp.Formatted = true
-	msg = fmt.Sprintf("%s successful", msg)
-	b.binding.FiniSPDKEnv(b.log, spdkOpts)
-
-	return nil
-}
-
-func (b *spdkBackend) Format(req DeviceFormatRequest) (*DeviceFormatResponse, error) {
-	if req.Device == "" {
-		return nil, errors.New("empty pci address in device format request")
-	}
-
-	resp := new(DeviceFormatResponse)
-
-	switch req.Class {
-	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
-		resp.Formatted = true
-		b.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Class, req.Device)
-	case storage.BdevClassNvme:
-		if err := b.formatNvmeBdev(req, resp); err != nil {
+	for _, dev := range req.DeviceList {
+		devResp, err := b.deviceFormat(req.Class, dev)
+		if err != nil {
 			return nil, err
 		}
-	default:
-		return nil, FaultFormatUnknownClass(req.Class.String())
+		resp.DeviceResponses[dev] = devResp
 	}
+
+	b.binding.FiniSPDKEnv(b.log, spdkOpts)
 
 	return resp, nil
 }
