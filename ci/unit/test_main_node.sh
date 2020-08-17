@@ -28,6 +28,5 @@ export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
 cd "$DAOS_BASE"
 IS_CI=true OLD_CI=false utils/run_test.sh
 #./utils/node_local_test.py all #DM
-rm -rf vm_test #DM
 mkdir -p vm_test #DM
 ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all #DM
