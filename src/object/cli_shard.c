@@ -599,10 +599,12 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					 0 : nr;
 	orw->orw_iod_array.oia_offs = args->offs;
 
+#if 0
 	D_DEBUG(DB_IO, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
 		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
 		tgt_ep.ep_tag, auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
+#endif
 
 	if (args->bulks != NULL) {
 		orw->orw_sgls.ca_count = 0;

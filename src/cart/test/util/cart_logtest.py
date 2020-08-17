@@ -508,7 +508,9 @@ class LogTest():
                                       'Used as descriptor without registering')
                         error_files.add(line.filename)
                         err_count += 1
-            else:
+            elif len(line._fields) > 2:
+                # is_calloc() doens't work on truncated output so only test if
+                # there are more than two fields to work with.
                 non_trace_lines += 1
                 if line.is_calloc():
                     pointer = line.get_field(-1).rstrip('.')
