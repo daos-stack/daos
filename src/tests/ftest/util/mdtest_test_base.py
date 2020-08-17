@@ -78,7 +78,7 @@ class MdtestBase(TestWithServers):
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
 
-    def _create_pool(self):
+    def create_pool(self):
         """Create a pool and execute Mdtest."""
         # Get the pool params
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
@@ -133,7 +133,7 @@ class MdtestBase(TestWithServers):
         """Runner method for Mdtest."""
         # Create a pool if one does not already exist
         if self.pool is None:
-            self._create_pool()
+            self.create_pool()
         # set Mdtest params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
 
