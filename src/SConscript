@@ -42,7 +42,6 @@ def scons():
     Export('env', 'CART_VERSION')
 
     SConscript('gurt/SConscript')
-    SConscript('swim/SConscript')
     SConscript('cart/SConscript')
     Default('gurt', 'swim', 'cart')
     # Generate the common libraries used by more than one component
