@@ -42,11 +42,12 @@ struct ec_agg_pool_info {
 	uuid_t		 api_poh_uuid;		/* pool handle uuid */
 	uuid_t		 api_cont_uuid;		/* container uuid */
 	uuid_t		 api_coh_uuid;		/* container handle uuid */
-	daos_handle_t	 api_cont_hdl;		/* container handle */
+	daos_handle_t	 api_cont_hdl;		/* container handle, returned by
+						   container open*/
 	uint32_t	 api_pool_version;	/* pool vers,fo check leader*/
 	d_rank_list_t	*api_svc_list;		/* service list */
 	struct ds_pool	*api_pool;		/* Used for IV fetch */
-	/* Shared handle UUIDs, and service listr
+	/* Shared handle UUIDs, and service list
 	 * are initialized in system Xstream.
 	 */
 	ABT_eventual	 api_eventual;		/* eventual for sys offload */
@@ -59,7 +60,7 @@ struct ec_agg_param {
 	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info */
 	struct ec_agg_entry	*ap_agg_entry;	 /* entry used for each OID */
 	daos_prop_t		*ap_prop;
-	daos_handle_t		 ap_cont_handle; /* container handle */
+	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 };
 
 /* Parity extent for the stripe undergoing aggregation.
@@ -84,22 +85,23 @@ struct ec_agg_stripe {
  * list of these is built from committed DTX table)
  */
 struct ec_agg_entry {
-	d_list_t		 ae_link;
-	daos_unit_oid_t		 ae_oid;
-	struct daos_oclass_attr	*ae_oca;
-	struct obj_ec_codec	*ae_codec;
-	d_sg_list_t		*ae_sgl;
-	daos_handle_t		 ae_cont_hdl;
-	daos_handle_t		 ae_chdl;
-	daos_handle_t		 ae_thdl;
+	d_list_t		 ae_link;	 /* List (of entries) link */
+	daos_unit_oid_t		 ae_oid;	 /* OID of iteration entry */
+	struct daos_oclass_attr	*ae_oca;	 /* Object class of object */
+	struct obj_ec_codec	*ae_codec;	 /* Encode/decode for oclass */
+	struct ec_agg_pool_info *ae_pool_info;
+	d_sg_list_t		*ae_sgl;	 /* Mem for entry processing */
+	daos_handle_t		 ae_cont_hdl;    /* Container handle	    */
+	daos_handle_t		 ae_chdl;	 /* Vos container handle */
+	daos_handle_t		 ae_thdl;	 /* Iterator handle */
 	daos_epoch_range_t	 ae_epoch_range; /* hi/lo extent threshold */
-	daos_key_t		 ae_dkey;
-	daos_key_t		 ae_akey;
-	daos_size_t		 ae_rsize;
-	struct ec_agg_stripe	 ae_cur_stripe;
-	struct ec_agg_par_extent ae_par_extent;
-	daos_handle_t		 ae_obj_hdl;
-	d_rank_t		 ae_peer_rank;
+	daos_key_t		 ae_dkey;	 /* Current dkey */
+	daos_key_t		 ae_akey;	 /* Current akey */
+	daos_size_t		 ae_rsize;	 /* Record size of cur array */
+	struct ec_agg_stripe	 ae_cur_stripe;  /* Struct for current stripe */
+	struct ec_agg_par_extent ae_par_extent;	 /* Parity extent */
+	daos_handle_t		 ae_obj_hdl;	 /* Object handle for cur obj */
+	d_rank_t		 ae_peer_rank;	 /* Rank of peer parity tgt */
 };
 
 /* Struct used to drive offloaded stripe update.
@@ -179,11 +181,25 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 
 /* Determines if the extent carries over into the next stripe.
  */
-static bool
-agg_carry_over(struct ec_agg_entry *agg_entry, struct ec_agg_extent *agg_extent)
+static unsigned int
+agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 {
-	/* TBD */
-	return false;
+	/*
+	unsigned int	stripe_size =
+			entry->ae_oca->u.ec.e_k * entry->ae_oca->u.ec.e_len;
+
+	daos_off_t	start_stripe = agg_extent->ae_recx.rx_idx ?
+				stripe_size / agg_extent->ae_recx.rx_idx : 0;
+	daos_off_t	end_stripe = stripe_size / (agg_extent->ae_recx.rx_idx
+						  + agg_extent->ae_recx.rx_nr);
+
+	// What if an extent carries over, and the tail is the only extent in
+	// the next stripe?
+
+	//D_PRINT("start stripe: %lu, end stripe: %lu\n", start_stripe,
+	//	end_stripe);
+	*/
+	return 0;
 }
 
 /* Clears the extent list of all extents completed for the processed stripe.
@@ -194,23 +210,29 @@ static void
 agg_clear_extents(struct ec_agg_entry *agg_entry)
 {
 	struct ec_agg_extent *agg_extent, *ext_tmp;
+	unsigned int	      tail = 0;
 
 	d_list_for_each_entry_safe(agg_extent, ext_tmp,
 				   &agg_entry->ae_cur_stripe.as_dextents,
 				   ae_link) {
 		/* Check for carry-over extent. */
-		if (!agg_carry_over(agg_entry, agg_extent)) {
+		tail = agg_carry_over(agg_entry, agg_extent);
+		if (tail) {
 			agg_entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_del(&agg_extent->ae_link);
 			D_FREE_PTR(agg_extent);
+		} else {
+			agg_extent->ae_recx.rx_idx += tail;
+			agg_extent->ae_recx.rx_nr -= tail;
 		}
+
 	}
 	agg_entry->ae_cur_stripe.as_hi_epoch = 0UL;
 	/* Should account for carry over. */
 	agg_entry->ae_cur_stripe.as_stripe_fill = 0U;
 }
 
-/* Retrunns the stripe number for the stripe containing ex_lo.
+/* Returns the stripe number for the stripe containing ex_lo.
  */
 static inline daos_off_t
 agg_stripenum(struct ec_agg_entry *entry, daos_off_t ex_lo)
@@ -546,13 +568,19 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	if (opened) {
 		d_rank_t myrank, prevrank = ~0;
 		crt_group_rank(NULL, &myrank);
-		D_PRINT("my rank: %u\n", myrank);
+		D_PRINT("agg: my rank: %u\n", myrank);
 		dc_obj_layout_get(entry->ae_obj_hdl, &layout);
 		for (i = 0; i < layout->ol_nr; i++)
 			for (j = 0; j < layout->ol_shards[i]->os_replica_nr;
-			     j++)
+			     j++) {
+				D_PRINT("i: %d, j: %d, rank: %u\n",i, j,
+					layout->ol_shards[i]->os_ranks[j]);
 				if (layout->ol_shards[i]->os_ranks[j] == myrank)
 					entry->ae_peer_rank = prevrank;
+				else
+					prevrank =
+					layout->ol_shards[i]->os_ranks[j];
+			}
 	}
 	return rc;
 }
@@ -710,7 +738,8 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	int		rc = 0;
 
 	D_ASSERT(p == 2);
-	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * len;
+	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len)
+							| PARITY_INDICATOR;
 	recx.rx_nr = len;
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -728,7 +757,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 			   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 			   DIOF_TO_SPEC_SHARD, &pshard);
 
-	// D_PRINT("Remote parity fetch returned: %d\n", rc);
+	D_PRINT("parity fetched from: %u, ret: %d\n", pshard, rc);
 	return rc;
 }
 
@@ -961,6 +990,87 @@ ev_out:
 out:
 	return rc;
 }
+static int
+agg_peer_update(struct ec_agg_entry *entry)
+{
+	struct obj_ec_agg_in	*ec_agg_in = NULL;
+	struct obj_ec_agg_out	*ec_agg_out = NULL;
+	//struct pool_target	*target;
+	struct ds_pool		*pool = entry->ae_pool_info->api_pool;
+	crt_endpoint_t		tgt_ep = {0};
+	crt_opcode_t		opcode;
+	//unsigned int		tgt_id = entry->ae_oid.id_shard - 1;
+	crt_rpc_t		*rpc;
+	int			rc = 0;
+
+	/*
+	D_PRINT("tgt_id: %u\n", tgt_id);
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
+	if (rc != 1 || (target->ta_comp.co_status != PO_COMP_ST_UPIN
+			&& target->ta_comp.co_status != PO_COMP_ST_UP)) {
+		// Remote target has failed, no need retry, but not
+		// report failure as well and next rebuild will handle
+		// it anyway.
+		//
+		ABT_rwlock_unlock(pool->sp_lock);
+		D_DEBUG(DB_TRACE, "Can not find tgt %d or target is down %d\n",
+			tgt_id, target->ta_comp.co_status);
+		D_PRINT("Can not find tgt %d or target is down %d\n",
+			tgt_id, target->ta_comp.co_status);
+		return -DER_NONEXIST;
+	}
+
+	ABT_rwlock_unlock(pool->sp_lock);
+	tgt_ep.ep_rank = target->ta_comp.co_rank;
+	*/
+	tgt_ep.ep_rank = entry->ae_peer_rank;
+	D_PRINT("target rank: %u\n", tgt_ep.ep_rank);
+	//tgt_ep.ep_tag = target->ta_comp.co_index;
+	D_PRINT("tgt_ep.ep_tag: %u\n", tgt_ep.ep_tag);
+	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_AGGREGATE, DAOS_OBJ_MODULE,
+				 DAOS_OBJ_VERSION);
+	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
+			    &rpc);
+	if (rc) {
+		D_ERROR("crt_req_create failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	ec_agg_in = crt_req_get(rpc);
+	D_PRINT("source pool uuid: "DF_UUID"\n",
+		DP_UUID(entry->ae_pool_info->api_pool_uuid));
+
+	uuid_copy(ec_agg_in->ea_pool_uuid, entry->ae_pool_info->api_pool_uuid);
+	uuid_copy(ec_agg_in->ea_poh_uuid, entry->ae_pool_info->api_poh_uuid);
+	uuid_copy(ec_agg_in->ea_cont_uuid, entry->ae_pool_info->api_cont_uuid);
+	uuid_copy(ec_agg_in->ea_coh_uuid, entry->ae_pool_info->api_coh_uuid);
+	ec_agg_in->ea_oid = entry->ae_oid;
+	ec_agg_in->ea_dkey = entry->ae_dkey;
+	ec_agg_in->ea_eph = entry->ae_cur_stripe.as_hi_epoch;
+	ec_agg_in->ea_stripenum = entry->ae_cur_stripe.as_stripenum;
+	ec_agg_in->ea_map_ver = pool->sp_map_version;
+	ec_agg_in->ea_prior_len = 0;
+	ec_agg_in->ea_after_len = 0;
+
+	D_PRINT("Sending RPC\n");
+	rc = dss_rpc_send(rpc);
+	if (rc) {
+		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
+		D_PRINT("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+	D_PRINT("Sent RPC\n");
+
+	ec_agg_out = crt_reply_get(rpc);
+	rc = ec_agg_out->ea_status;
+out:
+	if (rpc)
+		crt_req_decref(rpc);
+
+	return rc;
+
+}
 
 /* Process the prior stripe. Invoked when the iterator has moved to the first
  * extent in the subsequent.
@@ -983,7 +1093,6 @@ agg_process_stripe(struct ec_agg_entry *entry)
 						entry->ae_oca->u.ec.e_len);
 	iter_param.ip_recx.rx_nr	= entry->ae_oca->u.ec.e_len;
 
- 
 	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
@@ -1022,9 +1131,12 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	/* Parity, some later replicas, not full stripe. */
 	rc = agg_process_partial_stripe(entry);
 out:
-	if (update_vos && rc == 0)
+	if (update_vos && rc == 0) {
 		rc = agg_update_vos(entry);
-		/* offload of ds_obj_update (TBD) to push remote parity */
+		if (!rc && entry->ae_oca->u.ec.e_p > 1)
+			/* offload of ds_obj_update  to push remote parity */
+			rc = agg_peer_update(entry);
+	}
 
 	agg_clear_extents(entry);
 	return rc;
@@ -1259,8 +1371,11 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			}
 			D_INIT_LIST_HEAD(&agg_param->ap_agg_entry->
 					 ae_cur_stripe.as_dextents);
+			agg_param->ap_agg_entry->ae_pool_info =
+					&agg_param->ap_pool_info;
 
 		}
+		/* Some of these can be set at creation. They don't change. */
 		agg_reset_entry(agg_param->ap_cont_handle,
 			       agg_param->ap_pool_info.api_cont_hdl,
 			       agg_param->ap_agg_entry, entry, oca,

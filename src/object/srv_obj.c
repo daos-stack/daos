@@ -1297,6 +1297,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			}
 		}
 
+		D_PRINT("fetching: %lu\n", iods[0].iod_recxs[0].rx_idx);
 		rc = vos_fetch_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
 				     orw->orw_epoch,
 				     cond_flags, dkey, orw->orw_nr, iods,
@@ -1448,8 +1449,11 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	memset(ioc, 0, sizeof(*ioc));
 	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
 	if (rc) {
-		if (rc == -DER_NONEXIST)
+		D_PRINT("failing...\n");
+		if (rc == -DER_NONEXIST) {
+			D_PRINT("failed...\n");
 			rc = -DER_NO_HDL;
+		}
 		return rc;
 	}
 
@@ -1483,6 +1487,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 
 	if (!is_container_from_srv(pool_uuid, coh_uuid)) {
 		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
+			DP_UUID(cont_uuid), coh->sch_ref);
+		D_PRINT("Empty container "DF_UUID" (ref=%d) handle?\n",
 			DP_UUID(cont_uuid), coh->sch_ref);
 		D_GOTO(failed, rc = -DER_NO_HDL);
 	}
@@ -1540,8 +1546,15 @@ obj_ioc_begin(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	      struct obj_io_context *ioc)
 {
 	struct ds_pool_child *poc;
-	int		      rc;
+	int		      rank, rc;
+	ABT_xstream xs;
 
+	rc = ABT_xstream_self(&xs);
+	D_ASSERT(rc == ABT_SUCCESS);
+	rc = ABT_xstream_get_rank(xs, &rank);
+	D_ASSERT(rc == ABT_SUCCESS);
+	D_PRINT("xs_rank: %d, opc: %u, cont hdl uuid: "DF_UUIDF"\n", rank,
+		opc, DP_UUID(coh_uuid));
 	rc = obj_ioc_init(pool_uuid, coh_uuid, cont_uuid, opc, ioc);
 	if (rc)
 		return rc;
@@ -1616,6 +1629,60 @@ orf_to_dtx_epoch_flags(enum obj_rpc_flags orf_flags)
 	if (orf_flags & ORF_EPOCH_UNCERTAIN)
 		flags |= DTX_EPOCH_UNCERTAIN;
 	return flags;
+}
+
+void
+ds_obj_ec_agg_handler(crt_rpc_t *rpc)
+{
+	struct obj_ec_agg_in	*oea = crt_req_get(rpc);
+	struct obj_ec_agg_out	*oeao = crt_reply_get(rpc);
+	struct obj_io_context	ioc;
+	int			 rc;
+
+	D_ASSERT(oea != NULL);
+	D_ASSERT(oeao != NULL);
+
+	D_PRINT("pool uuid: "DF_UUID"\n", DP_UUID(oea->ea_pool_uuid));
+	rc = obj_ioc_begin(oea->ea_oid, oea->ea_map_ver,
+			   oea->ea_pool_uuid, oea->ea_coh_uuid,
+			   oea->ea_cont_uuid, opc_get(rpc->cr_opc), &ioc);
+	if (!rc)
+		D_PRINT("dedup: %d, dedup_size: %u\n",
+			      ioc.ioc_coc->sc_props.dcp_dedup,
+			      ioc.ioc_coc->sc_props.dcp_dedup_size);
+
+	else
+		D_PRINT("ioc_begin failed: %d\n", rc);
+		/*
+		goto out;
+	rc = vos_update_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
+			      orw->orw_epoch, orw->orw_api_flags,
+			      dkey, orw->orw_nr, iods,
+			      iod_csums,
+			      ioc->ioc_coc->sc_props.dcp_dedup,
+			      ioc->ioc_coc->sc_props.dcp_dedup_size,
+			      &ioh, dth);
+	if (rc) {
+		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
+		goto out;
+	}
+	biod = vos_ioh2desc(ioh);
+	rc = bio_iod_prep(biod);
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
+		goto out;
+	}
+	rc = obj_bulk_transfer(rpc, bulk_op, true,
+			       orw->orw_bulks.ca_arrays, offs,
+			       ioh, NULL, bsgls_dup, orw->orw_nr);
+	if (!rc)
+		bio_iod_flush(biod);
+
+out:
+*/
+	D_PRINT("rc == %d\n", rc);
 }
 
 void
