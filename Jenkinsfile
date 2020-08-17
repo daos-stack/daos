@@ -101,14 +101,6 @@ String daos_repo() {
     }
 }
 
-String el7_daos_repos() {
-    return el7_pr_repos() + ' ' + pr_repos() + ' ' + daos_repo()
-}
-
-String leap15_daos_repos() {
-    return leap15_pr_repos() + ' ' + pr_repos() + ' ' + daos_repo()
-}
-
 String hw_distro_target() {
     if (env.STAGE_NAME.contains('Hardware')) {
         if (env.STAGE_NAME.contains('Small')) {
@@ -132,10 +124,10 @@ String daos_repos() {
 
 String daos_repos(String distro) {
     if (distro == 'centos7') {
-        return el7_daos_repos()
+        return el7_pr_repos() + ' ' + pr_repos() + ' ' + daos_repo()
     }
     if (distro == 'leap15') {
-        return leap15_daos_repos()
+        return leap15_pr_repos() + ' ' + pr_repos() + ' ' + daos_repo()
     }
     error 'daos_repos not implemented for ' + distro
 }
