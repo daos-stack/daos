@@ -176,6 +176,8 @@ class CartUtils():
         if ofi_share_addr is not None:
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
 
+        env += " -x CRT_ATTACH_INFO_PATH={!s}".format(log_path)
+
         cartobj.log_path = log_path
 
         if not os.path.exists(log_path):
