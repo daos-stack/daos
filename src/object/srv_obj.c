@@ -1343,7 +1343,8 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		goto out;
 	}
 
-	if (obj_rpc_is_fetch(rpc) && !spec_fetch) {
+	if (obj_rpc_is_fetch(rpc) && !spec_fetch &&
+	    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
 		rc = obj_fetch_csum_init(ioc->ioc_coc, orw, orwo);
 		if (rc) {
 			D_ERROR(DF_UOID" fetch csum init failed: %d.\n",

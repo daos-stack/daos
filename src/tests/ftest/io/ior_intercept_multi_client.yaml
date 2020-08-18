@@ -31,12 +31,12 @@ ior:
     test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
-    daos_destroy: False
+    dfs_destroy: False
     iorflags:
         ssf:
           flags: "-k -v -D 300 -w -r"
           api: POSIX
-          daos_oclass: "SX"
+          dfs_oclass: "SX"
           transfersize_blocksize: !mux
             512B:
               transfer_size: '512B'
