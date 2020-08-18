@@ -790,8 +790,16 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group)
 	struct mgmt_svc	*svc;
 	d_rank_list_t	*psvcranks;
 	int		 rc;
+	crt_group_t	*crt_group;
 
 	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
+
+	crt_group = crt_group_lookup((char *)group);
+	if (crt_group == NULL) {
+		D_ERROR("Invalid group name %s\n", group);
+		rc = -DER_NONEXIST;
+		goto out;
+	}
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
