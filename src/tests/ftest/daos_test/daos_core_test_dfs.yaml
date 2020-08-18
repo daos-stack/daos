@@ -9,8 +9,10 @@ hosts:
   test_clients:
     - client-E
     - client-F
+    - client-G
+    - client-H
 
-timeout: 600
+timeout: 250
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
@@ -50,7 +52,7 @@ dmg:
     allow_insecure: True
 daos_tests:
   num_clients:
-    num_clients: 16
+    num_clients: 32
   num_replicas:
     num_replicas: 1
   Tests:
