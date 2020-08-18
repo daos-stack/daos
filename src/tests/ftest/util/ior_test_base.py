@@ -194,8 +194,8 @@ class IorTestBase(TestWithServers):
             str: the path for the mpi job manager command
 
         """
-        # Initialize MpioUtils if IOR is running in MPIIO or DAOS mode
-        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX", "DFS"]:
+        # Initialize MpioUtils if IOR is running in MPIIO or DFS mode
+        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
