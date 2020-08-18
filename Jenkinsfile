@@ -1015,8 +1015,8 @@ pipeline {
                     post {
                       always {
                             sh label: 'Unit Test junit fixup',
-                               script: '''for i in covc_test_results/*.xml; do
-                                            sed -i 's/<testsuite name=/<testsuite package="unit" name=/g' "$i"
+                               script: '''for i in test_results/*.xml; do
+                                            sed -i 's/<testsuite name="/<testsuite name="unit./g' "$i"
                                           done'''
                             archiveArtifacts artifacts: 'test_results/*.xml',
                                              allowEmptyArchive: true
@@ -1050,7 +1050,7 @@ pipeline {
                                           fi
                                           mv test_results covc_test_results
                                           for i in covc_test_results/*.xml; do
-                                            sed -i 's/<testsuite name=/<testsuite package="covc" name=/g' "$i"
+                                            sed -i 's/<testsuite name="/<testsuite name="covc./g' "$i"
                                           done'''
                             archiveArtifacts artifacts: 'covc_test_results/*.xml',
                                               allowEmptyArchive: true
