@@ -1040,9 +1040,13 @@ pipeline {
                             // caused by code coverage instrumentation affecting
                             // test results, and while code coverage is being
                             // added.
-                            FileOperations(
+                            fileOperations(
                               [fileRenameOperation(source: 'test_results',
                                                    dest: 'covc_test_results')])
+                            sh label: 'Bullseye junit fixup',
+                               script: '''for i in covc_test_results/*.xml; do
+                                            sed -i '/<testcase name=/<testcase classname="unit.covc" name=/g' "$i"
+                                          done'''
                             archiveArtifacts artifacts: 'covc_test_results/*.xml',
                                               allowEmptyArchive: true
                             unitTestPost ignore_failure: true,
