@@ -68,10 +68,6 @@ func (mb *MockBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
 }
 
 func (mb *MockBackend) Format(req FormatRequest) (*FormatResponse, error) {
-	//	if mb.cfg.FormatErr != nil {
-	//		return nil, mb.cfg.FormatErr
-	//	}
-
 	if mb.cfg.FormatRes != nil || mb.cfg.FormatErr != nil {
 		if mb.cfg.FormatErr != nil && mb.cfg.FormatFailIdx == mb.cfg.formatIdx {
 			mb.cfg.formatIdx++

@@ -249,7 +249,7 @@ func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*Form
 			formatted = append(formatted, nsID)
 		}
 
-		b.log.Debugf("formatted namespaces %v on %d", formatted, addr)
+		b.log.Debugf("formatted namespaces %v on %s", formatted, addr)
 
 		devResp := new(DeviceFormatResponse)
 		if len(failed) > 0 {

@@ -544,16 +544,6 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 				},
 			},
 		},
-		"BdevFormat failure": {
-			req: &pbin.Request{
-				Method:  "BdevFormat",
-				Payload: bdevFormatReqPayload,
-			},
-			bmbc: &bdev.MockBackendConfig{
-				FormatErr: bdev.FaultUnknown,
-			},
-			expErr: bdev.FaultUnknown,
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
