@@ -39,7 +39,6 @@
 This provides consistency checking for CaRT log files.
 """
 
-import sys
 import time
 import argparse
 HAVE_TABULATE = True

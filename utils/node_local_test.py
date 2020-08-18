@@ -755,7 +755,6 @@ def setup_log_test(conf):
     logparse_dir = os.path.join(file_self,
                                 '../src/cart/test/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
-    print(crt_mod_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
 
