@@ -56,7 +56,6 @@ class CartUtils():
 
     @staticmethod
     def write_host_file(hostlist, slots=1):
-        print("Entering write_host_file")
         """ write out a hostfile suitable for orterun """
 
         unique = random.randint(1, 100000)
@@ -83,7 +82,6 @@ class CartUtils():
 
     @staticmethod
     def check_process(proc):
-        print("Entering check_process")
         """ check if a process is still running"""
         proc.poll()
         procrtn = proc.returncode
@@ -93,7 +91,6 @@ class CartUtils():
 
     @staticmethod
     def wait_process(proc, wait_time):
-        print("Entering wait_process")
         """ wait for process to terminate """
         i = wait_time
         procrtn = None
@@ -110,7 +107,6 @@ class CartUtils():
 
     @staticmethod
     def stop_process(proc, self):
-        print("Entering stop_process")
         """ wait for process to terminate """
         i = 60
         procrtn = None
@@ -133,7 +129,6 @@ class CartUtils():
         return procrtn
 
     def get_env(self, cartobj):
-        self.stdout.info("Entering get_env")
         """ return basic env setting in yaml """
         env_CCSA = cartobj.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = cartobj.params.get("name", "/run/tests/*/")
@@ -198,7 +193,6 @@ class CartUtils():
 
     @staticmethod
     def get_srv_cnt(cartobj, host):
-        print("Entering get_srv_cnt")
         """ get server count """
         hostlist = cartobj.params.get("{}".format(host), "/run/hosts/*/")
 
@@ -209,7 +203,6 @@ class CartUtils():
         return srvcnt
 
     def build_cmd(self, cartobj, env, host):
-        self.stdout.info("Entering build_cmd")
         """ build command """
         tst_cmd = ""
 
@@ -228,8 +221,6 @@ class CartUtils():
         orterun_bin = find_executable("orterun", os.environ["PATH"] + ":/usr/lib64/openmpi3/bin")
         if orterun_bin is None:
             orterun_bin = "orterun_not_installed"
-
-        self.print("\nbuild_cmd:227: ENV : %s\n" % os.environ)
 
         tst_bin = cartobj.params.get("{}_bin".format(host),
                                      "/run/tests/*/")
@@ -283,7 +274,6 @@ class CartUtils():
         return tst_cmd
 
     def launch_srv_cli_test(self, cartobj, srvcmd, clicmd):
-        self.stdout.info("Entering launch_srv_cli_test")
         """ launches sever in the background and client in the foreground """
 
         srv_rtn = self.launch_cmd_bg(cartobj, srvcmd)
@@ -305,7 +295,6 @@ class CartUtils():
         return 0
 
     def init_mpi_old(self, mpi):
-        self.stdout.info("Entering init_mpi_old")
         """load mpi with older environment-modules"""
         self.print("Loading old %s" % mpi)
         self.module('purge')
@@ -313,7 +302,6 @@ class CartUtils():
         return True
 
     def init_mpi(self, mpi):
-        self.stdout.info("Entering init_mpi")
         """load mpi"""
 
         mpich = ['mpi/mpich-x86_64']
@@ -373,7 +361,6 @@ class CartUtils():
         return False
 
     def launch_test(self, cartobj, cmd, srv1=None, srv2=None):
-        self.stdout.info("Entering launch_test")
         """ launches test """
 
         self.print("\nCMD : %s\n" % cmd)
@@ -383,8 +370,6 @@ class CartUtils():
 
         cmd = shlex.split(cmd)
         rtn = subprocess.call(cmd)
-
-        self.print("\nENV : %s\n" % os.environ)
 
         if rtn:
             if srv1 is not None:
@@ -398,7 +383,6 @@ class CartUtils():
         return rtn
 
     def launch_cmd_bg(self, cartobj, cmd):
-        self.stdout.info("Entering launch_cmd_bg")
         """ launches the given cmd in background """
 
         self.print("\nCMD : %s\n" % cmd)
@@ -413,7 +397,6 @@ class CartUtils():
         return rtn
 
     def print(self, cmd):
-        self.stdout.info("Entering print")
         """ prints the given cmd at runtime and stdout """
 
         self.stdout.info(cmd)
@@ -421,7 +404,6 @@ class CartUtils():
 
     @staticmethod
     def log_check(cartobj):
-        print("Entering log_check")
         """Check log files for consistency """
 
         logparse = cartobj.params.get("logparse", "/run/tests/*/")
