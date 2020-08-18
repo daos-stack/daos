@@ -3,7 +3,7 @@
 if [ "$USE_VALGRIND" = "memcheck" ]; then
     VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
           --suppressions=${VALGRIND_SUPP} --xml=yes \
-          --xml-file=test_results/results-%p-memcheck.xml"
+          --xml-file=test_results/results-memcheck-%p.xml"
 elif [ "$USE_VALGRIND" = "pmemcheck" ]; then
     VCMD="valgrind --tool=pmemcheck "
 fi
