@@ -96,6 +96,11 @@ struct dev_health_t {
 	bool		 volatile_mem_warning;
 };
 
+/**
+ * \brief Result struct for namespace wipe operation containing return code,
+ * namespace id, parent controller pci address, info message and link to next
+ * list element.
+ */
 struct wipe_res_t {
 	char 			 ctrlr_pci_addr[BUFLEN];
 	uint32_t		 ns_id;
@@ -162,15 +167,22 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  const struct spdk_nvme_ctrlr_opts *opts);
 
 /*
- * Initialize the ret_t struct by allocating memory and setting attributes
+ * Initialize the wipe_res_t struct by allocating memory and setting references
  * to NULL.
  *
- * \param rc initial rc value to set in returned ret_t.
+ * \return a pointer to a wipe result struct (wipe_res_t).
+ **/
+struct wipe_res_t *
+init_wipe_res(void);
+
+/*
+ * Initialize the ret_t struct by allocating memory and setting references
+ * to NULL.
  *
  * \return a pointer to a return struct (ret_t).
  **/
 struct ret_t *
-init_ret(int rc);
+init_ret(void);
 
 /*
  * Free memory allocated in linked lists attached to the ret_t struct.

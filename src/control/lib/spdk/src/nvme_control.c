@@ -131,47 +131,45 @@ write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 }
 
 static struct wipe_res_t *
-wipe(struct ctrlr_entry *centry, struct ns_entry *nentry)
+wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 {
 	struct lba0_data	 data;
-	struct wipe_res_t	*ret, *tmp = NULL;
+	struct wipe_res_t	*res = NULL, *tmp = NULL;
 	int			 rc;
 
 	while (nentry != NULL) {
-		ret = calloc(1, sizeof(struct wipe_res_t));
-		if (ret == NULL) {
-			fprintf(stderr, "unable to alloc wipe result\n");
-			return NULL;
-		}
-		ret->next = tmp;
-		tmp = ret;
+		res = init_wipe_res();
+		res->next = tmp;
+		tmp = res;
 
-		rc = spdk_pci_addr_fmt(ret->ctrlr_pci_addr,
-				       sizeof(ret->ctrlr_pci_addr),
+		res->ns_id = spdk_nvme_ns_get_id(nentry->ns);
+
+		rc = spdk_pci_addr_fmt(res->ctrlr_pci_addr,
+				       sizeof(res->ctrlr_pci_addr),
 				       &centry->pci_addr);
 		if (rc != 0) {
 			rc = -NVMEC_ERR_PCI_ADDR_FMT;
-			return ret;
+			return res;
 		}
 
 		nentry->qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr,
 							       NULL, 0);
 		if (nentry->qpair == NULL) {
-			snprintf(ret->info, sizeof(ret->info),
+			snprintf(res->info, sizeof(res->info),
 				 "spdk_nvme_ctrlr_alloc_io_qpair()\n");
-			ret->rc = -1;
-			return ret;
+			res->rc = -1;
+			return res;
 		}
 
 		data.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
 					SPDK_ENV_SOCKET_ID_ANY,
 					SPDK_MALLOC_DMA);
 		if (data.buf == NULL) {
-			snprintf(ret->info, sizeof(ret->info),
+			snprintf(res->info, sizeof(res->info),
 				 "spdk_zmalloc()\n");
-			ret->rc = -1;
+			res->rc = -1;
 			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
-			return ret;
+			return res;
 		}
 		data.write_result = LBA0_WRITE_PENDING;
 		data.ns_entry = nentry;
@@ -181,12 +179,12 @@ wipe(struct ctrlr_entry *centry, struct ns_entry *nentry)
 					    1, /* number of LBAs */
 					    write_complete, &data, 0);
 		if (rc != 0) {
-			snprintf(ret->info, sizeof(ret->info),
+			snprintf(res->info, sizeof(res->info),
 				 "spdk_nvme_ns_cmd_write() (%d)\n", rc);
-			ret->rc = -1;
+			res->rc = -1;
 			spdk_free(data.buf);
 			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
-			return ret;
+			return res;
 		}
 
 		while (data.write_result == LBA0_WRITE_PENDING) {
@@ -200,32 +198,57 @@ wipe(struct ctrlr_entry *centry, struct ns_entry *nentry)
 		}
 
 		if (data.write_result != LBA0_WRITE_SUCCESS) {
-			snprintf(ret->info, sizeof(ret->info),
+			snprintf(res->info, sizeof(res->info),
 				 "spdk_nvme_ns_cmd_write() callback\n");
-			ret->rc = -1;
+			res->rc = -1;
 			spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
-			return ret;
+			return res;
 		}
 
 		spdk_nvme_ctrlr_free_io_qpair(nentry->qpair);
 		nentry = nentry->next;
 	}
 
-	return ret;
+	return res;
+}
+
+static struct wipe_res_t *
+wipe_ctrlrs(void)
+{
+	struct ctrlr_entry	*centry = g_controllers;
+	struct wipe_res_t	*start = NULL, *end = NULL;
+
+	while (centry != NULL) {
+		struct wipe_res_t *results = wipe_ctrlr(centry, centry->nss);
+		struct wipe_res_t *tmp = results;
+
+		if (results == NULL) {
+			continue;
+		}
+
+		if (start == NULL) {
+			start = results;
+		} else if (end != NULL) {
+			end->next = results;
+		}
+
+		/* update ptr to last in list */
+		while (tmp != NULL) {
+			end = tmp;
+			tmp = tmp->next;
+		}
+
+		centry = centry->next;
+	}
+
+	return start;
 }
 
 struct ret_t *
 nvme_wipe_namespaces(void)
 {
-	struct ctrlr_entry	*centry;
-	struct wipe_res_t	*start, *end;
-	struct ret_t		*ret = calloc(1, sizeof(struct ret_t));
-	int			 rc;
-
-	ret->rc = 0;
-	ret->ctrlrs = NULL;
-	ret->wipe_results = NULL;
-	snprintf(ret->info, sizeof(ret->info), "\n");
+	struct ret_t	*ret = init_ret();
+	int		 rc;
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -251,37 +274,14 @@ nvme_wipe_namespaces(void)
 		return ret;
 	}
 
-	centry = g_controllers;
-	start = NULL;
-	end = NULL;
-	while (centry != NULL) {
-		struct wipe_res_t *results = wipe(centry, centry->nss);
-		struct wipe_res_t *tmp = results;
-
-		if (results == NULL) {
-			snprintf(ret->info, sizeof(ret->info),
-				 "no namespaces on controller\n");
-			cleanup(true);
-			ret->rc = -1;
-			return ret;
-		}
-
-		if (start == NULL) {
-			start = results;
-		} else if (end != NULL) {
-			end->next = results;
-		}
-
-		/* update ptr to last in list */
-		while (tmp != NULL) {
-			end = tmp;
-			tmp = tmp->next;
-		}
-
-		centry = centry->next;
+	ret->wipe_results = wipe_ctrlrs();
+	if (ret->wipe_results == NULL) {
+		snprintf(ret->info, sizeof(ret->info),
+			 "no namespaces on controller\n");
+		cleanup(true);
+		ret->rc = -1;
+		return ret;
 	}
-
-	ret->wipe_results = start;
 
 	cleanup(true);
 	return ret;
@@ -297,7 +297,7 @@ nvme_format(char *ctrlr_pci_addr)
 	struct ctrlr_entry			*ctrlr_entry;
 	struct ret_t				*ret;
 
-	ret = init_ret(0);
+	ret = init_ret();
 
 	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
 	if (ret->rc != 0)
@@ -359,7 +359,7 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	struct ctrlr_entry			*ctrlr_entry;
 	struct ret_t				*ret;
 
-	ret = init_ret(0);
+	ret = init_ret();
 
 	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
 	if (ret->rc != 0)

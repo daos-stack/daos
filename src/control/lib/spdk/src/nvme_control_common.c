@@ -112,17 +112,29 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	}
 }
 
-struct ret_t *
-init_ret(int rc)
+struct wipe_res_t *
+init_wipe_res(void)
 {
-	struct ret_t *ret = NULL;
+	struct wipe_res_t *res = calloc(1, sizeof(struct wipe_res_t));
 
-	ret = calloc(1, sizeof(struct ret_t));
-	if (ret == NULL) {
-		perror("ret calloc");
+	if (res == NULL) {
+		perror("wipe_res_t calloc");
 		exit(1);
 	}
-	ret->rc = rc;
+	res->next = NULL;
+
+	return res;
+}
+
+struct ret_t *
+init_ret(void)
+{
+	struct ret_t *ret = calloc(1, sizeof(struct ret_t));
+
+	if (ret == NULL) {
+		perror("ret_t calloc");
+		exit(1);
+	}
 	ret->ctrlrs = NULL;
 	ret->wipe_results = NULL;
 
@@ -202,7 +214,7 @@ _discover(prober probe, bool detach, health_getter get_health)
 		goto fail;
 
 	if (!g_controllers || !g_controllers->ctrlr)
-		return init_ret(0); /* no controllers */
+		return init_ret(); /* no controllers */
 
 	/*
 	 * Collect NVMe SSD health stats for each probed controller.
@@ -233,7 +245,9 @@ _discover(prober probe, bool detach, health_getter get_health)
 
 fail:
 	cleanup(detach);
-	return init_ret(rc);
+	ret = init_ret();
+	ret->rc = rc;
+	return ret;
 }
 
 static int
@@ -412,7 +426,7 @@ collect(void)
 {
 	struct ret_t *ret;
 
-	ret = init_ret(0);
+	ret = init_ret();
 	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
 		 &spdk_pci_device_get_socket_id);
 
