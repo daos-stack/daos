@@ -167,6 +167,7 @@ int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		 daos_handle_t *ih, struct dtx_handle *dth)
 {
+	struct dtx_handle	*saved = vos_dth_get();
 	struct vos_iter_dict	*dict;
 	struct vos_iterator	*iter;
 	int			 rc;
@@ -193,10 +194,15 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_ERROR("Can't find iterator type %d\n", type);
 		return -DER_NOSYS;
 	}
+
+	vos_dth_set(dth);
+
 	if (!daos_handle_is_inval(param->ip_ih)) {
 		D_DEBUG(DB_TRACE, "Preparing nested iterator of type %s\n",
 			dict->id_name);
-		return nested_prepare(type, dict, param, ih);
+		rc = nested_prepare(type, dict, param, ih);
+
+		goto out;
 	}
 
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
@@ -209,7 +215,8 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		else
 			D_ERROR("Failed to prepare %s iterator: "DF_RC"\n",
 				dict->id_name, DP_RC(rc));
-		return rc;
+
+		goto out;
 	}
 
 	D_ASSERT(iter->it_type == type);
@@ -221,7 +228,10 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	iter->it_from_parent	= 0;
 
 	*ih = vos_iter2hdl(iter);
-	return 0;
+
+out:
+	vos_dth_set(saved);
+	return rc;
 }
 
 /* Internal function to ensure parent iterator remains
@@ -535,6 +545,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
+	struct dtx_handle	*saved = vos_dth_get();
 	vos_iter_entry_t	iter_ent = {0};
 	daos_handle_t		ih;
 	unsigned int		acts = 0;
@@ -547,6 +558,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	anchor = type2anchor(type, anchors);
 
+	vos_dth_set(dth);
+
 	rc = vos_iter_prepare(type, param, &ih, dth);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
@@ -556,6 +569,9 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 			D_ERROR("failed to prepare iterator (type=%d): "
 				""DF_RC"\n", type, DP_RC(rc));
 		}
+
+		vos_dth_set(saved);
+
 		return rc;
 	}
 
@@ -668,5 +684,6 @@ out:
 			DP_RC(rc));
 
 	vos_iter_finish(ih);
+	vos_dth_set(saved);
 	return rc;
 }
