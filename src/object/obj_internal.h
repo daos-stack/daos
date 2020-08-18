@@ -421,7 +421,7 @@ obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EVICTED || err == -DER_CSUM ||
+	       err == -DER_EVICTED || err == -DER_CSUM || err == -DER_TX_BUSY ||
 	       daos_crt_network_error(err);
 }
 
