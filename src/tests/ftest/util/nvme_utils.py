@@ -315,7 +315,7 @@ class ServerFillUp(IorTestBase):
             block_size(int): IOR Block size
         """
         #Check the replica for IOR object to calculate the correct block size.
-        _replica = re.findall(r'_(.+?)G', self.ior_cmd.daos_oclass.value)
+        _replica = re.findall(r'_(.+?)G', self.ior_cmd.dfs_oclass.value)
         if not _replica:
             replica_server = 1
         #This is for EC Parity
