@@ -108,6 +108,7 @@ class NvmeEnospace(ServerFillUp):
         #List all the container
         kwargs = {"pool": self.pool.uuid, "svc": self.pool.svc_ranks}
         continers = (self.daos_cmd.get_output("pool_list_cont", **kwargs))
+     
         #Destroy all the containers
         for _cont in continers:
             kwargs["cont"] = _cont
