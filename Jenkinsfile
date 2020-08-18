@@ -1014,6 +1014,8 @@ pipeline {
                     }
                     post {
                       always {
+                            archiveArtifiacts artifacts: 'test_results/*.xml',
+                                              allowEmptyArchive: true
                             unitTestPost valgrind_stash: 'centos7-gcc-unit-valg'
                         }
                     }
@@ -1038,7 +1040,13 @@ pipeline {
                             // caused by code coverage instrumentation affecting
                             // test results, and while code coverage is being
                             // added.
-                            unitTestPost ignore_failure: true
+                            FileOperations(
+                              [fileRenameOperation(source: 'test_results',
+                                                   dest: 'covc_test_results')])
+                            archiveArtifiacts artifacts: 'covc_test_results/*.xml',
+                                              allowEmptyArchive: true
+                            unitTestPost ignore_failure: true,
+                                         testResults: 'covc_test_results/*.xml'
                         }
                     }
                 } // stage('Unit test Bullseye')
