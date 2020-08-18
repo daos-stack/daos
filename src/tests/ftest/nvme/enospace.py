@@ -194,8 +194,8 @@ class NvmeEnospace(ServerFillUp):
         #Check both NVMe and SCM are full.
         pool_usage = self.pool.pool_percentage_used()
         #NVM should be almost full if not test will fail.
-        if pool_usage['nvme'] > 5:
-            self.fail('Pool NVMe used percentage should be < 5%, instead {}'.
+        if pool_usage['nvme'] > 8:
+            self.fail('Pool NVMe used percentage should be < 8%, instead {}'.
                       format(pool_usage['nvme']))
         #For SCM some % space used for system so it wont be 100% full.
         if pool_usage['scm'] > 50:
