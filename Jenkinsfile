@@ -1045,7 +1045,7 @@ pipeline {
                                                    destination: 'covc_test_results')])
                             sh label: 'Bullseye junit fixup',
                                script: '''for i in covc_test_results/*.xml; do
-                                            sed -i '/<testcase name=/<testcase classname="unit.covc" name=/g' "$i"
+                                            sed -i 's/<testcase name=/<testcase classname="unit.covc" name=/g' "$i"
                                           done'''
                             archiveArtifacts artifacts: 'covc_test_results/*.xml',
                                               allowEmptyArchive: true
