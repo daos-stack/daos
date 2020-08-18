@@ -124,6 +124,7 @@ init_ret(int rc)
 	}
 	ret->rc = rc;
 	ret->ctrlrs = NULL;
+	ret->wipe_results = NULL;
 
 	return ret;
 }
@@ -131,8 +132,15 @@ init_ret(int rc)
 void
 clean_ret(struct ret_t *ret)
 {
-	struct ctrlr_t	*cnext;
-	struct ns_t	*nnext;
+	struct ctrlr_t		*cnext;
+	struct ns_t		*nnext;
+	struct wipe_res_t	*wrnext;
+
+	while (ret && (ret->wipe_results)) {
+		wrnext = ret->wipe_results->next;
+		free(ret->wipe_results);
+		ret->wipe_results = wrnext;
+	}
 
 	while (ret && (ret->ctrlrs)) {
 		while (ret->ctrlrs->nss) {

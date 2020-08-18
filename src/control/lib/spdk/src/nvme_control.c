@@ -130,26 +130,30 @@ write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 	spdk_free(data->buf);
 }
 
-static struct ret_t *
-wipe(char *ctrlr_pci_addr)
+static struct wipe_res_t *
+wipe(struct ctrlr_entry *centry, struct ns_entry *nentry)
 {
-	struct ctrlr_entry	*centry;
-	struct ns_entry		*nentry;
-	struct ret_t		*ret;
 	struct lba0_data	 data;
+	struct wipe_res_t	*ret, *tmp = NULL;
 	int			 rc;
 
-	ret = init_ret(0);
-
-	rc = get_controller(&centry, ctrlr_pci_addr);
-	if (rc != 0) {
-		snprintf(ret->info, sizeof(ret->info), "get_controller()\n");
-		ret->rc = rc;
-		return ret;
-	}
-
-	nentry = centry->nss;
 	while (nentry != NULL) {
+		ret = calloc(1, sizeof(struct wipe_res_t));
+		if (ret == NULL) {
+			fprintf(stderr, "unable to alloc wipe result\n");
+			return NULL;
+		}
+		ret->next = tmp;
+		tmp = ret;
+
+		rc = spdk_pci_addr_fmt(ret->ctrlr_pci_addr,
+				       sizeof(ret->ctrlr_pci_addr),
+				       &centry->pci_addr);
+		if (rc != 0) {
+			rc = -NVMEC_ERR_PCI_ADDR_FMT;
+			return ret;
+		}
+
 		nentry->qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr,
 							       NULL, 0);
 		if (nentry->qpair == NULL) {
@@ -211,12 +215,17 @@ wipe(char *ctrlr_pci_addr)
 }
 
 struct ret_t *
-nvme_wipe_namespaces(char *ctrlr_pci_addr)
+nvme_wipe_namespaces(void)
 {
-	struct ret_t		*ret;
+	struct ctrlr_entry	*centry;
+	struct wipe_res_t	*start, *end;
+	struct ret_t		*ret = calloc(1, sizeof(struct ret_t));
 	int			 rc;
 
-	ret = init_ret(0);
+	ret->rc = 0;
+	ret->ctrlrs = NULL;
+	ret->wipe_results = NULL;
+	snprintf(ret->info, sizeof(ret->info), "\n");
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -242,7 +251,38 @@ nvme_wipe_namespaces(char *ctrlr_pci_addr)
 		return ret;
 	}
 
-	ret = wipe(ctrlr_pci_addr);
+	centry = g_controllers;
+	start = NULL;
+	end = NULL;
+	while (centry != NULL) {
+		struct wipe_res_t *results = wipe(centry, centry->nss);
+		struct wipe_res_t *tmp = results;
+
+		if (results == NULL) {
+			snprintf(ret->info, sizeof(ret->info),
+				 "no namespaces on controller\n");
+			cleanup(true);
+			ret->rc = -1;
+			return ret;
+		}
+
+		if (start == NULL) {
+			start = results;
+		} else if (end != NULL) {
+			end->next = results;
+		}
+
+		/* update ptr to last in list */
+		while (tmp != NULL) {
+			end = tmp;
+			tmp = tmp->next;
+		}
+
+		centry = centry->next;
+	}
+
+	ret->wipe_results = start;
+
 	cleanup(true);
 	return ret;
 }

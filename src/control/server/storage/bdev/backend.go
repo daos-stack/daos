@@ -219,11 +219,6 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	return scs[0], nil
 }
 
-func (b *spdkBackend) formatNvmeBdev(pciAddr string, resp *DeviceFormatResponse) error {
-
-	return nil
-}
-
 func (b *spdkBackend) deviceFormat(class storage.BdevClass, device string) (*DeviceFormatResponse, error) {
 	if device == "" {
 		return nil, errors.New("empty pci address in device list")

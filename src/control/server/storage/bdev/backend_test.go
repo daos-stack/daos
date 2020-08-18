@@ -213,39 +213,55 @@ func TestBdevBackendFormat(t *testing.T) {
 			expErr: errors.New("failed to init spdk env: spdk init says no"),
 		},
 		"binding format success": {
-			req: DeviceFormatRequest{
-				Class:  storage.BdevClassNvme,
-				Device: "foo",
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{"foo"},
 			},
-			expResp: &DeviceFormatResponse{
-				Formatted: true,
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					"foo": &DeviceFormatResponse{
+						Formatted: true,
+					},
+				},
 			},
 		},
 		"kdev": {
-			req: DeviceFormatRequest{
-				Class:  storage.BdevClassKdev,
-				Device: "foo",
+			req: FormatRequest{
+				Class:      storage.BdevClassKdev,
+				DeviceList: []string{"foo"},
 			},
-			expResp: &DeviceFormatResponse{
-				Formatted: true,
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					"foo": &DeviceFormatResponse{
+						Formatted: true,
+					},
+				},
 			},
 		},
 		"file": {
-			req: DeviceFormatRequest{
-				Class:  storage.BdevClassFile,
-				Device: "foo",
+			req: FormatRequest{
+				Class:      storage.BdevClassFile,
+				DeviceList: []string{"foo"},
 			},
-			expResp: &DeviceFormatResponse{
-				Formatted: true,
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					"foo": &DeviceFormatResponse{
+						Formatted: true,
+					},
+				},
 			},
 		},
 		"malloc": {
-			req: DeviceFormatRequest{
-				Class:  storage.BdevClassMalloc,
-				Device: "foo",
+			req: FormatRequest{
+				Class:      storage.BdevClassMalloc,
+				DeviceList: []string{"foo"},
 			},
-			expResp: &DeviceFormatResponse{
-				Formatted: true,
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					"foo": &DeviceFormatResponse{
+						Formatted: true,
+					},
+				},
 			},
 		},
 	} {

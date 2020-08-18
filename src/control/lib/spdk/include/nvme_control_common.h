@@ -96,14 +96,23 @@ struct dev_health_t {
 	bool		 volatile_mem_warning;
 };
 
+struct wipe_res_t {
+	char 			 ctrlr_pci_addr[BUFLEN];
+	uint32_t		 ns_id;
+	int			 rc;
+	char			 info[BUFLEN];
+	struct wipe_res_t	*next;
+};
+
 /**
- * \brief Return containing return code, controllers, namespaces and info
- * message
+ * \brief Return containing return code, controllers, namespaces, wwipe
+ * results and info message
  */
 struct ret_t {
-	int		rc;
-	struct ctrlr_t *ctrlrs;
-	char		info[BUFLEN];
+	struct ctrlr_t		*ctrlrs;
+	struct wipe_res_t	*wipe_results;
+	int			 rc;
+	char			 info[BUFLEN];
 };
 
 struct ctrlr_entry {
