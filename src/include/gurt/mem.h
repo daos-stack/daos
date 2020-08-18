@@ -20,6 +20,8 @@
 extern "C" {
 #endif
 
+#include <string.h>
+
 /**
  * \file
  * Optimized mem{cmp,cpy} functions
@@ -560,8 +562,6 @@ d_memcpy(void *dst, const void *src, size_t n)
 }
 
 #else /**!__AVX2__ */
-
-#include <string.h>
 
 #define d_memcpy	memcpy
 #define d_memcmp	memcmp
