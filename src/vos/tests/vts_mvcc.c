@@ -217,12 +217,14 @@ start_tx(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 static void
 stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 {
-	struct dtx_handle	*dth = txh->th_dth;
+	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
 	int			 err;
 
 	if (txh == NULL)
 		return;
+
+	dth = txh->th_dth;
 
 	if (write)
 		dth->dth_op_seq++;
