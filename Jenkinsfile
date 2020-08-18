@@ -1014,8 +1014,12 @@ pipeline {
                     }
                     post {
                       always {
+                            sh label: 'Unit Test junit fixup',
+                               script: '''for i in covc_test_results/*.xml; do
+                                            sed -i 's/<testsuite name"=/<testcase name="unit./g' "$i"
+                                          done'''
                             archiveArtifacts artifacts: 'test_results/*.xml',
-                                              allowEmptyArchive: true
+                                             allowEmptyArchive: true
                             unitTestPost valgrind_stash: 'centos7-gcc-unit-valg'
                         }
                     }
@@ -1046,7 +1050,7 @@ pipeline {
                                           fi
                                           mv test_results covc_test_results
                                           for i in covc_test_results/*.xml; do
-                                            sed -i 's/<testcase name=/<testcase classname="unit.covc" name=/g' "$i"
+                                            sed -i 's/<testsuite name"=/<testcase name="unit./g' "$i"
                                           done'''
                             archiveArtifacts artifacts: 'covc_test_results/*.xml',
                                               allowEmptyArchive: true
