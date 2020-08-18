@@ -34,14 +34,14 @@ ior:
             np: 12
     test_file: daos:testFile
     repetitions: 1
-    daos_destroy: False
+    dfs_destroy: False
     iorflags:
         flags: "-v -w -W -r -R -k"
-    api: DAOS
+    api: DFS
     transfer_size: '1M'
     block_size: '8G'
     objectclass: !mux
         oclass_SX:
-            daos_oclass: "SX"
+            dfs_oclass: "SX"
         oclass_RP_2GX:
-            daos_oclass: "RP_2GX"
+            dfs_oclass: "RP_2GX"
