@@ -405,6 +405,8 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 		D_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
+	/* Clients never decode requests. */
+	D_ASSERT(crt_is_service());
 	(void)crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc);
 	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
@@ -526,16 +528,23 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 						);
 			hdr->cch_dst_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
-			if (crt_is_service())
+			if (crt_is_service()) {
 				hdr->cch_src_rank =
 					crt_grp_priv_get_primary_rank(
 						rpc_priv->crp_grp_priv,
 						rpc_priv->crp_grp_priv->gp_self
 						);
-			else
+				hdr->cch_hlc = crt_hlc_get();
+			} else {
 				hdr->cch_src_rank = CRT_NO_RANK;
-
-			hdr->cch_hlc = crt_hlc_get();
+				/*
+				 * Because client HLC timestamps shall never be
+				 * used to sync server HLCs, we forward the
+				 * HLCT reading, which must be either zero or a
+				 * server HLC timestamp.
+				 */
+				hdr->cch_hlc = crt_hlct_get();
+			}
 		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
 		if (rc != 0) {
@@ -604,16 +613,25 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	/* D_DEBUG("in crt_proc_out_common, data: %p\n", *data); */
 
 	if (proc_op != CRT_PROC_FREE) {
-		if (proc_op == CRT_PROC_ENCODE)
+		if (proc_op == CRT_PROC_ENCODE) {
+			/* Clients never encode replies. */
+			D_ASSERT(crt_is_service());
 			rpc_priv->crp_reply_hdr.cch_hlc = crt_hlc_get();
+		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
 		if (rc != 0) {
 			RPC_ERROR(rpc_priv,
 				  "crt_proc_common_hdr failed rc: %d\n", rc);
 			D_GOTO(out, rc);
 		}
-		if (proc_op == CRT_PROC_DECODE)
-			(void)crt_hlc_get_msg(rpc_priv->crp_reply_hdr.cch_hlc);
+		if (proc_op == CRT_PROC_DECODE) {
+			uint64_t t = rpc_priv->crp_reply_hdr.cch_hlc;
+
+			if (crt_is_service())
+				crt_hlc_get_msg(t);
+			else
+				crt_hlct_sync(t);
+		}
 		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
 			RPC_ERROR(rpc_priv,
 				  "RPC failed to execute on target. error code: %d\n",
