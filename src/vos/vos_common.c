@@ -215,7 +215,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	dth->dth_local_tx_started = 0;
 
-	if (dth_in && err == 0)
+	if (dtx_is_valid_handle(dth_in) && err == 0)
 		err = vos_dtx_prepared(dth);
 
 	if (err == 0)
@@ -226,7 +226,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	if (rc != 0) {
 		/* The transaction aborted or failed to commit. */
 		vos_tx_publish(dth, false);
-		if (dth_in)
+		if (dtx_is_valid_handle(dth_in))
 			vos_dtx_cleanup_internal(dth);
 	}
 

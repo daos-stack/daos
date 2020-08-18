@@ -314,6 +314,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	dth->dth_op_seq = 0;
 	dth->dth_rsrvd_cnt = 0;
+	dth->dth_freed_cnt = 0;
 	dth->dth_oid_cnt = 0;
 	dth->dth_oid_cap = 0;
 	dth->dth_oid_array = NULL;

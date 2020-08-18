@@ -2187,7 +2187,7 @@ out:
 	return rc;
 }
 
-struct vos_container *
+void
 vos_dtx_cleanup_internal(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
@@ -2196,7 +2196,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 	int			 rc;
 
 	if (!dtx_is_valid_handle(dth) || !dth->dth_active)
-		return NULL;
+		return;
 
 	dth->dth_active = 0;
 	cont = vos_hdl2cont(dth->dth_coh);
@@ -2213,8 +2213,6 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 			dtx_evict_lid(cont, dae);
 		}
 	}
-
-	return cont;
 }
 
 void
