@@ -53,6 +53,7 @@ func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) {
 type MockNvmeCfg struct {
 	DiscoverCtrlrs []Controller
 	DiscoverErr    error
+	FormatResp     []*FormatResult
 	FormatErr      error
 	UpdateCtrlrs   []Controller
 	UpdateErr      error
@@ -82,11 +83,12 @@ func (n *MockNvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
 }
 
 // Format device at given pci address, destructive operation!
-func (n *MockNvmeImpl) Format(log logging.Logger, ctrlrPciAddr string) error {
+func (n *MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	if n.Cfg.FormatErr == nil {
-		log.Debugf("mock format nvme ssd: %q", ctrlrPciAddr)
+		return nil, n.Cfg.FormatErr
 	}
-	return n.Cfg.FormatErr
+
+	return n.Cfg.FormatResp, nil
 }
 
 // Update calls C.nvme_fwupdate to update controller firmware image.

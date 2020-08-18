@@ -27,7 +27,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -219,33 +218,83 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 	return scs[0], nil
 }
 
-func (b *spdkBackend) deviceFormat(class storage.BdevClass, device string) (*DeviceFormatResponse, error) {
-	if device == "" {
-		return nil, errors.New("empty pci address in device list")
+func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*FormatResponse, error) {
+	resp := &FormatResponse{
+		DeviceResponses: make(DeviceFormatResponses),
 	}
+	resultMap := make(map[string]map[uint32]error)
 
-	resp := new(DeviceFormatResponse)
-
-	switch class {
-	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
-		resp.Formatted = true
-		b.log.Debugf("%s format for non-NVMe bdev skipped on %s", class, device)
-	case storage.BdevClassNvme:
-		msg := fmt.Sprintf("%s device format on %q", class, device)
-
-		if err := b.binding.Format(b.log, device); err != nil {
-			resp.Error = FaultFormatError(device, err)
-			b.log.Debugf("%s failed Format() (%s)", msg, err)
-			break
+	// build pci address to namespace errors map
+	for _, result := range results {
+		if _, exists := resultMap[result.CtrlrPCIAddr]; !exists {
+			resultMap[result.CtrlrPCIAddr] = make(map[uint32]error)
 		}
 
-		resp.Formatted = true
-		b.log.Debugf("%s successful", msg)
-	default:
-		return nil, FaultFormatUnknownClass(class.String())
+		if _, exists := resultMap[result.CtrlrPCIAddr][result.NsID]; exists {
+			return nil, errors.Errorf("duplicate error for ns %d on %s",
+				result.NsID, result.CtrlrPCIAddr)
+		}
+
+		resultMap[result.CtrlrPCIAddr][result.NsID] = result.Err
+	}
+
+	// populate device responses for failed/formatted namespacess
+	for addr, nsErrMap := range resultMap {
+		var formatted, failed []uint32
+
+		for nsID, err := range nsErrMap {
+			if err != nil {
+				failed = append(failed, nsID)
+			}
+			formatted = append(formatted, nsID)
+		}
+
+		b.log.Debugf("formatted namespaces %v on %d", formatted, addr)
+
+		devResp := new(DeviceFormatResponse)
+		if len(failed) > 0 {
+			devResp.Error = FaultFormatError(addr, errors.Errorf(
+				"failed to format namespaces %v", failed))
+			resp.DeviceResponses[addr] = devResp
+			continue
+		}
+
+		devResp.Formatted = true
+		resp.DeviceResponses[addr] = devResp
 	}
 
 	return resp, nil
+}
+
+func (b *spdkBackend) format(class storage.BdevClass, deviceList []string) (*FormatResponse, error) {
+	// TODO (DAOS-3844): Kick off device formats parallel?
+	switch class {
+	case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
+		resp := &FormatResponse{
+			DeviceResponses: make(DeviceFormatResponses),
+		}
+
+		for _, device := range deviceList {
+			resp.DeviceResponses[device] = &DeviceFormatResponse{
+				Formatted: true,
+			}
+			b.log.Debugf("%s format for non-NVMe bdev skipped on %s",
+				class, device)
+		}
+
+		return resp, nil
+	case storage.BdevClassNvme:
+		b.log.Debugf("%s device format on %v", class, deviceList)
+
+		results, err := b.binding.Format(b.log)
+		if err != nil {
+			return nil, errors.Wrapf(err, "spdk format %v", deviceList)
+		}
+
+		return b.formatRespFromResults(results)
+	default:
+		return nil, FaultFormatUnknownClass(class.String())
+	}
 }
 
 func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
@@ -260,23 +309,9 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
 		return nil, errors.Wrap(err, "failed to init spdk env")
 	}
+	defer b.binding.FiniSPDKEnv(b.log, spdkOpts)
 
-	// TODO (DAOS-3844): Kick off device formats parallel?
-	resp := &FormatResponse{
-		DeviceResponses: make(DeviceFormatResponses),
-	}
-
-	for _, dev := range req.DeviceList {
-		devResp, err := b.deviceFormat(req.Class, dev)
-		if err != nil {
-			return nil, err
-		}
-		resp.DeviceResponses[dev] = devResp
-	}
-
-	b.binding.FiniSPDKEnv(b.log, spdkOpts)
-
-	return resp, nil
+	return b.format(req.Class, req.DeviceList)
 }
 
 // detectVMD returns whether VMD devices have been found and a slice of VMD
