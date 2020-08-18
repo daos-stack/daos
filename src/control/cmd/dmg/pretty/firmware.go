@@ -126,6 +126,10 @@ type hostDeviceError struct {
 // PrintSCMFirmwareQueryMap formats the firmware query results in a condensed format.
 func PrintSCMFirmwareQueryMap(fwMap control.HostSCMQueryMap, out io.Writer,
 	opts ...control.PrintConfigOption) error {
+	if fwMap == nil {
+		return nil
+	}
+
 	successes, errs, err := condenseSCMQueryMap(fwMap)
 	if err != nil {
 		return err
@@ -276,6 +280,10 @@ func getShortSCMString(module storage.ScmModule) string {
 // PrintSCMFirmwareQueryMapVerbose formats the firmware query results in a detailed format.
 func PrintSCMFirmwareQueryMapVerbose(fwMap control.HostSCMQueryMap, out io.Writer,
 	opts ...control.PrintConfigOption) error {
+	if fwMap == nil {
+		return nil
+	}
+
 	w := txtfmt.NewErrWriter(out)
 
 	printDeviceTypeHeader(w, scmSectionHeader)
@@ -409,6 +417,10 @@ func PrintSCMFirmwareUpdateMapVerbose(fwMap control.HostSCMUpdateMap, out io.Wri
 // concise format.
 func PrintNVMeFirmwareQueryMap(fwMap control.HostNVMeQueryMap, out io.Writer,
 	opts ...control.PrintConfigOption) error {
+	if fwMap == nil {
+		return nil
+	}
+
 	successes, errs, err := condenseNVMeQueryMap(fwMap)
 	if err != nil {
 		return err
@@ -461,6 +473,10 @@ func getNVMeFirmwareQueryStr(result *control.NVMeQueryResult) string {
 // results in a verbose format.
 func PrintNVMeFirmwareQueryMapVerbose(fwMap control.HostNVMeQueryMap, out io.Writer,
 	opts ...control.PrintConfigOption) error {
+	if fwMap == nil {
+		return nil
+	}
+
 	w := txtfmt.NewErrWriter(out)
 
 	printDeviceTypeHeader(w, nvmeSectionHeader)

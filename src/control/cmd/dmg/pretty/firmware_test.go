@@ -53,6 +53,10 @@ func TestPretty_PrintSCMFirmwareQueryMap(t *testing.T) {
 		hostErrors  control.HostErrorsMap
 		expPrintStr string
 	}{
+		"nil map": {
+			fwMap:       nil,
+			expPrintStr: "",
+		},
 		"no devices": {
 			fwMap: control.HostSCMQueryMap{
 				"host1": []*control.SCMQueryResult{},
@@ -369,6 +373,10 @@ func TestPretty_PrintSCMFirmwareQueryMapVerbose(t *testing.T) {
 		hostErrors  control.HostErrorsMap
 		expPrintStr string
 	}{
+		"nil map": {
+			fwMap:       nil,
+			expPrintStr: "",
+		},
 		"no devices": {
 			fwMap: control.HostSCMQueryMap{
 				"host1": []*control.SCMQueryResult{},
@@ -961,6 +969,10 @@ func TestPretty_PrintNVMeFirmwareQueryMap(t *testing.T) {
 		hostErrors  control.HostErrorsMap
 		expPrintStr string
 	}{
+		"nil map": {
+			fwMap:       nil,
+			expPrintStr: "",
+		},
 		"no devices": {
 			fwMap: control.HostNVMeQueryMap{
 				"host1": []*control.NVMeQueryResult{},
@@ -1068,6 +1080,10 @@ func TestPretty_PrintNVMeFirmwareQueryMapVerbose(t *testing.T) {
 		hostErrors  control.HostErrorsMap
 		expPrintStr string
 	}{
+		"nil map": {
+			fwMap:       nil,
+			expPrintStr: "",
+		},
 		"no devices": {
 			fwMap: control.HostNVMeQueryMap{
 				"host1": []*control.NVMeQueryResult{},
