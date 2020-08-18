@@ -1042,7 +1042,7 @@ pipeline {
                             // added.
                             fileOperations(
                               [fileRenameOperation(source: 'test_results',
-                                                   dest: 'covc_test_results')])
+                                                   destination: 'covc_test_results')])
                             sh label: 'Bullseye junit fixup',
                                script: '''for i in covc_test_results/*.xml; do
                                             sed -i '/<testcase name=/<testcase classname="unit.covc" name=/g' "$i"
