@@ -1014,7 +1014,7 @@ pipeline {
                     }
                     post {
                       always {
-                            archiveArtifiacts artifacts: 'test_results/*.xml',
+                            archiveArtifacts artifacts: 'test_results/*.xml',
                                               allowEmptyArchive: true
                             unitTestPost valgrind_stash: 'centos7-gcc-unit-valg'
                         }
@@ -1043,7 +1043,7 @@ pipeline {
                             FileOperations(
                               [fileRenameOperation(source: 'test_results',
                                                    dest: 'covc_test_results')])
-                            archiveArtifiacts artifacts: 'covc_test_results/*.xml',
+                            archiveArtifacts artifacts: 'covc_test_results/*.xml',
                                               allowEmptyArchive: true
                             unitTestPost ignore_failure: true,
                                          testResults: 'covc_test_results/*.xml'
