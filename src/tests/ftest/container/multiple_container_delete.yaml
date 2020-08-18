@@ -38,4 +38,4 @@ ior:
     api: DFS
     transfer_size: '1M'
     block_size: '1G'
-    daos_oclass: "SX"
+    dfs_oclass: "SX"
