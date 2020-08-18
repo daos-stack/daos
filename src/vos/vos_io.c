@@ -1918,12 +1918,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	uint64_t		 time = 0;
+	bool			 tx_started = false;
 
 	VOS_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
 
 	if (err != 0)
-		goto out;
+		goto abort;
 
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
@@ -1932,7 +1933,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	err = vos_tx_begin(dth, umem);
 	if (err != 0)
-		goto out;
+		goto abort;
+
+	tx_started = true;
 
 	vos_dth_set(dth);
 
@@ -1974,9 +1977,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 abort:
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
-			 &ioc->ic_blk_exts, err);
+			 &ioc->ic_blk_exts, tx_started, err);
 
-out:
 	if (err == 0) {
 		if (daes != NULL)
 			vos_dtx_post_handle(ioc->ic_cont, daes,

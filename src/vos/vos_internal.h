@@ -946,9 +946,24 @@ struct vos_rsrvd_scm {
 int
 vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
 
+/** Finish the transaction and publish or cancel the reservations or
+ *  return if err == 0 and it's a multi-modification transaction that
+ *  isn't complete.
+ *
+ * \param[in]	cont		the VOS container
+ * \param[in]	dth_in		The dtx handle, if applicable
+ * \param[in]	rsrvd_scmp	Pointer to reserved scm, will be consumed
+ * \param[in]	nvme_exts	List of resreved nvme extents
+ * \param[in]	started		Only applies when dth_in is invalid,
+ *				indicates if vos_tx_begin was successful
+ * \param[in]	err		the error code
+ *
+ * \return	err if non-zero, otherwise 0 or appropriate error
+ */
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, int err);
+	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, bool started,
+	   int err);
 
 /* vos_obj.c */
 int

@@ -2227,5 +2227,5 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 	/** This will abort the transaction and callback to
 	 *  vos_dtx_cleanup_internal
 	 */
-	vos_tx_end(cont, dth, NULL, NULL, -DER_CANCELED);
+	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, -DER_CANCELED);
 }
