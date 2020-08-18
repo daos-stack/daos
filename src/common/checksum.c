@@ -1385,7 +1385,9 @@ ci_insert(struct dcs_csum_info *dcb, int idx, uint8_t *csum_buf, size_t len)
 {
 	uint8_t *to_update;
 
-	D_ASSERT(idx < dcb->cs_nr);
+	D_ASSERTF(idx < dcb->cs_nr, "idx(%d) < dcb->cs_nr(%d)",
+		  idx, dcb->cs_nr);
+	D_ASSERT(len <= dcb->cs_buf_len - idx * dcb->cs_len);
 
 	to_update = dcb->cs_csum + idx * dcb->cs_len;
 	memcpy(to_update, csum_buf, len);

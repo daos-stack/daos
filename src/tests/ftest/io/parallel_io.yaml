@@ -49,6 +49,6 @@ ior:
     block_size: '26214400'    # 25M
     objectclass:
         oclass_SX:
-          daos_oclass: "SX"
+          dfs_oclass: "SX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
