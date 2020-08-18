@@ -195,7 +195,7 @@ class OSAOnlineReintegration(TestWithServers):
 
         # Start the daos_racer thread
         daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
-                                             kwargs={"num_pool": val+1})
+                                             kwargs={"num_pool": num_pool})
         daos_racer_thread.start()
 
         # Exclude and reintegrate the pool_uuid, rank and targets
