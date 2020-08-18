@@ -1079,6 +1079,7 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 	daos_size_t		npools_in;
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	char			filename[DTS_CFG_MAX];
+	char			dmg_cmd[DTS_CFG_MAX];
 	int			i, j;
 	int			rl_nr;
 	int			rc = 0;
@@ -1090,8 +1091,11 @@ int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
 	dts_create_config(filename, "/tmp/dmg_pool_list_%d.json",
 			  (uint8_t)rand());
 
-	rc = daos_dmg_json_contents("dmg pool list -i -j", filename,
-				    &parsed_json);
+	dts_create_config(dmg_cmd, "dmg pool list -i -j");
+	if (arg->dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+
+	rc = daos_dmg_json_contents(dmg_cmd, filename, &parsed_json);
 	if (rc != 0) {
 		print_message("daos_dmg_json_contents failed\n");
 		return -DER_INVAL;
