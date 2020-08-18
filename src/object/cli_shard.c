@@ -548,10 +548,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
-	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" %d %s rank:%d tag:%d eph "
-		DF_U64"\n", req, opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
-		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag,
-		auxi->epoch.oe_value);
+	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" "DF_KEY" rank:%d tag:%d eph "
+		DF_U64"\n", req, opc, DP_UOID(shard->do_id), DP_KEY(dkey),
+		tgt_ep.ep_rank, tgt_ep.ep_tag, auxi->epoch.oe_value);
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
@@ -599,12 +598,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					 0 : nr;
 	orw->orw_iod_array.oia_offs = args->offs;
 
-#if 0
-	D_DEBUG(DB_IO, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
+	D_DEBUG(DB_IO, "opc %d "DF_UOID" "DF_KEY" rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
-		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
-		tgt_ep.ep_tag, auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
-#endif
+		DP_KEY(dkey), tgt_ep.ep_rank, tgt_ep.ep_tag,
+		auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
 
 	if (args->bulks != NULL) {
 		orw->orw_sgls.ca_count = 0;
