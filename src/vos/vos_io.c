@@ -495,7 +495,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		goto error;
 
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, cond_flags, iod_nr,
-				 dth ? &dth->dth_xid.dti_uuid : NULL);
+				 dtx_is_valid_handle(dth) ?
+				 &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto error;
 
@@ -613,7 +614,7 @@ bsgl_csums_resize(struct vos_io_context *ioc)
 /** Save the checksum to a list that can be retrieved later */
 static int
 save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
-	  struct evt_entry *entry)
+	  struct evt_entry *entry, daos_size_t rec_size)
 {
 	struct dcs_csum_info	*saved_csum_info;
 	int			 rc;
@@ -633,7 +634,7 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	*saved_csum_info = *csum_info;
 	if (entry != NULL)
 		evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext,
-				      saved_csum_info);
+				      saved_csum_info, rec_size);
 
 	ioc->ic_biov_csums_at++;
 
@@ -679,7 +680,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		bio_addr_set_hole(&biov.bi_addr, 1);
 	}
 	if (ci_is_valid(&csum_info))
-		save_csum(ioc, &csum_info, NULL);
+		save_csum(ioc, &csum_info, NULL, 0);
 
 	rc = iod_fetch(ioc, &biov);
 	if (rc != 0)
@@ -835,7 +836,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		bio_iov_set(&biov, ent->en_addr, nr * ent_array.ea_inob);
 
 		if (ci_is_valid(&ent->en_csum)) {
-			rc = save_csum(ioc, &ent->en_csum, ent);
+			rc = save_csum(ioc, &ent->en_csum, ent, rsize);
 			if (rc != 0)
 				return rc;
 			biov_align_lens(&biov, ent, rsize);
@@ -1245,6 +1246,8 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
+	vos_dth_set(dth);
+
 	if (!vos_ts_lookup(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, false,
 			   &entry)) {
 		/** Re-cache the container timestamps */
@@ -1283,6 +1286,8 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	*ioh = vos_ioc2ioh(ioc);
 
 out:
+	vos_dth_set(NULL);
+
 	update_ts_on_fetch(ioc, rc);
 
 	if (rc != 0) {
@@ -2046,7 +2051,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	vos_dth_set(dth);
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
@@ -2069,7 +2074,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		ioc->ic_read_conflict = true;
 
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey, dth != NULL ?
+	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?
 			  dth->dth_op_seq : VOS_MINOR_EPC_MAX);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
@@ -2085,7 +2090,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 	}
 
-	if (dth != NULL) {
+	if (dtx_is_valid_handle(dth)) {
 		struct dtx_rsrvd_uint	*dru;
 
 		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
@@ -2142,9 +2147,11 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		"\n", DP_UOID(oid), iod_nr, dth ? dth->dth_epoch :  epoch);
+		"\n", DP_UOID(oid), iod_nr,
+		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch);
 
-	rc = vos_ioc_create(coh, oid, false, dth ? dth->dth_epoch : epoch,
+	rc = vos_ioc_create(coh, oid, false,
+			    dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch,
 			    flags, iod_nr, iods, iods_csums, 0, NULL, dedup,
 			    dedup_th, dth, &ioc);
 	if (rc != 0)

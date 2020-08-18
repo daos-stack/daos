@@ -61,10 +61,10 @@ ior:
     clientslots:
       slots: 1
     repetitions: 1
-    daos_destroy: False
+    dfs_destroy: False
     iorwriteflags:
       F: "-w -W -k -G 1"
     iorreadflags:
       F: "-r -R -G 1"
     objectclass:
-      daos_oclass: "SX"
+      dfs_oclass: "SX"
