@@ -29,7 +29,7 @@
 #include "crt_internal.h"
 
 #define CRT_PROC_NULL (NULL)
-#define CRT_PROC_TYPE_FUNC(type) 				\
+#define CRT_PROC_TYPE_FUNC(type)				\
 	int crt_proc_##type(crt_proc_t proc, type *data)	\
 	{							\
 		crt_proc_op_t	 proc_op;			\
