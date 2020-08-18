@@ -265,9 +265,6 @@ class DaosServer():
         self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         self.agent_dir = self._agent_dir.name
 
-        if not os.path.exists(self.agent_dir):
-            os.mkdir(self.agent_dir)
-
     def __del__(self):
         if self.running:
             self.stop()
