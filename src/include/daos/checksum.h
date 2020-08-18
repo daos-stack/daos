@@ -222,7 +222,10 @@ daos_csummer_get_type(struct daos_csummer *obj);
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj);
 
-/** Get an appropriate chunksize (based on configured chunksize) for a record */
+/** Get an appropriate chunksize (based on configured chunksize) for a
+ * record in bytes. Appropriate means that the chunksize should not be larger
+ * than record size and that records should evenly divide into chunk size.
+ */
 uint32_t
 daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size);
 
