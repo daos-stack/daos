@@ -39,4 +39,3 @@ if [ "$WITH_VALGRIND" == 'memcheck' ]; then
     find run_test_memcheck.sh -maxdepth 1 -name 'results-*-memcheck.xml' \
         -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"
 fi
-
