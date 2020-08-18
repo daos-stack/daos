@@ -39,11 +39,12 @@ def scons():
                     'include/gurt/%s' % header)
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
+    env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
     Export('env', 'CART_VERSION')
 
     SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
-    Default('gurt', 'cart')
+    Default('gurt')
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
