@@ -17,7 +17,7 @@ function count_servers {
 function start_servers {
     echo "starting servers"
     orterun --np $1 --hostfile $2 --enable-recovery \
-	--report-uri $5 -x D_LOG_MASK=INFO -x PATH -x CRT_PHY_ADDR_STR \
+	--report-uri $5 -x D_LOG_MASK=DEBUG -x PATH -x CRT_PHY_ADDR_STR \
 	-x OFI_INTERFACE -x OFI_PORT -x D_LOG_FILE=$3/daos.log \
 	-x FI_PSM2_NAME_SERVER -x FI_SOCKETS_MAX_CONN_RETRY -x PSM2_MULTI_EP \
 	-x CRT_CREDIT_EP_CTX -x FI_LOG_LEVEL -x LD_LIBRARY_PATH \
