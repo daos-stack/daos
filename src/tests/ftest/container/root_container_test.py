@@ -168,7 +168,7 @@ class RootContainerTest(TestWithServers):
         for i in range(pool_count):
             pool = self._create_pool()
             for j in range(self.cont_count):
-                cont_name = str("/cont_{}{}".format(i, j))
+                cont_name = "/cont_{}{}".format(i, j)
                 sub_cont = str(self.dfuse.mount_dir.value + cont_name)
                 self._create_cont(pool=pool, path=sub_cont)
                 self.insert_files_and_verify(cont_name)
@@ -224,7 +224,7 @@ class RootContainerTest(TestWithServers):
         """
         cont_dir = self.dfuse.mount_dir.value
         if container_name:
-            cont_dir = str("{}/{}".format(cont_dir, container_name))
+            cont_dir = "{}/{}".format(cont_dir, container_name)
 
         cmds = []
         ls_cmds = []
