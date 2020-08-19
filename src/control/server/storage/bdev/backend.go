@@ -324,7 +324,7 @@ func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) er
 		return err
 	}
 
-	if _, err := b.binding.Update(b.log, pciAddr, path, slot); err != nil {
+	if err := b.binding.Update(b.log, pciAddr, path, slot); err != nil {
 		return err
 	}
 

@@ -242,7 +242,7 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	int					fd = -1;
 	unsigned int				size;
 	struct stat				fw_stat;
-	void					*fw_image;
+	void					*fw_image = NULL;
 	enum spdk_nvme_fw_commit_action		commit_action;
 	struct spdk_nvme_status			status;
 	struct ctrlr_entry			*ctrlr_entry;
@@ -285,7 +285,7 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 		return ret;
 	}
 
-	if (read(fd, fw_image, size) != ((ssize_t)(size))) {
+	if (read(fd, fw_image, size) != (ssize_t)size) {
 		close(fd);
 		spdk_dma_free(fw_image);
 		sprintf(ret->err, "Read firmware image failed");
@@ -307,13 +307,7 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	spdk_dma_free(fw_image);
 
 	ret->rc = rc;
-	if (ret->rc != 0)
-		return ret;
-
-	/* collect() will allocate and return a new ret structure */
-	clean_ret(ret);
-	free(ret);
-	return collect();
+	return ret;
 }
 
 void

@@ -218,19 +218,17 @@ func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
 //
 // Retrieves image from path and updates given firmware slot/register
 // then remove lockfile for updated device.
-func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) (ctrlrs []Controller, err error) {
+func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
-	ctrlrs, err = processReturn(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
+	_, err := processReturn(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
 		"NVMe Update(): C.nvme_fwupdate")
 
-	err = wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
-
-	return
+	return wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
 }
 
 // Cleanup unlinks and detaches any controllers or namespaces,
