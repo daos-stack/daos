@@ -55,7 +55,7 @@ class DmgSystemReformatTest(TestWithServers):
         self.add_container(pool=self.pool, daos_command=DaosCommand(self.bin))
 
         self.log.info("Stop running io_server instancess: 'dmg system stop'")
-        data = self.server_managers[-1].dmg.system_stop()
+        data = self.server_managers[-1].dmg.system_stop(force=True)
 
         # Verify
         if not data:
