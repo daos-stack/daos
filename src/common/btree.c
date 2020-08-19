@@ -3524,8 +3524,8 @@ btr_iter_is_ready(struct btr_iterator *iter)
 		return -DER_NONEXIST;
 	default:
 		D_ASSERT(0);
-
 	}
+	return 0;
 }
 
 static int
