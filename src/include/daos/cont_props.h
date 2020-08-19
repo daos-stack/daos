@@ -38,7 +38,7 @@ struct cont_props {
 };
 
 void
-daos_props_2cont_props(daos_prop_t *props, struct cont_props * cont_prop);
+daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop);
 
 /**
  * Checksum Properties

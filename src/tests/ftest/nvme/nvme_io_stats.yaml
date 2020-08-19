@@ -20,11 +20,14 @@ pool:
     nvme_size: 107374182400 #100G
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 ior:
-  api: "DAOS"
+  api: "DFS"
   client_processes:
     np: 16
-  daos_destroy: False
+  dfs_destroy: False
   iorflags:
       flags: "-v -W -w -r -R"
   test_file: daos:testFile
@@ -33,4 +36,4 @@ ior:
   block_size: '1G'
   objectclass:
     SX:
-      daos_oclass: "SX"
+      dfs_oclass: "SX"

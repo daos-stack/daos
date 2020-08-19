@@ -235,7 +235,7 @@ dtx_epoch_bound(struct dtx_epoch *epoch)
 		 */
 		return epoch->oe_value;
 
-	limit = epoch->oe_first + crt_hlc_epsilon_get();
+	limit = crt_hlc_epsilon_get_bound(epoch->oe_first);
 	if (epoch->oe_value >= limit)
 		/*
 		 * The epoch is already out of the potential uncertainty
@@ -313,23 +313,13 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_modification_cnt = sub_modification_cnt;
 
 	dth->dth_op_seq = 0;
-	dth->dth_rsrvd_cnt = 0;
 	dth->dth_oid_cnt = 0;
 	dth->dth_oid_cap = 0;
 	dth->dth_oid_array = NULL;
 
 	dth->dth_dkey_hash = 0;
 
-	if (sub_modification_cnt <= 1) {
-		dth->dth_rsrvds = &dth->dth_rsrvd_inline;
-		return 0;
-	}
-
-	D_ALLOC_ARRAY(dth->dth_rsrvds, sub_modification_cnt);
-	if (dth->dth_rsrvds == NULL)
-		return -DER_NOMEM;
-
-	return 0;
+	return vos_dtx_rsrvd_init(dth);
 }
 
 static int
@@ -764,8 +754,7 @@ out:
 	D_FREE(dlh->dlh_subs);
 	D_FREE(dth->dth_oid_array);
 
-	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
-		D_FREE(dth->dth_rsrvds);
+	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }

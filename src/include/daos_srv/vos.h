@@ -37,6 +37,23 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
+/** Initialize the vos reserve/cancel related fields in dtx handle
+ *
+ * \param dth	[IN]	The dtx handle
+ *
+ * \return	0 on success
+ *		-DER_NOMEM on failure
+ */
+int
+vos_dtx_rsrvd_init(struct dtx_handle *dth);
+
+/** Finalize the vos reserve/cancel related fields in dtx handle
+ *
+ * \param dth	[IN]	The dtx handle
+ */
+void
+vos_dtx_rsrvd_fini(struct dtx_handle *dth);
+
 /**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
