@@ -124,9 +124,10 @@ ds_sec_alloc_default_daos_pool_acl(void)
 static Auth__Token *
 auth_token_dup(Auth__Token *orig)
 {
-	Auth__Token	*copy;
-	uint8_t		*packed;
-	size_t		len;
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Auth__Token		*copy;
+	uint8_t			*packed;
+	size_t			len;
 
 	/*
 	 * The most straightforward way to copy a protobuf struct is to pack
@@ -138,7 +139,7 @@ auth_token_dup(Auth__Token *orig)
 		return NULL;
 
 	auth__token__pack(orig, packed);
-	copy = auth__token__unpack(NULL, len, packed);
+	copy = auth__token__unpack(&alloc.alloc, len, packed);
 	D_FREE(packed);
 	return copy;
 }
@@ -147,11 +148,15 @@ static int
 get_token_from_validation_response(Drpc__Response *response,
 				   Auth__Token **token)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Auth__ValidateCredResp	*resp;
 	int			rc = 0;
 
-	resp = auth__validate_cred_resp__unpack(NULL, response->body.len,
+	resp = auth__validate_cred_resp__unpack(&alloc.alloc,
+						response->body.len,
 						response->body.data);
+	if (alloc.oom)
+		return -DER_NOMEM;
 	if (resp == NULL) {
 		D_ERROR("Response body was not a ValidateCredResp\n");
 		return -DER_PROTO;
@@ -174,13 +179,14 @@ get_token_from_validation_response(Drpc__Response *response,
 	}
 
 out:
-	auth__validate_cred_resp__free_unpacked(resp, NULL);
+	auth__validate_cred_resp__free_unpacked(resp, &alloc.alloc);
 	return rc;
 }
 
 static int
 new_validation_request(struct drpc *ctx, d_iov_t *creds, Drpc__Call **callp)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	uint8_t			*body;
 	size_t			len;
 	Drpc__Call		*request;
@@ -197,9 +203,9 @@ new_validation_request(struct drpc *ctx, d_iov_t *creds, Drpc__Call **callp)
 	if (rc != DER_SUCCESS)
 		return rc;
 
-	cred = auth__credential__unpack(NULL, creds->iov_buf_len,
+	cred = auth__credential__unpack(&alloc.alloc, creds->iov_buf_len,
 					creds->iov_buf);
-	if (cred == NULL) {
+	if (alloc.oom || cred == NULL) {
 		drpc_call_free(request);
 		return -DER_NOMEM;
 	}
@@ -209,14 +215,14 @@ new_validation_request(struct drpc *ctx, d_iov_t *creds, Drpc__Call **callp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_call_free(request);
-		auth__credential__free_unpacked(cred, NULL);
+		auth__credential__free_unpacked(cred, &alloc.alloc);
 		return -DER_NOMEM;
 	}
 	auth__validate_cred_req__pack(&req, body);
 	request->body.len = len;
 	request->body.data = body;
 
-	auth__credential__free_unpacked(cred, NULL);
+	auth__credential__free_unpacked(cred, &alloc.alloc);
 
 	*callp = request;
 	return DER_SUCCESS;
@@ -437,12 +443,17 @@ get_authsys_capas(struct daos_acl *acl,
 static int
 get_auth_sys_payload(Auth__Token *token, Auth__Sys **payload)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+
 	if (token->flavor != AUTH__FLAVOR__AUTH_SYS) {
 		D_ERROR("Credential auth flavor not supported\n");
 		return -DER_PROTO;
 	}
 
-	*payload = auth__sys__unpack(NULL, token->data.len, token->data.data);
+	*payload = auth__sys__unpack(&alloc.alloc,
+				     token->data.len, token->data.data);
+	if (alloc.oom)
+		return -DER_NOMEM;
 	if (*payload == NULL) {
 		D_ERROR("Invalid auth_sys payload\n");
 		return -DER_PROTO;
@@ -480,6 +491,7 @@ get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
 			struct daos_acl *acl, uint64_t owner_min_capas,
 			uint64_t (*convert_perms)(uint64_t), uint64_t *capas)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int		rc;
 	Auth__Sys	*authsys;
 
@@ -507,7 +519,7 @@ get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
 	if (authsys_user_is_owner(authsys, ownership))
 		*capas |= owner_min_capas;
 
-	auth__sys__free_unpacked(authsys, NULL);
+	auth__sys__free_unpacked(authsys, &alloc.alloc);
 	return rc;
 }
 
@@ -516,6 +528,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int		rc;
 	Auth__Token	*token;
 
@@ -554,7 +567,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 	if (rc == 0)
 		filter_pool_capas_based_on_flags(flags, capas);
 
-	auth__token__free_unpacked(token, NULL);
+	auth__token__free_unpacked(token, &alloc.alloc);
 	return rc;
 }
 
@@ -615,12 +628,13 @@ container_flags_valid(uint64_t flags)
 static Auth__Token *
 unpack_token_from_cred(d_iov_t *cred)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Auth__Credential	*unpacked;
 	Auth__Token		*token = NULL;
 
-	unpacked = auth__credential__unpack(NULL, cred->iov_buf_len,
+	unpacked = auth__credential__unpack(&alloc.alloc, cred->iov_buf_len,
 					    cred->iov_buf);
-	if (unpacked == NULL) {
+	if (alloc.oom || unpacked == NULL) {
 		D_ERROR("Couldn't unpack credential\n");
 		return NULL;
 	}
@@ -628,7 +642,7 @@ unpack_token_from_cred(d_iov_t *cred)
 	if (unpacked->token != NULL)
 		token = auth_token_dup(unpacked->token);
 
-	auth__credential__free_unpacked(unpacked, NULL);
+	auth__credential__free_unpacked(unpacked, &alloc.alloc);
 	return token;
 }
 
@@ -637,6 +651,7 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Auth__Token	*token;
 	int		rc;
 	uint64_t	owner_min_perms = CONT_CAPA_GET_ACL | CONT_CAPA_SET_ACL;
@@ -679,7 +694,7 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 	if (rc == 0)
 		filter_cont_capas_based_on_flags(flags, capas);
 
-	auth__token__free_unpacked(token, NULL);
+	auth__token__free_unpacked(token, &alloc.alloc);
 	return rc;
 }
 

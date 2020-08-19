@@ -2,9 +2,12 @@ hosts:
   test_servers:
     - server-A
     - server-B
+    - server-C
+    - server-D
   test_clients:
-    - client-C
-timeout: 900
+    - client-E
+    - client-F
+timeout: 300
 server_config:
   name: daos_server
   servers:
@@ -13,7 +16,6 @@ server_config:
     bdev_list: ["0000:81:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
-
 pool:
   createmode:
     mode_RW:
@@ -21,30 +23,35 @@ pool:
   createset:
     setname: daos_server
   createsize:
-    scm_size: 6000000000
-    nvme_size: 60000000000
+    scm_size: 5000000000
+    nvme_size: 20000000000
   createsvc:
     svcn: 1
 container:
   type: POSIX
   control_method: daos
 ior:
-  api: "DFS"
   client_processes:
-    np: 2
+      np: 10
+  io_consistency: !mux
+    FPP:
+      api_flag:
+        - [DFS , "-v -w -k -F"]
+        - [POSIX, "-v -r -R -F"]
+    SSF:
+      api_flag:
+        - [DFS , "-v -w -k"]
+        - [POSIX, "-v -r -R"]
   dfs_destroy: False
-  iorflags:
-    sequential:
-      flags: "-v -D 100 -w -r"
   test_file: /testFile
+  signature: 5
   repetitions: 1
   transfersize_blocksize:
-    4K:
-      transfer_size: '4K'
-      block_size: '4G'
+    1M:
+      transfer_size: '1M'
+      block_size: '2G'
   objectclass:
     SX:
       dfs_oclass: "SX"
-  subprocess: True
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
