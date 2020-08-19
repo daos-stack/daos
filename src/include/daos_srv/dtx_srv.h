@@ -87,7 +87,8 @@ struct dtx_handle {
 	/** The flags, see dtx_entry_flags. */
 	uint32_t			 dth_flags;
 	/** The count of reserved items in the dth_rsrvds array. */
-	uint32_t			 dth_rsrvd_cnt;
+	uint16_t			 dth_rsrvd_cnt;
+	uint16_t			 dth_deferred_cnt;
 	/** The total sub modifications count. */
 	uint16_t			 dth_modification_cnt;
 	/** Modification sequence in the distributed transaction. */
@@ -105,6 +106,7 @@ struct dtx_handle {
 
 	struct dtx_rsrvd_uint		 dth_rsrvd_inline;
 	struct dtx_rsrvd_uint		*dth_rsrvds;
+	void				**dth_deferred;
 };
 
 /* Each sub transaction handle to manage each sub thandle */

@@ -26,30 +26,34 @@
  */
 #define D_LOGFAC	DD_FAC(hg)
 
+#include <gurt/mem.h>
+
 #include "crt_internal.h"
 
 #define CRT_PROC_NULL (NULL)
-#define CRT_PROC_TYPE_FUNC(type) \
-	int crt_proc_##type(crt_proc_t proc, type *data) \
-	{ \
-		crt_proc_op_t	 proc_op; \
-		type		*buf; \
-		int		 rc = 0; \
-		rc = crt_proc_get_op(proc, &proc_op); \
-		if (unlikely(rc)) \
-			return -DER_HG; \
-		buf = hg_proc_save_ptr(proc, sizeof(*buf)); \
-		switch (proc_op) { \
-		case CRT_PROC_ENCODE: \
-			*buf = *data; \
-			break; \
-		case CRT_PROC_DECODE: \
-			*data = *buf; \
-			break; \
-		case CRT_PROC_FREE: \
-			break; \
-		} \
-		return rc; \
+#define CRT_PROC_TYPE_FUNC(type)				\
+	int crt_proc_##type(crt_proc_t proc, type *data)	\
+	{							\
+		crt_proc_op_t	 proc_op;			\
+		type		*buf;				\
+		int		 rc = 0;			\
+		rc = crt_proc_get_op(proc, &proc_op);		\
+		if (unlikely(rc))				\
+			return -DER_HG;				\
+		if (proc_op == CRT_PROC_FREE)			\
+			return rc;				\
+		buf = hg_proc_save_ptr(proc, sizeof(*buf));	\
+		switch (proc_op) {				\
+		case CRT_PROC_ENCODE:				\
+			*buf = *data;				\
+			break;					\
+		case CRT_PROC_DECODE:				\
+			*data = *buf;				\
+			break;					\
+		default:					\
+			break;					\
+		}						\
+		return rc;					\
 	}
 
 int
@@ -98,15 +102,18 @@ crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size)
 	if (unlikely(rc))
 		return -DER_HG;
 
+	if (proc_op == CRT_PROC_FREE)
+		return rc;
+
 	buf = hg_proc_save_ptr(proc, data_size);
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
-		memcpy(buf, data, data_size);
+		d_memcpy(buf, data, data_size);
 		break;
 	case CRT_PROC_DECODE:
-		memcpy(data, buf, data_size);
+		d_memcpy(data, buf, data_size);
 		break;
-	case CRT_PROC_FREE:
+	default:
 		break;
 	}
 

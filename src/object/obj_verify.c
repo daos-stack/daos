@@ -496,6 +496,7 @@ again:
 			break;
 		case OBJ_ITER_DKEY_EPOCH:
 		case OBJ_ITER_AKEY_EPOCH:
+		case OBJ_ITER_OBJ:
 			break;
 		default:
 			D_ERROR(DF_OID" invalid type %d\n",
