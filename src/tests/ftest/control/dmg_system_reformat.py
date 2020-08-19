@@ -73,9 +73,9 @@ class DmgSystemReformatTest(TestWithServers):
         # Check that io_servers starts up again
         self.log.info("<SERVER> Waiting for the daos_io_servers to start")
         self.server_managers[-1].manager.job.pattern_count = 2
-        if not self.server_managers[-1].manager.job.check_subprocess_status(
-           self.server_managers[-1].manager.process):
-            self.kill()
+        if not self.server_managers[-1].manager.job.\
+           check_subprocess_status(self.server_managers[-1].manager.process):
+            self.server_managers[-1].kill()
             raise ServerFailed("Failed to start servers after format")
 
         # Check that we have cleared
