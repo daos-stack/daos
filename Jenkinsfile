@@ -1027,7 +1027,7 @@ pipeline {
                 stage('Unit Test with memcheck') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('unit_test_memcheck') }
+                      expression { ! skip_stage('unit-test-memcheck') }
                     }
                     agent {
                         label 'ci_vm1'
