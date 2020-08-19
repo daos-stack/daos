@@ -220,8 +220,6 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*FormatResponse, error) {
-	b.log.Debugf("converting binding results %+v into format response", results)
-
 	resp := &FormatResponse{
 		DeviceResponses: make(DeviceFormatResponses),
 	}
@@ -262,7 +260,7 @@ func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*Form
 			formatted = append(formatted, nsID)
 		}
 
-		b.log.Debugf("formatted namespaces %v on %s", formatted, addr)
+		b.log.Debugf("formatted namespaces %v on nvme device at %s", formatted, addr)
 
 		devResp := new(DeviceFormatResponse)
 		if firstErr != nil {
@@ -300,7 +298,6 @@ func (b *spdkBackend) format(class storage.BdevClass, deviceList []string) (*For
 		if len(deviceList) == 0 {
 			return nil, errors.New("empty pci address list in format request")
 		}
-		b.log.Debugf("%s device format on %v", class, deviceList)
 
 		results, err := b.binding.Format(b.log)
 		if err != nil {

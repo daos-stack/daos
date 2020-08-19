@@ -222,7 +222,7 @@ test_collect(void **state)
 
 	attach_mock_controllers();
 
-	test_ret = init_ret(0);
+	test_ret = init_ret();
 
 	assert_null(test_ret->ctrlrs);
 	_collect(test_ret, &mock_copy_ctrlr_data,
