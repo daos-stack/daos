@@ -1937,7 +1937,7 @@ test_enumerate_object(void **state)
 		csum_count++;
 	}
 
-	assert_int_equal(13, csum_count);
+	assert_int_equal(11, csum_count);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
@@ -1956,7 +1956,7 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	d_iov_t			csum_iov = {0};
 	d_sg_list_t		sgl = {0};
 	const uint32_t		akey_nr = 5;
-	const uint32_t		enum_nr = akey_nr * 2 + 1;
+	const uint32_t		enum_nr = akey_nr * 2 + 2;
 	daos_key_desc_t		kds[enum_nr];
 	const size_t		csum_buf_len = 10;
 	uint8_t			csum_buf[csum_buf_len];
