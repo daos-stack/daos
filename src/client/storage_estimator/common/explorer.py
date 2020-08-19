@@ -83,6 +83,8 @@ class AverageFS(CommonBase):
     def set_avg_name_size(self, name_size):
         self._check_value_type(name_size, int)
         self._avg_name_size = name_size
+        self._debug(
+            'using {0} average file name size'.format(self._avg_name_size))
 
     def get_dfs(self):
         new_dfs = self._dfs.copy()
@@ -97,17 +99,21 @@ class AverageFS(CommonBase):
             if self._total_symlinks % self._total_dirs:
                 symlink_per_dir += 1
 
-            self._info(
-                '  assuming {0} symlinks per directory'.format(symlink_per_dir))
-            avg_sym_size = self._avg_symlink_size // self._total_symlinks
-            self._info(
-                '  assuming average symlink size of {0} bytes'.format(avg_sym_size))
-            dfs.add_symlink(oid, avg_name, avg_sym_size, symlink_per_dir)
+            self._debug(
+                'assuming {0} symlinks per directory'.format(symlink_per_dir))
+            self._debug(
+                'assuming average symlink size of {0} bytes'.format(
+                    self._avg_symlink_size))
+            dfs.add_symlink(
+                oid,
+                avg_name,
+                self._avg_symlink_size,
+                symlink_per_dir)
 
         return dfs
 
     def _calculate_average_dir(self, dfs):
-        self._info('  Calculating average')
+        self._debug('calculating average values')
 
         if self._total_dirs > 0:
             oid = dfs.add_obj()
@@ -121,7 +127,7 @@ class AverageFS(CommonBase):
             # add dirs and files
             remainder_items_per_dir = (
                 self._total_files + self._total_dirs) // self._total_dirs
-            self._info('  assuming {0} files and directories per directory'.format(
+            self._debug('assuming {0} files and directories per directory'.format(
                 remainder_items_per_dir))
             if remainder_items_per_dir > 0:
                 dfs.add_dir(oid, avg_name, remainder_items_per_dir)
@@ -311,7 +317,7 @@ class FileSystemExplorer(CommonBase):
         self._avg.set_dfs_file_meta(dkey)
 
     def explore(self):
-        self._info('processing path: {0}'.format(self._path))
+        self._debug('processing path: {0}'.format(self._path))
         self._traverse_directories()
 
     def print_stats(self):
@@ -360,7 +366,7 @@ class FileSystemExplorer(CommonBase):
         else:
             avg_file_name_size = self._name_size // total_items
 
-        self._info(
+        self._debug(
             '  assuming average file name size of {0} bytes'.format(avg_file_name_size))
         return avg_file_name_size
 
@@ -373,7 +379,7 @@ class FileSystemExplorer(CommonBase):
 
         if self._count_files > 0:
             avg_file_size = self._file_size // self._count_files
-            self._info(
+            self._debug(
                 '  assuming average file size of {0} bytes'.format(avg_file_size))
             self._avg.add_average_file(self._count_files, avg_file_size)
 

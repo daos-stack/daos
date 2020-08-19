@@ -59,10 +59,8 @@ class CommonBase(object):
         if self._verbose:
             print('{}'.format(msg), end='')
 
-    def _to_human(self, size):
-        power = 2**10
-        n = 0
-        power_labels = {
+    def _get_power_labels(self):
+        return {
             0: 'bytes',
             1: 'KiB',
             2: 'MiB',
@@ -72,17 +70,111 @@ class CommonBase(object):
             6: 'EiB',
             7: 'ZiB',
             8: 'YiB'}
+
+    def _to_human(self, size):
+        power_labels = self._get_power_labels()
+        power = pow(2, 10)
+        n = 0
         while size > power:
             size /= power
             n += 1
-        return "{0} {1}".format(int(size), power_labels[n])
+        return '{0} {1}'.format(int(size), power_labels[n])
+
+    def _check_suffix(self, string, suffix, pedantic=True):
+        if string.endswith(suffix):
+            return True
+        if pedantic:
+            return False
+        if string.endswith(suffix.lower()):
+            return True
+        short_suffix = suffix.replace('i', '')
+        if string.endswith(short_suffix):
+            return True
+        if string.endswith(short_suffix.lower()):
+            return True
+        shorter_suffix = suffix.replace('iB', '')
+        if string.endswith(shorter_suffix):
+            return True
+        if string.endswith(shorter_suffix.lower()):
+            return True
+        return False
+
+    def _remove_suffix(self, string, suffix, pedantic=True):
+        string = string.replace(suffix, '')
+        if pedantic:
+            return string
+
+        for letter in suffix:
+            string = string.replace(letter, '')
+            string = string.replace(letter.lower(), '')
+
+        return string
+
+    def _from_human(self, human_number):
+        self._check_value_type(human_number, str)
+        number = human_number
+        power_labels = self._get_power_labels()
+        for k, v in power_labels.items():
+            if self._check_suffix(human_number, v, False):
+                number = self._remove_suffix(human_number, v, False)
+                number = int(number)
+                number = pow(1024, k) * number
+
+        number = int(number)
+        if number < 1:
+            raise ValueError(
+                '{0} must be a positive not zero value'.format(human_number))
+        return number
 
 
 class ProcessBase(CommonBase):
     def __init__(self, args):
         super(ProcessBase, self).__init__()
-        self.set_verbose(args.verbose)
         self._args = args
+        self.set_verbose(args.verbose)
+        self._meta = self._get_vos_meta(args)
+        self._set_scm_cutoff(args)
+        self._set_chunk_size(args)
+        self._set_num_shards(args)
+
+    def get_chunk_size(self):
+        return self._chunk_size
+
+    def _set_num_shards(self, args):
+        if 'num_shards' in args:
+            self._check_value_type(args.num_shards, int)
+            if args.num_shards < 1:
+                raise ValueError(
+                    '{0} must be a positive not zero value'.format(human_number))
+            self._num_shards = args.num_shards
+        else:
+            self._num_shards = 0
+
+    def _set_chunk_size(self, args):
+        if 'chunk_size' in args:
+            chunk_size = self._from_human(args.chunk_size)
+            if self._scm_cutoff < 1:
+                raise ValueError('chunk_size is not defined')
+            if chunk_size % self._scm_cutoff:
+                raise ValueError(
+                    'chunk_size must be multiple of I/O size (scm_cutoff)')
+            self._debug('using chunk_size of {0} bytes'.format(chunk_size))
+            self._chunk_size = chunk_size
+        else:
+            self._chunk_size = 0
+
+    def _set_scm_cutoff(self, args):
+        if 'scm_cutoff' in args and args.scm_cutoff:
+            scm_cutoff = self._from_human(args.scm_cutoff)
+            self._scm_cutoff = scm_cutoff
+            self._debug(
+                'overriding scm_cutoff value with {0} bytes'.format(scm_cutoff))
+            self._meta['scm_cutoff'] = scm_cutoff
+        else:
+            self._scm_cutoff = self._meta.get('scm_cutoff', 4096)
+            self._debug(
+                'using default scm_cutoff value of {0} bytes'.format(
+                    self._scm_cutoff))
 
     def _print_destination_file(self, file_name):
         file_name = os.path.normpath(file_name)
@@ -139,8 +231,9 @@ class ProcessBase(CommonBase):
         num_shards = config_yaml.get('num_shards', 1)
         self._debug('using {0} vos pools'.format(num_shards))
 
-        meta_yaml = self._get_vos_meta()
-        overheads = MetaOverhead(self._args, num_shards, meta_yaml)
+        overheads = MetaOverhead(self._args, num_shards, self._meta)
+
+        overheads.set_scm_cutoff(self._scm_cutoff)
 
         if 'containers' not in config_yaml:
             raise Exception(
@@ -165,12 +258,12 @@ class ProcessBase(CommonBase):
 
         return meta_str
 
-    def _get_vos_meta(self):
-        if not self._args.meta:
-            meta_str = self._create_vos_meta()
-            meta_yaml = yaml.safe_load(meta_str)
+    def _get_vos_meta(self, args):
+        self._meta_str = self._create_vos_meta()
+        if 'meta' in args and args.meta:
+            meta_yaml = self._load_yaml_from_file(args.meta)
         else:
-            meta_yaml = self._load_yaml_from_file(self._args.meta)
+            meta_yaml = yaml.safe_load(self._meta_str)
 
         return meta_yaml
 
