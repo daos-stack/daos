@@ -65,7 +65,7 @@ func TestConcurrentGetNUMASocket(t *testing.T) {
 	pid := syscall.Getpid()
 	rand.Seed(time.Now().UnixNano())
 	r := rand.Intn(1500)
-	for i := 0; i < 2*maxConcurrent+r; i++ {
+	for i := 0; i < maxConcurrent+r; i++ {
 		wg.Add(1)
 		go func(n int32, ctx context.Context) {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
