@@ -38,6 +38,7 @@ static test_arg_t *save_arg;
 
 #define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
 #define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
+#define NUM_ADD_START_RANKS 4
 
 enum REBUILD_TEST_OP_TYPE {
 	RB_OP_TYPE_FAIL,
@@ -105,6 +106,21 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		sleep(2);
 	}
 }
+static void
+rebuild_extend_rank(test_arg_t **args, int args_cnt, d_rank_t rank)
+{
+	int i;
+
+	for (i = 0; i < args_cnt; i++) {
+		if (!args[i]->pool.destroyed)
+			daos_extend_server(args[i]->pool.pool_uuid,
+					args[i]->group,
+					args[i]->dmg_config,
+					&args[i]->pool.svc,
+					rank);
+		sleep(2);
+	}
+}
 
 static void
 rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
@@ -156,6 +172,39 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			args[i]->rebuild_post_cb(args[i]);
 }
 
+static void
+add_server_ranks(test_arg_t **args, int args_cnt, d_rank_t *ranks, int rank_nr)
+{
+	int i;
+
+	for (i = 0; i < args_cnt; i++)
+		if (args[i]->rebuild_pre_cb)
+			args[i]->rebuild_pre_cb(args[i]);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	/* Add new rank to pool */
+	if (args[0]->myrank == 0) {
+		for (i = 0; i < rank_nr; i++) {
+			rebuild_extend_rank(args, args_cnt, ranks[i]);
+			/* Sleep 5 seconds to make sure the rebuild start */
+			sleep(5);
+		}
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0; i < args_cnt; i++)
+		if (args[i]->rebuild_cb)
+			args[i]->rebuild_cb(args[i]);
+
+	sleep(10); /* make sure the rebuild happens after exclude/add/kill */
+	if (args[0]->myrank == 0)
+		test_rebuild_wait(args, args_cnt);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	for (i = 0; i < args_cnt; i++)
+		if (args[i]->rebuild_post_cb)
+			args[i]->rebuild_post_cb(args[i]);
+}
 
 void
 rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
@@ -185,6 +234,12 @@ drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 {
 	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, kill,
 			RB_OP_TYPE_DRAIN);
+}
+
+void
+addition_single_pool_rank(test_arg_t *arg, d_rank_t *ranks, int rank_nr)
+{
+	add_server_ranks(&arg, 1, ranks, rank_nr);
 }
 
 void
@@ -557,7 +612,7 @@ rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 
 	/* create/connect another pool */
 	rc = test_setup((void **)new_arg, flag, old_arg->multi_rank,
-			REBUILD_SUBTEST_POOL_SIZE, pool);
+			REBUILD_SUBTEST_POOL_SIZE, pool, NULL);
 	if (rc) {
 		print_message("open/connect another pool failed: rc %d\n", rc);
 		return rc;
@@ -601,7 +656,7 @@ rebuild_sub_setup(void **state)
 {
 	save_group_state(state);
 	return test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SUBTEST_POOL_SIZE, NULL);
+			REBUILD_SUBTEST_POOL_SIZE, NULL, NULL);
 }
 
 int
@@ -609,7 +664,25 @@ rebuild_small_sub_setup(void **state)
 {
 	save_group_state(state);
 	return test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, NULL);
+			REBUILD_SMALL_POOL_SIZE, NULL, NULL);
+}
+
+	int
+addition_small_sub_setup(void **state)
+{
+	d_rank_list_t rank_list;
+	int i;
+
+	save_group_state(state);
+
+	D_ALLOC_ARRAY(rank_list.rl_ranks, NUM_ADD_START_RANKS);
+	rank_list.rl_nr = NUM_ADD_START_RANKS;
+
+	for (i = 0; i < NUM_ADD_START_RANKS; ++i)
+		rank_list.rl_ranks[i] = i;
+
+	return test_setup(state, SETUP_CONT_CONNECT, true,
+			REBUILD_SMALL_POOL_SIZE, NULL, &rank_list);
 }
 
 int

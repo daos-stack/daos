@@ -34,7 +34,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXVizADKCoROdrFNvb"
+#define TESTS "mpceXVizADKCoROdrFNvbq"
 /**
  * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
@@ -77,6 +77,7 @@ print_usage(int rank)
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -v|--rebuild_simple\n");
 	print_message("daos_test -b|--drain_simple\n");
+	print_message("daos_test -q|--addition_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
@@ -249,6 +250,14 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_drain_simple_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
+		case 'q':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS addition simple tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_addition_simple_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+
 
 		default:
 			D_ASSERT(0);
@@ -307,6 +316,7 @@ main(int argc, char **argv)
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"rebuild_simple",	no_argument,	NULL,	'v'},
 		{"drain_simple",	no_argument,	NULL,	'b'},
+		{"addition_simple",	no_argument,	NULL,	'q'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"csum_type",	required_argument,	NULL,
@@ -337,7 +347,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvb",
+				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvbq",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
