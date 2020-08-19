@@ -96,7 +96,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
  *
  * \param[in]	poh	Pool connection handle
  * \param[in]	coh	Container open handle.
- * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR).
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR or O_WRONLY)
+ *                      Until WRITE ONLY objects will be implemented
+ *                      O_WRONLY mode is treated O_RDWR.
  * \param[out]	dfs	Pointer to the file system object created.
  *
  * \return		0 on success, errno code on failure.

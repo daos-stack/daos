@@ -164,6 +164,69 @@ dfs_test_mount(void **state)
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+
+	/** create a DFS container with POSIX layout */
+        rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+                            &coh, &co_info, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Mounting readonly\n");
+        rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
+        assert_int_equal(rc, 0);
+	print_message("Unmounting readonly\n");
+        rc = dfs_umount(dfs);
+        assert_int_equal(rc, 0);
+	print_message("Container closing\n");
+        rc = daos_cont_close(coh, NULL);
+        assert_int_equal(rc, 0);
+	print_message("Container destroying\n");
+        rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid))\
+	  ;
+
+	/** create a DFS container with POSIX layout */
+        rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+                            &coh, &co_info, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Mounting wrong parameters\n");
+	rc = dfs_mount(arg->pool.poh, coh, -1, &dfs);
+        assert_int_equal(rc, EINVAL);
+	print_message("Container closing\n");
+        rc = daos_cont_close(coh, NULL);
+        assert_int_equal(rc, 0);
+	print_message("Container destroying\n");
+        rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid))\
+	  ;
+
+	/** create a DFS container with POSIX layout */
+        rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+                            &coh, &co_info, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Mounting NULL dfs\n");
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, /*&dfs*/ NULL);
+        assert_int_equal(rc, EINVAL);
+        print_message("Unmount NULL dfs\n");
+        rc = dfs_umount(/*dfs*/ NULL);
+        assert_int_equal(rc, EINVAL);
+	print_message("Container closing\n");
+        rc = daos_cont_close(coh, NULL);
+        assert_int_equal(rc, 0);
+	print_message("Container destroying\n");
+        rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid))\
+	  ;
 }
 
 static int
