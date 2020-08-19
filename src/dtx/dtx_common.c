@@ -951,7 +951,8 @@ int
 dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		  daos_epoch_t *epoch, uint32_t *pm_ver)
 {
-	int	rc;
+	uint64_t	age;
+	int		rc;
 
 	if (daos_is_zero_dti(dti))
 		/* If DTX is disabled, then means that the application does
@@ -974,11 +975,12 @@ again:
 	case DTX_ST_COMMITTED:
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
-		if (dtx_hlc_age2sec(dti->dti_hlc) >
-		    DTX_AGG_THRESHOLD_AGE_LOWER ||
+		age = dtx_hlc_age2sec(dti->dti_hlc);
+		if (age > DTX_AGG_THRESHOLD_AGE_LOWER ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
-			D_DEBUG(DB_IO, "Not sure about whether the old RPC "
-				DF_DTI" is resent or not.\n", DP_DTI(dti));
+			D_ERROR("Not sure about whether the old RPC "DF_DTI
+				" is resent or not. Age="DF_U64" s.\n",
+				DP_DTI(dti), age);
 			rc = -DER_EP_OLD;
 		}
 		return rc;
