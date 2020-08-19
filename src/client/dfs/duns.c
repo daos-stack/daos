@@ -351,10 +351,10 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** if there is a relative path, parse it out */
 		t = strtok_r(NULL, "", &saveptr);
 		if (t != NULL) {
-			D_STRNDUP(attr->da_rel_path, t, PATH_MAX);
+			D_ASPRINTF(attr->da_rel_path, "/%s", t);
 			if (!attr->da_rel_path) {
 				D_FREE(dir);
-				return -ENOMEM;
+				return ENOMEM;
 			}
 		}
 
