@@ -285,6 +285,9 @@ main(int argc, char **argv)
 	int		 rank;
 	int		 size;
 	int		 rc;
+#if CMOCKA_FILTER_SUPPORTED == 1 /** for cmocka filter(requires cmocka 1.1.5) */
+	char		 filter[1024];
+#endif
 
 	d_register_alt_assert(mock_assert);
 
@@ -379,8 +382,6 @@ main(int argc, char **argv)
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 		{
 			/** Add wildcards for easier filtering */
-			char filter[sizeof(optarg) + 2];
-
 			sprintf(filter, "*%s*", optarg);
 			cmocka_set_test_filter(filter);
 		}
