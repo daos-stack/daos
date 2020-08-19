@@ -1503,7 +1503,6 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	rc = ds_cont_csummer_init(coc);
 	if (rc)
 		D_GOTO(failed, rc);
-
 out:
 	D_ASSERT(coc->sc_pool != NULL);
 	ioc->ioc_map_ver = coc->sc_pool->spc_map_version;
@@ -2155,6 +2154,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		enum_arg->chk_key2big = true;
 		enum_arg->need_punch = true;
 		enum_arg->copy_data_cb = vos_iter_copy;
+		fill_oid(oei->oei_oid, enum_arg);
 	}
 
 	/*
