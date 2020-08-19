@@ -116,7 +116,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage scan command fails.
 
         """
-        self.result = self._get_result(("storage", "scan"), verbose=verbose)
+        self._get_result(("storage", "scan"), verbose=verbose)
 
         # Sample dmg storage scan verbose output. Don't delete this sample
         # because it helps to develop and debug the regex.
@@ -206,20 +206,21 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def storage_format(self, verbose=False, reformat=False, system=False,
-                       ranks=None):
+    def storage_format(self, verbose=False, reformat=False, ranks=None,
+                       rank_hosts=None):
         """Get the result of the dmg storage format command.
 
         Args:
-            verbose (bool): Show results of each SCM & NVMe device format
+            verbose (bool): show results of each SCM & NVMe device format
                 operation.
             reformat (bool): always reformat storage, could be destructive.
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
                 formattable.
-            system (bool): Perform reformat of stopped DAOS servers in system
-            ranks (str): Comma separated list of system ranks to format,
+            ranks (str): comma separated list of system ranks to format,
                 Default is all ranks.
+            rank_hosts (str): comma separated list of hosts whose managed ranks
+                are to be operated on.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -232,8 +233,8 @@ class DmgCommand(DmgCommandBase):
         kwargs = {
             "verbose": verbose,
             "reformat": reformat,
-            "system": system,
             "ranks": ranks,
+            "rank_hosts": rank_hosts,
         }
         return self._get_result(("storage", "format"), **kwargs)
 

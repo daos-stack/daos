@@ -36,6 +36,7 @@ from avocado import skip, TestFail, fail_on
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
+from daos_utils import DaosCommand
 from command_utils_base import \
     CommandFailure, EnvironmentVariables, CommonConfig
 from agent_utils_params import \
@@ -841,7 +842,8 @@ class TestWithServers(TestWithoutServers):
         """
         self.pool = self.get_pool(namespace, create, connect, index)
 
-    def get_container(self, pool, namespace=None, create=True):
+    def get_container(self, pool, namespace=None, create=True,
+                      daos_command=None):
         """Get a test container object.
 
         Args:
@@ -850,12 +852,14 @@ class TestWithServers(TestWithoutServers):
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults
                 to True.
+            daos_command (DaosCommand): Daos command object used as control
+                object for container functions.
 
         Returns:
             TestContainer: the created test container object.
 
         """
-        container = TestContainer(pool)
+        container = TestContainer(pool, daos_command=daos_command)
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
@@ -863,7 +867,8 @@ class TestWithServers(TestWithoutServers):
             container.create()
         return container
 
-    def add_container(self, pool, namespace=None, create=True):
+    def add_container(self, pool, namespace=None, create=True,
+                      daos_command=None):
         """Add a container to the test case.
 
         This method defines the common test container creation sequence.
@@ -874,8 +879,11 @@ class TestWithServers(TestWithoutServers):
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults
                 to True.
+            daos_command (DaosCommand): Daos command object used as control
+                object for container functions.
         """
-        self.container = self.get_container(pool, namespace, create)
+        self.container = self.get_container(
+            pool, namespace, create, daos_command)
 
     def start_additional_servers(self, additional_servers, index=0):
         """Start additional servers.

@@ -24,12 +24,13 @@
 from __future__ import print_function
 
 from avocado import fail_on
+from apricot import TestWithServers
+from daos_utils import DaosCommand
 from server_utils import ServerFailed
 from command_utils import CommandFailure
-from control_test_base import ControlTestBase
 
 
-class DmgSystemReformatTest(ControlTestBase):
+class DmgSystemReformatTest(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
 
@@ -51,7 +52,7 @@ class DmgSystemReformatTest(ControlTestBase):
 
         # Create pool and container
         self.prepare_pool()
-        self.add_container(self.pool)
+        self.add_container(pool=self.pool, daos_command=DaosCommand(self.bin))
 
         self.log.info("Stop running io_server instancess: 'dmg system stop'")
         data = self.server_managers[-1].dmg.system_stop()
@@ -62,18 +63,27 @@ class DmgSystemReformatTest(ControlTestBase):
                 self.server_managers[-1].dmg.result.stderr))
 
         self.log.info("Perform dmg storage format on all system ranks:")
-        format_data = self.server_managers[-1].dmg.storage_format(system=True)
+        format_data = self.server_managers[-1].dmg.storage_format(reformat=True)
 
         # Verify
         if not format_data:
             self.fail("Detected issues performing storage format: {}".format(
                 self.server_managers[-1].dmg.result.stderr))
 
-        # Check that io_servers start up again
-        self.server_managers[-1].detect_io_server_start()
+        # Check that io_servers starts up again
+        self.log.info("<SERVER> Waiting for the daos_io_servers to start")
+        self.server_managers[-1].manager.job.pattern_count = 2
+        if not self.server_managers[-1].manager.job.check_subprocess_status(
+           self.server_managers[-1].manager.process):
+            self.kill()
+            raise ServerFailed("Failed to start servers after format")
 
         # Check that we have cleared
         pool_info = self.server_managers[-1].dmg.pool_list()
         if pool_info:
             self.fail("Detected pools in storage after refomat: {}".format(
                 self.server_managers[-1].dmg.result.stdout))
+
+        # Remove pools and containers since they were wiped from memory
+        self.pool = None
+        self.container = None

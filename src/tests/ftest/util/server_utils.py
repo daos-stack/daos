@@ -159,7 +159,6 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
-
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
