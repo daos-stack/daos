@@ -53,8 +53,6 @@ dmg:
 daos_tests:
   num_clients:
     num_clients: 32
-  num_replicas:
-    num_replicas: 1
   Tests:
     test_F:
       daos_test: F

@@ -108,8 +108,6 @@ class DaosCoreBase(TestWithServers):
         subtest = self.params.get("daos_test", self.TEST_PATH)
         num_clients = self.params.get("num_clients",
                                       '/run/daos_tests/num_clients/*')
-        num_replicas = self.params.get("num_replicas",
-                                       '/run/daos_tests/num_replicas/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         args = self.params.get("args", self.TEST_PATH, "")
         dmg = self.get_dmg_command()
@@ -125,7 +123,6 @@ class DaosCoreBase(TestWithServers):
                 "--map-by node", "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
                 self.daos_test,
-                "-s", str(num_replicas),
                 "-n", dmg_config_file,
                 "".join(["-", subtest]),
                 str(args)
