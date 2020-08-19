@@ -54,6 +54,9 @@ pool_reserved:
     scm_size: 3000000000
     nvme_size: 50000000000
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 container_reserved:
     akey_size: 5
     dkey_size: 5
@@ -95,11 +98,11 @@ soak_harassers:
         #- rebuild
 # Commandline parameters
 # Benchmark and application params
-# IOR params -a DAOS and -a MPIIO
+# IOR params -a DFS and -a MPIIO
 # sequential
 ior_harasser:
     api:
-        - DAOS
+        - DFS
         - MPIIO
     test_file: daos:testFile
     flags: -v -w -W -r -R
@@ -111,14 +114,14 @@ ior_harasser:
         - '128k'
         - '1m'
     segment_count: 1
-    daos_oclass:
+    dfs_oclass:
         - 'SX'
 rebuild:
     rebuild_timeout: 30
     ranks_to_kill:
         - 2
     svcl: 1
-    daos_oclass:
+    dfs_oclass:
         - "RP_2GX"
 dmg_create_destroy:
     size:
