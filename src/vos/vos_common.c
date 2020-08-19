@@ -167,6 +167,11 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 			return rc;
 	}
 
+	/** Handle the deferred NVMe cancellations */
+	if (!publish)
+		vos_publish_blocks(cont, &dth->dth_deferred_nvme,
+				   false, VOS_IOS_GENERIC);
+
 	return 0;
 }
 

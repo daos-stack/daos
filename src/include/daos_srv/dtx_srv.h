@@ -107,6 +107,8 @@ struct dtx_handle {
 	struct dtx_rsrvd_uint		 dth_rsrvd_inline;
 	struct dtx_rsrvd_uint		*dth_rsrvds;
 	void				**dth_deferred;
+	/* NVME extents to release */
+	d_list_t			dth_deferred_nvme;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
