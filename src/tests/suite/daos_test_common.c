@@ -31,6 +31,7 @@
 #include <daos_prop.h>
 #include <daos_mgmt.h>
 #include "daos_test.h"
+#include <json-c/json.h>
 
 /** Server crt group ID */
 const char *server_group;
@@ -44,6 +45,7 @@ unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
 int		objclass;
+
 
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
@@ -332,7 +334,9 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 
 	/** Look at variables set by test arguments and setup container props */
 	if (dt_csum_type) {
-		printf("\n-------\nChecksum enabled in test!\n-------\n");
+		print_message("\n-------\n"
+			      "Checksum enabled in test!"
+			      "\n-------\n");
 		entry = &csum_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
@@ -1052,4 +1056,134 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	daos_acl_free(acl);
 	D_FREE(user);
 	return prop;
+}
+
+/* JSON output handling for dmg command */
+static int
+daos_dmg_json_contents(const char *dmg_cmd, const char *filename,
+		       struct json_object **parsed_json)
+{
+	long	int size = 0;
+	char	*content = NULL;
+	char	system_cmd[DTS_CFG_MAX];
+	int	rc = 0;
+	FILE	*fp;
+
+	fp = fopen(filename, "w+");
+	if (!fp) {
+		print_message("fopen %s failed!\n", filename);
+		return -DER_IO;
+	}
+
+	dts_create_config(system_cmd, "%s > %s", dmg_cmd, filename);
+	rc = system(system_cmd);
+	assert_int_equal(rc, 0);
+
+	/* get the content size and allocate buffer */
+	fseek(fp, 0, SEEK_END);
+	size = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+	D_ALLOC(content, size);
+
+	if (fread(content, size, 1, fp) != 1) {
+		print_message("failed to read content of %s\n", filename);
+		D_GOTO(out, rc = -DER_IO);
+	}
+
+	if (parsed_json == NULL)
+		D_GOTO(out, rc = -DER_IO);
+
+	*parsed_json = json_tokener_parse(content);
+
+out:
+	fclose(fp);
+	rc = unlink(filename);
+	if (rc != 0)
+		D_ERROR("unlink %s failed, rc %d", filename, rc);
+	D_FREE(content);
+	return rc;
+}
+
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+			daos_mgmt_pool_info_t *pools)
+{
+	struct json_object	*parsed_json = NULL;
+	struct json_object	*response;
+	struct json_object	*pool_list;
+	struct json_object	*pool;
+	struct json_object	*uuid;
+	struct json_object	*rep_ranks;
+	struct json_object	*rank;
+	daos_size_t		npools_in;
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	char			filename[DTS_CFG_MAX];
+	char			dmg_cmd[DTS_CFG_MAX];
+	int			i, j;
+	int			rl_nr;
+	int			rc = 0;
+
+	if (npools == NULL)
+		return -DER_INVAL;
+	npools_in = *npools;
+
+	dts_create_config(filename, "/tmp/dmg_pool_list_%d.json",
+			  (uint8_t)rand());
+
+	dts_create_config(dmg_cmd, "dmg pool list -i -j");
+	if (arg->dmg_config != NULL)
+		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+
+	rc = daos_dmg_json_contents(dmg_cmd, filename, &parsed_json);
+	if (rc != 0) {
+		print_message("daos_dmg_json_contents failed\n");
+		return -DER_INVAL;
+	}
+
+	if (!json_object_object_get_ex(parsed_json, "response", &response))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	if (!json_object_object_get_ex(response, "Pools", &pool_list))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	if (pool_list == NULL)
+		*npools = 0;
+	else
+		*npools = json_object_array_length(pool_list);
+
+	if (pools == NULL) {
+		/* no need to fill up a NULL pools buffer */
+		goto out;
+	} else if (npools_in && (npools_in < *npools)) {
+		/* For non-NULL pools, the allocated non-zero buffer size is
+		 * not sufficient
+		 */
+		D_GOTO(out, rc = -DER_TRUNC);
+	}
+
+	for (i = 0; i < *npools; i++) {
+		pool = json_object_array_get_idx(pool_list, i);
+		json_object_object_get_ex(pool, "UUID", &uuid);
+		strcpy(uuid_str, json_object_get_string(uuid));
+		uuid_parse(uuid_str, pools[i].mgpi_uuid);
+		/* pool service replica ranks */
+		json_object_object_get_ex(pool, "Svcreps", &rep_ranks);
+		rl_nr = json_object_array_length(rep_ranks);
+		if (pools[i].mgpi_svc == NULL)
+			pools[i].mgpi_svc = d_rank_list_alloc(rl_nr);
+		print_message("pool uuid "DF_UUIDF" rl_nr %d\n",
+			      DP_UUID(pools[i].mgpi_uuid),
+			      pools[i].mgpi_svc->rl_nr);
+
+		for (j = 0; j < pools[i].mgpi_svc->rl_nr; j++) {
+			rank = json_object_array_get_idx(rep_ranks, j);
+			pools[i].mgpi_svc->rl_ranks[j] =
+				json_object_get_int(rank);
+			print_message("rl_ranks = %d\n",
+				      pools[i].mgpi_svc->rl_ranks[j]);
+		}
+	}
+
+out:
+	json_object_put(parsed_json);
+	return rc;
 }

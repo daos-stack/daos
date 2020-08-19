@@ -74,6 +74,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_resent = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
+	dth->dth_local_retry = 0;
 	dth->dth_solo = 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
@@ -99,6 +100,8 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 void
 vts_dtx_end(struct dtx_handle *dth)
 {
+	if (dth->dth_modification_cnt > 1)
+		D_FREE(dth->dth_rsrvds);
 	D_FREE(dth->dth_dte.dte_mbs);
 	D_FREE_PTR(dth);
 }

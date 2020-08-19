@@ -194,7 +194,8 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx],
 					      epoch, 0, &cred->tc_dkey, 1,
-					      &cred->tc_iod, NULL, &ioh, NULL);
+					      &cred->tc_iod, NULL, false, 0,
+					      &ioh, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx],
 					     epoch, 0, &cred->tc_dkey, 1,

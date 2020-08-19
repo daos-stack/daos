@@ -28,6 +28,7 @@ import os
 
 from general_utils import run_task
 from command_utils_base import CommandFailure
+from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 
@@ -230,11 +231,11 @@ class ServerFillUp(IorTestBase):
             _create_cont = False
             self.ior_cmd.flags.value = self.ior_read_flags
             self.ior_cmd.daos_cont.value = self.container_info[
-                "{}{}{}".format(self.ior_cmd.daos_oclass.value,
+                "{}{}{}".format(self.ior_cmd.dfs_oclass.value,
                                 self.ior_cmd.api.value,
                                 self.ior_cmd.transfer_size.value)][0]
             self.ior_cmd.block_size.value = self.container_info[
-                "{}{}{}".format(self.ior_cmd.daos_oclass.value,
+                "{}{}{}".format(self.ior_cmd.dfs_oclass.value,
                                 self.ior_cmd.api.value,
                                 self.ior_cmd.transfer_size.value)][1]
         #For IOR Other operation, calculate the block size based on server %
@@ -247,11 +248,11 @@ class ServerFillUp(IorTestBase):
         try:
             self.run_ior_with_pool(create_cont=_create_cont)
             results.put("PASS")
-        except CommandFailure as _error:
+        except (CommandFailure, TestFail) as _error:
             results.put("FAIL")
 
         self.container_info["{}{}{}"
-                            .format(self.ior_cmd.daos_oclass.value,
+                            .format(self.ior_cmd.dfs_oclass.value,
                                     self.ior_cmd.api.value,
                                     self.ior_cmd.transfer_size.value)] = [
                                         self.ior_cmd.daos_cont.value,
@@ -265,7 +266,7 @@ class ServerFillUp(IorTestBase):
             block_size(int): IOR Block size
         """
         #Check the replica for IOR object to calculate the correct block size.
-        _replica = re.findall(r'_(.+?)G', self.ior_cmd.daos_oclass.value)
+        _replica = re.findall(r'_(.+?)G', self.ior_cmd.dfs_oclass.value)
         if not _replica:
             replica_server = 1
         #This is for EC Parity

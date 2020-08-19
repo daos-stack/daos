@@ -47,14 +47,22 @@ print_chars(const uint8_t *buf, const size_t len, const uint32_t max)
 #define FAKE_UPDATE_BUF_LEN (1024*1024)
 static char fake_update_buf_copy[FAKE_UPDATE_BUF_LEN];
 static char *fake_update_buf = fake_update_buf_copy;
-
 static int fake_update_bytes;
 static int fake_update_called;
+
+static int
+fake_reset(struct daos_csummer *obj)
+{
+	fake_update_buf[0] = '>';
+	fake_update_buf++;
+	fake_update_bytes++;
+	return 0;
+}
+
 static int
 fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	int	i;
-	size_t	bytes_len;
 
 	fake_update_called++;
 
@@ -67,10 +75,9 @@ fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		fake_update_bytes++;
 	}
 
-	bytes_len = min(sizeof(uint32_t), buf_len);
-
-	for (i = 0; i < bytes_len; i++)
-		*((uint32_t *)obj->dcs_csum_buf) |= buf[i];
+	/** Fill checksum with 'N' to indicate creating new checksum */
+	for (i = 0; i < daos_csummer_get_csum_len(obj); i++)
+		obj->dcs_csum_buf[i] = 'N';
 
 	return 0;
 }
@@ -86,6 +93,7 @@ fake_compare(struct daos_csummer *obj,
 }
 
 static struct csum_ft fake_algo = {
+	.cf_reset = fake_reset,
 	.cf_update = fake_update,
 	.cf_compare = fake_compare,
 	.cf_csum_len = sizeof(uint32_t),
@@ -123,6 +131,26 @@ void fake_update_saw(char *file, int line, char *buf, size_t len)
 /**
  * -------------------------------------------------------------------------
  * Testing fetch of aligned and unaligned extents
+ *
+ * These tests verify that the server logic for creating new checksums
+ * or copying stored checksums works properly. Each test should have a layout
+ * diagram of sorts in the comment header (if it fits easily). Gennerally a '_'
+ * represents a hole that will exist in the request.
+ *
+ * There is a setup section that defines the request, chunk size,
+ * record size and the layout of what extents are "stored". The setup
+ * will create a bsgl with biov for each layout as though it were
+ * coming from VOS. It should take into
+ * account the prefix/suffix needed to represent raw vs req extents (.sel = req,
+ * .ful = raw).
+ * To verify correctness, a fake csum algo structure is used that
+ * remembers what data it sees while "updating" and then can verify that the
+ * correct data was used for "calculating" the new checksums.
+ * - In the checksum (ASSERT_CSUM) "SSSS" means that the stored checksum was
+ *   copied. "CCCC" means that a new checksum was created.
+ * - In the observed data for a checksum update (FAKE_UPDATE_SAW), a '>' means
+ *   that a new checksum was started,  and '|' separates calls to checksum
+ *   update.
  * -------------------------------------------------------------------------
  */
 struct vos_fetch_test_context {
@@ -138,6 +166,7 @@ struct extent_info {
 	char *data;
 	struct evt_extent sel;
 	struct evt_extent ful;
+	bool is_hole;
 };
 
 struct array_test_case_args {
@@ -160,6 +189,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	uint32_t	 cs;
 	size_t		 i = 0;
 	size_t		 j;
+	size_t		 c;
 	size_t		 nr;
 	uint8_t		*dummy_csums;
 
@@ -168,7 +198,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	csum_len = daos_csummer_get_csum_len(ctx->csummer);
 	cs = daos_csummer_get_chunksize(ctx->csummer);
 	assert_true(cs != 0);
-	dummy_csums = (uint8_t *) "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	dummy_csums = (uint8_t *)"SSSSSSSSSSSSSSSSSSSSSSSSSS";
 	rec_size = setup->rec_size;
 
 	/** count number of layouts */
@@ -180,7 +210,9 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	bio_sgl_init(&ctx->bsgl, nr);
 	ctx->bsgl.bs_nr_out = nr;
 	D_ALLOC_ARRAY(ctx->biov_csums, nr);
+	assert_non_null(ctx->biov_csums);
 
+	c = 0;
 	for (i = 0; i < nr; i++) {
 		struct extent_info	*l;
 		char			*data;
@@ -204,22 +236,23 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 				  (l->ful.ex_hi - l->sel.ex_hi) *
 				  rec_size);
 
-		D_ALLOC(biov->bi_buf, data_len);
-		memcpy(bio_iov2raw_buf(biov), data, data_len);
+		if (l->is_hole) {
+			biov->bi_addr.ba_hole = true;
+			biov->bi_buf = NULL;
+		} else {
+			D_ALLOC(biov->bi_buf, data_len);
+			memcpy(bio_iov2raw_buf(biov), data, data_len);
+			/** Just a rough count */
+			num_of_csum = data_len / cs + 1;
 
-		/** Just a rough count */
-		num_of_csum = data_len / cs + 1;
-
-		info = &ctx->biov_csums[i];
-		D_ALLOC(info->cs_csum, csum_len * num_of_csum);
-		info->cs_buf_len = csum_len * num_of_csum;
-		info->cs_nr = num_of_csum;
-		info->cs_len = csum_len;
-		info->cs_chunksize = cs;
-
-		for (j = 0; j < num_of_csum; j++) {
-			/** All csums will be the same so verify correctly */
-			ci_insert(info, j, dummy_csums, csum_len);
+			info = &ctx->biov_csums[c++];
+			D_ALLOC(info->cs_csum, csum_len * num_of_csum);
+			info->cs_buf_len = csum_len * num_of_csum;
+			info->cs_nr = num_of_csum;
+			info->cs_len = csum_len;
+			info->cs_chunksize = cs;
+			for (j = 0; j < num_of_csum; j++)
+				ci_insert(info, j, dummy_csums, csum_len);
 		}
 	}
 
@@ -266,200 +299,77 @@ fetch_csum_verify_bsgl_with_args(struct vos_fetch_test_context *ctx)
 		ctx->iod_csum);
 }
 
+#define ASSERT_CSUM(ctx, csum) \
+	assert_memory_equal(csum, ctx.iod_csum->ic_data->cs_csum, \
+		sizeof(csum) - 1)
+#define ASSERT_CSUM_EMPTY(ctx, idx) \
+	assert_string_equal("", ctx.iod_csum->ic_data->cs_csum + \
+	(idx * ctx.iod_csum->ic_data->cs_len))
+#define ASSERT_CSUM_IDX(ctx, csum, idx) \
+	assert_memory_equal(csum, ctx.iod_csum->ic_data->cs_csum + \
+	(idx * ctx.iod_csum->ic_data->cs_len), \
+		sizeof(csum) - 1)
+
 /**
- * -------------------------------------------------------------------------
- * Testing the logic to determine if a new checksum needs to be calculated
- * for a chunk of an extent ... or can the stored checksum be used
- * -------------------------------------------------------------------------
+ * Single extent that is a single chunk. Request matches extent
+ *
+ * Should look like this:
+ * Fetch extent:	1  2  3  \0 |
+ * epoch 1 extent:	1  2  3  \0 |
+ * index:		0  1  2  3  |
  */
-
-struct need_new_checksum_tests_args {
-	/**  bytes needed for the chunk, can be smaller than chunk size */
-	size_t		chunksize; /** chunk size */
-	/** If a new checksum calculation has already started */
-	bool		csum_started;
-	bool		has_next_biov;
-	/** byte the biov starts (not known by biov, but must is
-	 * calculated based on evt_entry/biov combo. For testing,
-	 * just hard code it.
-	 */
-	daos_off_t	req_start;
-	daos_off_t	req_len;
-	daos_off_t	raw_len;
-};
-
-#define	NEED_NEW_CHECKSUM_TESTS_TESTCASE(expected, ...) \
-	need_new_checksum_tests_testcase(__FILE__, __LINE__, expected, \
-		(struct need_new_checksum_tests_args)__VA_ARGS__)
-
-void
-need_new_checksum_tests_testcase(char *file, int line, bool expected,
-				 struct need_new_checksum_tests_args args)
-{
-	bool		 result;
-
-	bool has_next = args.has_next_biov;
-	bool started = args.csum_started;
-	struct daos_csum_range chunk;
-	struct daos_csum_range req;
-	struct daos_csum_range raw;
-
-	dcr_set_idx_nr(&chunk, 0, args.chunksize);
-	dcr_set_idx_nr(&req, args.req_start, args.req_len);
-	dcr_set_idx_nr(&raw, args.req_start, args.raw_len);
-
-	result = ds_csum_calc_needed(&raw, &req, &chunk, started, has_next);
-	if (result != expected) {
-		print_error("%s:%d expected %d but found %d\n", file, line,
-			    expected, result);
-		fail();
-	}
-}
-
 static void
-need_new_checksum_tests(void **state)
-{
-	/** Whenever a csum calculation has already been started (csum_started),
-	 * it must continue (until the next chunk at least).
-	 */
-	NEED_NEW_CHECKSUM_TESTS_TESTCASE(true, {
-		.csum_started = true,
-		.has_next_biov = false,
-		.chunksize = 10,
-		.req_len = 10,
-		.raw_len = 10,
-	});
-
-	/**
-	 *  Everything lines up so this 'chunk' csum can be used as is.
-	 */
-	NEED_NEW_CHECKSUM_TESTS_TESTCASE(false, {
-		.csum_started = false,
-		.has_next_biov = false,
-		.chunksize = 8,
-		.req_len = 8,
-		.raw_len = 8,
-	});
-
-	/**
-	 * Extent is larger than chunksize and is only extent in chunk so new
-	 * checksum is not needed.
-	 */
-	NEED_NEW_CHECKSUM_TESTS_TESTCASE(false, {
-		.has_next_biov = false,
-		.chunksize = 8,
-		.csum_started = false,
-		.req_len = 20,
-		.raw_len = 20,
-	});
-
-	/**
-	 * Extent is smaller than chunksize and is only extent in chunk
-	 */
-	NEED_NEW_CHECKSUM_TESTS_TESTCASE(false, {
-		.has_next_biov = false,
-		.chunksize = 16,
-		.csum_started = false,
-		.req_len = 6,
-		.raw_len = 6,
-	});
-
-	/**
-	 * Extent is smaller than chunksize and another extent is after, but
-	 * it is after the next chunk starts
-	 */
-	NEED_NEW_CHECKSUM_TESTS_TESTCASE(false, {
-		.has_next_biov = true,
-		.chunksize = 8,
-		.csum_started = false,
-		.req_len = 6,
-		.raw_len = 6,
-		.req_start = 4 /** starts so next biov is after chunk end */
-
-	});
-
-	/**
-	 * Extent is smaller than chunksize and another extent is after in
-	 * same chunk ... will need to calc new csum
-	 */
-	NEED_NEW_CHECKSUM_TESTS_TESTCASE(true, {
-		.has_next_biov = true,
-		.chunksize = 8,
-		.csum_started = false,
-		.req_len = 3,
-		.raw_len = 3,
-		.req_start = 4 /** starts so next biov is after chunk end */
-	});
-
-	/**
-	 * Extent is larger than bytes needed for chunk (fetch is smaller than
-	 * chunk), but still smaller than chunk.
-	 */
-	NEED_NEW_CHECKSUM_TESTS_TESTCASE(true, {
-		.has_next_biov = false,
-		.chunksize = 8,
-		.csum_started = false,
-		.req_len = 6,
-		.raw_len = 8,
-		.req_start = 1
-	});
-	/**
-	 * Same as previous, but using biov end instead of begin
-	 */
-	NEED_NEW_CHECKSUM_TESTS_TESTCASE(true, {
-		.has_next_biov = false,
-		.chunksize = 8,
-		.csum_started = false,
-		.req_len = 6,
-		.raw_len = 8,
-		.req_start = 0
-	});
-}
-
-struct csum_idx {
-	uint32_t ci_idx;
-	uint32_t csum_idx;
-};
-
-struct biov_iod_csum_compare {
-	struct csum_idx biov_csum;
-	struct csum_idx iod_csum;
-};
-
-#define	IOD_BIOV_CSUM_SAME(args, ...) \
-	iod_biov_csum_same(args, (struct biov_iod_csum_compare)__VA_ARGS__)
-
-void
-iod_biov_csum_same(struct vos_fetch_test_context *ctx,
-		   struct biov_iod_csum_compare idxs)
-{
-	struct dcs_csum_info	*biov;
-	struct dcs_csum_info	*iod;
-	uint32_t		 csum_len;
-
-	iod = &ctx->iod_csum->ic_data[idxs.iod_csum.ci_idx];
-	biov = &ctx->biov_csums[idxs.biov_csum.ci_idx];
-	csum_len = biov->cs_len;
-
-	assert_memory_equal(
-		ci_idx2csum(biov, idxs.biov_csum.csum_idx),
-		ci_idx2csum(iod, idxs.iod_csum.csum_idx), csum_len);
-}
-
-/** Test cases */
-static void
-with_extent_smaller_than_chunk(void **state)
+request_that_matches_single_extent(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
 	/** Setup */
 	ARRAY_TEST_CASE_CREATE(&ctx, {
-		.request_idx = 1,
+		.request_idx = 0,
+		.request_len = 4,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "123", .sel = {0, 3}, .ful = {0, 3},},
+			{.data = NULL}
+		}
+	});
+
+	memset(ctx.iod_csum->ic_data->cs_csum, 0,
+	       ctx.iod_csum->ic_data->cs_buf_len);
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+
+	ASSERT_CSUM(ctx, "SSSS");
+	FAKE_UPDATE_SAW("");
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * Single extent that is smaller than a single chunk. Request matches extent
+ *
+ * Should look like this:
+ * Fetch extent:	A  B  C
+ * epoch 1 extent:	A  B  C
+ * index:		0  1  2
+ */
+static void
+extent_smaller_than_chunk(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
 		.request_len = 3,
 		.chunksize = 8,
 		.rec_size = 1,
 		.layout = {
-			{.data = "AB", .sel = {0, 2}, .ful = {0, 2},},
+			{.data = "ABC", .sel = {0, 2}, .ful = {0, 2},},
 			{.data = NULL}
 		}
 	});
@@ -468,7 +378,8 @@ with_extent_smaller_than_chunk(void **state)
 	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
-	IOD_BIOV_CSUM_SAME(&ctx, { .biov_csum = {0, 0}, .iod_csum = {0, 0} });
+	ASSERT_CSUM(ctx, "SSSS");
+	FAKE_UPDATE_SAW("");
 
 	/** Never have to create a new csum because there's only 1 extent */
 	assert_int_equal(0, fake_update_called);
@@ -479,26 +390,26 @@ with_extent_smaller_than_chunk(void **state)
 }
 
 /**
+ * Single extent that is multiple chunks. Request matches extent
+ *
  * Should look like this:
- * Fetch extent:	1  2 | 3 \0 | 4  \0
- * epoch 2 extent:	              4  \0
- * epoch 1 extent:	1  2 | 3  \0
- * index:		0  1 | 2  3 | 4  5
+ * Fetch extent:	1  2 | 3  4 | 5  6 | 7  \0 |
+ * epoch 1 extent:	1  2 | 3  4 | 5  6 | 7  \0 |
+ * index:		0  1 | 2  3 | 4  5 | 6  7  |
  */
 static void
-with_aligned_chunks_csums_are_copied(void **state)
+request_that_matches_single_extent_multiple_chunks(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
 	/** Setup */
 	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
-		.request_len = 6,
+		.request_len = 8,
 		.chunksize = 2,
 		.rec_size = 1,
 		.layout = {
-			{.data = "123", .sel = {0, 3}, .ful = {0, 3},},
-			{.data = "4", .sel = {4, 5}, .ful = {4, 5},},
+			{.data = "1234567", .sel = {0, 7}, .ful = {0, 7},},
 			{.data = NULL}
 		}
 	});
@@ -507,19 +418,328 @@ with_aligned_chunks_csums_are_copied(void **state)
 	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
-	IOD_BIOV_CSUM_SAME(&ctx, { .biov_csum = {0, 0}, .iod_csum = {0, 0} });
-	IOD_BIOV_CSUM_SAME(&ctx, { .biov_csum = {0, 1}, .iod_csum = {0, 1} });
-	IOD_BIOV_CSUM_SAME(&ctx, { .biov_csum = {1, 0}, .iod_csum = {0, 2} });
-
+	ASSERT_CSUM(ctx, "SSSS");
 	FAKE_UPDATE_SAW("");
-	assert_int_equal(0, fake_update_called);
-	assert_int_equal(0, fake_compare_called);
-
 
 	test_case_destroy(&ctx);
 }
 
 /**
+ * Single extent that isn't chunk aligned at beginning or end,  but request
+ * matches extent so still don't need new checksum
+ *
+ * Should look like this:
+ * Fetch extent:	   2 | 3  4 | 5  6 | \0    |
+ * epoch 1 extent:	   2 | 3  4 | 5  6 | \0    |
+ * index:		0  1 | 2  3 | 4  5 | 6  7  |
+ */
+static void
+request_that_matches_single_extent_multiple_chunks_not_aligned(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 1,
+		.request_len = 6,
+		.chunksize = 2,
+		.rec_size = 1,
+		.layout = {
+			{.data = "23456", .sel = {1, 6}, .ful = {1, 6},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	ASSERT_CSUM(ctx, "SSSSSSSSSSSSSSSS");
+	FAKE_UPDATE_SAW("");
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * Two extents that are chunk aligned and request is chunk aligned. Stored
+ * checksums are copied.
+ *
+ * Should look like this:
+ * Fetch extent:	Z  Y  X  W | V  U  T  S
+ * epoch 2 extent:	           | V  U  T  S
+ * epoch 1 extent:	Z  Y  X  W |
+ * index:		0  1  2  3 | 4  5  6  7
+ */
+static void
+request_that_matches_multiple_aligned_extents(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 8,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ZYXW", .sel = {0, 3}, .ful = {0, 3},},
+			{.data = "VUTS", .sel = {4, 7}, .ful = {4, 7},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	ASSERT_CSUM(ctx, "SSSSSSSS");
+	FAKE_UPDATE_SAW("");
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * Two extents that are chunk aligned and request is chunk aligned. Stored
+ * checksums are copied. Same as previous but extents are  in reverse order
+ *
+ * Should look like this:
+ * Fetch extent:	Z  Y  X  W | V  U  T  S
+ * epoch 2 extent:	Z  Y  X  W |
+ * epoch 1 extent:	           | V  U  T  S
+ * index:		0  1  2  3 | 4  5  6  7
+ */
+static void
+request_that_matches_multiple_aligned_extents2(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 8,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "VUTS", .sel = {4, 7}, .ful = {4, 7},},
+			{.data = "ZYXW", .sel = {0, 3}, .ful = {0, 3},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	ASSERT_CSUM(ctx, "SSSSSSSS");
+	FAKE_UPDATE_SAW("");
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * One extent. Requesting larger (at end) extent than what exists. Will still
+ * copy stored checksum because only stored extent is returned.
+ *
+ * Should look like this:
+ * Fetch extent:	Z  Y  X  W | V  U  _  _
+ * epoch 1 extent:	Z  Y  X  W | V  U
+ * index:		0  1  2  3 | 4  5  6  7
+ */
+static void
+request_that_is_more_than_extents(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 8,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ZYXWVU", .sel = {0, 5}, .ful = {0, 5},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	ASSERT_CSUM(ctx, "SSSS");
+
+	FAKE_UPDATE_SAW("");
+	assert_int_equal(0, fake_update_called);
+	assert_int_equal(0, fake_compare_called);
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * One single chunk length extent, but only first half is requested. Will need
+ * to create a new checksum and verify whole original extent.
+ *
+ * Should look like this:
+ * Fetch extent:	Z  Y  X  W
+ * epoch 1 extent:	Z  Y  X  W  V  U  T  S  |
+ * index:		0  1  2  3  4  5  6  7  |
+ */
+static void
+partial_chunk_request0(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 4,
+		.chunksize = 8,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ZYXWVUTS", .sel = {0, 3}, .ful = {0, 7},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">ZYXW|>ZYXWVUTS|");
+	ASSERT_CSUM(ctx, "NNNN");
+	assert_int_equal(2, fake_update_called);
+	assert_int_equal(1, fake_compare_called);
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * One single chunk length extent, but only last half is requested. Will need
+ * to create a new checksum and verify whole original extent.
+ *
+ * Should look like this:
+ * Fetch extent:	            V  U  T  S  |
+ * epoch 1 extent:	Z  Y  X  W  V  U  T  S  |
+ * index:		0  1  2  3  4  5  6  7  |
+ */
+static void
+partial_chunk_request1(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 4,
+		.request_len = 4,
+		.chunksize = 8,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ZYXWVUTS", .sel = {4, 7}, .ful = {0, 7},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">VUTS|>ZYXWVUTS|");
+	ASSERT_CSUM(ctx, "NNNN");
+	assert_int_equal(2, fake_update_called);
+	assert_int_equal(1, fake_compare_called);
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * One single chunk length extent, but only middle part is requested. Will need
+ * to create a new checksum and verify whole original extent.
+ *
+ * Should look like this:
+ * Fetch extent:	      X  W  V  U        |
+ * epoch 1 extent:	Z  Y  X  W  V  U  T  S  |
+ * index:		0  1  2  3  4  5  6  7  |
+ */
+static void
+partial_chunk_request2(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 2,
+		.request_len = 4,
+		.chunksize = 8,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ZYXWVUTS", .sel = {2, 5}, .ful = {0, 7},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">XWVU|>ZYXWVUTS|");
+	ASSERT_CSUM(ctx, "NNNN");
+	assert_int_equal(2, fake_update_called);
+	assert_int_equal(1, fake_compare_called);
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * Single extent that spans multiple chunks. Request is only part of first
+ * and last chunk so those should have new checksums, while only the
+ * beginning/ending chunks are verified. The two middle chunks' checksums
+ * should be copied.
+ *
+ * Should look like this:
+ * Fetch extent:	      X  W | V  U  T  S | Z  Y  X  W | V  U       |
+ * epoch 1 extent:	Z  Y  X  W | V  U  T  S | Z  Y  X  W | V  U  T  S |
+ * index:		0  1  2  3 | 4  5  6  7 | 8  9 10 11 |12 13 14 15 |
+ * Should create a new csum for the first chunk, copy the middle 2 chunks, then
+ * create a new csum for the last chunk
+ */
+static void
+request_needs_new_and_copy(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 2,
+		.request_len = 12,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ZYXWVUTSZYXWVUTS", .sel = {2, 13},
+				.ful = {0, 15},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">XW|>ZYXW|>VU|>VUTS|");
+	assert_int_equal(4, fake_update_called);
+	assert_int_equal(2, fake_compare_called);
+
+	ASSERT_CSUM(ctx, "NNNNSSSSSSSSNNNN");
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * Two extents, second overlaps the first partially in first chunk and
+ * completely in second chunk. First chunk will need new checksum, second will
+ * be copied from second extent. The first chunk of both first and second
+ * extents will need to be verified.
+ *
+ *
  * Should look like this:
  * Fetch extent:	1  A | B \0
  * epoch 2 extent:	   A | B  \0
@@ -527,7 +747,7 @@ with_aligned_chunks_csums_are_copied(void **state)
  * index:		0  1 | 2  3
  */
 static void
-with_unaligned_chunks_csums_new_csum_is_created(void **state)
+unaligned_chunks_csums_new_csum_is_created(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
@@ -548,7 +768,9 @@ with_unaligned_chunks_csums_new_csum_is_created(void **state)
 	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
-	FAKE_UPDATE_SAW("1|A|12|A|");
+	FAKE_UPDATE_SAW(">1|A|>12|>A|");
+	ASSERT_CSUM(ctx, "NNNNSSSS");
+
 	assert_int_equal(4, fake_update_called);
 	assert_int_equal(2, fake_compare_called);
 
@@ -556,17 +778,19 @@ with_unaligned_chunks_csums_new_csum_is_created(void **state)
 }
 
 /**
- * Want to make sure not verifying chunks that are not part of fetch, even
- * though parts of the extent are.
+ * Make sure not verifying chunks that are not part of fetch, even
+ * though parts of the extent are. Request is first part of two extents, but
+ * not part of the second chunk of extent two. When verifying, should not need
+ * second chunk.
  *
  * Should look like this:
  * Fetch extent:	5  A  B  C
- * epoch 2 extent:	   A  B  C  D  E  F  G | H  I  \0
- * epoch 1 extent:	5  6  \0
+ * epoch 2 extent:	   A  B  C  D  E  F  G | H  I  J
+ * epoch 1 extent:	5  6  7
  * index:		0  1  2  3  4  5  6  7 | 8  9  10
  */
 static void
-with_extent_larger_than_request(void **state)
+extent_larger_than_request(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
@@ -582,7 +806,7 @@ with_extent_larger_than_request(void **state)
 		.chunksize = 8,
 		.rec_size = 1,
 		.layout = {
-			{.data = "56",
+			{.data = "567",
 				.sel = {0, 0}, .ful = {0, 2} },
 			{.data = "ABCDEFGHI",
 				.sel = {1, 3}, .ful = {1, 10} },
@@ -594,9 +818,10 @@ with_extent_larger_than_request(void **state)
 	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
-	FAKE_UPDATE_SAW("5|ABC|56\0|ABCDEFG|");
+	FAKE_UPDATE_SAW(">5|ABC|>567|>ABCDEFG|");
 	assert_int_equal(4, fake_update_called);
 	assert_int_equal(2, fake_compare_called);
+	ASSERT_CSUM(ctx, "NNNN");
 
 	/** clean up */
 	test_case_destroy(&ctx);
@@ -614,7 +839,7 @@ with_extent_larger_than_request(void **state)
  * index:		0  1 | 2  3
  */
 static void
-with_unaligned_first_chunk(void **state)
+unaligned_first_chunk(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
@@ -636,8 +861,8 @@ with_unaligned_first_chunk(void **state)
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
-	IOD_BIOV_CSUM_SAME(&ctx, { .biov_csum = {0, 0}, .iod_csum = {0, 0} });
-	IOD_BIOV_CSUM_SAME(&ctx, { .biov_csum = {1, 0}, .iod_csum = {0, 1} });
+	ASSERT_CSUM(ctx, "SSSSSSSS");
+
 	assert_int_equal(0, fake_update_called);
 	assert_int_equal(0, fake_compare_called);
 
@@ -645,27 +870,29 @@ with_unaligned_first_chunk(void **state)
 }
 
 /**
- * When the fetch is smaller than a chunk, will need to create a new checksum
- * and verify the stored checksum
+ * Two extents that don't overlap, but don't align (meet i nthe middle of a
+ * chunk). Will copy stored checksums for first and last chunk, but create a
+ * new one for the middle chunk.
  *
  * Should look like this:
- * Fetch extent:	   B  C  D  E  F  G     |
- * epoch 1 extent:	A  B  C  D  E  F  G  H  |
- * index:		0  1  2  3  4  5  6  7  |
+ * Fetch extent:	A  B  C | D  E  F | G  H  I |
+ * epoch 2 extent:	        |    E  F | G  H  I |
+ * epoch 1 extent:	A  B  C | D       |         |
+ * index:		0  1  2 | 3  4  5 | 6  7  8 |
  */
 static void
-with_fetch_smaller_than_chunk(void **state)
+fetch_multiple_unaligned_extents(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
 	ARRAY_TEST_CASE_CREATE(&ctx, {
-		.request_idx = 1,
-		.request_len = 6,
-		.chunksize = 8,
+		.request_idx = 0,
+		.request_len = 9,
+		.chunksize = 3,
 		.rec_size = 1,
 		.layout = {
-			{.data = "ABCDEFGH",
-				.sel = {1, 6}, .ful = {0, 7} },
+			{.data = "ABCD", .sel = {0, 3}, .ful = {0, 3} },
+			{.data = "EFGHI", .sel = {4, 8}, .ful = {4, 8} },
 			{.data = NULL}
 		}
 	});
@@ -674,37 +901,171 @@ with_fetch_smaller_than_chunk(void **state)
 	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
-	FAKE_UPDATE_SAW("BCDEFG|ABCDEFGH|");
+	FAKE_UPDATE_SAW(">D|EF|>D|>EF|");
+	assert_int_equal(4, fake_update_called);
+	assert_int_equal(2, fake_compare_called);
+	ASSERT_CSUM(ctx, "SSSSNNNNSSSS");
 
-	assert_int_equal(2, fake_update_called);
-	assert_int_equal(1, fake_compare_called);
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+
+/**
+ *
+ * Many extents without overlapping
+ *
+ * Should look like this:
+ * Fetch extent:	A  B  C  D | E  F
+ * epoch 6 extent:	           |    F
+ * epoch 5 extent:	           | E
+ * epoch 4 extent:	         D |
+ * epoch 3 extent:	      C    |
+ * epoch 2 extent:	   B       |
+ * epoch 1 extent:	A          |
+ * index:		0  1  2  3 | 4  5
+ */
+static void
+many_extents(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 6,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "A", .sel = {0, 0}, .ful = {0, 0} },
+			{.data = "B", .sel = {1, 1}, .ful = {1, 1} },
+			{.data = "C", .sel = {2, 2}, .ful = {2, 2} },
+			{.data = "D", .sel = {3, 3}, .ful = {3, 3} },
+			{.data = "E", .sel = {4, 4}, .ful = {4, 4} },
+			{.data = "F", .sel = {5, 5}, .ful = {5, 5} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">A|B|C|D|>A|>B|>C|>D|>E|F|>E|>F|");
+	ASSERT_CSUM(ctx, "NNNN");
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+
+
+/**
+ * Request begins before extent. This will be represented by VOS as an extent
+ * that is a hole first.
+ *
+ * Should look like this:
+ * Fetch extent:	_  _  X  W | V  U  T  S
+ * epoch 1 extent:	      X  W | V  U  T  S
+ * index:		0  1  2  3 | 4  5  6  7
+ */
+static void
+request_that_begins_before_extent(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	/** Setup */
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 8,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "", .sel = {0, 1}, .ful = {0, 1},
+				.is_hole = true},
+			{.data = "XWVUTS", .sel = {2, 7}, .ful = {2, 7},},
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	ASSERT_CSUM(ctx, "SSSS");
+
+	FAKE_UPDATE_SAW("");
+	assert_int_equal(0, fake_update_called);
+	assert_int_equal(0, fake_compare_called);
+
+	test_case_destroy(&ctx);
+}
+
+/**
+ * Two extents with a gap in the middle. Requesting all. The hole will be
+ * represented by VOS as a third extent that is a hole. Even though the first
+ * extent's hi isn't aligned, the stored checksum will still work.
+ *
+ * Should look like this:
+ * Fetch extent:	A  B  C | D  _  _ | G  H  I |
+ * epoch 2 extent:	        |         | G  H  I |
+ * epoch 1 extent:	A  B  C | D       |         |
+ * index:		0  1  2 | 3  4  5 | 6  7  8 |
+ */
+static void
+fetch_with_hole(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 9,
+		.chunksize = 3,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ABCD", .sel = {0, 3}, .ful = {0, 3} },
+			{.data = "", .sel = {4, 5}, .ful = {4, 5},
+				.is_hole = true},
+			{.data = "GHI", .sel = {6, 8}, .ful = {6, 8} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW("");
+	ASSERT_CSUM(ctx, "SSSSSSSSSSSS");
 
 	/** clean up */
 	test_case_destroy(&ctx);
 }
 
 /**
+ * Hole within a single chunk
+ *
  * Should look like this:
- * Fetch extent:	   A | C
- * epoch 2 extent:	   A | 1  \0
- * epoch 1 extent:	0  1 | \0
- * index:		0  1 | 2  3
+ * Fetch extent:	A  B  C  _  _  _  G  H |
+ * epoch 2 extent:	                  G  H |
+ * epoch 1 extent:	A  B  C                |
+ * index:		0  1  2  3  4  5  6  7 |
  */
 static void
-more_partial_extent_tests(void **state)
+fetch_with_hole2(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
 	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
-		.request_len = 3,
-		.chunksize = 2,
+		.request_len = 8,
+		.chunksize = 8,
 		.rec_size = 1,
 		.layout = {
-			{.data = "01",
-				.sel = {0, 0}, .ful = {0, 2} },
-			{.data = "A",
-				.sel = {1, 2}, .ful = {1, 2} },
+			{.data = "ABC", .sel = {0, 2}, .ful = {0, 2} },
+			{.data = "", .sel = {3, 5}, .ful = {3, 5},
+				.is_hole = true},
+			{.data = "GHI", .sel = {6, 7}, .ful = {6, 7} },
 			{.data = NULL}
 		}
 	});
@@ -713,17 +1074,231 @@ more_partial_extent_tests(void **state)
 	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
-	FAKE_UPDATE_SAW("0|A|01|A|");
+	FAKE_UPDATE_SAW(">ABC|GH|>ABC|>GH|");
+	ASSERT_CSUM(ctx, "NNNN");
 
-	assert_int_equal(4, fake_update_called);
-	assert_int_equal(2, fake_compare_called);
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+/**
+ *
+ * Many holes in a single chunk
+ *
+ * Should look like this:
+ * Fetch extent:	A  _  B  _  C  _  D  _  E  _  F
+ * epoch 6 extent:	                              F
+ * epoch 5 extent:	                        E
+ * epoch 4 extent:	                  D
+ * epoch 3 extent:	            C
+ * epoch 2 extent:	      B
+ * epoch 1 extent:	A
+ * index:		0  1  2  3  4  5  6  7  8  9  10
+ */
+static void
+fetch_with_hole3(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 20,
+		.chunksize = 16,
+		.rec_size = 1,
+		.layout = {
+			{.data = "A", .sel = {0, 0}, .ful = {0, 0} },
+			{.data = "", .sel = {1, 1}, .ful = {1, 1},
+				.is_hole = true},
+			{.data = "B", .sel = {2, 2}, .ful = {2, 2} },
+			{.data = "", .sel = {3, 3}, .ful = {3, 3},
+				.is_hole = true},
+			{.data = "C", .sel = {4, 4}, .ful = {4, 4} },
+			{.data = "", .sel = {5, 5}, .ful = {5, 5},
+				.is_hole = true},
+			{.data = "D", .sel = {6, 6}, .ful = {6, 6} },
+			{.data = "", .sel = {7, 7}, .ful = {7, 7},
+				.is_hole = true},
+			{.data = "E", .sel = {8, 8}, .ful = {8, 8} },
+			{.data = "", .sel = {9, 9}, .ful = {9, 9},
+				.is_hole = true},
+			{.data = "F", .sel = {10, 10}, .ful = {10, 10} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">A|B|C|D|E|F|>A|>B|>C|>D|>E|>F|");
+	ASSERT_CSUM(ctx, "NNNN");
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+/**
+ * 2 holes, first spans a whole chunk, second starts in middle of a chunk and
+ * ends in middle of next chunk
+ */
+static void
+fetch_with_hole4(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 23,
+		.chunksize = 8,
+		.rec_size = 1,
+		.layout = {
+			{.data = "", .sel = {0, 7}, .ful = {0, 7},
+				.is_hole = true},
+			{.data = "ABCDEF", .sel = {8, 13}, .ful = {8, 13} },
+			{.data = "", .sel = {14, 17}, .ful = {14, 17},
+				.is_hole = true},
+			{.data = "GHIJKL", .sel = {18, 23}, .ful = {8, 23} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW("");
+	ASSERT_CSUM_EMPTY(ctx, 0);
+	ASSERT_CSUM_IDX(ctx, "SSSS", 1);
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+/**
+ * Will create a new checksum for the first chunk, but there's a hole that
+ * continues into the next chunk.
+ *
+ * Should look like this:
+ * Fetch extent:	A  B  C  _ | _  _  _  _ | _  G  H      |
+ * epoch 3 extent:	           |            |    G  H      |
+ * epoch 2 extent:	   B  C    |            |              |
+ * epoch 1 extent:	A          |            |              |
+ * index:		0  1  2  3 | 4  5  6  7 | 8  9  10  11 |
+ */
+static void
+fetch_with_hole5(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 12,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ABC", .sel = {0, 0}, .ful = {0, 0} },
+			{.data = "BC", .sel = {1, 2}, .ful = {1, 2} },
+			{.data = "", .sel = {3, 8}, .ful = {3, 8},
+				.is_hole = true},
+			{.data = "GH", .sel = {9, 10}, .ful = {9, 10} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">A|BC|>A|>BC|");
+	ASSERT_CSUM(ctx, "NNNN");
+	ASSERT_CSUM_EMPTY(ctx, 1);
+	ASSERT_CSUM_IDX(ctx, "SSSS", 2);
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+/**
+ * Will skip the first chunk of the request, then create a checksum for the A
+ * in the second chunk. Request has two chunks even though it is only 1 chunk
+ * in length.
+ *
+ * Should look like this:
+ * Fetch extent:	   _  _  _ | A          |              |
+ * epoch 1 extent:	           | A  B  C  D |              |
+ * index:		0  1  2  3 | 4  5  6  7 | 8  9  10  11 |
+ */
+static void
+fetch_with_hole6(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 1,
+		.request_len = 4,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "", .sel = {1, 3}, .ful = {1, 3},
+				.is_hole = true},
+			{.data = "ABCD", .sel = {4, 4}, .ful = {4, 7} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">A|>ABCD|");
+	ASSERT_CSUM_EMPTY(ctx, 0);
+	ASSERT_CSUM_IDX(ctx, "NNNN", 1);
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+/**
+ * If multiple recx are part of an iod, there will be more biov's than needed
+ * for a single recx.
+ *
+ * Fetch extent:	A  B  C  D | E
+ * epoch 2 extent:	           |    F  G  H | I  J  K
+ * epoch 1 extent:	A  B  C  D | E          |
+ * index:		0  1  2  3 | 4  5  6  7 | 8  9  10
+*/
+static void
+request_is_only_part_of_biovs(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 5,
+		.chunksize = 4,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ABCDE",
+				.sel = {0, 4}, .ful = {0, 4} },
+			{.data = "FGHIJK",
+				.sel = {5, 10}, .ful = {5, 10} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW("");
+	ASSERT_CSUM(ctx, "SSSSSSSS");
 
 	/** clean up */
 	test_case_destroy(&ctx);
 }
 
 static void
-test_larger_records(void **state)
+larger_records(void **state)
 {
 	struct vos_fetch_test_context	ctx;
 	const int			buf_len = 1024;
@@ -757,14 +1332,15 @@ test_larger_records(void **state)
 	/** 1 record from 1st extent (mnop) and 2 records from 2nd extent
 	 * (ABCDEFGH)
 	 */
-	FAKE_UPDATE_SAW("mnop|ABCDEFGH|mnop|ABCDEFGH|");
+	FAKE_UPDATE_SAW(">mnop|ABCDEFGH|>mnop|>ABCDEFGH|");
+	ASSERT_CSUM(ctx, "SSSSNNNN");
 
 	/** clean up */
 	test_case_destroy(&ctx);
 }
 
 static void
-test_larger_records2(void **state)
+larger_records2(void **state)
 {
 	struct vos_fetch_test_context	ctx;
 	char				*large_data01;
@@ -779,7 +1355,7 @@ test_larger_records2(void **state)
 	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
 		.request_len = 12,
-		.chunksize = 1024*32,
+		.chunksize = 1024 * 32,
 		.rec_size = 1024,
 		.layout = {
 			{.data = large_data02,
@@ -814,25 +1390,56 @@ int teardown(void **state)
 	return 0;
 }
 
-/* Convenience macros for unit tests */
+/* Convenience macro for unit tests */
 #define	TA(desc, test_fn) \
-	{ "SRV_CSUM_ARRAY" desc, test_fn, setup, teardown }
+	{ desc, test_fn, setup, teardown }
 
 static const struct CMUnitTest array_tests[] = {
-	TA("01: Partial Extents, but chunks align",
-	  with_aligned_chunks_csums_are_copied),
-	TA("02: Partial Extents, chunks don't align",
-	  with_unaligned_chunks_csums_new_csum_is_created),
-	TA("03: Partial Extents, first extent isn't aligned",
-	  with_unaligned_first_chunk),
-	TA("04: Partial Extents, extent smaller than chunk",
-	  with_extent_smaller_than_chunk),
-	TA("05: Extent is larger than chunk", with_extent_larger_than_request),
-	TA("06: Fetch smaller than chunk", with_fetch_smaller_than_chunk),
-	TA("07: Partial extent/unaligned extent", more_partial_extent_tests),
-	TA("08: Fetch with larger records", test_larger_records),
-	TA("09: Fetch with larger records", test_larger_records2),
-	TA("10: Determine if need new checksum", need_new_checksum_tests),
+	TA("SRV_CSUM_ARRAY01: Whole extent requested",
+	   request_that_matches_single_extent),
+	TA("SRV_CSUM_ARRAY02: Whole extent requested, broken into multiple "
+	   "chunks", request_that_matches_single_extent_multiple_chunks),
+	TA("SRV_CSUM_ARRAY03: Whole extent requested, broken into multiple "
+	   "chunks, not aligned to chunk",
+	   request_that_matches_single_extent_multiple_chunks_not_aligned),
+	TA("SRV_CSUM_ARRAY04: Multiple aligned extents requested",
+	   request_that_matches_multiple_aligned_extents),
+	TA("SRV_CSUM_ARRAY05: Multiple aligned extents requested",
+	   request_that_matches_multiple_aligned_extents2),
+	TA("SRV_CSUM_ARRAY06: Request more than exists",
+	   request_that_is_more_than_extents),
+	TA("SRV_CSUM_ARRAY07: Partial Extents, first part of chunk",
+	   partial_chunk_request0),
+	TA("SRV_CSUM_ARRAY08: Partial Extents, last part of chunk",
+	   partial_chunk_request1),
+	TA("SRV_CSUM_ARRAY09: Partial Extents, middle part of chunk",
+	   partial_chunk_request2),
+	TA("SRV_CSUM_ARRAY10: Partial chunks and full chunks",
+	   request_needs_new_and_copy),
+	TA("SRV_CSUM_ARRAY11: Partial Extents, chunks don't align",
+	   unaligned_chunks_csums_new_csum_is_created),
+	TA("SRV_CSUM_ARRAY12: Partial Extents, first extent isn't aligned",
+	   unaligned_first_chunk),
+	TA("SRV_CSUM_ARRAY13: Partial Extents, extent smaller than chunk",
+	   extent_smaller_than_chunk),
+	TA("SRV_CSUM_ARRAY14: Extent is larger than chunk",
+	   extent_larger_than_request),
+	TA("SRV_CSUM_ARRAY15: Full and partial chunks",
+	   fetch_multiple_unaligned_extents),
+	TA("SRV_CSUM_ARRAY16: Many sequential extents", many_extents),
+	TA("SRV_CSUM_ARRAY17: Begins with hole",
+	   request_that_begins_before_extent),
+	TA("SRV_CSUM_ARRAY18: Hole in middle", fetch_with_hole),
+	TA("SRV_CSUM_ARRAY19: Hole in middle", fetch_with_hole2),
+	TA("SRV_CSUM_ARRAY20: Many holes in middle", fetch_with_hole3),
+	TA("SRV_CSUM_ARRAY21: First chunk is hole", fetch_with_hole4),
+	TA("SRV_CSUM_ARRAY22: Handle holes while creating csums",
+	   fetch_with_hole5),
+	TA("SRV_CSUM_ARRAY22: Hole spans past first chunk", fetch_with_hole6),
+	TA("SRV_CSUM_ARRAY23: First recx request of multiple",
+	   request_is_only_part_of_biovs),
+	TA("SRV_CSUM_ARRAY24: Fetch with larger records1", larger_records),
+	TA("SRV_CSUM_ARRAY25: Fetch with larger records2", larger_records2),
 };
 
 /**
@@ -897,9 +1504,18 @@ static const struct CMUnitTest sv_tests[] = {
 };
 
 int
-main(void)
+main(int argc, char **argv)
 {
-	int rc = 0;
+	int	rc = 0;
+#if CMOCKA_FILTER_SUPPORTED == 1 /** for cmocka filter(requires cmocka 1.1.5) */
+	char	 filter[1024];
+
+	if (argc > 1) {
+		snprintf(filter, 1024, "*%s*", argv[1]);
+		cmocka_set_test_filter(filter);
+	}
+#endif
+
 
 	rc += cmocka_run_group_tests_name(
 		"Storage and retrieval of checksums for Array Type",

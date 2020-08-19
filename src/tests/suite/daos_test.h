@@ -302,6 +302,8 @@ int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
+int run_daos_dedup_test(int rank, int size, int *sub_tests,
+			   int sub_tests_size);
 unsigned int daos_checksum_test_arg2type(char *optarg);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
@@ -389,6 +391,9 @@ int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 int addition_small_sub_setup(void **state);
 
+/* dmg cmd json output parser APIs */
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+			daos_mgmt_pool_info_t *pools);
 static inline void
 daos_test_print(int rank, char *message)
 {

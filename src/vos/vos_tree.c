@@ -439,7 +439,7 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	/** at this point, it's assumed that enough was allocated for the irec
 	 *  to hold a checksum of length csum->cs_len
 	 */
-	if (dth != NULL && dth->dth_flags & DTE_LEADER &&
+	if (dtx_is_valid_handle(dth) && dth->dth_flags & DTE_LEADER &&
 	    irec->ir_ex_addr.ba_type == DAOS_MEDIA_SCM &&
 	    DAOS_FAIL_CHECK(DAOS_VC_DIFF_REC)) {
 		void	*addr;
@@ -557,7 +557,11 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 	int			 rc;
 
 	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
-	umem_tx_add(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund));
+	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund),
+			  POBJ_XADD_NO_SNAPSHOT);
+	if (rc != 0)
+		return rc;
+
 	rec->rec_off = rbund->rb_off;
 	rbund->rb_off = UMOFF_NULL; /* taken over by btree */
 
@@ -1051,7 +1055,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		vos_ilog_ts_mark(ts_set, ilog);
 
 	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, parent,
-			    info, ts_set, true);
+			    info, ts_set, true,
+			    (flags & VOS_OF_REPLAY_PC) != 0);
 
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;

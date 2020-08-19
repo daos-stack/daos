@@ -913,8 +913,8 @@ rebuild_multiple_tgts(void **state)
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
 				daos_exclude_server(arg->pool.pool_uuid,
-						    arg->dmg_config,
 						    arg->group,
+						    arg->dmg_config,
 						    &arg->pool.svc,
 						    rank);
 				if (++fail_cnt >= 2)

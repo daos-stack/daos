@@ -111,6 +111,8 @@ struct dfs_obj {
 struct dfs {
 	/** flag to indicate whether the dfs is mounted */
 	bool			mounted;
+	/** flag to indicate whether dfs is mounted with balanced mode (DTX) */
+	bool			use_dtx;
 	/** lock for threadsafety */
 	pthread_mutex_t		lock;
 	/** uid - inherited from container. */
@@ -735,8 +737,8 @@ fopen:
  * object first.
  */
 static inline int
-create_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
-	   daos_oclass_id_t cid, dfs_obj_t *dir)
+create_dir(dfs_t *dfs, daos_handle_t parent_oh, daos_oclass_id_t cid,
+	   dfs_obj_t *dir)
 {
 	int			rc;
 
@@ -765,7 +767,7 @@ open_dir(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, int flags,
 	int			rc;
 
 	if (flags & O_CREAT) {
-		rc = create_dir(dfs, th, parent_oh, cid, dir);
+		rc = create_dir(dfs, parent_oh, cid, dir);
 		if (rc)
 			return rc;
 
@@ -1169,6 +1171,11 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (dfs == NULL)
 		D_GOTO(err_prop, rc = ENOMEM);
 
+	dfs->use_dtx = false;
+	d_getenv_bool("DFS_USE_DTX", &dfs->use_dtx);
+	if (dfs->use_dtx)
+		D_DEBUG(DB_ALL, "DFS mount with distributed transactions.\n");
+
 	dfs->poh = poh;
 	dfs->coh = coh;
 	dfs->amode = amode;
@@ -1282,6 +1289,7 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 /* Structure of global buffer for dfs */
 struct dfs_glob {
 	uint32_t		magic;
+	bool			use_dtx;
 	int32_t			amode;
 	uid_t			uid;
 	gid_t			gid;
@@ -1298,6 +1306,7 @@ swap_dfs_glob(struct dfs_glob *dfs_params)
 	D_ASSERT(dfs_params != NULL);
 
 	D_SWAP32S(&dfs_params->magic);
+	D_SWAP32S(&dfs_params->use_dtx);
 	D_SWAP32S(&dfs_params->amode);
 	D_SWAP32S(&dfs_params->uid);
 	D_SWAP32S(&dfs_params->gid);
@@ -1358,6 +1367,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	/* init global handle */
 	dfs_params = (struct dfs_glob *)glob->iov_buf;
 	dfs_params->magic	= DFS_GLOB_MAGIC;
+	dfs_params->use_dtx	= dfs->use_dtx;
 	dfs_params->amode	= dfs->amode;
 	dfs_params->uid		= dfs->uid;
 	dfs_params->gid		= dfs->gid;
@@ -1423,6 +1433,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 
 	dfs->poh = poh;
 	dfs->coh = coh;
+	dfs->use_dtx = dfs_params->use_dtx;
 	dfs->amode = (flags == 0) ? dfs_params->amode : (flags & O_ACCMODE);
 	dfs->uid = dfs_params->uid;
 	dfs->gid = dfs_params->gid;
@@ -1563,9 +1574,10 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
 	new_dir.name[DFS_MAX_PATH] = '\0';
-	rc = create_dir(dfs, th, parent->oh, cid, &new_dir);
+
+	rc = create_dir(dfs, parent->oh, cid, &new_dir);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	entry.oid = new_dir.oid;
 	entry.mode = S_IFDIR | mode;
@@ -1573,12 +1585,15 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	entry.chunk_size = 0;
 
 	rc = insert_entry(parent->oh, th, name, true, entry);
+	if (rc != 0) {
+		daos_obj_close(new_dir.oh, NULL);
+		return rc;
+	}
+
+	rc = daos_obj_close(new_dir.oh, NULL);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		return daos_der2errno(rc);
 
-	daos_obj_close(new_dir.oh, NULL);
-
-out:
 	return rc;
 }
 
@@ -1678,6 +1693,15 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 	if (rc)
 		return rc;
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			D_GOTO(out, daos_der2errno(rc));
+		}
+	}
+
+restart:
 	/** Even with cond punch, need to fetch the entry to check the type */
 	rc = fetch_entry(parent->oh, th, name, false, &exists, &entry);
 	if (rc)
@@ -1721,9 +1745,34 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc == -DER_TX_RESTART) {
+			rc = daos_tx_restart(th, NULL);
+			if (rc) {
+				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
+				D_GOTO(out, daos_der2errno(rc));
+			}
+			goto restart;
+		} else if (rc) {
+			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			D_GOTO(out, daos_der2errno(rc));
+		}
+	}
+
 	if (oid)
 		oid_cp(oid, entry.oid);
 out:
+	if (daos_handle_is_valid(th)) {
+		int ret;
+
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
+	}
 	return rc;
 }
 
@@ -2255,6 +2304,15 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	obj->flags = flags;
 	oid_cp(&obj->parent_oid, parent->oid);
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			D_GOTO(out, daos_der2errno(rc));
+		}
+	}
+
+restart:
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		rc = open_file(dfs, th, parent, flags, cid, chunk_size, obj);
@@ -2282,10 +2340,35 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 		D_GOTO(out, rc = EINVAL);
 	}
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc == -DER_TX_RESTART) {
+			rc = daos_tx_restart(th, NULL);
+			if (rc) {
+				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
+				D_GOTO(out, daos_der2errno(rc));
+			}
+			goto restart;
+		} else if (rc) {
+			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			D_GOTO(out, daos_der2errno(rc));
+		}
+	}
+
 	*_obj = obj;
 
 	return rc;
 out:
+	if (daos_handle_is_valid(th)) {
+		int ret;
+
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
+	}
 	D_FREE(obj);
 	return rc;
 }
@@ -3326,6 +3409,15 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	if (rc)
 		return rc;
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			D_GOTO(out, daos_der2errno(rc));
+		}
+	}
+
+restart:
 	rc = fetch_entry(parent->oh, th, name, true, &exists, &entry);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
@@ -3424,7 +3516,32 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc == -DER_TX_RESTART) {
+			rc = daos_tx_restart(th, NULL);
+			if (rc) {
+				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
+				D_GOTO(out, daos_der2errno(rc));
+			}
+			goto restart;
+		} else if (rc) {
+			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			D_GOTO(out, daos_der2errno(rc));
+		}
+	}
+
 out:
+	if (daos_handle_is_valid(th)) {
+		int ret;
+
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
+	}
 	if (entry.value) {
 		D_ASSERT(S_ISLNK(entry.mode));
 		D_FREE(entry.value);
@@ -3474,6 +3591,15 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 	if (rc)
 		return rc;
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			D_GOTO(out, daos_der2errno(rc));
+		}
+	}
+
+restart:
 	rc = fetch_entry(parent1->oh, th, name1, true, &exists, &entry1);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name1, rc);
@@ -3523,7 +3649,32 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 		D_GOTO(out, rc);
 	}
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc == -DER_TX_RESTART) {
+			rc = daos_tx_restart(th, NULL);
+			if (rc) {
+				D_ERROR("daos_tx_restart() failed (%d)\n", rc);
+				D_GOTO(out, daos_der2errno(rc));
+			}
+			goto restart;
+		} else if (rc) {
+			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			D_GOTO(out, daos_der2errno(rc));
+		}
+	}
+
 out:
+	if (daos_handle_is_valid(th)) {
+		int ret;
+
+		ret = daos_tx_close(th,  NULL);
+		if (ret) {
+			D_ERROR("daos_tx_close() failed (%d)\n", ret);
+			if (rc == 0)
+				rc = daos_der2errno(ret);
+		}
+	}
 	if (entry1.value) {
 		D_ASSERT(S_ISLNK(entry1.mode));
 		D_FREE(entry1.value);

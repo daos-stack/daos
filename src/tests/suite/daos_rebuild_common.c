@@ -56,7 +56,8 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
 				 args[0]->group, &args[0]->pool.alive_svc,
 				 rank);
-		sleep(5);
+		print_message("sleep 120 seconds for rebuild to start\n");
+		sleep(120);
 		/* If one rank is killed, then it has to exclude all
 		 * targets on this rank.
 		 **/

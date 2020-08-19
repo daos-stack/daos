@@ -71,7 +71,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		D_GOTO(out, rc);
 
 	rc = vos_ilog_punch(obj->obj_cont, &obj->obj_df->vo_ilog, &epr, NULL,
-			    &obj_info, ts_set, false);
+			    &obj_info, ts_set, false, false);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -107,7 +107,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 			read_conflict = true;
 
 		rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr,
-				    &obj_info, &dkey_info, ts_set, false);
+				    &obj_info, &dkey_info, ts_set, false,
+				    false);
 		if (rc)
 			D_GOTO(out, rc);
 
@@ -232,9 +233,14 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
-	daos_epoch_range_t	 epr = {0, dth ? dth->dth_epoch : epoch};
+	daos_epoch_range_t	 epr = { 0 };
 	bool			 read_conflict = false;
 	int			 rc = 0;
+
+	if (dtx_is_valid_handle(dth))
+		epr.epr_hi = dth->dth_epoch;
+	else
+		epr.epr_hi = epoch;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
 		DP_UOID(oid), epr.epr_hi);
@@ -243,7 +249,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	cont = vos_hdl2cont(coh);
 
 	rc = vos_ts_set_allocate(&ts_set, flags, akey_nr,
-				 dth ? &dth->dth_xid.dti_uuid : NULL);
+				 dtx_is_valid_handle(dth) ?
+				 &dth->dth_xid.dti_uuid : NULL);
 	if (rc != 0)
 		goto reset;
 
@@ -260,7 +267,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto reset;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, rc = -DER_NOMEM);
@@ -363,7 +370,7 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 	umm = vos_obj2umm(oiter->it_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
-			    oiter->it_epr.epr_hi, oiter->it_punched,
+			    oiter->it_epr.epr_hi, &oiter->it_punched,
 			    NULL, &oiter->it_ilog_info);
 
 	if (rc != 0)
@@ -381,7 +388,7 @@ out:
 static int
 key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 		 daos_key_t *key, int flags, daos_handle_t *sub_toh,
-		 daos_epoch_range_t *epr, daos_epoch_t *punched,
+		 daos_epoch_range_t *epr, struct vos_punch_record *punched,
 		 struct vos_ilog_info *info)
 {
 	struct vos_krec_df	*krec = NULL;
@@ -405,7 +412,8 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 	if (rc != 0)
 		goto fail;
 
-	if (punched && *punched < info->ii_prior_punch)
+	if (punched && vos_epc_punched(punched->pr_epc, punched->pr_minor_epc,
+				       &info->ii_prior_punch))
 		*punched = info->ii_prior_punch;
 
 	return 0;
@@ -519,7 +527,9 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	if (rc != 0)
 		return rc;
 
-	if (info->ii_punched < oiter->it_ilog_info.ii_prior_punch)
+	if (vos_epc_punched(info->ii_punched.pr_epc,
+			    info->ii_punched.pr_minor_epc,
+			    &oiter->it_ilog_info.ii_prior_punch))
 		info->ii_punched = oiter->it_ilog_info.ii_prior_punch;
 
 	if (type == VOS_ITER_RECX) {
@@ -930,8 +940,11 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	it_entry->ie_epoch	 = key.sk_epoch;
 	it_entry->ie_minor_epc	 = key.sk_minor_epc;
-	if (it_entry->ie_epoch <= oiter->it_punched)
+	if (vos_epc_punched(it_entry->ie_epoch, it_entry->ie_minor_epc,
+			    &oiter->it_punched)) {
+		/* entry is covered by a key/object punch */
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+	}
 	it_entry->ie_rsize	 = rbund.rb_rsize;
 	it_entry->ie_ver	 = rbund.rb_ver;
 	it_entry->ie_recx.rx_idx = 0;
@@ -1038,7 +1051,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	filter.fr_ex.ex_lo = 0;
 	filter.fr_ex.ex_hi = ~(0ULL);
 	filter.fr_epr = oiter->it_epr;
-	filter.fr_punch = oiter->it_punched;
+	filter.fr_punch_epc = oiter->it_punched.pr_epc;
+	filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
 	options = recx_get_flags(oiter);
 	rc = evt_iter_prepare(rx_toh, options, &filter,
 			      &oiter->it_hdl);
@@ -1155,7 +1169,6 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	vos_ilog_fetch_init(&oiter->it_ilog_info);
 	oiter->it_iter.it_type = type;
 	oiter->it_epr = param->ip_epr;
-	oiter->it_punched = 0;
 	oiter->it_epc_expr = param->ip_epc_expr;
 	oiter->it_flags = param->ip_flags;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
@@ -1372,7 +1385,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		filter.fr_ex.ex_lo = 0;
 		filter.fr_ex.ex_hi = ~(0ULL);
 		filter.fr_epr = oiter->it_epr;
-		filter.fr_punch = oiter->it_punched;
+		filter.fr_punch_epc = oiter->it_punched.pr_epc;
+		filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
 		options = recx_get_flags(oiter);
 		rc = evt_iter_prepare(toh, options, &filter, &oiter->it_hdl);
 		break;
@@ -1573,8 +1587,8 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
-				&oiter->it_epr, discard, oiter->it_punched,
-				&oiter->it_ilog_info);
+				&oiter->it_epr, discard,
+				oiter->it_punched.pr_epc, &oiter->it_ilog_info);
 
 	if (rc == 1) {
 		/* Incarnation log is empty so delete the key */

@@ -43,7 +43,6 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 	char			dkey[] = "slip dkey";
 	char			verify_buf[REC_MAX_LEN];
 	char			rec[REC_MAX_LEN], *rec_verify;
-	daos_epoch_t		epoch;
 
 	ioreq_init(&req, coh, oid, DAOS_IOD_SINGLE, arg);
 	if (update && !arg->myrank)
@@ -58,17 +57,16 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 		for (i = 0, k = 0; i < gs_dkeys; i++) {
 			daos_size_t		rec_size;
 
-			daos_tx_open(coh, &ths[i], 0, NULL);
-			daos_tx_hdl2epoch(ths[i], &epoch);
+			MUST(daos_tx_open(coh, &ths[i], 0, NULL));
 			memset(rec, 0, REC_MAX_LEN);
-			snprintf(rec, REC_MAX_LEN, VAL_FMT, epoch);
+			snprintf(rec, REC_MAX_LEN, VAL_FMT, (unsigned long)i);
 			rec_size = strnlen(rec, REC_MAX_LEN);
 			D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%d %s'\n",
 				i, dkey, (int)rec_size, rec);
 			insert_single(dkey, akey, 1100, rec, rec_size, ths[i],
 				      &req);
 
-			daos_tx_commit(ths[i], NULL);
+			MUST(daos_tx_commit(ths[i], NULL));
 			if (snaps_in && i == snaps_in[k]) {
 				MUST(daos_cont_create_snap(coh, &snaps[k++],
 							   NULL, arg->async ?
@@ -97,15 +95,24 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 	rec_verify = verify_data != NULL ?  verify_data : verify_buf;
 
 	for (i = 0, k = 0; i < gs_dkeys; i++) {
+		daos_epoch_t	epoch;
+		daos_handle_t	th;
+
 		memset(rec, 0, REC_MAX_LEN);
-		if (verify_data == NULL) {
-			daos_tx_hdl2epoch(ths[i], &epoch);
-			snprintf(rec_verify, REC_MAX_LEN, VAL_FMT, epoch);
-		}
-		lookup_single(dkey, akey, 1100, rec, REC_MAX_LEN, ths[i], &req);
+		if (verify_data == NULL)
+			snprintf(rec_verify, REC_MAX_LEN, VAL_FMT,
+				 (unsigned long)i);
+		MUST(daos_tx_hdl2epoch(ths[i], &epoch));
+		/*
+		 * daos_tx_open_snap should only open epochs of actual
+		 * snapshots. We are violating this rule for testing purposes.
+		 */
+		MUST(daos_tx_open_snap(coh, epoch, &th, NULL));
+		lookup_single(dkey, akey, 1100, rec, REC_MAX_LEN, th, &req);
 		assert_int_equal(req.iod[0].iod_size,
 				 strnlen(rec_verify, REC_MAX_LEN));
 		assert_memory_equal(rec, rec_verify, req.iod[0].iod_size);
+		MUST(daos_tx_close(th, NULL));
 	}
 }
 
@@ -166,10 +173,10 @@ test_epoch_aggregate(void **argp)
 			   /* verification data */ NULL);
 
 	for (i = 0 ; i < 100; i++) {
-		daos_tx_hdl2epoch(ths[i], &epoch);
+		MUST(daos_tx_hdl2epoch(ths[i], &epoch));
 		if (epc_hi < epoch)
 			epc_hi = epoch;
-		daos_tx_close(ths[i], NULL);
+		MUST(daos_tx_close(ths[i], NULL));
 	}
 
 	/* Trigger aggregation to epc_hi */
