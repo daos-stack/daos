@@ -37,11 +37,6 @@ void crt_opc_map_destroy(struct crt_opc_map *map);
 struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 				    int locked);
 
-/** crt_hg.c */
-int
-crt_na_class_get_addr(na_class_t *na_class,
-		char *addr_str, na_size_t *str_size);
-
 /** crt_context.c */
 /* return values of crt_context_req_track, in addition to standard
  * gurt error values.
@@ -60,6 +55,10 @@ void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
 int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
 void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);
 void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
+
+/** crt_hlct.c */
+uint64_t crt_hlct_get(void);
+void crt_hlct_sync(uint64_t msg);
 
 /** some simple helper functions */
 

@@ -4,7 +4,7 @@ from prereq_tools import GitRepoRetriever
 
 def define_checksum_timing(build, env, prereqs):
     """Define the Checksum Timing build"""
-    checksum_timing_libs = ['daos_common']
+    checksum_timing_libs = ['daos_common', 'gurt']
     AddOption('--mchecksum',
               dest='mchecksum',
               action='store_true',
@@ -52,7 +52,7 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
-    daos_build.test(tenv, 'common_test',
+    common_test = daos_build.test(tenv, 'common_test',
                     ['common_test.c', 'checksum_tests.c',
                      'misc_tests.c'],
                     LIBS=['daos_common', 'daos_tests', 'gurt', 'cart',
@@ -68,6 +68,8 @@ def scons():
     daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv, prereqs)
+
+    tenv.Install('$PREFIX/bin/', [common_test])
 
     unit_env = tenv.Clone()
     # Some syscalls are aliased when fortification is enabled, which makes

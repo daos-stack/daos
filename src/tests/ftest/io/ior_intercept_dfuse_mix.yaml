@@ -31,7 +31,7 @@ ior:
     test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
-    daos_destroy: False
+    dfs_destroy: False
     iorflags:
         ssf:
           flags: "-k -D 300 -v -w -r"
@@ -40,6 +40,6 @@ ior:
           block_size: '8G'
           write_x: 1
           read_x: 1
-          daos_oclass: "SX"
+          dfs_oclass: "SX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
