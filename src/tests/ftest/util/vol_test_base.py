@@ -45,6 +45,13 @@ class VolTestBase(TestWithServers):
         super(VolTestBase, self).__init__(*args, **kwargs)
         self.dfuse = None
 
+    def setUp(self):
+        """Set up each test case."""
+        # obtain separate logs
+        self.update_log_file_names()
+        # Start the servers and agents
+        super(VolTestBase, self).setUp()
+
     def tearDown(self):
         """Tear down each test case."""
         try:
@@ -88,7 +95,7 @@ class VolTestBase(TestWithServers):
         # test_list = self.params.get("daos_vol_tests", default=[])
         testname = self.params.get("testname")
         client_processes = self.params.get("client_processes")
-        # test_error = []
+
         # create pool, container and dfuse mount
         self.add_pool(connect=False)
         self.add_container(self.pool)
