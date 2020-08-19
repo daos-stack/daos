@@ -84,29 +84,6 @@ class MdtestCommand(ExecutableCommand):
         self.stonewall_statusfile = FormattedParameter("-x {}")
         self.depth = FormattedParameter("-z {}")
 
-        # Module DAOS (Not intended to be used as of now, hence all
-        # arguments for DAOS module are commented)
-        # Required arguments
-        #  --daos.pool=STRING            pool uuid
-        #  --daos.svcl=STRING            pool SVCL
-        #  --daos.cont=STRING            container uuid
-
-        # Flags
-        #  --daos.destroy                Destroy Container
-
-        # Optional arguments
-        #  --daos.group=STRING           server group
-        #  --daos.chunk_size=1048576     chunk size
-        #  --daos.oclass=STRING          object class
-
-        # self.daos_pool_uuid = FormattedParameter("--daos.pool {}")
-        # self.daos_svcl = FormattedParameter("--daos.svcl {}")
-        # self.daos_cont = FormattedParameter("--daos.cont {}")
-        # self.daos_group = FormattedParameter("--daos.group {}")
-        # self.daos_chunk_size = FormattedParameter(" --daos.chunk_size {}")
-        # self.daos_oclass = FormattedParameter("--daos.oclass {}")
-        # self.daos_destroy = FormattedParameter("--daos.destroy", True)
-
         # Module DFS
         # Required arguments
         #  --dfs.pool=STRING             DAOS pool uuid

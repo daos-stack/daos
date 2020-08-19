@@ -614,7 +614,7 @@ bsgl_csums_resize(struct vos_io_context *ioc)
 /** Save the checksum to a list that can be retrieved later */
 static int
 save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
-	  struct evt_entry *entry)
+	  struct evt_entry *entry, daos_size_t rec_size)
 {
 	struct dcs_csum_info	*saved_csum_info;
 	int			 rc;
@@ -634,7 +634,7 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	*saved_csum_info = *csum_info;
 	if (entry != NULL)
 		evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext,
-				      saved_csum_info);
+				      saved_csum_info, rec_size);
 
 	ioc->ic_biov_csums_at++;
 
@@ -680,7 +680,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		bio_addr_set_hole(&biov.bi_addr, 1);
 	}
 	if (ci_is_valid(&csum_info))
-		save_csum(ioc, &csum_info, NULL);
+		save_csum(ioc, &csum_info, NULL, 0);
 
 	rc = iod_fetch(ioc, &biov);
 	if (rc != 0)
@@ -836,7 +836,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		bio_iov_set(&biov, ent->en_addr, nr * ent_array.ea_inob);
 
 		if (ci_is_valid(&ent->en_csum)) {
-			rc = save_csum(ioc, &ent->en_csum, ent);
+			rc = save_csum(ioc, &ent->en_csum, ent, rsize);
 			if (rc != 0)
 				return rc;
 			biov_align_lens(&biov, ent, rsize);

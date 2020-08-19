@@ -60,7 +60,7 @@ class OSAOnlineDrain(TestWithServers):
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
-        self.ior_daos_oclass = self.params.get("obj_class",
+        self.ior_dfs_oclass = self.params.get("obj_class",
                                                '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
@@ -110,7 +110,7 @@ class OSAOnlineDrain(TestWithServers):
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.daos_oclass.update(oclass)
+        ior_cmd.dfs_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
         ior_cmd.block_size.update(test[3])
@@ -173,7 +173,7 @@ class OSAOnlineDrain(TestWithServers):
 
         # Drain the pool_uuid, rank and targets
         for val in range(0, num_pool):
-            for oclass, api, test, flags in product(self.ior_daos_oclass,
+            for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
