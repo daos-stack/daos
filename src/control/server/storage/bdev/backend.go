@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -219,32 +220,44 @@ func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeControll
 }
 
 func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*FormatResponse, error) {
+	b.log.Debugf("converting binding results %+v into format response", results)
+
 	resp := &FormatResponse{
 		DeviceResponses: make(DeviceFormatResponses),
 	}
-	resultMap := make(map[string]map[uint32]error)
+	resultMap := make(map[string]map[int]error)
 
 	// build pci address to namespace errors map
 	for _, result := range results {
 		if _, exists := resultMap[result.CtrlrPCIAddr]; !exists {
-			resultMap[result.CtrlrPCIAddr] = make(map[uint32]error)
+			resultMap[result.CtrlrPCIAddr] = make(map[int]error)
 		}
 
-		if _, exists := resultMap[result.CtrlrPCIAddr][result.NsID]; exists {
+		if _, exists := resultMap[result.CtrlrPCIAddr][int(result.NsID)]; exists {
 			return nil, errors.Errorf("duplicate error for ns %d on %s",
 				result.NsID, result.CtrlrPCIAddr)
 		}
 
-		resultMap[result.CtrlrPCIAddr][result.NsID] = result.Err
+		resultMap[result.CtrlrPCIAddr][int(result.NsID)] = result.Err
 	}
 
 	// populate device responses for failed/formatted namespacess
 	for addr, nsErrMap := range resultMap {
-		var formatted, failed []uint32
+		var formatted, failed, all []int
+		var firstErr error
 
-		for nsID, err := range nsErrMap {
+		for nsID := range nsErrMap {
+			all = append(all, nsID)
+		}
+		sort.Ints(all)
+		for _, nsID := range all {
+			err := nsErrMap[nsID]
 			if err != nil {
 				failed = append(failed, nsID)
+				if firstErr == nil {
+					firstErr = errors.Wrapf(err, "namespace %d", nsID)
+				}
+				continue
 			}
 			formatted = append(formatted, nsID)
 		}
@@ -252,9 +265,10 @@ func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*Form
 		b.log.Debugf("formatted namespaces %v on %s", formatted, addr)
 
 		devResp := new(DeviceFormatResponse)
-		if len(failed) > 0 {
+		if firstErr != nil {
 			devResp.Error = FaultFormatError(addr, errors.Errorf(
-				"failed to format namespaces %v", failed))
+				"failed to format namespaces %v (%s)",
+				failed, firstErr))
 			resp.DeviceResponses[addr] = devResp
 			continue
 		}
@@ -278,17 +292,23 @@ func (b *spdkBackend) format(class storage.BdevClass, deviceList []string) (*For
 			resp.DeviceResponses[device] = &DeviceFormatResponse{
 				Formatted: true,
 			}
-			b.log.Debugf("%s format for non-NVMe bdev skipped on %s",
-				class, device)
+			b.log.Debugf("%s format for non-NVMe bdev skipped on %s", class, device)
 		}
 
 		return resp, nil
 	case storage.BdevClassNvme:
+		if len(deviceList) == 0 {
+			return nil, errors.New("empty pci address list in format request")
+		}
 		b.log.Debugf("%s device format on %v", class, deviceList)
 
 		results, err := b.binding.Format(b.log)
 		if err != nil {
 			return nil, errors.Wrapf(err, "spdk format %v", deviceList)
+		}
+
+		if len(results) == 0 {
+			return nil, errors.New("empty results from spdk binding format request")
 		}
 
 		return b.formatRespFromResults(results)
@@ -297,6 +317,9 @@ func (b *spdkBackend) format(class storage.BdevClass, deviceList []string) (*For
 	}
 }
 
+// Format initializes the SPDK environment, defers the call to finalize the same
+// environment and calls private format() routine to format all devices in the
+// request device list in a manner specific to the supplied bdev class.
 func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	spdkOpts := spdk.EnvOptions{
 		ShmID:        req.ShmID,
@@ -305,7 +328,7 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 		DisableVMD:   b.IsVMDDisabled(),
 	}
 
-	// provide bdev as whitelist so only formatting device is bound
+	// provide bdev as whitelist so only formatting devices are bound
 	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
 		return nil, errors.Wrap(err, "failed to init spdk env")
 	}
@@ -354,6 +377,9 @@ func detectVMD() ([]string, error) {
 	return vmdAddrs, nil
 }
 
+// Prepare will execute SPDK setup.sh script to rebind PCI devices as selected
+// by bdev_include and bdev_exclude white and black list filters provided in the
+// server config file. This will make the devices available though SPDK.
 func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	resp := &PrepareResponse{}
 

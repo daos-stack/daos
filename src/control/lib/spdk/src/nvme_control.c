@@ -148,7 +148,7 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 				       sizeof(res->ctrlr_pci_addr),
 				       &centry->pci_addr);
 		if (rc != 0) {
-			rc = -NVMEC_ERR_PCI_ADDR_FMT;
+			res->rc = -NVMEC_ERR_PCI_ADDR_FMT;
 			return res;
 		}
 

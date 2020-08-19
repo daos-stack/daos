@@ -198,10 +198,19 @@ func TestBdevFormat(t *testing.T) {
 			req:    FormatRequest{},
 			expErr: errors.New("empty DeviceList"),
 		},
-		"NVMe single success": {
+		"NVMe success": {
 			req: FormatRequest{
 				Class:      storage.BdevClassNvme,
 				DeviceList: []string{mockSingle.PciAddr},
+			},
+			mbc: &MockBackendConfig{
+				FormatRes: &FormatResponse{
+					DeviceResponses: DeviceFormatResponses{
+						mockSingle.PciAddr: &DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expRes: &FormatResponse{
 				DeviceResponses: DeviceFormatResponses{
@@ -211,60 +220,6 @@ func TestBdevFormat(t *testing.T) {
 				},
 			},
 		},
-		// TODO: re-enable and add cases to backend_test.go
-		//		"NVMe triple success": {
-		//			req: FormatRequest{
-		//				Class: storage.BdevClassNvme,
-		//				DeviceList: []string{
-		//					mockSingle.PciAddr,
-		//					storage.MockNvmeController(2).PciAddr,
-		//					storage.MockNvmeController(3).PciAddr,
-		//				},
-		//			},
-		//			expRes: &FormatResponse{
-		//				DeviceResponses: DeviceFormatResponses{
-		//					mockSingle.PciAddr: &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//					storage.MockNvmeController(2).PciAddr: &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//					storage.MockNvmeController(3).PciAddr: &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//				},
-		//			},
-		//		},
-		//		"NVMe two success, one failure": {
-		//			mbc: &MockBackendConfig{
-		//				FormatFailIdx: 1,
-		//				FormatErr:     errors.New("format failed"),
-		//			},
-		//			req: FormatRequest{
-		//				Class: storage.BdevClassNvme,
-		//				DeviceList: []string{
-		//					mockSingle.PciAddr,
-		//					storage.MockNvmeController(2).PciAddr,
-		//					storage.MockNvmeController(3).PciAddr,
-		//				},
-		//			},
-		//			expRes: &FormatResponse{
-		//				DeviceResponses: DeviceFormatResponses{
-		//					mockSingle.PciAddr: &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//					storage.MockNvmeController(2).PciAddr: &DeviceFormatResponse{
-		//						Formatted: false,
-		//						Error: FaultFormatError(
-		//							storage.MockNvmeController(2).PciAddr,
-		//							errors.New("format failed")),
-		//					},
-		//					storage.MockNvmeController(3).PciAddr: &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//				},
-		//			},
-		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)

@@ -520,6 +520,15 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 				Method:  "BdevFormat",
 				Payload: bdevFormatReqPayload,
 			},
+			bmbc: &bdev.MockBackendConfig{
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						"foo": &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
 			expPayload: &bdev.FormatResponse{
 				DeviceResponses: bdev.DeviceFormatResponses{
 					"foo": &bdev.DeviceFormatResponse{
@@ -536,13 +545,7 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				FormatErr: bdev.FaultUnknown,
 			},
-			expPayload: &bdev.FormatResponse{
-				DeviceResponses: bdev.DeviceFormatResponses{
-					"foo": &bdev.DeviceFormatResponse{
-						Error: bdev.FaultFormatError("foo", bdev.FaultUnknown),
-					},
-				},
-			},
+			expErr: bdev.FaultUnknown,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

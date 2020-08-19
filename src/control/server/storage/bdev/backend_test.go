@@ -28,6 +28,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
@@ -167,6 +168,10 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 }
 
 func TestBdevBackendFormat(t *testing.T) {
+	pci1 := storage.MockNvmeController(1).PciAddr
+	pci2 := storage.MockNvmeController(2).PciAddr
+	pci3 := storage.MockNvmeController(3).PciAddr
+
 	for name, tc := range map[string]struct {
 		req     FormatRequest
 		mec     spdk.MockEnvCfg
@@ -174,48 +179,177 @@ func TestBdevBackendFormat(t *testing.T) {
 		expResp *FormatResponse
 		expErr  error
 	}{
-		// TODO: re-enable and add cases to backend_test.go
-		//		"empty input": {
-		//			req:    FormatRequest{},
-		//			expErr: errors.New("empty pci address in device format request"),
-		//		},
+		"empty device list": {
+			req: FormatRequest{
+				Class: storage.BdevClassNvme,
+			},
+			expErr: errors.New("empty pci address list in format request"),
+		},
 		"unknown device class": {
 			req: FormatRequest{
 				Class:      storage.BdevClass("whoops"),
-				DeviceList: []string{"foo"},
+				DeviceList: []string{pci1},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
 		},
-		// TODO: re-enable and add cases to backend_test.go
-		//		"binding format fail": {
-		//			mnc: spdk.MockNvmeCfg{
-		//				FormatErr: errors.New("spdk says no"),
-		//			},
-		//			req: FormatRequest{
-		//				Class:      storage.BdevClassNvme,
-		//				DeviceList: []string{"foo"},
-		//			},
-		//			expResp: &FormatResponse{
-		//				DeviceResponses: map[string]*DeviceFormatResponse{
-		//					"foo": &DeviceFormatResponse{
-		//						Error: FaultFormatError("foo", errors.New("spdk says no")),
-		//					},
-		//				},
-		//			},
-		//		},
-		//		"binding format success": {
-		//			req: FormatRequest{
-		//				Class:      storage.BdevClassNvme,
-		//				DeviceList: []string{"foo"},
-		//			},
-		//			expResp: &FormatResponse{
-		//				DeviceResponses: map[string]*DeviceFormatResponse{
-		//					"foo": &DeviceFormatResponse{
-		//						Formatted: true,
-		//					},
-		//				},
-		//			},
-		//		},
+		"binding format fail": {
+			mnc: spdk.MockNvmeCfg{
+				FormatErr: errors.New("spdk says no"),
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{pci1},
+			},
+			expErr: errors.New("spdk says no"),
+		},
+		"empty results from binding": {
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{pci1},
+			},
+			expErr: errors.New("empty results from spdk binding format request"),
+		},
+		"binding format success": {
+			mnc: spdk.MockNvmeCfg{
+				FormatRes: []*spdk.FormatResult{
+					{CtrlrPCIAddr: pci1, NsID: 1},
+				},
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{pci1},
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					pci1: &DeviceFormatResponse{
+						Formatted: true,
+					},
+				},
+			},
+		},
+		"multiple ssd and namespace success": {
+			mnc: spdk.MockNvmeCfg{
+				FormatRes: []*spdk.FormatResult{
+					{CtrlrPCIAddr: pci1, NsID: 1},
+					{CtrlrPCIAddr: pci1, NsID: 2},
+					{CtrlrPCIAddr: pci2, NsID: 2},
+					{CtrlrPCIAddr: pci2, NsID: 1},
+					{CtrlrPCIAddr: pci3, NsID: 1},
+					{CtrlrPCIAddr: pci3, NsID: 2},
+				},
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{pci1, pci2, pci3},
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: DeviceFormatResponses{
+					pci1: &DeviceFormatResponse{
+						Formatted: true,
+					},
+					pci2: &DeviceFormatResponse{
+						Formatted: true,
+					},
+					pci3: &DeviceFormatResponse{
+						Formatted: true,
+					},
+				},
+			},
+		},
+		"two success and one failure": {
+			mnc: spdk.MockNvmeCfg{
+				FormatRes: []*spdk.FormatResult{
+					{CtrlrPCIAddr: pci1, NsID: 1},
+					{CtrlrPCIAddr: pci1, NsID: 2},
+					{CtrlrPCIAddr: pci2, NsID: 2},
+					{CtrlrPCIAddr: pci2, NsID: 1},
+					{CtrlrPCIAddr: pci3, NsID: 1},
+					{
+						CtrlrPCIAddr: pci3, NsID: 2,
+						Err: errors.New("spdk format failed"),
+					},
+				},
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{pci1, pci2, pci3},
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: DeviceFormatResponses{
+					pci1: &DeviceFormatResponse{
+						Formatted: true,
+					},
+					pci2: &DeviceFormatResponse{
+						Formatted: true,
+					},
+					pci3: &DeviceFormatResponse{
+						Error: FaultFormatError(
+							pci3,
+							errors.Errorf(
+								"failed to format namespaces [2] (namespace 2: %s)",
+								errors.New("spdk format failed"))),
+					},
+				},
+			},
+		},
+		"multiple namespaces on single controller success": {
+			mnc: spdk.MockNvmeCfg{
+				FormatRes: []*spdk.FormatResult{
+					{CtrlrPCIAddr: pci1, NsID: 1},
+					{CtrlrPCIAddr: pci1, NsID: 2},
+					{CtrlrPCIAddr: pci1, NsID: 3},
+					{CtrlrPCIAddr: pci1, NsID: 4},
+				},
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{pci1},
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: DeviceFormatResponses{
+					pci1: &DeviceFormatResponse{
+						Formatted: true,
+					},
+				},
+			},
+		},
+		"multiple namespaces on single controller failure": {
+			mnc: spdk.MockNvmeCfg{
+				FormatRes: []*spdk.FormatResult{
+					{
+						CtrlrPCIAddr: pci1, NsID: 2,
+						Err: errors.New("spdk format failed"),
+					},
+					{
+						CtrlrPCIAddr: pci1, NsID: 3,
+						Err: errors.New("spdk format failed"),
+					},
+					{
+						CtrlrPCIAddr: pci1, NsID: 4,
+						Err: errors.New("spdk format failed"),
+					},
+					{
+						CtrlrPCIAddr: pci1, NsID: 1,
+						Err: errors.New("spdk format failed"),
+					},
+				},
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{pci1},
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: DeviceFormatResponses{
+					pci1: &DeviceFormatResponse{
+						Error: FaultFormatError(
+							pci1,
+							errors.Errorf(
+								"failed to format namespaces [1 2 3 4] (namespace 1: %s)",
+								errors.New("spdk format failed"))),
+					},
+				},
+			},
+		},
 		"kdev": {
 			req: FormatRequest{
 				Class:      storage.BdevClassKdev,
@@ -268,6 +402,9 @@ func TestBdevBackendFormat(t *testing.T) {
 				return
 			}
 
+			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
+			}
 			common.AssertEqual(t, tc.expResp, gotResp, "device response")
 		})
 	}

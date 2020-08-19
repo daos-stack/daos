@@ -121,7 +121,6 @@ init_wipe_res(void)
 		perror("wipe_res_t calloc");
 		exit(1);
 	}
-	res->next = NULL;
 
 	return res;
 }
@@ -135,8 +134,6 @@ init_ret(void)
 		perror("ret_t calloc");
 		exit(1);
 	}
-	ret->ctrlrs = NULL;
-	ret->wipe_results = NULL;
 
 	return ret;
 }

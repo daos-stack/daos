@@ -102,7 +102,7 @@ struct dev_health_t {
  * list element.
  */
 struct wipe_res_t {
-	char 			 ctrlr_pci_addr[BUFLEN];
+	char			 ctrlr_pci_addr[BUFLEN];
 	uint32_t		 ns_id;
 	int			 rc;
 	char			 info[BUFLEN];

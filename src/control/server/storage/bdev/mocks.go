@@ -29,12 +29,10 @@ import (
 
 type (
 	MockBackendConfig struct {
-		formatIdx       int
 		PrepareResetErr error
 		PrepareResp     *PrepareResponse
 		PrepareErr      error
 		FormatRes       *FormatResponse
-		FormatFailIdx   int
 		FormatErr       error
 		ScanRes         *ScanResponse
 		ScanErr         error
@@ -68,31 +66,10 @@ func (mb *MockBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
 }
 
 func (mb *MockBackend) Format(req FormatRequest) (*FormatResponse, error) {
-	if mb.cfg.FormatRes != nil || mb.cfg.FormatErr != nil {
-		if mb.cfg.FormatErr != nil && mb.cfg.FormatFailIdx == mb.cfg.formatIdx {
-			mb.cfg.formatIdx++
-			return &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{
-					req.DeviceList[0]: &DeviceFormatResponse{
-						Error: FaultFormatError(req.DeviceList[0], mb.cfg.FormatErr),
-					},
-				},
-			}, nil
-		}
-		mb.cfg.formatIdx++
-
-		if mb.cfg.FormatRes != nil {
-			return mb.cfg.FormatRes, nil
-		}
+	if mb.cfg.FormatRes == nil {
+		mb.cfg.FormatRes = new(FormatResponse)
 	}
-
-	return &FormatResponse{
-		DeviceResponses: map[string]*DeviceFormatResponse{
-			req.DeviceList[0]: &DeviceFormatResponse{
-				Formatted: true,
-			},
-		},
-	}, nil
+	return mb.cfg.FormatRes, mb.cfg.FormatErr
 }
 
 func (mb *MockBackend) PrepareReset() error {

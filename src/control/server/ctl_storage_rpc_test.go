@@ -445,6 +445,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				ScanRes: &bdev.ScanResponse{
 					storage.NvmeControllers{mockNvmeController0},
 				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -470,6 +477,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &bdev.ScanResponse{
 					storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
 				},
 			},
 			expResp: &StorageFormatResp{
@@ -574,6 +588,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				ScanRes: &bdev.ScanResponse{
 					storage.NvmeControllers{mockNvmeController0},
 				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -636,6 +657,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				ScanRes: &bdev.ScanResponse{
 					storage.NvmeControllers{mockNvmeController0},
 				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -691,6 +719,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				ScanRes: &bdev.ScanResponse{
 					storage.NvmeControllers{mockNvmeController0, mockNvmeController1},
 				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -699,7 +734,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						State:   new(ResponseState),
 					},
 					{
-						Pciaddr: mockNvmeController1.PciAddr,
+						// this should be id 1 but mock
+						// backend spits same output for
+						// both IO server instances
+						Pciaddr: mockNvmeController0.PciAddr,
 						State:   new(ResponseState),
 					},
 				},
