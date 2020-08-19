@@ -126,12 +126,16 @@ class LogLine():
 
         self.ts = fields[0]
         self._fields = fields[5:]
-        if self._fields[1][-2:] == '()':
-            self.trace = False
-            self.function = self._fields[1][:-2]
-        elif self._fields[1][-1:] == ')':
-            self.trace = True
-        else:
+        try:
+            if self._fields[1][-2:] == '()':
+                self.trace = False
+                self.function = self._fields[1][:-2]
+            elif self._fields[1][-1:] == ')':
+                self.trace = True
+            else:
+                self.trace = False
+        except IndexError:
+            # Catch truncated log lines.
             self.trace = False
 
         if self.trace:
