@@ -74,7 +74,7 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_SHUTDOWN:			return -DER_SHUTDOWN;
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
-	default:				return -DER_UNKNOWN;
+	default:				return -DER_MISC;
 	}
 }
 

@@ -372,7 +372,7 @@ umem_tx_errno(int err)
 
 	if (err == 0) {
 		D_ERROR("Transaction aborted for unknown reason\n");
-		return -DER_UNKNOWN;
+		return -DER_MISC;
 	}
 
 	if (err < 0) {
