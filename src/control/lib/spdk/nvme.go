@@ -284,48 +284,13 @@ func c2GoFormatResult(fmtResult *C.struct_wipe_res_t) *FormatResult {
 	}
 }
 
-// freeReturn frees memory that was allocated in C.
-func freeReturn(retPtr *C.struct_ret_t) {
-	ctrlr := retPtr.ctrlrs
-
-	for ctrlr != nil {
-		ctrlrNext := ctrlr.next
-
-		ns := ctrlr.nss
-		for ns != nil {
-			nsNext := ns.next
-			C.free(unsafe.Pointer(ns))
-			ns = nsNext
-		}
-
-		if ctrlr.dev_health != nil {
-			C.free(unsafe.Pointer(ctrlr.dev_health))
-		}
-
-		C.free(unsafe.Pointer(ctrlr))
-		ctrlr = ctrlrNext
-	}
-
-	wipeRes := retPtr.wipe_results
-
-	for wipeRes != nil {
-		wipeResNext := wipeRes.next
-
-		C.free(unsafe.Pointer(wipeRes))
-		wipeRes = wipeResNext
-	}
-
-	C.free(unsafe.Pointer(retPtr))
-	retPtr = nil
-}
-
 // collectCtrlrs parses return struct to collect slice of nvme.Controller.
 func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller, err error) {
 	if retPtr == nil {
 		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
 	}
 
-	defer freeReturn(retPtr)
+	defer C.clean_ret(retPtr)
 
 	if retPtr.rc != 0 {
 		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc),
@@ -369,7 +334,7 @@ func collectFormatResults(retPtr *C.struct_ret_t, failMsg string) ([]*FormatResu
 		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
 	}
 
-	defer freeReturn(retPtr)
+	defer C.clean_ret(retPtr)
 
 	if retPtr.rc != 0 {
 		return nil, errors.Wrap(FaultBindingFailed(int(retPtr.rc),

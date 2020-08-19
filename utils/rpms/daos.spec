@@ -34,7 +34,7 @@ BuildRequires: json-c-devel
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 %endif
-BuildRequires: libpmem-devel, libpmemobj-devel
+BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
 %if (0%{?suse_version} >= 1500)
 BuildRequires: libprotobuf-c-devel
