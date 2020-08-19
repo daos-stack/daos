@@ -59,7 +59,6 @@ class MacsioTestBase(TestWithServers):
         path = self.params.get("macsio_path", default="")
         macsio = MacsioCommand(path)
         macsio.get_params(self)
-
         # Create all the macsio output files in the same directory as the other
         # test log files
         macsio.set_output_file_path()
