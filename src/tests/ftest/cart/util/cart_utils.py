@@ -137,6 +137,8 @@ class CartUtils():
         if env_CCSA is not None:
             log_dir = "{}-{}".format(test_name, env_CCSA)
         else:
+            # Ensure we don't try to + concat None and string
+            env_CCSA = ""
             log_dir = "{}".format(test_name)
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
