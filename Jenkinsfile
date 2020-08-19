@@ -1014,7 +1014,9 @@ pipeline {
                     }
                     post {
                       always {
-                            unitTestPost valgrind_stash: 'centos7-gcc-unit-valg'
+                            unitTestPost artifacts: ['unit_test_logs/*',
+                                                     'unit_vm_test/**'],
+                                         valgrind_stash: 'centos7-gcc-unit-valg'
                         }
                     }
                 }
@@ -1038,7 +1040,9 @@ pipeline {
                             // caused by code coverage instrumentation affecting
                             // test results, and while code coverage is being
                             // added.
-                            unitTestPost ignore_failure: true
+                            unitTestPost ignore_failure: true,
+                                         artifacts: ['covc_test_logs/*',
+                                                     'covc_vm_test/**']
                         }
                     }
                 } // stage('Unit test Bullseye')
