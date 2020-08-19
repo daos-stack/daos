@@ -320,6 +320,8 @@ func (b *spdkBackend) format(class storage.BdevClass, deviceList []string) (*For
 // Format initializes the SPDK environment, defers the call to finalize the same
 // environment and calls private format() routine to format all devices in the
 // request device list in a manner specific to the supplied bdev class.
+//
+// Remove any stale SPDK lockfiles after format.
 func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	spdkOpts := spdk.EnvOptions{
 		ShmID:        req.ShmID,
@@ -333,6 +335,7 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 		return nil, errors.Wrap(err, "failed to init spdk env")
 	}
 	defer b.binding.FiniSPDKEnv(b.log, spdkOpts)
+	defer b.binding.CleanLockfiles(b.log, req.DeviceList...)
 
 	return b.format(req.Class, req.DeviceList)
 }

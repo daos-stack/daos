@@ -191,26 +191,15 @@ func (n *NvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
 
 // Format devices available through SPDK, destructive operation!
 //
-// Attempt wipe of namespace #1 LBA-0. Afterwards remove lockfile for formatted
-// device.
+// Attempt wipe of namespace #1 LBA-0.
 //
-// TODO: reinstate fall back to full controller format if quick format failed.
+// TODO DAOS-5485: reinstate fall back to full controller format if quick
+//      format failed, this requires reworking C.nvme_format() to format
+//      all available ctrlrs
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
-	//	defer func() {
-	//		err = wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
-	//	}()
-
-	//	csPci := C.CString(ctrlrPciAddr)
-	//	defer C.free(unsafe.Pointer(csPci))
-
 	return collectFormatResults(C.nvme_wipe_namespaces(),
 		"NVMe Format(): C.nvme_wipe_namespaces()")
 
-	//		return // quick format succeeded
-	//	}
-	//
-	//	log.Debugf("%s: %s", wipeMsg, err.Error())
-	//
 	//	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
 	//	_, err = collectCtrlrs(C.nvme_format(csPci), failMsg+"format()")
 	//

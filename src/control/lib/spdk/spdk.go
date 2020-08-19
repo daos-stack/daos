@@ -61,7 +61,7 @@ func Rc2err(label string, rc C.int) error {
 	return fmt.Errorf("%s: %d", label, rc)
 }
 
-// EnvOptions describe paramaters to be used when initializing a process'
+// EnvOptions describe parameters to be used when initializing a process'
 // SPDK environment.
 type EnvOptions struct {
 	ShmID        int      // shared memory segment identifier for SPDK IPC
