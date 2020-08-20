@@ -78,19 +78,19 @@ String leap15_pr_repos() {
     return cachedCommitPragma(pragma: 'PR-repos-leap15')
 }
 
-String unit_repos() {
+String all_pr_repos() {
     Map stage_info = parseStageInfo()
-    return unit_repos(stage_info['target'])
+    return all_pr_repos(stage_info['target'])
 }
 
-String unit_repos(String distro) {
+String all_pr_repos(String distro) {
     string repos = ""
     if (distro == 'centos7') {
         repos = el7_pr_repos()
     } else if (distro == 'leap15') {
         repos = leap15_pr_repos()
     } else {
-       error 'unit_repos not implemented for ' + distro
+       error 'all_pr_repos not implemented for ' + distro
     }
     return repos + ' ' + pr_repos()
 }
@@ -125,13 +125,7 @@ String daos_repos() {
 }
 
 String daos_repos(String distro) {
-    if (distro == 'centos7') {
-        return el7_pr_repos() + ' ' + pr_repos() + ' ' + daos_repo()
-    }
-    if (distro == 'leap15') {
-        return leap15_pr_repos() + ' ' + pr_repos() + ' ' + daos_repo()
-    }
-    error 'daos_repos not implemented for ' + distro
+    return all_pr_repos(distro) + ' ' + daos_repo()
 }
 
 String unit_packages() {
@@ -149,7 +143,8 @@ String unit_packages() {
                            'python36-tabulate '
         if (quickbuild()) {
             // TODO: these should be gotten from the Requires: of RPM
-            packages += " spdk-tools mercury boost-devel libisa-l_crypto"
+            packages += " spdk-tools mercury-2.0.0-rc1" +
+                        " boost-devel libisa-l_crypto"
         }
         return packages
     } else {
@@ -559,7 +554,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                                ' --build-arg REPOS="' + all_pr_repos() + '"'
                         }
                     }
                     steps {
@@ -607,7 +602,7 @@ pipeline {
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                                ' --build-arg REPOS="' + all_pr_repos() + '"'
                         }
                     }
                     steps {
@@ -653,7 +648,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                                ' --build-arg REPOS="' + all_pr_repos() + '"'
                         }
                     }
                     steps {
@@ -698,7 +693,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                                ' --build-arg REPOS="' + all_pr_repos() + '"'
                         }
                     }
                     steps {
@@ -866,7 +861,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_LEAP15 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                                ' --build-arg REPOS="' + all_pr_repos() + '"'
                         }
                     }
                     steps {
@@ -1011,7 +1006,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
-                                 inst_repos: unit_repos(),
+                                 inst_repos: daos_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
@@ -1033,7 +1028,7 @@ pipeline {
                     steps {
                         unitTest timeout_time: 60,
                                  ignore_failure: true,
-                                 inst_repos: unit_repos(),
+                                 inst_repos: daos_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
@@ -1077,7 +1072,7 @@ pipeline {
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                                ' --build-arg REPOS="' + all_pr_repos() + '"'
                         }
                     }
                     steps {
@@ -1276,7 +1271,7 @@ pipeline {
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
+                                ' --build-arg REPOS="' + all_pr_repos() + '"'
                         }
                     }
                     steps {
