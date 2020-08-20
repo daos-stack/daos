@@ -89,7 +89,7 @@ String pr_repos(String distro) {
        error 'all_pr_repos not implemented for ' + distro
     }
     string gen_pr_repos = cachedCommitPragma(pragma: 'PR-repos')
-    return repos + ' ' + gen_pr_repos()
+    return repos + ' ' + gen_pr_repos
 }
 
 String daos_repo() {
