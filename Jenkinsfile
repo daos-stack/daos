@@ -143,7 +143,7 @@ String unit_packages() {
                            'python36-tabulate '
         if (quickbuild()) {
             // TODO: these should be gotten from the Requires: of RPM
-            packages += " spdk-tools mercury-2.0.0-rc1" +
+            packages += " spdk-tools mercury-2.0.0~rc1" +
                         " boost-devel libisa-l_crypto"
         }
         return packages
