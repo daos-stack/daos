@@ -1,14 +1,9 @@
 {
    access-0
    Memcheck:Param
-   socketcall.sendto(msg)
    ...
    fun:send
-   fun:sock_comm_send_socket.isra.3
    ...
-   fun:sock_pe_progress_tx_entry
-   fun:sock_pe_progress_tx_ctx
-   fun:sock_pe_progress_thread
    fun:start_thread
    fun:clone
 }

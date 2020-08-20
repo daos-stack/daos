@@ -158,3 +158,12 @@
    fun:crt_hg_init
    fun:crt_init_opt
 }
+{
+   dl open leaks
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   malloc
+   ...
+   _dl_init
+   ...
+}
