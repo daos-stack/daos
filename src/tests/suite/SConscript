@@ -80,7 +80,7 @@ def scons():
     Import('denv')
 
     libraries = ['daos_common', 'daos', 'dfs', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid', 'dfs', 'cmocka', 'pthread', 'json-c']
+    libraries += ['uuid', 'dfs', 'cmocka', 'pthread']
 
     denv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
 
