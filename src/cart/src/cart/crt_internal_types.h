@@ -43,9 +43,11 @@ struct crt_grp_gdata;
 
 /* CaRT global data */
 struct crt_gdata {
-	/* TODO: Temporary storage for context0 URI, used during group
+	/*
+	 * TODO: Temporary storage for context0 URI, used during group
 	 * attach info file population for self address. Per-provider
-	 * context0 URIs need to be stored for multi-provider support */
+	 * context0 URIs need to be stored for multi-provider support
+	 */
 	char			cg_addr[CRT_ADDR_STR_MAX_LEN];
 
 	/* Flag indicating whether it is a client or server */
