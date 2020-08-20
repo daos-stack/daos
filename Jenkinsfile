@@ -84,13 +84,15 @@ String unit_repos() {
 }
 
 String unit_repos(String distro) {
+    string repos = ""
     if (distro == 'centos7') {
-        return el7_pr_repos() + ' ' + pr_repos()
+        repos = el7_pr_repos()
+    } else if (distro == 'leap15') {
+        repos = leap15_pr_repos()
+    } else {
+       error 'unit_repos not implemented for ' + distro
     }
-    if (distro == 'leap15') {
-        return leap15_daos_repos() + ' ' + pr_repos()
-    }
-    error 'unit_test_repos not implemented for ' + distro
+    return repos + ' ' + pr_repos()
 }
 
 String daos_repo() {
