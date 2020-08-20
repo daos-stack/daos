@@ -298,7 +298,6 @@ static int
 teardown(void **state)
 {
 	clean_ret(test_ret);
-	free(test_ret);
 	test_ret = NULL;
 	cleanup(false);
 
