@@ -46,5 +46,5 @@ ior:
     #    Values are appx GB.
     - [4000000000, 18000000000, 4000, 50000000, PASS]          #[4G, 18G, 4K, 51M, PASS]
 daos_racer:
-  runtime: 240
+  runtime: 480
   clush_timeout: 1500

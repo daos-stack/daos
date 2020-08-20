@@ -93,7 +93,7 @@ class OSAOnlineReintegration(TestWithServers):
         out = self.dmg_command.get_output("pool_query", **kwargs)
         return int(out[0][4])
 
-    def daos_racer_thread(self, num_pool):
+    def daos_racer_thread(self):
         """Start the daos_racer thread.
             Args:
             num_pool (int) : total pools to create for testing purposes.
@@ -102,8 +102,6 @@ class OSAOnlineReintegration(TestWithServers):
         self.daos_racer.get_params(self)
         self.daos_racer.set_environment(
             self.daos_racer.get_environment(self.server_managers[0]))
-        temp = self.daos_racer.runtime
-        self.daos_racer.runtime = temp * num_pool
         self.daos_racer.run()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
@@ -143,10 +141,10 @@ class OSAOnlineReintegration(TestWithServers):
 
         # Define the job manager for the IOR command
         manager = Mpirun(ior_cmd, mpitype="mpich")
-        manager.job.daos_cont.update(container_info
-                                     ["{}{}{}".format(oclass,
-                                                      api,
-                                                      test[2])])
+        manager.job.dfs_cont.update(container_info
+                                    ["{}{}{}".format(oclass,
+                                                     api,
+                                                     test[2])])
         env = ior_cmd.get_default_env(str(manager))
         manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         manager.assign_processes(processes)
@@ -194,8 +192,7 @@ class OSAOnlineReintegration(TestWithServers):
             pool_uuid.append(pool[val].uuid)
 
         # Start the daos_racer thread
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
-                                             kwargs={"num_pool": num_pool})
+        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
         daos_racer_thread.start()
 
         # Exclude and reintegrate the pool_uuid, rank and targets
