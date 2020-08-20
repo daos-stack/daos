@@ -111,38 +111,41 @@ is_sgl_full(struct dss_enum_arg *arg, daos_size_t size)
 	return 0;
 }
 
+int
+fill_oid(daos_unit_oid_t oid, struct dss_enum_arg *arg)
+{
+	d_iov_t *iov;
+
+	/* Check if sgl or kds is full */
+	if (is_sgl_full(arg, sizeof(oid)) || arg->kds_len >= arg->kds_cap)
+		return 1;
+
+	iov = &arg->sgl->sg_iovs[arg->sgl_idx];
+	/* Append a new descriptor to kds. */
+	memset(&arg->kds[arg->kds_len], 0, sizeof(arg->kds[arg->kds_len]));
+	arg->kds[arg->kds_len].kd_key_len = sizeof(oid);
+	arg->kds[arg->kds_len].kd_val_type =
+				vos_iter_type_2pack_type(VOS_ITER_OBJ);
+	arg->kds_len++;
+
+	/* Append the object ID to iov. */
+	daos_iov_append(iov, &oid, sizeof(oid));
+	D_DEBUG(DB_IO, "Pack obj "DF_UOID" iov_len/sgl %zu/%d kds_len %d\n",
+		DP_UOID(oid), iov->iov_len, arg->sgl_idx, arg->kds_len);
+	return 0;
+}
+
 static int
 fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
 	 vos_iter_type_t vos_type)
 {
-	d_iov_t *iovs = arg->sgl->sg_iovs;
-	int type;
+	int rc;
 
 	D_ASSERTF(vos_type == VOS_ITER_OBJ, "%d\n", vos_type);
 
-	/* Check if sgl or kds is full */
-	if (is_sgl_full(arg, sizeof(entry->ie_oid)) ||
-	    arg->kds_len >= arg->kds_cap)
-		return 1;
+	rc = fill_oid(entry->ie_oid, arg);
 
-	type = vos_iter_type_2pack_type(vos_type);
-	/* Append a new descriptor to kds. */
-	memset(&arg->kds[arg->kds_len], 0, sizeof(arg->kds[arg->kds_len]));
-	arg->kds[arg->kds_len].kd_key_len = sizeof(entry->ie_oid);
-	arg->kds[arg->kds_len].kd_val_type = type;
-	arg->kds_len++;
-
-	/* Append the object ID to iovs. */
-	D_ASSERT(iovs[arg->sgl_idx].iov_len + sizeof(entry->ie_oid) <
-		 iovs[arg->sgl_idx].iov_buf_len);
-	memcpy(iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len,
-	       &entry->ie_oid, sizeof(entry->ie_oid));
-	iovs[arg->sgl_idx].iov_len += sizeof(entry->ie_oid);
-
-	D_DEBUG(DB_IO, "Pack obj "DF_UOID" iov_len %zu kds_len %d\n",
-		DP_UOID(entry->ie_oid), iovs[arg->sgl_idx].iov_len,
-		arg->kds_len);
-	return 0;
+	return rc;
 }
 
 static int
@@ -208,7 +211,7 @@ fill_key_csum(vos_iter_entry_t *key_ent, struct dss_enum_arg *arg)
 	struct dcs_csum_info	*csum_info;
 	int			 rc;
 
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_calc)
 		return 0;
 
 	rc = daos_csummer_calc_key(csummer, &key_ent->ie_key, &csum_info);
@@ -258,7 +261,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		 * (kds_len < 2) before return KEY2BIG.
 		 */
 		if (arg->kds_len == 0 ||
-		    (arg->chk_key2big && arg->kds_len < 2)) {
+		    (arg->chk_key2big && arg->kds_len <= 2)) {
 			if (arg->kds[0].kd_key_len < total_size)
 				arg->kds[0].kd_key_len = total_size;
 			return -DER_KEY2BIG;
@@ -629,6 +632,7 @@ out:
  * \a sgls[\a iods_cap].
  *
  * \param[in,out]	io		I/O descriptor
+ * \param[in]		oid		oid
  * \param[in]		iods		daos_iod_t array
  * \param[in]		recxs_caps	recxs capacity array
  * \param[in]		sgls		optional sgl array for inline recxs
@@ -638,10 +642,11 @@ out:
  *					\a recxs_caps, \a sgls, and \a ephs
  */
 static void
-dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
-			struct dcs_iod_csums *iods_csums, int *recxs_caps,
-			d_sg_list_t *sgls, daos_epoch_t *akey_ephs,
-			daos_epoch_t *rec_ephs, int iods_cap)
+dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_unit_oid_t oid,
+			daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
+			int *recxs_caps, d_sg_list_t *sgls,
+			daos_epoch_t *akey_ephs, daos_epoch_t *rec_ephs,
+			int iods_cap)
 {
 	memset(io, 0, sizeof(*io));
 
@@ -1058,8 +1063,7 @@ enum_unpack_oid(daos_key_desc_t *kds, void *data,
 		io->ui_oid = *oid;
 	}
 
-	D_DEBUG(DB_REBUILD, "process obj "DF_UOID"\n",
-		DP_UOID(io->ui_oid));
+	D_DEBUG(DB_REBUILD, "process obj "DF_UOID"\n", DP_UOID(io->ui_oid));
 
 	return rc;
 }
@@ -1134,13 +1138,14 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		D_DEBUG(DB_REBUILD, "process %d type %d ptr %p len "DF_U64
 			" total %zd\n", i, kds->kd_val_type, ptr,
 			kds->kd_key_len, sgl->sg_iovs[0].iov_len);
-
-		if (kds->kd_val_type != type && type != -1) {
+		if (kds->kd_val_type == 0 ||
+		    (kds->kd_val_type != type && type != -1)) {
 			ptr += kds->kd_key_len;
+			D_DEBUG(DB_REBUILD, "skip type/size %d/%zd\n",
+				kds->kd_val_type, kds->kd_key_len);
 			continue;
 		}
 
-		D_ASSERT(kds->kd_key_len > 0);
 		if (kds->kd_val_type == OBJ_ITER_RECX ||
 		    kds->kd_val_type == OBJ_ITER_SINGLE) {
 			char *end = ptr + kds->kd_key_len;
@@ -1172,7 +1177,7 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, "process list buf rc "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_REBUILD, "process %d list buf rc "DF_RC"\n", nr, DP_RC(rc));
 
 	return rc;
 }
@@ -1182,14 +1187,18 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
  * be used to issue a VOS update. \a arg->*_anchor are ignored currently. \a cb
  * will be called, for the caller to consume the recxs accumulated in \a io.
  *
- * \param[in]		vos_type	enumeration type
- * \param[in]		arg		enumeration argument
- * \param[in]		cb		callback
- * \param[in]		cb_arg		callback argument
+ * \param[in]	oid	OID
+ * \param[in]	kds	key description
+ * \param[in]	kds_num	kds number
+ * \param[in]	sgl	sgl
+ * \param[in]	csum	checksum buffer
+ * \param[in]	cb	callback
+ * \param[in]	cb_arg	callback argument
  */
 int
-dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
-		dss_enum_unpack_cb_t cb, void *cb_arg)
+dss_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
+		d_sg_list_t *sgl, d_iov_t *csum, dss_enum_unpack_cb_t cb,
+		void *cb_arg)
 {
 	struct dss_enum_unpack_io	io = { 0 };
 	daos_iod_t			iods[DSS_ENUM_UNPACK_MAX_IODS];
@@ -1198,40 +1207,25 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			ephs[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			rec_ephs[DSS_ENUM_UNPACK_MAX_IODS];
-	/** Will be used to enum the csum data */
-	d_iov_t				csum_iov_iter;
+	d_iov_t				csum_iov = { 0 };
 	struct io_unpack_arg		unpack_arg;
 	int				rc = 0;
-	int				type;
 
-	/* Currently, this function is only for unpacking recursive
-	 * enumerations from arg->kds and arg->sgl.
-	 */
-	D_ASSERT(arg->chk_key2big && !arg->fill_recxs);
+	D_ASSERT(kds_num > 0);
+	D_ASSERT(kds != NULL);
+	dss_enum_unpack_io_init(&io, oid, iods, iods_csums, recxs_caps, sgls,
+				ephs, rec_ephs, DSS_ENUM_UNPACK_MAX_IODS);
 
-	D_ASSERT(arg->kds_len > 0);
-	D_ASSERT(arg->kds != NULL);
-	type = vos_iter_type_2pack_type(vos_type);
-	if (arg->kds[0].kd_val_type != type) {
-		D_ERROR("the first kds type %d != %d\n",
-			arg->kds[0].kd_val_type, type);
-		return -DER_INVAL;
-	}
-
-	dss_enum_unpack_io_init(&io, iods, iods_csums, recxs_caps, sgls, ephs,
-				rec_ephs, DSS_ENUM_UNPACK_MAX_IODS);
-	if (type != OBJ_ITER_OBJ)
-		io.ui_oid = arg->oid;
-
-	D_ASSERTF(arg->sgl->sg_nr > 0, "%u\n", arg->sgl->sg_nr);
-	D_ASSERT(arg->sgl->sg_iovs != NULL);
-	csum_iov_iter = arg->csum_iov;
+	if (csum)
+		csum_iov = *csum;
+	D_ASSERTF(sgl->sg_nr > 0, "%u\n", sgl->sg_nr);
+	D_ASSERT(sgl->sg_iovs != NULL);
 	unpack_arg.cb = cb;
 	unpack_arg.io = &io;
 	unpack_arg.cb_arg = cb_arg;
-	unpack_arg.csum_iov = &csum_iov_iter;
-	rc = obj_enum_iterate(arg->kds, arg->sgl, arg->kds_len, -1,
-			      enum_obj_io_unpack_cb, &unpack_arg);
+	unpack_arg.csum_iov = &csum_iov;
+	rc = obj_enum_iterate(kds, sgl, kds_num, -1, enum_obj_io_unpack_cb,
+			      &unpack_arg);
 	if (rc)
 		D_GOTO(out, rc);
 

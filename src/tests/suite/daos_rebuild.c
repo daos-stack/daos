@@ -503,7 +503,6 @@ rebuild_tgt_start_fail(void **state)
 
 	/* Rebuild rank 1 */
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -913,8 +912,8 @@ rebuild_multiple_tgts(void **state)
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
 				daos_exclude_server(arg->pool.pool_uuid,
-						    arg->dmg_config,
 						    arg->group,
+						    arg->dmg_config,
 						    &arg->pool.svc,
 						    rank);
 				if (++fail_cnt >= 2)

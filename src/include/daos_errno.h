@@ -168,7 +168,11 @@ extern "C" {
 	/** Used to indicate a transaction should restart */		\
 	ACTION(DER_TX_RESTART,		(DER_ERR_DAOS_BASE + 25))	\
 	/** Data lost or not recoverable */				\
-	ACTION(DER_DATA_LOSS,		(DER_ERR_DAOS_BASE + 26))
+	ACTION(DER_DATA_LOSS,		(DER_ERR_DAOS_BASE + 26))	\
+	/** Operation canceled (non-crt) */				\
+	ACTION(DER_OP_CANCELED,		(DER_ERR_DAOS_BASE + 27))	\
+	/** TX is not committed, not sure whether committable or not */	\
+	ACTION(DER_TX_BUSY,		(DER_ERR_DAOS_BASE + 28))
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
