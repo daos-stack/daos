@@ -179,6 +179,7 @@ crt_hg_pool_init(struct crt_hg_context *hg_ctx)
 	if (rc != 0)
 		D_ERROR("crt_hg_pool_enable, hg_ctx %p, failed rc:%d.\n",
 			hg_ctx, rc);
+
 exit:
 	return rc;
 }
@@ -188,8 +189,10 @@ crt_hg_pool_fini(struct crt_hg_context *hg_ctx)
 {
 	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
 
-	crt_hg_pool_disable(hg_ctx);
-	D_SPIN_DESTROY(&hg_pool->chp_lock);
+	if (hg_pool->chp_enabled) {
+		crt_hg_pool_disable(hg_ctx);
+		D_SPIN_DESTROY(&hg_pool->chp_lock);
+	}
 }
 
 static inline struct crt_hg_hdl *
