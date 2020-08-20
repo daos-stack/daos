@@ -199,7 +199,7 @@ crt_context_create(crt_context_t *crt_ctx)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (crt_gdata.cg_share_na &&
+	if (crt_gdata.cg_sep_mode &&
 	    crt_gdata.cg_ctx_num >= crt_gdata.cg_ctx_max_num) {
 		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
 			crt_gdata.cg_ctx_num, crt_gdata.cg_ctx_max_num);

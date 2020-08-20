@@ -94,6 +94,9 @@ enum {
 	DAOS_OC_EC_K4P2_L32K,	/* Erasure code, 4 data cells, 2 parity cells,
 				 * cell size 32K.
 				 */
+
+	DAOS_OC_EC_K2P1_SPEC_RANK_L32K,
+	DAOS_OC_EC_K4P1_SPEC_RANK_L32K,
 };
 
 static inline bool
@@ -115,7 +118,9 @@ daos_obj_is_srank(daos_obj_id_t oid)
 	int	oc = daos_obj_id2class(oid);
 
 	return oc == DAOS_OC_R3S_SPEC_RANK || oc == DAOS_OC_R1S_SPEC_RANK ||
-	       oc == DAOS_OC_R2S_SPEC_RANK;
+	       oc == DAOS_OC_R2S_SPEC_RANK ||
+	       oc == DAOS_OC_EC_K2P1_SPEC_RANK_L32K ||
+	       oc == DAOS_OC_EC_K4P1_SPEC_RANK_L32K;
 }
 
 enum daos_io_mode {
@@ -388,7 +393,7 @@ enum daos_io_flags {
 	DIOF_WITH_SPEC_EPOCH	= 0x4,
 	/* The operation is for EC recovering. */
 	DIOF_EC_RECOV		= 0x8,
-	/* The the key existence. */
+	/* The key existence. */
 	DIOF_CHECK_EXISTENCE	= 0x10,
 };
 

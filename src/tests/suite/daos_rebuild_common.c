@@ -55,7 +55,8 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
 				 args[0]->group, &args[0]->pool.alive_svc,
 				 rank);
-		sleep(5);
+		print_message("sleep 120 seconds for rebuild to start\n");
+		sleep(120);
 		/* If one rank is killed, then it has to exclude all
 		 * targets on this rank.
 		 **/
@@ -599,17 +600,43 @@ restore_group_state(void **state)
 int
 rebuild_sub_setup(void **state)
 {
+	test_arg_t	*arg;
+	int		rc;
+
 	save_group_state(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true,
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SUBTEST_POOL_SIZE, NULL);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
 }
 
 int
 rebuild_small_sub_setup(void **state)
 {
+	test_arg_t	*arg;
+	int rc;
+
 	save_group_state(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true,
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SMALL_POOL_SIZE, NULL);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
 }
 
 int

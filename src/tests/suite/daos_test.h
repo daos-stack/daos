@@ -79,7 +79,7 @@ extern const char *dmg_config_file;
 extern unsigned int dt_csum_type;
 extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
-extern int  objclass;
+extern int  dt_obj_class;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -153,7 +153,7 @@ typedef struct {
 	int			srv_disabled_ntgts;
 	int			index;
 	daos_epoch_t		hce;
-	int			objclass;
+	int			obj_class;
 
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
@@ -224,7 +224,7 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-		       struct test_pool *opool);
+		       struct test_pool *opool, daos_prop_t *prop);
 int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
@@ -382,6 +382,9 @@ int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
+/* dmg cmd json output parser APIs */
+int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
+			daos_mgmt_pool_info_t *pools);
 static inline void
 daos_test_print(int rank, char *message)
 {

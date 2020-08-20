@@ -87,7 +87,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 						rc);
 		}
 		inode->ie_parent = ie->ie_parent;
-		strncpy(inode->ie_name, ie->ie_name, NAME_MAX+1);
+		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
@@ -155,12 +155,10 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	 */
 	d_list_for_each_entry(dfpi, &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
-
 		DFUSE_TRA_DEBUG(ie, "Checking dfp %p", dfpi);
 
-		if (uuid_compare(dattr.da_puuid, dfpi->dfp_pool) != 0) {
+		if (uuid_compare(dattr.da_puuid, dfpi->dfp_pool) != 0)
 			continue;
-		}
 
 		DFUSE_TRA_DEBUG(ie, "Reusing dfp %p", dfpi);
 		dfp = dfpi;
@@ -191,7 +189,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	d_list_for_each_entry(dfsi, &dfp->dfp_dfs_list,	dfs_list) {
-
 		if (uuid_compare(dattr.da_cuuid, dfsi->dfs_cont) != 0)
 			continue;
 
@@ -352,5 +349,4 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 free:
 	D_FREE(ie);
-	return;
 }

@@ -32,7 +32,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
@@ -127,7 +126,6 @@ func TestProto_AnnotateError(t *testing.T) {
 		Description: "Description",
 		Resolution:  "Resolution",
 	}
-	testStatus := drpc.DaosInvalidInput
 
 	for name, tc := range map[string]struct {
 		err    error
@@ -135,9 +133,6 @@ func TestProto_AnnotateError(t *testing.T) {
 	}{
 		"wrap/unwrap Fault": {
 			err: testFault,
-		},
-		"wrap/unwrap DaoStatus": {
-			err: testStatus,
 		},
 		"non-fault err": {
 			err:    errors.New("not a fault"),
@@ -147,28 +142,13 @@ func TestProto_AnnotateError(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			aErr := proto.AnnotateError(tc.err)
-
-			var gotErr error
-			switch tc.err.(type) {
-			case *fault.Fault:
-				var gotFault *fault.Fault
-				gotFault, gotErr = proto.UnwrapFault(status.Convert(aErr))
-				common.CmpErr(t, tc.expErr, gotErr)
-				if diff := cmp.Diff(testFault, gotFault); diff != "" {
-					t.Fatalf("unexpected fault: (-want, +got):\n%s\n", diff)
-				}
-			case drpc.DaosStatus:
-				var gotStatus drpc.DaosStatus
-				gotStatus, gotErr = proto.UnwrapDaosStatus(status.Convert(aErr))
-				common.CmpErr(t, tc.expErr, gotErr)
-				if gotStatus != testStatus {
-					t.Fatalf("unexpected status: %d != %d", testStatus, gotStatus)
-				}
-			default:
-				_, gotErr = proto.UnwrapFault(status.Convert(aErr))
-				common.CmpErr(t, tc.expErr, gotErr)
-				_, gotErr = proto.UnwrapDaosStatus(status.Convert(aErr))
-				common.CmpErr(t, tc.expErr, gotErr)
+			gotFault, gotErr := proto.UnwrapFault(status.Convert(aErr))
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil || gotErr == nil {
+				return
+			}
+			if diff := cmp.Diff(testFault, gotFault); diff != "" {
+				t.Fatalf("unexpected fault: (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
