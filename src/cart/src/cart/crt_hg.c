@@ -210,7 +210,6 @@ crt_hg_pool_get(struct crt_hg_context *hg_ctx)
 	hdl = d_list_pop_entry(&hg_pool->chp_list,
 			       struct crt_hg_hdl,
 			       chh_link);
-
 	if (hdl == NULL) {
 		D_DEBUG(DB_NET,
 			"hg_pool %p is empty, cannot get.\n", hg_pool);
