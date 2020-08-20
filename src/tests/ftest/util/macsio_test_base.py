@@ -23,7 +23,7 @@
 """
 from apricot import TestWithServers
 from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun
+from job_manager_utils import Mpirun, Orterun
 from macsio_util import MacsioCommand
 
 
@@ -45,7 +45,11 @@ class MacsioTestBase(TestWithServers):
 
         # Support using different job managers to launch the daos agent/servers
         mpi_type = self.params.get("mpi_type", default="mpich")
-        self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
+        if mpi_type == "openmpi":
+            self.manager = Orterun(None, subprocess=False)
+        else:
+            self.manager = Mpirun(None, subprocess=False, mpitype="mpich")
+        #self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):
