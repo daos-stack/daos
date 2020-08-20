@@ -498,7 +498,7 @@ class SoakTestBase(TestWithServers):
                         nprocs = nodesperjob * ppn
                         env = ior_cmd.get_default_env("srun")
                         if ior_cmd.api.value == "MPIIO":
-                            env["DAOS_CONT"] = ior_cmd.daos_cont.value
+                            env["DAOS_CONT"] = ior_cmd.dfs_cont.value
                         cmd = Srun(ior_cmd)
                         cmd.assign_processes(nprocs)
                         cmd.assign_environment(env, True)
