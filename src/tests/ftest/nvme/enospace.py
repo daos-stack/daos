@@ -328,7 +328,6 @@ class NvmeEnospace(ServerFillUp):
         self.start_ior_load(storage='SCM', precent=1)
 
     @skipForTicket("DAOS-5403")
-    @skipForTicket("DAOS-5491")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
@@ -357,7 +356,7 @@ class NvmeEnospace(ServerFillUp):
         self.run_enospace_with_bg_job()
 
         #Read the same container which was written at the beginning.
-        self.ior_cmd.dfs_cont.value = baseline_cont_uuid
+        self.container.uuid = baseline_cont_uuid
         self.start_ior_load(storage='SCM', operation='Read', precent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
         print("IOR Latest Read MiB {}".format(max_mib_latest))
@@ -399,6 +398,7 @@ class NvmeEnospace(ServerFillUp):
 
         #Repeat the test in loop.
         for _loop in range(10):
+            print("-------enospc_no_aggregation Loop--------- {}".format(_loop))
             #Fill 75% of SCM pool
             self.start_ior_load(storage='SCM', precent=40)
 
