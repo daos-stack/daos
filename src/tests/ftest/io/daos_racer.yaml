@@ -6,8 +6,9 @@ hosts:
     - server-D
     - server-E
     - server-F
+    - server-G
   test_clients:
-    - client-G
+    - client-H
 timeout: 10800
 server_config:
     name: daos_server
