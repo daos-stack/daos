@@ -17,8 +17,8 @@
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
    ...
-   fun:crt_hg_init
-   fun:crt_init_opt
+   fun:crt_hg_ctx_init
+   ...
 }
 {
    FI leak 1
@@ -32,8 +32,8 @@
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
    ...
-   fun:crt_hg_init
-   fun:crt_init_opt
+   fun:crt_hg_ctx_init
+   ...
 }
 {
    FI leak 2
@@ -48,8 +48,8 @@
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
    ...
-   fun:crt_hg_init
-   fun:crt_init_opt
+   fun:crt_hg_ctx_init
+   ...
 }
 {
    FI leak 3
@@ -88,8 +88,8 @@
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
    ...
-   fun:crt_hg_init
-   fun:crt_init_opt
+   fun:crt_hg_ctx_init
+   ...
 }
 {
     CRYPTO leaks malloc
@@ -159,6 +159,6 @@
    fun:na_ofi_domain_open
    fun:na_ofi_initialize
    ...
-   fun:crt_hg_init
-   fun:crt_init_opt
+   fun:crt_hg_ctx_init
+   ...
 }

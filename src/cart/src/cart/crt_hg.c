@@ -617,32 +617,33 @@ out:
 int
 crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 {
-	hg_context_t		*hg_context;
-	hg_return_t		hg_ret = HG_SUCCESS;
-	int			rc = 0;
+	hg_return_t	hg_ret = HG_SUCCESS;
+	int		rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
-	hg_context = hg_ctx->chc_hgctx;
-	D_ASSERT(hg_context != NULL);
-
 	crt_hg_pool_fini(hg_ctx);
 
-	hg_ret = HG_Context_destroy(hg_context);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("Could not destroy HG context, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
+	if (hg_ctx->chc_hgctx) {
+		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("Could not destroy HG context, hg_ret: %d.\n",
+				hg_ret);
+			D_GOTO(out, rc = -DER_HG);
+		}
+		hg_ctx->chc_hgctx = NULL;
 	}
-	hg_ctx->chc_hgctx = NULL;
 
 	/* Shared class (sep case) is destroyed at crt_hg_fini time */
 	if (hg_ctx->chc_shared_hg_class == true)
 		goto out;
 
-	/* the hg_context destroyed, ignore below errors with warn msg */
-	hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
-	if (hg_ret != HG_SUCCESS)
-		D_WARN("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
-
+	if (hg_ctx->chc_hgcla) {
+		/* ignore below error with warn msg */
+		hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
+		if (hg_ret != HG_SUCCESS)
+			D_WARN("Could not finalize HG class, hg_ret: %d.\n",
+			       hg_ret);
+	}
 out:
 	return rc;
 }
