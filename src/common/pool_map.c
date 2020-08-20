@@ -2174,7 +2174,7 @@ pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
  */
 int
 pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
-			unsigned int *tgt_cnt)
+			  unsigned int *tgt_cnt)
 {
 	return pool_map_find_tgts_by_state(map,
 					   PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,

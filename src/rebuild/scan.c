@@ -386,9 +386,9 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 					       rpt->rt_tgts_num, myrank);
 	} else if (rpt->rt_rebuild_op == RB_OP_EXTEND) {
 		rebuild_nr = pl_obj_find_addition(map, &md, NULL,
-					          rpt->rt_rebuild_ver,
-					          tgts, shards,
-					          rpt->rt_tgts_num, myrank);
+						  rpt->rt_rebuild_ver,
+						  tgts, shards,
+						  rpt->rt_tgts_num, myrank);
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||

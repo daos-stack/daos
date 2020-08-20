@@ -115,7 +115,7 @@ rebuild_extend_rank(test_arg_t **args, int args_cnt, d_rank_t rank)
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed)
 			daos_extend_server(args[i]->pool.pool_uuid,
-					args[i]->group,
+					   args[i]->group,
 					args[i]->dmg_config,
 					&args[i]->pool.svc,
 					rank);
@@ -696,4 +696,3 @@ rebuild_sub_teardown(void **state)
 
 	return rc;
 }
-

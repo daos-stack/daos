@@ -166,7 +166,7 @@ addition_snap_update_recs(void **state)
 		recx.rx_idx = i * strlen(data);
 		recx.rx_nr = strlen(data);
 		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data,
-			      strlen(data) + 1, &req);
+			     strlen(data) + 1, &req);
 	}
 
 	addition_single_pool_rank(arg, ranks_to_add, 1);
@@ -277,7 +277,7 @@ addition_snap_update_keys(void **state)
 			enumerate_dkey(th_open, &number, kds, &anchor, buf,
 				       buf_len, &req);
 
-			assert_int_equal(number, j > 0 ? j+1 : 0);
+			assert_int_equal(number, j > 0 ? j + 1 : 0);
 
 			number = 10;
 			memset(&anchor, 0, sizeof(anchor));
@@ -483,7 +483,7 @@ static const struct CMUnitTest addition_tests[] = {
 
 int
 run_daos_addition_simple_test(int rank, int size, int *sub_tests,
-			     int sub_tests_size)
+			      int sub_tests_size)
 {
 	int rc = 0;
 
