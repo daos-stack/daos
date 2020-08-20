@@ -43,7 +43,7 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
-int		objclass;
+int		dt_obj_class;
 
 
 /* Create or import a single pool with option to store info in arg->pool
@@ -57,7 +57,7 @@ int		objclass;
  */
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-		       struct test_pool *opool)
+		       struct test_pool *opool, daos_prop_t *prop)
 {
 	test_arg_t		*arg = *state;
 	struct test_pool	*outpool;
@@ -92,12 +92,12 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		}
 
 		/*
-		 * Set the default NVMe partition size to "32 * scm_size", so
+		 * Set the default NVMe partition size to "4 * scm_size", so
 		 * that we need to specify SCM size only for each test case.
 		 *
 		 * Set env POOL_NVME_SIZE to overwrite the default NVMe size.
 		 */
-		nvme_size = outpool->pool_size * 32;
+		nvme_size = outpool->pool_size * 4;
 		env = getenv("POOL_NVME_SIZE");
 		if (env) {
 			size_gb = atoi(env);
@@ -110,7 +110,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		rc = dmg_pool_create(dmg_config_file,
 				     arg->uid, arg->gid, arg->group,
 				     NULL, outpool->pool_size, nvme_size,
-				     outpool->svc, outpool->pool_uuid);
+				     prop, outpool->svc, outpool->pool_uuid);
 		if (rc)
 			print_message("dmg_pool_create failed, rc: %d\n", rc);
 		else
@@ -260,7 +260,8 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool, NULL /*opool */);
+		return test_setup_pool_create(state, pool,
+					      NULL /*opool */, po_prop);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
@@ -325,13 +326,15 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.pool_connect_flags = DAOS_PC_RW;
 		arg->coh = DAOS_HDL_INVAL;
 		arg->cont_open_flags = DAOS_COO_RW;
-		arg->objclass = objclass;
+		arg->obj_class = dt_obj_class;
 		arg->pool.destroyed = false;
 	}
 
 	/** Look at variables set by test arguments and setup container props */
 	if (dt_csum_type) {
-		printf("\n-------\nChecksum enabled in test!\n-------\n");
+		print_message("\n-------\n"
+			      "Checksum enabled in test!"
+			      "\n-------\n");
 		entry = &csum_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;

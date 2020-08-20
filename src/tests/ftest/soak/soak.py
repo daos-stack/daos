@@ -471,10 +471,10 @@ class SoakTestBase(TestWithServers):
         api_list = self.params.get("api", ior_params + "*")
         tsize_list = self.params.get("transfer_size", ior_params + "*")
         bsize_list = self.params.get("block_size", ior_params + "*")
-        oclass_list = self.params.get("daos_oclass", ior_params + "*")
-        # check if capable of doing rebuild; if yes then daos_oclass = RP_*GX
+        oclass_list = self.params.get("dfs_oclass", ior_params + "*")
+        # check if capable of doing rebuild; if yes then dfs_oclass = RP_*GX
         if self.is_harasser("rebuild"):
-            oclass_list = self.params.get("daos_oclass", "/run/rebuild/*")
+            oclass_list = self.params.get("dfs_oclass", "/run/rebuild/*")
         # update IOR cmdline for each additional IOR obj
         for api in api_list:
             for b_size in bsize_list:
@@ -492,7 +492,7 @@ class SoakTestBase(TestWithServers):
                         ior_cmd.api.update(api)
                         ior_cmd.block_size.update(b_size)
                         ior_cmd.transfer_size.update(t_size)
-                        ior_cmd.daos_oclass.update(o_type)
+                        ior_cmd.dfs_oclass.update(o_type)
                         ior_cmd.set_daos_params(self.server_group, pool)
                         # srun cmdline
                         nprocs = nodesperjob * ppn
@@ -924,7 +924,7 @@ class SoakTestBase(TestWithServers):
         rank = self.params.get("rank", "/run/container_reserved/*")
         if self.is_harasser("rebuild"):
             obj_class = "_".join(["OC", str(
-                self.params.get("daos_oclass", "/run/rebuild/*")[0])])
+                self.params.get("dfs_oclass", "/run/rebuild/*")[0])])
         else:
             obj_class = self.params.get(
                 "object_class", "/run/container_reserved/*")

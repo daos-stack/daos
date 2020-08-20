@@ -212,7 +212,7 @@ class ContainerCreate(TestWithServers):
             # Create a container with 1GB of data in the first pool
             if use_ior:
                 mpirun.job.flags.update("-v -w -W -G 1 -k", "ior.flags")
-                mpirun.job.daos_destroy.update(False, "ior.daos_destroy")
+                mpirun.job.dfs_destroy.update(False, "ior.dfs_destroy")
                 mpirun.job.set_daos_params(self.server_group, self.pool[0])
                 self.log.info(
                     "%s: Running IOR on pool %s to fill container %s with data",
@@ -278,7 +278,7 @@ class ContainerCreate(TestWithServers):
                     "%s: Running IOR on pool %s to verify container %s",
                     loop_id, self.pool[0].uuid, mpirun.job.daos_cont.value)
                 mpirun.job.flags.update("-v -r -R -G 1 -E", "ior.flags")
-                mpirun.job.daos_destroy.update(True, "ior.daos_destroy")
+                mpirun.job.dfs_destroy.update(True, "ior.dfs_destroy")
                 self.run_ior(loop_id, mpirun)
             else:
                 self.log.info(

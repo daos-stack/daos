@@ -55,7 +55,7 @@ pool_create_all(void **state)
 			     geteuid(), getegid(),
 			     arg->group, NULL /* tgts */,
 			     128 * 1024 * 1024 /* minimal size */,
-			     0 /* nvme size */,
+			     0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
 	assert_int_equal(rc, 0);
 
@@ -106,7 +106,7 @@ setup_pools(void **state, daos_size_t npools)
 
 		/* Create the pool */
 		rc = test_setup_pool_create(state, NULL /* ipool */,
-					    &lparg->tpools[i]);
+					    &lparg->tpools[i], NULL /* prop */);
 		if (rc != 0)
 			goto err_destroy_pools;
 	}
@@ -392,7 +392,7 @@ pool_create_and_destroy_retry(void **state)
 			     geteuid(), getegid(),
 			     arg->group, NULL /* tgts */,
 			     128 * 1024 * 1024 /* minimal size */,
-			     0 /* nvme size */,
+			     0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
 	assert_int_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));

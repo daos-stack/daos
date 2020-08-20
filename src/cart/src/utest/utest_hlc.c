@@ -77,6 +77,67 @@ test_hlc_get_msg(void **state)
 	}
 }
 
+static void
+test_hlc_epsilon(void **state)
+{
+	int shift = 16;
+	uint64_t mask = (1ULL << shift) - 1;
+	uint64_t eps, pt1, pt2, hlc1, hlc2;
+
+	/*
+	 * Each subtest below tests these:
+	 *
+	 *   - Setting an epsilon shall get the value rounded up to the
+	 *     internal physical resolution.
+	 *
+	 *   - Event 1 happens before (via out of band communication) event 2.
+	 *     Event 1's physical timestamp >= event 2's due to their clock
+	 *     offsets. Based on event 2's HLC timestamp, the bound of
+	 *     event 1's HLC timestamp shall >= event 1's actual HLC timestamp
+	 *     and <= event 1's physical timestamp rounded up.
+	 */
+
+	eps = 0;
+	crt_hlc_epsilon_set(eps);
+	assert_true(crt_hlc_epsilon_get() == 0);
+	pt1 = (0x123ULL << shift) + 0x456;
+	hlc1 = pt1 | mask;			/* max logical */
+	pt2 = pt1 - eps;
+	hlc2 = pt2 & ~mask;			/* min logical */
+	assert_true(crt_hlc_epsilon_get_bound(hlc2) >= hlc1);
+	assert_true(crt_hlc_epsilon_get_bound(hlc2) <= ((pt1 + mask) | mask));
+
+	eps = 1;
+	crt_hlc_epsilon_set(eps);
+	assert_true(crt_hlc_epsilon_get() == 1ULL << shift);
+	pt1 = 0x123ULL << shift;
+	hlc1 = pt1 | mask;			/* max logical */
+	pt2 = pt1 - eps;
+	hlc2 = pt2 & ~mask;			/* min logical */
+	assert_true(crt_hlc_epsilon_get_bound(hlc2) >= hlc1);
+	assert_true(crt_hlc_epsilon_get_bound(hlc2) <= ((pt1 + mask) | mask));
+
+	eps = 1ULL << shift;
+	crt_hlc_epsilon_set(eps);
+	assert_true(crt_hlc_epsilon_get() == 1ULL << shift);
+	pt1 = (0x123ULL << shift) + 0x456;
+	hlc1 = pt1 | mask;			/* max logical */
+	pt2 = pt1 - eps;
+	hlc2 = pt2 & ~mask;			/* min logical */
+	assert_true(crt_hlc_epsilon_get_bound(hlc2) >= hlc1);
+	assert_true(crt_hlc_epsilon_get_bound(hlc2) <= ((pt1 + mask) | mask));
+
+	eps = (1ULL << shift) + 1;
+	crt_hlc_epsilon_set(eps);
+	assert_true(crt_hlc_epsilon_get() == 2ULL << shift);
+	pt1 = 0x123ULL << shift;
+	hlc1 = pt1 | mask;			/* max logical */
+	pt2 = pt1 - eps;
+	hlc2 = pt2 & ~mask;			/* min logical */
+	assert_true(crt_hlc_epsilon_get_bound(hlc2) >= hlc1);
+	assert_true(crt_hlc_epsilon_get_bound(hlc2) <= ((pt1 + mask) | mask));
+}
+
 static int
 init_tests(void **state)
 {
@@ -102,6 +163,7 @@ int main(int argc, char **argv)
 	const struct CMUnitTest tests[] = {
 		cmocka_unit_test(test_hlc_get),
 		cmocka_unit_test(test_hlc_get_msg),
+		cmocka_unit_test(test_hlc_epsilon),
 	};
 
 	d_register_alt_assert(mock_assert);

@@ -216,7 +216,8 @@ evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size);
 void
 evt_entry_csum_update(const struct evt_extent *const ext,
 		      const struct evt_extent *const sel,
-		      struct dcs_csum_info *csum_info);
+		      struct dcs_csum_info *csum_info,
+		      daos_size_t rec_len);
 
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want
