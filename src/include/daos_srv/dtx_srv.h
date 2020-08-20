@@ -214,13 +214,15 @@ int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, struct ds_cont_child *cont,
 int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
 		      daos_epoch_t *epoch, uint32_t *pm_ver);
 
-/* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
- *	logic clock that will be hidden when divided by NSEC_PER_SEC.
- */
 static inline uint64_t
 dtx_hlc_age2sec(uint64_t hlc)
 {
-	return (crt_hlc_get() - hlc) / NSEC_PER_SEC;
+	uint64_t now = crt_hlc_get();
+
+	if (now <= hlc)
+		return 0;
+
+	return crt_hlc2sec(now - hlc);
 }
 
 static inline struct dtx_entry *
