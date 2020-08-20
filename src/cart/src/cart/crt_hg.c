@@ -267,7 +267,6 @@ out:
 	return rc;
 }
 
-
 int
 crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 {
@@ -281,7 +280,6 @@ crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 
 	return 0;
 }
-
 
 int
 crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size)
@@ -301,8 +299,7 @@ crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size)
 
 	hg_ret = HG_Addr_to_string(hg_class, addr_str, str_size, self_addr);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Addr_to_string failed, hg_ret: %d.\n",
-			hg_ret);
+		D_ERROR("HG_Addr_to_string failed, hg_ret: %d.\n", hg_ret);
 		rc = -DER_HG;
 	}
 	HG_Addr_free(hg_class, self_addr);
@@ -345,36 +342,69 @@ out:
 	return rc;
 }
 
+/*
+ * Helper wrapper functions to return per-provider info.
+ * Currently we ignore the provider. Per-provider info will
+ * be returned during multi-provider support implementation
+ */
 static int
-crt_get_info_string(char **string)
+crt_provider_ctx0_port_get(int provider)
 {
+	return crt_na_ofi_conf.noc_port;
+}
+
+static char*
+crt_provider_domain_get(int provider)
+{
+	return crt_na_ofi_conf.noc_domain;
+}
+
+static char*
+crt_provider_name_get(int provider)
+{
+	return crt_na_dict[provider].nad_str;
+}
+
+static char*
+crt_provider_ip_str_get(int provider)
+{
+	return crt_na_ofi_conf.noc_ip_str;
+}
+
+static bool
+crt_provider_is_sep(int provider)
+{
+	return crt_gdata.cg_sep_mode;
+}
+
+static int
+crt_get_info_string(char **string, int ctx_idx)
+{
+	int	 provider;
+	char	*provider_str;
 	int	 port;
-	int	 plugin;
-	char	*plugin_str;
+	char	*domain_str;
+	char	*ip_str;
 
-	plugin = crt_gdata.cg_na_plugin;
-	D_ASSERT(plugin == crt_na_dict[plugin].nad_type);
-	plugin_str = crt_na_dict[plugin].nad_str;
+	provider = crt_gdata.cg_na_plugin;
 
-	if (!crt_na_dict[plugin].nad_port_bind) {
-		D_ASPRINTF(*string, "%s://", plugin_str);
-	} else if (crt_na_ofi_conf.noc_port == -1) {
-		/* OFI_PORT not speicified */
+	provider_str = crt_provider_name_get(provider);
+	port = crt_provider_ctx0_port_get(provider);
+	domain_str = crt_provider_domain_get(provider);
+	ip_str = crt_provider_ip_str_get(provider);
 
-		D_ASPRINTF(*string, "%s://%s/%s", plugin_str,
-			crt_na_ofi_conf.noc_domain,
-			crt_na_ofi_conf.noc_ip_str);
+	if (!crt_na_dict[provider].nad_port_bind) {
+		D_ASPRINTF(*string, "%s://", provider_str);
 	} else {
-		/* OFI_PORT is only for context 0 to use */
-		port = crt_na_ofi_conf.noc_port;
-		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2)
-			crt_na_ofi_conf.noc_port++;
-		else
-			crt_na_ofi_conf.noc_port = -1;
-
-		D_ASPRINTF(*string, "%s://%s/%s:%d", plugin_str,
-			crt_na_ofi_conf.noc_domain,
-			crt_na_ofi_conf.noc_ip_str, port);
+		/* If OFI_PORT is set, context0 gets it */
+		if (ctx_idx == 0 && port != -1) {
+			D_ASPRINTF(*string, "%s://%s/%s:%d",
+				   provider_str, domain_str, ip_str, port);
+		} else {
+			/* All other contexts get random port */
+			D_ASPRINTF(*string, "%s://%s/%s",
+				   provider_str, domain_str, ip_str);
+		}
 	}
 
 	if (*string == NULL)
@@ -402,13 +432,9 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 
 /* to be called only in crt_init */
 int
-crt_hg_init(crt_phy_addr_t *addr, bool server)
+crt_hg_init(void)
 {
-	char			*info_string = NULL;
-	struct crt_hg_gdata	*hg_gdata = NULL;
-	hg_class_t		*hg_class = NULL;
-	struct hg_init_info	 init_info = HG_INIT_INFO_INITIALIZER;
-	int			 rc = 0;
+	int	rc = 0;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -421,99 +447,93 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	hg_log_set_stream_warning((FILE *)(intptr_t)(D_LOGFAC | DLOG_WARN));
 	hg_log_set_stream_error((FILE *)(intptr_t)(D_LOGFAC | DLOG_ERR));
 
-	D_ASSERTF(*addr == NULL, "Can only be called in crt_init().\n");
-
-	rc = crt_get_info_string(&info_string);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	init_info.na_init_info.progress_mode = 0;
-	if (crt_gdata.cg_sep_mode == false)
-		/* one context per NA class */
-		init_info.na_init_info.max_contexts = 1;
-	else
-		init_info.na_init_info.max_contexts = crt_gdata.cg_ctx_max_num;
-
-	D_DEBUG(DB_NET, "info_string: %s\n", info_string);
-
-	hg_class = HG_Init_opt(info_string, server, &init_info);
-	if (hg_class == NULL) {
-		D_ERROR("Could not initialize HG class.\n");
-		D_GOTO(out, rc = -DER_HG);
-	}
-
-	D_ALLOC_PTR(hg_gdata);
-	if (hg_gdata == NULL) {
-		HG_Finalize(hg_class);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	hg_gdata->chg_hgcla = hg_class;
-
-	/* register the shared RPCID */
-	rc = crt_hg_reg_rpcid(hg_gdata->chg_hgcla);
-	if (rc != 0) {
-		D_ERROR("crt_hg_reg_rpcid failed, rc: %d.\n", rc);
-		HG_Finalize(hg_class);
-		D_GOTO(out, rc);
-	}
-
-	if (*addr == NULL) {
-		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-		hg_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
-
-		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
-		if (rc != 0) {
-			D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
-			HG_Finalize(hg_class);
-			D_GOTO(out, rc = -DER_HG);
-		}
-
-		D_STRNDUP(*addr, addr_str, CRT_ADDR_STR_MAX_LEN);
-		if (*addr == NULL) {
-			HG_Finalize(hg_class);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-	}
-
-	if (server)
-		D_DEBUG(DB_NET, "listening address: %s.\n", *addr);
-	else
-		D_DEBUG(DB_NET, "passive address: %s.\n", *addr);
-
-	crt_gdata.cg_hg = hg_gdata;
-
 out:
-	if (info_string)
-		D_FREE(info_string);
-
-	if (rc != DER_SUCCESS) {
-		D_FREE(hg_gdata);
-	}
 	return rc;
 }
+
+/* Shared HG class, used in SEP mode */
+static hg_class_t *sep_hg_class;
 
 /* be called only in crt_finalize */
 int
 crt_hg_fini()
 {
-	hg_class_t	*hg_class;
-	hg_return_t	hg_ret;
-	int		rc = DER_SUCCESS;
+	hg_return_t ret = HG_SUCCESS;
 
-	hg_class = crt_gdata.cg_hg->chg_hgcla;
-	D_ASSERT(hg_class != NULL);
+	if (sep_hg_class)
+		ret = HG_Finalize(sep_hg_class);
 
-	D_DEBUG(DB_NET, "Calling HG_Finalize\n");
+	if (ret != HG_SUCCESS)
+		return -DER_HG;
 
-	hg_ret = HG_Finalize(hg_class);
-	if (hg_ret != HG_SUCCESS) {
-		D_WARN("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
-		rc = -DER_HG;
+	return DER_SUCCESS;
+}
+
+/* Currently provider is ignored as we only support 1 provider at a time */
+static hg_class_t*
+crt_sep_hg_class_get(int provider)
+{
+	return sep_hg_class;
+}
+
+static void
+crt_sep_hg_class_set(int provider, hg_class_t *class)
+{
+	sep_hg_class = class;
+}
+
+static hg_class_t*
+crt_hg_class_init(int provider, int idx)
+{
+	char			*info_string = NULL;
+	struct hg_init_info	init_info = HG_INIT_INFO_INITIALIZER;
+	hg_class_t		*hg_class = NULL;
+	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
+	na_size_t		str_size = CRT_ADDR_STR_MAX_LEN;
+	int			rc;
+
+	rc = crt_get_info_string(&info_string, idx);
+	if (rc != 0)
+		D_GOTO(out, hg_class = NULL);
+
+	init_info.na_init_info.progress_mode = 0;
+
+	if (crt_provider_is_sep(provider))
+		init_info.na_init_info.max_contexts = crt_gdata.cg_ctx_max_num;
+	else
+		init_info.na_init_info.max_contexts = 1;
+
+	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
+	if (hg_class == NULL) {
+		D_ERROR("Could not initialize HG class.\n");
+		D_GOTO(out, hg_class = NULL);
 	}
 
-	D_FREE(crt_gdata.cg_hg);
-	return rc;
+	rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
+	if (rc != 0) {
+		D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
+		HG_Finalize(hg_class);
+		D_GOTO(out, hg_class = NULL);
+	}
+
+	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
+		idx, addr_str);
+
+	/* TODO: Need to store per provider addr for multi-provider support */
+	if (idx == 0)
+		strncpy(crt_gdata.cg_addr, addr_str, str_size);
+
+	rc = crt_hg_reg_rpcid(hg_class);
+	if (rc != 0) {
+		D_ERROR("crt_hg_reg_rpcid() for prov=%d idx=%d failed; rc=%d\n",
+			provider, idx, rc);
+		HG_Finalize(hg_class);
+		D_GOTO(out, hg_class = NULL);
+	}
+
+out:
+	D_FREE(info_string);
+	return hg_class;
 }
 
 int
@@ -522,119 +542,84 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	struct crt_context	*crt_ctx;
 	hg_class_t		*hg_class = NULL;
 	hg_context_t		*hg_context = NULL;
-	char			*info_string = NULL;
-	struct hg_init_info	 init_info = HG_INIT_INFO_INITIALIZER;
 	hg_return_t		 hg_ret;
+	bool			 sep_mode;
+	int			 provider;
 	int			 rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
 	D_DEBUG(DB_NET, "crt_gdata.cg_sep_mode %d, crt_is_service() %d\n",
-			crt_gdata.cg_sep_mode, crt_is_service());
-	if (idx == 0 || crt_gdata.cg_sep_mode == true) {
-		hg_context = HG_Context_create_id(crt_gdata.cg_hg->chg_hgcla,
-						  idx);
-		if (hg_context == NULL) {
-			D_ERROR("Could not create HG context.\n");
-			D_GOTO(out, rc = -DER_HG);
-		}
+		crt_gdata.cg_sep_mode, crt_is_service());
 
-		/* register crt_ctx to get it in crt_rpc_handler_common */
-		hg_ret = HG_Context_set_data(hg_context, crt_ctx, NULL);
-		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Context_set_data failed, ret: %d.\n",
-				hg_ret);
-			HG_Context_destroy(hg_context);
-			D_GOTO(out, rc = -DER_HG);
-		}
+	provider = crt_gdata.cg_na_plugin;
+	sep_mode = crt_provider_is_sep(provider);
 
-		hg_ctx->chc_hgcla = crt_gdata.cg_hg->chg_hgcla;
-		D_DEBUG(DB_NET, "hg_ctx->chc_hgcla %p\n", hg_ctx->chc_hgcla);
-		hg_ctx->chc_shared_hg_class = true;
+	/* In SEP mode all contexts share same hg_class*/
+	if (sep_mode) {
+		/* Only initialize class for context0 */
+		if (idx == 0) {
+			hg_class = crt_hg_class_init(provider, idx);
+			crt_sep_hg_class_set(provider, hg_class);
+		} else {
+			hg_class = crt_sep_hg_class_get(provider);
+		}
 	} else {
-		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-		na_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
-
-		rc = crt_get_info_string(&info_string);
-		if (rc != 0)
-			D_GOTO(out, rc);
-
-		init_info.na_init_info.progress_mode = 0;
-		init_info.na_init_info.max_contexts = 1;
-
-		hg_class = HG_Init_opt(info_string, crt_is_service(),
-				       &init_info);
-		if (hg_class == NULL) {
-			D_ERROR("Could not initialize HG class.\n");
-			D_GOTO(out, rc = -DER_HG);
-		}
-
-		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
-		if (rc != 0) {
-			D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
-			D_GOTO(out, rc = -DER_HG);
-		}
-
-		D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
-			idx, addr_str);
-
-		hg_context = HG_Context_create(hg_class);
-		if (hg_context == NULL) {
-			D_ERROR("Could not create HG context.\n");
-			HG_Finalize(hg_class);
-			D_GOTO(out, rc = -DER_HG);
-		}
-
-		/* register the shared RPCID to every hg_class */
-		rc = crt_hg_reg_rpcid(hg_class);
-		if (rc != 0) {
-			D_ERROR("crt_hg_reg_rpcid failed, rc: %d.\n", rc);
-			HG_Context_destroy(hg_context);
-			HG_Finalize(hg_class);
-			D_GOTO(out, rc);
-		}
-
-		D_DEBUG(DB_NET, "crt_gdata.cg_hg->chg_hgcla %p\n",
-			crt_gdata.cg_hg->chg_hgcla);
-		/* register crt_ctx to get it in crt_rpc_handler_common */
-		hg_ret = HG_Context_set_data(hg_context, crt_ctx, NULL);
-		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Context_set_data failed, ret: %d.\n",
-				hg_ret);
-			HG_Context_destroy(hg_context);
-			HG_Finalize(hg_class);
-			D_GOTO(out, rc = -DER_HG);
-		}
-
-		hg_ctx->chc_hgcla = hg_class;
-		hg_ctx->chc_shared_hg_class = false;
+		hg_class = crt_hg_class_init(provider, idx);
 	}
 
+	if (!hg_class) {
+		D_ERROR("Failed to init hg class for prov=%d idx=%d\n",
+			provider, idx);
+		D_GOTO(out, rc = -DER_HG);
+	}
+
+	hg_context = HG_Context_create_id(hg_class, idx);
+	if (hg_context == NULL) {
+		D_ERROR("Could not create HG context.\n");
+		D_GOTO(out, rc = -DER_HG);
+	}
+
+	/* register crt_ctx to get it in crt_rpc_handler_common */
+	hg_ret = HG_Context_set_data(hg_context, crt_ctx, NULL);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Context_set_data failed, ret: %d.\n", hg_ret);
+		HG_Context_destroy(hg_context);
+		D_GOTO(out, rc = -DER_HG);
+	}
+
+	hg_ctx->chc_hgcla = hg_class;
+	hg_ctx->chc_shared_hg_class = crt_gdata.cg_sep_mode;
 	hg_ctx->chc_hgctx = hg_context;
+
 	/* TODO: need to create separate bulk class and bulk context? */
 	hg_ctx->chc_bulkcla = hg_ctx->chc_hgcla;
 	hg_ctx->chc_bulkctx = hg_ctx->chc_hgctx;
-	D_ASSERT(hg_ctx->chc_bulkcla != NULL);
-	D_ASSERT(hg_ctx->chc_bulkctx != NULL);
 
 	rc = crt_hg_pool_init(hg_ctx);
 	if (rc != 0)
 		D_ERROR("context idx %d hg_ctx %p, crt_hg_pool_init failed, "
 			"rc: %d.\n", idx, hg_ctx, rc);
-
 out:
-	if (info_string)
-		D_FREE(info_string);
+	if (rc != 0) {
+		/* Destroy hg class on error */
+		if (hg_class) {
+			/* For SEP mode only destroy if ctx0 fails */
+			if ((sep_mode && idx == 0) || (!sep_mode))
+				HG_Finalize(hg_class);
+		}
+	}
+
 	return rc;
 }
 
 int
 crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 {
-	hg_context_t	*hg_context;
-	hg_return_t	hg_ret = HG_SUCCESS;
-	int		rc = 0;
+	hg_context_t		*hg_context;
+	hg_return_t		hg_ret = HG_SUCCESS;
+	int			rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
 	hg_context = hg_ctx->chc_hgctx;
@@ -643,13 +628,13 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	crt_hg_pool_fini(hg_ctx);
 
 	hg_ret = HG_Context_destroy(hg_context);
-	if (hg_ret == HG_SUCCESS) {
-		hg_ctx->chc_hgctx = NULL;
-	} else {
+	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("Could not destroy HG context, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
 	}
+	hg_ctx->chc_hgctx = NULL;
 
+	/* Shared class (sep case) is destroyed at crt_hg_fini time */
 	if (hg_ctx->chc_shared_hg_class == true)
 		goto out;
 
