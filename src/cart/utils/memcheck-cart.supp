@@ -162,8 +162,8 @@
    dl open leaks
    Memcheck:Leak
    match-leak-kinds: reachable
-   malloc
+   fun:malloc
    ...
-   _dl_init
+   fun:_dl_init
    ...
 }
