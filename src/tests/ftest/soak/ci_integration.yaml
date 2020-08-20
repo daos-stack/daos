@@ -1,0 +1,19 @@
+hosts:
+    test_servers:
+        - server-A
+timeout: 600
+server_config:
+    name: daos_server
+    servers:
+        log_mask: INFO
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
+pool:
+    mode: 146 # 146 is RW
+    name: daos_server
+    scm_size: 10000000000
+    svcn: 1
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
