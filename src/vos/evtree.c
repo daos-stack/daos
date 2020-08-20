@@ -3341,27 +3341,20 @@ void
 evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		    struct evt_entry *entry)
 {
-	daos_off_t	lo_offset;
-	uint32_t	csum_count;
-	uint32_t	chunk_len;
-	uint64_t	csum_start;
+	uint32_t csum_count;
 
 	if (tcx->tc_root->tr_csum_len <= 0 || !tcx->tc_root->tr_csum_chunk_size)
 		return;
 
 	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
-	lo_offset = evt_entry_selected_offset(entry);
 	csum_count = evt_csum_count(tcx, &entry->en_ext);
-	chunk_len = tcx->tc_root->tr_csum_chunk_size;
-	csum_start = lo_offset / chunk_len;
 
 	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
 	entry->en_csum.cs_nr = csum_count;
 	entry->en_csum.cs_buf_len = csum_count * tcx->tc_root->tr_csum_len;
 	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
-	entry->en_csum.cs_chunksize = chunk_len;
-	entry->en_csum.cs_csum = &desc->pt_csum[0] + csum_start *
-						     tcx->tc_root->tr_csum_len;
+	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
+	entry->en_csum.cs_csum = &desc->pt_csum[0];
 }
 
 struct evt_extent
@@ -3383,15 +3376,20 @@ evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size)
 void
 evt_entry_csum_update(const struct evt_extent *const ext,
 		      const struct evt_extent *const sel,
-		      struct dcs_csum_info *csum_info)
+		      struct dcs_csum_info *csum_info,
+		      daos_size_t rec_len)
 {
 	uint32_t csum_to_remove;
+	daos_size_t chunk_records;
 
 	D_ASSERT(csum_info->cs_chunksize > 0);
 	D_ASSERT(sel->ex_lo >= ext->ex_lo);
 
-	csum_to_remove = (sel->ex_lo - ext->ex_lo)
-			 / csum_info->cs_chunksize;
+	chunk_records = csum_record_chunksize(csum_info->cs_chunksize, rec_len)
+			/ rec_len;
+
+	csum_to_remove = sel->ex_lo / chunk_records -
+			 ext->ex_lo / chunk_records;
 
 	csum_info->cs_csum += csum_info->cs_len * csum_to_remove;
 	csum_info->cs_nr -= csum_to_remove;

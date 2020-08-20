@@ -291,6 +291,9 @@ struct obj_reasb_req;
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
 
+#define obj_ec_idx_parity2daos(vos_off, e_len, stripe_rec_nr)		\
+	(((vos_off) / e_len) * stripe_rec_nr)
+
 /**
  * Threshold size of EC single-value layout (even distribution).
  * When record_size <= OBJ_EC_SINGV_EVENDIST_SZ then stored in one data
@@ -578,6 +581,24 @@ obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 			return true;
 	}
 	return false;
+}
+
+static inline bool
+obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr **p_attr)
+{
+	struct daos_oclass_attr *attr;
+	bool is_ec;
+
+	is_ec = daos_oclass_is_ec(oid.id_pub, &attr);
+	if (p_attr != NULL)
+		*p_attr = attr;
+	if (!is_ec)
+		return false;
+
+	if ((oid.id_shard % obj_ec_tgt_nr(attr)) < obj_ec_data_tgt_nr(attr))
+		return false;
+
+	return true;
 }
 
 /* obj_class.c */
