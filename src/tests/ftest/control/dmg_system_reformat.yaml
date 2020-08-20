@@ -19,3 +19,5 @@ pool:
   scm_size: "2GB"
   nvme_size: "9GB"
   name: daos_server
+container:
+  control_method: daos
