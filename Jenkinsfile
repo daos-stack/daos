@@ -66,10 +66,6 @@ String get_daos_packages(String distro) {
     return pkgs + "-" + daos_packages_version(distro)
 }
 
-def pr_repos() {
-    return cachedCommitPragma(pragma: 'PR-repos')
-}
-
 String el7_pr_repos() {
     return cachedCommitPragma(pragma: 'PR-repos-el7')
 }
@@ -78,12 +74,12 @@ String leap15_pr_repos() {
     return cachedCommitPragma(pragma: 'PR-repos-leap15')
 }
 
-String all_pr_repos() {
+String pr_repos() {
     Map stage_info = parseStageInfo()
-    return all_pr_repos(stage_info['target'])
+    return pr_repos(stage_info['target'])
 }
 
-String all_pr_repos(String distro) {
+String pr_repos(String distro) {
     string repos = ""
     if (distro == 'centos7') {
         repos = el7_pr_repos()
@@ -92,7 +88,8 @@ String all_pr_repos(String distro) {
     } else {
        error 'all_pr_repos not implemented for ' + distro
     }
-    return repos + ' ' + pr_repos()
+    string gen_pr_repos = cachedCommitPragma(pragma: 'PR-repos')
+    return repos + ' ' + gen_pr_repos()
 }
 
 String daos_repo() {
@@ -125,7 +122,7 @@ String daos_repos() {
 }
 
 String daos_repos(String distro) {
-    return all_pr_repos(distro) + ' ' + daos_repo()
+    return pr_repos(distro) + ' ' + daos_repo()
 }
 
 String unit_packages() {
@@ -554,7 +551,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + all_pr_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -602,7 +599,7 @@ pipeline {
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + all_pr_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -648,7 +645,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + all_pr_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -693,7 +690,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + all_pr_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -861,7 +858,7 @@ pipeline {
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_LEAP15 + '"' +
-                                ' --build-arg REPOS="' + all_pr_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -1072,7 +1069,7 @@ pipeline {
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + all_pr_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
@@ -1271,7 +1268,7 @@ pipeline {
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + all_pr_repos() + '"'
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
