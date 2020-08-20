@@ -86,13 +86,13 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_modification_cnt = 1;
 
 	dth->dth_op_seq = 1;
-	dth->dth_rsrvd_cnt = 0;
 	dth->dth_oid_cnt = 0;
 	dth->dth_oid_cap = 0;
 	dth->dth_oid_array = NULL;
 
 	dth->dth_dkey_hash = dkey_hash;
-	dth->dth_rsrvds = &dth->dth_rsrvd_inline;
+
+	vos_dtx_rsrvd_init(dth);
 
 	*dthp = dth;
 }
@@ -100,8 +100,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 void
 vts_dtx_end(struct dtx_handle *dth)
 {
-	if (dth->dth_modification_cnt > 1)
-		D_FREE(dth->dth_rsrvds);
+	vos_dtx_rsrvd_fini(dth);
 	D_FREE(dth->dth_dte.dte_mbs);
 	D_FREE_PTR(dth);
 }
