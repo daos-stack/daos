@@ -503,7 +503,6 @@ rebuild_tgt_start_fail(void **state)
 
 	/* Rebuild rank 1 */
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void

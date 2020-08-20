@@ -233,6 +233,18 @@ typedef struct {
 				       unsigned int type_num);
 
 	/**
+	 * Defer free til commit.  For use with reserved extents that are not
+	 * yet published.  For VMEM, it just calls free.
+	 *
+	 * \param umm	[IN]		umem class instance.
+	 * \param off	[IN]		offset of allocation
+	 * \param act	[IN|OUT]	action used for later cancel/publish.
+	 */
+	void		 (*mo_defer_free)(struct umem_instance *umm,
+					  umem_off_t off,
+					  struct pobj_action *act);
+
+	/**
 	 * Cancel the reservation.
 	 *
 	 * \param umm	[IN]	umem class instance.
@@ -493,6 +505,20 @@ umem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size)
 						UMEM_TYPE_ANY);
 	return UMOFF_NULL;
 }
+
+static inline void
+umem_defer_free(struct umem_instance *umm, umem_off_t off,
+		struct pobj_action *act)
+{
+	if (umm->umm_ops->mo_defer_free)
+		return umm->umm_ops->mo_defer_free(umm, off, act);
+
+	/** Go ahead and free immediately.  The purpose of this function
+	 *  is to allow reserve/publish pair to execute on commit
+	 */
+	umem_free(umm, off);
+}
+
 
 static inline void
 umem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
