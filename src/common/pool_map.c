@@ -1810,6 +1810,7 @@ pool_map_find_targets_on_ranks(struct pool_map *map, d_rank_list_t *rank_list,
 
 		for (j = 0; j < dom->do_target_nr; j++) {
 			struct pool_target_id id = {0};
+
 			id.pti_id = dom->do_targets[j].ta_comp.co_id;
 
 			rc = pool_target_id_list_append(tgts, &id);

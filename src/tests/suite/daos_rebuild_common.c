@@ -107,6 +107,7 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		sleep(2);
 	}
 }
+
 static void
 rebuild_extend_rank(test_arg_t **args, int args_cnt, d_rank_t rank)
 {
