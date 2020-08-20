@@ -677,7 +677,8 @@ tse_sched_process_complete(struct tse_sched_private *dsp)
 		d_list_del_init(&dtp->dtp_list);
 		/* addref when the task add to dsp (tse_task_schedule) */
 		tse_sched_priv_decref(dsp);
-		tse_task_decref(task);  /* drop final ref */
+		if (dtp->dtp_completed)
+			tse_task_decref(task);  /* drop final ref */
 		processed++;
 	}
 	return processed;
@@ -993,8 +994,6 @@ tse_task_reinit(tse_task_t *task)
 
 	if (dtp->dtp_completed) {
 		D_ASSERT(d_list_empty(&dtp->dtp_list));
-		/* +1 ref for valid until complete */
-		tse_task_addref_locked(dtp);
 		/* +1 dsp ref as will add back to dsp again below */
 		tse_sched_priv_addref_locked(dsp);
 	} else if (dtp->dtp_running) {
