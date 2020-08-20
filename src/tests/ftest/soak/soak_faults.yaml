@@ -53,6 +53,9 @@ pool_reserved:
     scm_size: 3000000000
     nvme_size: 50000000000
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 container_reserved:
     akey_size: 5
     dkey_size: 5
@@ -108,11 +111,11 @@ soak_faults:
         - ior_faults
 # Commandline parameters
 # Benchmark and application params
-# IOR params -a DAOS and -a MPIIO
+# IOR params -a DFS and -a MPIIO
 # sequential
 ior_faults:
     api:
-        - DAOS
+        - DFS
         - MPIIO
     test_file: daos:testFile
     flags: -v -w -W -r -R
@@ -124,7 +127,7 @@ ior_faults:
         - '128k'
         - '1m'
     segment_count: 1
-    daos_oclass:
+    dfs_oclass:
         - 'SX'
 
 

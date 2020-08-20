@@ -68,6 +68,21 @@ struct obj_shard_iod {
 	uint64_t		 siod_off;
 };
 
+struct obj_iod_array {
+	/* number of iods (oia_iods) */
+	uint32_t		 oia_iod_nr;
+	/* number obj iods (oia_oiods) */
+	uint32_t		 oia_oiod_nr;
+	daos_iod_t		*oia_iods;
+	struct dcs_iod_csums	*oia_iod_csums;
+	struct obj_io_desc	*oia_oiods;
+	/* byte offset array for target, need this info after RPC dispatched
+	 * to specific target server as there is no oiod info already.
+	 * one for each iod, NULL for replica.
+	 */
+	uint64_t		*oia_offs;
+};
+
 /** Evenly distributed for EC full-stripe-only mode */
 #define OBJ_SIOD_EVEN_DIST	((uint32_t)1 << 0)
 /** Flag used only for proc func, to only proc to one specific target */
@@ -290,6 +305,9 @@ struct obj_reasb_req;
 #define obj_ec_idx_vos2daos(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
+
+#define obj_ec_idx_parity2daos(vos_off, e_len, stripe_rec_nr)		\
+	(((vos_off) / e_len) * stripe_rec_nr)
 
 /**
  * Threshold size of EC single-value layout (even distribution).
@@ -580,6 +598,24 @@ obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 	return false;
 }
 
+static inline bool
+obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr **p_attr)
+{
+	struct daos_oclass_attr *attr;
+	bool is_ec;
+
+	is_ec = daos_oclass_is_ec(oid.id_pub, &attr);
+	if (p_attr != NULL)
+		*p_attr = attr;
+	if (!is_ec)
+		return false;
+
+	if ((oid.id_shard % obj_ec_tgt_nr(attr)) < obj_ec_data_tgt_nr(attr))
+		return false;
+
+	return true;
+}
+
 /* obj_class.c */
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
@@ -613,7 +649,11 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 
 /* srv_ec.c */
 struct obj_rw_in;
-int obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **req);
+int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
+			uint32_t iod_nr, uint32_t start_shard,
+			void *tgt_map, uint32_t map_size,
+			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
+			struct obj_ec_split_req **split_req);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);
 
 #endif /* __OBJ_EC_H__ */

@@ -92,11 +92,17 @@ uint64_t crt_hlc2sec(uint64_t hlc)
 
 void crt_hlc_epsilon_set(uint64_t epsilon)
 {
-	D_INFO("setting maximum system clock offset to "DF_U64" ns\n", epsilon);
-	crt_hlc_epsilon = epsilon;
+	crt_hlc_epsilon = (epsilon + CRT_HLC_MASK) & ~CRT_HLC_MASK;
+	D_INFO("set maximum system clock offset to "DF_U64" ns\n",
+	       crt_hlc_epsilon);
 }
 
 uint64_t crt_hlc_epsilon_get(void)
 {
 	return crt_hlc_epsilon;
+}
+
+uint64_t crt_hlc_epsilon_get_bound(uint64_t hlc)
+{
+	return (hlc + crt_hlc_epsilon) | CRT_HLC_MASK;
 }

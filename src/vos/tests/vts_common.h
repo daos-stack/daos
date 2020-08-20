@@ -145,8 +145,9 @@ vts_dtx_begin_ex(const daos_unit_oid_t *oid, daos_handle_t coh,
 	dth = *dthp;
 
 	dth->dth_modification_cnt = nmods;
-	D_ALLOC_ARRAY(dth->dth_rsrvds, nmods);
-	assert_ptr_not_equal(dth->dth_rsrvds, NULL);
+
+	/** first call in vts_dtx_begin will have set this to inline */
+	assert_int_equal(vos_dtx_rsrvd_init(dth), 0);
 }
 
 void

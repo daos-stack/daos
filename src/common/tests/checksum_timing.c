@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,68 +39,117 @@
 #include <mchecksum_error.h>
 #endif
 
+static bool verbose;
+
 static int
-timebox(int (*cb)(void *), void *arg, uint64_t *usec)
+timebox(int (*cb)(void *), void *arg, uint64_t *nsec)
 {
-	struct timespec	start, end, result;
-	uint64_t	delta_us;
+	struct timespec	start, end;
 	int		rc;
 
-	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
-
+	d_gettime(&start);
 	rc = cb(arg);
+	d_gettime(&end);
 
-	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
-
-	result = d_timediff(start, end);
-
-	delta_us = ((uint64_t)result.tv_sec * 1000000000 +
-				(uint64_t)result.tv_nsec) / 1000;
-	*usec = delta_us;
+	*nsec = d_timediff_ns(&start, &end);
 
 	return rc;
 }
 
 struct csum_timing_args {
-	struct daos_csummer *csummer;
-	uint8_t *buf;
-	size_t len;
+	struct daos_csummer	*csummer;
+	uint8_t			*buf;
+	size_t			 len;
+	uint32_t		 iterations;
 };
 
-int
+static int
 csum_timed_cb(void *arg)
 {
-	struct csum_timing_args *timing_args = arg;
-	int rc =  daos_csummer_update(timing_args->csummer, timing_args->buf,
-				      timing_args->len);
+	struct csum_timing_args	*timing_args = arg;
+	int			 i;
+	int			 rc = 0;
 
-	if (rc)
-		return rc;
-	return daos_csummer_finish(timing_args->csummer);
+	for (i = 0; i < timing_args->iterations; i++) {
+		rc = daos_csummer_update(timing_args->csummer,
+					 timing_args->buf,
+					 timing_args->len);
+		if (rc)
+			return rc;
+	}
+
+	rc = daos_csummer_finish(timing_args->csummer);
+	return rc;
 }
 
-int
-run_timings(struct csum_ft *fts[], const int types_count,
-		 const size_t *sizes, const int sizes_count)
+/** Convert nanosec to human readable time */
+static void
+nsec_hr(double nsec, char *buf)
+{
+	int			 i = 0;
+	static const char	*const units[] = {"nsec", "usec", "sec",
+						    "min", "hr"};
+	uint32_t divisor[] = {
+		1e3 /** nsec->usec */,
+		1e6 /** usec->sec */,
+		60 /** sec->min */,
+		60 /** min->hr */};
+
+	while (nsec >= divisor[i]) {
+		nsec /= divisor[i];
+		i++;
+	}
+	sprintf(buf, "%.*f %s", i, nsec, units[i]);
+}
+
+/** Convert num of bytes to human readable */
+static void
+bytes_hr(uint64_t bytes, char *buf)
+{
+	int			 i = 0;
+	static const char	*const units[] = {"B", "KB", "MB", "GB", "TB"};
+
+	while (bytes >= 1024) {
+		bytes /= 1024;
+		i++;
+	}
+	sprintf(buf, "%lu %s", bytes, units[i]);
+}
+
+static void
+print_csum(uint8_t *csum_buf, uint32_t csum_buf_len)
+{
+	uint32_t i;
+
+	printf("0x");
+	for (i = 0; i < csum_buf_len; i++)
+		printf("%x", csum_buf[i]);
+	printf("\n");
+}
+
+static int
+run_timings(struct csum_ft *fts[], const int types_count, const size_t *sizes,
+	    const int sizes_count, uint32_t iterations)
 {
 	int	size_idx;
 	int	type_idx;
-	size_t	usec;
+	char	hr_str[20];
+	size_t	nsec;
 	int	rc;
-
 
 	for (size_idx = 0; size_idx < sizes_count; size_idx++) {
 		/** create data to checksum */
 		size_t		 len = sizes[size_idx];
-		unsigned char	*buf = malloc(len);
+		unsigned char	*buf;
 
+		D_ALLOC(buf, len);
 		if (!buf) {
 			printf("Not enough Memory;");
-			return 1;
+			return -DER_NOMEM;
 		}
 		memset(buf, 0xa, len);
-
-		printf("Data Length: %"PRIu64"\n", len);
+		bytes_hr(len, hr_str);
+		printf("Data Length: %s\n", hr_str);
 
 		for (type_idx = 0; type_idx < types_count; type_idx++) {
 			struct csum_ft		*ft = fts[type_idx];
@@ -120,20 +169,29 @@ run_timings(struct csum_ft *fts[], const int types_count,
 			args.len = len;
 
 			csum_size = daos_csummer_get_csum_len(csummer);
-			csum_buf = calloc(csum_size, 1);
+			D_ALLOC(csum_buf, csum_size);
+			if (csum_buf == NULL)
+				return -DER_NOMEM;
 
 			daos_csummer_set_buffer(csummer, csum_buf, csum_size);
 
-			rc = timebox(csum_timed_cb, &args, &usec);
+			args.iterations = iterations;
+			rc = timebox(csum_timed_cb, &args, &nsec);
 
-			if (rc == 0)
-				printf("\t%s:\t%"PRIu64" usec\n",
-				       daos_csummer_get_name(csummer), usec);
-			else
+			if (rc == 0) {
+				nsec_hr(nsec / args.iterations, hr_str);
+				printf("\t%s\t[%dB]:\t%s\n",
+				       daos_csummer_get_name(csummer),
+				       daos_csummer_get_csum_len(csummer),
+				       hr_str);
+				if (verbose)
+					print_csum(csum_buf, csum_size);
+			} else {
 				printf("\t%s: Error calculating\n",
 				       daos_csummer_get_name(csummer));
+			}
 
-			free(csum_buf);
+			D_FREE(csum_buf);
 			daos_csummer_destroy(&csummer);
 		}
 		free(buf);
@@ -146,7 +204,7 @@ run_timings(struct csum_ft *fts[], const int types_count,
 /** MCHECKSUM CRC64 */
 #ifdef MCHECKSUM_SUPPORT
 
-int
+static int
 m_csum64_init(struct daos_csummer *obj)
 {
 	mchecksum_object_t checksum = NULL;
@@ -159,7 +217,7 @@ m_csum64_init(struct daos_csummer *obj)
 	return rc;
 }
 
-int
+static int
 m_csum64_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	int rc;
@@ -174,16 +232,18 @@ m_csum64_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 	return rc;
 }
 
-void
+static void
 m_csum64_get(struct daos_csummer *obj)
 {
 	mchecksum_object_t checksum = obj->dcs_ctx;
+
 	uint32_t *crc32 = (uint32_t *) obj->dcs_csum_buf;
 
 	mchecksum_get(checksum, crc32, obj->dcs_csum_buf_size,
 		      MCHECKSUM_FINALIZE);
 }
-size_t
+
+static uint16_t
 m_csum64_get_size(struct daos_csummer *obj)
 {
 	mchecksum_object_t checksum = obj->dcs_ctx;
@@ -199,28 +259,62 @@ m_csum64_destroy(struct daos_csummer *obj)
 	mchecksum_destroy(checksum);
 }
 
-int
+static int
 m_csum64_finish(struct daos_csummer *obj)
 {
 	mchecksum_object_t checksum = obj->dcs_ctx;
 	uint64_t *crc64 = (uint64_t *) obj->dcs_csum_buf;
 	int rc = mchecksum_get(checksum, crc64, obj->dcs_csum_buf_size,
 			       MCHECKSUM_FINALIZE);
+
 	if (rc == MCHECKSUM_SUCCESS)
 		rc = 0;
 	return rc;
 }
 
 struct csum_ft m_csum64_algo = {
-		.update = m_csum64_update,
-		.get = m_csum64_get,
-		.init = m_csum64_init,
-		.destroy = m_csum64_destroy,
-		.finish = m_csum64_finish,
-		.get_size = m_csum64_get_size,
+		.cf_update = m_csum64_update,
+		.cf_get = m_csum64_get,
+		.cf_init = m_csum64_init,
+		.cf_destroy = m_csum64_destroy,
+		.cf_finish = m_csum64_finish,
+		.cf_get_size = m_csum64_get_size,
 		.name = "mcrc64"
 	};
 #endif
+
+static int
+murmur64_update(struct daos_csummer *obj,
+		uint8_t *buf, size_t buf_len)
+{
+
+	uint64_t *value = (uint64_t *)obj->dcs_csum_buf;
+
+	*value = d_hash_murmur64(buf, buf_len, *value);
+	return 0;
+}
+
+struct csum_ft murmur64_algo = {
+	.cf_update = murmur64_update,
+	.cf_csum_len = sizeof(uint64_t),
+	.cf_name = "murm64"
+};
+
+static int
+string32_update(struct daos_csummer *obj,
+		uint8_t *buf, size_t buf_len)
+{
+	uint32_t *value = (uint32_t *)obj->dcs_csum_buf;
+
+	*value = d_hash_string_u32((char *)buf, buf_len);
+	return 0;
+}
+
+struct csum_ft string32_algo = {
+	.cf_update = string32_update,
+	.cf_csum_len = sizeof(uint32_t),
+	.cf_name = "str32"
+};
 
 /** ----------------------------------------------------------------------- */
 
@@ -228,20 +322,23 @@ static void
 print_usage(char *name)
 {
 	printf("usage: %s [OPTIONS] ...\n\n", name);
-	printf("\t-s BYTES, --size=BYTES\t"
-		"Size of data used to calculate checksum.\n"
-		"\t\t\tDefault: Sizes will double starting with 128 until 4G");
-	printf("\t-c CHECKSUM, --checksum=CHECKSUM\t"
+	printf("\t-s BYTES, --size=BYTES\t\t"
+		"Size of data used to calculate checksum.\n\t\t\t\t\t"
+		"Default: Sizes will double starting with 128 until 4G\n");
+	printf("\t-c CHECKSUM, --csum=CSUM\t"
 			"Type of checksum (crc16, crc32, crc64, mcrc64)\n"
-		"\t\t\tDefault: Run through all checksums");
-	printf("\t-h, --help\t\tShow this message\n");
+		"\t\t\t\t\tDefault: Run through all checksums\n");
+	printf("\t-v, --verbose \t\t\tPrint more info\n");
+	printf("\t-h, --help\t\t\tShow this message\n");
 }
-const char *s_opts = "hs:c:";
+
+const char *s_opts = "vhs:c:";
 static int idx;
 
 static struct option l_opts[] = {
 	{"size",	required_argument,	NULL, 's'},
 	{"checksum",	required_argument,	NULL, 'c'},
+	{"verbose",	no_argument,		NULL, 'v'},
 	{"help",	no_argument,		NULL, 'h'}
 };
 
@@ -279,6 +376,12 @@ strarg2ft(char *str)
 		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC32_ISCSI);
 	if (csum_str_match(str, "crc64"))
 		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC64_REFL);
+	if (csum_str_match(str, "sha1"))
+		return daos_csum_type2algo(CSUM_TYPE_ISAL_SHA1);
+	if (csum_str_match(str, "sha256"))
+		return daos_csum_type2algo(CSUM_TYPE_ISAL_SHA256);
+	if (csum_str_match(str, "sha512"))
+		return daos_csum_type2algo(CSUM_TYPE_ISAL_SHA512);
 
 #ifdef MCHECKSUM_SUPPORT
 	if (csum_str_match(str, "mcrc64"))
@@ -287,16 +390,22 @@ strarg2ft(char *str)
 	return NULL;
 }
 
+#define ONE_GB (1024 * 1024 * 1024L)
+#define ONE_MB (1024 * 1024L)
+#define ONE_KB 1024L
+#define ONE_BYTE 1L
+
 int
 main(int argc, char *argv[])
 {
 	const int		 MAX_TYPES = 64;
-	const int		 MAX_SIZES = 64;
+	const int		 MAX_SIZES = 256;
 	int			 type_count = 0;
 	int			 sizes_count = 0;
 	struct csum_ft		*csum_fts[MAX_TYPES];
 	size_t			 sizes[MAX_SIZES];
 	int			 opt;
+	int			 rc = 0;
 
 	if (show_help(argc, argv)) {
 		print_usage(argv[0]);
@@ -326,6 +435,9 @@ main(int argc, char *argv[])
 			sizes[sizes_count++] = size;
 		}
 			break;
+		case 'v':
+			verbose = true;
+			break;
 		case 'h': /** already handled */
 		default:
 			break;
@@ -341,19 +453,23 @@ main(int argc, char *argv[])
 #ifdef MCHECKSUM_SUPPORT
 		csum_fts[type_count++] = &m_csum64_algo;
 #endif
+		csum_fts[type_count++] = &murmur64_algo;
+		csum_fts[type_count++] = &string32_algo;
 	}
 
 	if (sizes_count == 0) {
-		/** Sizes to time are 128 -> 4 GB, doubling each time */
-		const uint64_t	end = 1024*1024*1024*4L; /** 4 GB */
-		const uint64_t	start = 128; /** 128 bytes */
+		/** Sizes to time are start -> end, doubling each time */
+		const uint64_t	start = 1 * ONE_BYTE;
+		const uint64_t	end = 1 * ONE_MB;
 		size_t		size;
 
-		for (size = start; size < end; size *= 2)
+		for (size = start; size <= end &&
+		     sizes_count < MAX_SIZES; size *= 2)
 			sizes[sizes_count++] = size;
 	}
+	rc = run_timings(csum_fts, type_count, sizes, sizes_count, 1000);
+	if (rc != 0)
+		printf("Error: " DF_RC "\n", DP_RC(rc));
 
-	run_timings(csum_fts, type_count, sizes, sizes_count);
-
-	return 0;
+	return -rc;
 }
