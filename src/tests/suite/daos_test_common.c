@@ -44,7 +44,7 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
-int		objclass;
+int		dt_obj_class;
 
 
 /* Create or import a single pool with option to store info in arg->pool
@@ -326,13 +326,15 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.pool_connect_flags = DAOS_PC_RW;
 		arg->coh = DAOS_HDL_INVAL;
 		arg->cont_open_flags = DAOS_COO_RW;
-		arg->objclass = objclass;
+		arg->obj_class = dt_obj_class;
 		arg->pool.destroyed = false;
 	}
 
 	/** Look at variables set by test arguments and setup container props */
 	if (dt_csum_type) {
-		printf("\n-------\nChecksum enabled in test!\n-------\n");
+		print_message("\n-------\n"
+			      "Checksum enabled in test!"
+			      "\n-------\n");
 		entry = &csum_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
