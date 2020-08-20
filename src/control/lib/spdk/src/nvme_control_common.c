@@ -164,9 +164,6 @@ clean_ret(struct ret_t *ret)
 		free(ret->ctrlrs);
 		ret->ctrlrs = cnext;
 	}
-
-	if (ret)
-		free(ret);
 }
 
 int
@@ -240,7 +237,7 @@ _discover(prober probe, bool detach, health_getter get_health)
 	}
 
 	ret = collect();
-	/* TODO: cleanup(detach); */
+	cleanup(detach);
 	return ret;
 
 fail:

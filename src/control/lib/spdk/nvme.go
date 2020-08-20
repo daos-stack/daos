@@ -56,8 +56,6 @@ type Nvme interface {
 	Discover(logging.Logger) ([]Controller, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger) ([]*FormatResult, error)
-	// Cleanup NVMe object references
-	Cleanup()
 	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
 	CleanLockfiles(logging.Logger, ...string) error
 }
@@ -225,12 +223,6 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 	return
 }
 
-// Cleanup unlinks and detaches any controllers or namespaces,
-// as well as cleans up optional device health information.
-func (n *NvmeImpl) Cleanup() {
-	C.nvme_cleanup()
-}
-
 // c2GoController is a private translation function.
 func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	return Controller{
@@ -284,13 +276,19 @@ func c2GoFormatResult(fmtResult *C.struct_wipe_res_t) *FormatResult {
 	}
 }
 
+// clean deallocates memory in return structure and frees the pointer.
+func clean(retPtr *C.struct_ret_t) {
+	C.clean_ret(retPtr)
+	C.free(unsafe.Pointer(retPtr))
+}
+
 // collectCtrlrs parses return struct to collect slice of nvme.Controller.
 func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller, err error) {
 	if retPtr == nil {
 		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
 	}
 
-	defer C.clean_ret(retPtr)
+	defer clean(retPtr)
 
 	if retPtr.rc != 0 {
 		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc),
@@ -334,7 +332,7 @@ func collectFormatResults(retPtr *C.struct_ret_t, failMsg string) ([]*FormatResu
 		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
 	}
 
-	defer C.clean_ret(retPtr)
+	defer clean(retPtr)
 
 	if retPtr.rc != 0 {
 		return nil, errors.Wrap(FaultBindingFailed(int(retPtr.rc),

@@ -107,7 +107,3 @@ func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path stri
 
 	return n.Cfg.UpdateCtrlrs, nil
 }
-
-// Cleanup unlinks and detaches any controllers or namespaces.
-func (n *MockNvmeImpl) Cleanup() {
-}

@@ -425,7 +425,6 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 
 	/* collect() will allocate and return a new ret structure */
 	clean_ret(ret);
-	free(ret);
 	return collect();
 }
 
