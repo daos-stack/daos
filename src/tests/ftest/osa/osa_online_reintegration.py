@@ -95,8 +95,6 @@ class OSAOnlineReintegration(TestWithServers):
 
     def daos_racer_thread(self):
         """Start the daos_racer thread.
-            Args:
-            num_pool (int) : total pools to create for testing purposes.
         """
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
         self.daos_racer.get_params(self)
