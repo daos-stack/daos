@@ -405,7 +405,6 @@ func TestBdevBackendFormat(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, tc.expResp, gotResp, "device response")
 		})
 	}
 }

@@ -164,6 +164,9 @@ clean_ret(struct ret_t *ret)
 		free(ret->ctrlrs);
 		ret->ctrlrs = cnext;
 	}
+
+	if (ret)
+		free(ret);
 }
 
 int
