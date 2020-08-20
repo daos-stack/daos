@@ -159,14 +159,8 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.isSCMUpdate() {
-		if err := cmd.printSCMUpdateResult(resp, &bld); err != nil {
-			return err
-		}
-	} else {
-		if err := cmd.printNVMeUpdateResult(resp, &bld); err != nil {
-			return err
-		}
+	if err := cmd.printUpdateResult(resp, &bld); err != nil {
+		return err
 	}
 
 	cmd.log.Info(bld.String())
@@ -178,30 +172,23 @@ func (cmd *firmwareUpdateCmd) isSCMUpdate() bool {
 	return cmd.DeviceType == "scm"
 }
 
+func (cmd *firmwareUpdateCmd) printUpdateResult(resp *control.FirmwareUpdateResp, out io.Writer) error {
+	if cmd.isSCMUpdate() {
+		return cmd.printSCMUpdateResult(resp, out)
+	}
+	return cmd.printNVMeUpdateResult(resp, out)
+}
+
 func (cmd *firmwareUpdateCmd) printSCMUpdateResult(resp *control.FirmwareUpdateResp, out io.Writer) error {
 	if cmd.Verbose {
-		if err := pretty.PrintSCMFirmwareUpdateMapVerbose(resp.HostSCMResult, out); err != nil {
-			return err
-		}
-	} else {
-		if err := pretty.PrintSCMFirmwareUpdateMap(resp.HostSCMResult, out); err != nil {
-			return err
-		}
+		return pretty.PrintSCMFirmwareUpdateMapVerbose(resp.HostSCMResult, out)
 	}
-
-	return nil
+	return pretty.PrintSCMFirmwareUpdateMap(resp.HostSCMResult, out)
 }
 
 func (cmd *firmwareUpdateCmd) printNVMeUpdateResult(resp *control.FirmwareUpdateResp, out io.Writer) error {
 	if cmd.Verbose {
-		if err := pretty.PrintNVMeFirmwareUpdateMapVerbose(resp.HostNVMeResult, out); err != nil {
-			return err
-		}
-	} else {
-		if err := pretty.PrintNVMeFirmwareUpdateMap(resp.HostNVMeResult, out); err != nil {
-			return err
-		}
+		return pretty.PrintNVMeFirmwareUpdateMapVerbose(resp.HostNVMeResult, out)
 	}
-
-	return nil
+	return pretty.PrintNVMeFirmwareUpdateMap(resp.HostNVMeResult, out)
 }
