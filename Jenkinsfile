@@ -172,7 +172,7 @@ String functional_rpms(String distro) {
                   "mpi4py-tests-cart-4-daos-0 " +
                   "MACSio-openmpi3 " +
                   "hdf5-vol-daos-openmpi3-tests-daos-0 " +
-                  "hdf5-vol-daos-mpich2-tests-daos-0 " +
+                  "hdf5-vol-daos-mpich2-tests-daos-0 "
 
     if (distro == "leap15") {
         return rpms
