@@ -30,6 +30,4 @@
 
 #include "dfuse_log.h"
 
-
-
 #endif /* __DFUSE_COMMON_H__ */

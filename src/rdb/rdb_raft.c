@@ -722,29 +722,21 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 static int
 rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
 {
-	struct dss_enum_arg	   arg = { 0 };
 	struct rdb_raft_unpack_arg unpack_arg;
+	daos_unit_oid_t		   invalid_oid = { 0 };
 	d_sg_list_t		   sgl;
 
-	/* Set up the same iteration as rdb_raft_pack_chunk. */
-	memset(&arg, 0, sizeof(arg));
-	arg.chk_key2big = true;
-
 	/* Set up the buffers. */
-	arg.kds = kds->iov_buf;
-	arg.kds_cap = kds->iov_buf_len / sizeof(*arg.kds);
-	arg.kds_len = kds->iov_len / sizeof(*arg.kds);
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
 	sgl.sg_iovs = data;
-	arg.sgl = &sgl;
 
 	unpack_arg.eph = index;
 	unpack_arg.slc = slc;
 
-	/* Unpack from the object level. */
-	return dss_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
-			       &unpack_arg);
+	return dss_enum_unpack(invalid_oid, (daos_key_desc_t *)kds,
+			       kds->iov_len / sizeof(*kds), &sgl, NULL,
+			       rdb_raft_exec_unpack_io, &unpack_arg);
 }
 
 static int
