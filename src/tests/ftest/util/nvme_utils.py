@@ -230,7 +230,7 @@ class ServerFillUp(IorTestBase):
         if 'Read' in operation:
             _create_cont = False
             self.ior_cmd.flags.value = self.ior_read_flags
-            self.ior_cmd.daos_cont.value = self.container_info[
+            self.ior_cmd.dfs_cont.value = self.container_info[
                 "{}{}{}".format(self.ior_cmd.dfs_oclass.value,
                                 self.ior_cmd.api.value,
                                 self.ior_cmd.transfer_size.value)][0]
@@ -255,7 +255,7 @@ class ServerFillUp(IorTestBase):
                             .format(self.ior_cmd.dfs_oclass.value,
                                     self.ior_cmd.api.value,
                                     self.ior_cmd.transfer_size.value)] = [
-                                        self.ior_cmd.daos_cont.value,
+                                        self.ior_cmd.dfs_cont.value,
                                         self.ior_cmd.block_size.value]
 
     def calculate_ior_block_size(self):
