@@ -13,8 +13,8 @@
    fun:clone
 }
 {
-   access-0
-   Memcheck:Param
+   uninit-1
+   Memcheck:Param,Memcheck:Value1,Memcheck:Value8
    socketcall.sendto(msg)
    ...
    fun:send
