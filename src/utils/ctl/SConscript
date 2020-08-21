@@ -20,29 +20,25 @@
 # Any reproduction of computer software, computer software documentation, or
 # portions thereof marked with this legend must also reproduce the markings.
 #
-"""Build swim src"""
+"""Build cart_ctl test"""
 
-SRC = ['swim.c']
+import os
+import daos_build
+
+SRC = ['cart_ctl.c']
 
 def scons():
-    """Scons function"""
+    """scons function"""
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 
-    Import('env', 'prereqs', 'gurt_lib')
+    tenv = env.Clone()
+    tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/tests/ftest/cart'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
+    prereqs.require(tenv, 'mercury')
 
-    env.AppendUnique(LIBPATH=[Dir('.')])
-
-    denv = env.Clone()
-
-    denv.AppendUnique(CPPPATH=['#/src/cart/src/swim'])
-    denv.AppendUnique(LIBS=['gurt'])
-    denv.Append(CCFLAGS=['-D_USE_CART_'])
-
-    swim_targets = denv.SharedObject(SRC)
-    swim_lib = denv.SharedLibrary('libswim', swim_targets)
-    denv.Requires(swim_lib, gurt_lib)
-
-    Default(swim_targets)
-    Export('swim_lib', 'swim_targets')
+    ctl = daos_build.program(tenv, SRC)
+    tenv.Requires(ctl, [cart_lib, gurt_lib])
+    tenv.Install(os.path.join("$PREFIX", 'bin'), ctl)
 
 if __name__ == "SCons.Script":
     scons()
