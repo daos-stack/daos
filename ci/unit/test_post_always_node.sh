@@ -17,7 +17,6 @@ case $STAGE_NAME in
 esac
 mkdir "${test_log_dir}"
 mkdir "${vm_log_dir}"
-mkdir vm_test
 if [ -e nlt-errors.json ]; then
   cp nlt-errors.json "$vm_log_dir"/
   mv nlt-errors.json vm_test/
