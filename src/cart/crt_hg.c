@@ -443,12 +443,15 @@ crt_hg_init(void)
 		D_GOTO(out, rc = -DER_ALREADY);
 	}
 
+	#define EXT_FAC DD_FAC(external)
+
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
-	hg_log_set_stream_debug((FILE *)(intptr_t)(D_LOGFAC | DLOG_DBG));
-	hg_log_set_stream_warning((FILE *)(intptr_t)(D_LOGFAC | DLOG_WARN));
-	hg_log_set_stream_error((FILE *)(intptr_t)(D_LOGFAC | DLOG_ERR));
+	hg_log_set_stream_debug((FILE *)(intptr_t)(EXT_FAC | DLOG_DBG));
+	hg_log_set_stream_warning((FILE *)(intptr_t)(EXT_FAC | DLOG_WARN));
+	hg_log_set_stream_error((FILE *)(intptr_t)(EXT_FAC | DLOG_ERR));
 
+	#undef EXT_FAC
 out:
 	return rc;
 }
@@ -587,9 +590,6 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 
 	hg_ctx->chc_hgcla = hg_class;
 	hg_ctx->chc_shared_hg_class = sep_mode;
-	/* TODO: need to create separate bulk class and bulk context? */
-	hg_ctx->chc_bulkcla = hg_ctx->chc_hgcla;
-	hg_ctx->chc_bulkctx = hg_ctx->chc_hgctx;
 
 	hg_context = HG_Context_create_id(hg_class, idx);
 	if (hg_context == NULL) {
@@ -598,6 +598,10 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	}
 
 	hg_ctx->chc_hgctx = hg_context;
+
+	/* TODO: need to create separate bulk class and bulk context? */
+	hg_ctx->chc_bulkctx = hg_ctx->chc_hgctx;
+	hg_ctx->chc_bulkcla = hg_ctx->chc_hgcla;
 
 	/* register crt_ctx to get it in crt_rpc_handler_common */
 	hg_ret = HG_Context_set_data(hg_context, crt_ctx, NULL);

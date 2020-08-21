@@ -43,6 +43,7 @@
 	ACTION(grp,   group,       arg)	\
 	ACTION(lm,    livenessmap, arg)	\
 	ACTION(hg,    mercury,     arg)	\
+	ACTION(external, external, arg) \
 	ACTION(pmix,  pmix,        arg)	\
 	ACTION(st,    self_test,   arg)	\
 	ACTION(iv,    iv,          arg)	\
