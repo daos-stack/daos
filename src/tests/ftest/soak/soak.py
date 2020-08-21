@@ -464,7 +464,6 @@ class SoakTestBase(TestWithServers):
 
         """
         commands = []
-
         iteration = self.test_iteration
         ior_params = "/run/" + job_spec + "/*"
         # IOR job specs with a list of parameters; update each value
@@ -493,6 +492,9 @@ class SoakTestBase(TestWithServers):
                         ior_cmd.block_size.update(b_size)
                         ior_cmd.transfer_size.update(t_size)
                         ior_cmd.dfs_oclass.update(o_type)
+                        if ior_cmd.api.value == "DFS":
+                            ior_cmd.test_file.update(
+                                os.path.join("/", "testfile"))
                         ior_cmd.set_daos_params(self.server_group, pool)
                         # srun cmdline
                         nprocs = nodesperjob * ppn
@@ -697,7 +699,7 @@ class SoakTestBase(TestWithServers):
             error = os.path.join(
                 self.test_log_dir, self.test_name + "_" + job + "_" +
                 log_name + "_" +
-                str(ppn*nodesperjob) + "_%N_" + "%j_" + "_ERROR_")
+                str(ppn*nodesperjob) + "_%N_" + "%j_" + "ERROR_")
             sbatch = {
                 "time": str(self.job_timeout) + ":00",
                 "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
@@ -855,7 +857,7 @@ class SoakTestBase(TestWithServers):
         # unique numbers per pass
         self.used = []
         # Update the remote log directories from new loop/pass
-        self.sharedsoakdir = self.sharedlog_dir  + "/pass" + str(self.loop)
+        self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
         local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
