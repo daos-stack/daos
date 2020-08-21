@@ -73,7 +73,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	DFUSE_TRA_INFO(ev, "%#zx-%#zx requested pid=%d",
 		       position, position + len - 1, fc->pid);
 
-
 	if (oh->doh_ie->ie_truncated &&
 	    position + len < oh->doh_ie->ie_stat.st_size &&
 		((oh->doh_ie->ie_start_off == 0 &&
@@ -148,10 +147,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	if (ev->de_len <= len) {
 		if (ev->de_len == 0)
 			DFUSE_TRA_DEBUG(oh, "Truncated read, %#zx-%#zx (EOF)",
-				        position, position);
+					position, position);
 		else if (ev->de_len != len)
 			DFUSE_TRA_DEBUG(oh, "Truncated read, %#zx-%#zx",
-				        position, position + ev->de_len - 1);
+					position, position + ev->de_len - 1);
 		DFUSE_REPLY_BUF(oh, req, buff, ev->de_len);
 		D_FREE(buff);
 		D_FREE(ev);
