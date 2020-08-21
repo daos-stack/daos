@@ -13,6 +13,7 @@ timeout: 600
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
+  nvme_size: 16G
 server_config:
   servers_per_host: 2
   name: daos_server
