@@ -446,7 +446,7 @@ class MacsioCommand(ExecutableCommand):
             get_log_file(self.timings_file_name.value),
             "macsio.timings_file_name")
 
-    def get_environment(self, manager, log_file=None, vol=False):
+    def get_environment(self, manager, log_file=None):
         """Get the environment variables to export for the command.
 
         Args:
@@ -467,13 +467,6 @@ class MacsioCommand(ExecutableCommand):
             "DAOS_SVCL": self.daos_svcl,
             "DAOS_CONT": self.daos_cont,
         }
-        if vol:
-            plugin_path = self.params.get("plugin_path", default="")
-            vol_env = {
-                "HDF5_VOL_CONNECTOR": "daos",
-                "HDF5_PLUGIN_PATH": "{}".format(plugin_path)
-            }
-            mapping.update(vol_env)
         for key in mapping:
             if mapping[key]:
                 env[key] = mapping[key]
