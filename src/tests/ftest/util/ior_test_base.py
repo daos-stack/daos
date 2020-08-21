@@ -195,7 +195,7 @@ class IorTestBase(TestWithServers):
 
         """
         # Initialize MpioUtils if IOR is running in MPIIO or DFS mode
-        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS"]:
+        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS", "HDF5"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
@@ -210,7 +210,7 @@ class IorTestBase(TestWithServers):
         return self.mpirun
 
     def check_subprocess_status(self, operation="write"):
-        """Check subprocess status """
+        """Check subprocess status."""
         if operation == "write":
             self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
         elif operation == "read":
@@ -258,6 +258,7 @@ class IorTestBase(TestWithServers):
 
     def stop_ior(self):
         """Stop IOR process.
+
         Args:
             manager (str): mpi job manager command
         """
@@ -272,7 +273,6 @@ class IorTestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             self.pool.display_pool_daos_space()
-
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -394,7 +394,7 @@ class IorTestBase(TestWithServers):
                     actual_pool_size, expected_pool_size))
 
     def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
-        """Execute cmd using general_utils.pcmd
+        """Execute cmd using general_utils.pcmd.
 
           Args:
             cmd (str): String command to be executed
@@ -405,6 +405,7 @@ class IorTestBase(TestWithServers):
           Returns:
             dict: a dictionary of return codes keys and accompanying NodeSet
                   values indicating which hosts yielded the return code.
+
         """
         try:
             # execute bash cmds
@@ -420,7 +421,7 @@ class IorTestBase(TestWithServers):
                         "Error running '{}' on the following "
                         "hosts: {}".format(cmd, error_hosts))
 
-         # report error if any command fails
+        # report error if any command fails
         except CommandFailure as error:
             self.log.error("DfuseSparseFile Test Failed: %s",
                            str(error))

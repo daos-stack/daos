@@ -165,9 +165,14 @@ String qb_inst_rpms_run_test() {
 String functional_rpms(String distro) {
     String rpms = "openmpi3 hwloc ndctl " +
                   "ior-hpc-cart-4-daos-0 " +
-                  "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
+                  "romio-tests-cart-4-daos-0 " +
+                  "hdf5-mpich2-tests-daos-0 " +
+                  "hdf5-openmpi3-tests-daos-0 " +
                   "testmpio-cart-4-daos-0 fio " +
-                  "mpi4py-tests-cart-4-daos-0 MACSio"
+                  "mpi4py-tests-cart-4-daos-0 " +
+                  "MACSio-openmpi3 " +
+                  "hdf5-vol-daos-openmpi3-tests-daos-0 " +
+                  "hdf5-vol-daos-mpich2-tests-daos-0 " +
 
     if (distro == "leap15") {
         return rpms

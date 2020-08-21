@@ -58,7 +58,7 @@ class IorCommand(ExecutableCommand):
         self.flags = FormattedParameter("{}")
 
         # Optional arguments
-        #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DFS]
+        #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DFS|HDF5]
         #   -b=1048576      blockSize -- contiguous bytes to write per task
         #   -d=0            interTestDelay -- delay between reps in seconds
         #   -f=STRING       scriptFile -- test script name
@@ -151,7 +151,7 @@ class IorCommand(ExecutableCommand):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.set_daos_pool_params(pool, display)
-        if self.api.value in ["DFS", "MPIIO", "POSIX"]:
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_group.update(group, "dfs_group" if display else None)
             self.dfs_cont.update(
                 cont_uuid if cont_uuid else str(uuid.uuid4()),
@@ -164,7 +164,7 @@ class IorCommand(ExecutableCommand):
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        if self.api.value in ["DFS", "MPIIO", "POSIX"]:
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_pool.update(
                 pool.pool.get_uuid_str(), "dfs_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
@@ -180,7 +180,7 @@ class IorCommand(ExecutableCommand):
             [str(item) for item in [
                 int(pool.pool.svc.rl_ranks[index])
                 for index in range(pool.pool.svc.rl_nr)]])
-        if self.api.value in ["DFS", "MPIIO", "POSIX"]:
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_aggregate_total(self, processes):
