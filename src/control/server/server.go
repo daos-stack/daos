@@ -330,7 +330,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
 	sysdb.OnLeaderGained(func(ctx context.Context) error {
 		mgmtSvc.startUpdateLoop(ctx)
-		mgmtSvc.requestGroupUpdate(ctx)
+		if mc, _ := sysdb.MemberCount(); mc > 0 {
+			mgmtSvc.requestGroupUpdate(ctx)
+		}
 		return nil
 	})
 
