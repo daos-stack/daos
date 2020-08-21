@@ -235,7 +235,8 @@ void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
 int  daos_sgl_init(d_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
-int daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
+		       int src_nr);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 			    int src_nr);
 int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
