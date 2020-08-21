@@ -234,8 +234,8 @@ crt_context_create(crt_context_t *crt_ctx)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	if (crt_is_service() &&
-            crt_gdata.cg_auto_swim_disable == 0 &&
-            ctx->cc_idx == CRT_DEFAULT_PROGRESS_CTX_IDX) {
+	    crt_gdata.cg_auto_swim_disable == 0 &&
+	    ctx->cc_idx == CRT_DEFAULT_PROGRESS_CTX_IDX) {
 		rc = crt_swim_init(CRT_DEFAULT_PROGRESS_CTX_IDX);
 		if (rc) {
 			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);

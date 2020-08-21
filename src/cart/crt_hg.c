@@ -484,19 +484,19 @@ crt_sep_hg_class_set(int provider, hg_class_t *class)
 	sep_hg_class = class;
 }
 
-static hg_class_t*
-crt_hg_class_init(int provider, int idx)
+static int
+crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 {
 	char			*info_string = NULL;
 	struct hg_init_info	init_info = HG_INIT_INFO_INITIALIZER;
 	hg_class_t		*hg_class = NULL;
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	na_size_t		str_size = CRT_ADDR_STR_MAX_LEN;
-	int			rc;
+	int			rc = DER_SUCCESS;
 
 	rc = crt_get_info_string(&info_string, idx);
 	if (rc != 0)
-		D_GOTO(out, hg_class = NULL);
+		D_GOTO(out, rc);
 
 	init_info.na_init_info.progress_mode = 0;
 
@@ -508,14 +508,14 @@ crt_hg_class_init(int provider, int idx)
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
-		D_GOTO(out, hg_class = NULL);
+		D_GOTO(out, rc = -DER_HG);
 	}
 
 	rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
 	if (rc != 0) {
 		D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
 		HG_Finalize(hg_class);
-		D_GOTO(out, hg_class = NULL);
+		D_GOTO(out, rc = -DER_HG);
 	}
 
 	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
@@ -530,12 +530,15 @@ crt_hg_class_init(int provider, int idx)
 		D_ERROR("crt_hg_reg_rpcid() for prov=%d idx=%d failed; rc=%d\n",
 			provider, idx, rc);
 		HG_Finalize(hg_class);
-		D_GOTO(out, hg_class = NULL);
+		D_GOTO(out, rc = -DER_HG);
 	}
 
 out:
+	if (rc == 0)
+		*ret_hg_class = hg_class;
+
 	D_FREE(info_string);
-	return hg_class;
+	return rc;
 }
 
 int
@@ -562,13 +565,18 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	if (sep_mode) {
 		/* Only initialize class for context0 */
 		if (idx == 0) {
-			hg_class = crt_hg_class_init(provider, idx);
+			rc = crt_hg_class_init(provider, idx, &hg_class);
+			if (rc != 0)
+				D_GOTO(out, rc);
+
 			crt_sep_hg_class_set(provider, hg_class);
 		} else {
 			hg_class = crt_sep_hg_class_get(provider);
 		}
 	} else {
-		hg_class = crt_hg_class_init(provider, idx);
+		rc = crt_hg_class_init(provider, idx, &hg_class);
+		if (rc != 0)
+			D_GOTO(out, rc);
 	}
 
 	if (!hg_class) {
