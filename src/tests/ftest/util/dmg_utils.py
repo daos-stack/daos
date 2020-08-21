@@ -468,6 +468,44 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
+    def pool_extend(self, pool, rank, tgt_idx=None):
+        """Extend the daos_server pool
+
+        Args:
+            pool (str): Pool uuid.
+            rank (int): Rank of the daos_server to extend
+            tgt_idx (int): target included to the pool
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool extend command fails.
+
+        """
+        return self._get_result(
+            ("pool", "extend"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+
+    def pool_drain(self, pool, rank, tgt_idx=None):
+        """Drain a daos_server from the pool
+
+        Args:
+            pool (str): Pool uuid.
+            rank (int): Rank of the daos_server to drain
+            tgt_idx (int): target to be excluded from the pool
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool drain command fails.
+
+        """
+        return self._get_result(
+            ("pool", "drain"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+
     def pool_reintegrate(self, pool, rank, tgt_idx=None):
         """Reintegrate a daos_server to the pool.
 
