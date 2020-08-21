@@ -143,7 +143,7 @@ int
 daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src, int src_nr)
 {
 	return daos_sgls_copy_internal(dst, dst_nr, src, src_nr, false, false,
-				       false);
+				       true);
 }
 
 int
