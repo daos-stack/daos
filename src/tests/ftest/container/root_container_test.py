@@ -156,7 +156,7 @@ class RootContainerTest(TestWithServers):
         #Insert files into sub container
         self.insert_files_and_verify("cont0")
         #Create 100 subcontainer and verify the temp files
-        self.verify_create_delete_containers(pool, self.cont_count)
+        self.verify_create_delete_containers(pool, 100)
         self.verify_multi_pool_containers()
 
     def verify_multi_pool_containers(self):
