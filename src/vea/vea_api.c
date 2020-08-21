@@ -364,7 +364,9 @@ done:
 	D_ASSERT(resrvd->vre_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(resrvd->vre_blk_cnt == blk_cnt);
 
-	D_ASSERT(vsi->vsi_stat[STAT_FREE_BLKS] >= blk_cnt);
+	D_ASSERTF(vsi->vsi_stat[STAT_FREE_BLKS] >= blk_cnt,
+		  "free:"DF_U64" < rsrvd:%u\n",
+		  vsi->vsi_stat[STAT_FREE_BLKS], blk_cnt);
 	vsi->vsi_stat[STAT_FREE_BLKS] -= blk_cnt;
 
 	/* Update hint offset */

@@ -2188,7 +2188,7 @@ out:
 }
 
 void
-vos_dtx_cleanup(struct dtx_handle *dth)
+vos_dtx_cleanup_internal(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae = NULL;
@@ -2213,6 +2213,52 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 			dtx_evict_lid(cont, dae);
 		}
 	}
+}
 
-	vos_tx_end(dth, vos_cont2umm(cont), -DER_CANCELED);
+void
+vos_dtx_cleanup(struct dtx_handle *dth)
+{
+	struct vos_container	*cont;
+
+	if (!dtx_is_valid_handle(dth) || !dth->dth_active)
+		return;
+
+	cont = vos_hdl2cont(dth->dth_coh);
+	/** This will abort the transaction and callback to
+	 *  vos_dtx_cleanup_internal
+	 */
+	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, -DER_CANCELED);
+}
+
+/** Allocate space for saving the vos reservations and deferred actions */
+int
+vos_dtx_rsrvd_init(struct dtx_handle *dth)
+{
+	dth->dth_rsrvd_cnt = 0;
+	dth->dth_deferred_cnt = 0;
+
+	if (dth->dth_modification_cnt <= 1) {
+		dth->dth_rsrvds = &dth->dth_rsrvd_inline;
+		return 0;
+	}
+
+	D_ALLOC_ARRAY(dth->dth_rsrvds, dth->dth_modification_cnt);
+	if (dth->dth_rsrvds == NULL)
+		return -DER_NOMEM;
+
+	D_ALLOC_ARRAY(dth->dth_deferred, dth->dth_modification_cnt);
+	if (dth->dth_deferred == NULL) {
+		D_FREE(dth->dth_rsrvds);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+void
+vos_dtx_rsrvd_fini(struct dtx_handle *dth)
+{
+	D_FREE(dth->dth_deferred);
+	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
+		D_FREE(dth->dth_rsrvds);
 }

@@ -1622,7 +1622,7 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg);
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, &arg->pool.alive_svc,
+			    arg->dmg_config, arg->pool.alive_svc,
 			    layout1->ol_shards[0]->os_ranks[0]);
 	assert_true(disabled_nr < disabled_targets(arg));
 
@@ -1650,7 +1650,7 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	assert_success(rc);
 
 	daos_add_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			&arg->pool.alive_svc, rank_to_exclude);
+			arg->pool.alive_svc, rank_to_exclude);
 	assert_int_equal(disabled_nr, disabled_targets(arg));
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
@@ -1937,7 +1937,7 @@ test_enumerate_object(void **state)
 		csum_count++;
 	}
 
-	assert_int_equal(13, csum_count);
+	assert_int_equal(11, csum_count);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
@@ -1956,7 +1956,7 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	d_iov_t			csum_iov = {0};
 	d_sg_list_t		sgl = {0};
 	const uint32_t		akey_nr = 5;
-	const uint32_t		enum_nr = akey_nr * 2 + 1;
+	const uint32_t		enum_nr = akey_nr * 2 + 2;
 	daos_key_desc_t		kds[enum_nr];
 	const size_t		csum_buf_len = 10;
 	uint8_t			csum_buf[csum_buf_len];
