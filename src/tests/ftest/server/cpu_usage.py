@@ -21,7 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from general_utils import run_task
 import time
 
@@ -33,11 +33,12 @@ class CPUUsage(TestWithServers):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-5504")
     def test_cpu_usage(self):
         # pylint: disable=pylint-bad-continuation
         """
         JIRA ID: DAOS-4826
-        Test Description: Test CPU usage of daos_server.
+        Test Description: Test CPU usage of formatted and idle daos_io_server.
         :avocado: tags=all,hw,server,small,full_regression,cpu_usage
         """
         ps_get_cpu = r"ps -C daos_io_server -o %\cpu"
