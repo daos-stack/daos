@@ -92,6 +92,7 @@ obj_rw_complete(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (!daos_handle_is_inval(ioh)) {
 		uint32_t map_version;
 		int	 rc;
+		bool	 update = obj_rpc_is_update(rpc);
 
 		if (ioc->ioc_zc_fetch) {
 			/* complete the ioh after reply */
@@ -102,11 +103,13 @@ obj_rw_complete(struct obj_io_context *ioc, crt_rpc_t *rpc,
 
 		D_ASSERT(ioc->ioc_coc != NULL);
 		map_version = ioc->ioc_coc->sc_pool->spc_map_version;
-		rc = vos_update_end(ioh, map_version, &orwi->orw_dkey,
-				    status, dth);
+		rc = update ? vos_update_end(ioh, map_version, &orwi->orw_dkey,
+					     status, dth) :
+			      vos_fetch_end(ioh, status);
 		if (rc != 0) {
-			D_ERROR(DF_UOID "update end failed: %d\n",
-				DP_UOID(orwi->orw_oid), rc);
+			D_ERROR(DF_UOID "%s end failed: %d\n",
+				DP_UOID(orwi->orw_oid),
+				update ? "Update" : "Fetch", rc);
 			if (status == 0)
 				status = rc;
 		}
@@ -933,7 +936,7 @@ obj_local_rw(struct obj_io_context *ioc, crt_rpc_t *rpc,
 
 	ioc->ioc_zc_fetch = !obj_rpc_is_update(rpc) && !rma;
 	/* Prepare IO descriptor */
-	if (!ioc->ioc_zc_fetch) {
+	if (obj_rpc_is_update(rpc)) {
 		obj_singv_ec_rw_filter(orw, iods, offs, true);
 		bulk_op = CRT_BULK_GET;
 		rc = vos_update_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
