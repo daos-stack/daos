@@ -20,6 +20,24 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+ /**
+ * MPI-based and cart-based crt_launch application that facilitates launching
+ * cart-based clients and servers when no pmix is used.
+ *
+ * Usage is mpirun -x OFI_INTERFACE=eth0 -H <hosts> crt_launch <app to run>
+ *
+ * crt_launch will prepare environment for app and exec provided <app to run>
+ * The environment consists of envariables:
+ *
+ * CRT_L_RANK - rank for <app to run> to use. Rank is negotiated across all
+ * instances of crt_launch so that each exec-ed app is passed a unique rank.
+ *
+ * CRT_L_GRP_CFG - Path to group configuration file generated in /tmp/ having
+ * form of crt_launch-info-XXXXXX where X's are replaced by random string.
+ *
+ * OFI_PORT - port to use for
+ *
+ */
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>

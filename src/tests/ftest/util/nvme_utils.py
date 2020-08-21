@@ -294,6 +294,7 @@ class ServerFillUp(IorTestBase):
         if 'Read' in operation:
             _create_cont = False
             self.ior_cmd.flags.value = self.ior_read_flags
+
         #For IOR Other operation, calculate the block size based on server %
         #to fill up. Store the container UUID for future reading operation.
         block_size = self.calculate_ior_block_size()
