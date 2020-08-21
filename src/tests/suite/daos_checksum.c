@@ -1946,7 +1946,7 @@ test_enumerate_object(void **state)
 		csum_count++;
 	}
 
-	assert_int_equal(11, csum_count);
+	assert_int_equal(enum_nr, csum_count);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
