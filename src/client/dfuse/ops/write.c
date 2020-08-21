@@ -32,7 +32,7 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 	else
 		DFUSE_REPLY_ERR_RAW(ev, ev->de_req,
 				    daos_der2errno(ev->de_ev.ev_error));
-	D_FREE(ev->de_buff);
+	D_FREE(ev->de_iov.iov_buf);
 }
 
 void
@@ -60,15 +60,14 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	/* Allocate temporary space for the data whilst they asynchronous
 	 * operation is happening.
 	 */
-	D_ALLOC(ev->de_buff, len);
-	if (ev->de_buff == NULL)
-		D_GOTO(err, rc = ENOMEM);
 
 	/* Declare a bufvec on the stack and have fuse copy into it.
 	 * For page size and above this will read directly into the
 	 * buffer, avoiding any copying of the data.
 	 */
-	ibuf.buf[0].mem = ev->de_buff;
+	D_ALLOC(ibuf.buf[0].mem, len);
+	if (ibuf.buf[0].mem == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	rc = fuse_buf_copy(&ibuf, bufv, 0);
 	if (rc != len)
@@ -83,7 +82,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
 	ev->de_sgl.sg_nr = 1;
-	d_iov_set(&ev->de_iov, ev->de_buff, len);
+	d_iov_set(&ev->de_iov, ibuf.buf[0].mem, len);
 	ev->de_sgl.sg_iovs = &ev->de_iov;
 
 	/* Check for potentially using readahead on this file, ie_truncated
@@ -115,7 +114,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	if (ev)
-		D_FREE(ev->de_buff);
+	D_FREE(ibuf.buf[0].mem);
 	D_FREE(ev);
 }

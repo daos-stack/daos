@@ -164,7 +164,6 @@ struct dfuse_event {
 	daos_event_t	de_ev;
 	void		(*de_complete_cb)(struct dfuse_event *ev);
 	size_t		de_len;
-	void		*de_buff;
 	d_iov_t		de_iov;
 	d_sg_list_t	de_sgl;
 };

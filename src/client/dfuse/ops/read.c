@@ -29,12 +29,22 @@
 static void
 dfuse_cb_read_complete(struct dfuse_event *ev)
 {
-	if (ev->de_ev.ev_error == 0)
-		DFUSE_REPLY_BUF(ev, ev->de_req, ev->de_buff, ev->de_len);
-	else
+	if (ev->de_ev.ev_error == 0) {
+		size_t len = ev->de_iov.iov_buf_len;
+
+		if (ev->de_len == 0)
+			DFUSE_TRA_DEBUG(ev, "Truncated read, (EOF)");
+		else if (ev->de_len != len)
+			DFUSE_TRA_DEBUG(ev,
+					"Truncated read, requested %#zx returned %#zx",
+					len, ev->de_len);
+
+		DFUSE_REPLY_BUF(ev, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
+	} else {
 		DFUSE_REPLY_ERR_RAW(ev, ev->de_req,
 				    daos_der2errno(ev->de_ev.ev_error));
-	D_FREE(ev->de_buff);
+	}
+	D_FREE(ev->de_iov.iov_buf);
 }
 
 
@@ -54,12 +64,15 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	bool				async = false;
 	struct dfuse_event		*ev = NULL;
 
-	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested pid=%d",
-		       position, position + len - 1, fc->pid);
-
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
+
+	DFUSE_TRA_UP(ev, oh, "event");
+
+	DFUSE_TRA_INFO(ev, "%#zx-%#zx requested pid=%d",
+		       position, position + len - 1, fc->pid);
+
 
 	if (oh->doh_ie->ie_truncated &&
 	    position + len < oh->doh_ie->ie_stat.st_size &&
@@ -100,6 +113,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 			ev->de_req = req;
 			ev->de_complete_cb = dfuse_cb_read_complete;
+			async = true;
 		}
 	}
 
@@ -115,8 +129,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		ev->de_len = buff_len;
 	} else {
 		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position,
-			      &ev->de_len,
-			async ? &ev->de_ev : NULL);
+			      &ev->de_len, async ? &ev->de_ev : NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_REPLY_ERR_RAW(oh, req, rc);
 			D_FREE(buff);
@@ -133,6 +146,12 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	}
 
 	if (ev->de_len <= len) {
+		if (ev->de_len == 0)
+			DFUSE_TRA_DEBUG(oh, "Truncated read, %#zx-%#zx (EOF)",
+				        position, position);
+		else if (ev->de_len != len)
+			DFUSE_TRA_DEBUG(oh, "Truncated read, %#zx-%#zx",
+				        position, position + ev->de_len - 1);
 		DFUSE_REPLY_BUF(oh, req, buff, ev->de_len);
 		D_FREE(buff);
 		D_FREE(ev);
