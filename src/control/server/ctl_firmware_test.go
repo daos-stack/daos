@@ -186,6 +186,106 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				NvmeResults: testNVMePB,
 			},
 		},
+		"both - success with devices": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+				QueryScm:  true,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes: storage.ScmModules{
+					{UID: "TestUid1"},
+					{UID: "TestUid2"},
+					{UID: "TestUid3"},
+				},
+				GetFirmwareStatusRes: testFWInfo,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: testNVMeDevs,
+			},
+			expResp: &ctlpb.FirmwareQueryResp{
+				ScmResults: []*ctlpb.ScmFirmwareQueryResp{
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid1"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid2"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid3"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+				},
+				NvmeResults: testNVMePB,
+			},
+		},
+		"both - no SCM found": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+				QueryScm:  true,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes: storage.ScmModules{},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: testNVMeDevs,
+			},
+			expResp: &ctlpb.FirmwareQueryResp{
+				ScmResults:  []*ctlpb.ScmFirmwareQueryResp{},
+				NvmeResults: testNVMePB,
+			},
+		},
+		"both - no NVMe found": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+				QueryScm:  true,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes: storage.ScmModules{
+					{UID: "TestUid1"},
+					{UID: "TestUid2"},
+					{UID: "TestUid3"},
+				},
+				GetFirmwareStatusRes: testFWInfo,
+			},
+			bmbc: &bdev.MockBackendConfig{},
+			expResp: &ctlpb.FirmwareQueryResp{
+				ScmResults: []*ctlpb.ScmFirmwareQueryResp{
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid1"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid2"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid3"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+				},
+				NvmeResults: []*ctlpb.NvmeFirmwareQueryResp{},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
