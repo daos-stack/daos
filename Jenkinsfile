@@ -66,29 +66,22 @@ String get_daos_packages(String distro) {
     return pkgs + "-" + daos_packages_version(distro)
 }
 
-String el7_pr_repos() {
-    return cachedCommitPragma(pragma: 'PR-repos-el7')
-}
-
-String leap15_pr_repos() {
-    return cachedCommitPragma(pragma: 'PR-repos-leap15')
-}
-
 String pr_repos() {
     Map stage_info = parseStageInfo()
     return pr_repos(stage_info['target'])
 }
 
 String pr_repos(String distro) {
-    string repos = ""
+    String repos = ""
     if (distro == 'centos7') {
-        repos = el7_pr_repos()
+        repos = cachedCommitPragma(pragma: 'PR-repos-el7')
+    }
     } else if (distro == 'leap15') {
-        repos = leap15_pr_repos()
+        repos = cachedCommitPragma(pragma: 'PR-repos-leap15')
     } else {
        error 'all_pr_repos not implemented for ' + distro
     }
-    string gen_pr_repos = cachedCommitPragma(pragma: 'PR-repos')
+    String gen_pr_repos = cachedCommitPragma(pragma: 'PR-repos')
     return repos + ' ' + gen_pr_repos
 }
 
@@ -218,7 +211,7 @@ String functional_packages() {
 }
 
 String functional_packages(String distro) {
-    string pkgs = get_daos_packages(distro)
+    String pkgs = get_daos_packages(distro)
     pkgs += " openmpi3 hwloc ndctl " +
             "ior-hpc-cart-4-daos-0 " +
             "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
