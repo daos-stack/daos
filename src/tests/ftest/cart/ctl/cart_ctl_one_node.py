@@ -70,17 +70,17 @@ class CartCtlOneNodeTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        clicmd = self.utils.build_cmd(self, self.env, "cli1")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients_1")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli2")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients_2")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli3")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients_3")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli4")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients_4")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli5")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients_5")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli6")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients_6")
         self.utils.launch_test(self, clicmd, srv_rtn)
 
 

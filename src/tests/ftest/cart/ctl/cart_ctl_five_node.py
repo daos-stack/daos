@@ -73,9 +73,9 @@ class CartCtlFiveNodeTest(Test):
 
         time.sleep(5)
 
-        clicmd = self.utils.build_cmd(self, self.env, "cli1")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients_1")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli2")
+        clicmd = self.utils.build_cmd(self, self.env, "test_clients_2")
         self.utils.launch_test(self, clicmd, srv_rtn)
 
         self.utils.stop_process(srv_rtn, self.utils)
