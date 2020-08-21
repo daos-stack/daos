@@ -1599,8 +1599,12 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 	int	i, j;
 	int	rc;
 
-	if (iods == NULL)
+	if (iods == NULL) {
+		if (nr == 0)
+			return 0;
+
 		return -DER_INVAL;
+	}
 
 	for (i = 0; i < nr; i++) {
 		if (iods[i].iod_name.iov_buf == NULL) {
@@ -3352,6 +3356,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 			if (args->extra_flags & DIOF_CHECK_EXISTENCE)
 				dc_tx_check_existence_cb(args->extra_arg, task);
+			else if (daos_handle_is_valid(obj_auxi->th) &&
+				 (task->dt_result == 0 ||
+				  task->dt_result == -DER_NONEXIST))
+				/* Cache transactional read if exist or not. */
+				dc_tx_attach(obj_auxi->th, DAOS_OBJ_RPC_FETCH,
+					     task);
 			break;
 		}
 		case DAOS_OBJ_RPC_PUNCH:
@@ -3359,6 +3369,24 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_RPC_PUNCH_AKEYS:
 			if (daos_handle_is_valid(obj_auxi->th))
 				dc_tx_non_cpd_cb(obj_auxi->th, task->dt_result);
+			break;
+		case DAOS_OBJ_RPC_QUERY_KEY:
+		case DAOS_OBJ_RECX_RPC_ENUMERATE:
+		case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+		case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+			if (daos_handle_is_valid(obj_auxi->th) &&
+			    (task->dt_result == 0 ||
+			     task->dt_result == -DER_NONEXIST))
+				/* Cache transactional read if exist or not. */
+				dc_tx_attach(obj_auxi->th,
+					     obj_auxi->opc, task);
+			break;
+		case DAOS_OBJ_RPC_ENUMERATE:
+			/* XXX: For list dkey recursively, that is mainly used
+			 *	by rebuild and object consistency verification,
+			 *	currently, we do not have any efficient way to
+			 *	trace and spread related read TS to servers.
+			 */
 			break;
 		}
 
@@ -3505,6 +3533,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 		struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	struct daos_csummer	*csummer_copy = NULL;
 	struct cont_props	 cont_props = dc_cont_hdl2props(obj->cob_coh);
 	struct dcs_csum_info	*dkey_csum = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
@@ -3544,21 +3573,33 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 			return 0;
 	}
 
+	/** Used to do actual checksum calculations. This prevents conflicts
+	 * between tasks
+	 */
+	csummer_copy = daos_csummer_copy(csummer);
+	if (csummer_copy == NULL)
+		return -DER_NOMEM;
+
+
 	/** Calc 'd' key checksum */
-	rc = daos_csummer_calc_key(csummer, args->dkey, &dkey_csum);
-	if (rc != 0)
+	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
+	if (rc != 0) {
+		daos_csummer_destroy(&csummer_copy);
 		return rc;
+	}
 
 	/** Calc 'a' key checksum and value checksum */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, NULL,
+	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
 				    args->nr,
 				    false, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
-		daos_csummer_free_ci(csummer, &dkey_csum);
+		daos_csummer_free_ci(csummer_copy, &dkey_csum);
+		daos_csummer_destroy(&csummer_copy);
 		D_ERROR("daos_csummer_calc_iods error: %d", rc);
 		return rc;
 	}
+	daos_csummer_destroy(&csummer_copy);
 
 	/** fault injection - corrupt data and/or keys after calculating
 	 * checksum - simulates corruption over network
@@ -3581,6 +3622,7 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	       struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	struct daos_csummer	*csummer_copy;
 	struct dcs_csum_info	*dkey_csum = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
@@ -3597,21 +3639,33 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 		return 0;
 	}
 
+	/** Used to do actual checksum calculations. This prevents conflicts
+	 * between tasks
+	 */
+	csummer_copy = daos_csummer_copy(csummer);
+	if (csummer_copy == NULL)
+		return -DER_NOMEM;
+
 	/** dkey */
-	rc = daos_csummer_calc_key(csummer, args->dkey, &dkey_csum);
-	if (rc != 0)
+	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
+	if (rc != 0) {
+		daos_csummer_destroy(&csummer_copy);
 		return rc;
+	}
 
 	/** akeys (1 for each iod) */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, NULL,
+	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
 				    args->nr,
 				    true, obj_auxi->reasb_req.orr_singv_los,
 				    -1, &iod_csums);
 	if (rc != 0) {
 		D_ERROR("daos_csummer_calc_iods error: %d", rc);
-		daos_csummer_free_ci(csummer, &dkey_csum);
+		daos_csummer_free_ci(csummer_copy, &dkey_csum);
+		daos_csummer_destroy(&csummer_copy);
 		return rc;
 	}
+
+	daos_csummer_destroy(&csummer_copy);
 
 	/**
 	 * fault injection - corrupt keys after calculating checksum -
@@ -3870,7 +3924,7 @@ dc_obj_update_task(tse_task_t *task)
 
 	if (daos_handle_is_valid(args->th)) {
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, args, DAOS_OBJ_RPC_UPDATE, task);
+		rc = dc_tx_attach(args->th, DAOS_OBJ_RPC_UPDATE, task);
 		goto comp;
 	}
 
@@ -4335,7 +4389,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	if (daos_handle_is_valid(args->th)) {
 
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, args, opc, task);
+		rc = dc_tx_attach(args->th, opc, task);
 		goto comp;
 	}
 	/* submit the punch */
