@@ -3512,19 +3512,20 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 static int
 btr_iter_is_ready(struct btr_iterator *iter)
 {
-	D_DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
+
+	if (likely(iter->it_state == BTR_ITR_READY))
+		return 0;
 
 	switch (iter->it_state) {
-	default:
-		D_ASSERT(0);
 	case BTR_ITR_NONE:
 	case BTR_ITR_INIT:
 		return -DER_NO_PERM;
-	case BTR_ITR_READY:
-		return 0;
 	case BTR_ITR_FINI:
 		return -DER_NONEXIST;
+	default:
+		D_ASSERT(0);
 	}
+	return 0;
 }
 
 static int
@@ -3638,8 +3639,6 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 	struct btr_context  *tcx;
 	struct btr_record   *rec;
 	int		     rc;
-
-	D_DEBUG(DB_TRACE, "Current iterator\n");
 
 	tcx = btr_hdl2tcx(ih);
 	if (tcx == NULL)

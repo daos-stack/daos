@@ -160,7 +160,7 @@ open_retry:
 		D_GOTO(unlock, rc = -DER_NONEXIST);
 	}
 
-	D_DEBUG(DB_IO, "Open object shard %d\n", shard);
+	D_DEBUG(DB_TRACE, "Open object shard %d\n", shard);
 
 	if (obj_shard->do_obj == NULL) {
 		daos_unit_oid_t	 oid;
