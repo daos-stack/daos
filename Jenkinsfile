@@ -141,7 +141,7 @@ String unit_packages() {
         if (quickbuild()) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
-                        " boost-devel libisa-l_crypto"
+                        " boost-devel libisa-l_crypto libfabric-debuginfo"
         }
         return packages
     } else {
