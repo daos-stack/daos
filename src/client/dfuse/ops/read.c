@@ -77,7 +77,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 				oh->doh_ie->ie_end_off == 0) ||
 				(position >= oh->doh_ie->ie_end_off ||
 					pos_ra <= oh->doh_ie->ie_start_off))) {
-
 			readahead = true;
 		}
 	} else if (oh->doh_ie->ie_dfs->dfs_attr_timeout > 0 &&
@@ -142,7 +141,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	rc = pthread_mutex_trylock(&oh->doh_ie->ie_dfs->dfs_read_mutex);
 	if (rc == 0) {
-
 		fb.count = 1;
 		fb.buf[0].mem = buff + len;
 		fb.buf[0].size = ev->de_len - len;
