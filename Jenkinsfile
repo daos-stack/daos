@@ -75,14 +75,12 @@ String pr_repos(String distro) {
     String repos = ""
     if (distro == 'centos7') {
         repos = cachedCommitPragma(pragma: 'PR-repos-el7')
-    }
     } else if (distro == 'leap15') {
         repos = cachedCommitPragma(pragma: 'PR-repos-leap15')
     } else {
-       error 'all_pr_repos not implemented for ' + distro
+       error 'pr_repos not implemented for ' + distro
     }
-    String gen_pr_repos = cachedCommitPragma(pragma: 'PR-repos')
-    return repos + ' ' + gen_pr_repos
+    return repos + ' ' + cachedCommitPragma(pragma: 'PR-repos')
 }
 
 String daos_repo() {
@@ -996,7 +994,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
-                                 inst_repos: daos_repos(),
+                                 inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
@@ -1018,7 +1016,7 @@ pipeline {
                     steps {
                         unitTest timeout_time: 60,
                                  ignore_failure: true,
-                                 inst_repos: daos_repos(),
+                                 inst_repos: pr_repos(),
                                  inst_rpms: unit_packages()
                     }
                     post {
