@@ -27,8 +27,10 @@ from __future__ import print_function
 import sys
 import time
 
-from avocado       import Test
-from avocado       import main
+# Import avocado '@' function annotations
+import avocado
+from avocado  import Test
+from avocado  import main
 
 sys.path.append('./util')
 
@@ -50,6 +52,7 @@ class CartCtlFiveNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
+    @avocado.skip("Currently no support for heterogeneous multi-node tests")
     def test_cart_ctl(self):
         """
         Test CaRT ctl

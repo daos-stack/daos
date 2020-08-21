@@ -28,8 +28,10 @@ import os
 import sys
 import subprocess
 
-from avocado       import Test
-from avocado       import main
+# Import avocado '@' function annotations
+import avocado
+from avocado  import Test
+from avocado  import main
 
 sys.path.append('./util')
 
@@ -51,6 +53,7 @@ class GroupTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
+    @avocado.skip("Currently no support for heterogeneous multi-node tests")
     def test_group(self):
         """
         Test CaRT NoPmix Launcher

@@ -39,6 +39,8 @@ import cart_logparse
 import cart_logtest
 
 import avocado
+from avocado  import Test
+from avocado  import main
 
 import os, fnmatch
 

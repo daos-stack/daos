@@ -34,8 +34,10 @@ import codecs
 import subprocess
 import shlex
 
-from avocado       import Test
-from avocado       import main
+# Import avocado '@' function annotations
+import avocado
+from avocado  import Test
+from avocado  import main
 
 sys.path.append('./util')
 
@@ -213,6 +215,7 @@ class CartIvTwoNodeTest(Test):
                     raise ValueError('Error code {!s} running command "{!s}"' \
                             .format(cli_rtn, command))
 
+    @avocado.skip("Currently no support for heterogeneous multi-node tests")
     def test_cart_iv(self):
         """
         Test CaRT IV

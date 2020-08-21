@@ -26,8 +26,10 @@ from __future__ import print_function
 
 import sys
 
-from avocado       import Test
-from avocado       import main
+# Import avocado '@' function annotations
+import avocado
+from avocado  import Test
+from avocado  import main
 
 sys.path.append('./util')
 
@@ -49,6 +51,7 @@ class CartRpcTwoNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
+    @avocado.skip("Currently no support for heterogeneous multi-node tests")
     def test_cart_rpc(self):
         """
         Test CaRT RPC
