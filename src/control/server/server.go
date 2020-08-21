@@ -70,10 +70,6 @@ func cfgHasBdev(cfg *Configuration) bool {
 	return false
 }
 
-func instanceShmID(idx int) int {
-	return os.Getpid() + idx + 1
-}
-
 func iommuDetected() bool {
 	// Simple test for now -- if the path exists and contains
 	// DMAR entries, we assume that's good enough.
@@ -216,10 +212,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
 		}
 
-		// Each instance must have a unique shmid in order to run as SPDK primary.
-		// Use a stable identifier that's easy to construct elsewhere if we don't
-		// have access to the instance configuration.
-		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
 		// Indicate whether VMD devices have been detected and can be used.
 		srvCfg.Storage.Bdev.VmdDisabled = bdevProvider.IsVMDDisabled()
 
