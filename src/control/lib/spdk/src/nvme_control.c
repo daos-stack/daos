@@ -427,9 +427,3 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	clean_ret(ret);
 	return collect();
 }
-
-void
-nvme_cleanup(void)
-{
-	cleanup(true);
-}

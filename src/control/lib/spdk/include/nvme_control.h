@@ -67,10 +67,4 @@ nvme_format(char *ctrlr_pci_addr);
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
 
-/**
- * Cleanup structs held in memory.
- */
-void
-nvme_cleanup(void);
-
 #endif

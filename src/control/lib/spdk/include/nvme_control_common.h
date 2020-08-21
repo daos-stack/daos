@@ -75,7 +75,7 @@ struct ns_t {
 	struct ns_t    *next;
 };
 
-/*
+/**
  * \brief Raw SPDK device health statistics.
  */
 struct dev_health_t {
@@ -166,7 +166,7 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  struct spdk_nvme_ctrlr *ctrlr,
 	  const struct spdk_nvme_ctrlr_opts *opts);
 
-/*
+/**
  * Initialize the wipe_res_t struct by allocating memory and setting references
  * to NULL.
  *
@@ -175,7 +175,7 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 struct wipe_res_t *
 init_wipe_res(void);
 
-/*
+/**
  * Initialize the ret_t struct by allocating memory and setting references
  * to NULL.
  *
@@ -184,10 +184,11 @@ init_wipe_res(void);
 struct ret_t *
 init_ret(void);
 
-/*
+/**
  * Free memory allocated in linked lists attached to the ret_t struct.
  *
- * \param ret a pointer to a return struct (ret_t).
+ * \param ret A pointer to a return struct (ret_t) which itself needs to be
+ *            freed explicitly after calling clean_ret.
  **/
 void
 clean_ret(struct ret_t *ret);
