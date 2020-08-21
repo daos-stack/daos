@@ -21,7 +21,8 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
-                 '-Wframe-larger-than=4096']
+                 '-Wframe-larger-than=4096',
+                 ' -mavx2']
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
@@ -407,6 +408,7 @@ def scons(): # pylint: disable=too-many-locals
     env.Install("$PREFIX/lib64/daos", "VERSION")
     env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
+    env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['utils/sl/env_modules.py'])

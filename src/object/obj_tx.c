@@ -39,6 +39,13 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+/* Server side minor epoch is 16 bits, and starts from 1, that allows at most
+ * '2 ^ 16 - 1' sub modifications.
+ */
+#define DTX_SUB_WRITE_MAX	((1 << 16) - 1)
+#define DTX_SUB_REQ_MAX		((1ULL << 32) - 1)
+#define DTX_SUB_REQ_DEF		16
+
 enum dc_tx_status {
 	TX_OPEN,
 	TX_COMMITTING,
@@ -47,36 +54,24 @@ enum dc_tx_status {
 	TX_FAILED,
 };
 
-/* Request cache for each modification in the TX */
-struct dc_tx_sub_req {
-	/* link into dc_tx::tx_sub_reqs. */
-	d_list_t		 dtsr_link;
-	/* Pointer to the object to be modified. */
-	struct dc_object	*dtsr_obj;
-	/* The hashed dkey if applicable. */
-	uint64_t		 dtsr_dkey_hash;
-	/* The modification type: update/punch_obj/punch_dkey/punch_akey. */
-	uint32_t		 dtsr_opc;
-	/* Modification flags, see update/punch API. */
-	uint32_t		 dtsr_flags;
-	/* The count of akeys to be modified if applicable. */
-	uint32_t		 dtsr_nr;
-	/* Hold the dkey to be modified for non-zero-copy case. */
-	daos_key_t		 dtsr_dkey_inline;
-	/*
-	 * Pointer to the dkey to be modified, either dtsr_dkey_inline
-	 * or the TX sponsor given key buffer.
-	 */
-	daos_key_t		*dtsr_dkey;
-	union {
-		/* The array of akeys to be punched. */
-		daos_key_t	*dtsr_akeys;
-		/* The array of iods to be updated. */
-		daos_iod_t	*dtsr_iods;
-	};
-	/* Array of sgls to be updated. */
-	d_sg_list_t		*dtsr_sgls;
-};
+/*
+ * XXX: In the CPD RPC on-wire data, the read sub requests and write ones are
+ *	classified and stored separatedly (but adjacent each other). The Read
+ *	ones are in front of the write ones. Such layout will simplify server
+ *	side CPD RPC processing.
+ *
+ *	So when client caches the sub requests, we will keep the same layout,
+ *	that can avoid additional memory movement when pack sub requests into
+ *	CPD RPC. For such purpose, we will allocate large buffer to cache all
+ *	related sub-requests for both read and write consecutively.
+ *
+ *	LOW								 HIGH
+ *	|      <-- read reqs direction -- | -- write reqs directoion -->    |
+ *	|---------------------------------|---------------------------------|
+ *
+ *	The order for read sub requests is not important, but write ones must
+ *	be sorted as their sponsored order.
+ */
 
 /* Client transaction handle */
 struct dc_tx {
@@ -92,24 +87,122 @@ struct dc_tx {
 	struct dtx_epoch	 tx_epoch;
 	/** The task choosing the TX epoch. */
 	tse_task_t		*tx_epoch_task;
-	/** The list of dc_tx_sub_req. */
-	d_list_t		 tx_sub_reqs;
 	/** Transaction flags (DAOS_TF_RDONLY, DAOS_TF_ZERO_COPY, etc.) */
 	uint64_t		 tx_flags;
 	uint32_t		 tx_local:1; /* Local TX. */
-	/** The sub requests count */
-	uint32_t		 tx_sub_count;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
-	/** Pool map version when trigger first IO. */
-	uint32_t		 tx_pm_ver;
 	/** The rank for the server on which the TX leader resides. */
 	uint32_t		 tx_leader_rank;
 	/** The target index for the TX leader. */
 	uint32_t		 tx_leader_tag;
+
+	/* Pointer to the big buffer to cache all sub requests. */
+	struct daos_cpd_sub_req	*tx_req_cache;
+	/* How many sub requests can be held in the cache. */
+	uint32_t		 tx_total_slots;
+	/** The write requests count */
+	uint32_t		 tx_write_cnt;
+	/** The read requests count */
+	uint32_t		 tx_read_cnt;
+
+	/** Pool map version when trigger first IO. */
+	uint32_t		 tx_pm_ver;
 	/** Reference the pool. */
 	struct dc_pool		*tx_pool;
 };
+
+static int
+dc_tx_get_next_slot(struct dc_tx *tx, bool for_read,
+		    struct daos_cpd_sub_req **slot)
+{
+	struct daos_cpd_sub_req		*buf;
+	uint32_t			 start;
+	uint32_t			 idx;
+	uint32_t			 count;
+	uint32_t			 from;
+	uint32_t			 to;
+
+	if (for_read) {
+		if (tx->tx_flags & DAOS_TF_RDONLY)
+			start = tx->tx_total_slots - 1;
+		else if (tx->tx_total_slots > DTX_SUB_WRITE_MAX)
+			start = tx->tx_total_slots - DTX_SUB_WRITE_MAX - 1;
+		else
+			start = (tx->tx_total_slots >> 1) - 1;
+
+		/* All read slots are used. */
+		if (tx->tx_read_cnt > start)
+			goto full;
+
+		idx = start - tx->tx_read_cnt;
+	} else {
+		D_ASSERT(!(tx->tx_flags & DAOS_TF_RDONLY));
+
+		if (tx->tx_total_slots > DTX_SUB_WRITE_MAX)
+			start = tx->tx_total_slots - DTX_SUB_WRITE_MAX;
+		else
+			start = tx->tx_total_slots >> 1;
+
+		/* All write slots are used. */
+		if (tx->tx_write_cnt >= start)
+			goto full;
+
+		idx = start + tx->tx_write_cnt;
+	}
+
+	*slot = &tx->tx_req_cache[idx];
+
+	return 0;
+
+full:
+	if (!for_read && tx->tx_write_cnt >= DTX_SUB_WRITE_MAX)
+		return -DER_OVERFLOW;
+
+	if (((tx->tx_read_cnt + tx->tx_write_cnt) >= DTX_SUB_REQ_MAX) ||
+	    (tx->tx_total_slots >= DTX_SUB_REQ_MAX))
+		return -DER_OVERFLOW;
+
+	if (tx->tx_flags & DAOS_TF_RDONLY ||
+	    tx->tx_total_slots <= DTX_SUB_WRITE_MAX)
+		count = tx->tx_total_slots << 1;
+	else
+		count = (tx->tx_total_slots << 1) - DTX_SUB_WRITE_MAX;
+
+	D_ALLOC_ARRAY(buf, count);
+	if (buf == NULL)
+		return -DER_NOMEM;
+
+	if (for_read) {
+		from = 0;
+		if (tx->tx_flags & DAOS_TF_RDONLY)
+			start = count - 1;
+		else if (count > DTX_SUB_WRITE_MAX)
+			start = count - DTX_SUB_WRITE_MAX - 1;
+		else
+			start = (count >> 1) - 1;
+		to = start - tx->tx_read_cnt + 1;
+		idx = start - tx->tx_read_cnt;
+	} else {
+		from = start - tx->tx_read_cnt;
+		if (count > DTX_SUB_WRITE_MAX)
+			start = count - DTX_SUB_WRITE_MAX;
+		else
+			start = count >> 1;
+		to = start - tx->tx_read_cnt;
+		idx = start + tx->tx_write_cnt;
+	}
+
+	memcpy(buf + to, tx->tx_req_cache + from,
+	       (tx->tx_read_cnt + tx->tx_write_cnt) * sizeof(*buf));
+	D_FREE(tx->tx_req_cache);
+	tx->tx_req_cache = buf;
+	tx->tx_total_slots = count;
+
+	*slot = &tx->tx_req_cache[idx];
+
+	return 0;
+}
 
 static void
 dc_tx_free(struct d_hlink *hlink)
@@ -118,9 +211,13 @@ dc_tx_free(struct d_hlink *hlink)
 
 	tx = container_of(hlink, struct dc_tx, tx_hlink);
 	D_ASSERT(daos_hhash_link_empty(&tx->tx_hlink));
+	D_ASSERT(tx->tx_read_cnt == 0);
+	D_ASSERT(tx->tx_write_cnt == 0);
 
 	if (tx->tx_epoch_task != NULL)
 		tse_task_decref(tx->tx_epoch_task);
+
+	D_FREE(tx->tx_req_cache);
 	dc_pool_put(tx->tx_pool);
 	D_MUTEX_DESTROY(&tx->tx_lock);
 	D_FREE_PTR(tx);
@@ -188,8 +285,17 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	if (tx == NULL)
 		return -DER_NOMEM;
 
+	D_ALLOC_ARRAY(tx->tx_req_cache, DTX_SUB_REQ_DEF);
+	if (tx->tx_req_cache == NULL) {
+		D_FREE(tx);
+		return -DER_NOMEM;
+	}
+
+	tx->tx_total_slots = DTX_SUB_REQ_DEF;
+
 	rc = D_MUTEX_INIT(&tx->tx_lock, NULL);
 	if (rc != 0) {
+		D_FREE(tx->tx_req_cache);
 		D_FREE_PTR(tx);
 		return rc;
 	}
@@ -197,7 +303,6 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	tx->tx_pool = dc_hdl2pool(ph);
 	D_ASSERT(tx->tx_pool != NULL);
 
-	D_INIT_LIST_HEAD(&tx->tx_sub_reqs);
 	daos_dti_gen(&tx->tx_id, false);
 
 	if (epoch == 0) {
@@ -224,59 +329,103 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 }
 
 static void
-dc_tx_cleanup_one(struct dc_tx *tx, struct dc_tx_sub_req *dtsr)
+dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 {
 	int	i;
 
-	if (!(tx->tx_flags & DAOS_TF_ZERO_COPY)) {
-		switch (dtsr->dtsr_opc) {
-		case DAOS_OBJ_RPC_UPDATE:
-			for (i = 0; i < dtsr->dtsr_nr; i++) {
-				daos_iov_free(&dtsr->dtsr_iods[i].iod_name);
-				D_FREE(dtsr->dtsr_iods[i].iod_recxs);
-				daos_sgl_fini(&dtsr->dtsr_sgls[i], true);
+	switch (dcsr->dcsr_opc) {
+	case DCSO_UPDATE: {
+		struct daos_cpd_update	*dcu = &dcsr->dcsr_update;
+		struct obj_iod_array	*iod_array = dcu->dcu_iod_array;
+		struct daos_csummer	*csummer;
+
+		csummer = dc_cont_hdl2csummer(tx->tx_coh);
+
+		if (dcu->dcu_iod_array != NULL) {
+			for (i = 0; i < dcsr->dcsr_nr; i++) {
+				daos_iov_free(&iod_array->oia_iods[i].iod_name);
+				D_FREE(iod_array->oia_iods[i].iod_recxs);
 			}
 
-			D_FREE(dtsr->dtsr_iods);
-			D_FREE(dtsr->dtsr_sgls);
-			daos_iov_free(dtsr->dtsr_dkey);
-			break;
-		case DAOS_OBJ_RPC_PUNCH:
-			break;
-		case DAOS_OBJ_RPC_PUNCH_DKEYS:
-			daos_iov_free(dtsr->dtsr_dkey);
-			break;
-		case DAOS_OBJ_RPC_PUNCH_AKEYS:
-			for (i = 0; i < dtsr->dtsr_nr; i++)
-				daos_iov_free(&dtsr->dtsr_akeys[i]);
-
-			D_FREE(dtsr->dtsr_akeys);
-			daos_iov_free(dtsr->dtsr_dkey);
-			break;
-		default:
-			D_ASSERT(0);
+			obj_io_desc_fini(iod_array->oia_oiods);
+			daos_csummer_free_ic(csummer,
+					     &iod_array->oia_iod_csums);
+			D_FREE(iod_array->oia_offs);
+			D_FREE(dcu->dcu_iod_array);
 		}
+
+		if (dcu->dcu_flags & DRF_CPD_BULK) {
+			for (i = 0; i < dcsr->dcsr_nr; i++) {
+				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
+					crt_bulk_free(dcu->dcu_bulks[i]);
+			}
+		} else if (dcu->dcu_sgls != NULL) {
+			for (i = 0; i < dcsr->dcsr_nr; i++)
+				daos_sgl_fini(&dcu->dcu_sgls[i],
+					      !(tx->tx_flags &
+						DAOS_TF_ZERO_COPY));
+
+			D_FREE(dcu->dcu_sgls);
+		}
+
+		daos_csummer_free_ci(csummer, &dcu->dcu_dkey_csum);
+		D_FREE(dcu->dcu_ec_tgts);
+
+		daos_iov_free(&dcsr->dcsr_dkey);
+		break;
+	}
+	case DCSO_PUNCH_OBJ:
+		break;
+	case DCSO_PUNCH_DKEY:
+		daos_iov_free(&dcsr->dcsr_dkey);
+		break;
+	case DCSO_PUNCH_AKEY: {
+		struct daos_cpd_punch	*dcp = &dcsr->dcsr_punch;
+
+		for (i = 0; i < dcsr->dcsr_nr; i++)
+			daos_iov_free(&dcp->dcp_akeys[i]);
+
+		D_FREE(dcp->dcp_akeys);
+		daos_iov_free(&dcsr->dcsr_dkey);
+		break;
+	}
+	case DCSO_READ: {
+		struct daos_cpd_read	*dcr = &dcsr->dcsr_read;
+
+		for (i = 0; i < dcsr->dcsr_nr; i++)
+			daos_iov_free(&dcr->dcr_iods[i].iod_name);
+
+		D_FREE(dcr->dcr_iods);
+		daos_iov_free(&dcsr->dcsr_dkey);
+		break;
+	}
+	default:
+		D_ASSERT(0);
 	}
 
-	obj_decref(dtsr->dtsr_obj);
-	D_FREE(dtsr);
+	obj_decref(dcsr->dcsr_obj);
 }
 
 static void
 dc_tx_cleanup(struct dc_tx *tx)
 {
-	struct dc_tx_sub_req	*dtsr;
+	uint32_t	from;
+	uint32_t	to;
+	uint32_t	i;
 
-	while ((dtsr = d_list_pop_entry(&tx->tx_sub_reqs,
-					struct dc_tx_sub_req,
-					dtsr_link)) != NULL) {
-		dc_tx_cleanup_one(tx, dtsr);
-		tx->tx_sub_count--;
-	}
+	if (tx->tx_flags & DAOS_TF_RDONLY)
+		from = tx->tx_total_slots - tx->tx_read_cnt;
+	else if (tx->tx_total_slots > DTX_SUB_WRITE_MAX)
+		from = tx->tx_total_slots - DTX_SUB_WRITE_MAX - tx->tx_read_cnt;
+	else
+		from = (tx->tx_total_slots >> 1) - tx->tx_read_cnt;
 
-	D_ASSERTF(tx->tx_sub_count == 0,
-		  "Invalid sub requests count %d when cleanup\n",
-		  tx->tx_sub_count);
+	to = from + tx->tx_read_cnt + tx->tx_write_cnt;
+	for (i = from; i < to; i++)
+		dc_tx_cleanup_one(tx, &tx->tx_req_cache[i]);
+
+	tx->tx_read_cnt = 0;
+	tx->tx_write_cnt = 0;
 }
 
 /**
@@ -331,9 +480,9 @@ dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
 		if (tx->tx_epoch.oe_first == 0)
 			tx->tx_epoch.oe_first = tx->tx_epoch.oe_value;
 		D_DEBUG(DB_IO, DF_X64"/%p: set: value="DF_U64" first="DF_U64
-			" flags="DF_X64"\n", th.cookie, task,
+			" flags=%x, rpc flags %x\n", th.cookie, task,
 			tx->tx_epoch.oe_value, tx->tx_epoch.oe_first,
-			tx->tx_epoch.oe_flags);
+			tx->tx_epoch.oe_flags, tx->tx_epoch.oe_rpc_flags);
 	}
 
 out:
@@ -716,41 +865,55 @@ dc_tx_non_cpd_cb(daos_handle_t th, int result)
 static int
 dc_tx_commit_non_cpd(tse_task_t *task, struct dc_tx *tx)
 {
-	struct dc_tx_sub_req	*dtsr;
+	struct daos_cpd_sub_req	*dcsr;
 	struct dtx_epoch	 epoch = tx->tx_epoch;
 	uint32_t		 pm_ver = tx->tx_pm_ver;
 	int			 rc;
 
 	tx->tx_status = TX_COMMITTING;
-	dtsr = d_list_entry(tx->tx_sub_reqs.next, struct dc_tx_sub_req,
-			    dtsr_link);
+	dcsr = &tx->tx_req_cache[tx->tx_total_slots >> 1];
 
 	D_MUTEX_UNLOCK(&tx->tx_lock);
 
-	if (dtsr->dtsr_opc == DAOS_OBJ_RPC_UPDATE) {
+	if (dcsr->dcsr_opc == DCSO_UPDATE) {
 		daos_obj_update_t	*args = dc_task_get_args(task);
 
 		args->th = dc_tx_ptr2hdl(tx);
-		args->oh = obj_ptr2hdl(dtsr->dtsr_obj);
-		args->flags = dtsr->dtsr_flags;
-		args->dkey = dtsr->dtsr_dkey;
-		args->nr = dtsr->dtsr_nr;
-		args->iods = dtsr->dtsr_iods;
-		args->sgls = dtsr->dtsr_sgls;
+		args->oh = obj_ptr2hdl(dcsr->dcsr_obj);
+		args->flags = dcsr->dcsr_api_flags;
+		args->dkey = &dcsr->dcsr_dkey;
+		args->nr = dcsr->dcsr_nr;
+		args->iods = dcsr->dcsr_update.dcu_iod_array->oia_iods;
+		args->sgls = dcsr->dcsr_update.dcu_sgls;
 		args->ioms = NULL;
 
 		rc = dc_obj_update(task, &epoch, pm_ver, args);
 	} else {
 		daos_obj_punch_t	*args = dc_task_get_args(task);
+		uint32_t		 opc;
 
 		args->th = dc_tx_ptr2hdl(tx);
-		args->oh = obj_ptr2hdl(dtsr->dtsr_obj);
-		args->dkey = dtsr->dtsr_dkey;
-		args->akeys = dtsr->dtsr_akeys;
-		args->flags = dtsr->dtsr_flags;
-		args->akey_nr = dtsr->dtsr_nr;
+		args->oh = obj_ptr2hdl(dcsr->dcsr_obj);
+		args->dkey = &dcsr->dcsr_dkey;
+		args->akeys = dcsr->dcsr_punch.dcp_akeys;
+		args->flags = dcsr->dcsr_api_flags;
+		args->akey_nr = dcsr->dcsr_nr;
 
-		rc = dc_obj_punch(task, &epoch, pm_ver, dtsr->dtsr_opc, args);
+		switch (dcsr->dcsr_opc) {
+		case DCSO_PUNCH_OBJ:
+			opc = DAOS_OBJ_RPC_PUNCH;
+			break;
+		case DCSO_PUNCH_DKEY:
+			opc = DAOS_OBJ_RPC_PUNCH_DKEYS;
+			break;
+		case DCSO_PUNCH_AKEY:
+			opc = DAOS_OBJ_RPC_PUNCH_AKEYS;
+			break;
+		default:
+			D_ASSERT(0);
+		}
+
+		rc = dc_obj_punch(task, &epoch, pm_ver, opc, args);
 	}
 
 	/* -1 for dc_tx_commit() held */
@@ -770,7 +933,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx)
 	/* FIXME: Before support compounded RPC, let's use the existing
 	 *	  object update/punch RPC to commit the TX modification.
 	 */
-	if (tx->tx_sub_count == 1)
+	if (tx->tx_write_cnt == 1)
 		return dc_tx_commit_non_cpd(task, tx);
 
 	D_ASSERT(0);
@@ -850,11 +1013,6 @@ dc_tx_commit(tse_task_t *task)
 
 	D_MUTEX_LOCK(&tx->tx_lock);
 
-	if (tx->tx_flags & DAOS_TF_RDONLY) {
-		D_ERROR("Can't commit a RDONLY TX\n");
-		D_GOTO(out_tx, rc = -DER_NO_PERM);
-	}
-
 	if (tx->tx_status == TX_COMMITTED)
 		D_GOTO(out_tx, rc = 0);
 
@@ -862,12 +1020,12 @@ dc_tx_commit(tse_task_t *task)
 		/* FIXME: Before support compounded RPC, the retry update/punch
 		 *	  RPC will hit TX_COMMITTING status TX, that is normal.
 		 */
-		D_ASSERT(!d_list_empty(&tx->tx_sub_reqs));
+		D_ASSERT(tx->tx_write_cnt != 0);
 	} else if (tx->tx_status != TX_OPEN) {
 		D_ERROR("Can't commit non-open state TX (%d)\n",
 			tx->tx_status);
 		D_GOTO(out_tx, rc = -DER_NO_PERM);
-	} else if (d_list_empty(&tx->tx_sub_reqs)) {
+	} else if (tx->tx_write_cnt == 0) {
 		tx->tx_status = TX_COMMITTED;
 		D_GOTO(out_tx, rc = 0);
 	}
@@ -909,11 +1067,6 @@ dc_tx_abort(tse_task_t *task)
 	if (tx->tx_status != TX_OPEN) {
 		D_ERROR("Can't commit non-open state TX (%d)\n",
 			tx->tx_status);
-		D_GOTO(out_tx, rc = -DER_NO_PERM);
-	}
-
-	if (tx->tx_flags & DAOS_TF_RDONLY) {
-		D_ERROR("Can't abort a RDONLY TX\n");
 		D_GOTO(out_tx, rc = -DER_NO_PERM);
 	}
 
@@ -1081,101 +1234,103 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 		 daos_key_t *dkey, uint32_t nr, daos_iod_t *iods,
 		 d_sg_list_t *sgls)
 {
-	struct dc_tx_sub_req	*dtsr;
-	int			 rc = 0;
+	struct daos_cpd_sub_req	*dcsr;
+	struct daos_cpd_update	*dcu = NULL;
+	struct obj_iod_array	*iod_array = NULL;
+	int			 rc;
 	int			 i;
 
 	D_ASSERT(nr != 0);
 
-	D_ALLOC_PTR(dtsr);
-	if (dtsr == NULL)
-		return -DER_NOMEM;
+	rc = dc_tx_get_next_slot(tx, false, &dcsr);
+	if (rc != 0)
+		return rc;
 
-	dtsr->dtsr_obj = obj_hdl2ptr(oh);
-	if (dtsr->dtsr_obj == NULL)
-		D_GOTO(fail, rc = -DER_NO_HDL);
+	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	if (dcsr->dcsr_obj == NULL)
+		return -DER_NO_HDL;
 
-	dtsr->dtsr_opc = DAOS_OBJ_RPC_UPDATE;
-	dtsr->dtsr_flags = flags;
-	dtsr->dtsr_dkey_hash = obj_dkey2hash(dkey);
-	dtsr->dtsr_nr = nr;
+	rc = daos_iov_copy(&dcsr->dcsr_dkey, dkey);
+	if (rc != 0)
+		D_GOTO(fail, rc);
 
-	if (tx->tx_flags & DAOS_TF_ZERO_COPY) {
-		dtsr->dtsr_dkey = dkey;
-		dtsr->dtsr_iods = iods;
-		dtsr->dtsr_sgls = sgls;
-	} else {
-		dtsr->dtsr_dkey = &dtsr->dtsr_dkey_inline;
-		rc = daos_iov_copy(dtsr->dtsr_dkey, dkey);
+	dcsr->dcsr_opc = DCSO_UPDATE;
+	dcsr->dcsr_nr = nr;
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(dkey);
+	dcsr->dcsr_api_flags = flags;
+
+	dcu = &dcsr->dcsr_update;
+	D_ALLOC_PTR(dcu->dcu_iod_array);
+	if (dcu->dcu_iod_array == NULL)
+		D_GOTO(fail, rc = -DER_NOMEM);
+
+	iod_array = dcu->dcu_iod_array;
+	iod_array->oia_iod_nr = nr;
+
+	D_ALLOC_ARRAY(iod_array->oia_iods, nr);
+	if (iod_array->oia_iods == NULL)
+		D_GOTO(fail, rc = -DER_NOMEM);
+
+	for (i = 0; i < nr; i++) {
+		rc = daos_iov_copy(&iod_array->oia_iods[i].iod_name,
+				   &iods[i].iod_name);
 		if (rc != 0)
 			D_GOTO(fail, rc);
 
-		D_ALLOC_ARRAY(dtsr->dtsr_iods, nr);
-		if (dtsr->dtsr_iods == NULL)
+		iod_array->oia_iods[i].iod_size = iods[i].iod_size;
+		iod_array->oia_iods[i].iod_type = iods[i].iod_type;
+		iod_array->oia_iods[i].iod_nr = iods[i].iod_nr;
+
+		if (iods[i].iod_recxs == NULL)
+			continue;
+
+		D_ALLOC_ARRAY(iod_array->oia_iods[i].iod_recxs,
+			      iods[i].iod_nr);
+		if (iod_array->oia_iods[i].iod_recxs == NULL)
 			D_GOTO(fail, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dtsr->dtsr_sgls, nr);
-		if (dtsr->dtsr_sgls == NULL)
-			D_GOTO(fail, rc = -DER_NOMEM);
-
-		for (i = 0; i < nr; i++) {
-			rc = daos_iov_copy(&dtsr->dtsr_iods[i].iod_name,
-					   &iods[i].iod_name);
-			if (rc != 0)
-				D_GOTO(fail, rc);
-
-			dtsr->dtsr_iods[i].iod_type = iods[i].iod_type;
-			dtsr->dtsr_iods[i].iod_size = iods[i].iod_size;
-			dtsr->dtsr_iods[i].iod_nr = iods[i].iod_nr;
-
-			if (iods[i].iod_recxs == NULL)
-				continue;
-
-			D_ALLOC_ARRAY(dtsr->dtsr_iods[i].iod_recxs,
-				      iods[i].iod_nr);
-			if (dtsr->dtsr_iods[i].iod_recxs == NULL)
-				D_GOTO(fail, rc = -DER_NOMEM);
-
-			memcpy(dtsr->dtsr_iods[i].iod_recxs, iods[i].iod_recxs,
-			       sizeof(daos_recx_t) * iods[i].iod_nr);
-		}
-
-		rc = daos_sgls_copy_all(dtsr->dtsr_sgls, nr, sgls, nr);
-		if (rc != 0)
-			D_GOTO(fail, rc);
+		memcpy(iod_array->oia_iods[i].iod_recxs, iods[i].iod_recxs,
+		       sizeof(daos_recx_t) * iods[i].iod_nr);
 	}
 
-	d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
-	tx->tx_sub_count++;
+	D_ALLOC_ARRAY(dcu->dcu_sgls, nr);
+	if (dcu->dcu_sgls == NULL)
+		D_GOTO(fail, rc = -DER_NOMEM);
+
+	if (tx->tx_flags & DAOS_TF_ZERO_COPY)
+		rc = daos_sgls_copy_ptr(dcu->dcu_sgls, nr, sgls, nr);
+	else
+		rc = daos_sgls_copy_all(dcu->dcu_sgls, nr, sgls, nr);
+	if (rc != 0)
+		D_GOTO(fail, rc);
+
+	tx->tx_write_cnt++;
 
 	return 0;
 
 fail:
-	if (!(tx->tx_flags & DAOS_TF_ZERO_COPY)) {
-		if (dtsr->dtsr_iods != NULL) {
+	if (dcu != NULL) {
+		if (dcu->dcu_iod_array != NULL) {
 			for (i = 0; i < nr; i++) {
-				daos_iov_free(
-					&dtsr->dtsr_iods[i].iod_name);
-				D_FREE(dtsr->dtsr_iods[i].iod_recxs);
+				daos_iov_free(&iod_array->oia_iods[i].iod_name);
+				D_FREE(iod_array->oia_iods[i].iod_recxs);
 			}
 
-			D_FREE(dtsr->dtsr_iods);
+			D_FREE(dcu->dcu_iod_array);
 		}
 
-		if (dtsr->dtsr_sgls != NULL) {
+		if (dcu->dcu_sgls != NULL) {
 			for (i = 0; i < nr; i++)
-				daos_sgl_fini(&dtsr->dtsr_sgls[i], true);
+				daos_sgl_fini(&dcu->dcu_sgls[i],
+					      !(tx->tx_flags &
+						DAOS_TF_ZERO_COPY));
 
-			D_FREE(dtsr->dtsr_sgls);
+			D_FREE(dcu->dcu_sgls);
 		}
-
-		daos_iov_free(dtsr->dtsr_dkey);
 	}
 
-	if (dtsr->dtsr_obj != NULL)
-		obj_decref(dtsr->dtsr_obj);
-
-	D_FREE(dtsr);
+	daos_iov_free(&dcsr->dcsr_dkey);
+	obj_decref(dcsr->dcsr_obj);
 
 	return rc;
 }
@@ -1183,138 +1338,191 @@ fail:
 static int
 dc_tx_add_punch_obj(struct dc_tx *tx, daos_handle_t oh, uint64_t flags)
 {
-	struct dc_tx_sub_req	*dtsr;
-	int			 rc = 0;
+	struct daos_cpd_sub_req	*dcsr;
+	int			 rc;
 
-	D_ALLOC_PTR(dtsr);
-	if (dtsr == NULL)
-		return -DER_NOMEM;
+	rc = dc_tx_get_next_slot(tx, false, &dcsr);
+	if (rc != 0)
+		return rc;
 
-	dtsr->dtsr_obj = obj_hdl2ptr(oh);
-	if (dtsr->dtsr_obj == NULL)
-		D_GOTO(fail, rc = -DER_NO_HDL);
+	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	if (dcsr->dcsr_obj == NULL)
+		return -DER_NO_HDL;
 
-	dtsr->dtsr_opc = DAOS_OBJ_RPC_PUNCH;
-	dtsr->dtsr_flags = flags;
-	dtsr->dtsr_dkey_hash = 0;
+	dcsr->dcsr_opc = DCSO_PUNCH_OBJ;
+	dcsr->dcsr_api_flags = flags;
 
-	d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
-	tx->tx_sub_count++;
+	tx->tx_write_cnt++;
 
 	return 0;
-
-fail:
-	D_FREE(dtsr);
-
-	return rc;
 }
 
 static int
 dc_tx_add_punch_dkey(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 		     daos_key_t *dkey)
 {
-	struct dc_tx_sub_req	*dtsr;
-	int			 rc = 0;
+	struct daos_cpd_sub_req	*dcsr;
+	int			 rc;
 
-	D_ALLOC_PTR(dtsr);
-	if (dtsr == NULL)
-		return -DER_NOMEM;
+	rc = dc_tx_get_next_slot(tx, false, &dcsr);
+	if (rc != 0)
+		return rc;
 
-	dtsr->dtsr_obj = obj_hdl2ptr(oh);
-	if (dtsr->dtsr_obj == NULL)
-		D_GOTO(fail, rc = -DER_NO_HDL);
+	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	if (dcsr->dcsr_obj == NULL)
+		return -DER_NO_HDL;
 
-	dtsr->dtsr_opc = DAOS_OBJ_RPC_PUNCH_DKEYS;
-	dtsr->dtsr_flags = flags;
-	dtsr->dtsr_dkey_hash = obj_dkey2hash(dkey);
-
-	if (tx->tx_flags & DAOS_TF_ZERO_COPY) {
-		dtsr->dtsr_dkey = dkey;
-	} else {
-		dtsr->dtsr_dkey = &dtsr->dtsr_dkey_inline;
-		rc = daos_iov_copy(dtsr->dtsr_dkey, dkey);
-		if (rc != 0)
-			D_GOTO(fail, rc);
+	rc = daos_iov_copy(&dcsr->dcsr_dkey, dkey);
+	if (rc != 0) {
+		obj_decref(dcsr->dcsr_obj);
+		return rc;
 	}
 
-	d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
-	tx->tx_sub_count++;
+	dcsr->dcsr_opc = DCSO_PUNCH_DKEY;
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(dkey);
+	dcsr->dcsr_api_flags = flags;
+
+	tx->tx_write_cnt++;
 
 	return 0;
-
-fail:
-	if (dtsr->dtsr_obj != NULL)
-		obj_decref(dtsr->dtsr_obj);
-
-	D_FREE(dtsr);
-
-	return rc;
 }
 
 static int
 dc_tx_add_punch_akeys(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 		      daos_key_t *dkey, uint32_t nr, daos_key_t *akeys)
 {
-	struct dc_tx_sub_req	*dtsr;
-	int			 rc = 0;
+	struct daos_cpd_sub_req	*dcsr = NULL;
+	struct daos_cpd_punch	*dcp = NULL;
+	int			 rc;
 	int			 i;
 
 	D_ASSERT(nr != 0);
 
-	D_ALLOC_PTR(dtsr);
-	if (dtsr == NULL)
-		return -DER_NOMEM;
+	rc = dc_tx_get_next_slot(tx, false, &dcsr);
+	if (rc != 0)
+		return rc;
 
-	dtsr->dtsr_obj = obj_hdl2ptr(oh);
-	if (dtsr->dtsr_obj == NULL)
-		D_GOTO(fail, rc = -DER_NO_HDL);
+	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	if (dcsr->dcsr_obj == NULL)
+		return -DER_NO_HDL;
 
-	dtsr->dtsr_opc = DAOS_OBJ_RPC_PUNCH_AKEYS;
-	dtsr->dtsr_flags = flags;
-	dtsr->dtsr_dkey_hash = obj_dkey2hash(dkey);
-	dtsr->dtsr_nr = nr;
+	rc = daos_iov_copy(&dcsr->dcsr_dkey, dkey);
+	if (rc != 0)
+		goto fail;
 
-	if (tx->tx_flags & DAOS_TF_ZERO_COPY) {
-		dtsr->dtsr_dkey = dkey;
-		dtsr->dtsr_akeys = akeys;
-	} else {
-		dtsr->dtsr_dkey = &dtsr->dtsr_dkey_inline;
-		rc = daos_iov_copy(dtsr->dtsr_dkey, dkey);
+	dcp = &dcsr->dcsr_punch;
+	D_ALLOC_ARRAY(dcp->dcp_akeys, nr);
+	if (dcp->dcp_akeys == NULL)
+		D_GOTO(fail, rc = -DER_NOMEM);
+
+	for (i = 0; i < nr; i++) {
+		rc = daos_iov_copy(&dcp->dcp_akeys[i], &akeys[i]);
 		if (rc != 0)
 			D_GOTO(fail, rc);
-
-		D_ALLOC_ARRAY(dtsr->dtsr_akeys, nr);
-		if (dtsr->dtsr_akeys == NULL)
-			D_GOTO(fail, rc = -DER_NOMEM);
-
-		for (i = 0; i < nr; i++) {
-			rc = daos_iov_copy(&dtsr->dtsr_akeys[i], &akeys[i]);
-			if (rc != 0)
-				D_GOTO(fail, rc);
-		}
 	}
 
-	d_list_add_tail(&dtsr->dtsr_link, &tx->tx_sub_reqs);
-	tx->tx_sub_count++;
+	dcsr->dcsr_opc = DCSO_PUNCH_AKEY;
+	dcsr->dcsr_nr = nr;
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(dkey);
+	dcsr->dcsr_api_flags = flags;
+
+	tx->tx_write_cnt++;
 
 	return 0;
 
 fail:
-	if (!(tx->tx_flags & DAOS_TF_ZERO_COPY)) {
-		if (dtsr->dtsr_akeys != NULL) {
-			for (i = 0; i < nr; i++)
-				daos_iov_free(&dtsr->dtsr_akeys[i]);
+	if (dcp != NULL && dcp->dcp_akeys != NULL) {
+		for (i = 0; i < nr; i++)
+			daos_iov_free(&dcp->dcp_akeys[i]);
 
-			D_FREE(dtsr->dtsr_akeys);
-		}
-
-		daos_iov_free(dtsr->dtsr_dkey);
+		D_FREE(dcp->dcp_akeys);
 	}
 
-	if (dtsr->dtsr_obj != NULL)
-		obj_decref(dtsr->dtsr_obj);
+	daos_iov_free(&dcsr->dcsr_dkey);
+	obj_decref(dcsr->dcsr_obj);
 
-	D_FREE(dtsr);
+	return rc;
+}
+
+static int
+dc_tx_add_read(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
+	       daos_key_t *dkey, uint32_t nr, void *iods_or_akey)
+{
+	struct daos_cpd_sub_req	*dcsr = NULL;
+	struct daos_cpd_read	*dcr = NULL;
+	int			 rc;
+	int			 i;
+
+	if (tx->tx_status != TX_OPEN)
+		return 0;
+
+	if (tx->tx_local && tx->tx_flags & DAOS_TF_RDONLY)
+		return 0;
+
+	rc = dc_tx_get_next_slot(tx, true, &dcsr);
+	if (rc != 0)
+		return rc;
+
+	dcsr->dcsr_obj = obj_hdl2ptr(oh);
+	if (dcsr->dcsr_obj == NULL)
+		return -DER_NO_HDL;
+
+	/* Set read TS on object shard. */
+	if (dkey == NULL)
+		goto done;
+
+	rc = daos_iov_copy(&dcsr->dcsr_dkey, dkey);
+	if (rc != 0)
+		goto fail;
+
+	/* Set read TS on dkey. */
+	if (nr == 0)
+		goto done;
+
+	dcr = &dcsr->dcsr_read;
+	D_ALLOC_ARRAY(dcr->dcr_iods, nr);
+	if (dcr->dcr_iods == NULL)
+		D_GOTO(fail, rc = -DER_NOMEM);
+
+	/* If nr is 1, then the input @iods_or_akey is an akey.
+	 * Otherwise, it is iods array for fetch case.
+	 */
+	if (nr == 1) {
+		rc = daos_iov_copy(&dcr->dcr_iods[0].iod_name,
+				   (daos_key_t *)iods_or_akey);
+		if (rc != 0)
+			D_GOTO(fail, rc);
+
+		goto done;
+	}
+
+	for (i = 0; i < nr; i++) {
+		rc = daos_iov_copy(&dcr->dcr_iods[i].iod_name,
+				   &((daos_iod_t *)iods_or_akey)[i].iod_name);
+		if (rc != 0)
+			D_GOTO(fail, rc);
+	}
+
+done:
+	dcsr->dcsr_opc = DCSO_READ;
+	dcsr->dcsr_nr = nr;
+	dcsr->dcsr_dkey_hash = obj_dkey2hash(dkey);
+	dcsr->dcsr_api_flags = flags;
+
+	tx->tx_read_cnt++;
+
+	return 0;
+
+fail:
+	if (dcr != NULL && dcr->dcr_iods != NULL) {
+		for (i = 0; i < nr; i++)
+			daos_iov_free(&dcr->dcr_iods[i].iod_name);
+
+		D_FREE(dcr->dcr_iods);
+	}
+
+	daos_iov_free(&dcsr->dcsr_dkey);
+	obj_decref(dcsr->dcsr_obj);
 
 	return rc;
 }
@@ -1427,6 +1635,9 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 	cb_args->iods_or_akeys	= iods_or_akeys;
 	cb_args->sgls		= sgls;
 
+	/* XXX: Use conditional fetch (with empty sgls) to check the target
+	 *	existence on related server.
+	 */
 	if (nr != 0) {
 		D_ASSERT(iods_or_akeys != NULL);
 
@@ -1457,8 +1668,9 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 	}
 
 	rc = dc_obj_fetch_task_create(oh, dc_tx_ptr2hdl(tx), api_flags, dkey,
-			nr, DIOF_CHECK_EXISTENCE | DIOF_TO_LEADER, iods, sgls,
-			NULL, cb_args, NULL, tse_task2sched(parent), &task);
+				      nr, DIOF_CHECK_EXISTENCE | DIOF_TO_LEADER,
+				      iods, NULL, NULL, cb_args, NULL,
+				      tse_task2sched(parent), &task);
 	if (rc != 0)
 		goto out;
 
@@ -1491,20 +1703,19 @@ out:
 }
 
 int
-dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
-	     tse_task_t *task)
+dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 {
 	struct dc_tx	*tx;
 	int		 rc;
 	bool		 locked = true;
 
-	rc = dc_tx_check(th, true, &tx);
+	rc = dc_tx_check(th, obj_is_modification_opc(opc) ? true : false, &tx);
 	if (rc != 0)
 		return rc;
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE: {
-		daos_obj_update_t	*up = args;
+		daos_obj_update_t	*up = dc_task_get_args(task);
 
 		if (up->flags & (DAOS_COND_DKEY_INSERT |
 				 DAOS_COND_DKEY_UPDATE |
@@ -1523,7 +1734,7 @@ dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
 		break;
 	}
 	case DAOS_OBJ_RPC_PUNCH: {
-		daos_obj_punch_t	*pu = args;
+		daos_obj_punch_t	*pu = dc_task_get_args(task);
 
 		D_ASSERTF(!(pu->flags & DAOS_COND_MASK),
 			  "Unexpected cond flag %lx for punch obj\n",
@@ -1533,7 +1744,7 @@ dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
 		break;
 	}
 	case DAOS_OBJ_RPC_PUNCH_DKEYS: {
-		daos_obj_punch_t	*pu = args;
+		daos_obj_punch_t	*pu = dc_task_get_args(task);
 
 		if (pu->flags & DAOS_COND_PUNCH) {
 			D_MUTEX_UNLOCK(&tx->tx_lock);
@@ -1548,7 +1759,7 @@ dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
 		break;
 	}
 	case DAOS_OBJ_RPC_PUNCH_AKEYS: {
-		daos_obj_punch_t	*pu = args;
+		daos_obj_punch_t	*pu = dc_task_get_args(task);
 
 		if (pu->flags & DAOS_COND_PUNCH) {
 			D_MUTEX_UNLOCK(&tx->tx_lock);
@@ -1562,6 +1773,51 @@ dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
 						   pu->dkey, pu->akey_nr,
 						   pu->akeys);
 		}
+		break;
+	}
+	case DAOS_OBJ_RPC_FETCH: {
+		daos_obj_fetch_t	*fe = dc_task_get_args(task);
+
+		rc = dc_tx_add_read(tx, fe->oh, fe->flags, fe->dkey, fe->nr,
+				    fe->nr != 1 ? fe->iods :
+				    (void *)&fe->iods[0].iod_name);
+		break;
+	}
+	case DAOS_OBJ_RPC_QUERY_KEY: {
+		daos_obj_query_key_t	*qu = dc_task_get_args(task);
+		daos_key_t		*dkey;
+		uint32_t		 nr;
+
+		if (qu->flags & DAOS_GET_DKEY) {
+			dkey = NULL;
+			nr = 0;
+		} else if (qu->flags & DAOS_GET_AKEY) {
+			dkey = qu->dkey;
+			nr = 0;
+		} else {
+			dkey = qu->dkey;
+			nr = 1;
+		}
+
+		rc = dc_tx_add_read(tx, qu->oh, 0, dkey, nr, qu->akey);
+		break;
+	}
+	case DAOS_OBJ_RECX_RPC_ENUMERATE: {
+		daos_obj_list_recx_t	*lr = dc_task_get_args(task);
+
+		rc = dc_tx_add_read(tx, lr->oh, 0, lr->dkey, 1, lr->akey);
+		break;
+	}
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE: {
+		daos_obj_list_akey_t	*la = dc_task_get_args(task);
+
+		rc = dc_tx_add_read(tx, la->oh, 0, la->dkey, 0, NULL);
+		break;
+	}
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE: {
+		daos_obj_list_dkey_t	*ld = dc_task_get_args(task);
+
+		rc = dc_tx_add_read(tx, ld->oh, 0, NULL, 0, NULL);
 		break;
 	}
 	default:

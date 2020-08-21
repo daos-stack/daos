@@ -372,7 +372,8 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_DEDUP;
-	} else if (!strcmp(name, "dedup_th") || !strcmp(name, "dedup_threshold")) {
+	} else if (!strcmp(name, "dedup_th") ||
+		   !strcmp(name, "dedup_threshold")) {
 		char *endp;
 		long val;
 

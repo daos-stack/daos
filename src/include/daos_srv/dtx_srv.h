@@ -74,7 +74,9 @@ struct dtx_handle {
 					 /* Leader oid is touched. */
 					 dth_touched_leader_oid:1,
 					 /* Local TX is started. */
-					 dth_local_tx_started:1;
+					 dth_local_tx_started:1,
+					 /* Retry with this server. */
+					 dth_local_retry:1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -85,7 +87,8 @@ struct dtx_handle {
 	/** The flags, see dtx_entry_flags. */
 	uint32_t			 dth_flags;
 	/** The count of reserved items in the dth_rsrvds array. */
-	uint32_t			 dth_rsrvd_cnt;
+	uint16_t			 dth_rsrvd_cnt;
+	uint16_t			 dth_deferred_cnt;
 	/** The total sub modifications count. */
 	uint16_t			 dth_modification_cnt;
 	/** Modification sequence in the distributed transaction. */
@@ -103,6 +106,7 @@ struct dtx_handle {
 
 	struct dtx_rsrvd_uint		 dth_rsrvd_inline;
 	struct dtx_rsrvd_uint		*dth_rsrvds;
+	void				**dth_deferred;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
@@ -210,13 +214,15 @@ int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, struct ds_cont_child *cont,
 int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
 		      daos_epoch_t *epoch, uint32_t *pm_ver);
 
-/* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
- *	logic clock that will be hidden when divided by NSEC_PER_SEC.
- */
 static inline uint64_t
 dtx_hlc_age2sec(uint64_t hlc)
 {
-	return (crt_hlc_get() - hlc) / NSEC_PER_SEC;
+	uint64_t now = crt_hlc_get();
+
+	if (now <= hlc)
+		return 0;
+
+	return crt_hlc2sec(now - hlc);
 }
 
 static inline struct dtx_entry *
@@ -231,6 +237,12 @@ dtx_entry_put(struct dtx_entry *dte)
 {
 	if (--(dte->dte_refs) == 0)
 		D_FREE(dte);
+}
+
+static inline bool
+dtx_is_valid_handle(struct dtx_handle *dth)
+{
+	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
 }
 
 struct dtx_scan_args {

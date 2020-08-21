@@ -233,7 +233,7 @@ pool_init(struct dts_context *tsc)
 		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(),
 				     NULL, NULL,
 				     tsc->tsc_scm_size, tsc->tsc_nvme_size,
-				     svc, tsc->tsc_pool_uuid);
+				     NULL, svc, tsc->tsc_pool_uuid);
 		if (rc)
 			goto bcast;
 

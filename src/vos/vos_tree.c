@@ -27,7 +27,6 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
-#include <daos/btree_class.h>
 #include <daos/btree.h>
 #include <daos/mem.h>
 #include <daos/object.h>
@@ -440,7 +439,7 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	/** at this point, it's assumed that enough was allocated for the irec
 	 *  to hold a checksum of length csum->cs_len
 	 */
-	if (dth != NULL && dth->dth_flags & DTE_LEADER &&
+	if (dtx_is_valid_handle(dth) && dth->dth_flags & DTE_LEADER &&
 	    irec->ir_ex_addr.ba_type == DAOS_MEDIA_SCM &&
 	    DAOS_FAIL_CHECK(DAOS_VC_DIFF_REC)) {
 		void	*addr;
@@ -558,7 +557,11 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 	int			 rc;
 
 	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
-	umem_tx_add(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund));
+	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund),
+			  POBJ_XADD_NO_SNAPSHOT);
+	if (rc != 0)
+		return rc;
+
 	rec->rec_off = rbund->rb_off;
 	rbund->rb_off = UMOFF_NULL; /* taken over by btree */
 
@@ -589,18 +592,30 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 }
 
 static int
-svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
+		      bool overwrite)
 {
 	daos_epoch_t		*epc = (daos_epoch_t *)&rec->rec_hkey[0];
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	bio_addr_t		*addr = &irec->ir_ex_addr;
+	struct dtx_handle	*dth = NULL;
+	struct vos_rsrvd_scm	*rsrvd_scm;
+	struct pobj_action	*act;
+	int			 i;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
+	if (overwrite) {
+		dth = vos_dth_get();
+		if (dth == NULL)
+			return -DER_NO_PERM; /* Not allowed */
+	}
+
 	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
 				  irec->ir_dtx, *epc, rec->rec_off);
 
+	/** TODO: handle NVME */
 	/* SCM value is stored together with vos_irec_df */
 	if (addr->ba_type == DAOS_MEDIA_NVME) {
 		struct vos_pool *pool = tins->ti_priv;
@@ -609,7 +624,34 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		vos_bio_addr_free(pool, addr, irec->ir_size);
 	}
 
-	return umem_free(&tins->ti_umm, rec->rec_off);
+	if (!overwrite)
+		return umem_free(&tins->ti_umm, rec->rec_off);
+
+	/** Find an empty slot for the deferred free */
+	for (i = 0; i < dth->dth_deferred_cnt; i++) {
+		rsrvd_scm = dth->dth_deferred[i];
+		D_ASSERT(rsrvd_scm != NULL);
+
+		if (rsrvd_scm->rs_actv_at >= rsrvd_scm->rs_actv_cnt)
+			continue; /* Can't really be > but keep it simple */
+
+		act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
+		umem_defer_free(&tins->ti_umm, rec->rec_off, act);
+		rsrvd_scm->rs_actv_at++;
+
+		return 0;
+	}
+
+	/** We didn't reserve enough space */
+	D_ASSERT(0);
+
+	return -DER_MISC;
+}
+
+static int
+svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+{
+	return svt_rec_free_internal(tins, rec, false);
 }
 
 static int
@@ -647,7 +689,7 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	D_DEBUG(DB_IO, "Overwrite epoch "DF_X64".%d\n", skey->sk_epoch,
 		skey->sk_minor_epc);
 
-	rc = svt_rec_free(tins, rec, NULL);
+	rc = svt_rec_free_internal(tins, rec, true);
 	if (rc != 0)
 		return rc;
 
@@ -715,13 +757,6 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 		.ta_feats	= BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "singv",
 		.ta_ops		= &singv_btr_ops,
-	},
-	{
-		.ta_class	= DBTREE_CLASS_IV,
-		.ta_order	= VEA_TREE_ODR,
-		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
-		.ta_name	= "vea",
-		.ta_ops		= &dbtree_iv_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_END,
@@ -902,7 +937,6 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
-	bool			 found;
 	int			 rc;
 	int			 tmprc;
 
@@ -940,15 +974,12 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	case 0:
 		krec = rbund.rb_krec;
 		ilog = &krec->kr_ilog;
-		found = vos_ilog_ts_lookup(ts_set, ilog);
-		if (found)
-			break;
 		/** fall through to cache re-cache entry */
 	case -DER_NONEXIST:
 		/** Key hash already be calculated by dbtree_fetch so no need
 		 *  to pass in the key here.
 		 */
-		tmprc = vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		tmprc = vos_ilog_ts_add(ts_set, ilog, NULL, 0);
 		if (tmprc != 0) {
 			rc = tmprc;
 			D_ASSERT(tmprc == -DER_NO_PERM);
@@ -1012,13 +1043,13 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
 	       struct vos_ilog_info *info)
 {
-	struct vos_rec_bundle	*rbund;
+	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 	struct vos_krec_df	*krec;
 	struct ilog_df		*ilog = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
-	bool			 found = false;
 	bool			 mark = false;
 	int			 rc;
+	int			 lrc;
 
 	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
 			  val_iov);
@@ -1028,11 +1059,13 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			rbund = iov2rec_bundle(val_iov);
 			krec = rbund->rb_krec;
 			ilog = &krec->kr_ilog;
-			found = vos_ilog_ts_lookup(ts_set, ilog);
 		}
 
-		if (!found)
-			vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		lrc = vos_ilog_ts_add(ts_set, ilog, NULL, 0);
+		if (lrc != 0) {
+			rc = lrc;
+			goto done;
+		}
 
 		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
 			rc = -DER_NONEXIST;
@@ -1054,15 +1087,16 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	/** Punch always adds a log entry */
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
+	ilog = &krec->kr_ilog;
 
 	if (mark)
 		vos_ilog_ts_mark(ts_set, ilog);
 
-	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, parent,
+	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, parent,
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 
-	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
+	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));

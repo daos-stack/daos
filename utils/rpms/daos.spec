@@ -2,11 +2,16 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
+%if (0%{?suse_version} >= 1500)
+# until we get an updated mercury build on 15.2
+%global mercury_version 2.0.0~rc1-1.suse.lp151
+%else
 %global mercury_version 2.0.0~rc1-1%{?dist}
+%endif
 
 Name:          daos
 Version:       1.1.0
-Release:       30%{?relval}%{?dist}
+Release:       32%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -31,7 +36,11 @@ BuildRequires: libjson-c-devel
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse3-devel >= 3.4.2
+%if (0%{?suse_version} >= 1500)
+BuildRequires: libprotobuf-c-devel
+%else
 BuildRequires: protobuf-c-devel
+%endif
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
@@ -40,7 +49,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel >= 0.6.0
+BuildRequires: raft-devel = 0.6.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -54,6 +63,7 @@ BuildRequires: CUnit-devel
 BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
+BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
@@ -69,7 +79,7 @@ BuildRequires: cunit-devel
 BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
-BuildRequires: Modules
+BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
 %else
@@ -143,7 +153,6 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: fio
-Requires: json-c
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -208,6 +217,7 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
+mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
@@ -247,6 +257,8 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
+%dir %{_sysconfdir}/bash_completion.d
+%{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
@@ -372,6 +384,14 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Mon Aug 17 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-32
+- Install completion script in /etc/bash_completion.d
+
+* Wed Aug 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-31
+- Change fuse requirement to fuse3
+- Use Lmod for MPI module loading
+- Remove unneeded (and un-distro gated) Requires: json-c
+
 * Wed Jul 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-30
 - Add the daos_storage_estimator.py tool. It merges the functionality of the
   former tools vos_size, vos_size.py, vos_size_dfs_sample.py and parse_csv.py.
@@ -461,7 +481,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 - Remove scons_local as dependency
 
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
-- bump up go minimum version to 1.12
+- Bump up go minimum version to 1.12
 
 * Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
 - daos-server requires daos-client (same version)

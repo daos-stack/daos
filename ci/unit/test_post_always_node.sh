@@ -4,8 +4,6 @@ set -uex
 
 cd "$DAOS_BASE"
 mkdir run_test.sh
-mkdir vm_test
-mv nlt-errors.json vm_test/
 if ls /tmp/daos*.log > /dev/null; then
   mv /tmp/daos*.log run_test.sh/
 fi
@@ -17,7 +15,7 @@ x=0
 while [ "$x" -lt 10 ] &&
   pgrep '(orterun|daos_server|daos_io_server)'; do
   sleep 1
-  let x=$x+1
+  (( x=x+1 ))
 done
 if ! sudo umount /mnt/daos; then
   echo 'Failed to unmount /mnt/daos'
