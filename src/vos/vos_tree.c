@@ -431,7 +431,8 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	irec->ir_ex_addr	= biov->bi_addr;
 	irec->ir_ver		= rbund->rb_ver;
 	irec->ir_minor_epc	= skey->sk_minor_epc;
-	irec->ir_corrupt	= rbund->rb_corrupt;
+	if (rbund->rb_corrupt)
+		BIO_ADDR_SET_CORRUPTED(&irec->ir_ex_addr);
 
 	if (irec->ir_size == 0) { /* it is a punch */
 		csum->cs_csum = NULL;
@@ -495,7 +496,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
 
-	if (irec->ir_corrupt)
+	if (BIO_ADDR_IS_CORRUPTED(&irec->ir_ex_addr))
 		return -DER_CSUM;
 
 	return 0;

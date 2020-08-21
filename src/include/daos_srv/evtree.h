@@ -64,8 +64,8 @@ struct evt_desc {
 	/** The DTX entry in SCM. */
 	uint32_t			dc_dtx;
 	/** padding */
-	uint16_t			dc_corrupted;
-	uint16_t			dc_pad;
+//	uint16_t			dc_corrupted;
+	uint32_t			dc_pad;
 	/** placeholder for csum array buffer */
 	/** csum_count * csum_len (from tree root) is length of csum buf */
 	uint8_t				pt_csum[0];

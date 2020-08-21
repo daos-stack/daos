@@ -33,6 +33,13 @@
 #include <daos/common.h>
 #include <abt.h>
 
+#define BIO_ADDR_IS_CORRUPTED(addr) (addr)->ba_flags == BIO_FLAG_CORRUPTED
+#define BIO_ADDR_SET_CORRUPTED(addr) (addr)->ba_flags |= BIO_FLAG_CORRUPTED
+
+enum BIO_FLAG {
+	BIO_FLAG_CORRUPTED = (1 << 0),
+};
+
 typedef struct {
 	/*
 	 * Byte offset within PMDK pmemobj pool for SCM;
@@ -44,7 +51,7 @@ typedef struct {
 	/* Is the address a hole ? */
 	uint16_t	ba_hole;
 	uint16_t	ba_dedup;
-	uint16_t	ba_padding;
+	uint16_t	ba_flags;
 } bio_addr_t;
 
 /** Ensure this remains compatible */
