@@ -1,6 +1,7 @@
 {
    access-0
    Memcheck:Param
+   match-leak-kinds: reachable
    ...
    fun:send
    ...
