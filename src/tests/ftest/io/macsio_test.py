@@ -96,6 +96,6 @@ class MacsioTest(MacsioTestBase):
         status = self.macsio.check_results(
             self.run_macsio(
                 self.pool.uuid, convert_list(self.pool.svc_ranks),
-                self.container.uuid))
+                self.container.uuid, True))
         if status:
             self.log.info("Test passed")

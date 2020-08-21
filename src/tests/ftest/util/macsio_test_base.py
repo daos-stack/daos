@@ -23,7 +23,7 @@
 """
 from apricot import TestWithServers
 from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun, Orterun
+from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
 
 
@@ -45,11 +45,7 @@ class MacsioTestBase(TestWithServers):
 
         # Support using different job managers to launch the daos agent/servers
         mpi_type = self.params.get("mpi_type", default="mpich")
-        if mpi_type == "openmpi":
-            self.manager = Orterun(None, subprocess=False)
-        else:
-            self.manager = Mpirun(None, subprocess=False, mpitype="mpich")
-        #self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
+        self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):
@@ -69,7 +65,7 @@ class MacsioTestBase(TestWithServers):
 
         return macsio
 
-    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None):
+    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None, vol=False):
         """Run the macsio.
 
         Parameters for the macsio command are obtained from the test yaml file,
@@ -89,6 +85,10 @@ class MacsioTestBase(TestWithServers):
 
         """
         # Setup the job manager (mpirun) to run the macsio command
+        if vol:
+            plugin_path = self.params.get("plugin_path", default="")
+            self.macsio.env["HDF5_VOL_CONNECTOR"] = "daos"
+            self.macsio.env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
         self.macsio.daos_pool = pool_uuid
         self.macsio.daos_svcl = pool_svcl
         self.macsio.daos_cont = cont_uuid
