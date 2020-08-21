@@ -585,11 +585,19 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
+	hg_ctx->chc_hgcla = hg_class;
+	hg_ctx->chc_shared_hg_class = sep_mode;
+	/* TODO: need to create separate bulk class and bulk context? */
+	hg_ctx->chc_bulkcla = hg_ctx->chc_hgcla;
+	hg_ctx->chc_bulkctx = hg_ctx->chc_hgctx;
+
 	hg_context = HG_Context_create_id(hg_class, idx);
 	if (hg_context == NULL) {
 		D_ERROR("Could not create HG context.\n");
 		D_GOTO(out, rc = -DER_HG);
 	}
+
+	hg_ctx->chc_hgctx = hg_context;
 
 	/* register crt_ctx to get it in crt_rpc_handler_common */
 	hg_ret = HG_Context_set_data(hg_context, crt_ctx, NULL);
@@ -599,28 +607,11 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	hg_ctx->chc_hgcla = hg_class;
-	hg_ctx->chc_shared_hg_class = crt_gdata.cg_sep_mode;
-	hg_ctx->chc_hgctx = hg_context;
-
-	/* TODO: need to create separate bulk class and bulk context? */
-	hg_ctx->chc_bulkcla = hg_ctx->chc_hgcla;
-	hg_ctx->chc_bulkctx = hg_ctx->chc_hgctx;
-
 	rc = crt_hg_pool_init(hg_ctx);
 	if (rc != 0)
 		D_ERROR("context idx %d hg_ctx %p, crt_hg_pool_init failed, "
 			"rc: %d.\n", idx, hg_ctx, rc);
 out:
-	if (rc != 0) {
-		/* Destroy hg class on error */
-		if (hg_class) {
-			/* For SEP mode only destroy if ctx0 fails */
-			if ((sep_mode && idx == 0) || (!sep_mode))
-				HG_Finalize(hg_class);
-		}
-	}
-
 	return rc;
 }
 
