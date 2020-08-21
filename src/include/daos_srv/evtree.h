@@ -64,7 +64,8 @@ struct evt_desc {
 	/** The DTX entry in SCM. */
 	uint32_t			dc_dtx;
 	/** padding */
-	uint32_t			dc_pad;
+	uint16_t			dc_corrupted;
+	uint16_t			dc_pad;
 	/** placeholder for csum array buffer */
 	/** csum_count * csum_len (from tree root) is length of csum buf */
 	uint8_t				pt_csum[0];
@@ -300,6 +301,7 @@ struct evt_entry_in {
 	uint32_t		ei_inob;
 	/** Address of record to insert */
 	bio_addr_t		ei_addr;
+	bool			ei_corrupted;
 };
 
 enum evt_visibility {
@@ -325,6 +327,7 @@ struct evt_entry {
 	struct evt_extent		en_sel_ext;
 	/** checksums of the actual extent*/
 	struct dcs_csum_info		en_csum;
+	bool				en_corrupted;
 	/** pool map version */
 	uint32_t			en_ver;
 	/** Visibility flags for extent */

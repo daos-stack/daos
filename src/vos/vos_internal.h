@@ -535,6 +535,7 @@ struct vos_rec_bundle {
 	umem_off_t		 rb_off;
 	/** checksum buffer for the daos key */
 	struct dcs_csum_info	*rb_csum;
+	bool			 rb_corrupt;
 	/**
 	 * Input  : value buffer (non-rdma data)
 	 *	    TODO also support scatter/gather list input.

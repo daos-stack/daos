@@ -228,6 +228,7 @@ enum {
 	 * under the specified range. Intended for internal use only.
 	 */
 	VOS_OF_REMOVE		= (1 << 9),
+	VOS_OF_CORRUPT		= (1 << 10),
 };
 
 /** Mask for any conditionals passed to to the fetch */

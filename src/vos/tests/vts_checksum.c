@@ -26,10 +26,19 @@
 #include <evt_priv.h>
 #include "vts_io.h"
 
+#define assert_success(r) do {\
+	int __rc = (r); \
+	if (__rc != 0) \
+		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
+	} while (0)
+
+
+
 /*
  * Structure which uniquely identifies a extent in a key value pair.
  */
 struct extent_key {
+	daos_handle_t	pool_hdl;
 	daos_handle_t	container_hdl;
 	daos_unit_oid_t	object_id;
 	daos_key_t	dkey;
@@ -43,7 +52,7 @@ struct extent_key {
  */
 void
 extent_key_from_test_args(struct extent_key *k,
-			       struct io_test_args *args)
+			  struct io_test_args *args)
 {
 	/* Set up dkey and akey */
 	dts_key_gen(&k->dkey_buf[0], args->dkey_size, args->dkey);
@@ -52,6 +61,7 @@ extent_key_from_test_args(struct extent_key *k,
 	set_iov(&k->akey, &k->akey_buf[0], args->ofeat & DAOS_OF_AKEY_UINT64);
 
 	k->container_hdl = args->ctx.tc_co_hdl;
+	k->pool_hdl = args->ctx.tc_po_hdl;
 	k->object_id = args->oid;
 }
 
@@ -419,6 +429,91 @@ update_fetch_csum_for_array_10(void **state)
 	});
 }
 
+static void
+mark_sv_corrupted(void **state)
+{
+	struct extent_key	 k = {0};
+	daos_iod_t		 iod = {0};
+	d_sg_list_t		 sgl = {0};
+	int			 rc = 0;
+
+	/** setup */
+	extent_key_from_test_args(&k, *state);
+	dts_sgl_init_with_strings(&sgl, 1, "Going to be corrupted!!");
+
+	iod.iod_name = k.akey;
+	iod.iod_size = daos_sgl_buf_size(&sgl);
+	iod.iod_nr = 1;
+	iod.iod_type = DAOS_IOD_SINGLE;
+
+	assert_success(vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0,
+				      &k.dkey, 1, &iod, NULL, &sgl));
+
+	/** reset sgl and fetch just to sanity check that it works before
+	 * marking as corrupted
+	 */
+	memset(sgl.sg_iovs[0].iov_buf, 0, sgl.sg_iovs[0].iov_buf_len);
+	assert_success(vos_obj_fetch(k.container_hdl, k.object_id, 1, 0,
+				     &k.dkey, 1, &iod, &sgl));
+
+	/** Mark as corrupted using the corrupt flag */
+	assert_success(vos_obj_update(k.container_hdl, k.object_id, 1, 0,
+				      VOS_OF_CORRUPT,
+				      &k.dkey, 1, &iod, NULL, &sgl));
+
+	/** now should return a checksum error */
+	rc = vos_obj_fetch(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
+			   &sgl);
+	assert_int_equal(-DER_CSUM, rc);
+
+	/** clean up */
+	daos_sgl_fini(&sgl, true);
+}
+static void
+mark_extent_corrupted(void **state)
+{
+	struct extent_key	k;
+	daos_iod_t		iod = {0};
+	daos_recx_t		recx;
+	d_sg_list_t		sgl;
+	int			rc;
+
+	/** setup */
+	extent_key_from_test_args(&k, *state);
+	dts_sgl_init_with_strings(&sgl, 1, "Going to be corrupted!!");
+
+	recx.rx_nr = daos_sgl_buf_size(&sgl);
+	recx.rx_idx = 0;
+	iod.iod_name = k.akey;
+	iod.iod_size = 1;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	iod.iod_type = DAOS_IOD_ARRAY;
+
+	assert_success(vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0,
+				      &k.dkey, 1, &iod, NULL, &sgl));
+
+	/** reset sgl and fetch just to sanity check that it works before
+	 * marking as corrupted
+	 */
+	memset(sgl.sg_iovs[0].iov_buf, 0, sgl.sg_iovs[0].iov_buf_len);
+	assert_success(vos_obj_fetch(k.container_hdl, k.object_id, 1, 0,
+				     &k.dkey, 1, &iod, &sgl));
+
+	/** Mark as corrupted using the corrupt flag */
+	assert_success(vos_obj_update(k.container_hdl, k.object_id, 1, 0,
+				      VOS_OF_CORRUPT,
+				      &k.dkey, 1, &iod, NULL, &sgl));
+
+	/** now should return a checksum error */
+	rc = vos_obj_fetch(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
+			   &sgl);
+	assert_int_equal(-DER_CSUM, rc);
+
+	/** clean up */
+	daos_sgl_fini(&sgl, true);
+}
+
 /**
  * -------------------------------------
  * Helper function tests
@@ -737,6 +832,7 @@ test_evt_entry_csum_update(void **state)
 			 actual.cs_csum);
 }
 
+
 int setup(void **state)
 {
 	return 0;
@@ -761,6 +857,8 @@ static const struct CMUnitTest update_fetch_checksums_for_array_types[] = {
 	VOS("08: Partial -> more partial", update_fetch_csum_for_array_8),
 	VOS("09: Many sequential extents", update_fetch_csum_for_array_9),
 	VOS("10: Holes", update_fetch_csum_for_array_10),
+	VOS("11: Mark corrupted", mark_sv_corrupted),
+	VOS("WIP 12: Mark corrupted", mark_extent_corrupted),
 };
 
 #define	EVT(desc, test_fn) \

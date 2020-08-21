@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,6 +101,7 @@ struct ds_pool_child {
 	struct ds_pool		*spc_pool;
 	uuid_t			spc_uuid;	/* pool UUID */
 	struct sched_request	*spc_gc_req;	/* Track GC ULT */
+	struct sched_request	*spc_scrubbing_req; /* Track Scrubbing ULT */
 	d_list_t		spc_cont_list;
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so

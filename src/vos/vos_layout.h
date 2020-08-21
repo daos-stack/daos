@@ -348,8 +348,8 @@ struct vos_irec_df {
 	uint16_t			ir_cs_size;
 	/** key checksum type */
 	uint8_t				ir_cs_type;
-	/** padding bytes */
-	uint8_t				ir_pad8;
+	/** checksum or value is corrupted */
+	uint8_t				ir_corrupt;
 	/** pool map version */
 	uint32_t			ir_ver;
 	/** The DTX entry in SCM. */

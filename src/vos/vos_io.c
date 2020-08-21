@@ -42,6 +42,7 @@ struct vos_io_context {
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
 	daos_iod_t		*ic_iods;
+	/* [todo-ryon]: rename to ic_iod_csums */
 	struct dcs_iod_csums	*iod_csums;
 	/** reference on the object */
 	struct vos_object	*ic_obj;
@@ -81,7 +82,8 @@ struct vos_io_context {
 				 ic_dedup:1, /** candidate for dedup */
 				 ic_read_ts_only:1,
 				 ic_check_existence:1,
-				 ic_remove:1;
+				 ic_remove:1,
+				 ic_corrupt:1;
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -497,6 +499,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		((cond_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
+	ioc->ic_corrupt = (cond_flags & VOS_OF_CORRUPT) != 0;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
 	vos_ilog_fetch_init(&ioc->ic_akey_info);
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
@@ -1334,11 +1337,12 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	else
 		rbund.rb_csum	= &csum;
 
-	rbund.rb_biov	= biov;
-	rbund.rb_rsize	= rsize;
-	rbund.rb_gsize	= gsize;
-	rbund.rb_off	= umoff;
-	rbund.rb_ver	= pm_ver;
+	rbund.rb_biov		= biov;
+	rbund.rb_rsize		= rsize;
+	rbund.rb_gsize		= gsize;
+	rbund.rb_off		= umoff;
+	rbund.rb_ver		= pm_ver;
+	rbund.rb_corrupt	= ioc->ic_corrupt;
 
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0)
@@ -1377,6 +1381,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
 	ent.ei_addr.ba_dedup = false;	/* Don't make this flag persistent */
+	ent.ei_corrupted = ioc->ic_corrupt;
 
 	if (ioc->ic_remove)
 		return evt_remove_all(toh, &ent.ei_rect.rc_ex, &ioc->ic_epr);
