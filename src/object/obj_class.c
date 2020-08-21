@@ -301,8 +301,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "EC_2P2G1_32K",
-		.oc_id		= OC_EC_2P2G1_32K,
+		.oc_name	= "DAOS_OC_EC_K2P2_L32K",
+		.oc_id		= DAOS_OC_EC_K2P2_L32K,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_EC,
@@ -337,8 +337,8 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "EC_4P2G1_32K",
-		.oc_id		= OC_EC_4P2G1_32K,
+		.oc_name	= "DAOS_OC_EC_K4P2_L32K",
+		.oc_id		= DAOS_OC_EC_K4P2_L32K,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_EC,
@@ -370,6 +370,30 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_ec_k		= 16,
 			.ca_ec_p		= 2,
 			.ca_ec_cell		= 1 << 20,
+		},
+	},
+	{
+		.oc_name	= "EC_2P1G1_SPEC",
+		.oc_id		= DAOS_OC_EC_K2P1_SPEC_RANK_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 1,
+			.ca_ec_cell		= 1 << 15,
+		},
+	},
+	{
+		.oc_name	= "EC_4P1G1_SPEC",
+		.oc_id		= DAOS_OC_EC_K4P1_SPEC_RANK_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 1,
+			.ca_ec_cell		= 1 << 15,
 		},
 	},
 	{

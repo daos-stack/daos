@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 package netdetect
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -41,13 +42,18 @@ const maxConcurrent = 1000
 
 func getSocketID(t *testing.T, pid int32, wg *sync.WaitGroup) {
 	defer wg.Done()
-	numaNode, err := GetNUMASocketIDForPid(int32(pid))
+
+	netCtx, err := Init(context.Background())
+	defer CleanUp(netCtx)
+	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
+
+	numaNode, err := GetNUMASocketIDForPid(netCtx, int32(pid))
 	common.AssertEqual(t, err, nil, fmt.Sprintf("GetNUMASocketIDForPid error on NUMA %d / pid %d", numaNode, pid))
 }
 
 // TestConcurrentGetNUMASocket launches maxConcurrent go routines
 // that concurrently access the hwloc topology.  This test verifies that there are
-// no race conditions
+// no race conditions when the topology is initialized on each access
 func TestConcurrentGetNUMASocket(t *testing.T) {
 	_, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -61,6 +67,36 @@ func TestConcurrentGetNUMASocket(t *testing.T) {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
 			getSocketID(t, n, &wg)
 		}(int32(pid))
+	}
+	wg.Wait()
+}
+
+func getSocketIDWithContext(t *testing.T, pid int32, wg *sync.WaitGroup, ctx context.Context) {
+	defer wg.Done()
+	numaNode, err := GetNUMASocketIDForPid(ctx, int32(pid))
+	common.AssertEqual(t, err, nil, fmt.Sprintf("GetNUMASocketIDForPid error on NUMA %d / pid %d", numaNode, pid))
+}
+
+// TestConcurrentGetNUMASocket launches maxConcurrent go routines
+// that concurrently access the hwloc topology.  This test verifies that there are
+// no race conditions when using a shared topology pointer
+func TestConcurrentGetNUMASocketWithContext(t *testing.T) {
+	_, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	netCtx, err := Init(context.Background())
+	defer CleanUp(netCtx)
+	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
+
+	var wg sync.WaitGroup
+	pid := syscall.Getpid()
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < maxConcurrent; i++ {
+		wg.Add(1)
+		go func(n int32, ctx context.Context) {
+			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
+			getSocketIDWithContext(t, n, &wg, ctx)
+		}(int32(pid), netCtx)
 	}
 	wg.Wait()
 }

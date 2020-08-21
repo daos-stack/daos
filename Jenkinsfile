@@ -165,10 +165,9 @@ String qb_inst_rpms_run_test() {
 String functional_rpms(String distro) {
     String rpms = "openmpi3 hwloc ndctl " +
                   "ior-hpc-cart-4-daos-0 " +
-                  "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
+                  "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
                   "testmpio-cart-4-daos-0 fio " +
-                  "mpi4py-tests-cart-4-daos-0 " +
-                  "MACSio"
+                  "mpi4py-tests-cart-4-daos-0 MACSio"
 
     if (distro == "leap15") {
         return rpms
@@ -182,7 +181,6 @@ String functional_rpms(String distro) {
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
-
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -505,10 +503,10 @@ pipeline {
                         stash name: 'centos7-gcc-build-vars',
                               includes: ".build_vars${arch}.*"
                         stash name: 'centos7-gcc-tests',
-                              includes: '''build/*/*/src/cart/src/utest/test_linkage,
-                                           build/*/*/src/cart/src/utest/test_gurt,
-                                           build/*/*/src/cart/src/utest/utest_hlc,
-                                           build/*/*/src/cart/src/utest/utest_swim,
+                              includes: '''build/*/*/src/cart/test/utest/test_linkage,
+                                           build/*/*/src/cart/test/utest/utest_hlc,
+                                           build/*/*/src/cart/test/utest/utest_swim,
+                                           build/*/*/src/gurt/tests/test_gurt,
                                            build/*/*/src/rdb/raft/src/tests_main,
                                            build/*/*/src/common/tests/btree_direct,
                                            build/*/*/src/common/tests/btree,

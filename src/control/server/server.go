@@ -55,8 +55,6 @@ const (
 	ControlPlaneName = "DAOS Control Server"
 	// DataPlaneName defines a consistent name for the ioserver.
 	DataPlaneName = "DAOS I/O Server"
-	// define supported maximum number of I/O servers
-	maxIOServers = 2
 
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
@@ -126,30 +124,32 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to lookup current user")
 	}
 
+	iommuDisabled := !iommuDetected()
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
-		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
+		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
+		PCIBlacklist:  strings.Join(cfg.BdevExclude, " "),
 		DisableVFIO:   cfg.DisableVFIO,
+		DisableVMD:    cfg.DisableVMD || cfg.DisableVFIO || iommuDisabled,
+		// TODO: pass vmd include/white list
 	}
 
 	if cfgHasBdev(cfg) {
 		// The config value is intended to be per-ioserver, so we need to adjust
 		// based on the number of ioservers.
 		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
-	}
 
-	// Perform these checks to avoid even trying a prepare if the system
-	// isn't configured properly.
-	if cfgHasBdev(cfg) {
+		// Perform these checks to avoid even trying a prepare if the system
+		// isn't configured properly.
 		if runningUser.Uid != "0" {
 			if cfg.DisableVFIO {
 				return FaultVfioDisabled
 			}
 
-			if !iommuDetected() {
+			if iommuDisabled {
 				return FaultIommuDisabled
 			}
 		}
@@ -179,17 +179,26 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	harness := NewIOServerHarness(log)
 	var netDevClass uint32
 
-	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIOServers {
-			break
-		}
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		return err
+	}
+	defer netdetect.CleanUp(netCtx)
 
+	// On a NUMA-aware system, emit a message when the configuration
+	// may be sub-optimal.
+	numaCount := netdetect.NumNumaNodes(netCtx)
+	if numaCount > 0 && len(cfg.Servers) > numaCount {
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
+	}
+
+	for i, srvCfg := range cfg.Servers {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
 		// specify the correct device for each.
 		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
-			deviceAlias, err := netdetect.GetDeviceAlias(srvCfg.Fabric.Interface)
+			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, srvCfg.Fabric.Interface)
 			if err != nil {
 				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
 			}
@@ -211,6 +220,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		// Use a stable identifier that's easy to construct elsewhere if we don't
 		// have access to the instance configuration.
 		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
+		// Indicate whether VMD devices have been detected and can be used.
+		srvCfg.Storage.Bdev.VmdEnabled = bdevProvider.IsVmdEnabled()
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
@@ -244,10 +255,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		control.WithClientLogger(log))
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, rpcClient)
-	if err != nil {
-		return errors.Wrap(err, "init control service")
-	}
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, rpcClient)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}

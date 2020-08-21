@@ -37,8 +37,13 @@ enum {
 	/** The transaction is read only. */
 	DAOS_TF_RDONLY		= (1 << 0),
 	/**
-	 * Not copy application buffer (neither key buffer nor value buffer)
-	 * when cache modification on client for the distributed transaction.
+	 * Not copy application data buffer when cache modification on client
+	 * for the distributed transaction.
+	 *
+	 * Please note that the key buffer will always be copied when caching.
+	 * Then the TX sponsor can reuse or release related key' buffer after
+	 * the operation returning to avoid more programming restriction under
+	 * DAOS transaction model.
 	 */
 	DAOS_TF_ZERO_COPY	= (1 << 1),
 };
@@ -156,12 +161,18 @@ int
 daos_tx_restart(daos_handle_t th, daos_event_t *ev);
 
 /**
- * Return epoch associated with the transaction handle.
+ * Return the epoch associated with the transaction handle. An epoch may not be
+ * available at the beginning of the transaction, but one shall be available
+ * after the transaction successfully commits.
+ *
+ * This function is specific to the current implementation. It should only be
+ * used for testing and debugging purposes.
  *
  * \param[in]	th	Transaction handle.
  * \param[out]	epoch	Returned epoch value.
  *
  * \return		0 if Success, negative if failed.
+ * \retval -DER_UNINIT	An epoch is not available yet.
  */
 int
 daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);

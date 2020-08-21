@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       28%{?relval}%{?dist}
+Release:       32%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -27,11 +27,12 @@ BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
-BuildRequires: libpsm2-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
+BuildRequires: json-c-devel
 %else
 BuildRequires: libabt-devel >= 1.0rc1
+BuildRequires: libjson-c-devel
 %endif
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse3-devel >= 3.4.2
@@ -216,6 +217,7 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
+mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
@@ -244,21 +246,19 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
-%{_bindir}/vos_size
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
 %{_bindir}/pl_bench
 %{_bindir}/rdbt
-%{_bindir}/vos_size_dfs_sample.py
-%{_bindir}/vos_size.py
-%{_libdir}/libdfs_internal.so
 %{_libdir}/libvos.so
 %{_libdir}/libcart*
 %{_libdir}/libgurt*
 %{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
+%dir %{_sysconfdir}/bash_completion.d
+%{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
@@ -306,17 +306,24 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_bindir}/dfuse
 %{_bindir}/daos
 %{_bindir}/dfuse_hl
+%{_bindir}/daos_storage_estimator.py
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/libdfs_internal.so
+%{_libdir}/libvos_size.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
+%dir  %{_libdir}/python2.7/site-packages/storage_estimator
 %{_libdir}/python2.7/site-packages/pydaos/*.py
+%{_libdir}/python2.7/site-packages/storage_estimator/*.py
 %if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/*.pyo
+%{_libdir}/python2.7/site-packages/storage_estimator/*.pyc
+%{_libdir}/python2.7/site-packages/storage_estimator/*.pyo
 %endif
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
@@ -328,10 +335,14 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
+%dir %{_libdir}/python3/site-packages/storage_estimator
 %{_libdir}/python3/site-packages/pydaos/*.py
+%{_libdir}/python3/site-packages/storage_estimator/*.py
 %if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/*.pyc
 %{_libdir}/python3/site-packages/pydaos/*.pyo
+%{_libdir}/python3/site-packages/storage_estimator/*.pyc
+%{_libdir}/python3/site-packages/storage_estimator/*.pyo
 %endif
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
 %dir %{_libdir}/python3/site-packages/pydaos/raw
@@ -373,6 +384,21 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Mon Aug 17 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-32
+- Install completion script in /etc/bash_completion.d
+
+* Wed Aug 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-31
+- Change fuse requirement to fuse3
+- Use Lmod for MPI module loading
+- Remove unneeded (and un-distro gated) Requires: json-c
+
+* Wed Jul 29 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> - 1.1.0-30
+- Add the daos_storage_estimator.py tool. It merges the functionality of the
+  former tools vos_size, vos_size.py, vos_size_dfs_sample.py and parse_csv.py.
+
+* Wed Jul 29 2020 Jeffrey V Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-29
+- Revert prior changes from version 28
+
 * Mon Jul 13 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-28
 - Change fuse requirement to fuse3
 - Use Lmod for MPI module loading

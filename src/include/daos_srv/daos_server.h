@@ -255,9 +255,14 @@ enum {
 	SCHED_REQ_MAX,
 };
 
+enum {
+	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
+};
+
 struct sched_req_attr {
 	uuid_t		sra_pool_id;
 	uint32_t	sra_type;
+	uint32_t	sra_flags;
 };
 
 static inline void
@@ -771,8 +776,10 @@ struct dss_enum_unpack_io {
 
 typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
 
-int dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
-		    dss_enum_unpack_cb_t cb, void *cb_arg);
+int
+dss_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
+		d_sg_list_t *sgl, d_iov_t *csum, dss_enum_unpack_cb_t cb,
+		void *cb_arg);
 
 d_rank_t dss_self_rank(void);
 

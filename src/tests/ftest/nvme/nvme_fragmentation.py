@@ -64,7 +64,7 @@ class NvmeFragmentation(TestWithServers):
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_transfer_size = self.params.get("transfer_block_size",
                                                  '/run/ior/iorflags/*')
-        self.ior_daos_oclass = self.params.get("obj_class",
+        self.ior_dfs_oclass = self.params.get("obj_class",
                                                '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
@@ -94,7 +94,7 @@ class NvmeFragmentation(TestWithServers):
             self.fail("Exiting Test: Mpich not installed")
 
         # Iterate through IOR different value and run in sequence
-        for oclass, api, test, flags in product(self.ior_daos_oclass,
+        for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                 self.ior_apis,
                                                 self.ior_transfer_size,
                                                 self.ior_flags):
@@ -102,7 +102,7 @@ class NvmeFragmentation(TestWithServers):
             ior_cmd = IorCommand()
             ior_cmd.get_params(self)
             ior_cmd.set_daos_params(self.server_group, self.pool)
-            ior_cmd.daos_oclass.update(oclass)
+            ior_cmd.dfs_oclass.update(oclass)
             ior_cmd.api.update(api)
             ior_cmd.transfer_size.update(test[0])
             ior_cmd.block_size.update(test[1])

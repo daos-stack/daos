@@ -1,7 +1,7 @@
 ---
 # yaml sample
-# num_pools specifies the number of VOS pools.
-num_pools: 30
+# num_shards specifies the number of VOS pools.
+num_shards: 30
 
 # Example values
 # NAME      REQUIRED            DESCRIPTION                     DEFAULT

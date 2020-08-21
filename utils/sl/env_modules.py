@@ -23,6 +23,7 @@ from __future__ import print_function
 import os
 import sys
 import subprocess
+import errno
 from subprocess import PIPE, Popen
 from distutils.spawn import find_executable
 
@@ -57,6 +58,9 @@ class _env_module(): # pylint: disable=invalid-name
 
         try:
             proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
+        except OSError as error:
+            if error.errno == errno.ENOENT:
+                return None, None
         except FileNotFoundError:
             return None, None
 

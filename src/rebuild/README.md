@@ -230,3 +230,10 @@ related message will be shown on the leader console. For example:
 ```
 Rebuild [aborted] (pool 8799e471 ver=41, toberb_obj=75, rb_obj=75, rec= 11937, done 1 status 0 duration=10 secs)
 ```
+## Rebuilding with Checksums
+During a rebuild, the server being rebuilt will act as a DAOS Client in the
+ sense that it will read the data and checksum from a replica server and verify
+ the integrity of the data before it uses it for the rebuild. If corrupted data
+ is detected, then the read will fail, and the replica server will be notified
+ of the corruption. The rebuild will then attempt to use a different replica.
+

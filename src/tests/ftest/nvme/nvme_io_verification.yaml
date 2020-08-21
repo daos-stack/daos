@@ -20,6 +20,9 @@ pool:
  name: daos_server
  svcn: 1
  control_method: dmg
+container:
+ type: POSIX
+ control_method: daos
 ior:
  client_processes:
    np: 16
@@ -28,9 +31,9 @@ ior:
    write: "-w -k -G=5"
    read: "-r -R -k -G=5"
  repetitions: 1
- api: DAOS
+ api: DFS
  object_type: 'SX'
- daos_destroy: False
+ dfs_destroy: False
  transfersize: !mux
    case1:
      block_size: 30000000

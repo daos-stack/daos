@@ -33,6 +33,7 @@
 #include <gurt/types.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
+#include <daos/cont_props.h>
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 #define C_TRACE_ENABLED() D_LOG_ENABLED(DB_TRACE)
@@ -48,49 +49,6 @@ is_array(const daos_iod_t *iod)
 }
 
 /** Container Property knowledge */
-uint32_t
-daos_cont_prop2csum(daos_prop_t *props)
-{
-	struct daos_prop_entry *prop =
-		daos_prop_entry_get(props, DAOS_PROP_CO_CSUM);
-
-	return prop == NULL ? DAOS_PROP_CO_CSUM_OFF : (uint32_t)prop->dpe_val;
-}
-
-uint64_t
-daos_cont_prop2chunksize(daos_prop_t *props)
-{
-	struct daos_prop_entry *prop =
-		daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
-
-	return prop == NULL ? 0 : prop->dpe_val;
-}
-
-bool
-daos_cont_prop2serververify(daos_prop_t *props)
-{
-	struct daos_prop_entry *prop =
-		daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_SERVER_VERIFY);
-
-	return prop == NULL ? false : prop->dpe_val == DAOS_PROP_CO_CSUM_SV_ON;
-}
-
-bool
-daos_cont_csum_prop_is_valid(uint16_t val)
-{
-	if (daos_cont_csum_prop_is_enabled(val) || val == DAOS_PROP_CO_CSUM_OFF)
-		return true;
-	return false;
-}
-
-bool
-daos_cont_csum_prop_is_enabled(uint16_t val)
-{
-	if (val > DAOS_PROP_CO_CSUM_OFF && val <= DAOS_PROP_CO_CSUM_SHA512)
-		return true;
-	return false;
-}
-
 enum DAOS_CSUM_TYPE
 daos_contprop2csumtype(int contprop_csum_val)
 {
@@ -478,8 +436,10 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 	struct daos_csummer	*result;
 	int			 rc = 0;
 
-	if (!ft)
+	if (!ft) {
+		D_ERROR("No function table");
 		return -DER_INVAL;
+	}
 
 	D_ALLOC(result, sizeof(*result));
 	if (result == NULL)
@@ -520,6 +480,17 @@ daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props)
 					   daos_contprop2csumtype(csum_prop),
 					   daos_cont_prop2chunksize(props),
 					   daos_cont_prop2serververify(props));
+}
+
+struct daos_csummer *
+daos_csummer_copy(const struct daos_csummer *obj)
+{
+	struct daos_csummer *result = NULL;
+
+	daos_csummer_init(&result, obj->dcs_algo,
+			  obj->dcs_chunk_size, obj->dcs_srv_verify);
+
+	return result;
 }
 
 void daos_csummer_destroy(struct daos_csummer **obj)
@@ -712,7 +683,8 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 		if (!csum_iod_is_supported(iod))
 			continue;
 
-		result += csum_size; /** akey csum */
+		if (!obj->dcs_skip_key_calc)
+			result += csum_size; /** akey csum */
 
 		if (akey_only)
 			continue;
@@ -788,10 +760,12 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			continue;
 
 		/** setup akey csum  */
-		ci_set(&iod_csum->ic_akey, NULL, csum_size, csum_size, 1,
-		       CSUM_NO_CHUNK, csum_type);
-		setptr(iod_csum->ic_akey.cs_csum, buf, csum_size, used,
-		       buf_len);
+		if (!obj->dcs_skip_key_calc) {
+			ci_set(&iod_csum->ic_akey, NULL, csum_size, csum_size,
+			       1, CSUM_NO_CHUNK, csum_type);
+			setptr(iod_csum->ic_akey.cs_csum, buf, csum_size, used,
+			       buf_len);
+		}
 
 		if (akey_only)
 			continue;
@@ -1188,11 +1162,14 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 			continue;
 
 		/** akey */
-		rc = calc_for_iov(obj, &iod->iod_name,
-			     csums->ic_akey.cs_csum, csum_len);
-		if (rc != 0) {
-			D_ERROR("calc_for_iov error: %d\n", rc);
-			goto error;
+		if (!obj->dcs_skip_key_calc) {
+			rc = calc_for_iov(obj, &iod->iod_name,
+					  csums->ic_akey.cs_csum, csum_len);
+			if (rc != 0) {
+				D_ERROR("calc_for_iov error: %d\n", rc);
+				goto error;
+			}
+
 		}
 
 		if (akey_only)
@@ -1235,7 +1212,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 	uint16_t		 type = daos_csummer_get_type(csummer);
 	int			 rc;
 
-	if (!daos_csummer_initialized(csummer))
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_calc)
 		return 0;
 
 	C_TRACE("Creating checksum for key: "DF_KEY"\n", DP_KEY(key));
@@ -1249,8 +1226,6 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 
 	rc = calc_for_iov(csummer, key, dkey_csum_buf, size);
 	if (rc == 0) {
-		C_TRACE("Calculating checksum for Key "DF_KEY" -> "DF_CI"\n",
-			DP_KEY(key), DP_CI(*csum_info));
 		*p_csum = csum_info;
 		C_TRACE("Checksum created for key: "DF_KEY"->"DF_CI"\n",
 			DP_KEY(key), DP_CI(*csum_info));
@@ -1292,7 +1267,7 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 	int			 rc;
 	bool			 match;
 
-	if (!daos_csummer_initialized(obj))
+	if (!daos_csummer_initialized(obj) || obj->dcs_skip_data_verify)
 		return 0;
 
 	if (iod == NULL || sgl == NULL || iod_csum == NULL) {
@@ -1419,7 +1394,9 @@ ci_insert(struct dcs_csum_info *dcb, int idx, uint8_t *csum_buf, size_t len)
 {
 	uint8_t *to_update;
 
-	D_ASSERT(idx < dcb->cs_nr);
+	D_ASSERTF(idx < dcb->cs_nr, "idx(%d) < dcb->cs_nr(%d)",
+		  idx, dcb->cs_nr);
+	D_ASSERT(len <= dcb->cs_buf_len - idx * dcb->cs_len);
 
 	to_update = dcb->cs_csum + idx * dcb->cs_len;
 	memcpy(to_update, csum_buf, len);

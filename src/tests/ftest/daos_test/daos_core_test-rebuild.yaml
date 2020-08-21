@@ -7,6 +7,8 @@ hosts:
     - server-C
     - server-D
 timeout: 600
+pool:
+  nvme_size: 0G
 server_config:
   servers_per_host: 2
   name: daos_server
