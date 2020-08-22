@@ -78,7 +78,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			expErr: errors.New("wrong system"),
 		},
 		"no i/o servers": {
-			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil, nil, nil),
+			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil, nil),
 			req:     &mgmtpb.LeaderQueryReq{},
 			expErr:  errors.New("no I/O servers"),
 		},
@@ -1037,7 +1037,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			rb, _ := proto.Marshal(&mgmtpb.GetAttachInfoResp{})
 			cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, nil)
 			srv.setDrpcClient(newMockDrpcClient(cfg))
-			tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log), tc.clientNetworkCfg)
+			tc.mgmtSvc = newMgmtSvc(harness, nil, system.MockDatabase(t, log))
+			tc.mgmtSvc.clientNetworkCfg = tc.clientNetworkCfg
 			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)

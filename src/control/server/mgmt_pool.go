@@ -146,12 +146,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 			return
 		// Error after pool was created
 		case err != nil && resp.GetStatus() == 0:
-			// Don't try to clean up if the retry loop was aborted.
-			if err == context.Canceled {
-				break
-			}
-
-			svc.log.Errorf("cleaning up pool %s due to create failure %s", req.Uuid, err)
+			svc.log.Errorf("cleaning up pool %s due to create failure: %q", req.Uuid, err)
 
 			var pdResp *mgmtpb.PoolDestroyResp
 			pdResp, cuErr = svc.PoolDestroy(ctx,

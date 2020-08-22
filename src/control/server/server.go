@@ -186,6 +186,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	membership := system.NewMembership(log, sysdb)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
+	mgmtSvc := newMgmtSvc(harness, membership, sysdb)
 	var netDevClass uint32
 
 	netCtx, err := netdetect.Init(context.Background())
@@ -243,6 +244,11 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
+
+		srv.OnReady(func(ctx context.Context) error {
+			mgmtSvc.requestGroupUpdate(ctx)
+			return nil
+		})
 
 		if idx == 0 {
 			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
@@ -320,19 +326,16 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 
-	clientNetworkCfg := ClientNetworkCfg{
+	mgmtSvc.clientNetworkCfg = &ClientNetworkCfg{
 		Provider:        cfg.Fabric.Provider,
 		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      cfg.Fabric.CrtTimeout,
 		NetDevClass:     netDevClass,
 	}
-	mgmtSvc := newMgmtSvc(harness, membership, sysdb, &clientNetworkCfg)
+
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
 	sysdb.OnLeaderGained(func(ctx context.Context) error {
 		mgmtSvc.startUpdateLoop(ctx)
-		if mc, _ := sysdb.MemberCount(); mc > 0 {
-			mgmtSvc.requestGroupUpdate(ctx)
-		}
 		return nil
 	})
 

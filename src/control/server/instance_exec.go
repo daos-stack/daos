@@ -127,6 +127,12 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 
 	srv.ready.SetTrue()
 
+	for _, fn := range srv.onReady {
+		if err := fn(ctx); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

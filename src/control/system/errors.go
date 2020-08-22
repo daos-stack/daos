@@ -32,6 +32,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrEmptyGroupMap = errors.New("empty GroupMap")
+
 type ErrNotReplica struct {
 	Replicas []string
 }

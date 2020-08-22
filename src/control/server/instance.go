@@ -44,6 +44,7 @@ import (
 )
 
 type onStorageReadyFn func() error
+type onReadyFn func(ctx context.Context) error
 
 // IOServerInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O server instances. The distinction
@@ -66,6 +67,7 @@ type IOServerInstance struct {
 	startLoop         chan bool // restart loop
 	fsRoot            string
 	onStorageReady    []onStorageReadyFn
+	onReady           []onReadyFn
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -121,6 +123,12 @@ func (srv *IOServerInstance) isMSReplica() bool {
 // storage becomes ready.
 func (srv *IOServerInstance) OnStorageReady(fn onStorageReadyFn) {
 	srv.onStorageReady = append(srv.onStorageReady, fn)
+}
+
+// OnReady adds a list of callbacks to invoke when the instance
+// becomes ready.
+func (srv *IOServerInstance) OnReady(fn onReadyFn) {
+	srv.onReady = append(srv.onReady, fn)
 }
 
 // LocalState returns local perspective of the current instance state

@@ -122,6 +122,9 @@ func (svc *mgmtSvc) groupUpdateLoop(ctx context.Context) {
 			svc.log.Debug("starting group update")
 			if err := svc.doGroupUpdate(ctx); err != nil {
 				svc.log.Error(errors.Wrap(err, "group update failed").Error())
+				if err == system.ErrEmptyGroupMap {
+					updateRequested = false
+				}
 				continue
 			}
 			svc.log.Debug("finished group update")
@@ -139,14 +142,11 @@ func (svc *mgmtSvc) startUpdateLoop(ctx context.Context) {
 
 func (svc *mgmtSvc) requestGroupUpdate(ctx context.Context) {
 	go func(ctx context.Context) {
-		requested := false
 		select {
 		case <-ctx.Done():
 		case svc.updateReqChan <- struct{}{}:
 			svc.log.Debug("requested group update")
-			requested = true
 		}
-		svc.log.Debugf("requestGroupUpdate(): requested? %t", requested)
 	}(ctx)
 }
 
@@ -161,7 +161,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 		return err
 	}
 	if len(gm.RankURIs) == 0 {
-		return errors.New("empty groupmap")
+		return system.ErrEmptyGroupMap
 	}
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,

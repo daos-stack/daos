@@ -152,13 +152,13 @@ type mgmtSvc struct {
 	updateReqChan    chan struct{}
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database, c *ClientNetworkCfg) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *mgmtSvc {
 	return &mgmtSvc{
 		log:              h.log,
 		harness:          h,
 		membership:       m,
 		sysdb:            s,
-		clientNetworkCfg: c,
+		clientNetworkCfg: &ClientNetworkCfg{},
 		updateReqChan:    make(chan struct{}),
 	}
 }
