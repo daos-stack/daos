@@ -591,7 +591,11 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	hg_ctx->chc_hgcla = hg_class;
 	hg_ctx->chc_shared_hg_class = sep_mode;
 
-	hg_context = HG_Context_create_id(hg_class, idx);
+	if (sep_mode)
+		hg_context = HG_Context_create_id(hg_class, idx);
+	else
+		hg_context = HG_Context_create(hg_class);
+
 	if (hg_context == NULL) {
 		D_ERROR("Could not create HG context.\n");
 		D_GOTO(out, rc = -DER_HG);
