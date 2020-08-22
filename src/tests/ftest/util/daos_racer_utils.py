@@ -30,12 +30,13 @@ from general_utils import pcmd
 class DaosRacerCommand(ExecutableCommand):
     """Defines a object representing a daos_racer command."""
 
-    def __init__(self, path, host):
+    def __init__(self, path, host, dmg_config=None):
         """Create a daos_racer command object.
 
         Args:
             path (str): path of the daos_racer command
             host (str): host on which to run the daos_racer command
+            dmg_config (str): path to dmg config file
         """
         super(DaosRacerCommand, self).__init__(
             "/run/daos_racer/*", "daos_racer", path)
@@ -43,6 +44,9 @@ class DaosRacerCommand(ExecutableCommand):
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
+
+        if dmg_config:
+            self.dmg_config = FormattedParameter("-n {}", dmg_config)
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the

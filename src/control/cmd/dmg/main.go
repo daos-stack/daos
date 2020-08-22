@@ -36,6 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -89,15 +90,23 @@ func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
 }
 
 func (cmd *jsonOutputCmd) outputJSON(in interface{}, cmdErr error) error {
+	status := 0
 	var errStr *string
 	if cmdErr != nil {
 		errStr = new(string)
 		*errStr = cmdErr.Error()
+		if s, ok := errors.Cause(cmdErr).(drpc.DaosStatus); ok {
+			status = int(s)
+		} else {
+			status = int(drpc.DaosMiscError)
+		}
 	}
+
 	data, err := json.MarshalIndent(struct {
 		Response interface{} `json:"response"`
 		Error    *string     `json:"error"`
-	}{in, errStr}, "", "  ")
+		Status   int         `json:"status"`
+	}{in, errStr, status}, "", "  ")
 	if err != nil {
 		return err
 	}

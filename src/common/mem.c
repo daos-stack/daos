@@ -120,6 +120,14 @@ pmem_tx_add(struct umem_instance *umm, umem_off_t umoff,
 	return pmemobj_tx_add_range(umem_off2id(umm, umoff), offset, size);
 }
 
+static int
+pmem_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
+	     size_t size, uint64_t flags)
+{
+	return pmemobj_tx_xadd_range(umem_off2id(umm, umoff), offset, size,
+				     flags);
+}
+
 
 static int
 pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
@@ -255,6 +263,15 @@ pmem_tx_commit(struct umem_instance *umm)
 	return rc ? umem_tx_errno(rc) : 0;
 }
 
+static void
+pmem_defer_free(struct umem_instance *umm, umem_off_t off,
+		struct pobj_action *act)
+{
+	PMEMoid	id = umem_off2id(umm, off);
+
+	pmemobj_defer_free(umm->umm_pool, id, act);
+}
+
 static umem_off_t
 pmem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
 	     unsigned int type_num)
@@ -345,11 +362,13 @@ static umem_ops_t	pmem_ops = {
 	.mo_tx_free		= pmem_tx_free,
 	.mo_tx_alloc		= pmem_tx_alloc,
 	.mo_tx_add		= pmem_tx_add,
+	.mo_tx_xadd		= pmem_tx_xadd,
 	.mo_tx_add_ptr		= pmem_tx_add_ptr,
 	.mo_tx_abort		= pmem_tx_abort,
 	.mo_tx_begin		= pmem_tx_begin,
 	.mo_tx_commit		= pmem_tx_commit,
 	.mo_reserve		= pmem_reserve,
+	.mo_defer_free		= pmem_defer_free,
 	.mo_cancel		= pmem_cancel,
 	.mo_tx_publish		= pmem_tx_publish,
 	.mo_tx_add_callback	= pmem_tx_add_callback,

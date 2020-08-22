@@ -210,7 +210,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		   const daos_epoch_range_t *epr, bool discard,
 		   daos_epoch_t punched, struct vos_ilog_info *info);
 
-#define ILOG_TRACE
+/* #define ILOG_TRACE */
 #ifdef ILOG_TRACE
 #undef vos_ilog_fetch
 #undef vos_ilog_update
@@ -298,26 +298,14 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
  *
  *  \param	ts_set[in]	The timestamp set
  *  \param	ilog[in]	The incarnation log
+ *  \param	record[in]	The record to hash
+ *  \param	rec_size[in]	The size of the record
  *
  *  \return true if found or ts_set is NULL
  */
-bool
-vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog);
-
-/** Allocate timestamps for the entry and add them to the set.  If ilog is
- *  NULL, it pulls in the negative entry.  The hash is calculated using
- *  vos_hash_get.
- *
- *  \param	ts_set[in]	The timestamp set
- *  \param	ilog[in]	The incarnation log
- *  \param	record[in]	The record to hash
- *  \param	rec_size[in]	The size of the record to hash
- *
- *  \return 0 on success or an error
- */
 int
-vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
-		  void *record, daos_size_t rec_size);
+vos_ilog_ts_add(struct vos_ts_set *ts_set, struct ilog_df *ilog,
+		const void *record, daos_size_t rec_size);
 
 /** Mark the last timestamp entry corresponding to the ilog as newly created
  *  \param	ts_set[in]	The timestamp set
