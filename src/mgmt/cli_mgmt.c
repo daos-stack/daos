@@ -74,7 +74,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n",
 			args->grp, DP_RC(rc));
-		rc = DER_INVAL;
+		rc = -DER_INVAL;
 		goto out_task;
 	}
 
