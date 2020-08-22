@@ -88,7 +88,7 @@ class MacsioTestBase(TestWithServers):
             self.server_managers[0], self.client_log)
         if vol:
             plugin_path = self.params.get("plugin_path", default="")
-            env["HDF5_VOL_CONNECTOR"] = "daos",
+            env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
         # Setup the job manager (mpirun) to run the macsio command
         self.macsio.daos_pool = pool_uuid
