@@ -384,8 +384,16 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	if (inline_data && data_size > 0) {
 		d_iov_t iov_out;
 
+		/* It may be partial visible, so it may be not in SCM. */
+#if 0
 		/* inline packing for the small recx located on SCM */
-		D_ASSERT(key_ent->ie_biov.bi_addr.ba_type == DAOS_MEDIA_SCM);
+		D_ASSERTF(key_ent->ie_biov.bi_addr.ba_type == DAOS_MEDIA_SCM,
+			  "Invalid ba_type %d, ba_off "DF_X64
+			  ", thres %ld, data_size %ld, type %d, iod_size %ld\n",
+			  key_ent->ie_biov.bi_addr.ba_type,
+			  key_ent->ie_biov.bi_addr.ba_off,
+			  arg->inline_thres, data_size, type, iod_size);
+#endif
 
 		d_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
 				       iovs[arg->sgl_idx].iov_len, data_size);

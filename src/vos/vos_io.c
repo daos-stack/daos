@@ -1734,6 +1734,9 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 done:
 	bio_addr_set(&biov.bi_addr, media, off);
 	bio_iov_set_len(&biov, size);
+	if (size < 32)
+		D_ASSERT(media == DAOS_MEDIA_SCM);
+
 	rc = iod_reserve(ioc, &biov);
 
 	return rc;
@@ -1785,6 +1788,9 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 done:
 	bio_addr_set(&biov.bi_addr, media, off);
 	bio_iov_set_len(&biov, size);
+	if (size < 32)
+		D_ASSERT(media == DAOS_MEDIA_SCM);
+
 	rc = iod_reserve(ioc, &biov);
 
 	return rc;
