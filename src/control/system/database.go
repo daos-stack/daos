@@ -321,7 +321,9 @@ func (db *Database) ReplicaRanks() (*GroupMap, error) {
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
 		repAddr, _, err := db.checkReplica(srv.Addr)
-		if err != nil || repAddr == nil || srv.state != MemberStateJoined {
+		if err != nil || repAddr == nil ||
+			!(srv.state == MemberStateJoined || srv.state == MemberStateReady) {
+
 			continue
 		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI

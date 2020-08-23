@@ -164,6 +164,8 @@ func newMgmtSvc(h *IOServerHarness, m *system.Membership, s *system.Database) *m
 }
 
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
+
 	if svc.clientNetworkCfg == nil {
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
@@ -184,6 +186,8 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
+
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v\n", *resp)
 	return resp, nil
 }
 
