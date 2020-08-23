@@ -144,7 +144,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 		tgt_idx = shard_tgt->st_shard;
 		tgt_oiod = obj_ec_tgt_oiod_get(split_req->osr_tgt_oiods,
 					       dlh->dlh_sub_cnt + 1,
-					       tgt_idx);
+					       tgt_idx - obj_exec_arg->start);
 		D_ASSERT(tgt_oiod != NULL);
 		orw->orw_iod_array.oia_oiods = tgt_oiod->oto_oiods;
 		orw->orw_iod_array.oia_oiod_nr = orw->orw_iod_array.oia_iod_nr;
@@ -376,12 +376,14 @@ ds_obj_cpd_clone_reqs(struct dtx_leader_handle *dlh, struct daos_shard_tgt *tgt,
 
 				oiod = obj_ec_tgt_oiod_get(split->osr_tgt_oiods,
 						dcsr_parent[idx].dcsr_ec_tgt_nr,
-						dcri_parent->dcri_shard_idx);
+						dcri_parent->dcri_shard_idx -
+						dcu_parent->dcu_start_shard);
 				D_ASSERT(oiod != NULL);
 
-				dcu->dcu_iod_array->oia_oiods = oiod->oto_oiods;
-				dcu->dcu_iod_array->oia_oiod_nr = oiod->oto_iod_nr;
-				dcu->dcu_iod_array->oia_offs = oiod->oto_offs;
+				dcu->dcu_iod_array.oia_oiods = oiod->oto_oiods;
+				dcu->dcu_iod_array.oia_oiod_nr =
+					dcu_parent->dcu_iod_array.oia_iod_nr;
+				dcu->dcu_iod_array.oia_offs = oiod->oto_offs;
 			}
 		}
 
