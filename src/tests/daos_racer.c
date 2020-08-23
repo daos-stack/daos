@@ -134,7 +134,7 @@ pack_dkey_iod_sgl(char *dkey, d_iov_t *dkey_iov, char akeys[][MAX_KEY_SIZE],
 
 	for (i = 0; i < iod_nr; i++) {
 		unsigned size;
-		unsigned val = rand() % 16;
+		unsigned val = rand() % 8;
 
 		sprintf(akeys[i], "%d", rand() % max_akey_per_dkey);
 		d_iov_set(&iods[i].iod_name, akeys[i], strlen(akeys[i]));
