@@ -2090,6 +2090,16 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node, unsigned int at,
 		 */
 		evt_ent_addr_update(tcx, entry, offset);
 	}
+
+	if (!bio_addr_is_hole(&desc->dc_ex_addr) &&
+	    tcx->tc_inob == 1 && width < 32)
+		D_ASSERTF(desc->dc_ex_addr.ba_type == DAOS_MEDIA_SCM,
+			  "Invalid media type: lo "DF_X64", hi "DF_X64
+			  ", original lo "DF_X64", original hi "DF_X64
+			  ", width %ld, offset "DF_U64", vis %x, rc %d\n",
+			  entry->en_sel_ext.ex_lo, entry->en_sel_ext.ex_hi,
+			  rect.rc_ex.ex_lo, rect.rc_ex.ex_hi, width, offset,
+			  entry->en_visibility, entry->en_avail_rc);
 }
 
 /**
