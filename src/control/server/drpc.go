@@ -74,7 +74,7 @@ func isRetryable(msg proto.Message) (*retryableDrpcReq, bool) {
 		return msg, true
 	// Pool creates are notorious for needing retry logic
 	// while things are starting up in CI testing.
-	case *mgmtpb.PoolCreateReq:
+	case *mgmtpb.PoolCreateReq, *mgmtpb.PoolDestroyReq:
 		return &retryableDrpcReq{
 			Message: msg,
 			RetryableStatuses: []drpc.DaosStatus{
