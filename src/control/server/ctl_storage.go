@@ -141,7 +141,7 @@ func (c *StorageControlService) Setup() error {
 		return nil
 	}
 
-	if c.bdev.IsVmdEnabled() {
+	if !c.bdev.IsVMDDisabled() {
 		if err := c.substBdevVmdAddrs(sr); err != nil {
 			return err
 		}
