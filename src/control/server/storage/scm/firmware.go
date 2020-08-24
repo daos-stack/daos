@@ -25,8 +25,13 @@
 package scm
 
 import (
+	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -52,7 +57,9 @@ type (
 	// FirmwareQueryRequest defines the parameters for a firmware query.
 	FirmwareQueryRequest struct {
 		pbin.ForwardableRequest
-		Devices []string // requested device UIDs, empty for all
+		DeviceUIDs  []string // requested device UIDs, empty for all
+		ModelID     string   // filter by model ID
+		FirmwareRev string   // filter by current FW revision
 	}
 
 	// ModuleFirmware represents the results of a firmware query for a specific
@@ -71,8 +78,10 @@ type (
 	// FirmwareUpdateRequest defines the parameters for a firmware update.
 	FirmwareUpdateRequest struct {
 		pbin.ForwardableRequest
-		Devices      []string // requested device UIDs, empty for all
+		DeviceUIDs   []string // requested device UIDs, empty for all
 		FirmwarePath string   // location of the firmware binary
+		ModelID      string   // filter devices by model ID
+		FirmwareRev  string   // filter devices by current FW revision
 	}
 
 	// ModuleFirmwareUpdateResult represents the result of a firmware update for
@@ -99,10 +108,12 @@ func (p *Provider) QueryFirmware(req FirmwareQueryRequest) (*FirmwareQueryRespon
 		return p.fwFwd.Query(req)
 	}
 
-	modules, err := p.getRequestedModules(req.Devices)
+	// For query we won't complain about bad IDs
+	modules, err := p.getRequestedModules(req.DeviceUIDs, true)
 	if err != nil {
 		return nil, err
 	}
+	modules = filterModules(modules, req.FirmwareRev, req.ModelID)
 
 	resp := &FirmwareQueryResponse{
 		Results: make([]ModuleFirmware, 0, len(modules)),
@@ -122,6 +133,59 @@ func (p *Provider) QueryFirmware(req FirmwareQueryRequest) (*FirmwareQueryRespon
 	return resp, nil
 }
 
+func (p *Provider) getRequestedModules(requestedUIDs []string, ignoreMissing bool) (storage.ScmModules, error) {
+	modules, err := p.backend.Discover()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(requestedUIDs) == 0 {
+		return modules, nil
+	}
+
+	uniqueUIDs := common.DedupeStringSlice(requestedUIDs)
+	sort.Strings(uniqueUIDs)
+
+	result := make(storage.ScmModules, 0, len(modules))
+	for _, uid := range uniqueUIDs {
+		mod, err := getModule(uid, modules)
+		if err != nil {
+			if ignoreMissing {
+				continue
+			}
+			return nil, err
+		}
+		result = append(result, mod)
+	}
+
+	return result, nil
+}
+
+func getModule(uid string, modules storage.ScmModules) (*storage.ScmModule, error) {
+	for _, mod := range modules {
+		if mod.UID == uid {
+			return mod, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no module found with UID %q", uid)
+}
+
+func filterModules(modules storage.ScmModules, fwRev string, modelID string) storage.ScmModules {
+	filtered := make(storage.ScmModules, 0, len(modules))
+	for _, mod := range modules {
+		if filterMatches(fwRev, mod.FirmwareRevision) &&
+			filterMatches(modelID, mod.PartNumber) {
+			filtered = append(filtered, mod)
+		}
+	}
+	return filtered
+}
+
+func filterMatches(filterStr, actualStr string) bool {
+	return filterStr == "" || strings.ToUpper(actualStr) == strings.ToUpper(filterStr)
+}
+
 // UpdateFirmware updates the SCM device firmware.
 func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateResponse, error) {
 	if p.shouldForward(req) {
@@ -132,10 +196,11 @@ func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateRes
 		return nil, errors.New("missing path to firmware file")
 	}
 
-	modules, err := p.getRequestedModules(req.Devices)
+	modules, err := p.getRequestedModules(req.DeviceUIDs, false)
 	if err != nil {
 		return nil, err
 	}
+	modules = filterModules(modules, req.FirmwareRev, req.ModelID)
 
 	if len(modules) == 0 {
 		return nil, errors.New("no SCM modules")

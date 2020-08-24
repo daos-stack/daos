@@ -25,8 +25,8 @@
 package bdev
 
 import (
-	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -54,11 +54,31 @@ type (
 		fwFwd *FirmwareForwarder
 	}
 
+	// FirmwareQueryRequest defines the parameters for a firmware query.
+	FirmwareQueryRequest struct {
+		DeviceAddrs []string // requested device PCI addresses, empty for all
+		ModelID     string   // filter devices by model ID
+		FirmwareRev string   // filter devices by current FW revision
+	}
+
+	// DeviceFirmwareQueryResult represents the result of a firmware query for
+	// a specific NVMe controller.
+	DeviceFirmwareQueryResult struct {
+		Device storage.NvmeController
+	}
+
+	// FirmwareQueryResponse contains the results of the firmware query.
+	FirmwareQueryResponse struct {
+		Results []DeviceFirmwareQueryResult
+	}
+
 	// FirmwareUpdateRequest defines the parameters for a firmware update.
 	FirmwareUpdateRequest struct {
 		pbin.ForwardableRequest
 		DeviceAddrs  []string // requested device PCI addresses, empty for all
 		FirmwarePath string   // location of the firmware binary
+		ModelID      string   // filter devices by model ID
+		FirmwareRev  string   // filter devices by current FW revision
 	}
 
 	// DeviceFirmwareUpdateResult represents the result of a firmware update for
@@ -79,6 +99,90 @@ func (p *Provider) setupFirmwareProvider(log logging.Logger) {
 	p.fwFwd = NewFirmwareForwarder(log)
 }
 
+// QueryFirmware requests the firmware information for the NVMe device controller.
+func (p *Provider) QueryFirmware(req FirmwareQueryRequest) (*FirmwareQueryResponse, error) {
+	// For the time being this just scans and returns the devices, which include their
+	// firmware revision.
+	controllers, err := p.getRequestedControllers(req.DeviceAddrs, req.ModelID, req.FirmwareRev, true)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]DeviceFirmwareQueryResult, 0, len(controllers))
+	for _, dev := range controllers {
+		res := DeviceFirmwareQueryResult{
+			Device: *dev,
+		}
+		results = append(results, res)
+	}
+	resp := &FirmwareQueryResponse{
+		Results: results,
+	}
+
+	return resp, nil
+}
+
+func (p *Provider) getRequestedControllers(requestedPCIAddrs []string, modelID string, fwRev string, ignoreMissing bool) (storage.NvmeControllers, error) {
+	controllers, err := p.getRequestedControllersByAddr(requestedPCIAddrs, ignoreMissing)
+	if err != nil {
+		return nil, err
+	}
+	return filterControllers(controllers, modelID, fwRev), nil
+}
+
+func (p *Provider) getRequestedControllersByAddr(requestedPCIAddrs []string, ignoreMissing bool) (storage.NvmeControllers, error) {
+	resp, err := p.backend.Scan(ScanRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(requestedPCIAddrs) == 0 {
+		return resp.Controllers, nil
+	}
+
+	uniquePCIAddrs := common.DedupeStringSlice(requestedPCIAddrs)
+	sort.Strings(uniquePCIAddrs)
+
+	result := make(storage.NvmeControllers, 0, len(uniquePCIAddrs))
+	for _, addr := range uniquePCIAddrs {
+		dev, err := getDeviceController(addr, resp.Controllers)
+		if err != nil {
+			if ignoreMissing {
+				continue
+			}
+			return nil, err
+		}
+		result = append(result, dev)
+	}
+
+	return result, nil
+}
+
+func getDeviceController(pciAddr string, controllers storage.NvmeControllers) (*storage.NvmeController, error) {
+	for _, dev := range controllers {
+		if dev.PciAddr == pciAddr {
+			return dev, nil
+		}
+	}
+
+	return nil, FaultPCIAddrNotFound(pciAddr)
+}
+
+func filterControllers(controllers storage.NvmeControllers, modelID, fwRev string) storage.NvmeControllers {
+	selected := make(storage.NvmeControllers, 0, len(controllers))
+	for _, ctrlr := range controllers {
+		if filterMatches(modelID, ctrlr.Model) &&
+			filterMatches(fwRev, ctrlr.FwRev) {
+			selected = append(selected, ctrlr)
+		}
+	}
+	return selected
+}
+
+func filterMatches(filterStr, actualStr string) bool {
+	return filterStr == "" || strings.ToUpper(actualStr) == strings.ToUpper(filterStr)
+}
+
 // UpdateFirmware updates the NVMe device controller firmware.
 func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateResponse, error) {
 	if p.shouldForward(req) {
@@ -89,7 +193,7 @@ func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateRes
 		return nil, errors.New("missing path to firmware file")
 	}
 
-	controllers, err := p.getRequestedControllers(req.DeviceAddrs)
+	controllers, err := p.getRequestedControllers(req.DeviceAddrs, req.ModelID, req.FirmwareRev, false)
 	if err != nil {
 		return nil, err
 	}
@@ -113,41 +217,6 @@ func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateRes
 	}
 
 	return resp, nil
-}
-
-func (p *Provider) getRequestedControllers(requestedPCIAddrs []string) (storage.NvmeControllers, error) {
-	resp, err := p.backend.Scan(ScanRequest{})
-	if err != nil {
-		return nil, err
-	}
-
-	if len(requestedPCIAddrs) == 0 {
-		return resp.Controllers, nil
-	}
-
-	uniquePCIAddrs := common.DedupeStringSlice(requestedPCIAddrs)
-	sort.Strings(uniquePCIAddrs)
-
-	result := make(storage.NvmeControllers, 0, len(uniquePCIAddrs))
-	for _, addr := range uniquePCIAddrs {
-		dev, err := getDeviceController(addr, resp.Controllers)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, dev)
-	}
-
-	return result, nil
-}
-
-func getDeviceController(pciAddr string, controllers storage.NvmeControllers) (*storage.NvmeController, error) {
-	for _, dev := range controllers {
-		if dev.PciAddr == pciAddr {
-			return dev, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no NVMe controller found with PCI address %q", pciAddr)
 }
 
 // FirmwareForwarder forwards firmware requests to a privileged binary.
