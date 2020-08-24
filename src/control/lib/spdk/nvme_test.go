@@ -138,7 +138,7 @@ func TestDiscover(t *testing.T) {
 		fmt.Println("spdk binding tests currently disabled")
 
 		// TODO
-		//		if err := se.InitSPDKEnv(tt.shmID); err != nil {
+		//		if err := se.InitSPDKEnv(log, tt.shmID); err != nil {
 		//			t.Fatal(err.Error())
 		//		}
 		//
