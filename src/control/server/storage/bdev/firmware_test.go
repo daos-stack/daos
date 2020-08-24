@@ -63,7 +63,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 		"success": {
 			inputPath: testPath,
 			backendCfg: &MockBackendConfig{
-				ScanRes: defaultDevs,
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expRes: &FirmwareUpdateResponse{
 				Results: []DeviceFirmwareUpdateResult{
@@ -82,7 +82,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 		"update failed": {
 			inputPath: testPath,
 			backendCfg: &MockBackendConfig{
-				ScanRes:   defaultDevs,
+				ScanRes:   &ScanResponse{Controllers: defaultDevs},
 				UpdateErr: testErr,
 			},
 			expRes: &FirmwareUpdateResponse{
@@ -106,7 +106,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 			inputPath:    testPath,
 			inputDevices: []string{"0000:80:00.0", "0000:80:00.2"},
 			backendCfg: &MockBackendConfig{
-				ScanRes: defaultDevs,
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expRes: &FirmwareUpdateResponse{
 				Results: []DeviceFirmwareUpdateResult{
@@ -123,7 +123,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 			inputPath:    testPath,
 			inputDevices: []string{"0000:80:00.0", "fake"},
 			backendCfg: &MockBackendConfig{
-				ScanRes: defaultDevs,
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expErr: errors.New("no NVMe controller found with PCI address \"fake\""),
 		},
@@ -131,7 +131,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 			inputPath:    testPath,
 			inputDevices: []string{"0000:80:00.0", "0000:80:00.0"},
 			backendCfg: &MockBackendConfig{
-				ScanRes: defaultDevs,
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expRes: &FirmwareUpdateResponse{
 				Results: []DeviceFirmwareUpdateResult{

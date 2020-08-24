@@ -116,13 +116,13 @@ func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateRes
 }
 
 func (p *Provider) getRequestedControllers(requestedPCIAddrs []string) (storage.NvmeControllers, error) {
-	controllers, err := p.backend.Scan()
+	resp, err := p.backend.Scan(ScanRequest{})
 	if err != nil {
 		return nil, err
 	}
 
 	if len(requestedPCIAddrs) == 0 {
-		return controllers, nil
+		return resp.Controllers, nil
 	}
 
 	uniquePCIAddrs := common.DedupeStringSlice(requestedPCIAddrs)
@@ -130,7 +130,7 @@ func (p *Provider) getRequestedControllers(requestedPCIAddrs []string) (storage.
 
 	result := make(storage.NvmeControllers, 0, len(uniquePCIAddrs))
 	for _, addr := range uniquePCIAddrs {
-		dev, err := getDeviceController(addr, controllers)
+		dev, err := getDeviceController(addr, resp.Controllers)
 		if err != nil {
 			return nil, err
 		}

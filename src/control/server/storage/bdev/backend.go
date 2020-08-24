@@ -422,7 +422,11 @@ func (b *spdkBackend) PrepareReset() error {
 }
 
 func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
-	if err := b.Init(); err != nil {
+	spdkOpts := spdk.EnvOptions{
+		DisableVMD: b.IsVMDDisabled(),
+	}
+
+	if err := b.binding.init(b.log, spdkOpts); err != nil {
 		return err
 	}
 

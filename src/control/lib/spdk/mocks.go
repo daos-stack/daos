@@ -98,12 +98,12 @@ func (n *MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 }
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
-func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) (ctrlrs []Controller, err error) {
+func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
 	if n.Cfg.UpdateErr != nil {
-		return nil, n.Cfg.UpdateErr
+		return n.Cfg.UpdateErr
 	}
 	log.Debugf("mock update fw on nvme ssd: %q, image path %q, slot %d. returns ctrlrs: %v",
 		ctrlrPciAddr, path, slot, n.Cfg.UpdateCtrlrs)
 
-	return n.Cfg.UpdateCtrlrs, nil
+	return nil
 }

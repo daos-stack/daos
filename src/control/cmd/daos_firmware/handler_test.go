@@ -284,7 +284,7 @@ func TestDaosFirmware_NvmeUpdateHandler(t *testing.T) {
 				Payload: updateReqPayload,
 			},
 			nmbc: &bdev.MockBackendConfig{
-				ScanRes: testDevices,
+				ScanRes: &bdev.ScanResponse{Controllers: testDevices},
 			},
 			expPayload: &bdev.FirmwareUpdateResponse{
 				Results: []bdev.DeviceFirmwareUpdateResult{
@@ -299,7 +299,7 @@ func TestDaosFirmware_NvmeUpdateHandler(t *testing.T) {
 				Payload: updateReqPayload,
 			},
 			nmbc: &bdev.MockBackendConfig{
-				ScanRes:   testDevices,
+				ScanRes:   &bdev.ScanResponse{Controllers: testDevices},
 				UpdateErr: errors.New("mock failure"),
 			},
 			expPayload: &bdev.FirmwareUpdateResponse{

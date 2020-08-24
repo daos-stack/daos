@@ -59,7 +59,7 @@ type Nvme interface {
 	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
 	CleanLockfiles(logging.Logger, ...string) error
 	// Update updates the firmware on a specific PCI address and slot
-	Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) ([]Controller, error)
+	Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error
 }
 
 // NvmeImpl is an implementation of the Nvme interface.

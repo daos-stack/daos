@@ -180,7 +180,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryNvme: true,
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: testNVMeDevs,
+				ScanRes: &bdev.ScanResponse{Controllers: testNVMeDevs},
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
 				NvmeResults: testNVMePB,
@@ -200,7 +200,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: testNVMeDevs,
+				ScanRes: &bdev.ScanResponse{Controllers: testNVMeDevs},
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
 				ScmResults: []*ctlpb.ScmFirmwareQueryResp{
@@ -238,7 +238,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				DiscoverRes: storage.ScmModules{},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: testNVMeDevs,
+				ScanRes: &bdev.ScanResponse{Controllers: testNVMeDevs},
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
 				ScmResults:  []*ctlpb.ScmFirmwareQueryResp{},
@@ -445,7 +445,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwarePath: "/some/path",
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: mockNVMe,
+				ScanRes: &bdev.ScanResponse{Controllers: mockNVMe},
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
 				NvmeResults: []*ctlpb.NvmeFirmwareUpdateResp{
@@ -467,7 +467,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwarePath: "/some/path",
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes:   mockNVMe,
+				ScanRes:   &bdev.ScanResponse{Controllers: mockNVMe},
 				UpdateErr: errors.New("mock update"),
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
