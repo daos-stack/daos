@@ -53,6 +53,7 @@ const (
 	testShortTimeout   = 50 * time.Millisecond
 	testLongTimeout    = 1 * time.Minute
 	delayedFailTimeout = 20 * testShortTimeout
+	maxIOServers       = 2
 )
 
 func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {

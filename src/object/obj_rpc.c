@@ -913,6 +913,8 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 				if (dcu->dcu_ec_tgts == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
+
+			dcu->dcu_ec_split_req = NULL;
 		}
 
 		rc = crt_proc_struct_dcs_csum_info(proc, &dcu->dcu_dkey_csum);
@@ -930,7 +932,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 				D_GOTO(out, rc = -DER_HG);
 
 			rc = crt_proc_uint32_t(proc,
-					&dcu->dcu_ec_tgts[i].dcet_tgt_idx);
+					&dcu->dcu_ec_tgts[i].dcet_tgt_id);
 			if (rc != 0)
 				D_GOTO(out, rc = -DER_HG);
 		}
@@ -1307,6 +1309,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_SYNC:
 		((struct obj_sync_out *)reply)->oso_ret = status;
 		break;
+	case DAOS_OBJ_RPC_CPD:
+		((struct obj_cpd_out *)reply)->oco_ret = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1338,6 +1343,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_query_key_out *)reply)->okqo_ret;
 	case DAOS_OBJ_RPC_SYNC:
 		return ((struct obj_sync_out *)reply)->oso_ret;
+	case DAOS_OBJ_RPC_CPD:
+		return ((struct obj_cpd_out *)reply)->oco_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -1377,6 +1384,9 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_SYNC:
 		((struct obj_sync_out *)reply)->oso_map_version = map_version;
 		break;
+	case DAOS_OBJ_RPC_CPD:
+		((struct obj_cpd_out *)reply)->oco_map_version = map_version;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1408,6 +1418,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		return ((struct obj_query_key_out *)reply)->okqo_map_version;
 	case DAOS_OBJ_RPC_SYNC:
 		return ((struct obj_sync_out *)reply)->oso_map_version;
+	case DAOS_OBJ_RPC_CPD:
+		return ((struct obj_cpd_out *)reply)->oco_map_version;
 	default:
 		D_ASSERT(0);
 	}

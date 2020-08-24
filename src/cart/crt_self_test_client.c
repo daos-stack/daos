@@ -467,7 +467,7 @@ send_rpc:
 
 			/* Free the RPC request that was created but not sent */
 			RPC_PUB_DECREF(new_rpc);
-			D_GOTO(abort, ret = -DER_UNKNOWN);
+			D_GOTO(abort, ret = -DER_MISC);
 		}
 
 		/* Send the RPC */
