@@ -6,6 +6,7 @@ def scons():
     Import('env', 'prereqs', 'platform_arm')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('.').abspath])
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path

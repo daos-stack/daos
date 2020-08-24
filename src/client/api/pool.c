@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,8 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 	daos_pool_query_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	D_DEPRECATED("dmg pool query");
 
 	DAOS_API_ARG_ASSERT(*args, POOL_QUERY);
 
