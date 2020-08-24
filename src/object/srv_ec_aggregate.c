@@ -514,13 +514,13 @@ agg_update_vos(struct ec_agg_entry *entry)
 	rc = vos_obj_array_remove(entry->ae_chdl, entry->ae_oid,
 				  &epoch_range, &entry->ae_dkey,
 				  &entry->ae_akey, &recx);
-
 	iod.iod_nr = 1;
 	iod.iod_size = entry->ae_rsize;
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_recxs = &recx;
-	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * len;
+	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len) |
+							PARITY_INDICATOR;
 	recx.rx_nr = len;
 	rc = vos_obj_update(entry->ae_chdl, entry->ae_oid,
 			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
@@ -993,17 +993,20 @@ out:
 static int
 agg_peer_update(struct ec_agg_entry *entry)
 {
+	d_iov_t			 iov = { 0 };
+	d_sg_list_t		 sgl = { 0 };
+	crt_endpoint_t		 tgt_ep = { 0 };
+	//crt_bulk_t		*bulk = NULL;
+	unsigned char		*buf = NULL;
 	struct obj_ec_agg_in	*ec_agg_in = NULL;
 	struct obj_ec_agg_out	*ec_agg_out = NULL;
-	//struct pool_target	*target;
+	struct pool_target	*target;
 	struct ds_pool		*pool = entry->ae_pool_info->api_pool;
-	crt_endpoint_t		tgt_ep = {0};
-	crt_opcode_t		opcode;
-	//unsigned int		tgt_id = entry->ae_oid.id_shard - 1;
+	crt_opcode_t		 opcode;
+	unsigned int		 tgt_id = entry->ae_oid.id_shard - 1;
 	crt_rpc_t		*rpc;
-	int			rc = 0;
+	int			 rc = 0;
 
-	/*
 	D_PRINT("tgt_id: %u\n", tgt_id);
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
@@ -1023,9 +1026,10 @@ agg_peer_update(struct ec_agg_entry *entry)
 
 	ABT_rwlock_unlock(pool->sp_lock);
 	tgt_ep.ep_rank = target->ta_comp.co_rank;
-	*/
-	tgt_ep.ep_rank = entry->ae_peer_rank;
+	tgt_ep.ep_tag = target->ta_comp.co_index+1;
 	D_PRINT("target rank: %u\n", tgt_ep.ep_rank);
+	D_PRINT("target tag: %u\n", tgt_ep.ep_tag);
+	tgt_ep.ep_rank = entry->ae_peer_rank;
 	tgt_ep.ep_tag = 1;
 	//D_PRINT("tgt_ep.ep_tag: %u\n", tgt_ep.ep_tag);
 	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_AGGREGATE, DAOS_OBJ_MODULE,
@@ -1034,7 +1038,7 @@ agg_peer_update(struct ec_agg_entry *entry)
 			    &rpc);
 	if (rc) {
 		D_ERROR("crt_req_create failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	ec_agg_in = crt_req_get(rpc);
@@ -1046,30 +1050,50 @@ agg_peer_update(struct ec_agg_entry *entry)
 	uuid_copy(ec_agg_in->ea_cont_uuid, entry->ae_pool_info->api_cont_uuid);
 	uuid_copy(ec_agg_in->ea_coh_uuid, entry->ae_pool_info->api_coh_uuid);
 	ec_agg_in->ea_oid = entry->ae_oid;
+	D_PRINT("rc == %d\n", rc);
 	ec_agg_in->ea_dkey = entry->ae_dkey;
-	ec_agg_in->ea_eph = entry->ae_cur_stripe.as_hi_epoch;
+	ec_agg_in->ea_epoch = entry->ae_cur_stripe.as_hi_epoch;
 	ec_agg_in->ea_stripenum = entry->ae_cur_stripe.as_stripenum;
 	ec_agg_in->ea_map_ver = pool->sp_map_version;
 	ec_agg_in->ea_prior_len = 0;
 	ec_agg_in->ea_after_len = 0;
-
+	buf = (unsigned char *) &entry->ae_sgl->sg_iovs[AGG_IOV_PARITY];
+	iov.iov_buf = &buf[entry->ae_oca->u.ec.e_len * entry->ae_rsize];
+	iov.iov_len = entry->ae_oca->u.ec.e_len * entry->ae_rsize;
+	iov.iov_buf_len = entry->ae_oca->u.ec.e_len * entry->ae_rsize;
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr = 1;
+	/*
+	D_ALLOC_PTR(bulk);
+	if (bulk == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	*/
+	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &sgl, CRT_BULK_RW,
+			     &ec_agg_in->ea_bulk);
+	if (rc) {
+		D_PRINT("crt_bulk_create returned: %d\n", rc);
+		goto out;
+	}
 	D_PRINT("Sending RPC\n");
 	rc = dss_rpc_send(rpc);
 	if (rc) {
 		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
 		D_PRINT("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		crt_bulk_free(ec_agg_in->ea_bulk);
+		goto out;
 	}
 	D_PRINT("Sent RPC\n");
 
 	ec_agg_out = crt_reply_get(rpc);
 	rc = ec_agg_out->ea_status;
+	crt_bulk_free(ec_agg_in->ea_bulk);
 out:
+	//D_FREE(bulk);
 	if (rpc)
 		crt_req_decref(rpc);
-
 	return rc;
-
 }
 
 /* Process the prior stripe. Invoked when the iterator has moved to the first

@@ -708,6 +708,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_SYNC:
 		((struct obj_sync_out *)reply)->oso_ret = status;
 		break;
+	case DAOS_OBJ_RPC_EC_AGGREGATE:
+		((struct obj_ec_agg_out *)reply)->ea_status = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -739,6 +742,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_query_key_out *)reply)->okqo_ret;
 	case DAOS_OBJ_RPC_SYNC:
 		return ((struct obj_sync_out *)reply)->oso_ret;
+	case DAOS_OBJ_RPC_EC_AGGREGATE:
+		return ((struct obj_ec_agg_out *)reply)->ea_status;
 	default:
 		D_ASSERT(0);
 	}
@@ -777,6 +782,9 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		break;
 	case DAOS_OBJ_RPC_SYNC:
 		((struct obj_sync_out *)reply)->oso_map_version = map_version;
+		break;
+	case DAOS_OBJ_RPC_EC_AGGREGATE:
+		((struct obj_ec_agg_out *)reply)->ea_map_ver = map_version;
 		break;
 	default:
 		D_ASSERT(0);
