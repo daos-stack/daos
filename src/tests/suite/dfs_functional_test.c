@@ -112,123 +112,6 @@ dfs_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-static void
-dfs_test_mount(void **state)
-{
-	test_arg_t		*arg = *state;
-	uuid_t			cuuid;
-	daos_cont_info_t	co_info;
-	daos_handle_t		coh;
-	dfs_t			*dfs;
-	int			rc;
-
-	if (arg->myrank != 0)
-		return;
-
-	/** create & open a non-posix container */
-	uuid_generate(cuuid);
-	rc = daos_cont_create(arg->pool.poh, cuuid, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created non-POSIX Container "DF_UUIDF"\n",
-		      DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
-	assert_int_equal(rc, 0);
-
-	/** try to mount DFS on it, should fail. */
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
-	assert_int_equal(rc, EINVAL);
-
-	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n",
-		      DP_UUID(cuuid));
-
-	/** create a DFS container with POSIX layout */
-	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_umount(dfs);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-
-	/** create a DFS container with POSIX layout */
-        rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-                            &coh, &co_info, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Mounting readonly\n");
-        rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
-        assert_int_equal(rc, 0);
-	print_message("Unmounting readonly\n");
-        rc = dfs_umount(dfs);
-        assert_int_equal(rc, 0);
-	print_message("Container closing\n");
-        rc = daos_cont_close(coh, NULL);
-        assert_int_equal(rc, 0);
-	print_message("Container destroying\n");
-        rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid))\
-	  ;
-
-	/** create a DFS container with POSIX layout */
-        rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-                            &coh, &co_info, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Mounting wrong parameters\n");
-	rc = dfs_mount(arg->pool.poh, coh, -1, &dfs);
-        assert_int_equal(rc, EINVAL);
-	print_message("Container closing\n");
-        rc = daos_cont_close(coh, NULL);
-        assert_int_equal(rc, 0);
-	print_message("Container destroying\n");
-        rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid))\
-	  ;
-
-	/** create a DFS container with POSIX layout */
-        rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-                            &coh, &co_info, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Mounting NULL dfs\n");
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, /*&dfs*/ NULL);
-        assert_int_equal(rc, EINVAL);
-        print_message("Unmount NULL dfs\n");
-        rc = dfs_umount(/*dfs*/ NULL);
-        assert_int_equal(rc, EINVAL);
-	print_message("Container closing\n");
-        rc = daos_cont_close(coh, NULL);
-        assert_int_equal(rc, 0);
-	print_message("Container destroying\n");
-        rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid))\
-	  ;
-}
-
 static int
 dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 		  daos_size_t file_size)
@@ -645,44 +528,6 @@ dfs_test_cond(void **state)
 }
 
 static void
-dfs_test_syml(void **state)
-{
-	dfs_obj_t		*sym;
-	char			*filename = "syml_file";
-	char			*val = "SYMLINK VAL 1";
-	char			tmp_buf[64];
-	struct stat		stbuf;
-	daos_size_t		size = 0;
-	int			rc, op_rc;
-
-	op_rc = dfs_open(dfs_mt, NULL, filename, S_IFLNK | S_IWUSR | S_IRUSR,
-			 O_RDWR | O_CREAT | O_EXCL, 0, 0, val, &sym);
-	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
-	assert_int_equal(rc, 0);
-	if (op_rc != 0)
-		goto syml_stat;
-
-	rc = dfs_get_symlink_value(sym, NULL, &size);
-	assert_int_equal(rc, 0);
-	assert_int_equal(size, strlen(val)+1);
-
-	rc = dfs_get_symlink_value(sym, tmp_buf, &size);
-	assert_int_equal(rc, 0);
-	assert_int_equal(size, strlen(val) + 1);
-	assert_string_equal(val, tmp_buf);
-
-	rc = dfs_release(sym);
-	assert_int_equal(rc, 0);
-
-syml_stat:
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
-	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_size, strlen(val));
-
-	MPI_Barrier(MPI_COMM_WORLD);
-}
-
-static void
 dfs_test_hole_mgmt(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -934,19 +779,15 @@ dfs_test_hole_mgmt(void **state)
 	D_FREE(rsgl.sg_iovs);
 }
 
-static const struct CMUnitTest dfs_tests[] = {
-	{ "DFS_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_TEST2: DFS short reads",
-	  dfs_test_short_read, async_disable, test_case_teardown},
-	{ "DFS_TEST3: multi-threads read shared file",
+static const struct CMUnitTest dfs_functional_tests[] = {
+	{ "DFS_FUNCTIONAL_TEST1: DFS short reads",
+	  dfs_test_short_read,       async_disable, test_case_teardown},
+	{ "DFS_FUNCTIONAL_TEST2: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_TEST4: Conditional OPs",
-	  dfs_test_cond, async_disable, test_case_teardown},
-	{ "DFS_TEST5: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_TEST6: DFS hole management",
-	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
+	{ "DFS_FUNCTIONAL_TEST3: Conditional OPs",
+	  dfs_test_cond,             async_disable, test_case_teardown},
+	{ "DFS_FUNCTIONAL_TEST4: DFS hole management",
+	  dfs_test_hole_mgmt,        async_disable, test_case_teardown},
 };
 
 static int
@@ -999,14 +840,16 @@ dfs_teardown(void **state)
 }
 
 int
-run_daos_fs_test(int rank, int size, int *sub_tests, int sub_tests_size)
+run_daos_fs_functional_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
-	int rc = 0;
+        int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
-					 dfs_tests, dfs_setup,
+	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) functional tes\
+ts",
+					 dfs_functional_tests, dfs_setup,
 					 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
+

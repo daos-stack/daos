@@ -34,7 +34,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXViADKFCoRvbOzUdrNb"
+#define TESTS "mpceXViADKIFCoRvbOzUdrNb"
 /**
  * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
@@ -80,6 +80,8 @@ print_usage(int rank)
 	print_message("daos_test -v|--rebuild_simple\n");
 	print_message("daos_test -b|--drain_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
+        print_message("daos_test -I|--DFS unit\n");
+        print_message("daos_test -F|--DFS functional\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
@@ -230,12 +232,19 @@ run_specified_tests(const char *tests, int rank, int size,
 							   sub_tests,
 							   sub_tests_size);
 			break;
+		case 'I':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS FileSystem (DFS) unit test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_fs_unit_test(rank, size, sub_tests,
+							   sub_tests_size);
+			break;
 		case 'F':
 			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS FileSystem (DFS) test..");
+			daos_test_print(rank, "DAOS FileSystem (DFS) functional test..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_fs_test(rank, size, sub_tests,
-						      sub_tests_size);
+			nr_failed += run_daos_fs_functional_test(rank, size, sub_tests,
+								 sub_tests_size);
 			break;
 		case 'N':
 			daos_test_print(rank, "\n\n=================");
@@ -330,7 +339,8 @@ main(int argc, char **argv)
 		{"subtests",	required_argument,	NULL,	'u'},
 		{"exclude",	required_argument,	NULL,	'E'},
 		{"filter",	required_argument,	NULL,	'f'},
-		{"dfs",		no_argument,		NULL,	'F'},
+		{"dfs_unit",	no_argument,		NULL,	'I'},
+		{"dfs_funct",  	no_argument,		NULL,	'F'},
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
 		{"help",	no_argument,		NULL,	'h'},
@@ -347,7 +357,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvb",
+				  "ampcCdXVizxADKeoROg:n:s:u:E:f:IFw:W:hrNvb",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
