@@ -932,7 +932,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 				D_GOTO(out, rc = -DER_HG);
 
 			rc = crt_proc_uint32_t(proc,
-					&dcu->dcu_ec_tgts[i].dcet_tgt_idx);
+					&dcu->dcu_ec_tgts[i].dcet_tgt_id);
 			if (rc != 0)
 				D_GOTO(out, rc = -DER_HG);
 		}

@@ -46,7 +46,7 @@ obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
 	 *	be unordered. So checking the bitmap may be inefficient.
 	 */
 	for (i = 0; i < map_size; i++) {
-		if (tgt_map[i].dcet_tgt_idx == id) {
+		if (tgt_map[i].dcet_tgt_id == id) {
 			*shard = tgt_map[i].dcet_shard_idx;
 			return true;
 		}
