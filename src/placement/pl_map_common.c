@@ -169,9 +169,7 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 	int                     tgt;
 	int                     current_index;
 
-	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
+	D_ASSERT(daos_obj_is_srank(oid));
 
 	/* locate rank in the pool map targets */
 	tgts = pool_map_targets(pl_poolmap);
@@ -197,7 +195,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		struct daos_obj_shard_md *shard_md, uint32_t r_ver,
 		uint32_t *tgt_id, uint32_t *shard_idx,
 		unsigned int array_size, int myrank, int *idx,
-		struct pl_obj_layout *layout, d_list_t *remap_list)
+		struct pl_obj_layout *layout, d_list_t *remap_list,
+		bool fill_addition)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
@@ -211,71 +210,15 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
 		    f_shard->fs_status == PO_COMP_ST_UP ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
+		    fill_addition == true) {
 			/*
 			 * Target id is used for rw, but rank is used
 			 * for rebuild, perhaps they should be unified.
 			 */
 			if (l_shard->po_shard != -1) {
-				struct pool_target      *target;
-				int                      leader;
-
 				D_ASSERT(f_shard->fs_tgt_id != -1);
 				D_ASSERT(*idx < array_size);
-
-				/* If the caller does not care about DTX related
-				 * things (myrank == -1), then fill it directly.
-				 */
-				if (myrank == -1)
-					goto fill;
-
-				leader = pl_select_leader(md->omd_id,
-					l_shard->po_shard, layout->ol_nr,
-					true, pl_obj_get_shard, layout);
-
-				if (leader < 0) {
-					D_WARN("Not sure whether current shard "
-					       "is leader or not for obj "
-					       DF_OID", fseq:%d, status:%d, "
-					       "ver:%d, shard:%d, rc = %d\n",
-					       DP_OID(md->omd_id),
-					       f_shard->fs_fseq,
-					       f_shard->fs_status, r_ver,
-					       l_shard->po_shard, leader);
-					goto fill;
-				}
-
-				rc = pool_map_find_target(map->pl_poolmap,
-							  leader, &target);
-				D_ASSERT(rc == 1);
-
-				if (myrank != target->ta_comp.co_rank) {
-					/* The leader shard is not on current
-					* server, then current server cannot
-					 * know whether DTXs for current shard
-					 * have been re-synced or not. So skip
-					 * the shard that will be handled by
-					 * the leader on another server.
-					 */
-					D_DEBUG(DB_PL, "Current replica (%d)"
-						"isn't the leader (%d) for obj "
-						DF_OID", fseq:%d, status:%d, "
-						"ver:%d, shard:%d, skip it\n",
-						myrank, target->ta_comp.co_rank,
-						DP_OID(md->omd_id),
-						f_shard->fs_fseq,
-						f_shard->fs_status,
-						r_ver, l_shard->po_shard);
-					continue;
-				}
-
-fill:
-				D_DEBUG(DB_PL, "Current replica (%d) is the "
-					"leader for obj "DF_OID", fseq:%d, "
-					"ver:%d, shard:%d, to be rebuilt.\n",
-					myrank, DP_OID(md->omd_id),
-					f_shard->fs_fseq,
-					r_ver, l_shard->po_shard);
 				tgt_id[*idx] = f_shard->fs_tgt_id;
 				shard_idx[*idx] = l_shard->po_shard;
 				(*idx)++;
@@ -480,4 +423,24 @@ out:
 	D_FREE(grp_count);
 	remap_list_free_all(extended_list);
 	return rc;
+}
+
+bool
+is_pool_adding(struct pool_domain *dom)
+{
+	uint32_t child_nr;
+
+	while (dom->do_children && dom->do_comp.co_status != PO_COMP_ST_NEW) {
+		child_nr = dom->do_child_nr;
+		dom = &dom->do_children[child_nr - 1];
+	}
+
+	if (dom->do_comp.co_status == PO_COMP_ST_NEW)
+		return true;
+
+	child_nr = dom->do_target_nr;
+	if (dom->do_targets[child_nr - 1].ta_comp.co_status == PO_COMP_ST_NEW)
+		return true;
+
+	return false;
 }

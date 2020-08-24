@@ -464,17 +464,16 @@ class SoakTestBase(TestWithServers):
 
         """
         commands = []
-
         iteration = self.test_iteration
         ior_params = "/run/" + job_spec + "/*"
         # IOR job specs with a list of parameters; update each value
         api_list = self.params.get("api", ior_params + "*")
         tsize_list = self.params.get("transfer_size", ior_params + "*")
         bsize_list = self.params.get("block_size", ior_params + "*")
-        oclass_list = self.params.get("daos_oclass", ior_params + "*")
-        # check if capable of doing rebuild; if yes then daos_oclass = RP_*GX
+        oclass_list = self.params.get("dfs_oclass", ior_params + "*")
+        # check if capable of doing rebuild; if yes then dfs_oclass = RP_*GX
         if self.is_harasser("rebuild"):
-            oclass_list = self.params.get("daos_oclass", "/run/rebuild/*")
+            oclass_list = self.params.get("dfs_oclass", "/run/rebuild/*")
         # update IOR cmdline for each additional IOR obj
         for api in api_list:
             for b_size in bsize_list:
@@ -492,13 +491,16 @@ class SoakTestBase(TestWithServers):
                         ior_cmd.api.update(api)
                         ior_cmd.block_size.update(b_size)
                         ior_cmd.transfer_size.update(t_size)
-                        ior_cmd.daos_oclass.update(o_type)
+                        ior_cmd.dfs_oclass.update(o_type)
+                        if ior_cmd.api.value == "DFS":
+                            ior_cmd.test_file.update(
+                                os.path.join("/", "testfile"))
                         ior_cmd.set_daos_params(self.server_group, pool)
                         # srun cmdline
                         nprocs = nodesperjob * ppn
                         env = ior_cmd.get_default_env("srun")
                         if ior_cmd.api.value == "MPIIO":
-                            env["DAOS_CONT"] = ior_cmd.daos_cont.value
+                            env["DAOS_CONT"] = ior_cmd.dfs_cont.value
                         cmd = Srun(ior_cmd)
                         cmd.assign_processes(nprocs)
                         cmd.assign_environment(env, True)
@@ -697,7 +699,7 @@ class SoakTestBase(TestWithServers):
             error = os.path.join(
                 self.test_log_dir, self.test_name + "_" + job + "_" +
                 log_name + "_" +
-                str(ppn*nodesperjob) + "_%N_" + "%j_" + "_ERROR_")
+                str(ppn*nodesperjob) + "_%N_" + "%j_" + "ERROR_")
             sbatch = {
                 "time": str(self.job_timeout) + ":00",
                 "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
@@ -855,7 +857,7 @@ class SoakTestBase(TestWithServers):
         # unique numbers per pass
         self.used = []
         # Update the remote log directories from new loop/pass
-        self.sharedsoakdir = self.sharedlog_dir  + "/pass" + str(self.loop)
+        self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
         self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
         local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
@@ -924,7 +926,7 @@ class SoakTestBase(TestWithServers):
         rank = self.params.get("rank", "/run/container_reserved/*")
         if self.is_harasser("rebuild"):
             obj_class = "_".join(["OC", str(
-                self.params.get("daos_oclass", "/run/rebuild/*")[0])])
+                self.params.get("dfs_oclass", "/run/rebuild/*")[0])])
         else:
             obj_class = self.params.get(
                 "object_class", "/run/container_reserved/*")
