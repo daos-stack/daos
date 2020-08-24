@@ -62,7 +62,7 @@ def ior_runner_thread(manager, uuids, results):
         results (queue): queue for returning thread results
     """
     for index, cont_uuid in enumerate(uuids):
-        manager.job.daos_cont.update(cont_uuid, "ior.cont_uuid")
+        manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
         try:
             manager.run()
         except CommandFailure as error:

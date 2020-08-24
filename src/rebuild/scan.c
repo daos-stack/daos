@@ -500,8 +500,10 @@ rebuild_scanner(void *data)
 		return 0;
 	}
 
-	if (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
-		dss_sleep(daos_fail_value_get() * 1000000);
+	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
+		D_DEBUG(DB_REBUILD, "sleep 2 seconds then retry\n");
+		dss_sleep(2 * 1000);
+	}
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);

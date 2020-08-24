@@ -321,7 +321,6 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		entry->dpe_str = strdup(value);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
-
 		if (csum_type < 0) {
 			fprintf(stderr,
 				"currently supported checksum types are "
@@ -340,10 +339,12 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		 */
 		val = strtoull(value, &endp, 0);
 		if (*endp != '\0') {
-			fprintf(stderr, "invalid digits in %s\n", value);
+			fprintf(stderr, "cksum_size value has invalid digits (%s)\n",
+				value);
 			return -DER_INVAL;
 		} else if (val == ULLONG_MAX) {
-			fprintf(stderr, "too big value %s\n", value);
+			fprintf(stderr, "cksum_size value is too big (%s)\n",
+				value);
 			return -DER_INVAL;
 		}
 
@@ -359,6 +360,43 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	} else if (!strcmp(name, "dedup")) {
+		if (!strcmp(value, "off"))
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_OFF;
+		else if (!strcmp(value, "memcmp"))
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_MEMCMP;
+		else if (!strcmp(value, "hash"))
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_HASH;
+		else {
+			fprintf(stderr, "dedup prop value can only be 'off/memcmp/hash'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_DEDUP;
+	} else if (!strcmp(name, "dedup_th") ||
+		   !strcmp(name, "dedup_threshold")) {
+		char *endp;
+		long val;
+
+		/* use base 0 to interpret 0/octal or 0x/hex prefixes
+		 * no need to check empty value, this is done in
+		 * daos_parse_properties()
+		 */
+		val = strtoull(value, &endp, 0);
+		if (*endp != '\0') {
+			fprintf(stderr, "dedup_th value has invalid digits (%s)\n",
+				value);
+			return -DER_INVAL;
+		} else if (val == ULLONG_MAX) {
+			fprintf(stderr, "dedup_th value is too big (%s)\n",
+				value);
+			return -DER_INVAL;
+		} else if (val < 4096) {
+			fprintf(stderr, "dedup_th value is too small (%s)\n",
+				value);
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+		entry->dpe_val = val;
 	} else if (!strcmp(name, "rf")) {
 		if (!strcmp(value, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -376,7 +414,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		}
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	} else {
-		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/rf\n");
+		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;
 	}
 
@@ -451,6 +489,11 @@ daos_parse_properties(char *props_string, daos_prop_t *props)
 enum {
 	DAOS_PROPERTIES_OPTION = 1,
 };
+
+/* resource and command arguments (ie "container create" for example) can be
+ * skipped for options evaluation
+ */
+#define SKIP_RES_AND_CMD_ARGS 2
 
 static int
 common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
@@ -530,10 +573,13 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (cmdname == NULL)
 		D_GOTO(out_free, rc = RC_NO_HELP);
 
-	/* Parse command options. Use goto on any errors here
-	 * since some options may result in resource allocation.
+	/* Parse remaining command-line options (skip resource and command).
+	 * Use goto on any errors here since some options may result in
+	 * resource allocation.
 	 */
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc - SKIP_RES_AND_CMD_ARGS,
+				 &argv[SKIP_RES_AND_CMD_ARGS], "", options,
+				 NULL)) != -1) {
 		switch (rc) {
 		case 'G':
 			D_FREE(ap->sysname);
@@ -702,6 +748,13 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			fprintf(stderr, "unknown option : %d\n", rc);
 			D_GOTO(out_free, rc = RC_PRINT_HELP);
 		}
+	}
+
+	/* unexpected extra arguments not allowed */
+	if (optind < argc - SKIP_RES_AND_CMD_ARGS) {
+		fprintf(stderr, "unexpected extra argument : '%s'\n",
+			argv[optind + SKIP_RES_AND_CMD_ARGS]);
+		D_GOTO(out_free, rc = RC_NO_HELP);
 	}
 
 	cmd_args_print(ap);
@@ -1226,11 +1279,14 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"
-			"				cksum_size, srv_cksum, rf\n"
+			"				cksum_size, srv_cksum, dedup\n"
+			"				dedup_th, rf\n"
 			"			   label value can be any string\n"
 			"			   cksum supported values are off, crc[16,32,64], sha1\n"
 			"			   cksum_size can be any size\n"
 			"			   srv_cksum values can be on, off\n"
+			"			   dedup values can be off, memcmp or hash\n"
+			"			   dedup_th can be any size bigger than 4K\n"
 			"			   rf supported values are [0-4]\n"
 			"	--acl-file=PATH    input file containing ACL\n"
 			"	--user=ID          user who will own the container.\n"

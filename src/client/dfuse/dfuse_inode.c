@@ -90,18 +90,16 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 				&ir_id,
 				sizeof(ir_id));
 
-	if (!rlink) {
+	if (!rlink)
 		return -DER_NONEXIST;
-	}
 
 	dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
 				&dfir->ir_ino,
 				sizeof(dfir->ir_ino));
-	if (!rlink) {
+	if (!rlink)
 		return -DER_NONEXIST;
-	}
 
 	entry = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -140,7 +138,6 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 			       !daos_handle_is_inval(dfs->dfs_coh));
 
 		if (!daos_handle_is_inval(dfs->dfs_coh)) {
-
 			rc = dfs_umount(dfs->dfs_ns);
 			if (rc != 0)
 				DFUSE_TRA_ERROR(dfs,
