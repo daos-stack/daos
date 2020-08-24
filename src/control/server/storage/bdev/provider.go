@@ -36,6 +36,7 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
+		DeviceList []string
 		DisableVMD bool
 	}
 
@@ -66,14 +67,12 @@ type (
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
-		ShmID      int // shared memory segment for SPDK IPC
 		MemSize    int // size MiB memory to be used by SPDK proc
 		DisableVMD bool
 	}
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
 	DeviceFormatRequest struct {
-		ShmID   int // shared memory segment for SPDK IPC
 		MemSize int // size MiB memory to be used by SPDK proc
 		Device  string
 		Class   storage.BdevClass
