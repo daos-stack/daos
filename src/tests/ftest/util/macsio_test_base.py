@@ -65,7 +65,7 @@ class MacsioTestBase(TestWithServers):
 
         return macsio
 
-    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None, vol=False):
+    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None, plugin=None):
         """Run the macsio.
 
         Parameters for the macsio command are obtained from the test yaml file,
@@ -78,6 +78,7 @@ class MacsioTestBase(TestWithServers):
             pool_uuid (str): pool uuid
             pool_svcl (str): pool service replica
             cont_uuid (str, optional): container uuid. Defaults to None.
+            plugin (str, optional): plugin path to use with DAOS VOL connector
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -86,10 +87,11 @@ class MacsioTestBase(TestWithServers):
         """
         env = self.macsio.get_environment(
             self.server_managers[0], self.client_log)
-        if vol:
-            plugin_path = self.params.get("plugin_path", default="")
+        if plugin:
+            # Include DAOS VOL environment settings
             env["HDF5_VOL_CONNECTOR"] = "daos"
-            env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
+            env["HDF5_PLUGIN_PATH"] = "{}".format(plugin)
+
         # Setup the job manager (mpirun) to run the macsio command
         self.macsio.daos_pool = pool_uuid
         self.macsio.daos_svcl = pool_svcl

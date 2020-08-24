@@ -22,10 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from general_utils import convert_list
+from dfuse_test_base import DfuseTestBase
 from macsio_test_base import MacsioTestBase
 
 
-class MacsioTest(MacsioTestBase):
+class MacsioTest(MacsioTestBase, DfuseTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs a basic MACSio test.
 
@@ -80,6 +81,8 @@ class MacsioTest(MacsioTestBase):
 
         :avocado: tags=all,pr,hw,large,io,macsio_daos_vol
         """
+        plugin_path = self.params.get("plugin_path")
+
         # Create a pool
         self.add_pool()
         self.pool.display_pool_daos_space()
@@ -88,14 +91,18 @@ class MacsioTest(MacsioTestBase):
         self.add_container(self.pool)
 
         # Create dfuse mount point
+        self.start_dfuse()
 
-        # Update mpirun command environment
+        # VOL needs to run from a file system that supports xattr.  Currently
+        # nfs does not have this attribute so it was recommended to create and
+        # use a dfuse dir and run vol tests from there.
+        self.manager.working_dir.value = self.dfuse.mount_dir.value
 
         # Run macsio
         self.log.info("Running MACSio with DAOS VOL connector")
         status = self.macsio.check_results(
             self.run_macsio(
                 self.pool.uuid, convert_list(self.pool.svc_ranks),
-                self.container.uuid, True))
+                self.container.uuid, plugin_path))
         if status:
             self.log.info("Test passed")
