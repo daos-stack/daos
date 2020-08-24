@@ -16,7 +16,7 @@
    ...
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
-   fun:NA_Initialize_opt
+   ...
    fun:crt_hg_init
    fun:crt_init_opt
 }

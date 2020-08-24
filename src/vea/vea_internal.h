@@ -149,6 +149,7 @@ static inline bool ext_is_idle(struct vea_free_extent *vfe)
 
 enum vea_free_flags {
 	VEA_FL_NO_MERGE		= (1 << 0),
+	VEA_FL_NO_ACCOUNTING	= (1 << 1),
 };
 
 /* vea_init.c */

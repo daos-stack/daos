@@ -34,7 +34,6 @@ pool:
     control_method: dmg
 container:
     type: POSIX
-    # Disabling checksum due to DAOS-4458
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 ior:
@@ -43,13 +42,13 @@ ior:
             np: 16
     test_file: daos:testFile
     repetitions: 2
-    daos_destroy: False
+    dfs_destroy: False
     iorflags:
           ior_flags:
             - "-v -W -w -r -R"
             - "-v -W -w -r -R -F"
           ior_api:
-            - DAOS
+            - DFS
             - MPIIO
             - POSIX
           transfer_block_size:

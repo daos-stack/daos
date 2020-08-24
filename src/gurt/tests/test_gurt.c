@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
+/*
  * This file tests macros in GURT
  */
 #ifndef TEST_OLD_ERROR
@@ -1897,6 +1897,82 @@ test_gurt_atomic(void **state)
 	assert(mix  == 123456);
 }
 
+static void
+check_string_buffer(struct d_string_buffer_t *str_buf, int str_size,
+		    int buf_size, const char *test_str)
+{
+	assert_non_null(str_buf->str);
+	assert_int_equal(str_buf->str_size, str_size);
+	assert_int_equal(str_buf->buf_size, buf_size);
+	assert_int_equal(str_buf->status, 0);
+	if (test_str != NULL) {
+		assert_string_equal(str_buf->str, test_str);
+	}
+	d_free_string(str_buf);
+}
+
+static void
+test_gurt_string_buffer(void **state)
+{
+	int rc, i;
+	struct d_string_buffer_t str_buf = {0};
+	wchar_t wbuf[2] = {129, 0};
+
+	/* empty string */
+	rc = d_write_string_buffer(&str_buf, "");
+	assert_return_code(rc, errno);
+	check_string_buffer(&str_buf, 0, 64, NULL);
+
+	/* simple string */
+	rc = d_write_string_buffer(&str_buf, "hello there");
+	assert_return_code(rc, errno);
+	check_string_buffer(&str_buf, 11, 64, "hello there");
+
+	/* simple string append*/
+	rc = d_write_string_buffer(&str_buf, "Look");
+	assert_return_code(rc, errno);
+	rc = d_write_string_buffer(&str_buf, " ");
+	assert_return_code(rc, errno);
+	rc = d_write_string_buffer(&str_buf, "inside");
+	assert_return_code(rc, errno);
+	rc = d_write_string_buffer(&str_buf, "!");
+	assert_return_code(rc, errno);
+	check_string_buffer(&str_buf, 12, 64, "Look inside!");
+
+	/* formatted string */
+	rc = d_write_string_buffer(&str_buf, "int %d float %f", 5, 3.141516);
+	assert_return_code(rc, errno);
+	check_string_buffer(&str_buf, 20, 64, "int 5 float 3.141516");
+
+	/* grow buffer */
+	for (i = 0; i < 100; i++) {
+		rc = d_write_string_buffer(&str_buf,
+					   "experience what's inside");
+		assert_return_code(rc, errno);
+	}
+	check_string_buffer(&str_buf, 24 * i, 4096, NULL);
+
+	/* run as string buffer */
+	for (i = 0; i < 100; i++) {
+		d_write_string_buffer(&str_buf,
+				      "experience what's inside");
+	}
+	check_string_buffer(&str_buf, 24 * i, 4096, NULL);
+
+	/* run as string buffer with encoding error */
+	d_write_string_buffer(&str_buf, "Only");
+	d_write_string_buffer(&str_buf, " the%ls", wbuf);
+	d_write_string_buffer(&str_buf, " paranoid");
+	d_write_string_buffer(&str_buf, " survive");
+
+	assert_int_not_equal(str_buf.status, 0);
+	assert_string_equal(strerror(errno),
+			    "Invalid or incomplete multibyte or wide character");
+
+	d_free_string(&str_buf);
+	assert_null(str_buf.str);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1916,6 +1992,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_parallel_different_operations),
 		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
 		cmocka_unit_test(test_gurt_atomic),
+		cmocka_unit_test(test_gurt_string_buffer),
 	};
 
 	d_register_alt_assert(mock_assert);

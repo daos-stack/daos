@@ -39,6 +39,7 @@ func TestBdevRunnerPrepare(t *testing.T) {
 		testNrHugePages  = 42
 		testTargetUser   = "amos"
 		testPciWhitelist = "a,b,c"
+		testPciBlacklist = "x,y,z"
 	)
 
 	for name, tc := range map[string]struct {
@@ -47,10 +48,10 @@ func TestBdevRunnerPrepare(t *testing.T) {
 		expEnv []string
 		expErr error
 	}{
-		"reset fails": {
+		"prepare reset fails": {
 			req: PrepareRequest{},
 			mbc: &MockBackendConfig{
-				ResetErr: errors.New("reset failed"),
+				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("reset failed"),
 		},
@@ -84,6 +85,32 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
 		},
+		"blacklist": {
+			req: PrepareRequest{
+				HugePageCount: testNrHugePages,
+				TargetUser:    testTargetUser,
+				PCIBlacklist:  testPciBlacklist,
+				DisableVFIO:   true,
+			},
+			expEnv: []string{
+				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
+				fmt.Sprintf("%s=%s", pciBlackListEnv, testPciBlacklist),
+				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
+			},
+		},
+		"blacklist whitelist fails": {
+			req: PrepareRequest{
+				HugePageCount: testNrHugePages,
+				TargetUser:    testTargetUser,
+				PCIBlacklist:  testPciBlacklist,
+				PCIWhitelist:  testPciWhitelist,
+				DisableVFIO:   true,
+			},
+			expErr: errors.New(
+				"bdev_include and bdev_exclude can't be used together"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -94,7 +121,7 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				runCmd: func(log logging.Logger, env []string, cmdStr string, args ...string) (string, error) {
 					if len(args) > 0 && args[0] == "reset" {
 						if tc.mbc != nil {
-							return "", tc.mbc.ResetErr
+							return "", tc.mbc.PrepareResetErr
 						}
 						return "", nil
 					}

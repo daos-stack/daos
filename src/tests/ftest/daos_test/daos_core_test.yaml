@@ -13,6 +13,7 @@ timeout: 600
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
+  nvme_size: 16G
 server_config:
   servers_per_host: 2
   name: daos_server
@@ -56,6 +57,7 @@ daos_tests:
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
+      scalable_endpoint: True
     test_m:
       daos_test: m
       test_name: Management tests

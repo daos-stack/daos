@@ -16,7 +16,7 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${TARGET:=centos8}"
       ;;
     *Leap*15*|*leap15*|*opensuse15*|*sles15*)
-      : "${CHROOT_NAME:=opensuse-leap-15.1-x86_64}"
+      : "${CHROOT_NAME:=opensuse-leap-15.2-x86_64}"
       : "${TARGET:=leap15}"
       ;;
   esac

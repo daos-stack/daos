@@ -38,7 +38,7 @@ ior:
   - "RP_3G1"
   - "RP_4GX"
   - "RP_4G1"
- daos_destroy: False
+ dfs_destroy: False
  ior_sequence:
 #   - [scmsize, nvmesize, stripesize, blocksize, clientslots]
     - [6000000000, 139586437120, 1048576, 17179869184, 1]        #[6G, 130G, 1M, 16G, 1]
