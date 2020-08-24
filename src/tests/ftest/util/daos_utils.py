@@ -81,7 +81,12 @@ class DaosCommand(DaosCommandBase):
         "container_list_attrs": r"\n \S+ \S+ (.+)",
         # Sample create-snap output.
         # snapshot/epoch 1582610056530034697 has been created
-        "container_create_snap": r"[A-Za-z\/]+\s[0-9]+\s[a-z\s]+"
+        "container_create_snap": r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+",
+        # Sample container list-snaps output - no line break on second line.
+        # 05/15-20:40:40.46 wolf-3 Container's snapshots :
+        # 05/15-20:40:40.46 wolf-3 1589575199653691408  05/15-20:40:40.46
+        # wolf-3 1589575236150689813  05/15-20:40:40.46 wolf-3
+        "container_list_snaps": r"(\d{19})"
     }
 
     def pool_query(self, pool, sys_name=None, svc=None, sys=None):
@@ -388,15 +393,18 @@ class DaosCommand(DaosCommandBase):
             ("container", "create-snap"), pool=pool, svc=svc, cont=cont,
             sys_name=sys_name, snap=snap_name, epc=epoch, )
 
-    def container_destroy_snap(self, pool, cont, snap_name=None, epoch=None,
-                               svc=None, sys_name=None):
+    def container_destroy_snap(
+        self, pool, cont, epochs, snap_name=None, svc=None, sys_name=None):
         """Call daos container create-snap.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
             snap_name (str, optional): Snapshot name.
-            epoch (str, optional): Epoch number.
+            epochs (List of string): If you want to use --epc, use a
+                single-element list. If you want to use --epcrange, use a list
+                that contains epoch for B in the first element and epoch for E
+                in the second element.
             svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
                 to None.
             sys_name (str, optional): DAOS system name context for servers.
@@ -410,6 +418,27 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos pool query command fails.
 
         """
+        if len(epochs) == 1:
+            return self._get_result(
+                ("container", "destroy-snap"), pool=pool, svc=svc, cont=cont,
+                sys_name=sys_name, snap=snap_name, epc=epochs[0])
+
+        epcrange = "{}-{}".format(epochs[0], epochs[1])
         return self._get_result(
             ("container", "destroy-snap"), pool=pool, svc=svc, cont=cont,
-            sys_name=sys_name, snap=snap_name, epc=epoch, )
+            sys_name=sys_name, snap=snap_name, epcrange=epcrange)
+
+    def container_list_snaps(self, pool, cont, svc=None):
+        """List snapshot in a container.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str): Service replicas. Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+        """
+        return self._get_result(
+            ("container", "list-snaps"), pool=pool, cont=cont, svc=svc)
