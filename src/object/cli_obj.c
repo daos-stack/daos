@@ -3257,7 +3257,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (rc != 0 || obj_auxi->result) {
 		if (task->dt_result == 0)
 			task->dt_result = rc ? rc : obj_auxi->result;
-		D_ERROR("obj complete callback failure %d\n", task->dt_result);
+		D_DEBUG(DB_IO, "obj complete callback: %d\n", task->dt_result);
 	}
 
 	if (obj->cob_time_fetch_leader != NULL &&
