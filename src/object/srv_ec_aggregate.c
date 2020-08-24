@@ -820,7 +820,7 @@ agg_recalc_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 	unsigned char	*parity_bufs[p];
 	unsigned char	*data[k];
 	unsigned char	*buf;
-	unsigned int	 i, r, l = 0;;
+	int	 i, r, l = 0;;
 
 	for (i = 0, r = 0; i < k; i++) {
 		unsigned char *rbuf =
@@ -835,6 +835,7 @@ agg_recalc_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 	}
 	D_ASSERT(r == cell_cnt);
 	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
+	D_ASSERT(p > 0);
 	for (i = p - 1; i >= 0; i--)
 		parity_bufs[i] = &buf[i*cell_bytes];
 
