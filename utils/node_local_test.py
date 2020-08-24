@@ -1239,6 +1239,9 @@ def main():
 
     conf = load_conf()
 
+    # set the path so that dmg, etc. can be found
+    os.environ['PATH'] += os.pathsep + os.path.join(conf['PREFIX'], 'bin')
+
     wf = WarningsFactory(args.output_file)
 
     conf.set_wf(wf)

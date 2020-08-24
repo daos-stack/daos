@@ -18,7 +18,9 @@ def scons():
     dc_tgts += dc_mgmt_tgts + dc_array_tgts + dc_kv_tgts + dc_security_tgts
     libdaos = daos_build.library(env, 'daos', dc_tgts,
                                  SHLIBVERSION=API_VERSION,
-                                 LIBS=['daos_common'])
+                                 LIBS=['daos_common', 'daos_tests'])
+    # TODO (DAOS-4600): Remove dependency on daos_tests, which was
+    # added temporarily to ease migration from the C mgmt API.
     if hasattr(env, 'InstallVersionedLib'):
         env.InstallVersionedLib('$PREFIX/lib64/', libdaos,
                                 SHLIBVERSION=API_VERSION)

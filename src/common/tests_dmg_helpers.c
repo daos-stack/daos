@@ -122,6 +122,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		   char *args[], int argcount,
 		   struct json_object **json_out)
 {
+	char			*cfg_file = NULL;
 	char			*cmd_str = NULL;
 	char			*cmd_base = NULL;
 	struct	json_object	*obj = NULL;
@@ -130,11 +131,22 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	FILE			*fp = NULL;
 	int			pc_rc, rc = 0;
 
+	/* allow env to set only if not supplied */
 	if (dmg_config_file == NULL)
+		cfg_file = getenv("DMG_CONFIG_FILE");
+	else {
+		D_STRNDUP(cfg_file, dmg_config_file, MAXPATHLEN);
+		if (cfg_file == NULL)
+			return -DER_NOMEM;
+	}
+
+	if (cfg_file == NULL)
 		D_ASPRINTF(cmd_base, "dmg -j -i %s ", dmg_cmd);
-	else
-		D_ASPRINTF(cmd_base, "dmg -j -o %s %s ",
-			   dmg_config_file, dmg_cmd);
+	else {
+		D_ASPRINTF(cmd_base, "dmg -j -o %s %s ", cfg_file, dmg_cmd);
+		if (dmg_config_file != NULL)
+			D_FREE(cfg_file);
+	}
 	if (cmd_base == NULL)
 		return -DER_NOMEM;
 	cmd_str = cmd_string(cmd_base, args, argcount);

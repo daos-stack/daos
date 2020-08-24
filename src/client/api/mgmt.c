@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <daos/pool.h>
 #include <daos/task.h>
 #include <daos_mgmt.h>
+#include <daos/tests_lib.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
@@ -36,6 +37,8 @@ daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 	daos_svc_rip_t		*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	D_DEPRECATED("");
 
 	DAOS_API_ARG_ASSERT(*args, SVC_RIP);
 	rc = dc_task_create(dc_mgmt_svc_rip, NULL, ev, &task);
@@ -57,6 +60,8 @@ daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 	daos_set_params_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	D_DEPRECATED("");
 
 	DAOS_API_ARG_ASSERT(*args, SET_PARAMS);
 	rc = dc_task_create(dc_mgmt_set_params, NULL, ev, &task);
@@ -80,58 +85,17 @@ daos_pool_create(uint32_t mode, uid_t uid, gid_t gid, const char *grp,
 		 daos_prop_t *pool_prop, d_rank_list_t *svc,
 		 uuid_t uuid, daos_event_t *ev)
 {
-	daos_pool_create_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_CREATE);
-	if (pool_prop != NULL && !daos_prop_valid(pool_prop, true, true)) {
-		D_ERROR("Invalid pool properties.\n");
-		return -DER_INVAL;
-	}
-
-	rc = dc_task_create(dc_pool_create, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->mode	= mode;
-	args->uid	= uid;
-	args->gid	= gid;
-	args->grp	= grp;
-	args->tgts	= tgts;
-	args->dev	= dev;
-	args->scm_size	= scm_size;
-	args->nvme_size	= nvme_size;
-	args->prop	= pool_prop;
-	args->svc	= svc;
-	args->uuid	= uuid;
-
-	return dc_task_schedule(task, true);
+	D_DEPRECATED("dmg_pool_create()");
+	return dmg_pool_create(NULL, uid, gid, grp, tgts,
+			       scm_size, nvme_size, pool_prop, svc, uuid);
 }
 
 int
 daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 		  daos_event_t *ev)
 {
-	daos_pool_destroy_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_DESTROY);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_pool_destroy, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->force	= force;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-
-	return dc_task_schedule(task, true);
+	D_DEPRECATED("dmg_pool_destroy()");
+	return dmg_pool_destroy(NULL, uuid, grp, force);
 }
 
 int
@@ -142,6 +106,8 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	D_DEPRECATED("");
 
 	if (!daos_uuid_valid(uuid))
 		return -DER_INVAL;
@@ -168,6 +134,8 @@ daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
 	tse_task_t		*task;
 	int			 rc;
 
+	D_DEPRECATED("");
+
 	if (!daos_uuid_valid(uuid))
 		return -DER_INVAL;
 
@@ -192,6 +160,8 @@ daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
 	daos_pool_update_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	D_DEPRECATED("");
 
 	if (!daos_uuid_valid(uuid))
 		return -DER_INVAL;
@@ -218,6 +188,8 @@ daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 	tse_task_t		*task;
 	int			 rc;
 
+	D_DEPRECATED("");
+
 	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE);
 	if (!daos_uuid_valid(uuid))
 		return -DER_INVAL;
@@ -239,6 +211,8 @@ int
 daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
 		 d_rank_list_t *failed, daos_event_t *ev)
 {
+	D_DEPRECATED("");
+
 	return -DER_NOSYS;
 }
 
@@ -250,6 +224,8 @@ daos_pool_add_replicas(const uuid_t uuid, const char *group,
 	daos_pool_replicas_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+
+	D_DEPRECATED("");
 
 	DAOS_API_ARG_ASSERT(*args, POOL_ADD_REPLICAS);
 	if (!daos_uuid_valid(uuid))
@@ -278,6 +254,8 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 	tse_task_t		*task;
 	int			 rc;
 
+	D_DEPRECATED("");
+
 	DAOS_API_ARG_ASSERT(*args, POOL_REMOVE_REPLICAS);
 	if (!daos_uuid_valid(uuid))
 		return -DER_INVAL;
@@ -300,30 +278,13 @@ int
 daos_mgmt_list_pools(const char *group, daos_size_t *npools,
 		     daos_mgmt_pool_info_t *pools, daos_event_t *ev)
 {
-	daos_mgmt_list_pools_t	*args;
-	tse_task_t		*task;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, MGMT_LIST_POOLS);
-
-	if (npools == NULL) {
-		D_ERROR("npools must be non-NULL\n");
-		return -DER_INVAL;
-	}
-
-	rc = dc_task_create(dc_mgmt_list_pools, NULL, ev, &task);
-	if (rc)
-		return rc;
-	args = dc_task_get_args(task);
-	args->grp = group;
-	args->pools = pools;
-	args->npools = npools;
-
-	return dc_task_schedule(task, true);
+	D_DEPRECATED("dmg_pool_list()");
+	return dmg_pool_list(NULL, group, npools, pools);
 }
 
 int
 daos_mgmt_add_mark(const char *mark)
 {
+	D_DEPRECATED("");
 	return dc_mgmt_add_mark(mark);
 }
