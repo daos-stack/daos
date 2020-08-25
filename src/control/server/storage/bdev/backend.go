@@ -35,6 +35,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -155,10 +156,14 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 	return b.binding.vmdDisabled
 }
 
-func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error) {
+func convertControllers(bcs []spdk.Controller, pciFilter ...string) ([]*storage.NvmeController, error) {
 	scs := make([]*storage.NvmeController, 0, len(bcs))
 
 	for _, bc := range bcs {
+		if len(pciFilter) > 0 && !common.Includes(pciFilter, bc.PCIAddr) {
+			continue
+		}
+
 		sc := &storage.NvmeController{}
 		if err := convertController(bc, sc); err != nil {
 			return nil, errors.Wrapf(err,
@@ -172,7 +177,7 @@ func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error
 }
 
 // Scan discovers NVMe controllers accessible by SPDK.
-func (b *spdkBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
+func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	spdkOpts := spdk.EnvOptions{
 		DisableVMD: b.IsVMDDisabled(),
 	}
@@ -181,7 +186,7 @@ func (b *spdkBackend) Scan(_ ScanRequest) (*ScanResponse, error) {
 		return nil, err
 	}
 
-	cs, err := convertControllers(b.binding.controllers)
+	cs, err := convertControllers(b.binding.controllers, req.DeviceList...)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +326,6 @@ func (b *spdkBackend) format(class storage.BdevClass, deviceList []string) (*For
 // Remove any stale SPDK lockfiles after format.
 func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	spdkOpts := spdk.EnvOptions{
-		ShmID:        req.ShmID,
 		MemSize:      req.MemSize,
 		PciWhiteList: req.DeviceList,
 		DisableVMD:   b.IsVMDDisabled(),
