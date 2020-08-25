@@ -911,8 +911,39 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+
     archive_files(destination, host_list, "{}/*.log*".format(logs_dir))
 
+    # Caution: the glob expression "_output.log" must match the
+    #   --output-filename specified in # cart_utils.py:get_env()
+    tar_files(destination, "{}/*_output.log*".format(logs_dir))
+
+def tar_files(destination, logs_glob_expr):
+    """Run tar on files (in the directory specified by the orterun
+        --output-filename option) to the avocado results directory.  Useful for
+        copying, e.g., files from orterun --output-filename option to the avocado
+        results directory.
+
+    Args:
+        destination (str): (glob expression) path of files to be tar'd
+        logs_dir (str): destination of tar file(s)
+    """
+
+    # Create the destination directory
+    if not os.path.exists(destination):
+      get_output(["mkdir", destination])
+
+    import glob
+
+    for f_glob in glob.glob(logs_glob_expr):
+
+      tar_cmd = ["tar", "cf", "{}.tar".format(f_glob), f_glob]
+      subprocess.call(tar_cmd, stdout=subprocess.PIPE)
+      print("Running tar: {}".format(" ".join(tar_cmd)))
+
+      cp_cmd = ["cp", "{}.tar".format(f_glob), destination]
+      subprocess.call(cp_cmd, stdout=subprocess.PIPE)
+      print("Running cp: {}".format(" ".join(cp_cmd)))
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
@@ -947,7 +978,8 @@ def archive_files(destination, host_list, source_files):
     this_host = socket.gethostname().split(".")[0]
 
     # Create the destination directory
-    get_output(["mkdir", destination])
+    if not os.path.exists(destination):
+      get_output(["mkdir", destination])
 
     # Display available disk space prior to copy.  Allow commands to fail w/o
     # exiting this program.  Any disk space issues preventing the creation of a
