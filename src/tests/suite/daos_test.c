@@ -340,7 +340,7 @@ main(int argc, char **argv)
 		{"exclude",	required_argument,	NULL,	'E'},
 		{"filter",	required_argument,	NULL,	'f'},
 		{"dfs_unit",	no_argument,		NULL,	'I'},
-		{"dfs_funct",  	no_argument,		NULL,	'F'},
+		{"dfs_funct",	no_argument,		NULL,	'F'},
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
 		{"help",	no_argument,		NULL,	'h'},
