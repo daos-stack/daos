@@ -1144,7 +1144,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	int			amode, obj_mode;
 	int			rc;
 
-        if (_dfs == NULL)
+	if (_dfs == NULL)
 	  return EINVAL;
 
 	amode = (flags & O_ACCMODE);
