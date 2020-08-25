@@ -1,3 +1,4 @@
+
 /**
  * (C) Copyright 2019-2020 Intel Corporation.
  *
@@ -840,15 +841,15 @@ dfs_teardown(void **state)
 }
 
 int
-run_daos_fs_functional_test(int rank, int size, int *sub_tests, int sub_tests_size)
+run_daos_fs_functional_test(int rank, int size, 
+			    int *sub_tests, int sub_tests_size)
 {
-        int rc = 0;
+	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) functional tes\
-ts",
-					 dfs_functional_tests, dfs_setup,
-					 dfs_teardown);
+	rc = cmocka_run_group_tests_name(
+		"DAOS FileSystem (DFS) functional tests",
+		dfs_functional_tests, dfs_setup, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

@@ -234,16 +234,20 @@ run_specified_tests(const char *tests, int rank, int size,
 			break;
 		case 'I':
 			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS FileSystem (DFS) unit test..");
+			daos_test_print(rank, 
+					"DAOS FileSystem (DFS) unit test..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_fs_unit_test(rank, size, sub_tests,
+			nr_failed += run_daos_fs_unit_test(rank, size, 
+							   sub_tests,
 							   sub_tests_size);
 			break;
 		case 'F':
 			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS FileSystem (DFS) functional test..");
+			daos_test_print(rank, 
+					"DAOS FileSystem (DFS) funct test..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_fs_functional_test(rank, size, sub_tests,
+			nr_failed += run_daos_fs_functional_test(rank, size, 
+								 sub_tests,
 								 sub_tests_size);
 			break;
 		case 'N':
