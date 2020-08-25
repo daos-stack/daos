@@ -26,7 +26,7 @@ import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
@@ -35,9 +35,9 @@ from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
+from dfuse_utils import Dfuse
 
-
-class IorTestBase(DfuseTestBase):
+class IorTestBase(TestWithServers):
     """Base IOR test class.
 
     :avocado: recursive
@@ -52,6 +52,7 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
+        self.dfuse = None
         self.container = None
         self.lock = None
         self.mpirun = None
@@ -72,6 +73,15 @@ class IorTestBase(DfuseTestBase):
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
 
+    def tearDown(self):
+        """Tear down each test case."""
+        try:
+            if self.dfuse:
+                self.dfuse.stop()
+        finally:
+            # Stop the servers and agents
+            super(IorTestBase, self).tearDown()
+
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
@@ -91,6 +101,27 @@ class IorTestBase(DfuseTestBase):
 
         # create container
         self.container.create()
+
+    def _start_dfuse(self):
+        """Create a DfuseCommand object to start dfuse."""
+        # Get Dfuse params
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
+        self.dfuse.get_params(self)
+
+        # update dfuse params
+        self.dfuse.set_dfuse_params(self.pool)
+        self.dfuse.set_dfuse_cont_param(self.container)
+        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
+
+        try:
+            # start dfuse
+            self.dfuse.run()
+        except CommandFailure as error:
+            self.log.error("Dfuse command %s failed on hosts %s",
+                           str(self.dfuse),
+                           str(NodeSet.fromlist(self.dfuse.hosts)),
+                           exc_info=error)
+            self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
@@ -124,7 +155,7 @@ class IorTestBase(DfuseTestBase):
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
-                self.start_dfuse()
+                self._start_dfuse()
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
@@ -257,7 +288,7 @@ class IorTestBase(DfuseTestBase):
 
         # start dfuse for POSIX api. This is specific to interception
         # library test requirements.
-        self.start_dfuse()
+        self._start_dfuse()
 
         # Create two jobs and run in parallel.
         # Job1 will have 3 client set up to use dfuse + interception
