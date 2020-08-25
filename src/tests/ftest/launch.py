@@ -929,6 +929,9 @@ def tar_files(destination, logs_glob_expr):
         logs_dir (str): destination of tar file(s)
     """
 
+    print('DEBUG log: line 931, destination = ', destination)
+    print('DEBUG log: line 931, logs_glob_expr = ', logs_glob_expr)
+
     # Create the destination directory
     if not os.path.exists(destination):
       get_output(["mkdir", destination])

@@ -168,7 +168,13 @@ class CartIvOneNodeTest(Test):
                 expected_rc = int(action['return_code'])
 
                 # Create a temporary file for iv_client to write the results to
-                log_fd, log_path = tempfile.mkstemp()
+                log_path_dir = os.environ['HOME']
+                if os.environ['DAOS_TEST_SHARED_DIR']:
+                  log_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
+
+                log_fd, log_path = tempfile.mkstemp(dir = log_path_dir)
+
+                print('DEBUG log: line 175, log_path = ', log_path)
 
                 # try writing to an unwritable spot
                 # log_path = "/"
