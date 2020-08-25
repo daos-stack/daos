@@ -200,6 +200,13 @@ class CartIvOneNodeTest(Test):
                 # 2.
                 # codecs.open(log_file, "w", "unicode").write('')
 
+
+                # DEBUGGING: dump contents of JSON file to screen
+                with open(log_path, 'r') as f:
+                    print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:206")
+                    print("TRACE, Contents of log_path:")
+                    print(f.read())
+
                 test_result = json.load(log_file)
                 print('DEBUG log: line 168, test_result = ', test_result)
 
