@@ -408,3 +408,62 @@ func TestBdevBackendFormat(t *testing.T) {
 		})
 	}
 }
+
+func TestBdevBackendUpdate(t *testing.T) {
+	numCtrlrs := 4
+	controllers := make([]spdk.Controller, 0, numCtrlrs)
+	for i := 0; i < numCtrlrs; i++ {
+		c := mockSpdkController(int32(i))
+		controllers = append(controllers, c)
+	}
+
+	for name, tc := range map[string]struct {
+		pciAddr string
+		mec     spdk.MockEnvCfg
+		mnc     spdk.MockNvmeCfg
+		expErr  error
+	}{
+		"init failed": {
+			pciAddr: controllers[0].PCIAddr,
+			mec: spdk.MockEnvCfg{
+				InitErr: errors.New("spdk init says no"),
+			},
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: controllers,
+			},
+			expErr: errors.New("spdk init says no"),
+		},
+		"not found": {
+			pciAddr: "NotReal",
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: controllers,
+			},
+			expErr: FaultPCIAddrNotFound("NotReal"),
+		},
+		"binding update fail": {
+			pciAddr: controllers[0].PCIAddr,
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: controllers,
+				UpdateErr:      errors.New("spdk says no"),
+			},
+			expErr: errors.New("spdk says no"),
+		},
+		"binding update success": {
+			pciAddr: controllers[0].PCIAddr,
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: controllers,
+			},
+			expErr: nil,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+
+			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
+			common.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}

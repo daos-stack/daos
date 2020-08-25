@@ -55,7 +55,6 @@ type MockNvmeCfg struct {
 	DiscoverErr    error
 	FormatRes      []*FormatResult
 	FormatErr      error
-	UpdateCtrlrs   []Controller
 	UpdateErr      error
 }
 
@@ -102,8 +101,8 @@ func (n *MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path stri
 	if n.Cfg.UpdateErr != nil {
 		return n.Cfg.UpdateErr
 	}
-	log.Debugf("mock update fw on nvme ssd: %q, image path %q, slot %d. returns ctrlrs: %v",
-		ctrlrPciAddr, path, slot, n.Cfg.UpdateCtrlrs)
+	log.Debugf("mock update fw on nvme ssd: %q, image path %q, slot %d",
+		ctrlrPciAddr, path, slot)
 
 	return nil
 }
