@@ -80,8 +80,8 @@ print_usage(int rank)
 	print_message("daos_test -v|--rebuild_simple\n");
 	print_message("daos_test -b|--drain_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
-        print_message("daos_test -I|--DFS unit\n");
-        print_message("daos_test -F|--DFS functional\n");
+	print_message("daos_test -I|--DFS unit\n");
+	print_message("daos_test -F|--DFS functional\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
