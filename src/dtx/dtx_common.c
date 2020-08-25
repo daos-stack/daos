@@ -235,7 +235,7 @@ dtx_epoch_bound(struct dtx_epoch *epoch)
 		 */
 		return epoch->oe_value;
 
-	limit = epoch->oe_first + crt_hlc_epsilon_get();
+	limit = crt_hlc_epsilon_get_bound(epoch->oe_first);
 	if (epoch->oe_value >= limit)
 		/*
 		 * The epoch is already out of the potential uncertainty
@@ -272,7 +272,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	if (!dtx_epoch_chosen(epoch)) {
 		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
-			DF_U64" first="DF_U64" flags="DF_X64"\n",
+			DF_U64" first="DF_U64" flags=%x\n",
 			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
 			epoch->oe_flags);
 		return -DER_INVAL;
@@ -285,38 +285,41 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_refs = 1;
 	dth->dth_mbs = mbs;
 
-	dth->dth_sync = 0;
 	dth->dth_resent = 0;
 	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
+	dth->dth_local_retry = 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
 	dth->dth_ent = NULL;
 	dth->dth_flags = leader ? DTE_LEADER : 0;
+
+	/* Set 'DTE_BLOCK' flag for EC object modification or
+	 * distributed transaction. At the same time, ask DTX
+	 * to 'sync' commit.
+	 */
+	if (daos_oclass_is_ec(leader_oid->id_pub, NULL) ||
+	    (mbs != NULL && mbs->dm_grp_cnt > 1)) {
+		dth->dth_flags |= DTE_BLOCK;
+		dth->dth_sync = 1;
+	} else {
+		dth->dth_sync = 0;
+	}
+
 	dth->dth_modification_cnt = sub_modification_cnt;
 
 	dth->dth_op_seq = 0;
-	dth->dth_rsrvd_cnt = 0;
 	dth->dth_oid_cnt = 0;
 	dth->dth_oid_cap = 0;
 	dth->dth_oid_array = NULL;
 
 	dth->dth_dkey_hash = 0;
 
-	if (sub_modification_cnt <= 1) {
-		dth->dth_rsrvds = &dth->dth_rsrvd_inline;
-		return 0;
-	}
-
-	D_ALLOC_ARRAY(dth->dth_rsrvds, sub_modification_cnt);
-	if (dth->dth_rsrvds == NULL)
-		return -DER_NOMEM;
-
-	return 0;
+	return vos_dtx_rsrvd_init(dth);
 }
 
 static int
@@ -527,10 +530,10 @@ init:
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
 			     true, tgt_cnt == 0 ? true : false, dth);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
-		"dti_cos_cnt %d: "DF_RC"\n",
+	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, leader "DF_UOID
+		", dti_cos_cnt %d: "DF_RC"\n",
 		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, dti_cos_cnt, DP_RC(rc));
+		dth->dth_ver, DP_UOID(*leader_oid), dti_cos_cnt, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dlh->dlh_subs);
@@ -638,13 +641,6 @@ again:
 
 			dth->dth_sync = 1;
 		}
-
-		/* FIXME: For the DTX across multiple modification groups,
-		 *	  commit it synchronously. That will be changed in
-		 *	  next phase.
-		 */
-		if (dth->dth_mbs->dm_grp_cnt > 1)
-			dth->dth_sync = 1;
 
 		/* For synchronous DTX, do not add it into CoS cache, otherwise,
 		 * we may have no way to remove it from the cache.
@@ -758,8 +754,7 @@ out:
 	D_FREE(dlh->dlh_subs);
 	D_FREE(dth->dth_oid_array);
 
-	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
-		D_FREE(dth->dth_rsrvds);
+	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }
@@ -956,7 +951,8 @@ int
 dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		  daos_epoch_t *epoch, uint32_t *pm_ver)
 {
-	int	rc;
+	uint64_t	age;
+	int		rc;
 
 	if (daos_is_zero_dti(dti))
 		/* If DTX is disabled, then means that the application does
@@ -979,11 +975,12 @@ again:
 	case DTX_ST_COMMITTED:
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
-		if (dtx_hlc_age2sec(dti->dti_hlc) >
-		    DTX_AGG_THRESHOLD_AGE_LOWER ||
+		age = dtx_hlc_age2sec(dti->dti_hlc);
+		if (age > DTX_AGG_THRESHOLD_AGE_LOWER ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
-			D_DEBUG(DB_IO, "Not sure about whether the old RPC "
-				DF_DTI" is resent or not.\n", DP_DTI(dti));
+			D_ERROR("Not sure about whether the old RPC "DF_DTI
+				" is resent or not. Age="DF_U64" s.\n",
+				DP_DTI(dti), age);
 			rc = -DER_EP_OLD;
 		}
 		return rc;

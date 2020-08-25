@@ -33,19 +33,11 @@ import (
 )
 
 type (
-	// InitRequest defines the parameters for initializing the provider.
-	InitRequest struct {
-		pbin.ForwardableRequest
-		SPDKShmID int
-	}
-
-	// InitResponse contains the results of a successful Init operation.
-	InitResponse struct{}
-
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
-		EnableVmd bool
+		DeviceList []string
+		DisableVMD bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -58,6 +50,7 @@ type (
 		pbin.ForwardableRequest
 		HugePageCount int
 		PCIWhitelist  string
+		PCIBlacklist  string
 		TargetUser    string
 		ResetOnly     bool
 		DisableVFIO   bool
@@ -74,14 +67,21 @@ type (
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
-		EnableVmd  bool
+		MemSize    int // size MiB memory to be used by SPDK proc
+		DisableVMD bool
+	}
+
+	// DeviceFormatRequest designs the parameters for a device-specific format.
+	DeviceFormatRequest struct {
+		MemSize int // size MiB memory to be used by SPDK proc
+		Device  string
+		Class   storage.BdevClass
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
 	DeviceFormatResponse struct {
-		Formatted  bool
-		Error      *fault.Fault
-		Controller *storage.NvmeController
+		Formatted bool
+		Error     *fault.Fault
 	}
 
 	// DeviceFormatResponses is a map of device identifiers to device Format results.
@@ -94,13 +94,12 @@ type (
 
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
-		Init(shmID ...int) error
-		Reset() error
+		PrepareReset() error
 		Prepare(PrepareRequest) (*PrepareResponse, error)
-		Scan() (storage.NvmeControllers, error)
-		Format(pciAddr string) (*storage.NvmeController, error)
-		EnableVmd()
-		IsVmdEnabled() bool
+		Scan(ScanRequest) (*ScanResponse, error)
+		Format(FormatRequest) (*FormatResponse, error)
+		DisableVMD()
+		IsVMDDisabled() bool
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -136,42 +135,27 @@ func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
 	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
-func (p *Provider) enableVmd() {
-	p.backend.EnableVmd()
+func (p *Provider) disableVMD() {
+	p.backend.DisableVMD()
 }
 
-// IsVmdEnabled returns true if provider is VMD device aware.
-func (p *Provider) IsVmdEnabled() bool {
-	return p.backend.IsVmdEnabled()
-}
-
-// Init performs any initialization steps required by the provider.
-func (p *Provider) Init(req InitRequest) error {
-	if p.shouldForward(req) {
-		return p.fwd.Init(req)
-	}
-	return p.backend.Init(req.SPDKShmID)
+// IsVMDDisabled returns true if provider has disabled VMD device awareness.
+func (p *Provider) IsVMDDisabled() bool {
+	return p.backend.IsVMDDisabled()
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.shouldForward(req) {
-		req.EnableVmd = p.IsVmdEnabled()
+		req.DisableVMD = p.IsVMDDisabled()
 		return p.fwd.Scan(req)
 	}
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.EnableVmd {
-		p.enableVmd()
+	if req.IsForwarded() && req.DisableVMD {
+		p.disableVMD()
 	}
 
-	cs, err := p.backend.Scan()
-	if err != nil {
-		return nil, err
-	}
-
-	return &ScanResponse{
-		Controllers: cs,
-	}, nil
+	return p.backend.Scan(req)
 }
 
 // Prepare attempts to perform all actions necessary to make NVMe components available for
@@ -180,15 +164,15 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	if p.shouldForward(req) {
 		resp, err := p.fwd.Prepare(req)
 		// set vmd state on local provider after forwarding request
-		if err == nil && resp.VmdDetected {
-			p.enableVmd()
+		if err == nil && !resp.VmdDetected {
+			p.disableVMD()
 		}
 
 		return resp, err
 	}
 
 	// run reset first to ensure reallocation of hugepages
-	if err := p.backend.Reset(); err != nil {
+	if err := p.backend.PrepareReset(); err != nil {
 		return nil, errors.Wrap(err, "bdev prepare reset")
 	}
 
@@ -198,9 +182,7 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return resp, nil
 	}
 
-	resp, err := p.backend.Prepare(req)
-
-	return resp, errors.Wrap(err, "bdev prepare")
+	return p.backend.Prepare(req)
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).
@@ -210,41 +192,13 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 
 	if p.shouldForward(req) {
-		req.EnableVmd = p.IsVmdEnabled()
+		req.DisableVMD = p.IsVMDDisabled()
 		return p.fwd.Format(req)
 	}
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.EnableVmd {
-		p.enableVmd()
+	if req.IsForwarded() && req.DisableVMD {
+		p.disableVMD()
 	}
 
-	// TODO (DAOS-3844): Kick off device formats in goroutines? Serially formatting a large
-	// number of NVMe devices can be slow.
-	res := &FormatResponse{
-		DeviceResponses: make(DeviceFormatResponses),
-	}
-
-	for _, dev := range req.DeviceList {
-		res.DeviceResponses[dev] = &DeviceFormatResponse{}
-		switch req.Class {
-		default:
-			res.DeviceResponses[dev].Error = FaultFormatUnknownClass(req.Class.String())
-		case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
-			res.DeviceResponses[dev].Formatted = true
-			p.log.Infof("%s format for non-NVMe bdev skipped (%s)", req.Class, dev)
-		case storage.BdevClassNvme:
-			p.log.Infof("%s format starting (%s)", req.Class, dev)
-			c, err := p.backend.Format(dev)
-			if err != nil {
-				p.log.Errorf("%s format failed (%s)", req.Class, dev)
-				res.DeviceResponses[dev].Error = FaultFormatError(dev, err)
-				continue
-			}
-			res.DeviceResponses[dev].Controller = c
-			res.DeviceResponses[dev].Formatted = true
-			p.log.Infof("%s format successful (%s)", req.Class, dev)
-		}
-	}
-
-	return res, nil
+	return p.backend.Format(req)
 }

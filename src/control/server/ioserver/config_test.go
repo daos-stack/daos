@@ -303,7 +303,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		logMask         = "LOG_MASK_VALUE"
 		logFile         = "/path/to/log"
 		cfgPath         = "/path/to/nvme.conf"
-		shmId           = 42
 		interfacePort   = 20
 		targetCount     = 4
 		helperCount     = 1
@@ -326,7 +325,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithSocketDir(socketDir).
 		WithLogFile(logFile).
 		WithLogMask(logMask).
-		WithShmID(shmId).
 		WithBdevConfigPath(cfgPath).
 		WithSystemName(systemName).
 		WithCrtCtxShareAddr(crtCtxShareAddr).
@@ -342,7 +340,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		"-f", strconv.Itoa(serviceCore),
 		"-g", systemName,
 		"-d", socketDir,
-		"-i", strconv.Itoa(shmId),
 		"-n", cfgPath,
 		"-I", strconv.Itoa(index),
 		"-p", strconv.FormatUint(uint64(pinnedNumaNode), 10),

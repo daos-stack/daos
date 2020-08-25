@@ -211,9 +211,8 @@ get_new_entry(struct da_entry **entry, struct obj_da *da)
 	*entry = d_list_pop_entry(&tpv_data->free_entries,
 				  struct da_entry,
 				  link);
-	if (*entry) {
+	if (*entry)
 		goto zero;
-	}
 
 	/* Ok, no entries, let's allocate some and put them in our tpv */
 	D_ALLOC(block, da->block_size);

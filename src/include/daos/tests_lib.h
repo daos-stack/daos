@@ -270,6 +270,7 @@ int dmg_pool_list(const char *dmg_config_file, const char *group,
  *			supported target size.
  * \param nvme_size
  *		[IN]	Target NVMe (Non-Volatile Memory express) size in bytes.
+ * \param prop	[IN]	Optional, pool properties.
  * \param svc	[IN]	Number of desired pool service replicas. Callers must
  *			specify svc->rl_nr and allocate a matching
  *			svc->rl_ranks; svc->rl_nr and svc->rl_ranks
@@ -285,6 +286,7 @@ int dmg_pool_create(const char *dmg_config_file,
 		    uid_t uid, gid_t gid, const char *grp,
 		    const d_rank_list_t *tgts,
 		    daos_size_t scm_size, daos_size_t nvme_size,
+		    daos_prop_t *prop,
 		    d_rank_list_t *svc, uuid_t uuid);
 
 /**

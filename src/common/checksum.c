@@ -482,6 +482,17 @@ daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props)
 					   daos_cont_prop2serververify(props));
 }
 
+struct daos_csummer *
+daos_csummer_copy(const struct daos_csummer *obj)
+{
+	struct daos_csummer *result = NULL;
+
+	daos_csummer_init(&result, obj->dcs_algo,
+			  obj->dcs_chunk_size, obj->dcs_srv_verify);
+
+	return result;
+}
+
 void daos_csummer_destroy(struct daos_csummer **obj)
 {
 	struct daos_csummer *csummer = *obj;
@@ -1215,8 +1226,6 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 
 	rc = calc_for_iov(csummer, key, dkey_csum_buf, size);
 	if (rc == 0) {
-		C_TRACE("Calculating checksum for Key "DF_KEY" -> "DF_CI"\n",
-			DP_KEY(key), DP_CI(*csum_info));
 		*p_csum = csum_info;
 		C_TRACE("Checksum created for key: "DF_KEY"->"DF_CI"\n",
 			DP_KEY(key), DP_CI(*csum_info));
@@ -1385,7 +1394,9 @@ ci_insert(struct dcs_csum_info *dcb, int idx, uint8_t *csum_buf, size_t len)
 {
 	uint8_t *to_update;
 
-	D_ASSERT(idx < dcb->cs_nr);
+	D_ASSERTF(idx < dcb->cs_nr, "idx(%d) < dcb->cs_nr(%d)",
+		  idx, dcb->cs_nr);
+	D_ASSERT(len <= dcb->cs_buf_len - idx * dcb->cs_len);
 
 	to_update = dcb->cs_csum + idx * dcb->cs_len;
 	memcpy(to_update, csum_buf, len);

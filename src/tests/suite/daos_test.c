@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXVizuADKCoROdrFNvb"
+#define TESTS "mpceXViADKFCoRvbOzUdrNb"
 /**
  * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
@@ -62,7 +62,7 @@ print_usage(int rank)
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
 	print_message("daos_test -C|--capa\n");
-	print_message("daos_test -u|--dedup\n");
+	print_message("daos_test -U|--dedup\n");
 	print_message("daos_test -z|--checksum\n");
 	print_message("daos_test -X|--dtx\n");
 	print_message("daos_test -i|--daos_io_tests\n");
@@ -153,7 +153,7 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_checksum_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
-		case 'u':
+		case 'U':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS dedup tests..");
 			daos_test_print(rank, "=================");
@@ -285,6 +285,9 @@ main(int argc, char **argv)
 	int		 rank;
 	int		 size;
 	int		 rc;
+#if CMOCKA_FILTER_SUPPORTED == 1 /** for cmocka filter(requires cmocka 1.1.5) */
+	char		 filter[1024];
+#endif
 
 	d_register_alt_assert(mock_assert);
 
@@ -333,8 +336,8 @@ main(int argc, char **argv)
 		{"dfs",		no_argument,		NULL,	'F'},
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
+		{"obj_class",	required_argument,	NULL,	'l'},
 		{"help",	no_argument,		NULL,	'h'},
-		{"object",	required_argument,	NULL,	'X'},
 		{NULL,		0,			NULL,	0}
 	};
 
@@ -347,7 +350,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizuxADKeoROg:n:s:u:E:f:Fw:W:hrNvb",
+				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvbl:",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
@@ -379,8 +382,6 @@ main(int argc, char **argv)
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 		{
 			/** Add wildcards for easier filtering */
-			char filter[sizeof(optarg) + 2];
-
 			sprintf(filter, "*%s*", optarg);
 			cmocka_set_test_filter(filter);
 		}
@@ -396,9 +397,9 @@ main(int argc, char **argv)
 			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
 			if (test_io_dir == NULL)
 				return -1;
-		case 'X':
-			objclass = daos_oclass_name2id(optarg);
-			if (objclass == OC_UNKNOWN)
+		case 'l':
+			dt_obj_class = daos_oclass_name2id(optarg);
+			if (dt_obj_class == OC_UNKNOWN)
 				return -1;
 			break;
 		case CHECKSUM_ARG_VAL_TYPE:

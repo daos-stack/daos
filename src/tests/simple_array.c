@@ -151,6 +151,7 @@ pool_create(void)
 			     NULL /* list of targets, NULL = all */,
 			     10ULL << 30 /* target SCM size, 10G */,
 			     40ULL << 30 /* target NVMe size, 40G */,
+			     NULL /* pool props */,
 			     &svcl /* pool service nodes, used for connect */,
 			     pool_uuid /* the uuid of the pool created */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
