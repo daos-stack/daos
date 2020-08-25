@@ -49,6 +49,7 @@ class CartCtlOneNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
+    @avocado.skip("Currently no support for heterogeneous multi-node tests")
     def test_cart_ctl(self):
         """
         Test CaRT ctl
