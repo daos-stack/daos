@@ -252,11 +252,82 @@ simple_put_get(void **state)
 	print_message("all good\n");
 } /* End simple_put_get */
 
+static void
+kv_cond_ops(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	int		val, val_out;
+	size_t		size;
+	int		rc;
+
+	oid = dts_oid_gen(OC_S1, 0, arg->myrank);
+
+	/** open the object */
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	val_out = 5;
+	size = sizeof(int);
+	print_message("Conditional FETCH of non existent Key(should fail)\n");
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key2",
+			 &size, &val_out, NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_int_equal(val_out, 5);
+
+	val = 1;
+	print_message("Conditional UPDATE of non existent Key(should fail)\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_UPDATE, "Key1",
+			 sizeof(int), &val, NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
+
+	val_out = 5;
+	size = sizeof(int);
+	print_message("Conditional FETCH of non existent Key(should fail)\n");
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key2",
+			 &size, &val_out, NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_int_equal(val_out, 5);
+
+	print_message("Conditional INSERT of non existent Key\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
+			 sizeof(int), &val, NULL);
+	assert_int_equal(rc, 0);
+
+	val = 2;
+	print_message("Conditional INSERT of existing Key (Should fail)\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
+			 sizeof(int), &val, NULL);
+	assert_int_equal(rc, -DER_EXIST);
+
+	size = sizeof(int);
+	print_message("Conditional FETCH of existing Key\n");
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key1",
+			 &size, &val_out, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(val_out, 1);
+
+	print_message("Conditional Remove non existing Key (should fail)\n");
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key2",
+			    NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
+
+	print_message("Conditional Remove existing Key\n");
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key1",
+			    NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("all good\n");
+} /* End simple_put_get */
+
 static const struct CMUnitTest kv_tests[] = {
 	{"KV: Object Put/GET (blocking)",
 	 simple_put_get, async_disable, NULL},
 	{"KV: Object Put/GET (non-blocking)",
 	 simple_put_get, async_enable, NULL},
+	{"KV: Object Conditional Ops (blocking)",
+	 kv_cond_ops, async_disable, NULL},
 };
 
 int

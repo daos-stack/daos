@@ -102,6 +102,7 @@ dc_kv_put(tse_task_t *task)
 	update_args = daos_task_get_args(update_task);
 	update_args->oh		= args->oh;
 	update_args->th		= args->th;
+	update_args->flags	= args->flags;
 	update_args->dkey	= &params->dkey;
 	update_args->nr		= 1;
 	update_args->iods	= &params->iod;
@@ -183,6 +184,7 @@ dc_kv_get(tse_task_t *task)
 	fetch_args = daos_task_get_args(fetch_task);
 	fetch_args->oh		= args->oh;
 	fetch_args->th		= args->th;
+	fetch_args->flags	= args->flags;
 	fetch_args->dkey	= &params->dkey;
 	fetch_args->nr		= 1;
 	fetch_args->iods	= &params->iod;
@@ -246,6 +248,7 @@ dc_kv_remove(tse_task_t *task)
 	punch_args = daos_task_get_args(punch_task);
 	punch_args->oh		= args->oh;
 	punch_args->th		= args->th;
+	punch_args->flags	= args->flags;
 	punch_args->dkey	= &params->dkey;
 	punch_args->akeys	= NULL;
 	punch_args->akey_nr	= 0;
