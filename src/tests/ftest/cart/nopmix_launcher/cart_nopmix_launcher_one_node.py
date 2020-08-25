@@ -28,6 +28,7 @@ import os
 import sys
 import subprocess
 
+import avocado
 from avocado       import Test
 from avocado       import main
 
@@ -51,6 +52,7 @@ class CartNoPmixLauncherOneNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
+    @avocado.skip("Currently no --use-cfg option (see DAOS-5524)")
     def test_cart_no_pmix_launcher(self):
         """
         Test CaRT NoPmix Launcher
