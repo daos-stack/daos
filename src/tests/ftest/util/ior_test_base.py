@@ -1,32 +1,32 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+(C) Copyright 2018-2020 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-     http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+The Government's rights to use, modify, reproduce, release, perform, display,
+or disclose this software are subject to the terms of the Apache License as
+provided in Contract No. B609815.
+Any reproduction of computer software, computer software documentation, or
+portions thereof marked with this legend must also reproduce the markings.
 """
 import os
 import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
+from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
@@ -36,10 +36,8 @@ from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
-from dfuse_utils import Dfuse
 
-
-class IorTestBase(TestWithServers):
+class IorTestBase(DfuseTestBase):
     """Base IOR test class.
 
     :avocado: recursive
@@ -54,7 +52,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
-        self.dfuse = None
         self.container = None
         self.lock = None
         self.mpirun = None
@@ -75,15 +72,6 @@ class IorTestBase(TestWithServers):
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(IorTestBase, self).tearDown()
-
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
@@ -103,27 +91,6 @@ class IorTestBase(TestWithServers):
 
         # create container
         self.container.create()
-
-    def _start_dfuse(self):
-        """Create a DfuseCommand object to start dfuse."""
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse),
-                           str(NodeSet.fromlist(self.dfuse.hosts)),
-                           exc_info=error)
-            self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
@@ -157,7 +124,7 @@ class IorTestBase(TestWithServers):
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
-                self._start_dfuse()
+                self.start_dfuse()
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
@@ -290,7 +257,7 @@ class IorTestBase(TestWithServers):
 
         # start dfuse for POSIX api. This is specific to interception
         # library test requirements.
-        self._start_dfuse()
+        self.start_dfuse()
 
         # Create two jobs and run in parallel.
         # Job1 will have 3 client set up to use dfuse + interception
