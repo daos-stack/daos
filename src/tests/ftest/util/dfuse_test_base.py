@@ -42,20 +42,25 @@ class DfuseTestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.dfuse:
-                self.dfuse.stop()
+            self.stop_dfuse()
         finally:
             # Stop the servers and agents
             super(DfuseTestBase, self).tearDown()
 
-    def start_dfuse(self):
-        """Create a DfuseCommand object and use it to start dfuse."""
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
+    def start_dfuse(self, hosts, pool, container):
+        """Create a DfuseCommand object and use it to start Dfuse.
+
+        Args:
+            hosts (list): list of hosts on which to start Dfuse
+            pool (TestPool): pool to use with Dfuse
+            container (TestContainer): container to use with Dfuse
+        """
+        self.dfuse = Dfuse(hosts, self.tmp)
         self.dfuse.get_params(self)
 
         # Update dfuse params
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
+        self.dfuse.set_dfuse_params(pool)
+        self.dfuse.set_dfuse_cont_param(container)
         self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         try:
@@ -66,3 +71,9 @@ class DfuseTestBase(TestWithServers):
                 "Dfuse command %s failed on hosts %s", str(self.dfuse),
                 str(NodeSet.fromlist(self.dfuse.hosts)), exc_info=error)
             self.fail("Test was expected to pass but it failed.")
+
+    def stop_dfuse(self):
+        """Stop Dfuse and unset the DfuseCommand object."""
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None

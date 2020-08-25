@@ -26,7 +26,7 @@ from dfuse_test_base import DfuseTestBase
 from macsio_test_base import MacsioTestBase
 
 
-class MacsioTest(MacsioTestBase, DfuseTestBase):
+class MacsioTest(DfuseTestBase, MacsioTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs a basic MACSio test.
 
@@ -91,7 +91,7 @@ class MacsioTest(MacsioTestBase, DfuseTestBase):
         self.add_container(self.pool)
 
         # Create dfuse mount point
-        self.start_dfuse()
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # VOL needs to run from a file system that supports xattr.  Currently
         # nfs does not have this attribute so it was recommended to create and
