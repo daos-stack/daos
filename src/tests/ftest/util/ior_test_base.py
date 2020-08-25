@@ -26,7 +26,8 @@ import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
+
+from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
@@ -36,10 +37,8 @@ from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
-from dfuse_utils import Dfuse
 
-
-class IorTestBase(TestWithServers):
+class IorTestBase(DfuseTestBase):
     """Base IOR test class.
 
     :avocado: recursive
@@ -54,7 +53,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
-        self.dfuse = None
         self.container = None
         self.lock = None
         self.mpirun = None
@@ -75,15 +73,6 @@ class IorTestBase(TestWithServers):
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(IorTestBase, self).tearDown()
-
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
@@ -103,27 +92,6 @@ class IorTestBase(TestWithServers):
 
         # create container
         self.container.create()
-
-    def _start_dfuse(self):
-        """Create a DfuseCommand object to start dfuse."""
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse),
-                           str(NodeSet.fromlist(self.dfuse.hosts)),
-                           exc_info=error)
-            self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
@@ -157,7 +125,8 @@ class IorTestBase(TestWithServers):
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
-                self._start_dfuse()
+                self.start_dfuse(
+                    self.hostlist_clients, self.pool, self.container)
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
@@ -167,13 +136,17 @@ class IorTestBase(TestWithServers):
         out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
                            intercept)
 
-        if stop_dfuse and self.dfuse:
-            self.dfuse.stop()
-            self.dfuse = None
+        if stop_dfuse:
+            self.stop_dfuse()
+
         return out
 
     def update_ior_cmd_with_pool(self, create_cont=True):
-        """Update ior_cmd with pool."""
+        """Update ior_cmd with pool.
+
+        Args:
+            create_cont (bool, optional): create a container. Defaults to True.
+        """
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
@@ -210,7 +183,7 @@ class IorTestBase(TestWithServers):
         return self.mpirun
 
     def check_subprocess_status(self, operation="write"):
-        """Check subprocess status """
+        """Check subprocess status."""
         if operation == "write":
             self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
         elif operation == "read":
@@ -258,6 +231,7 @@ class IorTestBase(TestWithServers):
 
     def stop_ior(self):
         """Stop IOR process.
+
         Args:
             manager (str): mpi job manager command
         """
@@ -272,7 +246,6 @@ class IorTestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             self.pool.display_pool_daos_space()
-
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -290,7 +263,7 @@ class IorTestBase(TestWithServers):
 
         # start dfuse for POSIX api. This is specific to interception
         # library test requirements.
-        self._start_dfuse()
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # Create two jobs and run in parallel.
         # Job1 will have 3 client set up to use dfuse + interception
@@ -309,8 +282,7 @@ class IorTestBase(TestWithServers):
         job2.start()
         job1.join()
         job2.join()
-        self.dfuse.stop()
-        self.dfuse = None
+        self.stop_dfuse()
 
     def get_new_job(self, clients, job_num, results, intercept=None):
         """Create a new thread for ior run.
@@ -394,17 +366,18 @@ class IorTestBase(TestWithServers):
                     actual_pool_size, expected_pool_size))
 
     def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
-        """Execute cmd using general_utils.pcmd
+        """Execute cmd using general_utils.pcmd.
 
-          Args:
+        Args:
             cmd (str): String command to be executed
             fail_on_err (bool): Boolean for whether to fail the test if command
                                 execution returns non zero return code.
             display_output (bool): Boolean for whether to display output.
 
-          Returns:
+        Returns:
             dict: a dictionary of return codes keys and accompanying NodeSet
                   values indicating which hosts yielded the return code.
+
         """
         try:
             # execute bash cmds
@@ -420,10 +393,8 @@ class IorTestBase(TestWithServers):
                         "Error running '{}' on the following "
                         "hosts: {}".format(cmd, error_hosts))
 
-         # report error if any command fails
+        # report error if any command fails
         except CommandFailure as error:
-            self.log.error("DfuseSparseFile Test Failed: %s",
-                           str(error))
-            self.fail("Test was expected to pass but "
-                      "it failed.\n")
+            self.log.error("DfuseSparseFile Test Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
         return ret
