@@ -295,6 +295,7 @@ class Mpirun(JobManager):
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
+        self.envlist = FormattedParameter("-envlist {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wd {}", None)
 
@@ -347,7 +348,7 @@ class Mpirun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.export.update_default(env_vars.get_list())
+        self.envlist.update_default(env_vars.get_list())
 
     def run(self):
         """Run the mpirun command.
