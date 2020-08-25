@@ -79,7 +79,7 @@ class VolTestBase(DfuseTestBase):
         manager.assign_hosts(self.hostlist_clients)
         manager.assign_processes(client_processes)
         manager.assign_environment(env, True)
-        manager.wdir.value = self.dfuse.mount_dir.value
+        manager.working_dir.value = self.dfuse.mount_dir.value
 
         # run VOL Command
         try:
