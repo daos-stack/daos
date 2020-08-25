@@ -75,9 +75,11 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
+	/*
 	rc = ds_obj_ec_aggregate(cont, epr);
 	if (rc)
 		D_PRINT("EC aggregate returned %d\n", rc);
+	*/
 
 	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
 			   (void *)cont->sc_agg_req);
