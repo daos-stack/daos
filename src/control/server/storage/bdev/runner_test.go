@@ -48,10 +48,10 @@ func TestBdevRunnerPrepare(t *testing.T) {
 		expEnv []string
 		expErr error
 	}{
-		"reset fails": {
+		"prepare reset fails": {
 			req: PrepareRequest{},
 			mbc: &MockBackendConfig{
-				ResetErr: errors.New("reset failed"),
+				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("reset failed"),
 		},
@@ -121,7 +121,7 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				runCmd: func(log logging.Logger, env []string, cmdStr string, args ...string) (string, error) {
 					if len(args) > 0 && args[0] == "reset" {
 						if tc.mbc != nil {
-							return "", tc.mbc.ResetErr
+							return "", tc.mbc.PrepareResetErr
 						}
 						return "", nil
 					}

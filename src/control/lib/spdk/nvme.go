@@ -50,20 +50,18 @@ import (
 
 const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
 
-// NVME is the interface that provides SPDK NVMe functionality.
-type NVME interface {
+// Nvme is the interface that provides SPDK NVMe functionality.
+type Nvme interface {
 	// Discover NVMe controllers and namespaces, and device health info
-	Discover(logging.Logger, bool) ([]Controller, error)
+	Discover(logging.Logger) ([]Controller, error)
 	// Format NVMe controller namespaces
-	Format(logging.Logger, string) error
-	// Cleanup NVMe object references
-	Cleanup()
+	Format(logging.Logger) ([]*FormatResult, error)
 	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
-	CleanLockfiles(logging.Logger, ...string)
+	CleanLockfiles(logging.Logger, ...string) error
 }
 
-// Nvme is an NVME interface implementation.
-type Nvme struct{}
+// NvmeImpl is an implementation of the Nvme interface.
+type NvmeImpl struct{}
 
 // Controller struct mirrors C.struct_ctrlr_t and
 // describes a NVMe controller.
@@ -110,6 +108,15 @@ type DeviceHealth struct {
 	VolatileWarn    bool
 }
 
+// FormatResult struct mirrors C.struct_wipe_res_t
+// and describes the results of a format operation
+// on an NVMe controller namespace.
+type FormatResult struct {
+	CtrlrPCIAddr string
+	NsID         uint32
+	Err          error
+}
+
 type remFunc func(name string) error
 
 func realRemove(name string) error {
@@ -150,7 +157,7 @@ func wrapCleanError(inErr error, cleanErr error) (outErr error) {
 }
 
 // CleanLockfiles removes SPDK lockfiles after binding operations.
-func (n *Nvme) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
+func (n *NvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
 	return cleanLockfiles(log, realRemove, pciAddrs...)
 }
 
@@ -170,60 +177,45 @@ func pciAddressList(ctrlrs []Controller) []string {
 // ctrlr_t structs. These are converted and returned as Controller slices
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
-func (n *Nvme) Discover(log logging.Logger, enableVmd bool) ([]Controller, error) {
-	ctrlrs, err := processReturn(C.nvme_discover(C.bool(enableVmd)),
+func (n *NvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
+	ctrlrs, err := collectCtrlrs(C.nvme_discover(),
 		"NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
-	var vmdMsg string
-	if enableVmd {
-		vmdMsg = " with vmd enabled"
-	}
-	log.Debugf("discovered nvme ssds%s: %v", vmdMsg, pciAddrs)
+	log.Debugf("discovered nvme ssds: %v", pciAddrs)
 
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
 
-// Format device at given pci address, destructive operation!
+// Format devices available through SPDK, destructive operation!
 //
-// Attempt wipe of namespace #1 LBA-0 and falls back to full controller
-// format if quick format failed. Afterwards remove lockfile for formatted
-// device.
-func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
-	defer func() {
-		err = wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
-	}()
+// Attempt wipe of namespace #1 LBA-0.
+//
+// TODO DAOS-5485: reinstate fall back to full controller format if quick
+//      format failed, this requires reworking C.nvme_format() to format
+//      all available ctrlrs
+func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
+	return collectFormatResults(C.nvme_wipe_namespaces(),
+		"NVMe Format(): C.nvme_wipe_namespaces()")
 
-	csPci := C.CString(ctrlrPciAddr)
-	defer C.free(unsafe.Pointer(csPci))
-
-	failMsg := "NVMe Format(): C.nvme_"
-	wipeMsg := failMsg + "wipe_first_ns()"
-
-	if _, err = processReturn(C.nvme_wipe_first_ns(csPci), wipeMsg); err == nil {
-		return // quick format succeeded
-	}
-
-	log.Debugf("%s: %s", wipeMsg, err.Error())
-
-	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
-	_, err = processReturn(C.nvme_format(csPci), failMsg+"format()")
-
-	return
+	//	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
+	//	_, err = collectCtrlrs(C.nvme_format(csPci), failMsg+"format()")
+	//
+	//	return
 }
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
 //
 // Retrieves image from path and updates given firmware slot/register
 // then remove lockfile for updated device.
-func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) (ctrlrs []Controller, err error) {
+func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) (ctrlrs []Controller, err error) {
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
-	ctrlrs, err = processReturn(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
+	ctrlrs, err = collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
 		"NVMe Update(): C.nvme_fwupdate")
 
 	err = wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
@@ -231,13 +223,7 @@ func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot
 	return
 }
 
-// Cleanup unlinks and detaches any controllers or namespaces,
-// as well as cleans up optional device health information.
-func (n *Nvme) Cleanup() {
-	C.nvme_cleanup()
-}
-
-// c2GoController is a private translation function
+// c2GoController is a private translation function.
 func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	return Controller{
 		Model:    C.GoString(&ctrlr.model[0]),
@@ -248,7 +234,7 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	}
 }
 
-// c2GoDeviceHealth is a private translation function
+// c2GoDeviceHealth is a private translation function.
 func c2GoDeviceHealth(health *C.struct_dev_health_t) *DeviceHealth {
 	return &DeviceHealth{
 		Temperature:     uint32(health.temperature),
@@ -268,7 +254,7 @@ func c2GoDeviceHealth(health *C.struct_dev_health_t) *DeviceHealth {
 	}
 }
 
-// c2GoNamespace is a private translation function
+// c2GoNamespace is a private translation function.
 func c2GoNamespace(ns *C.struct_ns_t) *Namespace {
 	return &Namespace{
 		ID:   uint32(ns.id),
@@ -276,29 +262,49 @@ func c2GoNamespace(ns *C.struct_ns_t) *Namespace {
 	}
 }
 
-// processReturn parses return structs
-func processReturn(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller, err error) {
+// c2GoFormatResult is a private translation function.
+func c2GoFormatResult(fmtResult *C.struct_wipe_res_t) *FormatResult {
+	var err error
+	if fmtResult.rc != 0 {
+		err = Rc2err(C.GoString(&fmtResult.info[0]), fmtResult.rc)
+	}
+
+	return &FormatResult{
+		CtrlrPCIAddr: C.GoString(&fmtResult.ctrlr_pci_addr[0]),
+		NsID:         uint32(fmtResult.ns_id),
+		Err:          err,
+	}
+}
+
+// clean deallocates memory in return structure and frees the pointer.
+func clean(retPtr *C.struct_ret_t) {
+	C.clean_ret(retPtr)
+	C.free(unsafe.Pointer(retPtr))
+}
+
+// collectCtrlrs parses return struct to collect slice of nvme.Controller.
+func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller, err error) {
 	if retPtr == nil {
 		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
 	}
 
-	defer freeReturn(retPtr)
-
-	ctrlrPtr := retPtr.ctrlrs
+	defer clean(retPtr)
 
 	if retPtr.rc != 0 {
-		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc), C.GoString(&retPtr.err[0])),
-			failMsg)
+		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc),
+			C.GoString(&retPtr.info[0])), failMsg)
 
 		return
 	}
 
+	ctrlrPtr := retPtr.ctrlrs
 	for ctrlrPtr != nil {
 		ctrlr := c2GoController(ctrlrPtr)
 
 		if nsPtr := ctrlrPtr.nss; nsPtr != nil {
 			for nsPtr != nil {
-				ctrlr.Namespaces = append(ctrlr.Namespaces, c2GoNamespace(nsPtr))
+				ctrlr.Namespaces = append(ctrlr.Namespaces,
+					c2GoNamespace(nsPtr))
 				nsPtr = nsPtr.next
 			}
 		}
@@ -319,28 +325,26 @@ func processReturn(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller,
 	return
 }
 
-// freeReturn frees memory that was allocated in C
-func freeReturn(retPtr *C.struct_ret_t) {
-	ctrlr := retPtr.ctrlrs
-
-	for ctrlr != nil {
-		ctrlrNext := ctrlr.next
-
-		ns := ctrlr.nss
-		for ns != nil {
-			nsNext := ns.next
-			C.free(unsafe.Pointer(ns))
-			ns = nsNext
-		}
-
-		if ctrlr.dev_health != nil {
-			C.free(unsafe.Pointer(ctrlr.dev_health))
-		}
-
-		C.free(unsafe.Pointer(ctrlr))
-		ctrlr = ctrlrNext
+// collectFormatResults parses return struct to collect slice of
+// nvme.FormatResult.
+func collectFormatResults(retPtr *C.struct_ret_t, failMsg string) ([]*FormatResult, error) {
+	if retPtr == nil {
+		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
 	}
 
-	C.free(unsafe.Pointer(retPtr))
-	retPtr = nil
+	defer clean(retPtr)
+
+	if retPtr.rc != 0 {
+		return nil, errors.Wrap(FaultBindingFailed(int(retPtr.rc),
+			C.GoString(&retPtr.info[0])), failMsg)
+	}
+
+	var fmtResults []*FormatResult
+	fmtResult := retPtr.wipe_results
+	for fmtResult != nil {
+		fmtResults = append(fmtResults, c2GoFormatResult(fmtResult))
+		fmtResult = fmtResult.next
+	}
+
+	return fmtResults, nil
 }
