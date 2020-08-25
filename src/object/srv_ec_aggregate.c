@@ -1263,7 +1263,7 @@ out:
 	return rc;
 }
 
-#ifndef VOS_UNIT_TEST
+#ifndef AGG_UNIT_TEST
 /* Captures the IV values need for pool and container open. Runs in
  * system xstream.
  */
@@ -1308,6 +1308,7 @@ out:
 	daos_prop_entries_free(prop);
 	D_FREE(prop);
 }
+#endif
 
 /* Iterates entire VOS. Invokes nested iterator to recurse through trees
  * for all objects meeting the criteria: object is EC, and this target is
@@ -1319,10 +1320,11 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
 	struct ec_agg_param	 agg_param = { 0 };
+#ifndef AGG_UNIT_TEST
 	daos_handle_t		 ph = DAOS_HDL_INVAL;
 	int			*status;
+#endif
 	int			 rc = 0;
-
 	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
 		  cont->sc_pool->spc_uuid);
 	uuid_copy(agg_param.ap_pool_info.api_cont_uuid, cont->sc_uuid);
@@ -1331,6 +1333,7 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 		cont->sc_pool->spc_pool->sp_map_version;
 	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
 	agg_param.ap_cont_handle	= cont->sc_hdl;
+#ifndef AGG_UNIT_TEST
 	rc = ABT_eventual_create(sizeof(*status),
 				 &agg_param.ap_pool_info.api_eventual);
 	if (rc != ABT_SUCCESS)
@@ -1366,6 +1369,7 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 		D_ERROR("dsc_cont_open failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+#endif
 
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= 0ULL;
@@ -1373,11 +1377,13 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
 	agg_sgl_fini(&agg_param.ap_sgl);
+#ifndef AGG_UNIT_TEST
 out:
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
 	D_FREE(agg_param.ap_agg_entry);
 	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 	dsc_pool_close(ph);
+#endif
 	return rc;
 
 }
@@ -1396,7 +1402,7 @@ ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	return rc;
 }
 
-#else
+#ifdef NO
 
 static int
 agg_iterate_all(daos_handle_t coh, daos_epoch_range_t *epr)

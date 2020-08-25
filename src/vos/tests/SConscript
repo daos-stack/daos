@@ -5,7 +5,7 @@ def scons():
     """Execute build"""
     Import('denv', 'prereqs', 'utest_utils')
 
-    libraries = ['vos', 'bio', 'abt', 'isal', 'pthread', 'daos_common', 'daos_tests',
+    libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common', 'daos_tests',
                  'gurt', 'cart', 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
 
     prereqs.require(denv, 'argobots')
@@ -15,7 +15,8 @@ def scons():
     vtsenv = denv.Clone()
     vtsenv.Append(CPPDEFINES={'VOS_UNIT_TEST' : '1'})
 
-    vts_targets = vtsenv.Object(['vts_io.c', 'vts_common.c'])
+    vts_targets = vtsenv.SharedObject(['vts_io.c', 'vts_common.c'])
+    Export('vts_targets') 
     vos_test_src = ['vos_tests.c', 'vts_pool.c', 'vts_container.c',
                     'vts_aggregate.c', 'vts_dtx.c',
                     'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c', 'vts_array.c',
@@ -24,17 +25,11 @@ def scons():
     vos_tests = daos_build.program(vtsenv, 'vos_tests', vos_test_src,
                                    LIBS=libraries)
 
-    srv_ec_aggregate_tests = daos_build.program(vtsenv, 'srv_ec_aggregate_tests',
-   				 ['vts_ec_aggregate.c',
-                    '../../object/srv_ec_aggregate.c', '../../object/obj_class.c',
-		    vts_targets],
-		    LIBS=libraries)
-				   
     denv.AppendUnique(CPPPATH=["../../common/tests"])
     evt_ctl = daos_build.program(denv, 'evt_ctl', ['evt_ctl.c', utest_utils],
                                  LIBS=libraries)
 
-    denv.Install('$PREFIX/bin/', [vos_tests, srv_ec_aggregate_tests, evt_ctl])
+    denv.Install('$PREFIX/bin/', [vos_tests, evt_ctl])
     denv.Install('$PREFIX/etc/', ['vos_size_input.yaml'])
 
 if __name__ == "SCons.Script":
