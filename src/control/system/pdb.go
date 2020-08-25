@@ -57,6 +57,14 @@ type (
 	}
 )
 
+func (pss PoolServiceState) String() string {
+	return [...]string{
+		"Creating",
+		"Ready",
+		"Destroying",
+	}[pss]
+}
+
 func (prm PoolRankMap) MarshalJSON() ([]byte, error) {
 	jm := make(map[Rank][]uuid.UUID)
 	for rank, svcList := range prm {

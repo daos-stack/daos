@@ -252,7 +252,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, targets,
 					   scm_size, nvme_size, &tgt_uuids);
 	if (rc != 0) {
-		D_ERROR("creating pool on ranks "DF_UUID" failed: rc "DF_RC"\n",
+		D_ERROR("creating pool "DF_UUID" on ranks failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}

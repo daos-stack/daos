@@ -181,8 +181,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
 	}
 
-	svc.log.Debugf("MgmtSvc.PoolCreate dispatch resp:%+v\n", *resp)
-
 	if resp.GetStatus() != 0 {
 		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
 			return nil, err
@@ -195,6 +193,8 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 		return nil, err
 	}
+
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch resp:%+v\n", *resp)
 
 	return resp, nil
 }
