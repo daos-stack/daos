@@ -37,9 +37,21 @@ import shlex
 from avocado       import Test
 from avocado       import main
 
+import traceback
+
 sys.path.append('./util')
 
 from cart_utils import CartUtils
+
+def PrintException():
+    import linecache
+    exc_type, exc_obj, tb = sys.exc_info()
+    f = tb.tb_frame
+    lineno = tb.tb_lineno
+    filename = f.f_code.co_filename
+    linecache.checkcache(filename)
+    line = linecache.getline(filename, lineno, f.f_globals)
+    print('EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj))
 
 def _check_value(expected_value, received_value):
     """
@@ -78,6 +90,11 @@ def _check_key(key_rank, key_idx, received_key_hex):
         key_rank and key_idx are 32-bit integers
         received_key_hex is hex(key_rank|key_idx)
     """
+
+    print('DEBUG log: line 84, received_key_hex = ', received_key_hex)
+    print('DEBUG log: line 84, key_rank = ', key_rank)
+    print('DEBUG log: line 84, key_idx = ', key_idx)
+    print('DEBUG log: line 88, received_key_hex[:8] = ', received_key_hex[:8])
 
     if len(received_key_hex) != 16:
         return False
@@ -160,7 +177,19 @@ class CartIvOneNodeTest(Test):
 
                 # Read the result into test_result and remove the temp file
                 log_file = open(log_path)
+
+                # Try to induce "No JSON object could be decoded" error
+                #
+                # 1. 
+                # with open(log_path, "a") as myfile:
+                # myfile.write("some-invalid-junk-appended-to-json")
+                #
+                # 2.
+                # codecs.open(log_file, "w", "unicode").write('')
+
                 test_result = json.load(log_file)
+                print('DEBUG log: line 168, test_result = ', test_result)
+
                 log_file.close()
                 os.close(log_fd)
                 os.remove(log_path)
@@ -260,8 +289,12 @@ class CartIvOneNodeTest(Test):
 
         try:
             self._iv_test_actions(clicmd, actions)
+            # DEBUGGING
+            # raise ValueError
         except ValueError as exception:
             failed = True
+            PrintException()
+            traceback.print_stack()
             self.utils.print("TEST FAILED: %s" % str(exception))
 
         ########## Shutdown Servers ##########
