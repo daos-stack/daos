@@ -177,6 +177,11 @@ class OSAOnlineReintegration(TestWithServers):
         # Exclude one rank : other than rank 0.
         rank = random.randint(1, exclude_servers)
 
+        # Start the daos_racer thread
+        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
+        daos_racer_thread.start()
+        time.sleep(5)
+        
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
                                  dmg_command=self.get_dmg_command())
@@ -188,10 +193,6 @@ class OSAOnlineReintegration(TestWithServers):
                                             num_pool)
             pool[val].create()
             pool_uuid.append(pool[val].uuid)
-
-        # Start the daos_racer thread
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
-        daos_racer_thread.start()
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
