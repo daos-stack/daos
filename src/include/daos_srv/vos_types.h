@@ -228,6 +228,8 @@ enum {
 	 * under the specified range. Intended for internal use only.
 	 */
 	VOS_OF_REMOVE		= (1 << 9),
+	/** Mark the record's bio address as being corrupted */
+	VOS_OF_CORRUPT		= (1 << 10),
 };
 
 /** Mask for any conditionals passed to to the fetch */

@@ -300,6 +300,7 @@ struct evt_entry_in {
 	uint32_t		ei_inob;
 	/** Address of record to insert */
 	bio_addr_t		ei_addr;
+	bool			ei_corrupted;
 };
 
 enum evt_visibility {
@@ -325,6 +326,7 @@ struct evt_entry {
 	struct evt_extent		en_sel_ext;
 	/** checksums of the actual extent*/
 	struct dcs_csum_info		en_csum;
+	bool				en_corrupted;
 	/** pool map version */
 	uint32_t			en_ver;
 	/** Visibility flags for extent */

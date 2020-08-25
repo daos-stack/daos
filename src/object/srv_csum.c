@@ -27,6 +27,8 @@
 #include <gurt/common.h>
 #include <daos/checksum.h>
 #include <daos_types.h>
+#include <daos_srv/vos_types.h>
+#include <daos_srv/vos.h>
 #include "daos_srv/srv_csum.h"
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
@@ -686,4 +688,195 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 
 	return ds_csum_add2iod_array(iod, csummer, bsgl, biov_csums,
 				     biov_csums_used, iod_csums);
+}
+
+/**
+ * -------------------------
+ * Scrubbing
+ * -------------------------
+ */
+
+struct scrubbing_context {
+	struct daos_csummer *sc_csummer;
+	ds_progress_handler_t sc_progress_handler;
+	ds_corruption_handler_t sc_corruption_handler;
+};
+
+static void
+sc_progress_handler(const struct scrubbing_context *ctx)
+{
+	if (ctx->sc_progress_handler)
+		ctx->sc_progress_handler();
+}
+
+static void
+sc_corrution_handler(const struct scrubbing_context *ctx)
+{
+	if (ctx->sc_corruption_handler)
+		ctx->sc_corruption_handler();
+}
+
+static int
+verify_recx(struct scrubbing_context *ctx, daos_recx_t *recx,
+	    daos_size_t rec_len, d_iov_t *recx_data,
+	    struct dcs_csum_info *orig_csum_info)
+{
+	struct daos_csum_range	 chunk;
+	daos_key_t		 iov;
+	uint8_t			*csum_buf;
+	struct daos_csummer	*csummer = ctx->sc_csummer;
+	daos_size_t		 processed_bytes = 0;
+	uint32_t		 i;
+	int			 rc = 0;
+	uint32_t		 chunksize;
+	uint32_t		 csum_nr;
+	uint16_t		 csum_len;
+
+	chunksize = daos_csummer_get_rec_chunksize(csummer, rec_len);
+	csum_nr = daos_recx_calc_chunks(*recx, rec_len, chunksize);
+	csum_len = daos_csummer_get_csum_len(csummer);
+
+	if (csum_nr != orig_csum_info->cs_nr)
+		return -DER_CSUM;
+	if (csum_len != orig_csum_info->cs_len)
+		return -DER_CSUM;
+
+	D_ALLOC(csum_buf, csum_len);
+
+	/**
+	 * loop through each checksum and chunk of the recx based
+	 * on chunk size.
+	 */
+	for (i = 0; i < csum_nr; i++) {
+		daos_size_t	 bytes_for_csum;
+		uint8_t		*orig_csum;
+		bool		 match;
+
+		chunk = csum_recx_chunkidx2range(recx, rec_len, chunksize, i);
+		bytes_for_csum = chunk.dcr_nr * rec_len;
+		D_ASSERT(processed_bytes + bytes_for_csum <=
+			 recx_data->iov_len);
+
+		d_iov_set(&iov, recx_data->iov_buf + processed_bytes,
+			  bytes_for_csum);
+		rc = daos_csummer_calc_for_iov(csummer, &iov, csum_buf,
+					       csum_len);
+		if (rc != 0) {
+			D_ERROR("daos_csummer_calc_for_iov error: %d\n", rc);
+			D_GOTO(done, rc);
+		}
+
+		sc_progress_handler(ctx);
+
+		orig_csum = ci_idx2csum(orig_csum_info, i);
+		match = daos_csummer_csum_compare(csummer, orig_csum, csum_buf,
+						  csum_len);
+		if (!match) {
+			D_ERROR("Corruption found");
+			D_GOTO(done, rc = -DER_CSUM);
+		}
+
+		processed_bytes += bytes_for_csum;
+	}
+
+done:
+	D_FREE(csum_buf);
+
+	return rc;
+}
+
+static int
+verify_sv(struct scrubbing_context *ctx, d_iov_t *iov,
+	  struct dcs_csum_info *csum)
+{
+	int rc = daos_csummer_verify_key(ctx->sc_csummer, iov, csum);
+
+	sc_progress_handler(ctx);
+
+	return rc;
+}
+
+/** vos_iter_cb_t */
+static int
+scrub_obj_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+	     vos_iter_type_t type, vos_iter_param_t *param,
+	     void *cb_arg, unsigned int *acts)
+{
+	struct scrubbing_context	*ctx = cb_arg;
+	daos_iod_t			 iod = {0};
+	d_sg_list_t			 sgl = {0};
+	uint64_t			 data_len = 0;
+	int				 rc = 0;
+
+	if (!(type == VOS_ITER_RECX || type == VOS_ITER_SINGLE))
+		return 0;
+
+	iod.iod_size = entry->ie_rsize;
+	iod.iod_name = param->ip_akey;
+	iod.iod_nr = 1;
+
+	if (type == VOS_ITER_RECX) {
+		iod.iod_recxs = &entry->ie_recx;
+		iod.iod_type = DAOS_IOD_ARRAY;
+		data_len = iod.iod_recxs->rx_nr * iod.iod_size;
+	} else { /** type == VOS_ITER_SINGLE */
+		iod.iod_type = DAOS_IOD_SINGLE;
+		data_len = iod.iod_size;
+	}
+
+	/** allocate memory to fetch data into */
+	d_sgl_init(&sgl, 1);
+	D_ALLOC(sgl.sg_iovs[0].iov_buf, data_len);
+	sgl.sg_iovs[0].iov_buf_len = data_len;
+	sgl.sg_iovs[0].iov_len = data_len;
+
+	rc = vos_obj_fetch(param->ip_hdl, param->ip_oid, entry->ie_epoch, 0,
+			   &param->ip_dkey, 1, &iod, &sgl);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	if (type == VOS_ITER_RECX)
+		rc = verify_recx(ctx, &iod.iod_recxs[0], iod.iod_size,
+				 &sgl.sg_iovs[0], &entry->ie_csum);
+	else /** type == VOS_ITER_SINGLE */
+		rc = verify_sv(ctx, &sgl.sg_iovs[0], &entry->ie_csum);
+
+	if (rc == -DER_CSUM) {
+		D_WARN("Checksum scrubber found corruption");
+		sc_corrution_handler(ctx);
+
+		/** mark as corrupt */
+		rc = vos_obj_update(param->ip_hdl, param->ip_oid,
+				    entry->ie_epoch, 0, VOS_OF_CORRUPT,
+				    &param->ip_dkey, 1, &iod, NULL, NULL);
+	}
+
+out:
+	d_sgl_fini(&sgl, true);
+	return rc;
+}
+
+int
+ds_obj_csum_scrub(daos_handle_t coh, struct daos_csummer *csummer,
+		  ds_progress_handler_t progress_handler,
+		  ds_corruption_handler_t corruption_handler)
+{
+	vos_iter_param_t		param = {0};
+	struct vos_iter_anchors	anchor = {0};
+	int				rc;
+	struct scrubbing_context	ctx = {0};
+
+	ctx.sc_csummer = csummer;
+	ctx.sc_progress_handler = progress_handler;
+	ctx.sc_corruption_handler = corruption_handler;
+
+	param.ip_hdl = coh;
+	param.ip_epr.epr_lo = 0;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+
+	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchor, scrub_obj_cb,
+			 NULL, &ctx, NULL);
+
+
+	return rc;
 }

@@ -29,8 +29,7 @@
 #include <daos/checksum.h>
 #include <daos_srv/evtree.h>
 #include <daos_srv/srv_csum.h>
-
-#define ASSERT_SUCCESS(exp) assert_int_equal(0, (exp))
+#include <daos/tests_lib.h>
 
 static void
 print_chars(const uint8_t *buf, const size_t len, const uint32_t max)
@@ -339,7 +338,7 @@ request_that_matches_single_extent(void **state)
 	       ctx.iod_csum->ic_data->cs_buf_len);
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 
@@ -375,7 +374,7 @@ extent_smaller_than_chunk(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSS");
@@ -415,7 +414,7 @@ request_that_matches_single_extent_multiple_chunks(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSS");
@@ -451,7 +450,7 @@ request_that_matches_single_extent_multiple_chunks_not_aligned(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSSSSSSSSSSSSSS");
@@ -489,7 +488,7 @@ request_that_matches_multiple_aligned_extents(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSSSSSS");
@@ -527,7 +526,7 @@ request_that_matches_multiple_aligned_extents2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSSSSSS");
@@ -563,7 +562,7 @@ request_that_is_more_than_extents(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSS");
@@ -602,7 +601,7 @@ partial_chunk_request0(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">ZYXW|>ZYXWVUTS|");
@@ -640,7 +639,7 @@ partial_chunk_request1(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">VUTS|>ZYXWVUTS|");
@@ -678,7 +677,7 @@ partial_chunk_request2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">XWVU|>ZYXWVUTS|");
@@ -721,7 +720,7 @@ request_needs_new_and_copy(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">XW|>ZYXW|>VU|>VUTS|");
@@ -765,7 +764,7 @@ unaligned_chunks_csums_new_csum_is_created(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">1|A|>12|>A|");
@@ -815,7 +814,7 @@ extent_larger_than_request(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">5|ABC|>567|>ABCDEFG|");
@@ -857,7 +856,7 @@ unaligned_first_chunk(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -898,7 +897,7 @@ fetch_multiple_unaligned_extents(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">D|EF|>D|>EF|");
@@ -948,7 +947,7 @@ many_extents(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">A|B|C|D|>A|>B|>C|>D|>E|F|>E|>F|");
@@ -989,7 +988,7 @@ request_that_begins_before_extent(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSS");
@@ -1032,7 +1031,7 @@ fetch_with_hole(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -1071,7 +1070,7 @@ fetch_with_hole2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">ABC|GH|>ABC|>GH|");
@@ -1127,7 +1126,7 @@ fetch_with_hole3(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">A|B|C|D|E|F|>A|>B|>C|>D|>E|>F|");
@@ -1163,7 +1162,7 @@ fetch_with_hole4(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -1206,7 +1205,7 @@ fetch_with_hole5(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">A|BC|>A|>BC|");
@@ -1247,7 +1246,7 @@ fetch_with_hole6(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">A|>ABCD|");
@@ -1287,7 +1286,7 @@ request_is_only_part_of_biovs(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -1326,7 +1325,7 @@ larger_records(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	/** 1 record from 1st extent (mnop) and 2 records from 2nd extent
@@ -1367,7 +1366,7 @@ larger_records2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	assert_int_equal(4, fake_update_called);
@@ -1379,12 +1378,14 @@ larger_records2(void **state)
 	D_FREE(large_data02);
 }
 
-int setup(void **state)
+static int
+sct_setup(void **state)
 {
 	return 0;
 }
 
-int teardown(void **state)
+static int
+sct_teardown(void **state)
 {
 	reset_fake_algo();
 	return 0;
@@ -1392,7 +1393,7 @@ int teardown(void **state)
 
 /* Convenience macro for unit tests */
 #define	TA(desc, test_fn) \
-	{ desc, test_fn, setup, teardown }
+	{ desc, test_fn, sct_setup, sct_teardown }
 
 static const struct CMUnitTest array_tests[] = {
 	TA("SRV_CSUM_ARRAY01: Whole extent requested",
@@ -1494,14 +1495,16 @@ update_fetch_sv(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
-
 #define	TS(desc, test_fn) \
-	{ "SRV_CSUM_SV" desc, test_fn, setup, teardown }
+	{ "SRV_CSUM_SV" desc, test_fn, sct_setup, sct_teardown }
 
 static const struct CMUnitTest sv_tests[] = {
 	TS("01: Various scenarios for update/fetch with fault injection",
 	   update_fetch_sv),
 };
+
+/** in srv_scrubbing_tests.c */
+extern int run_scrubbing_tests(void);
 
 int
 main(int argc, char **argv)
@@ -1516,7 +1519,6 @@ main(int argc, char **argv)
 	}
 #endif
 
-
 	rc += cmocka_run_group_tests_name(
 		"Storage and retrieval of checksums for Array Type",
 		array_tests, NULL, NULL);
@@ -1525,6 +1527,7 @@ main(int argc, char **argv)
 		"Storage and retrieval of checksums for Single Value Type",
 		sv_tests, NULL, NULL);
 
+	rc += run_scrubbing_tests();
 	return rc;
 
 }

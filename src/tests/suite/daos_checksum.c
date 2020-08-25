@@ -34,12 +34,6 @@
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
 
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
-	} while (0)
-
 unsigned int
 daos_checksum_test_arg2type(char *str)
 {

@@ -1907,6 +1907,8 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
+	if (ent->ei_corrupted)
+		BIO_ADDR_SET_CORRUPTED(&dst_desc->dc_ex_addr);
 	evt_desc_csum_fill(tcx, dst_desc, ent, csum_bufp);
 
 	return 0;
@@ -2083,6 +2085,7 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node, unsigned int at,
 	evt_entry_csum_fill(tcx, desc, entry);
 	entry->en_avail_rc = evt_desc_log_status(tcx, entry->en_epoch, desc,
 						 intent);
+	entry->en_corrupted = BIO_ADDR_IS_CORRUPTED(&desc->dc_ex_addr);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -2247,6 +2250,10 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			}
 
 			evt_entry_fill(tcx, node, i, rect, intent, ent);
+			if (ent->en_corrupted) {
+				rc = -DER_CSUM;
+				goto out;
+			}
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
@@ -2709,6 +2716,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		desc->dc_ex_addr = ent->ei_addr;
 		evt_desc_csum_fill(tcx, desc, ent, csum_bufp);
 		desc->dc_ver = ent->ei_ver;
+		if (ent->ei_corrupted)
+			BIO_ADDR_SET_CORRUPTED(&desc->dc_ex_addr);
 	} else {
 		nd->tn_child[i] = in_off;
 	}

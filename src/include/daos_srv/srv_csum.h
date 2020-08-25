@@ -28,27 +28,6 @@
 #include <daos/checksum.h>
 
 /**
- * Determine if the saved checksum for a chunk can be used, or if a
- * new checksum is required.
- * @param raw_ext		Range of the raw (actual) extent (should map
- *				to evt_entry.en_ext)
- * @param req_ext		Range of the requested extent (should map
- *				to evt_entry.en_sel_ext)
- * @param chunk			Range of the chunk under investigation
- * @param csum_started		whether or not a previous biov for the current
- *				chunk exists and started a new checksum that
- *				\biov should contribute to
- * @param has_next_biov		Is there another extent following
- * @return
- */
-bool
-ds_csum_calc_needed(struct daos_csum_range *raw_ext,
-		    struct daos_csum_range *req_ext,
-		    struct daos_csum_range *chunk,
-		    bool csum_started,
-		    bool has_next_biov);
-
-/**
  * Process the bsgl and create new checksums or use the stored
  * checksums for the bsgl as needed and appropriate. The result is the iod will
  * have checksums appropriate for the extents and data they represent
@@ -66,5 +45,28 @@ int
 ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
 		size_t *biov_csums_used, struct dcs_iod_csums *iod_csums);
+
+/** handler for scrubber. will get called after each checksum calculated */
+typedef int (*ds_progress_handler_t)();
+/** handler for when corruption is discovered */
+typedef int (*ds_corruption_handler_t)();
+
+/**
+ * Iterate over all objects in a container and verify the data stored is not
+ * corrupt by calculating new checksums and comparing to stored checksum
+ *
+ * @param coh				container handle
+ * @param csummer			daos_csummer for calculating checksums
+ * @param progress_handler		will get called after each checksum
+ *					is calculated
+ * @param corruption_handler		will get called when corruption is
+ *					discovered
+ *
+ * @return				0 on success, else error code
+ */
+int
+ds_obj_csum_scrub(daos_handle_t coh, struct daos_csummer *csummer,
+		  ds_progress_handler_t progress_handler,
+		  ds_corruption_handler_t corruption_handler);
 
 #endif
