@@ -32,7 +32,7 @@ class IorHdf5(IorTestBase):
     :avocado: recursive
     """
 
-    def test_ior_hdf5(self):
+    def ior_hdf5(self, plugin_path=None):
         """Jira ID: DAOS-4909.
 
         Test Description:
@@ -71,4 +71,43 @@ class IorHdf5(IorTestBase):
         self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
         self.ior_cmd.dfs_oclass.update(obj_class[0])
         # run ior
-        self.run_ior_with_pool()
+        self.run_ior_with_pool(plugin_path=plugin_path)
+
+    def test_ior_hdf5(self):
+        """Jira ID: DAOS-4909.
+
+        Test Description:
+            Purpose of this test is to have small ior test to check basic
+            functionality for HDF5 api
+
+        Use case:
+            Run ior with read, write, CheckWrite, CheckRead in ssf mode.
+            Run ior with read, write, CheckWrite, CheckRead in fpp mode.
+            Run ior with read, write, CheckWrite and access to random
+                offset instead of sequential.
+            All above three cases to be run with single client and
+                multiple client processes in two separate nodes.
+
+        :avocado: tags=all,pr,hw,large,daosio,hdf5,iorhdf5
+        """
+        self.ior_hdf5()
+
+    def test_ior_hdf5_vol(self):
+        """Jira ID: DAOS-4909.
+
+        Test Description:
+            Purpose of this test is to have small ior test to check basic
+            functionality for HDF5 api using the vol connector
+
+        Use case:
+            Run ior with read, write, CheckWrite, CheckRead in ssf mode.
+            Run ior with read, write, CheckWrite, CheckRead in fpp mode.
+            Run ior with read, write, CheckWrite and access to random
+                offset instead of sequential.
+            All above three cases to be run with single client and
+                multiple client processes in two separate nodes.
+
+        :avocado: tags=all,pr,hw,large,daosio,hdf5,vol,iorhdf5vol
+        """
+        plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
+        self.ior_hdf5(plugin_path)

@@ -37,6 +37,7 @@ from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from dfuse_utils import Dfuse
 
+
 class IorTestBase(TestWithServers):
     """Base IOR test class.
 
@@ -125,7 +126,7 @@ class IorTestBase(TestWithServers):
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
-                          create_cont=True, stop_dfuse=True):
+                          create_cont=True, stop_dfuse=True, plugin_path=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -152,7 +153,7 @@ class IorTestBase(TestWithServers):
             self.update_ior_cmd_with_pool(create_cont)
 
         # start dfuse if api is POSIX
-        if self.ior_cmd.api.value == "POSIX":
+        if self.ior_cmd.api.value == "POSIX" or plugin_path:
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self._start_dfuse()
@@ -163,7 +164,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
         out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
-                           intercept)
+                           intercept, plugin_path)
 
         if stop_dfuse and self.dfuse:
             self.dfuse.stop()
@@ -221,7 +222,8 @@ class IorTestBase(TestWithServers):
                 self.mpirun.process, self.ior_cmd):
             self.fail("Exiting Test: Subprocess not running")
 
-    def run_ior(self, manager, processes, intercept=None, display_space=True):
+    def run_ior(self, manager, processes, intercept=None, display_space=True,
+                plugin_path=None):
         """Run the IOR command.
 
         Args:
@@ -232,10 +234,14 @@ class IorTestBase(TestWithServers):
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
+        if plugin_path:
+            env["HDF5_VOL_CONNECTOR"] = "daos"
+            env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(processes)
         manager.assign_environment(env)
+        manager.working_dir.value = self.dfuse.mount_dir.value
 
         try:
             if display_space:
@@ -394,15 +400,15 @@ class IorTestBase(TestWithServers):
     def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
         """Execute cmd using general_utils.pcmd.
 
-          Args:
-            cmd (str): String command to be executed
-            fail_on_err (bool): Boolean for whether to fail the test if command
-                                execution returns non zero return code.
-            display_output (bool): Boolean for whether to display output.
+        Args:
+        cmd (str): String command to be executed
+        fail_on_err (bool): Boolean for whether to fail the test if command
+                            execution returns non zero return code.
+        display_output (bool): Boolean for whether to display output.
 
-          Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                  values indicating which hosts yielded the return code.
+        Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+                values indicating which hosts yielded the return code.
 
         """
         try:
