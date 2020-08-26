@@ -912,11 +912,11 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
 
-    archive_files(destination, host_list, "{}/*.log*".format(logs_dir))
+    archive_files(destination, host_list, "{}/*.{{tar*,log*}}".format(logs_dir))
 
     # Caution: the glob expression "_output.log" must match the
     #   --output-filename specified in # cart_utils.py:get_env()
-    tar_files(destination, "{}/*_output.log*".format(logs_dir))
+    tar_files(destination, "{}/*_output.log".format(logs_dir))
 
 def tar_files(destination, logs_glob_expr):
     """Run tar on files (in the directory specified by the orterun
@@ -938,15 +938,39 @@ def tar_files(destination, logs_glob_expr):
 
     import glob
 
+    def dump_find_output(find_arg):
+        """Print the stdout and stderr of find command.
+
+        Args:
+            arg (string): directory to run /bin/find command on
+
+        Returns:
+            void
+
+        """
+
+        find_cmd = "find " + find_arg
+        out = subprocess.Popen(find_cmd,
+                   shell=True,
+                   stdout=subprocess.PIPE,
+                   stderr=subprocess.STDOUT)
+        stdout,stderr = out.communicate()
+        print("DEBUG: stdout of [" + find_cmd + "]:\n {}".format(stdout))
+        print("DEBUG: stderr of [" + find_cmd + "]:\n {}".format(stderr))
+
+    # START: DEBUGGING
+    print('DEBUG log: line 960, glob.glob(logs_glob_expr) = ', glob.glob(logs_glob_expr))
+    dump_find_output(logs_glob_expr)
+    dump_find_output(destination)
+    # END: DEBUGGING
+
     for f_glob in glob.glob(logs_glob_expr):
 
-      tar_cmd = ["tar", "cf", "{}.tar".format(f_glob), f_glob]
+      print('DEBUG log: line 967, f_glob = ', f_glob)
+
+      tar_cmd = ["tar", "cf", "{}/{}.tar".format(destination, os.path.basename(f_glob)), f_glob]
       subprocess.call(tar_cmd, stdout=subprocess.PIPE)
       print("Running tar: {}".format(" ".join(tar_cmd)))
-
-      cp_cmd = ["cp", "{}.tar".format(f_glob), destination]
-      subprocess.call(cp_cmd, stdout=subprocess.PIPE)
-      print("Running cp: {}".format(" ".join(cp_cmd)))
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
