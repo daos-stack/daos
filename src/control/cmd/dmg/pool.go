@@ -417,7 +417,7 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	resp, err := control.PoolQuery(ctx, c.ctlInvoker, req)
 
 	if c.jsonOutputEnabled() {
-		return c.errorJSON(err)
+		return c.outputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -458,7 +458,7 @@ func (c *PoolSetPropCmd) Execute(_ []string) error {
 	resp, err := control.PoolSetProp(ctx, c.ctlInvoker, req)
 
 	if c.jsonOutputEnabled() {
-		return c.errorJSON(err)
+		return c.outputJSON(resp, err)
 	}
 
 	if err != nil {
