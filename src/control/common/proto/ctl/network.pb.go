@@ -167,7 +167,9 @@ func init() {
 	proto.RegisterType((*FabricInterface)(nil), "ctl.FabricInterface")
 }
 
-func init() { proto.RegisterFile("network.proto", fileDescriptor_8571034d60397816) }
+func init() {
+	proto.RegisterFile("network.proto", fileDescriptor_8571034d60397816)
+}
 
 var fileDescriptor_8571034d60397816 = []byte{
 	// 190 bytes of a gzipped FileDescriptorProto
