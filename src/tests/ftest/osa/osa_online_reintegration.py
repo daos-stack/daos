@@ -57,6 +57,7 @@ class OSAOnlineReintegration(TestWithServers):
         """Set up for test case."""
         super(OSAOnlineReintegration, self).setUp()
         self.dmg_command = self.get_dmg_command()
+        self.dmg_config_file = self.dmg_command.yaml.filename
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
         self.record_length = self.params.get("length", '/run/record/*')
@@ -97,7 +98,8 @@ class OSAOnlineReintegration(TestWithServers):
     def daos_racer_thread(self, results):
         """Start the daos_racer thread.
         """
-        self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
+        self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
+                                           self.dmg_config_file)
         self.daos_racer.get_params(self)
         self.daos_racer.set_environment(
             self.daos_racer.get_environment(self.server_managers[0]))
