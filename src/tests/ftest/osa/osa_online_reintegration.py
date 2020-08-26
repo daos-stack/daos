@@ -71,6 +71,7 @@ class OSAOnlineReintegration(TestWithServers):
             self.hostlist_clients, self.workdir, None)
         self.pool = None
         self.out_queue = queue.Queue()
+        self.ds_racer_queue = queue.Queue()
         self.daos_racer = None
 
     @fail_on(CommandFailure)
@@ -93,14 +94,17 @@ class OSAOnlineReintegration(TestWithServers):
         out = self.dmg_command.get_output("pool_query", **kwargs)
         return int(out[0][4])
 
-    def daos_racer_thread(self):
+    def daos_racer_thread(self, results):
         """Start the daos_racer thread.
         """
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
         self.daos_racer.get_params(self)
         self.daos_racer.set_environment(
             self.daos_racer.get_environment(self.server_managers[0]))
-        self.daos_racer.run()
+        try:
+            self.daos_racer.run()
+        except CommandFailure as _error:
+            results.put("FAIL")
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
@@ -178,7 +182,10 @@ class OSAOnlineReintegration(TestWithServers):
         rank = random.randint(1, exclude_servers)
 
         # Start the daos_racer thread
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
+        daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
+                                             kwargs={
+                                              "results": self.ds_racer_queue
+                                              })
         daos_racer_thread.start()
         time.sleep(5)
         
