@@ -206,8 +206,9 @@ class DmgCommandBase(YamlCommand):
                     self).__init__(
                         "/run/dmg/pool/extend/*", "extend")
                 self.pool = FormattedParameter("--pool={}", None)
-                self.rank = FormattedParameter("--rank={}", None)
-                self.tgt_idx = FormattedParameter("--target-idx={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
+                self.scm_size = FormattedParameter("--scm-size={}", None)
+                self.nvme_size = FormattedParameter("--nvme-size={}", None)
 
         class DrainSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool drain command."""

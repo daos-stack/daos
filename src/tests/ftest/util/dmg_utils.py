@@ -557,13 +557,14 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def pool_extend(self, pool, rank, tgt_idx=None):
+    def pool_extend(self, pool, ranks, scm_size, nvme_size):
         """Extend the daos_server pool
 
         Args:
             pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to extend
-            tgt_idx (int): target included to the pool
+            ranks (int): Ranks of the daos_server to extend
+            scm_size (int): SCM pool size to extend
+            nvme_size (int): NVME pool size to extend
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -574,7 +575,8 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "extend"), pool=pool, rank=rank, tgt_idx=tgt_idx)
+            ("pool", "extend"), pool=pool, rank=ranks,
+            scm_size=scm_size, nvme_size=nvme_size)
 
     def pool_drain(self, pool, rank, tgt_idx=None):
         """Drain a daos_server from the pool
