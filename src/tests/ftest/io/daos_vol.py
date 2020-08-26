@@ -59,6 +59,6 @@ class DaosVol(VolTestBase):
               h5daos_test_map_parallel
               h5daos_test_oclass
 
-        :avocado: tags=all,pr,hw,small,vol
+        :avocado: tags=all,pr,hw,small,hdf5,vol
         """
         self.run_test()
