@@ -56,7 +56,7 @@ dfs_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 	}
 
 	/** broadcast global handle to all peers */
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, 
+	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0,
 		       MPI_COMM_WORLD);
 	assert_int_equal(rc, MPI_SUCCESS);
 
