@@ -853,4 +853,3 @@ run_daos_fs_functional_test(int rank, int size,
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
-
