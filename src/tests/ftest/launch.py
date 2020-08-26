@@ -914,7 +914,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Caution: the glob expression "_output.log" must match the
     #   --output-filename specified in # cart_utils.py:get_env()
-    tar_files(destination, "{}/*_output.log".format(logs_dir))
+    tar_files(destination, "{}/*_output.orterun_log".format(logs_dir))
 
     archive_files(destination, host_list, "{}/*.{{tar*,log*}}".format(logs_dir))
 
