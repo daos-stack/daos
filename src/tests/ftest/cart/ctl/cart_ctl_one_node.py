@@ -26,6 +26,7 @@ from __future__ import print_function
 
 import sys
 
+import avocado
 from avocado       import Test
 from avocado       import main
 
