@@ -367,8 +367,8 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            snap_name (str, optional): Snapshot name.
-            epoch (str, optional): Epoch number.
+            snap_name (str, optional): Snapshot name. Defaults to None.
+            epoch (str, optional): Epoch number. Defaults to None.
             svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
                 to None.
             sys_name (str, optional): DAOS system name context for servers.
@@ -381,7 +381,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container create-snap command fails.
 
         """
-        self.result = self._get_result(
+        self._get_result(
             ("container", "create-snap"), pool=pool, svc=svc, cont=cont,
             sys_name=sys_name, snap=snap_name, epc=epoch)
 
@@ -401,16 +401,15 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            snap_name (str, optional): Snapshot name.
-            epc (str): Epoch value of the snapshot to be destroyed.
+            snap_name (str, optional): Snapshot name. Defaults to None.
+            epc (str, optional): Epoch value of the snapshot to be destroyed.
+                Defaults to None.
             svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
                 to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
-            epcrange (list): If you want to use --epc, use a single-element
-                list. If you want to use --epcrange, use a list that contains
-                epoch for B in the first element and epoch for E in the second
-                element.
+            epcrange (str, optional): Epoch range in the format "<start>-<end>".
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -443,13 +442,12 @@ class DaosCommand(DaosCommandBase):
             dict: Dictionary that contains epoch values in key "epochs". Value
                 is a list of string.
         """
-        self.result = self._get_result(
+        self._get_result(
             ("container", "list-snaps"), pool=pool, cont=cont, svc=svc)
 
-        # Sample container list-snaps output - no line break on second line.
-        # 05/15-20:40:40.46 wolf-3 Container's snapshots :
-        # 05/15-20:40:40.46 wolf-3 1589575199653691408  05/15-20:40:40.46
-        # wolf-3 1589575236150689813  05/15-20:40:40.46 wolf-3
+        # Sample container list-snaps output.
+        # Container's snapshots :
+        # 1598478249040609297 1598478258840600594 1598478287952543761
         data = {}
         match = re.findall(r"(\d{19})", self.result.stdout)
         if match:

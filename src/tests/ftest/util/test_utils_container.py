@@ -407,8 +407,9 @@ class TestContainer(TestDaosApiBase):
 
         Args:
             snap_name (str, optional): Snapshot name
-            epc (str): Epoch ID that indicates the snapshot to be destroyed.
-            epcrange (list, optional): list of Epoch IDs as strings
+            epc (str, optional): Epoch ID that indicates the snapshot to be
+                destroyed. Defaults to None.
+            epcrange (str, optional): Epoch range in the format "<start>-<end>".
         """
         status = False
 

@@ -141,9 +141,10 @@ class DaosSnapshotTest(TestWithServers):
             cont_uuid=self.container.uuid, count=5)
 
         # 2. Destroy all snapshots with --epcrange.
+        epcrange = "{}-{}".format(new_epochs[0], new_epochs[-1])
         self.daos_cmd.container_destroy_snap(
-            pool=self.pool.uuid, cont=self.container.uuid,
-            epcrange=[new_epochs[0], new_epochs[-1]], svc=self.svc)
+            pool=self.pool.uuid, cont=self.container.uuid, epcrange=epcrange,
+            svc=self.svc)
 
         # 3. List and verify that there's no snapshot.
         epochs = self.daos_cmd.container_list_snaps(
