@@ -23,6 +23,7 @@ from mdtest_test_base import MdtestBase
 from test_utils_container import TestContainer
 from daos_utils import DaosCommand
 from data_mover_utils import DataMover
+from command_utils_base import CommandFailure
 
 # pylint: disable=too-many-ancestors
 class ContainerCopy(MdtestBase, IorTestBase):
@@ -37,15 +38,6 @@ class ContainerCopy(MdtestBase, IorTestBase):
         super(ContainerCopy, self).__init__(*args, **kwargs)
 
         self.container = []
-#    def tearDown(self):
-#        """Tear down each test case."""
-#        try:
-#            if self.dfuse:
-#                self.dfuse.stop()
-#        finally:
-#            # Stop the servers and agents
-#            super(ContainerCopy, self).tearDown()
-
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
@@ -59,95 +51,124 @@ class ContainerCopy(MdtestBase, IorTestBase):
 
         self.container.append(container)
 
+    def run_dcp(self, src_pool=None, dst_pool=None, src_cont=None,
+                dst_cont=None, update_dest=False):
+        """Initialise and run DatamoverCommand object
+
+          Args:
+            src_pool(TestPool): source pool object
+            dst_pool(TestPool): destination pool object
+            src_cont(TestContainer): source container object
+            dst_cont(TestContainer): destination container object
+            update_dest(bool): Update destination path
+
+          Raise:
+            raises Commandfailure
+        """
+        # param for dcp processes
+        processes = self.params.get("processes", "/run/datamover/*")
+
+        dcp = DataMover(self.hostlist_clients)
+        dcp.get_params(self)
+        # update dest path
+        if update_dest:
+            dcp.dest_path.update(self.tmp)
+        # set datamover params
+        dcp.set_datamover_params(src_pool, dst_pool, src_cont, dst_cont)
+
+        try:
+            # run dcp
+            dcp.run(self.workdir, processes)
+
+        except CommandFailure as error:
+            self.log.error("DCP command failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
+
     def test_daoscont1_to_daoscont2(self):
-        """Jira ID: DAOS-4778.
+        """Jira ID: DAOS-4782.
         Test Description:
-            Run IOR first using DFS and then using POSIX to verify data
-            consistency.
+            Copy data from daos cont1 to daos cont2
         Use Cases:
-            Create a pool
+            Create a pool.
             Create POSIX type container.
-            Run ior -a DFS with FPP and keep the file.
-            Mount the container using dfuse
-            Run IOR -a POSIX -r -R to verify data consistency and delete the
-            file.
-            Try to re-create to the same file name after deletion, which should
-            work without issues.
-            Repeat the same steps as above for SSF this time.
-        :avocado: tags=all,daosio,hw,large,pr,daoscont1_to_daoscont2
+            Run mdtest -a DFS to create 2B 4K files
+            Create second container
+            Copy data from cont1 to cont2 using dcp
+            Run mdtest again, but this time on cont2 and read the files back.
+        :avocado: tags=all,daosio,hw,large,full_regression
+        :avocado: tags=containercopy,daoscont1_to_daoscont2
         """
 
         # test params
-        processes = self.params.get("processes", "/run/datamover/*")
-
+        mdtest_flags = self.params.get("mdtest_flags", "/run/mdtest/*")
+        file_size = self.params.get("bytes", "/run/mdtest/*")
+        # create pool and cont
         self.create_pool()
         self.create_cont()
 
-        self.execute_mdtest(self.container[0])
-
+        # set and update mdtest command params
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool,
+                                        self.container[0])
+        self.mdtest_cmd.flags.update(mdtest_flags[0])
+        self.mdtest_cmd.write_bytes.update(file_size)
+        # run mdtest
+        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
+                        self.processes)
+        # create second container
         self.create_cont()
 
-        print("Container2: {}".format(self.container[1].uuid))
-        
-        dcp = DataMover(self.hostlist_clients, self.pool, self.pool, self.container[0], self.container[1])
-        dcp.get_params(self)
-        dcp.set_datamover_params()
+        # copy data from cont1 to cont2
+        self.run_dcp(self.pool, self.pool, self.container[0], self.container[1])
 
-        dcp.run(self.workdir, processes)
-#        dcp.run(self.workdir, processes)
+        # update and run mdtest read on cont2
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool,
+                                        self.container[1])
+        self.mdtest_cmd.flags.update(mdtest_flags[1])
+        self.mdtest_cmd.read_bytes.update(file_size)
+
+        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
+                        self.processes)
 
     def test_daoscont_to_posixfs(self):
-        """Jira ID: DAOS-4778.
+        """Jira ID: DAOS-4782.
         Test Description:
-            Run IOR first using DFS and then using POSIX to verify data
-            consistency.
+            Copy data from daos container to external Posix file system
         Use Cases:
             Create a pool
             Create POSIX type container.
-            Run ior -a DFS with FPP and keep the file.
-            Mount the container using dfuse
-            Run IOR -a POSIX -r -R to verify data consistency and delete the
-            file.
-            Try to re-create to the same file name after deletion, which should
-            work without issues.
-            Repeat the same steps as above for SSF this time.
-        :avocado: tags=all,daosio,hw,large,pr,daoscont_to_posixfs
+            Run ior -a DFS on cont1.
+            Create cont2
+            Copy data from cont1 to cont2 using dcp.
+            Copy data from cont2 to external Posix File system.
+            Run ior -a DFS with read verify on copied directory to verify
+            data.
+        :avocado: tags=all,daosio,hw,large,full_regression
+        :avocado: tags=containercopy,daoscont_to_posixfs
         """
 
-        # test params
-        processes = self.params.get("processes", "/run/datamover/*")
-
+        # create pool and cont
         self.create_pool()
         self.create_cont()
 
+        # update and run ior on cont1
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container[0].uuid)
         self.run_ior(self.get_ior_job_manager_command(), self.processes)
 
-
+        # create container2
         self.create_cont()
 
-        print("Container2: {}".format(self.container[1].uuid))
-
-        # copy from daos cont to another daos cont
-        dcp = DataMover(self.hostlist_clients, self.pool, self.pool, self.container[0], self.container[1])
-        dcp.get_params(self)
-        dcp.set_datamover_params()
-
-        dcp.run(self.workdir, processes)
+        # copy from daos cont1 to cont2
+        self.run_dcp(self.pool, self.pool, self.container[0], self.container[1])
 
         # copy from daos cont to posix file system
-        dcp = DataMover(self.hostlist_clients, self.pool, None, self.container[1])
-        dcp.get_params(self)
-        dcp.dest_path.update(self.tmp)
-        dcp.set_datamover_params()
-#        dcp.dest_path.update(self.tmp)
+        self.run_dcp(self.pool, None, self.container[1], None, True)
 
-        dcp.run(self.workdir, processes)
-
+        # update ior params, read back and verify data from posix file system
         self.ior_cmd.api.update("POSIX")
         self.ior_cmd.flags.update("-r -R")
-        dest_path = dcp.dest_path.value + self.ior_cmd.test_file.value
+        dest_path = self.tmp + self.ior_cmd.test_file.value
+        # update dest path permissions to be able to read the file.
         cmd = u"chmod 755 {}".format(dest_path)
         self.execute_cmd(cmd)
         self.ior_cmd.test_file.update(dest_path)
