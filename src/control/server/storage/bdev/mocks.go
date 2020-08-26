@@ -37,6 +37,7 @@ type (
 		ScanRes         *ScanResponse
 		ScanErr         error
 		vmdDisabled     bool // set through public access methods
+		UpdateErr       error
 	}
 
 	MockBackend struct {
@@ -93,6 +94,10 @@ func (mb *MockBackend) DisableVMD() {
 
 func (mb *MockBackend) IsVMDDisabled() bool {
 	return mb.cfg.vmdDisabled
+}
+
+func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {
+	return mb.cfg.UpdateErr
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {

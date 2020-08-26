@@ -100,6 +100,7 @@ type (
 		Format(FormatRequest) (*FormatResponse, error)
 		DisableVMD()
 		IsVMDDisabled() bool
+		UpdateFirmware(pciAddr string, path string, slot int32) error
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -108,6 +109,7 @@ type (
 		log     logging.Logger
 		backend Backend
 		fwd     *Forwarder
+		firmwareProvider
 	}
 )
 
@@ -118,11 +120,13 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
 		fwd:     NewForwarder(log),
 	}
+	p.setupFirmwareProvider(log)
+	return p
 }
 
 // WithForwardingDisabled returns a provider with forwarding disabled.
