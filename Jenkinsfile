@@ -1053,10 +1053,10 @@ pipeline {
                             // test results, and while code coverage is being
                             // added.
                             unitTestPost ignore_failure: true,
-                                       artifacts: ['unit_test_memcheck_logs/*',
-                                                   'unit_memcheck_vm_test/**']
-                                       valgrind_stash: 'centos7-gcc-unit-valg',
-                                       valgrind_pattern: 'unit_test_memcheck_logs/results-memcheck-*.xml'
+                                         artifacts: ['unit_test_memcheck_logs/*',
+                                                   'unit_memcheck_vm_test/**'],
+                                         valgrind_stash: 'centos7-gcc-unit-valg',
+                                         valgrind_pattern: 'unit_test_memcheck_logs/results-memcheck-*.xml'
                         }
                     }
                 } // stage('Unit Test with memcheck')
