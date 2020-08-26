@@ -80,10 +80,7 @@ class DaosSnapshotTest(TestWithServers):
         self.daos_cmd = DaosCommand(self.bin)
         self.add_pool(connect=False)
         self.svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
-        self.container = TestContainer(
-            pool=self.pool, daos_command=self.daos_cmd)
-        self.container.get_params(self)
-        self.container.create()
+        self.add_container(self.pool)
 
     def test_create_list_delete(self):
         """JIRA ID: DAOS-4872
