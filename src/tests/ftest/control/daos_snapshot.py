@@ -23,10 +23,10 @@
 '''
 from apricot import TestWithServers, skipForTicket
 from daos_utils import DaosCommand
-from control_test_base import ControlTestBase
+from test_utils_container import TestContainer
 
 
-class DaosSnapshotTest(ControlTestBase):
+class DaosSnapshotTest(TestWithServers):
     """
     Test Class Description:
         Test daos container create-snap, list-snaps, and destroy-snap. Test
@@ -53,6 +53,7 @@ class DaosSnapshotTest(ControlTestBase):
         """Initialize a DaosSnapshotTest object."""
         super(DaosSnapshotTest, self).__init__(*args, **kwargs)
         self.daos_cmd = None
+        self.svc = None
 
     def create_snapshot(self, pool_uuid, svc, cont_uuid, count):
         """Create snapshots and return the epoch values obtained from stdout.
@@ -66,12 +67,23 @@ class DaosSnapshotTest(ControlTestBase):
         Returns:
             List of string: Epochs obtained from stdout.
         """
-        kwargs = {"pool": pool_uuid, "svc": svc, "cont": cont_uuid}
         epochs = []
         for _ in range(count):
             epochs.append(
-                self.daos_cmd.get_output("container_create_snap", **kwargs)[0])
+                self.daos_cmd.container_create_snap(pool=pool_uuid,
+                cont=cont_uuid, svc=svc)["epoch"])
         return epochs
+
+    def prepare_pool_container(self):
+        """Create a pool and a container and prepare for the test cases.
+        """
+        self.daos_cmd = DaosCommand(self.bin)
+        self.add_pool(connect=False)
+        self.svc = str(self.pool.svc_ranks[0])
+        self.container = TestContainer(
+            pool=self.pool, daos_command=self.daos_cmd)
+        self.container.get_params(self)
+        self.container.create()
 
     def test_create_list_delete(self):
         """JIRA ID: DAOS-4872
@@ -84,35 +96,32 @@ class DaosSnapshotTest(ControlTestBase):
 
         :avocado: tags=all,small,control,full_regression,daos_snapshot
         """
-        kwargs = {"scm_size": "1G"}
-        data = self.get_dmg_command().pool_create(scm_size="1G")
-        pool_uuid = data["uuid"]
-        sr = data["svc"]
-        self.daos_cmd = DaosCommand(self.bin)
-        kwargs = {"pool": pool_uuid, "svc": sr}
-        cont_uuid = self.daos_cmd.get_output("container_create", **kwargs)[0]
+        self.prepare_pool_container()
 
         # 1. Create 5 snapshots.
         expected_epochs = self.create_snapshot(
-            pool_uuid=pool_uuid, svc=sr, cont_uuid=cont_uuid, count=5)
+            pool_uuid=self.pool.uuid, svc=self.svc, cont_uuid=self.container.uuid,
+            count=5)
         expected_epochs.sort()
         self.log.debug("Expected Epochs = {}".format(expected_epochs))
-        kwargs = {"pool": pool_uuid, "svc": sr, "cont": cont_uuid}
 
         # 2. List the 5 snapshots and verify their epochs.
-        actual_epochs = self.daos_cmd.get_output(
-            "container_list_snaps", **kwargs)
+        actual_epochs = self.daos_cmd.container_list_snaps(
+            pool=self.pool.uuid, cont=self.container.uuid,
+            svc=self.svc)["epochs"]
         actual_epochs.sort()
         self.log.debug("Actual Epochs = {}".format(actual_epochs))
         self.assertEqual(expected_epochs, actual_epochs)
 
         # 3. Destroy all the snapshots.
         for epoch in actual_epochs:
-            _ = self.daos_cmd.container_destroy_snap(
-                pool=pool_uuid, cont=cont_uuid, epochs=[epoch], svc=sr)
+            self.daos_cmd.container_destroy_snap(
+                pool=self.pool.uuid, cont=self.container.uuid, epc=epoch,
+                svc=self.svc)
 
         # 4. List and verify that there's no snapshot.
-        epochs = self.daos_cmd.get_output("container_list_snaps", **kwargs)
+        epochs = self.daos_cmd.container_list_snaps(
+            pool=self.pool.uuid, cont=self.container.uuid, svc=self.svc)
         self.assertTrue(not epochs)
 
     @skipForTicket("DAOS-4691")
@@ -127,16 +136,19 @@ class DaosSnapshotTest(ControlTestBase):
         
         :avocado: tags=all,small,container,full_regression,daos_snapshot_range
         """
+        self.prepare_pool_container()
+
         # 1. Create 5 snapshots.
         new_epochs = self.create_snapshot(
-            pool_uuid=pool_uuid, svc=sr, cont_uuid=cont_uuid, count=5)
+            pool_uuid=self.pool.uuid, svc=self.svc,
+            cont_uuid=self.container.uuid, count=5)
 
         # 2. Destroy all snapshots with --epcrange.
-        _ = self.daos_cmd.container_destroy_snap(
-            pool=pool_uuid, cont=cont_uuid,
-            epochs=[new_epochs[0], new_epochs[-1]], svc=sr)
+        self.daos_cmd.container_destroy_snap(
+            pool=self.pool.uuid, cont=self.container.uuid,
+            epcrange=[new_epochs[0], new_epochs[-1]], svc=self.svc)
 
         # 3. List and verify that there's no snapshot.
-        epochs = self.daos_cmd.get_output(
-            "container_list_snaps", **kwargs)[0]
+        epochs = self.daos_cmd.container_list_snaps(
+            pool=self.pool.uuid, cont=self.container.uuid, svc=self.svc)
         self.assertTrue(not epochs)

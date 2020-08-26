@@ -406,12 +406,13 @@ class TestContainer(TestDaosApiBase):
         self.epoch = output.split()[1]
 
     @fail_on(DaosApiError)
-    def destroy_snap(self, snap_name=None, epochs=None):
+    def destroy_snap(self, snap_name=None, epc=None, epcrange=None):
         """Destroy Snapshot using daos utility
 
         Args:
             snap_name (str, optional): Snapshot name
-            epochs (List of str, optional): Epoch ID(s)
+            epc (str): Epoch ID that indicates the snapshot to be destroyed.
+            epcrange (list, optional): list of Epoch IDs as strings
         """
         status = False
 
@@ -423,7 +424,8 @@ class TestContainer(TestDaosApiBase):
                 "pool" : self.pool.uuid,
                 "cont" : self.uuid,
                 "snap_name" : snap_name,
-                "epochs" : epochs,
+                "epc" : epc,
+                "epcrange": epcrange,
                 "svc" : ",".join(str(rank) for rank in self.pool.svc_ranks),
                 "sys_name": self.pool.name.value,
             }
