@@ -1,0 +1,79 @@
+hosts:
+  test_servers:
+    - boro-14
+#    - server-A
+#    - server-B
+#    - server-C
+#    - server-D
+  test_clients:
+    - boro-14
+#    - client-E
+#    - client-F
+timeout: 300
+server_config:
+  name: daos_server
+  servers:
+    log_mask: ERR
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0"]
+#    scm_class: dcpm
+#    scm_list: ["/dev/pmem0"]
+pool:
+  createmode:
+    mode_RW:
+      mode: 146
+  createset:
+    setname: daos_server
+  createsize:
+    scm_size: 1000000000
+    nvme_size: 10000000000
+  createsvc:
+    svcn: 1
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  client_processes:
+      np: 1
+  api: DFS
+  flags: "-w -k"
+#  io_consistency: !mux
+#    FPP:
+#      api_flag:
+#        - [DFS , "-v -w -k -F"]
+#        - [POSIX, "-v -r -R -F"]
+#    SSF:
+#      api_flag:
+#        - [DFS , "-v -w -k"]
+#        - [POSIX, "-v -r -R"]
+  dfs_destroy: False
+  test_file: /testFile
+  repetitions: 1
+  signature: 5
+  transfersize_blocksize:
+    1M:
+      transfer_size: '1M'
+      block_size: '1G'
+  objectclass:
+    SX:
+      dfs_oclass: "SX"
+mdtest:
+  client_processes:
+    np: 1
+  api: DFS
+  num_of_files_dirs: 20         # creating total of 50K files
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: False
+  manager: "MPICH"
+  flags: "-F -C"
+  write_bytes: 4096
+  read_bytes: 4096
+  depth: 0
+
+datamover:
+  src_path: "/"
+  dest_path: "/"
+  processes: 1
+#mpirun:
+#  processes: 2

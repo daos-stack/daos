@@ -129,13 +129,17 @@ class MdtestBase(TestWithServers):
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 
-    def execute_mdtest(self):
-        """Runner method for Mdtest."""
+    def execute_mdtest(self, cont=None):
+        """Runner method for Mdtest.
+        
+          Args:
+            cont (TestContainer): container obj
+        """
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, cont.uuid)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
