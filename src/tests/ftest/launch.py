@@ -912,11 +912,11 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
 
-    archive_files(destination, host_list, "{}/*.{{tar*,log*}}".format(logs_dir))
-
     # Caution: the glob expression "_output.log" must match the
     #   --output-filename specified in # cart_utils.py:get_env()
     tar_files(destination, "{}/*_output.log".format(logs_dir))
+
+    archive_files(destination, host_list, "{}/*.{{tar*,log*}}".format(logs_dir))
 
 def tar_files(destination, logs_glob_expr):
     """Run tar on files (in the directory specified by the orterun
