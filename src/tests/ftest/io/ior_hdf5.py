@@ -47,7 +47,7 @@ class IorHdf5(IorTestBase):
             All above three cases to be run with single client and
                 multiple client processes in two separate nodes.
 
-        :avocado: tags=all,pr,hw,large,daosio,iorhdf5
+        :avocado: tags=all,pr,hw,large,daosio,hdf5,iorhdf5
         """
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         transfer_block_size = self.params.get("transfer_block_size",
