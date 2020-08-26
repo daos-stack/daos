@@ -129,7 +129,9 @@ func init() {
 	proto.RegisterType((*ContSetOwnerResp)(nil), "mgmt.ContSetOwnerResp")
 }
 
-func init() { proto.RegisterFile("cont.proto", fileDescriptor_7e578f20ac30c5ed) }
+func init() {
+	proto.RegisterFile("cont.proto", fileDescriptor_7e578f20ac30c5ed)
+}
 
 var fileDescriptor_7e578f20ac30c5ed = []byte{
 	// 156 bytes of a gzipped FileDescriptorProto

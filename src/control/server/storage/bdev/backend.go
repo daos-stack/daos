@@ -424,3 +424,24 @@ func (b *spdkBackend) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 func (b *spdkBackend) PrepareReset() error {
 	return b.script.Reset()
 }
+
+func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
+	spdkOpts := spdk.EnvOptions{
+		DisableVMD: b.IsVMDDisabled(),
+	}
+
+	if err := b.binding.init(b.log, spdkOpts); err != nil {
+		return err
+	}
+
+	_, err := getController(pciAddr, b.binding.controllers)
+	if err != nil {
+		return err
+	}
+
+	if err := b.binding.Update(b.log, pciAddr, path, slot); err != nil {
+		return err
+	}
+
+	return nil
+}
