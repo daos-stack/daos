@@ -93,7 +93,7 @@ type nvmeHealthQueryCmd struct {
 
 func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
 	ctx := context.Background()
-	req := &control.StorageScanReq{}
+	req := &control.StorageScanReq{ConfigDevicesOnly: true}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 

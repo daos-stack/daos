@@ -167,6 +167,79 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 	}
 }
 
+func TestBdevBackendScan(t *testing.T) {
+	ctrlr1 := storage.MockNvmeController(1)
+	nativeCtrlr1 := new(spdk.Controller)
+	if err := convert(ctrlr1, nativeCtrlr1); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		req     ScanRequest
+		mec     spdk.MockEnvCfg
+		mnc     spdk.MockNvmeCfg
+		expResp *ScanResponse
+		expErr  error
+	}{
+		"binding scan fail": {
+			mnc: spdk.MockNvmeCfg{
+				DiscoverErr: errors.New("spdk says no"),
+			},
+			expErr: errors.New("spdk says no"),
+		},
+		"empty results from binding": {
+			req:     ScanRequest{},
+			expResp: &ScanResponse{Controllers: storage.NvmeControllers{}},
+		},
+		"binding scan success": {
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
+			},
+			req: ScanRequest{},
+			expResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{
+					ctrlr1,
+				},
+			},
+		},
+		"binding scan filtered in": {
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
+			},
+			req: ScanRequest{DeviceList: []string{ctrlr1.PciAddr}},
+			expResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{
+					ctrlr1,
+				},
+			},
+		},
+		"binding scan filtered out": {
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
+			},
+			req:     ScanRequest{DeviceList: []string{"0000:ff:ff.f"}},
+			expResp: &ScanResponse{Controllers: storage.NvmeControllers{}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+
+			gotResp, gotErr := b.Scan(tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestBdevBackendFormat(t *testing.T) {
 	pci1 := storage.MockNvmeController(1).PciAddr
 	pci2 := storage.MockNvmeController(2).PciAddr
@@ -405,6 +478,65 @@ func TestBdevBackendFormat(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestBdevBackendUpdate(t *testing.T) {
+	numCtrlrs := 4
+	controllers := make([]spdk.Controller, 0, numCtrlrs)
+	for i := 0; i < numCtrlrs; i++ {
+		c := mockSpdkController(int32(i))
+		controllers = append(controllers, c)
+	}
+
+	for name, tc := range map[string]struct {
+		pciAddr string
+		mec     spdk.MockEnvCfg
+		mnc     spdk.MockNvmeCfg
+		expErr  error
+	}{
+		"init failed": {
+			pciAddr: controllers[0].PCIAddr,
+			mec: spdk.MockEnvCfg{
+				InitErr: errors.New("spdk init says no"),
+			},
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: controllers,
+			},
+			expErr: errors.New("spdk init says no"),
+		},
+		"not found": {
+			pciAddr: "NotReal",
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: controllers,
+			},
+			expErr: FaultPCIAddrNotFound("NotReal"),
+		},
+		"binding update fail": {
+			pciAddr: controllers[0].PCIAddr,
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: controllers,
+				UpdateErr:      errors.New("spdk says no"),
+			},
+			expErr: errors.New("spdk says no"),
+		},
+		"binding update success": {
+			pciAddr: controllers[0].PCIAddr,
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: controllers,
+			},
+			expErr: nil,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+
+			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
