@@ -23,6 +23,9 @@ pool:
   name: daos_server
   scm_size: 5G
   nvme_size: 10G
+container:
+  control_method: daos
+  type: POSIX
 macsio:
   interface: hdf5
   parallel_file_mode: SIF 1
