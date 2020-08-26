@@ -237,11 +237,11 @@ class IorTestBase(TestWithServers):
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
+            manager.working_dir.value = self.dfuse.mount_dir.value
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(processes)
         manager.assign_environment(env)
-        manager.working_dir.value = self.dfuse.mount_dir.value
 
         try:
             if display_space:
