@@ -126,6 +126,7 @@ func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing [
 	for _, storageCfg := range c.instanceStorage {
 		for _, pciAddr := range storageCfg.Bdev.GetNvmeDevs() {
 			if getController(pciAddr) == nil {
+				missing = append(missing, pciAddr)
 			}
 		}
 	}
