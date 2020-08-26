@@ -375,8 +375,7 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: Dictionary that stores the created epoch in the key "epoch".
 
         Raises:
             CommandFailure: if the daos container create-snap command fails.

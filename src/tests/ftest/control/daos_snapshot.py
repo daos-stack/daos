@@ -79,7 +79,7 @@ class DaosSnapshotTest(TestWithServers):
         """
         self.daos_cmd = DaosCommand(self.bin)
         self.add_pool(connect=False)
-        self.svc = str(self.pool.svc_ranks[0])
+        self.svc = ",".join(str(rank) for rank in self.pool.svc_ranks)
         self.container = TestContainer(
             pool=self.pool, daos_command=self.daos_cmd)
         self.container.get_params(self)
