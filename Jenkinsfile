@@ -211,7 +211,7 @@ String functional_packages() {
 String functional_packages(String distro) {
     String pkgs = get_daos_packages(distro)
     pkgs += " openmpi3 hwloc ndctl fio " +
-            "ior-hpc-daos-0 " +
+            "ior-hpc-cart-4-daos-0 " +
             "romio-tests-cart-4-daos-0 " +
             "testmpio-cart-4-daos-0 " +
             "mpi4py-tests-cart-4-daos-0 " +
