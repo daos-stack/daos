@@ -38,7 +38,6 @@ class FioBase(DfuseTestBase):
         self.fio_cmd = None
         self.processes = None
         self.manager = None
-        # self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -47,9 +46,6 @@ class FioBase(DfuseTestBase):
 
         # Start the servers and agents
         super(FioBase, self).setUp()
-
-        # # initialize daos_cmd
-        # self.daos_cmd = DaosCommand(self.bin)
 
         # Get the parameters for Fio
         self.fio_cmd = FioCommand()

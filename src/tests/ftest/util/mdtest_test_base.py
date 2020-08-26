@@ -40,7 +40,6 @@ class MdtestBase(DfuseTestBase):
         self.mdtest_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
-        # self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -48,9 +47,6 @@ class MdtestBase(DfuseTestBase):
         self.update_log_file_names()
         # Start the servers and agents
         super(MdtestBase, self).setUp()
-
-        # # initialize daos_cmd
-        # self.daos_cmd = DaosCommand(self.bin)
 
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
