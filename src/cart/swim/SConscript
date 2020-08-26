@@ -1,5 +1,5 @@
 #!python
-# (C) Copyright 2016-2020 Intel Corporation.
+# (C) Copyright 2018-2020 Intel Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,29 +20,30 @@
 # Any reproduction of computer software, computer software documentation, or
 # portions thereof marked with this legend must also reproduce the markings.
 #
-"""Build self test"""
+"""Build swim src"""
 
-import os
-import daos_build
-
-SELF_TEST = 'self_test.c'
+SRC = ['swim.c']
 
 def scons():
-    """scons function"""
+    """Scons function"""
 
-    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
+    #Import('env', 'gurt_lib') #DM
+    Import('env', 'prereqs', 'gurt_lib') #DM
 
-    tenv = env.Clone()
+    env.AppendUnique(LIBPATH=[Dir('.')])
 
-    tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart', '#/src/cart/src/test'])
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
-    prereqs.require(tenv, 'mercury')
-    tenv.AppendUnique(LIBPATH=['#/src/cart/src/cart'])
-    tenv.AppendUnique(FLAGS='-pthread')
+    denv = env.Clone()
 
-    self_test = daos_build.program(tenv, SELF_TEST)
-    tenv.Requires(self_test, [cart_lib, gurt_lib])
-    tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
+    denv.AppendUnique(CPPPATH=['#/src/cart/swim'])
+    denv.AppendUnique(LIBS=['gurt'])
+    denv.Append(CCFLAGS=['-D_USE_CART_'])
+
+    swim_targets = denv.SharedObject(SRC)
+    swim_lib = denv.SharedLibrary('libswim', swim_targets)
+    denv.Requires(swim_lib, gurt_lib)
+
+    Default(swim_targets)
+    Export('swim_lib', 'swim_targets')
 
 if __name__ == "SCons.Script":
     scons()

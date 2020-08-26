@@ -955,6 +955,7 @@ def archive_files(destination, host_list, source_files):
         "copied=()",
         "for file in $(ls {})".format(source_files),
         "do ls -sh $file",
+        "/lib/cart/TESTING/util/cart_logtest.py $file",
         "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, destination),
         "then copied+=($file)",

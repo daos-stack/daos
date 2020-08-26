@@ -30,14 +30,14 @@
 
 struct ctrlr_entry	*g_controllers;
 
-static bool
+bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	 struct spdk_nvme_ctrlr_opts *opts)
 {
 	return true;
 }
 
-static void
+void
 register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 {
 	struct ns_entry				*nentry;
@@ -59,9 +59,9 @@ register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 		return;
 	}
 
-	nentry = malloc(sizeof(struct ns_entry));
+	nentry = calloc(1, sizeof(struct ns_entry));
 	if (nentry == NULL) {
-		perror("ns_entry malloc");
+		perror("ns_entry calloc");
 		exit(1);
 	}
 
@@ -75,13 +75,13 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  struct spdk_nvme_ctrlr *ctrlr,
 	  const struct spdk_nvme_ctrlr_opts *opts)
 {
-	int			 nsid, num_ns;
 	struct ctrlr_entry	*entry;
 	struct spdk_nvme_ns	*ns;
+	int			 nsid, num_ns;
 
-	entry = malloc(sizeof(struct ctrlr_entry));
+	entry = calloc(1, sizeof(struct ctrlr_entry));
 	if (entry == NULL) {
-		perror("ctrlr_entry malloc");
+		perror("ctrlr_entry calloc");
 		exit(1);
 	}
 
@@ -112,18 +112,28 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	}
 }
 
-struct ret_t *
-init_ret(int rc)
+struct wipe_res_t *
+init_wipe_res(void)
 {
-	struct ret_t *ret = NULL;
+	struct wipe_res_t *res = calloc(1, sizeof(struct wipe_res_t));
 
-	ret = malloc(sizeof(struct ret_t));
-	if (ret == NULL) {
-		perror("ret malloc");
+	if (res == NULL) {
+		perror("wipe_res_t calloc");
 		exit(1);
 	}
-	ret->rc = rc;
-	ret->ctrlrs = NULL;
+
+	return res;
+}
+
+struct ret_t *
+init_ret(void)
+{
+	struct ret_t *ret = calloc(1, sizeof(struct ret_t));
+
+	if (ret == NULL) {
+		perror("ret_t calloc");
+		exit(1);
+	}
 
 	return ret;
 }
@@ -131,8 +141,15 @@ init_ret(int rc)
 void
 clean_ret(struct ret_t *ret)
 {
-	struct ctrlr_t	*cnext;
-	struct ns_t	*nnext;
+	struct ctrlr_t		*cnext;
+	struct ns_t		*nnext;
+	struct wipe_res_t	*wrnext;
+
+	while (ret && (ret->wipe_results)) {
+		wrnext = ret->wipe_results->next;
+		free(ret->wipe_results);
+		ret->wipe_results = wrnext;
+	}
 
 	while (ret && (ret->ctrlrs)) {
 		while (ret->ctrlrs->nss) {
@@ -175,19 +192,12 @@ get_controller(struct ctrlr_entry **entry, char *addr)
 }
 
 struct ret_t *
-_discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
+_discover(prober probe, bool detach, health_getter get_health)
 {
-	int			 rc;
 	struct ctrlr_entry	*ctrlr_entry;
 	struct dev_health_entry	*health_entry;
-
-	if (init_vmd) {
-		rc = spdk_vmd_init();
-		if (rc) {
-			rc = -NVMEC_ERR_NO_VMD_CTRLRS;
-			goto fail;
-		}
-	}
+	struct ret_t		*ret;
+	int			 rc;
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -200,14 +210,8 @@ _discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 	if (rc != 0)
 		goto fail;
 
-	/**
-	 * TODO: add fini call when we upgrade SPDK to a version that supports
-	 * if (init_vmd)
-	 *   spdk_vmd_fini();
-	 */
-
 	if (!g_controllers || !g_controllers->ctrlr)
-		return init_ret(0); /* no controllers */
+		return init_ret(); /* no controllers */
 
 	/*
 	 * Collect NVMe SSD health stats for each probed controller.
@@ -216,7 +220,7 @@ _discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		health_entry = malloc(sizeof(struct dev_health_entry));
+		health_entry = calloc(1, sizeof(struct dev_health_entry));
 		if (health_entry == NULL) {
 			rc = -ENOMEM;
 			goto fail;
@@ -232,10 +236,15 @@ _discover(prober probe, bool detach, health_getter get_health, bool init_vmd)
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
-	return collect();
+	ret = collect();
+	/* TODO: cleanup(detach); */
+	return ret;
+
 fail:
 	cleanup(detach);
-	return init_ret(rc);
+	ret = init_ret();
+	ret->rc = rc;
+	return ret;
 }
 
 static int
@@ -269,9 +278,9 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 	struct ns_t	*ns_tmp;
 
 	while (ns_entry) {
-		ns_tmp = malloc(sizeof(struct ns_t));
+		ns_tmp = calloc(1, sizeof(struct ns_t));
 		if (ns_tmp == NULL) {
-			perror("ns_t malloc");
+			perror("ns_t calloc");
 			return -ENOMEM;
 		}
 
@@ -290,12 +299,12 @@ static int
 collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 {
 	struct dev_health_t			 *h_tmp;
-	struct spdk_nvme_health_information_page health_pg;
-	union spdk_nvme_critical_warning_state	 cwarn;
+	struct spdk_nvme_health_information_page  health_pg;
+	union spdk_nvme_critical_warning_state	  cwarn;
 
-	h_tmp = malloc(sizeof(struct dev_health_t));
+	h_tmp = calloc(1, sizeof(struct dev_health_t));
 	if (h_tmp == NULL) {
-		perror("dev_health_t malloc");
+		perror("dev_health_t calloc");
 		return -ENOMEM;
 	}
 
@@ -336,9 +345,9 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		ctrlr_tmp = malloc(sizeof(struct ctrlr_t));
+		ctrlr_tmp = calloc(1, sizeof(struct ctrlr_t));
 		if (!ctrlr_tmp) {
-			perror("ctrlr_t malloc");
+			perror("ctrlr_t calloc");
 			rc = -ENOMEM;
 			goto fail;
 		}
@@ -414,7 +423,7 @@ collect(void)
 {
 	struct ret_t *ret;
 
-	ret = init_ret(0);
+	ret = init_ret();
 	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
 		 &spdk_pci_device_get_socket_id);
 

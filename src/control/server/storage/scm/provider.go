@@ -82,7 +82,8 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
-		Rescan bool
+		DeviceList []string
+		Rescan     bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.

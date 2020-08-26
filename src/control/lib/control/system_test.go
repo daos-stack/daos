@@ -905,24 +905,6 @@ func TestControl_SystemStop(t *testing.T) {
 }
 
 func TestControl_SystemReformat(t *testing.T) {
-	testHS, err := hostlist.CreateSet("foo-[1-23]")
-	if err != nil {
-		t.Fatal(err)
-	}
-	testReqHS := new(SystemResetFormatReq)
-	testReqHS.Hosts = *testHS
-	testRespHS := new(SystemResetFormatResp)
-	testRespHS.AbsentHosts = *testHS
-
-	testRS, err := system.CreateRankSet("1-23")
-	if err != nil {
-		t.Fatal(err)
-	}
-	testReqRS := new(SystemResetFormatReq)
-	testReqRS.Ranks = *testRS
-	testRespRS := new(SystemResetFormatResp)
-	testRespRS.AbsentRanks = *testRS
-
 	for name, tc := range map[string]struct {
 		req     *SystemResetFormatReq
 		uErr    error
@@ -943,34 +925,6 @@ func TestControl_SystemReformat(t *testing.T) {
 			req:    new(SystemResetFormatReq),
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
-		},
-		"request absent host set": {
-			req: testReqHS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemResetFormatResp{
-					Absenthosts: "foo-[1-23]",
-				}),
-			expResp: &StorageFormatResp{
-				HostErrorsResp: HostErrorsResp{
-					HostErrors: mockHostErrorsMap(t, &mockHostError{
-						"foo-[1-23]", "unknown host",
-					}),
-				},
-			},
-		},
-		"request absent rank set": {
-			req: testReqRS,
-			uResp: MockMSResponse("0.0.0.0", nil,
-				&ctlpb.SystemResetFormatResp{
-					Absentranks: "1-23",
-				}),
-			expResp: &StorageFormatResp{
-				HostErrorsResp: HostErrorsResp{
-					HostErrors: mockHostErrorsMap(t, &mockHostError{
-						"0.0.0.0", "23 ranks unknown: 1-23",
-					}),
-				},
-			},
 		},
 		"no results": {
 			req: new(SystemResetFormatReq),
