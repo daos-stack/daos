@@ -349,7 +349,8 @@ class DaosServerYamlParameters(YamlParameters):
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
-                "DD_MASK=mgmt,io,md,epc,rebuild"
+                "DD_MASK=mgmt,io,md,epc,rebuild",
+                "FI_LOG_LEVEL=warn"
             ]
             if default_provider == "ofi+sockets":
                 default_env_vars.extend([
