@@ -56,7 +56,7 @@ dfs_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 	}
 
 	/** broadcast global handle to all peers */
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, 
+	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0,
 		       MPI_COMM_WORLD);
 	assert_int_equal(rc, MPI_SUCCESS);
 
@@ -160,7 +160,7 @@ dfs_test_mount(void **state)
 	/** create a DFS container with POSIX layout */
 	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-        print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
@@ -176,7 +176,7 @@ dfs_test_mount(void **state)
 	print_message("Container destroying\n");
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", 
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 
 	/** create a DFS container with POSIX layout */
@@ -195,7 +195,7 @@ dfs_test_mount(void **state)
 	print_message("Container destroying\n");
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", 
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 
         /** create a DFS container with POSIX layout */
@@ -217,7 +217,7 @@ dfs_test_mount(void **state)
 	print_message("Container destroying\n");
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", 
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 }
 
