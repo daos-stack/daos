@@ -841,7 +841,7 @@ dfs_teardown(void **state)
 }
 
 int
-run_daos_fs_functional_test(int rank, int size, 
+run_daos_fs_functional_test(int rank, int size,
 			    int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
@@ -853,4 +853,3 @@ run_daos_fs_functional_test(int rank, int size,
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
-
