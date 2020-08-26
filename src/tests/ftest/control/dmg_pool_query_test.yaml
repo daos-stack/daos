@@ -29,12 +29,14 @@ pool:
   scm_size: "16GB"
   nvme_size: "32GB"
   name: daos_server
-
+container:
+    type: POSIX
+    control_method: daos
 ior:
   flags: "-k -w -r"
   transfer_size: "64M"
   block_size: "2G"
-  daos_destroy: False
+  dfs_destroy: False
 
 exp_vals:
   pool_info: ['8', '0', '0', '1']

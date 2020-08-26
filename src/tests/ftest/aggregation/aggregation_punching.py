@@ -81,7 +81,7 @@ class AggregationPunching(MdtestBase):
                       "NVMe" if storage_index else "SCM")
         self.log.info("%s <= %s", free_space_after_mdtest,
                       initial_free_space-mdtest_data_size)
-        self.assertTrue(free_space_after_mdtest <
+        self.assertTrue(free_space_after_mdtest <=
                         initial_free_space - mdtest_data_size)
 
         # Enable the aggregation

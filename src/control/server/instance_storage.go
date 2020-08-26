@@ -123,7 +123,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 		return errors.Errorf("can't wait for storage: instance %d already started", idx)
 	}
 
-	srv.log.Infof("Waiting for %s instance %d storage to be ready...", DataPlaneName, idx)
+	srv.log.Infof("Checking %s instance %d storage ...", DataPlaneName, idx)
 
 	needsScmFormat, err := srv.NeedsScmFormat()
 	if err != nil {
