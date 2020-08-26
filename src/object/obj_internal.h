@@ -442,12 +442,24 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
-
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
-
 int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 		      daos_recx_t *recxs, int nr, daos_recx_t **output_recxs,
 		      int *output_nr);
+int obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
+		       uint32_t iod_nr, struct daos_oclass_attr *oca);
+void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
+int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
+		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
+		  crt_bulk_t **p_bulks);
+int obj_get_replicas(struct dc_object *obj);
+int obj_shard_open(struct dc_object *obj, unsigned int shard,
+		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
+int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
+int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
+			tse_task_t **taskp);
+
+#define obj_shard_close(shard)	dc_obj_shard_close(shard)
 
 static inline bool
 obj_retry_error(int err)
@@ -516,10 +528,6 @@ void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
-int dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
-		  daos_obj_update_t *args);
-int dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
-		 enum obj_rpc_opc opc, daos_obj_punch_t *api_args);
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {
@@ -674,11 +682,7 @@ int
 dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
-dc_tx_non_cpd_cb(daos_handle_t th, int result);
-
-int
-dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
-	     tse_task_t *task);
+dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task);
 
 void
 dc_tx_check_existence_cb(void *data, tse_task_t *task);
