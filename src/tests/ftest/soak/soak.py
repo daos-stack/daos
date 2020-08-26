@@ -499,8 +499,6 @@ class SoakTestBase(TestWithServers):
                         # srun cmdline
                         nprocs = nodesperjob * ppn
                         env = ior_cmd.get_default_env("srun")
-                        if ior_cmd.api.value == "MPIIO":
-                            env["DAOS_CONT"] = ior_cmd.dfs_cont.value
                         cmd = Srun(ior_cmd)
                         cmd.assign_processes(nprocs)
                         cmd.assign_environment(env, True)
@@ -512,30 +510,6 @@ class SoakTestBase(TestWithServers):
                         self.log.info(
                             "<<IOR cmdline>>:\n %s", cmd.__str__())
         return commands
-
-    def create_dfuse_cont(self, pool):
-        """Create a TestContainer object to be used to create container.
-
-        Args:
-
-            pool (obj):   TestPool obj
-
-        Returns:
-            cuuid: container uuid
-
-        """
-        # TO-DO: use daos tool when available
-        # This method assumes that daos agent is running on test node
-        cmd = "daos cont create --pool={} --svc={} --type=POSIX".format(
-            pool.uuid, ":".join(
-                [str(item) for item in pool.svc_ranks]))
-        try:
-            result = run_command(cmd, timeout=30)
-        except DaosTestError as error:
-            raise SoakTestError(
-                "<<FAILED: Dfuse container failed {}>>".format(error))
-        self.log.info("Dfuse Container UUID = %s", result.stdout.split()[3])
-        return result.stdout.split()[3]
 
     def start_dfuse(self, pool):
         """Create dfuse start command line for slurm.
@@ -556,7 +530,7 @@ class SoakTestBase(TestWithServers):
         mount_dir = dfuse.mount_dir.value + unique
         dfuse.mount_dir.update(mount_dir)
         dfuse.set_dfuse_params(pool)
-        dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
+        dfuse.set_dfuse_cont_param(self.get_container(pool))
         # create dfuse mount point
         commands.append(slurm_utils.srun_str(
             hosts=None,
@@ -937,10 +911,7 @@ class SoakTestBase(TestWithServers):
         self.pool[0].connect()
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
-        self.container = TestContainer(self.pool[0])
-        self.container.namespace = "/run/container_reserved/*"
-        self.container.get_params(self)
-        self.container.create()
+        self.add_container(self.pool[0], "/run/container_reserved/*")
         self.container.write_objects(rank, obj_class)
         self.all_failed_jobs = []
         # cleanup soak log directories before test on all nodes
