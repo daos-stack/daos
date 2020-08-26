@@ -27,8 +27,8 @@ from command_utils_base import CommandFailure
 
 # pylint: disable=too-many-ancestors
 class ContainerCopy(MdtestBase, IorTestBase):
-    """Test class Description: Verify data consistency using different
-                               middlewares. In this case, using DFS and POSIX.
+    """Test class Description: Add datamover test to copy large data amongst
+                               daos containers and external file system.
 
     :avocado: recursive
     """
