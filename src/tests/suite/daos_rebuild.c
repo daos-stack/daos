@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -503,7 +503,6 @@ rebuild_tgt_start_fail(void **state)
 
 	/* Rebuild rank 1 */
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
-	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -767,7 +766,7 @@ rebuild_master_change_during_scan(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6) || arg->pool.alive_svc.rl_nr == 1)
+	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr == 1)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -797,7 +796,7 @@ rebuild_master_change_during_rebuild(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6) || arg->pool.alive_svc.rl_nr == 1)
+	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr == 1)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -913,9 +912,9 @@ rebuild_multiple_tgts(void **state)
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
 				daos_exclude_server(arg->pool.pool_uuid,
-						    arg->dmg_config,
 						    arg->group,
-						    &arg->pool.svc,
+						    arg->dmg_config,
+						    arg->pool.svc,
 						    rank);
 				if (++fail_cnt >= 2)
 					break;
@@ -941,7 +940,7 @@ rebuild_multiple_tgts(void **state)
 	if (arg->myrank == 0) {
 		for (i = 0; i < 2; i++)
 			daos_add_server(arg->pool.pool_uuid, arg->group,
-					arg->dmg_config, &arg->pool.svc,
+					arg->dmg_config, arg->pool.svc,
 					exclude_ranks[i]);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -984,7 +983,7 @@ rebuild_master_failure(void **state)
 	int			rc;
 
 	/* need 5 svc replicas, as will kill the leader 2 times */
-	if (!test_runable(arg, 6) || arg->pool.alive_svc.rl_nr < 5) {
+	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 5) {
 		print_message("testing skipped ...\n");
 		return;
 	}
@@ -1093,7 +1092,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	struct daos_obj_layout *layout;
 	struct daos_obj_shard *shard;
 
-	if (!test_runable(arg, 6) || arg->pool.alive_svc.rl_nr < 3)
+	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 3)
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R2S_SPEC_RANK, 0, arg->myrank);
@@ -1110,15 +1109,19 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* Kill one replica and start rebuild */
 	shard = layout->ol_shards[0];
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 &arg->pool.alive_svc, shard->os_ranks[0]);
+			 arg->pool.alive_svc, shard->os_ranks[0]);
 
 	/* Sleep 10 seconds after it scan finish and hang before rebuild */
 	print_message("sleep 10 seconds to wait scan to be finished \n");
 	sleep(10);
 
-	/* Then kill rank 1 */
-	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 &arg->pool.alive_svc, shard->os_ranks[1]);
+	/* Then kill rank on shard1 */
+	/* NB: we can not kill rank 0, otherwise the following set_params
+	 * will fail and also pool destroy will not work.
+	 */
+	if (shard->os_ranks[1] != 0)
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+				 arg->pool.alive_svc, shard->os_ranks[1]);
 
 	/* Continue rebuild */
 	daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
@@ -1146,7 +1149,7 @@ rebuild_fail_all_replicas(void **state)
 	 * in svcs, so make sure there are at least 6 ranks in svc, so
 	 * the new leader can be chosen.
 	 */
-	if (!test_runable(arg, 6) || arg->pool.alive_svc.rl_nr < 6) {
+	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 6) {
 		print_message("need at least 6 svcs, -s5\n");
 		return;
 	}
@@ -1165,7 +1168,7 @@ rebuild_fail_all_replicas(void **state)
 			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
 
 			daos_kill_server(arg, arg->pool.pool_uuid,
-					 arg->group, &arg->pool.alive_svc,
+					 arg->group, arg->pool.alive_svc,
 					 rank);
 		}
 	}

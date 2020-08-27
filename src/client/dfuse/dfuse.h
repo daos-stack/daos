@@ -24,6 +24,8 @@
 #ifndef __DFUSE_H__
 #define __DFUSE_H__
 
+#include <semaphore.h>
+
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
@@ -64,10 +66,18 @@ struct dfuse_projection_info {
 	struct dfuse_info		*dpi_info;
 	uint32_t			dpi_max_read;
 	uint32_t			dpi_max_write;
-	/** Hash table of open inodes */
+	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table		dpi_iet;
+	/** Hash table of all known/seen inodes */
 	struct d_hash_table		dpi_irt;
+	/** Next available inode number */
 	ATOMIC uint64_t			dpi_ino_next;
+	/* Event queue for async events */
+	daos_handle_t			dpi_eq;
+	/** Semaphore to signal event waiting for async thread */
+	sem_t				dpi_sem;
+	pthread_t			dpi_thread;
+	bool				dpi_shutdown;
 };
 
 /*
@@ -147,6 +157,15 @@ struct dfuse_inode_ops {
 	void (*removexattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			    const char *name);
 	void (*statfs)(fuse_req_t req, struct dfuse_inode_entry *inode);
+};
+
+struct dfuse_event {
+	fuse_req_t	de_req;
+	daos_event_t	de_ev;
+	void		(*de_complete_cb)(struct dfuse_event *ev);
+	size_t		de_len;
+	d_iov_t		de_iov;
+	d_sg_list_t	de_sgl;
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -341,7 +360,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"fuse_reply_buf returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
-
 
 #define DFUSE_REPLY_WRITE(desc, req, bytes)				\
 	do {								\
@@ -590,7 +608,7 @@ dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,
 		struct dfuse_inode_entry *, const char *, unsigned int);
 
 void
-dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,
+dfuse_cb_write(fuse_req_t, fuse_ino_t, struct fuse_bufvec *, off_t,
 	       struct fuse_file_info *);
 
 void

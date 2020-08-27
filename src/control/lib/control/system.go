@@ -27,7 +27,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/golang/protobuf/proto"
@@ -336,33 +335,11 @@ func getResetRankErrors(results system.MemberResults) (map[string][]string, []st
 type SystemResetFormatReq struct {
 	unaryRequest
 	msRequest
-	sysRequest
 }
 
 // SystemResetFormatResp contains the request response.
 type SystemResetFormatResp struct {
-	sysResponse
 	Results system.MemberResults
-}
-
-// UnmarshalJSON unpacks JSON message into SystemResetFormatResp struct.
-func (resp *SystemResetFormatResp) UnmarshalJSON(data []byte) error {
-	type Alias SystemResetFormatResp
-	aux := &struct {
-		AbsentHosts string
-		AbsentRanks string
-		*Alias
-	}{
-		Alias: (*Alias)(resp),
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	if err := resp.getAbsentHostsRanks(aux.AbsentHosts, aux.AbsentRanks); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // SystemReformat will reformat and start rank after a controlled shutdown of DAOS system.
@@ -388,8 +365,6 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 	}
 
 	pbReq := new(ctlpb.SystemResetFormatReq)
-	pbReq.Hosts = resetReq.Hosts.String()
-	pbReq.Ranks = resetReq.Ranks.String()
 
 	resetReq.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).SystemResetFormat(ctx, pbReq)
@@ -412,26 +387,8 @@ func SystemReformat(ctx context.Context, rpcClient UnaryInvoker, resetReq *Syste
 		return nil, err
 	}
 
-	if len(resetRankErrors) > 0 || resetResp.AbsentHosts.Count() > 0 ||
-		resetResp.AbsentRanks.Count() > 0 {
-
+	if len(resetRankErrors) > 0 {
 		reformatResp := new(StorageFormatResp)
-
-		if resetResp.AbsentHosts.Count() > 0 {
-			hostList := strings.Split(resetResp.AbsentHosts.DerangedString(), ",")
-			for _, addr := range hostList {
-				reformatResp.HostErrorsResp.addHostError(addr,
-					errors.New("unknown host"))
-			}
-		}
-
-		if resetResp.AbsentRanks.Count() > 0 {
-			reformatResp.HostErrorsResp.addHostError("0.0.0.0",
-				errors.Errorf("%s unknown: %s",
-					english.Plural(resetResp.AbsentRanks.Count(),
-						"rank", "ranks"),
-					resetResp.AbsentRanks.String()))
-		}
 
 		// create "X ranks failed: err..." error entries for each host address
 		// a single host maybe associated with multiple error entries in HEM

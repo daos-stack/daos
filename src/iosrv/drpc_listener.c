@@ -116,7 +116,7 @@ setup_listener_ctx(struct drpc_progress_context **new_ctx)
 	if (listener == NULL) {
 		D_ERROR("Failed to create listener socket at '%s'\n",
 			sockpath);
-		return -DER_UNKNOWN;
+		return -DER_MISC;
 	}
 
 	*new_ctx = drpc_progress_context_create(listener);

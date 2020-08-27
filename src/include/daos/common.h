@@ -50,6 +50,7 @@
 #include <daos_prop.h>
 #include <daos_security.h>
 #include <daos/profile.h>
+#include <daos/dtx.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -234,7 +235,8 @@ void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
 int  daos_sgl_init(d_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
-int daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
+		       int src_nr);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 			    int src_nr);
 int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
@@ -705,6 +707,7 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
+int crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti);
 int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
 int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
 

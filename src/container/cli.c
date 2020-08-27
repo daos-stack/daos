@@ -757,6 +757,7 @@ dc_cont_close(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	if (cont->dc_slave) {
+		daos_csummer_destroy(&cont->dc_csummer);
 		dc_cont_hdl_unlink(cont);
 		dc_cont_put(cont);
 
@@ -2340,7 +2341,7 @@ dc_cont_create_snap(tse_task_t *task)
 	if (args->name != NULL) {
 		D_ERROR("Named Snapshots not yet supported\n");
 		tse_task_complete(task, -DER_NOSYS);
-		return DER_NOSYS;
+		return -DER_NOSYS;
 	}
 
 	if (args->epoch == NULL) {

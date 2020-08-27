@@ -43,7 +43,7 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
-int		objclass;
+int		dt_obj_class;
 
 
 /* Create or import a single pool with option to store info in arg->pool
@@ -57,7 +57,7 @@ int		objclass;
  */
 int
 test_setup_pool_create(void **state, struct test_pool *ipool,
-		       struct test_pool *opool)
+		       struct test_pool *opool, daos_prop_t *prop)
 {
 	test_arg_t		*arg = *state;
 	struct test_pool	*outpool;
@@ -70,10 +70,8 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		assert_int_equal(outpool->slave, 0);
 		outpool->pool_size = ipool->pool_size;
 		uuid_copy(outpool->pool_uuid, ipool->pool_uuid);
-		outpool->alive_svc.rl_nr = ipool->alive_svc.rl_nr;
-		outpool->svc.rl_nr = ipool->svc.rl_nr;
-		memcpy(outpool->ranks, ipool->ranks,
-		       sizeof(outpool->ranks[0]) * TEST_RANKS_MAX_NUM);
+		d_rank_list_dup(&outpool->alive_svc, ipool->alive_svc);
+		d_rank_list_dup(&outpool->svc, ipool->svc);
 		outpool->slave = 1;
 		if (arg->multi_rank)
 			MPI_Barrier(MPI_COMM_WORLD);
@@ -112,7 +110,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		rc = dmg_pool_create(dmg_config_file,
 				     arg->uid, arg->gid, arg->group,
 				     NULL, outpool->pool_size, nvme_size,
-				     &outpool->svc, outpool->pool_uuid);
+				     prop, outpool->svc, outpool->pool_uuid);
 		if (rc)
 			print_message("dmg_pool_create failed, rc: %d\n", rc);
 		else
@@ -126,12 +124,12 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		if (!rc) {
 			MPI_Bcast(outpool->pool_uuid, 16,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
-			MPI_Bcast(&outpool->svc.rl_nr,
-				  sizeof(outpool->svc.rl_nr),
+			MPI_Bcast(&outpool->svc->rl_nr,
+				  sizeof(outpool->svc->rl_nr),
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
-			MPI_Bcast(outpool->ranks,
-				  sizeof(outpool->ranks[0]) *
-					 outpool->svc.rl_nr,
+			MPI_Bcast(outpool->svc->rl_ranks,
+				  sizeof(outpool->svc->rl_ranks[0]) *
+					 outpool->svc->rl_nr,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
 		}
 	}
@@ -160,7 +158,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc,
+				       arg->pool.svc,
 				       arg->pool.pool_connect_flags,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
@@ -262,7 +260,8 @@ test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		return daos_eq_create(&arg->eq);
 	case SETUP_EQ:
 		arg->setup_state = SETUP_POOL_CREATE;
-		return test_setup_pool_create(state, pool, NULL /*opool */);
+		return test_setup_pool_create(state, pool,
+					      NULL /*opool */, po_prop);
 	case SETUP_POOL_CREATE:
 		arg->setup_state = SETUP_POOL_CONNECT;
 		return test_setup_pool_connect(state, pool);
@@ -293,6 +292,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	srandom(seed);
 
 	if (arg == NULL) {
+		d_rank_list_t	tmp_list;
+
 		D_ALLOC(arg, sizeof(test_arg_t));
 		if (arg == NULL)
 			return -1;
@@ -305,10 +306,11 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.pool_size = pool_size;
 		arg->setup_state = -1;
 
-		arg->pool.alive_svc.rl_nr = svc_nreplicas;
-		arg->pool.alive_svc.rl_ranks = arg->pool.ranks;
-		arg->pool.svc.rl_nr = svc_nreplicas;
-		arg->pool.svc.rl_ranks = arg->pool.ranks;
+		tmp_list.rl_nr = svc_nreplicas;
+		tmp_list.rl_ranks = arg->pool.ranks;
+
+		d_rank_list_dup(&arg->pool.alive_svc, &tmp_list);
+		d_rank_list_dup(&arg->pool.svc, &tmp_list);
 		arg->pool.slave = false;
 
 		arg->uid = geteuid();
@@ -324,13 +326,15 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.pool_connect_flags = DAOS_PC_RW;
 		arg->coh = DAOS_HDL_INVAL;
 		arg->cont_open_flags = DAOS_COO_RW;
-		arg->objclass = objclass;
+		arg->obj_class = dt_obj_class;
 		arg->pool.destroyed = false;
 	}
 
 	/** Look at variables set by test arguments and setup container props */
 	if (dt_csum_type) {
-		printf("\n-------\nChecksum enabled in test!\n-------\n");
+		print_message("\n-------\n"
+			      "Checksum enabled in test!"
+			      "\n-------\n");
 		entry = &csum_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
@@ -382,7 +386,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 
 	if (daos_handle_is_inval(poh)) {
 		rc = daos_pool_connect(pool->pool_uuid, arg->group,
-				       &pool->svc, DAOS_PC_RW,
+				       pool->svc, DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
 		if (rc != 0) { /* destroy straight away */
@@ -540,6 +544,10 @@ test_teardown(void **state)
 	}
 
 free:
+	if (arg->pool.svc)
+		d_rank_list_free(arg->pool.svc);
+	if (arg->pool.alive_svc)
+		d_rank_list_free(arg->pool.alive_svc);
 	D_FREE(arg);
 	*state = NULL;
 	return 0;
@@ -619,7 +627,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 
 	if (daos_handle_is_inval(arg->pool.poh)) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc, DAOS_PC_RW,
+				       arg->pool.svc, DAOS_PC_RW,
 				       &arg->pool.poh, pinfo,
 				       NULL /* ev */);
 		if (rc) {
