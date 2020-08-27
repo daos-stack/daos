@@ -989,25 +989,22 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "find $(dirname $file)",
     ]
 
+    # If we have a directory, tar it before scp-ing it.
     if do_tar:
         commands.extend([
-            "tarfile={}/$(basename $file).tar".format(destination),
+            "tarfile=$(basename $file).tar",
             "tar cf $tarfile $file",
-            "if scp $tarfile {}:{}/${{file##*/}}-$(hostname -s)".format(
-                this_host, destination),
-        ])
-    else:
-        commands.extend([
-            "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-                this_host, destination)
+            "file=$tarfile",
         ])
 
     commands.extend([
-        "then copied+=($file)",
-        "if ! sudo rm -fr $file",
-        "then ((rc++))",
-        "ls -al $file",
-        "fi",
+        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+            this_host, destination),
+          "then copied+=($file)",
+          "if ! sudo rm -fr $file",
+            "then ((rc++))",
+            "ls -al $file",
+          "fi",
         "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
