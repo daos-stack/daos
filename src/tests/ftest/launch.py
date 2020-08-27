@@ -1020,10 +1020,16 @@ def archive_files(destination, host_list, source_files):
     # related to any failed command.
     commands = [
         "set -eu",
+        "set +x",
         "rc=0",
         "copied=()",
         "for file in $(ls {})".format(source_files),
         "do ls -sh $file",
+
+        # DEBUGGING
+        "find $(dirname $file)",
+
+
         "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, destination),
         "then copied+=($file)",
