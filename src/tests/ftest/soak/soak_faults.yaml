@@ -63,6 +63,9 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
 faults:
     fault_list:
     #    - DAOS_DTX_LOST_RPC_REQUEST
