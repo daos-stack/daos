@@ -36,6 +36,7 @@ type (
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
 		pbin.ForwardableRequest
+		DeviceList []string
 		DisableVMD bool
 	}
 
@@ -66,14 +67,12 @@ type (
 		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
-		ShmID      int // shared memory segment for SPDK IPC
 		MemSize    int // size MiB memory to be used by SPDK proc
 		DisableVMD bool
 	}
 
 	// DeviceFormatRequest designs the parameters for a device-specific format.
 	DeviceFormatRequest struct {
-		ShmID   int // shared memory segment for SPDK IPC
 		MemSize int // size MiB memory to be used by SPDK proc
 		Device  string
 		Class   storage.BdevClass
@@ -101,6 +100,7 @@ type (
 		Format(FormatRequest) (*FormatResponse, error)
 		DisableVMD()
 		IsVMDDisabled() bool
+		UpdateFirmware(pciAddr string, path string, slot int32) error
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -109,6 +109,7 @@ type (
 		log     logging.Logger
 		backend Backend
 		fwd     *Forwarder
+		firmwareProvider
 	}
 )
 
@@ -119,11 +120,13 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
 		fwd:     NewForwarder(log),
 	}
+	p.setupFirmwareProvider(log)
+	return p
 }
 
 // WithForwardingDisabled returns a provider with forwarding disabled.
