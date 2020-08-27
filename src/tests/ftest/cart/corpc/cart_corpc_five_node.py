@@ -26,7 +26,8 @@ from __future__ import print_function
 
 import sys
 
-# Import avocado '@' function annotations
+from apricot import skipForTicket
+
 import avocado
 from avocado  import Test
 from avocado  import main
