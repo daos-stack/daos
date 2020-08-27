@@ -449,6 +449,13 @@ dmg_pool_create(const char *dmg_config_file,
 		}
 	}
 
+	if (svc != NULL) {
+		args = cmd_push_arg(args, &argcount,
+				    "--nsvc=%d", svc->rl_nr);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
 	rc = daos_dmg_json_pipe("pool create", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
