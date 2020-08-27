@@ -1,7 +1,7 @@
 hosts:
   test_servers:
     - server-A
-timeout: 90
+timeout: 400
 server_config:
   name: daos_server
 pool:
@@ -9,3 +9,10 @@ pool:
   control_method: dmg
 container:
   control_method: daos
+stress_test: !mux
+  small:
+    snapshot_count: 5
+  medium:
+    snapshot_count: 50
+  high:
+    snapshot_count: 100
