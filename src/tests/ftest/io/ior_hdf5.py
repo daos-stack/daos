@@ -32,7 +32,7 @@ class IorHdf5(IorTestBase):
     :avocado: recursive
     """
 
-    def ior_hdf5(self, plugin_path=None):
+    def ior_hdf5(self, hdf5_plugin_path=None):
         """Jira ID: DAOS-4909.
 
         Test Description:
@@ -63,7 +63,7 @@ class IorHdf5(IorTestBase):
                 self.ior_cmd.transfer_size.update(test[0])
                 self.ior_cmd.block_size.update(test[1])
                 # run ior
-                self.run_ior_with_pool()
+                self.run_ior_with_pool(plugin_path=hdf5_plugin_path)
 
         # Running a variant for ior fpp
         self.ior_cmd.flags.update(flags[1])
@@ -71,7 +71,7 @@ class IorHdf5(IorTestBase):
         self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
         self.ior_cmd.dfs_oclass.update(obj_class[0])
         # run ior
-        self.run_ior_with_pool(plugin_path=plugin_path)
+        self.run_ior_with_pool(plugin_path=hdf5_plugin_path)
 
     def test_ior_hdf5(self):
         """Jira ID: DAOS-4909.
@@ -109,5 +109,5 @@ class IorHdf5(IorTestBase):
 
         :avocado: tags=all,pr,hw,large,daosio,hdf5,vol,iorhdf5vol
         """
-        plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
-        self.ior_hdf5(plugin_path)
+        hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
+        self.ior_hdf5(hdf5_plugin_path)
