@@ -1012,8 +1012,9 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
-    ]
-    spawn_commands(host_list, "; ".join(commands), 900)
+    ])
+  
+    spawn_commands(host_list, "; ".join(commands), timeout=900)
 
 
 def rename_logs(avocado_logs_dir, test_file):
