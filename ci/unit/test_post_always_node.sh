@@ -11,12 +11,10 @@ case $STAGE_NAME in
     vm_log_dir="covc_vm_test"
     ;;
   *memcheck*)
-    echo "memcheck"
     test_log_dir="unit_test_memcheck_logs"
     vm_log_dir="unit_memcheck_vm_test"
     ;;
   *Unit*)
-    echo "unit"
     test_log_dir="unit_test_logs"
     vm_log_dir="unit_vm_test"
     ;;
