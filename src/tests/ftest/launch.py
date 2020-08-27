@@ -914,63 +914,13 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Caution: the glob expression "_output.log" must match the
     #   --output-filename specified in # cart_utils.py:get_env()
-    tar_files(destination, "{}/*_output.orterun_log".format(logs_dir))
 
+    # Create tar archives of orterun log dirs to prevent name collisions (e.g.,
+    # we'll have many # hundreds of tests with output files named "stdout")
+    archive_files(destination, host_list, "{}/*_output.orterun_log".format(logs_dir), do_tar=True)
+
+    # Plain files need not be tar'd, then can simply be scp'd to the archive destination
     archive_files(destination, host_list, "{}/*.{{tar*,log*}}".format(logs_dir))
-
-def tar_files(destination, logs_glob_expr):
-    """Run tar on files (in the directory specified by the orterun
-        --output-filename option) to the avocado results directory.  Useful for
-        copying, e.g., files from orterun --output-filename option to the avocado
-        results directory.
-
-    Args:
-        destination (str): (glob expression) path of files to be tar'd
-        logs_dir (str): destination of tar file(s)
-    """
-
-    print('DEBUG log: line 931, destination = ', destination)
-    print('DEBUG log: line 931, logs_glob_expr = ', logs_glob_expr)
-
-    # Create the destination directory
-    if not os.path.exists(destination):
-      get_output(["mkdir", destination])
-
-    import glob
-
-    def dump_find_output(find_arg):
-        """Print the stdout and stderr of find command.
-
-        Args:
-            arg (string): directory to run /bin/find command on
-
-        Returns:
-            void
-
-        """
-
-        find_cmd = "find " + find_arg
-        out = subprocess.Popen(find_cmd,
-                   shell=True,
-                   stdout=subprocess.PIPE,
-                   stderr=subprocess.STDOUT)
-        stdout,stderr = out.communicate()
-        print("DEBUG: stdout of [" + find_cmd + "]:\n {}".format(stdout))
-        print("DEBUG: stderr of [" + find_cmd + "]:\n {}".format(stderr))
-
-    # START: DEBUGGING
-    print('DEBUG log: line 960, glob.glob(logs_glob_expr) = ', glob.glob(logs_glob_expr))
-    dump_find_output(logs_glob_expr)
-    dump_find_output(destination)
-    # END: DEBUGGING
-
-    for f_glob in glob.glob(logs_glob_expr):
-
-      print('DEBUG log: line 967, f_glob = ', f_glob)
-
-      tar_cmd = ["tar", "cf", "{}/{}.tar".format(destination, os.path.basename(f_glob)), f_glob]
-      subprocess.call(tar_cmd, stdout=subprocess.PIPE)
-      print("Running tar: {}".format(" ".join(tar_cmd)))
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
@@ -993,14 +943,17 @@ def archive_config_files(avocado_logs_dir):
     archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
 
-
-def archive_files(destination, host_list, source_files):
+def archive_files(destination, host_list, source_files, do_tar=False):
     """Archive all of the remote files to the destination directory.
 
     Args:
         destination (str): path to which to archive files
         host_list (list): hosts from which to archive files
         source_files (str): remote files to archive
+        do_tar (bool): tar directory before scp-ing to host
+          (Useful for copying, e.g., files from orterun --output-filename option
+          to the avocado results directory.)
+
     """
     this_host = socket.gethostname().split(".")[0]
 
@@ -1014,6 +967,12 @@ def archive_files(destination, host_list, source_files):
     print("Current disk space usage of {}".format(destination))
     print(get_output(["df", "-h", destination]))
 
+    # If we're tar-ing, then we're our source files ought to be a directory, hence
+    # the -d option to ls here.
+    ls_cmd = "ls"
+    if do_tar:
+      ls_cmd = "ls -d"
+
     # Copy any source files that exist on the remote hosts and remove them from
     # the remote host if the copy is successful.  Attempt all of the commands
     # and report status at the end of the loop.  Include a listing of the file
@@ -1023,15 +982,27 @@ def archive_files(destination, host_list, source_files):
         "set +x",
         "rc=0",
         "copied=()",
-        "for file in $(ls {})".format(source_files),
+        "for file in $({} {})".format(ls_cmd, source_files),
         "do ls -sh $file",
 
         # DEBUGGING
         "find $(dirname $file)",
+    ]
 
+    if do_tar:
+        commands.extend([
+            "tarfile={}/$(basename $file).tar".format(destination),
+            "tar cf $tarfile $file",
+            "if scp $tarfile {}:{}/${{file##*/}}-$(hostname -s)".format(
+                this_host, destination),
+        ])
+    else:
+        commands.extend([
+            "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+                this_host, destination)
+        ])
 
-        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, destination),
+    commands.extend([
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
         "then ((rc++))",
