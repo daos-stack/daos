@@ -219,7 +219,9 @@ class CartUtils():
         self.init_mpi("openmpi")
 
         import os
-        orterun_bin = find_executable("orterun", os.environ["PATH"] + ":/usr/lib64/openmpi3/bin")
+        orterun_bin = find_executable("orterun", 
+          os.environ["PATH"] + ":/usr/lib64/openmpi3/bin:/usr/lib64/mpi/gcc/openmpi3/bin")
+
         if orterun_bin is None:
             orterun_bin = "orterun_not_installed"
 
