@@ -586,7 +586,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
+                                '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
@@ -1255,7 +1255,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
+                                '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
