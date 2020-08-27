@@ -215,7 +215,7 @@ class CartIvTwoNodeTest(Test):
                     raise ValueError('Error code {!s} running command "{!s}"' \
                             .format(cli_rtn, command))
 
-    @avocado.skip("Currently no support for heterogeneous multi-node tests")
+    @skipForTicket("DAOS-5549")
     def test_cart_iv(self):
         """
         Test CaRT IV

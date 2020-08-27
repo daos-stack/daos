@@ -53,7 +53,7 @@ class GroupTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @avocado.skip("Currently no support for heterogeneous multi-node tests")
+    @skipForTicket("DAOS-5549")
     def test_group(self):
         """
         Test CaRT NoPmix Launcher

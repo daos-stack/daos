@@ -51,7 +51,7 @@ class CartCoRpcTwoNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @avocado.skip("Currently no support for heterogeneous multi-node tests")
+    @skipForTicket("DAOS-5549")
     def test_cart_corpc(self):
         """
         Test CaRT CoRPC
