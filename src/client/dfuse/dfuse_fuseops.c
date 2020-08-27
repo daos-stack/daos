@@ -93,6 +93,9 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	dfuse_show_flags(fs_handle, conn->want);
 
+	conn->max_background = 16;
+	conn->congestion_threshold = 8;
+
 	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
 	DFUSE_TRA_INFO(fs_handle,
 		       "congestion_threshold %d", conn->congestion_threshold);
@@ -696,7 +699,7 @@ struct fuse_lowlevel_ops
 	 */
 	fuse_ops->open		= dfuse_cb_open;
 	fuse_ops->release	= dfuse_cb_release;
-	fuse_ops->write		= dfuse_cb_write;
+	fuse_ops->write_buf	= dfuse_cb_write;
 	fuse_ops->read		= dfuse_cb_read;
 	fuse_ops->readlink	= dfuse_cb_readlink;
 	fuse_ops->ioctl		= dfuse_cb_ioctl;
