@@ -897,7 +897,6 @@ class SoakTestBase(TestWithServers):
         self.h_list = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         pool_list = self.params.get("poollist", test_param + "*")
-        rank = self.params.get("rank", "/run/container_reserved/*")
         if self.is_harasser("rebuild"):
             obj_class = "_".join(["OC", str(
                 self.params.get("dfs_oclass", "/run/rebuild/*")[0])])
@@ -912,7 +911,7 @@ class SoakTestBase(TestWithServers):
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
         self.add_container(self.pool[0], "/run/container_reserved/*")
-        self.container.write_objects(rank, obj_class)
+        self.container.write_objects(obj_class=obj_class)
         self.all_failed_jobs = []
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(

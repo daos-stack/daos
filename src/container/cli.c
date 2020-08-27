@@ -757,6 +757,7 @@ dc_cont_close(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	if (cont->dc_slave) {
+		daos_csummer_destroy(&cont->dc_csummer);
 		dc_cont_hdl_unlink(cont);
 		dc_cont_put(cont);
 

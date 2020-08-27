@@ -172,7 +172,11 @@ class TestWithoutServers(Test):
         self.fault_file = None
         self.context = None
         self.d_log = None
-        self.test_log = None
+
+        # Create a default TestLogger w/o a DaosLog object to prevent errors in
+        # tearDown() if setUp() is not completed.  The DaosLog is added upon the
+        # completion of setUp().
+        self.test_log = TestLogger(self.log, None)
 
     def setUp(self):
         """Set up run before each test."""
@@ -223,7 +227,7 @@ class TestWithoutServers(Test):
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
-        self.test_log = TestLogger(self.log, self.d_log)
+        self.test_log.daos_log = self.d_log
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -792,7 +796,7 @@ class TestWithServers(TestWithoutServers):
         """Get a DaosCommand object.
 
         Returns:
-            DaosCommand: DaosCommand obj
+            DaosCommand: New DaosCommand object.
 
         """
         return DaosCommand(self.bin)

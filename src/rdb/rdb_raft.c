@@ -720,7 +720,8 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 }
 
 static int
-rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
+rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds_iov, d_iov_t *data,
+		      int index)
 {
 	struct rdb_raft_unpack_arg unpack_arg;
 	daos_unit_oid_t		   invalid_oid = { 0 };
@@ -734,9 +735,10 @@ rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
 	unpack_arg.eph = index;
 	unpack_arg.slc = slc;
 
-	return dss_enum_unpack(invalid_oid, (daos_key_desc_t *)kds,
-			       kds->iov_len / sizeof(*kds), &sgl, NULL,
-			       rdb_raft_exec_unpack_io, &unpack_arg);
+	return dss_enum_unpack(invalid_oid, kds_iov->iov_buf,
+			       kds_iov->iov_len / sizeof(daos_key_desc_t),
+			       &sgl, NULL, rdb_raft_exec_unpack_io,
+			       &unpack_arg);
 }
 
 static int
