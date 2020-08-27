@@ -1320,11 +1320,10 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
 	struct ec_agg_param	 agg_param = { 0 };
+	int			 rc = 0;
 #ifndef AGG_UNIT_TEST
 	daos_handle_t		 ph = DAOS_HDL_INVAL;
 	int			*status;
-#endif
-	int			 rc = 0;
 	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
 		  cont->sc_pool->spc_uuid);
 	uuid_copy(agg_param.ap_pool_info.api_cont_uuid, cont->sc_uuid);
@@ -1333,7 +1332,6 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 		cont->sc_pool->spc_pool->sp_map_version;
 	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
 	agg_param.ap_cont_handle	= cont->sc_hdl;
-#ifndef AGG_UNIT_TEST
 	rc = ABT_eventual_create(sizeof(*status),
 				 &agg_param.ap_pool_info.api_eventual);
 	if (rc != ABT_SUCCESS)
