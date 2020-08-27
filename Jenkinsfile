@@ -213,14 +213,14 @@ String functional_packages(String distro) {
     pkgs += " openmpi3 hwloc ndctl fio " +
             "ior-hpc-cart-4-daos-0 " +
             "romio-tests-cart-4-daos-0 " +
-            "testmpio-cart-4-daos-0 " +
+            "testmpio-cart-4-daos-0 " + 
             "mpi4py-tests-cart-4-daos-0 " +
             "hdf5-mpich2-tests-daos-0 " +
             "hdf5-openmpi3-tests-daos-0 " +
-            "hdf5-vol-daos-openmpi3-tests-daos-0 " +
             "hdf5-vol-daos-mpich2-tests-daos-0 " +
-            "MACSio"
-
+            "hdf5-vol-daos-openmpi3-tests-daos-0 " +
+            "MACSio-mpich2-daos-0 " +
+            "MACSio-openmpi3-daos-0"
     if (quickbuild()) {
         pkgs += " spdk_tools"
     }
