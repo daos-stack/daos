@@ -145,7 +145,12 @@ class Test(avocadoTest):
     # pylint: enable=invalid-name
 
     def get_test_name(self):
-        """Obtain test name from self.__str__()."""
+        """Obtain the test method name from the Avocado test name.
+
+        Returns:
+            str: name of the test method
+
+        """
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
 
@@ -275,6 +280,7 @@ class TestWithServers(TestWithoutServers):
         self.control_log = None
         self.helper_log = None
         self.client_log = None
+        self.config_file_base = "test"
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         # self.debug = False
@@ -397,7 +403,7 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(agent_groups, dict):
             for group, hosts in agent_groups.items():
-                transport = DaosAgentTransportCredentials()
+                transport = DaosAgentTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "agent")
                 # Setup the access points with the server hosts
@@ -433,12 +439,13 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, hosts in server_groups.items():
-                transport = DaosServerTransportCredentials()
+                transport = DaosServerTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "server")
                 dmg_config_file = self.get_config_file(group, "dmg")
                 # Setup the access points with the server hosts
                 common_cfg = CommonConfig(group, transport)
+
                 self.add_server_manager(
                     config_file, dmg_config_file, common_cfg)
                 self.configure_manager(
@@ -460,7 +467,8 @@ class TestWithServers(TestWithoutServers):
             str: daos_agent yaml configuration file full name
 
         """
-        return os.path.join(self.tmp, "test_{}_{}.yaml".format(name, command))
+        filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
+        return os.path.join(self.tmp, filename)
 
     def add_agent_manager(self, config_file=None, common_cfg=None, timeout=30):
         """Add a new daos agent manager object to the agent manager list.
@@ -480,9 +488,8 @@ class TestWithServers(TestWithoutServers):
         if config_file is None:
             config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
-            common_cfg = CommonConfig(
-                self.server_group, DaosAgentTransportCredentials())
-
+            agent_transport = DaosAgentTransportCredentials(self.workdir)
+            common_cfg = CommonConfig(self.server_group, agent_transport)
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
         agent_cmd = DaosAgentCommand(self.bin, agent_cfg, timeout)
@@ -514,12 +521,13 @@ class TestWithServers(TestWithoutServers):
             config_file = self.get_config_file("daos", "server")
         if common_cfg is None:
             common_cfg = CommonConfig(
-                self.server_group, DaosServerTransportCredentials())
+                self.server_group, DaosServerTransportCredentials(self.workdir))
 
         if dmg_config_file is None:
             dmg_config_file = self.get_config_file("daos", "dmg")
+        transport_dmg = DmgTransportCredentials(self.workdir)
         dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
+            dmg_config_file, self.server_group, transport_dmg)
         # Create a ServerCommand to manage with a new ServerManager object
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
         server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
@@ -752,6 +760,7 @@ class TestWithServers(TestWithoutServers):
         self.control_log = "{}_daos_control.log".format(self.test_id)
         self.helper_log = "{}_daos_admin.log".format(self.test_id)
         self.client_log = "{}_daos_client.log".format(self.test_id)
+        self.config_file_base = "{}_".format(self.test_id)
 
     def get_dmg_command(self, index=0):
         """Get a DmgCommand setup to interact with server manager index.
@@ -778,7 +787,8 @@ class TestWithServers(TestWithoutServers):
 
         dmg_config_file = self.get_config_file("daos", "dmg")
         dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
+            dmg_config_file, self.server_group,
+            DmgTransportCredentials(self.workdir))
         dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
 
@@ -800,7 +810,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
                 test yaml file. Defaults to None.
-            create ((bool, optional): should the pool be created. Defaults to
+            create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
@@ -810,8 +820,7 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(
-            self.context, dmg_command=self.server_managers[index].dmg)
+        pool = TestPool(self.context, dmg_command=self.get_dmg_command(index))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
@@ -829,7 +838,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
                 test yaml file. Defaults to None.
-            create ((bool, optional): should the pool be created. Defaults to
+            create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.

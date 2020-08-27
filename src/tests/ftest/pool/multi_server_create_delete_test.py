@@ -105,8 +105,8 @@ class MultiServerCreateDeleteTest(TestWithServers):
         else:
             test_destroy = False
             if expected_result == RESULT_PASS:
-                self.fail("Test was expected to pass but it failed at pool " +
-                          "create.")
+                self.fail(
+                    "Test was expected to pass but it failed at pool create.")
 
         if test_destroy:
             destroy_result = dmg.pool_destroy(data["uuid"])

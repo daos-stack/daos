@@ -29,7 +29,6 @@ import grp
 import re
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-import dmg_utils
 import agent_utils as agu
 import security_test_base as secTestBase
 
@@ -319,8 +318,8 @@ class PoolSecurityTestBase(TestWithServers):
         self.verify_pool_readwrite(svc, uuid, "read", expect=exp_read)
 
         # Verify pool write operation
-        # daos continer create --pool <uuid>
-        self.log.info("  (8-7)Verify pool write by: daos continer create pool")
+        # daos container create --pool <uuid>
+        self.log.info("  (8-7)Verify pool write by: daos container create pool")
         exp_write = sec_group_rw[1]
         self.verify_pool_readwrite(svc, uuid, "write", expect=exp_write)
 
@@ -408,7 +407,7 @@ class PoolSecurityTestBase(TestWithServers):
             data["svc"], data["uuid"], "read", expect=read)
 
         # (8)Verify pool write operation
-        #    daos continer create --pool <uuid>
+        #    daos container create --pool <uuid>
         self.log.info("  (8)Verify pool write by: daos container create --pool")
         self.verify_pool_readwrite(
             data["svc"], data["uuid"], "write", expect=write)

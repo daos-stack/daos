@@ -29,10 +29,10 @@ container:
   type: POSIX
   control_method: daos
 ior:
-  api: "DAOS"
+  api: "DFS"
   client_processes:
     np: 2
-  daos_destroy: False
+  dfs_destroy: False
   iorflags:
     sequential:
       flags: "-v -D 100 -w -r"
@@ -44,7 +44,7 @@ ior:
       block_size: '4G'
   objectclass:
     SX:
-      daos_oclass: "SX"
+      dfs_oclass: "SX"
   subprocess: True
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"

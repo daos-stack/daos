@@ -23,7 +23,7 @@
 """
 import os
 from time import sleep
-from ctypes import c_uint, create_string_buffer, POINTER
+import ctypes
 
 from test_utils_base import TestDaosApiBase
 
@@ -136,28 +136,23 @@ class TestPool(TestDaosApiBase):
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
 
-            # Manually populate the DaosPool object attributes only if the pool
-            # creation was successful.
-            if self.dmg.result.exit_status == 0:
-                # Populate the empty DaosPool object with the properties of the
-                # pool created with dmg pool create.
-                if self.name.value:
-                    self.pool.group = create_string_buffer(self.name.value)
+            # Populate the empty DaosPool object with the properties of the pool
+            # created with dmg pool create.
+            if self.name.value:
+                self.pool.group = ctypes.create_string_buffer(self.name.value)
 
-                # Convert the string of service replicas from the dmg command
-                # output into an ctypes array for the DaosPool object using the
-                # same technique used in DaosPool.create().
-                service_replicas = [
-                    int(value) for value in data["svc"].split(",")]
-                rank_t = c_uint * len(service_replicas)
-                rank = rank_t(*list([svc for svc in service_replicas]))
-                rl_ranks = POINTER(c_uint)(rank)
-                self.pool.svc = daos_cref.RankList(
-                    rl_ranks, len(service_replicas))
+            # Convert the string of service replicas from the dmg command output
+            # into an ctype array for the DaosPool object using the same
+            # technique used in DaosPool.create().
+            service_replicas = [int(value) for value in data["svc"].split(",")]
+            rank_t = ctypes.c_uint * len(service_replicas)
+            rank = rank_t(*list([svc for svc in service_replicas]))
+            rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
+            self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
 
-                # Set UUID and attached to the DaosPool object
-                self.pool.set_uuid_str(data["uuid"])
-                self.pool.attached = 1
+            # Set UUID and attached to the DaosPool object
+            self.pool.set_uuid_str(data["uuid"])
+            self.pool.attached = 1
 
         elif self.control_method.value == self.USE_DMG:
             self.log.error("Error: Undefined dmg command")
@@ -630,6 +625,24 @@ class TestPool(TestDaosApiBase):
         self.log.info(
             "Pool %s space%s:\n  %s", self.uuid,
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
+
+    def pool_percentage_used(self):
+        """Get the pool storage used % for SCM and NVMe.
+
+        Returns:
+            dict: a dictionary of SCM/NVMe pool space usage in %(float)
+
+        """
+        space = self.get_pool_daos_space()
+        pool_percent = {
+            'scm': round(
+                float(space["s_free"][0]) / float(space["s_total"][0]) * 100,
+                2),
+            'nvme': round(
+                float(space["s_free"][1]) / float(space["s_total"][1]) * 100,
+                2)
+        }
+        return pool_percent
 
     def get_pool_rebuild_status(self):
         """Get the pool info rebuild status attributes as a dictionary.

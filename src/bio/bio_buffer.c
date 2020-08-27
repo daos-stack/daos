@@ -349,7 +349,7 @@ chunk_reserve(struct bio_dma_chunk *chk, unsigned int chk_pg_idx,
 	if (chk_pg_idx + pg_cnt > bio_chk_sz)
 		return NULL;
 
-	D_DEBUG(DB_IO, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
+	D_DEBUG(DB_TRACE, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
 		chk, chk->bdc_ptr, chk_pg_idx, pg_cnt, pg_off);
 
 	chk->bdc_pg_idx = chk_pg_idx + pg_cnt;
@@ -532,7 +532,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	if (last_rg) {
 		uint64_t cur_pg, prev_pg_start, prev_pg_end;
 
-		D_DEBUG(DB_IO, "Last region %p:%d ["DF_U64","DF_U64")\n",
+		D_DEBUG(DB_TRACE, "Last region %p:%d ["DF_U64","DF_U64")\n",
 			last_rg->brr_chk, last_rg->brr_pg_idx,
 			last_rg->brr_off, last_rg->brr_end);
 
@@ -551,7 +551,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 			bio_iov_set_raw_buf(biov,
 				chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
 			if (bio_iov2raw_buf(biov) != NULL) {
-				D_DEBUG(DB_IO, "Consecutive reserve %p.\n",
+				D_DEBUG(DB_TRACE, "Consecutive reserve %p.\n",
 					bio_iov2raw_buf(biov));
 				last_rg->brr_end = end;
 				return 0;
@@ -825,7 +825,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 
 		nob = min(size, buf_len - arg->ca_iov_off);
 		if (addr != NULL) {
-			D_DEBUG(DB_IO, "bio copy %p size %zd\n",
+			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",
 				addr, nob);
 			bio_memcpy(biod, media, addr, iov->iov_buf +
 					arg->ca_iov_off, nob);

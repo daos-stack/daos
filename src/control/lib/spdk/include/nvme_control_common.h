@@ -26,25 +26,28 @@
 
 #include <stdbool.h>
 
+#define BUFLEN 1024
+
 /**
  * \brief NVMECONTROL return codes
  */
-enum NvmeControlStatusCode {
-	NVMEC_SUCCESS			= 0,
-	NVMEC_ERR_CHK_SIZE		= 1,
-	NVMEC_ERR_GET_PCI_DEV		= 2,
-	NVMEC_ERR_PCI_ADDR_FMT		= 3,
-	NVMEC_ERR_PCI_ADDR_PARSE	= 4,
-	NVMEC_ERR_CTRLR_NOT_FOUND	= 5,
-	NVMEC_ERR_NS_NOT_FOUND		= 6,
-	NVMEC_ERR_NOT_SUPPORTED		= 7,
-	NVMEC_ERR_BAD_LBA		= 8,
-	NVMEC_ERR_ALLOC_IO_QPAIR	= 9,
-	NVMEC_ERR_NS_ID_UNEXPECTED	= 10,
-	NVMEC_ERR_NS_WRITE_FAIL		= 11,
-	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 12,
-	NVMEC_ERR_NULL_NS		= 13,
-	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 14,
+enum nvme_control_status_code {
+	NVMEC_SUCCESS			= 0x0,
+	NVMEC_ERR_CHK_SIZE		= 0x1,
+	NVMEC_ERR_GET_PCI_DEV		= 0x2,
+	NVMEC_ERR_PCI_ADDR_FMT		= 0x3,
+	NVMEC_ERR_PCI_ADDR_PARSE	= 0x4,
+	NVMEC_ERR_CTRLR_NOT_FOUND	= 0x5,
+	NVMEC_ERR_NS_NOT_FOUND		= 0x6,
+	NVMEC_ERR_NOT_SUPPORTED		= 0x7,
+	NVMEC_ERR_BAD_LBA		= 0x8,
+	NVMEC_ERR_ALLOC_IO_QPAIR	= 0x9,
+	NVMEC_ERR_NS_ID_UNEXPECTED	= 0xA,
+	NVMEC_ERR_NS_WRITE_FAIL		= 0xB,
+	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 0xC,
+	NVMEC_ERR_NULL_NS		= 0xD,
+	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 0xE,
+	NVMEC_ERR_NO_VMD_CTRLRS		= 0xF,
 	NVMEC_LAST_STATUS_VALUE
 };
 
@@ -52,10 +55,11 @@ enum NvmeControlStatusCode {
  * \brief NVMe controller details
  */
 struct ctrlr_t {
-	char		     model[1024];
-	char		     serial[1024];
-	char		     pci_addr[1024];
-	char		     fw_rev[1024];
+	char		     model[BUFLEN];
+	char		     serial[BUFLEN];
+	char		     pci_addr[BUFLEN];
+	char		     fw_rev[BUFLEN];
+	char		     pci_type[BUFLEN];
 	int		     socket_id;
 	struct ns_t	    *nss;
 	struct dev_health_t *dev_health;
@@ -71,7 +75,7 @@ struct ns_t {
 	struct ns_t    *next;
 };
 
-/*
+/**
  * \brief Raw SPDK device health statistics.
  */
 struct dev_health_t {
@@ -93,13 +97,27 @@ struct dev_health_t {
 };
 
 /**
- * \brief Return containing return code, controllers, namespaces and error
- * message
+ * \brief Result struct for namespace wipe operation containing return code,
+ * namespace id, parent controller pci address, info message and link to next
+ * list element.
+ */
+struct wipe_res_t {
+	char			 ctrlr_pci_addr[BUFLEN];
+	uint32_t		 ns_id;
+	int			 rc;
+	char			 info[BUFLEN];
+	struct wipe_res_t	*next;
+};
+
+/**
+ * \brief Return containing return code, controllers, namespaces, wwipe
+ * results and info message
  */
 struct ret_t {
-	int		rc;
-	struct ctrlr_t *ctrlrs;
-	char		err[1024];
+	struct ctrlr_t		*ctrlrs;
+	struct wipe_res_t	*wipe_results;
+	int			 rc;
+	char			 info[BUFLEN];
 };
 
 struct ctrlr_entry {
@@ -113,6 +131,7 @@ struct ctrlr_entry {
 
 struct ns_entry {
 	struct spdk_nvme_ns	*ns;
+	struct spdk_nvme_qpair	*qpair;
 	struct ns_entry		*next;
 };
 
@@ -123,6 +142,13 @@ struct dev_health_entry {
 };
 
 extern struct ctrlr_entry	*g_controllers;
+
+bool
+probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
+	 struct spdk_nvme_ctrlr_opts *opts);
+
+void
+register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns);
 
 /**
  * Attach call back function to report a device that has been
@@ -140,21 +166,29 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  struct spdk_nvme_ctrlr *ctrlr,
 	  const struct spdk_nvme_ctrlr_opts *opts);
 
-/*
- * Initialize the ret_t struct by allocating memory and setting attributes
+/**
+ * Initialize the wipe_res_t struct by allocating memory and setting references
  * to NULL.
  *
- * \param rc initial rc value to set in returned ret_t.
+ * \return a pointer to a wipe result struct (wipe_res_t).
+ **/
+struct wipe_res_t *
+init_wipe_res(void);
+
+/**
+ * Initialize the ret_t struct by allocating memory and setting references
+ * to NULL.
  *
  * \return a pointer to a return struct (ret_t).
  **/
 struct ret_t *
-init_ret(int rc);
+init_ret(void);
 
-/*
+/**
  * Free memory allocated in linked lists attached to the ret_t struct.
  *
- * \param ret a pointer to a return struct (ret_t).
+ * \param ret A pointer to a return struct (ret_t) which itself needs to be
+ *            freed explicitly after calling clean_ret.
  **/
 void
 clean_ret(struct ret_t *ret);

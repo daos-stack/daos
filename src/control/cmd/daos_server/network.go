@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -62,7 +63,13 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		provider = cmd.FabricProvider
 	}
 
-	results, err := netdetect.ScanFabric(provider, defaultExcludeInterfaces)
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		return err
+	}
+	defer netdetect.CleanUp(netCtx)
+
+	results, err := netdetect.ScanFabric(netCtx, provider, defaultExcludeInterfaces)
 	if err != nil {
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}

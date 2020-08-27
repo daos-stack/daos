@@ -175,7 +175,8 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 			if (rc)
 				return rc;
 
-			rc = compound_free(vsi, &vfe, VEA_FL_NO_MERGE);
+			rc = compound_free(vsi, &vfe, VEA_FL_NO_MERGE |
+						VEA_FL_NO_ACCOUNTING);
 			if (rc)
 				return rc;
 		}

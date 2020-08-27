@@ -69,7 +69,7 @@ class StorageRatio(TestWithServers):
                 elif 'PASS' in test[2]:
                     results[num] = 'PASS'
                 elif ('WARNING' in test[2] and
-                      'SCM:NVMe ratio is less than' in dmg_output):
+                      'SCM:NVMe ratio is less than' in pool.dmg.result.stdout):
                     results[num] = 'PASS'
                 else:
                     results[num] = 'FAIL'

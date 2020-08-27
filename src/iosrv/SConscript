@@ -26,7 +26,7 @@ def scons():
                                 'drpc_listener.c', 'drpc_progress.c', 'init.c',
                                 'module.c', 'srv_cli.c', 'profile.c', 'rpc.c',
                                 'server_iv.c', 'srv.c', 'srv.pb-c.c', 'tls.c',
-                                'sched.c', 'ult.c', 'vos.c'],
+                                'sched.c', 'ult.c'],
                                LIBS=libraries)
     denv.Install('$PREFIX/bin', iosrv)
 
