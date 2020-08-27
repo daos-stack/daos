@@ -154,6 +154,8 @@ class CartUtils():
         ofi_share_addr = cartobj.params.get("CRT_CTX_SHARE_ADDR",
                                             "/run/env_CRT_CTX_SHARE_ADDR/*/")
 
+        # Do not use the standard .log file extension, otherwise it'll get
+        # removed (cleaned up for disk space savings) before we can archive it.
         env = " --output-filename {!s}".format(os.path.join(log_path, test_name + "_" + env_CCSA + "_output.orterun_log"))
         env += " -x D_LOG_FILE={!s}".format(log_file)
         env += " -x D_LOG_FILE_APPEND_PID=1"

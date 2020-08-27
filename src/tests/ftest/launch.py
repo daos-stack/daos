@@ -984,9 +984,6 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "copied=()",
         "for file in $({} {})".format(ls_cmd, source_files),
         "do ls -sh $file",
-
-        # DEBUGGING
-        "find $(dirname $file)",
     ]
 
     # If we have a directory, tar it before scp-ing it.
