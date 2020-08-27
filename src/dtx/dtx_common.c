@@ -510,9 +510,6 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		if (!daos_is_zero_dti(dti))
 			goto init;
 
-		rc = vos_dtx_rsrvd_init(dth);
-		/** should never be non-zero in this case */
-		D_ASSERT(rc == 0);
 		return 0;
 	}
 
@@ -525,12 +522,8 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		dlh->dlh_subs[i].dss_tgt = tgts[i];
 	dlh->dlh_sub_cnt = tgt_cnt;
 
-	if (daos_is_zero_dti(dti)) {
-		rc = vos_dtx_rsrvd_init(dth);
-		/** should never be non-zero in this case */
-		D_ASSERT(rc == 0);
+	if (daos_is_zero_dti(dti))
 		return 0;
-	}
 
 init:
 	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
@@ -737,6 +730,7 @@ abort:
 			  dth->dth_epoch, &dte, 1);
 	}
 
+	vos_dtx_rsrvd_fini(dth);
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid))
 		D_DEBUG(DB_IO,
@@ -760,8 +754,6 @@ out:
 
 	D_FREE(dlh->dlh_subs);
 	D_FREE(dth->dth_oid_array);
-
-	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }
@@ -798,9 +790,6 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 
 	if (daos_is_zero_dti(dti)) {
 		daos_dti_gen(&dth->dth_xid, true);
-		rc = vos_dtx_rsrvd_init(dth);
-		/** should never be non-zero in this case */
-		D_ASSERT(rc == 0);
 		return 0;
 	}
 
