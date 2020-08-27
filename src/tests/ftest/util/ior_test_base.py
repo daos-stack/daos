@@ -164,7 +164,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
         out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
-                           intercept, plugin_path=plugin_path)
+                           intercept, plugin_path=None)
 
         if stop_dfuse and self.dfuse:
             self.dfuse.stop()
