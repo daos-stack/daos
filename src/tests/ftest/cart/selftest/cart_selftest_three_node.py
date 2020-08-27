@@ -51,7 +51,7 @@ class CartSelfThreeNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @avocado.skip("Currently no support for heterogeneous multi-node tests")
+    @skipForTicket("DAOS-5547")
     def test_cart_selftest(self):
         """
         Test CaRT Self Test
