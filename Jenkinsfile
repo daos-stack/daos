@@ -133,7 +133,7 @@ String unit_packages() {
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate '
-        if (need_qb()) {
+        if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
                         " boost-devel libisa-l_crypto libfabric-debuginfo"
