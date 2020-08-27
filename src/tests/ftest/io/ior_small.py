@@ -37,7 +37,7 @@ class IorSmall(IorTestBase):
 
         Test Description:
             Purpose of this test is to have small ior test to check basic
-            functionality for both DAOS and MPIIO api
+            functionality for both DFS and MPIIO api
 
         Use case:
             Run ior with read, write, CheckWrite, CheckRead in ssf mode.
@@ -58,7 +58,7 @@ class IorSmall(IorTestBase):
         # run tests for different variants
         self.ior_cmd.flags.update(flags[0])
         for oclass in obj_class:
-            self.ior_cmd.daos_oclass.update(oclass)
+            self.ior_cmd.dfs_oclass.update(oclass)
             for api in apis:
                 self.ior_cmd.api.update(api)
                 for test in transfer_block_size:
@@ -73,6 +73,6 @@ class IorSmall(IorTestBase):
         self.ior_cmd.api.update(apis[0])
         self.ior_cmd.block_size.update((transfer_block_size[1])[1])
         self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
-        self.ior_cmd.daos_oclass.update(obj_class[0])
+        self.ior_cmd.dfs_oclass.update(obj_class[0])
         # run ior
         self.run_ior_with_pool()

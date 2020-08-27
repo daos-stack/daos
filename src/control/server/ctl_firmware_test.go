@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -42,6 +43,19 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func getPBNvmeQueryResults(t *testing.T, devs storage.NvmeControllers) []*ctlpb.NvmeFirmwareQueryResp {
+	results := make([]*ctlpb.NvmeFirmwareQueryResp, 0, len(devs))
+	for _, dev := range devs {
+		devPB := &ctlpb.NvmeFirmwareQueryResp{}
+		if err := convert.Types(dev, &devPB.Device); err != nil {
+			t.Fatalf("unable to convert NvmeController: %s", err)
+		}
+		results = append(results, devPB)
+	}
+
+	return results
+}
+
 func TestCtlSvc_FirmwareQuery(t *testing.T) {
 	testFWInfo := &storage.ScmFirmwareInfo{
 		ActiveVersion:     "MyActiveVersion",
@@ -49,6 +63,9 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 		ImageMaxSizeBytes: 1024,
 		UpdateStatus:      storage.ScmUpdateStatusStaged,
 	}
+
+	testNVMeDevs := storage.MockNvmeControllers(3)
+	testNVMePB := getPBNvmeQueryResults(t, testNVMeDevs)
 
 	for name, tc := range map[string]struct {
 		bmbc    *bdev.MockBackendConfig
@@ -140,6 +157,135 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				},
 			},
 		},
+		"NVMe - discovery failed": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("mock scan failed"),
+			},
+			expErr: errors.New("mock scan failed"),
+		},
+		"NVMe - no devices": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+			},
+			bmbc: &bdev.MockBackendConfig{},
+			expResp: &ctlpb.FirmwareQueryResp{
+				NvmeResults: []*ctlpb.NvmeFirmwareQueryResp{},
+			},
+		},
+		"NVMe - success with devices": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{Controllers: testNVMeDevs},
+			},
+			expResp: &ctlpb.FirmwareQueryResp{
+				NvmeResults: testNVMePB,
+			},
+		},
+		"both - success with devices": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+				QueryScm:  true,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes: storage.ScmModules{
+					{UID: "TestUid1"},
+					{UID: "TestUid2"},
+					{UID: "TestUid3"},
+				},
+				GetFirmwareStatusRes: testFWInfo,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{Controllers: testNVMeDevs},
+			},
+			expResp: &ctlpb.FirmwareQueryResp{
+				ScmResults: []*ctlpb.ScmFirmwareQueryResp{
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid1"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid2"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid3"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+				},
+				NvmeResults: testNVMePB,
+			},
+		},
+		"both - no SCM found": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+				QueryScm:  true,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes: storage.ScmModules{},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{Controllers: testNVMeDevs},
+			},
+			expResp: &ctlpb.FirmwareQueryResp{
+				ScmResults:  []*ctlpb.ScmFirmwareQueryResp{},
+				NvmeResults: testNVMePB,
+			},
+		},
+		"both - no NVMe found": {
+			req: ctlpb.FirmwareQueryReq{
+				QueryNvme: true,
+				QueryScm:  true,
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes: storage.ScmModules{
+					{UID: "TestUid1"},
+					{UID: "TestUid2"},
+					{UID: "TestUid3"},
+				},
+				GetFirmwareStatusRes: testFWInfo,
+			},
+			bmbc: &bdev.MockBackendConfig{},
+			expResp: &ctlpb.FirmwareQueryResp{
+				ScmResults: []*ctlpb.ScmFirmwareQueryResp{
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid1"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid2"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+					{
+						Module:            &ctlpb.ScmModule{Uid: "TestUid3"},
+						ActiveVersion:     testFWInfo.ActiveVersion,
+						StagedVersion:     testFWInfo.StagedVersion,
+						ImageMaxSizeBytes: testFWInfo.ImageMaxSizeBytes,
+						UpdateStatus:      uint32(testFWInfo.UpdateStatus),
+					},
+				},
+				NvmeResults: []*ctlpb.NvmeFirmwareQueryResp{},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -160,6 +306,8 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 }
 
 func TestCtlSvc_FirmwareUpdate(t *testing.T) {
+	mockNVMe := storage.MockNvmeControllers(3)
+
 	for name, tc := range map[string]struct {
 		bmbc           *bdev.MockBackendConfig
 		smbc           *scm.MockBackendConfig
@@ -197,12 +345,6 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				Type: ctlpb.FirmwareUpdateReq_DeviceType(0xFFFF),
 			},
 			expErr: errors.New("unrecognized device type"),
-		},
-		"NVMe - not implemented yet": {
-			req: ctlpb.FirmwareUpdateReq{
-				Type: ctlpb.FirmwareUpdateReq_NVMe,
-			},
-			expErr: errors.New("NVMe device update not implemented"),
 		},
 		"SCM - discovery failed": {
 			req: ctlpb.FirmwareUpdateReq{
@@ -275,6 +417,72 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 					{
 						Module: &ctlpb.ScmModule{Uid: "TestUid3"},
 						Error:  "mock update",
+					},
+				},
+			},
+		},
+		"NVMe - scan failed": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_NVMe,
+				FirmwarePath: "/some/path",
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("mock scan failed"),
+			},
+			expErr: errors.New("mock scan failed"),
+		},
+		"NVMe - no devices": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_NVMe,
+				FirmwarePath: "/some/path",
+			},
+			bmbc:   &bdev.MockBackendConfig{},
+			expErr: errors.New("no NVMe device controllers"),
+		},
+		"NVMe - success with devices": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_NVMe,
+				FirmwarePath: "/some/path",
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{Controllers: mockNVMe},
+			},
+			expResp: &ctlpb.FirmwareUpdateResp{
+				NvmeResults: []*ctlpb.NvmeFirmwareUpdateResp{
+					{
+						PciAddr: mockNVMe[0].PciAddr,
+					},
+					{
+						PciAddr: mockNVMe[1].PciAddr,
+					},
+					{
+						PciAddr: mockNVMe[2].PciAddr,
+					},
+				},
+			},
+		},
+		"NVMe - failure with devices": {
+			req: ctlpb.FirmwareUpdateReq{
+				Type:         ctlpb.FirmwareUpdateReq_NVMe,
+				FirmwarePath: "/some/path",
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes:   &bdev.ScanResponse{Controllers: mockNVMe},
+				UpdateErr: errors.New("mock update"),
+			},
+			expResp: &ctlpb.FirmwareUpdateResp{
+				NvmeResults: []*ctlpb.NvmeFirmwareUpdateResp{
+					{
+						PciAddr: mockNVMe[0].PciAddr,
+						Error:   "mock update",
+					},
+					{
+						PciAddr: mockNVMe[1].PciAddr,
+						Error:   "mock update",
+					},
+					{
+						PciAddr: mockNVMe[2].PciAddr,
+						Error:   "mock update",
 					},
 				},
 			},

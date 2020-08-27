@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,5 +116,6 @@ int dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry **dtes,
 int dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 	      struct dtx_entry **dtes, int count);
 int dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte);
+
 
 #endif /* __DTX_INTERNAL_H__ */

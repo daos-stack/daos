@@ -283,10 +283,12 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	int			 rc;
 
 	rc = merge_free_ext(vsi, vfe, VEA_TYPE_COMPOUND, flags);
-	if (rc < 0)
+	if (rc < 0) {
 		return rc;
-	else if (rc > 0)
-		return 0;	/* extent merged in tree */
+	} else if (rc > 0) {
+		rc = 0;	/* extent merged in tree */
+		goto accounting;
+	}
 
 	memset(&dummy, 0, sizeof(dummy));
 	D_INIT_LIST_HEAD(&dummy.ve_link);
@@ -317,6 +319,10 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	D_INIT_LIST_HEAD(&entry->ve_link);
 
 	rc = free_class_add(&vsi->vsi_class, entry);
+
+accounting:
+	if (!rc && !(flags & VEA_FL_NO_ACCOUNTING))
+		vsi->vsi_stat[STAT_FREE_BLKS] += vfe->vfe_blk_cnt;
 	return rc;
 }
 
@@ -479,7 +485,6 @@ migrate_end_cb(void *data, bool noop)
 					vfe.vfe_blk_cnt, rc);
 				break;
 			}
-			vsi->vsi_stat[STAT_FREE_BLKS] += vfe.vfe_blk_cnt;
 		}
 	}
 
@@ -515,9 +520,6 @@ migrate_end_cb(void *data, bool noop)
 			D_ERROR("Compound free ["DF_U64", %u] error: %d\n",
 				vue->vue_ext.vfe_blk_off,
 				vue->vue_ext.vfe_blk_cnt, rc);
-		else
-			vsi->vsi_stat[STAT_FREE_BLKS] +=
-				vue->vue_ext.vfe_blk_cnt;
 		D_FREE(vue);
 	}
 }

@@ -697,6 +697,9 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	/* Try to load blobstore without specifying 'bstype' first */
 	bs = load_blobstore(ctxt, bdev, NULL, false);
 	if (bs == NULL) {
+		D_DEBUG(DB_MGMT, "Creating bs for %s\n",
+			spdk_bdev_get_name(bdev));
+
 		/* Create blobstore if it wasn't created before */
 		uuid_generate(bs_uuid);
 		bs = load_blobstore(ctxt, bdev, &bs_uuid, true);

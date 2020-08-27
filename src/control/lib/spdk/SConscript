@@ -9,7 +9,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc', 'isal')
+    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
 
@@ -24,17 +24,12 @@ def scons():
     libs += ['spdk_vmd']
 
     # Other libs
-    libs += ['numa', 'dl', 'isal']
-
-    # hack to avoid building this library with cov compiler for the moment
-    compiler = senv.get('COMPILER').lower()
-    if compiler == "covc":
-        compiler = "gcc"
+    libs += ['numa', 'dl']
 
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
     denv.nvmecontrol = senv.StaticLibrary("nvme_control", [senv.nc, senv.ncc],
-                                          CC=compiler, LIBS=libs)
+                                          LIBS=libs)
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 

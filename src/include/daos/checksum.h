@@ -203,6 +203,15 @@ daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
 int
 daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props);
 
+/**
+ * Initialize a daos_csummer as a copy of an existing daos_csummer
+ * @param obj		daos_csummer to be copied.
+ *
+ * @return		Allocated daos_csummer, or NULL if not enough memory.
+ */
+struct daos_csummer *
+daos_csummer_copy(const struct daos_csummer *obj);
+
 /** Destroy the daos_csummer */
 void
 daos_csummer_destroy(struct daos_csummer **obj);
@@ -222,7 +231,10 @@ daos_csummer_get_type(struct daos_csummer *obj);
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj);
 
-/** Get an appropriate chunksize (based on configured chunksize) for a record */
+/** Get an appropriate chunksize (based on configured chunksize) for a
+ * record in bytes. Appropriate means that the chunksize should not be larger
+ * than record size and that records should evenly divide into chunk size.
+ */
 uint32_t
 daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size);
 
