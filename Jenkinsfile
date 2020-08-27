@@ -210,11 +210,6 @@ String functional_packages() {
 
 String functional_packages(String distro) {
     String pkgs = get_daos_packages(distro)
-    pkgs += " openmpi3 hwloc ndctl " +
-            "ior-hpc-cart-4-daos-0 " +
-            "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
-            "testmpio-cart-4-daos-0 fio " +
-            "mpi4py-tests-cart-4-daos-0 MACSio"
     if (quickbuild()) {
         pkgs += " spdk_tools"
     }

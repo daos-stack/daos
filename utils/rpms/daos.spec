@@ -153,6 +153,20 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: fio
+Requires: mpich
+Requires: openmpi3
+Requires: hwloc
+Requires: ndctl
+Requires: ior-hpc-cart-4-daos-0
+Requires: romio-tests-cart-4-daos-0
+Requires: testmpio-cart-4-daos-0
+Requires: mpi4py-tests-cart-4-daos-0
+Requires: hdf5-mpich2-tests-daos-0
+Requires: hdf5-openmpi3-tests-daos-0
+Requires: hdf5-vol-daos-mpich2-tests-daos-0
+Requires: hdf5-vol-daos-openmpi3-tests-daos-0
+Requires: MACSio-mpich2-daos-0
+Requires: MACSio-openmpi3-daos-0
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
