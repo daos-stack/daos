@@ -80,6 +80,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev)
 
 	args = dc_task_get_args(task);
 	args->th	= th;
+	args->flags	= 0;
 
 	return dc_task_schedule(task, true);
 }

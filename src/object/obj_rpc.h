@@ -345,7 +345,7 @@ struct daos_cpd_sub_head {
 
 struct daos_cpd_ec_tgts {
 	uint32_t			 dcet_shard_idx;
-	uint32_t			 dcet_tgt_idx;
+	uint32_t			 dcet_tgt_id;
 };
 
 struct daos_cpd_update {
@@ -391,7 +391,11 @@ struct daos_cpd_sub_req {
 		/* Used by CPD PRC and server side logic. */
 		daos_unit_oid_t		 dcsr_oid;
 		/* Used by client side cache. */
-		void			*dcsr_obj;
+		struct {
+			void		*dcsr_obj;
+			void		*dcsr_reasb;
+			d_sg_list_t	*dcsr_sgls;
+		};
 	};
 	daos_key_t			 dcsr_dkey;
 	uint64_t			 dcsr_dkey_hash;

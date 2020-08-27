@@ -25,27 +25,13 @@
 #define NVMECONTROL_H
 
 /**
- * \brief Details of write sequence for quick format.
- */
-struct format_sequence {
-	struct spdk_nvme_ctrlr	*ctrlr;
-	struct spdk_nvme_qpair	*qpair;
-	struct spdk_nvme_ns	*ns;
-	char			*buf;
-	unsigned		 using_cmb_io;
-	int			 is_completed;
-};
-
-/**
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.
- *
- * \param init_vmd Enable discovery of NVMe controllers backing a VMD address.
  *
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
-nvme_discover(bool init_vmd);
+nvme_discover(void);
 
 /**
  * Wipe NVMe controller namespace LBA-0.
@@ -57,7 +43,7 @@ nvme_discover(bool init_vmd);
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
-nvme_wipe_first_ns(char *ctrlr_pci_addr);
+nvme_wipe_namespaces(void);
 
 /**
  * Format NVMe controller namespace.
@@ -80,11 +66,5 @@ nvme_format(char *ctrlr_pci_addr);
  */
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
-
-/**
- * Cleanup structs held in memory.
- */
-void
-nvme_cleanup(void);
 
 #endif

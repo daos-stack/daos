@@ -97,6 +97,11 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
+		if len(cmdArgs) > 0 {
+			// don't support positional arguments, extra cmdArgs are unexpected
+			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
+		}
+
 		if !opts.AllowProxy {
 			common.ScrubProxyVariables()
 		}
