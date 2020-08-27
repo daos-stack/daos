@@ -308,9 +308,10 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 {
 	uint32_t	size;
 	uint64_t	array_size;
+	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK;
 
 	*ts_set = NULL;
-	if (tx_id == NULL)
+	if (tx_id == NULL && (flags & cond_mask) == 0)
 		return 0;
 
 	size = 3 + akey_nr;
@@ -337,8 +338,11 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		break;
 	}
 	(*ts_set)->ts_set_size = size;
-	uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
-	(*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
+	if (tx_id != NULL) {
+		(*ts_set)->ts_in_tx = true;
+		uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
+		(*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
+	} /* ts_in_tx is false by default */
 
 	return 0;
 }
@@ -355,7 +359,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 	int			 i;
 	int			 parent_idx;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return;
 
 	ts_table = vos_ts_table_get();
