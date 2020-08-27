@@ -33,21 +33,12 @@ class IorHdf5(IorTestBase):
     """
 
     def ior_hdf5(self, hdf5_plugin_path=None):
-        """Jira ID: DAOS-4909.
+        """Run IOR cmd with HDF5.
 
-        Test Description:
-            Purpose of this test is to have small ior test to check basic
-            functionality for HDF5 api
-
-        Use case:
-            Run ior with read, write, CheckWrite, CheckRead in ssf mode.
-            Run ior with read, write, CheckWrite, CheckRead in fpp mode.
-            Run ior with read, write, CheckWrite and access to random
-                offset instead of sequential.
-            All above three cases to be run with single client and
-                multiple client processes in two separate nodes.
-
-        :avocado: tags=all,pr,hw,large,daosio,hdf5,iorhdf5
+        Args:
+            hdf5_plugin_path (str, optional): HDF5 vol connector library path.
+                This will enable dfuse (xattr) working directory which is
+                needed to run vol connector for DAOS. Default is None.
         """
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         transfer_block_size = self.params.get("transfer_block_size",

@@ -144,6 +144,9 @@ class IorTestBase(TestWithServers):
             create_cont (bool, optional): Create new container. Default is True
             stop_dfuse (bool, optional): Stop dfuse after ior command is
                 finished. Default is True.
+            plugin_path (str, optional): HDF5 vol connector library path.
+                This will enable dfuse (xattr) working directory which is
+                needed to run vol connector for DAOS. Default is None.
 
         Returns:
             CmdResult: result of the ior command execution
@@ -157,6 +160,9 @@ class IorTestBase(TestWithServers):
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self._start_dfuse()
+
+        # setup test file for POSIX
+        if self.ior_cmd.api.value == "POSIX":
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
@@ -164,7 +170,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
         out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
-                           intercept, plugin_path=None)
+                           intercept, plugin_path=plugin_path)
 
         if stop_dfuse and self.dfuse:
             self.dfuse.stop()
@@ -230,6 +236,9 @@ class IorTestBase(TestWithServers):
             manager (str): mpi job manager command
             processes (int): number of host processes
             intercept (str): path to interception library.
+            plugin_path (str, optional): HDF5 vol connector library path.
+                This will enable dfuse (xattr) working directory which is
+                needed to run vol connector for DAOS. Default is None.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
@@ -401,13 +410,13 @@ class IorTestBase(TestWithServers):
         """Execute cmd using general_utils.pcmd.
 
         Args:
-        cmd (str): String command to be executed
-        fail_on_err (bool): Boolean for whether to fail the test if command
-                            execution returns non zero return code.
-        display_output (bool): Boolean for whether to display output.
+            cmd (str): String command to be executed
+            fail_on_err (bool): Boolean for whether to fail the test if command
+                execution returns non zero return code.
+            display_output (bool): Boolean for whether to display output.
 
         Returns:
-        dict: a dictionary of return codes keys and accompanying NodeSet
+            dict: a dictionary of return codes keys and accompanying NodeSet
                 values indicating which hosts yielded the return code.
 
         """
