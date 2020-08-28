@@ -147,7 +147,11 @@ class CartIvTwoNodeTest(Test):
                 expected_rc = int(action['return_code'])
 
                 # Create a temporary file for iv_client to write the results to
-                log_fd, log_path = tempfile.mkstemp()
+                log_path_dir = os.environ['HOME']
+                if os.environ['DAOS_TEST_SHARED_DIR']:
+                  log_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
+
+                log_fd, log_path = tempfile.mkstemp(dir = log_path_dir)
 
                 command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' -l '{!s}'" \
                     .format(command, operation, rank, key_rank, key_idx,
