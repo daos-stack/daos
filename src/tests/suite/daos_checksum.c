@@ -1193,6 +1193,36 @@ single_value(void **state)
 };
 
 static void
+dtx_with_csum(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct csum_test_ctx	 ctx = { 0 };
+	daos_handle_t		 th = { 0 };
+	daos_oclass_id_t	 oc = dts_csum_oc;
+	int			 rc;
+
+
+	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
+		skip();
+
+	setup_from_test_args(&ctx, arg);
+	setup_simple_data(&ctx);
+
+	/** Server verify enabled, no corruption. */
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
+	rc = daos_tx_open(ctx.coh, &th, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	daos_obj_update(ctx.oh, th, 0, &ctx.dkey, 1, &ctx.update_iod,
+			&ctx.update_sgl, NULL);
+	rc = daos_tx_commit(th, NULL);
+	assert_int_equal(rc, 0);
+
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
+}
+
+static void
 mix_test(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
@@ -2087,6 +2117,8 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM18: request extent starts much later than the "
 		  "beginning of the stored extent",
 		  request_is_after_extent_start),
+	CSUM_TEST("DAOS_CSUM19: DTX with checksum enabled against REP obj",
+		  dtx_with_csum),
 	CSUM_TEST("DAOS_CSUM_REBUILD01: Array, Data is inlined", rebuild_1),
 	CSUM_TEST("DAOS_CSUM_REBUILD02: Array, Data not inlined, not bulk",
 		  rebuild_2),
@@ -2100,6 +2132,8 @@ static const struct CMUnitTest csum_tests[] = {
 	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
 		     io_with_server_side_verify),
 	EC_CSUM_TEST("DAOS_EC_CSUM02: Single Value Checksum", single_value),
+	EC_CSUM_TEST("DAOS_EC_CSUM03: DTX with checksum enabled against EC obj",
+		     dtx_with_csum),
 };
 
 static int

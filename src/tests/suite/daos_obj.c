@@ -121,12 +121,13 @@ ioreq_fini(struct ioreq *req)
 /* no wait for async insert, for sync insert it still will block */
 static void
 insert_internal_nowait(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
-		       daos_iod_t *iods, daos_handle_t th, struct ioreq *req)
+		       daos_iod_t *iods, daos_handle_t th, struct ioreq *req,
+		       uint64_t flags)
 {
 	int rc;
 
 	/** execute update operation */
-	rc = daos_obj_update(req->oh, th, 0, dkey, nr, iods, sgls,
+	rc = daos_obj_update(req->oh, th, flags, dkey, nr, iods, sgls,
 			     req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async)
 		assert_int_equal(rc, req->arg->expect_result);
@@ -228,13 +229,13 @@ insert_recxs_nowait(const char *dkey, const char *akey, daos_size_t iod_size,
 	/* iod, recxs */
 	ioreq_iod_recxs_set(req, 0, iod_size, recxs, nr);
 
-	insert_internal_nowait(&req->dkey, 1, req->sgl, req->iod, th, req);
+	insert_internal_nowait(&req->dkey, 1, req->sgl, req->iod, th, req, 0);
 }
 
 void
 insert_nowait(const char *dkey, int nr, const char **akey,
 	      daos_size_t *iod_size, int *rx_nr, uint64_t *idx, void **val,
-	      daos_handle_t th, struct ioreq *req)
+	      daos_handle_t th, struct ioreq *req, uint64_t flags)
 {
 	daos_size_t	data_size[nr];
 	int		i;
@@ -258,7 +259,7 @@ insert_nowait(const char *dkey, int nr, const char **akey,
 	ioreq_iod_simple_set(req, iod_size, false, idx, nr, rx_nr);
 
 	insert_internal_nowait(&req->dkey, nr, val == NULL ? NULL : req->sgl,
-			       req->iod, th, req);
+			       req->iod, th, req, flags);
 }
 
 void
@@ -287,10 +288,11 @@ insert_wait(struct ioreq *req)
  */
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
-	struct ioreq *req)
+       int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+       struct ioreq *req, uint64_t flags)
 {
-	insert_nowait(dkey, nr, akey, iod_size, rx_nr, idx, val, th, req);
+	insert_nowait(dkey, nr, akey, iod_size, rx_nr, idx, val, th, req,
+		      flags);
 	insert_wait(req);
 }
 
@@ -305,7 +307,17 @@ insert_single(const char *dkey, const char *akey, uint64_t idx, void *value,
 {
 	int rx_nr = 1;
 
-	insert(dkey, 1, &akey, &iod_size, &rx_nr, &idx, &value, th, req);
+	insert(dkey, 1, &akey, &iod_size, &rx_nr, &idx, &value, th, req, 0);
+}
+
+void
+insert_single_with_flags(const char *dkey, const char *akey, uint64_t idx,
+			 void *value, daos_size_t iod_size, daos_handle_t th,
+			 struct ioreq *req, uint64_t flags)
+{
+	int rx_nr = 1;
+
+	insert(dkey, 1, &akey, &iod_size, &rx_nr, &idx, &value, th, req, flags);
 }
 
 /**
@@ -318,7 +330,7 @@ insert_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
 			 daos_handle_t th, struct ioreq *req)
 {
 	insert(dkey, /*nr*/1, &akey, &iod_size, &rx_nr, &idx,
-	       value != NULL ? &value : NULL, th, req);
+	       value != NULL ? &value : NULL, th, req, 0);
 }
 
 void
@@ -352,6 +364,18 @@ punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req)
 }
 
 void
+punch_dkey_with_flags(const char *dkey, daos_handle_t th, struct ioreq *req,
+		      uint64_t flags)
+{
+	int rc;
+
+	ioreq_dkey_set(req, dkey);
+
+	rc = daos_obj_punch_dkeys(req->oh, th, flags, 1, &req->dkey, NULL);
+	assert_int_equal(rc, req->arg->expect_result);
+}
+
+void
 punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 	   struct ioreq *req)
 {
@@ -365,6 +389,24 @@ punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 	daos_akey.iov_buf_len = strlen(akey);
 
 	rc = daos_obj_punch_akeys(req->oh, th, 0, &req->dkey, 1, &daos_akey,
+				  NULL);
+	assert_int_equal(rc, req->arg->expect_result);
+}
+
+void
+punch_akey_with_flags(const char *dkey, const char *akey, daos_handle_t th,
+		      struct ioreq *req, uint64_t flags)
+{
+	daos_key_t daos_akey;
+	int rc;
+
+	ioreq_dkey_set(req, dkey);
+
+	daos_akey.iov_buf = (void *)akey;
+	daos_akey.iov_len = strlen(akey);
+	daos_akey.iov_buf_len = strlen(akey);
+
+	rc = daos_obj_punch_akeys(req->oh, th, flags, &req->dkey, 1, &daos_akey,
 				  NULL);
 	assert_int_equal(rc, req->arg->expect_result);
 }
@@ -1927,7 +1969,7 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 
 	/** Insert */
 	insert(dkey, MANYREC_NUMRECS, (const char **)akeys,
-	       rec_size, rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req);
+	       rec_size, rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req, 0);
 
 	/** Lookup */
 	lookup(dkey, MANYREC_NUMRECS, (const char **)akeys, offset, rec_size,
@@ -3025,7 +3067,7 @@ tgt_idx_change_retry(void **state)
 
 	/** Insert */
 	insert_nowait(dkey, 5, (const char **)akey, /*iod_size*/rec_size,
-		      rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req);
+		      rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req, 0);
 
 	if (arg->myrank == 0) {
 		/** verify the object layout */
@@ -3809,7 +3851,7 @@ static void fetch_mixed_keys_internal(void **state, daos_obj_id_t oid,
 
 	/** Insert */
 	insert(dkey, MANYREC_NUMRECS, (const char **)akeys, rec_size, rx_nr,
-	       offset, (void **)rec, DAOS_TX_NONE, &req);
+	       offset, (void **)rec, DAOS_TX_NONE, &req, 0);
 
 	/* update the non existent akeys*/
 	snprintf(akeys[1], 30, "%sA", akey);
