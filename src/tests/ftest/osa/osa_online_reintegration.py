@@ -188,7 +188,7 @@ class OSAOnlineReintegration(TestWithServers):
                                               "results": self.ds_racer_queue
                                               })
         daos_racer_thread.start()
-        time.sleep(5)
+        time.sleep(30)
         
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
