@@ -178,7 +178,7 @@ class OSAOnlineReintegration(TestWithServers):
         rank = random.randint(1, exclude_servers)
 
         # Start the daos_racer thread
-        kwargs={"results": self.ds_racer_queue}
+        kwargs = {"results": self.ds_racer_queue}
         daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
                                              kwargs=kwargs)
         daos_racer_thread.start()
