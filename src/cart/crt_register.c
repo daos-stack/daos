@@ -197,7 +197,6 @@ crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 	unsigned int		 L2_idx;
 	unsigned int		 L3_idx;
 
-	D_DEBUG(DB_ALL, "looking up opcode: %#x\n", opc);
 	L1_idx = opc >> 24;
 	L2_idx = (opc & CRT_PROTO_VER_MASK) >> 16;
 	L3_idx = opc & CRT_PROTO_COUNT_MASK;

@@ -162,7 +162,6 @@ load_free_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 	if (rc != 0)
 		return rc;
 
-	vsi->vsi_stat[STAT_FREE_BLKS] += vfe->vfe_blk_cnt;
 	return 0;
 }
 

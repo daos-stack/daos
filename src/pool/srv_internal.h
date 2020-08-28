@@ -53,6 +53,8 @@ pool_tls_get()
 }
 
 struct pool_iv_map {
+	d_rank_t	piv_master_rank;
+	uint32_t	piv_pool_map_ver;
 	struct pool_buf	piv_pool_buf;
 };
 
@@ -79,7 +81,14 @@ struct pool_iv_conn {
 	char		pic_creds[0];
 };
 
+struct pool_iv_conns {
+	uint32_t		pic_size;
+	uint32_t		pic_buf_size;
+	struct pool_iv_conn	pic_conns[0];
+};
+
 struct pool_iv_key {
+	uuid_t		pik_uuid;
 	uint32_t	pik_entry_size; /* IV entry size */
 };
 
@@ -89,14 +98,11 @@ struct pool_iv_hdl {
 };
 
 struct pool_iv_entry {
-	uuid_t				piv_pool_uuid;
-	uint32_t			piv_master_rank;
-	uint32_t			piv_pool_map_ver;
-	union	{
+	union {
 		struct pool_iv_map	piv_map;
 		struct pool_iv_prop	piv_prop;
-		struct pool_iv_conn	piv_conn;
 		struct pool_iv_hdl	piv_hdl;
+		struct pool_iv_conns	piv_conn_hdls;
 	};
 };
 
@@ -148,7 +154,6 @@ void ds_pool_child_purge(struct pool_tls *tls);
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
-void ds_pool_tgt_dist_hdls_handler(crt_rpc_t *rpc);
 
 /*
  * srv_util.c
@@ -176,4 +181,8 @@ int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			      uuid_t cont_hdl_uuid);
 
 int ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool);
+int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
+			      d_iov_t *conn_iov);
+int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
+
 #endif /* __POOL_SRV_INTERNAL_H__ */

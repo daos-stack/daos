@@ -100,12 +100,12 @@ struct test_pool {
 	/* Updated if some ranks are killed during degraged or rebuild
 	 * test, so we know whether some tests is allowed to be run.
 	 */
-	d_rank_list_t		alive_svc;
+	d_rank_list_t		*alive_svc;
 	/* Used for all pool related operation, since client will
 	 * use this rank list to find out the real leader, so it
 	 * can not be changed.
 	 */
-	d_rank_list_t		svc;
+	d_rank_list_t		*svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
 	bool			destroyed;
@@ -296,7 +296,8 @@ int run_daos_md_replication_test(int rank, int size);
 int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
-int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
+int run_daos_base_tx_test(int rank, int size, int *tests, int test_size);
+int run_daos_dist_tx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
@@ -382,9 +383,6 @@ int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
-/* dmg cmd json output parser APIs */
-int daos_json_list_pool(test_arg_t *arg, daos_size_t *npools,
-			daos_mgmt_pool_info_t *pools);
 static inline void
 daos_test_print(int rank, char *message)
 {

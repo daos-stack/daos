@@ -20,38 +20,29 @@
 # Any reproduction of computer software, computer software documentation, or
 # portions thereof marked with this legend must also reproduce the markings.
 #
-"""Build crt_launch"""
+"""Build self test"""
+
 import os
-import sys
-from distutils.spawn import find_executable
 import daos_build
 
-CRT_LAUNCH = 'crt_launch.c'
+SELF_TEST = 'self_test.c'
 
 def scons():
     """scons function"""
+
     Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 
     tenv = env.Clone()
 
-    libs = ['cart', 'gurt', 'pthread', 'm']
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(tenv, libs)
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
-
-    tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart'])
-    tenv.AppendUnique(LIBS=libs)
+    tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/tests/ftest/cart'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     prereqs.require(tenv, 'mercury')
-    tenv.AppendUnique(LIBPATH=['#/src/cart/src/cart'])
+    tenv.AppendUnique(LIBPATH=['#/src/cart'])
     tenv.AppendUnique(FLAGS='-pthread')
 
-    crt_launch = daos_build.program(tenv, CRT_LAUNCH)
-
-    tenv.Requires(crt_launch, [cart_lib, gurt_lib])
-    tenv.Install(os.path.join("$PREFIX", 'bin'), crt_launch)
+    self_test = daos_build.program(tenv, SELF_TEST)
+    tenv.Requires(self_test, [cart_lib, gurt_lib])
+    tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
 
 if __name__ == "SCons.Script":
     scons()

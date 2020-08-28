@@ -266,6 +266,15 @@ func HasNUMA(ctx context.Context) bool {
 	return ndc.numaAware
 }
 
+// NumNumaNodes returns the number of detected NUMA nodes, or 0 if none.
+func NumNumaNodes(ctx context.Context) int {
+	ndc, err := getContext(ctx)
+	if err != nil || !HasNUMA(ctx) {
+		return 0
+	}
+	return ndc.numNUMANodes
+}
+
 // Cleanup releases the hwloc topology resources
 func CleanUp(ctx context.Context) {
 	ndc, err := getContext(ctx)
