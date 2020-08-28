@@ -63,7 +63,8 @@ class OSAOnlineExtend(TestWithServers):
         self.ior_daos_oclass = self.params.get("obj_class",
                                                '/run/ior/iorflags/*')
         # Start an additional server.
-        self.extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
+        self.extra_servers = self.params.get("test_servers",
+                                             "/run/extra_servers/*")
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -113,7 +114,6 @@ class OSAOnlineExtend(TestWithServers):
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.daos_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
         ior_cmd.block_size.update(test[3])
@@ -126,10 +126,8 @@ class OSAOnlineExtend(TestWithServers):
 
         # Define the job manager for the IOR command
         manager = Mpirun(ior_cmd, mpitype="mpich")
-        manager.job.daos_cont.update(container_info
-                                     ["{}{}{}".format(oclass,
-                                                      api,
-                                                      test[2])])
+        key = "".join([oclass, api, str(test[2])])
+        manager.job.daos_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(manager))
         manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         manager.assign_processes(processes)
@@ -150,14 +148,7 @@ class OSAOnlineExtend(TestWithServers):
         # Create a pool
         pool = {}
         pool_uuid = []
-        target_list = []
         total_servers = len(self.hostlist_servers)
-
-        # Exclude target : random two targets
-        n = random.randint(1, 7)
-        target_list.append(n)
-        target_list.append(n+1)
-        t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Extend one of the ranks (or server)
         # rank index starts from zero
@@ -217,7 +208,6 @@ class OSAOnlineExtend(TestWithServers):
             fail_count = 0
             while fail_count <= 20:
                 pver_extend = self.get_pool_version()
-                rebuild_status = self.get_rebuild_status()
                 time.sleep(15)
                 fail_count += 1
                 if pver_extend > pver_begin:
