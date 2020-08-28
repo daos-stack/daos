@@ -102,10 +102,7 @@ class OSAOnlineReintegration(TestWithServers):
         self.daos_racer.get_params(self)
         self.daos_racer.set_environment(
             self.daos_racer.get_environment(self.server_managers[0]))
-        try:
-            self.daos_racer.run()
-        except CommandFailure as _error:
-            results.put("FAIL")
+        self.daos_racer.run()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
@@ -144,10 +141,8 @@ class OSAOnlineReintegration(TestWithServers):
 
         # Define the job manager for the IOR command
         manager = Mpirun(ior_cmd, mpitype="mpich")
-        manager.job.dfs_cont.update(container_info
-                                    ["{}{}{}".format(oclass,
-                                                     api,
-                                                     test[2])])
+        key = "".join([oclass, api, test[2]])
+        manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(manager))
         manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         manager.assign_processes(processes)
@@ -183,10 +178,9 @@ class OSAOnlineReintegration(TestWithServers):
         rank = random.randint(1, exclude_servers)
 
         # Start the daos_racer thread
+        kwargs={"results": self.ds_racer_queue}
         daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
-                                             kwargs={
-                                              "results": self.ds_racer_queue
-                                              })
+                                             kwargs=kwargs)
         daos_racer_thread.start()
         time.sleep(30)
         

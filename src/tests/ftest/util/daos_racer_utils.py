@@ -36,7 +36,8 @@ class DaosRacerCommand(ExecutableCommand):
         Args:
             path (str): path of the daos_racer command
             host (str): host on which to run the daos_racer command
-            dmg (object): dmg object
+            dmg (DmgCommand): a DmgCommand object used to obtain the
+                configuration file and certificate
         """
         super(DaosRacerCommand, self).__init__(
             "/run/daos_racer/*", "daos_racer", path)
@@ -47,9 +48,7 @@ class DaosRacerCommand(ExecutableCommand):
 
         if dmg:
             self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
-            hostlist = []
-            hostlist.append(host)
-            dmg.copy_certificates(get_log_file("daosCA/certs"), hostlist)
+            dmg.copy_certificates(get_log_file("daosCA/certs"), [self.host])
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the
