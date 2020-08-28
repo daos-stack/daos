@@ -1082,8 +1082,7 @@ pipeline {
                         functionalTest inst_repos: daos_repos("centos7"),
                                        inst_rpms: get_daos_packages('centos7') + ' ' +
                                                   functional_rpms('centos7') + ' ' +
-                                                  qb_inst_rpms_functional() +
-                                                  ' python2-tabulate '
+                                                  qb_inst_rpms_functional()
                     }
                     post {
                         always {
@@ -1104,8 +1103,7 @@ pipeline {
                                        inst_repos: daos_repos('leap15'),
                                        inst_rpms: get_daos_packages('leap15') + ' ' +
                                                   functional_rpms('leap15') + ' ' +
-                                                  qb_inst_rpms_functional() +
-                                                  ' python2-tabulate '
+                                                  qb_inst_rpms_functional()
                     }
                     post {
                         always {
@@ -1131,8 +1129,7 @@ pipeline {
                                        inst_repos: daos_repos(hw_distro("small")),
                                        inst_rpms: get_daos_packages(hw_distro("small")) + ' ' +
                                                   functional_rpms(hw_distro("small")) + ' ' +
-                                                  qb_inst_rpms_functional() +
-                                                  ' python2-tabulate '
+                                                  qb_inst_rpms_functional()
                     }
                     post {
                         always {
@@ -1158,8 +1155,7 @@ pipeline {
                                        inst_repos: daos_repos(hw_distro("medium")),
                                        inst_rpms: get_daos_packages(hw_distro("medium")) + ' ' +
                                                   functional_rpms(hw_distro("medium")) + ' ' +
-                                                  qb_inst_rpms_functional() +
-                                                  ' python2-tabulate '
+                                                  qb_inst_rpms_functional()
                     }
                     post {
                         always {
@@ -1185,8 +1181,7 @@ pipeline {
                                        inst_repos: daos_repos(hw_distro("large")),
                                        inst_rpms: get_daos_packages(hw_distro("large")) + ' ' +
                                                   functional_rpms(hw_distro("large")) + ' ' +
-                                                  qb_inst_rpms_functional() +
-                                                  ' python2-tabulate '
+                                                  qb_inst_rpms_functional()
                     }
                     post {
                         always {
