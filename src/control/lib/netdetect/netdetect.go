@@ -201,7 +201,6 @@ type logger interface {
 }
 
 var log logger = logging.NewStdoutLogger("netdetect")
-var mutex sync.Mutex
 
 // SetLogger sets the package-level logger
 func SetLogger(l logger) {
@@ -210,6 +209,50 @@ func SetLogger(l logger) {
 
 func (da *DeviceAffinity) String() string {
 	return fmt.Sprintf("%s:%s:%s:%d", da.DeviceName, da.CPUSet, da.NodeSet, da.NUMANode)
+}
+
+type hwlocProtectedAccess struct {
+	mutex sync.Mutex
+}
+
+var hpa hwlocProtectedAccess
+
+func (hpa *hwlocProtectedAccess) hwloc_get_proc_cpubind_wrapper(topology C.hwloc_topology_t, pid C.hwloc_pid_t, cpuset C.hwloc_cpuset_t, flags C.int) C.int {
+	hpa.mutex.Lock()
+	defer hpa.mutex.Unlock()
+	status := C.hwloc_get_proc_cpubind(topology, pid, cpuset, flags)
+	return status
+}
+
+func (hpa *hwlocProtectedAccess) topology_init() (C.hwloc_topology_t, error) {
+	var topology C.hwloc_topology_t
+	var status C.int
+
+	defer func() {
+		if status != 0 && topology != nil {
+			cleanUp(topology)
+		}
+	}()
+
+	hpa.mutex.Lock()
+	defer hpa.mutex.Unlock()
+
+	status = C.hwloc_topology_init(&topology)
+	if status != 0 {
+		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
+	}
+
+	status = C.cmpt_setFlags(topology)
+	if status != 0 {
+		return nil, errors.Errorf("hwloc setFlags failure: %v", status)
+	}
+
+	status = C.hwloc_topology_load(topology)
+	if status != 0 {
+		return nil, errors.Errorf("hwloc_topology_load failure: %v", status)
+	}
+
+	return topology, nil
 }
 
 type netdetectContext struct {
@@ -286,38 +329,18 @@ func CleanUp(ctx context.Context) {
 
 // initLib initializes the hwloc library.
 func initLib() (C.hwloc_topology_t, error) {
-	var topology C.hwloc_topology_t
 	var version C.uint
-	var status C.int
-
-	defer func() {
-		if status != 0 && topology != nil {
-			cleanUp(topology)
-		}
-	}()
 
 	version = C.hwloc_get_api_version()
 	if (version >> 16) != (C.HWLOC_API_VERSION >> 16) {
 		return nil, errors.Errorf("compilation error - compiled for hwloc API 0x%x but using library API 0x%x\n", C.HWLOC_API_VERSION, version)
 	}
 
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	status = C.hwloc_topology_init(&topology)
-	if status != 0 {
-		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
+	topology, err := hpa.topology_init()
+	if err != nil {
+		return nil, err
 	}
 
-	status = C.cmpt_setFlags(topology)
-	if status != 0 {
-		return nil, errors.Errorf("hwloc setFlags failure: %v", status)
-	}
-
-	status = C.hwloc_topology_load(topology)
-	if status != 0 {
-		return nil, errors.Errorf("hwloc_topology_load failure: %v", status)
-	}
 	return topology, nil
 }
 
@@ -591,9 +614,7 @@ func GetNUMASocketIDForPid(ctx context.Context, pid int32) (int, error) {
 	cpuset := C.hwloc_bitmap_alloc()
 	defer C.hwloc_bitmap_free(cpuset)
 
-	mutex.Lock()
-	status := C.hwloc_get_proc_cpubind(ndc.topology, C.int(pid), cpuset, 0)
-	mutex.Unlock()
+	status := hpa.hwloc_get_proc_cpubind_wrapper(ndc.topology, C.int(pid), cpuset, 0)
 	if status != 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
