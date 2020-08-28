@@ -156,6 +156,8 @@ enum obj_rpc_flags {
 	DRF_CPD_BULK		= (1 << 10),
 	/* Contain EC split req, only used on CPD leader locally. */
 	DRF_HAS_EC_SPLIT	= (1 << 11),
+	/* Checking the existence of the object/key. */
+	DRF_CHECK_EXISTENCE	= (1 << 12),
 };
 
 /* common for update/fetch */
@@ -350,9 +352,9 @@ struct daos_cpd_ec_tgts {
 
 struct daos_cpd_update {
 	struct dcs_csum_info		*dcu_dkey_csum;
-	/* ID array for the DAOS targets that takes part in EC object update. */
-	struct obj_iod_array		*dcu_iod_array;
 	struct daos_cpd_ec_tgts		*dcu_ec_tgts;
+	/* ID array for the DAOS targets that takes part in EC object update. */
+	struct obj_iod_array		 dcu_iod_array;
 	/* Used for split EC update request. */
 	uint32_t			 dcu_start_shard;
 	/* see obj_rpc_flags. */
