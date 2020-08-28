@@ -668,6 +668,9 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 	if (ts_set == NULL)
 		return;
 
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_READ_TS))
+		return;
+
 	if ((ts_set->ts_cflags & VOS_TS_READ_MASK) == 0)
 		return;
 
