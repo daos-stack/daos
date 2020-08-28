@@ -34,8 +34,8 @@ class DmgStorageQuery(ControlTestBase):
     """Test Class Description:
 
     Test to verify dmg storage health query commands and device state commands.
-    Including: storage query, storage blobstore-health, storage nvme-health,
-    storage query device-state.
+    Including: storage query, storage blobstore-health, storage query
+    device-state.
 
     :avocado: recursive
     """

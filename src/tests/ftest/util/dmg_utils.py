@@ -334,18 +334,18 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("storage", "query", "target-health"), rank=rank, tgtid=tgtid)
 
-    def storage_query_nvme_health(self):
-        """Get the result of the 'dmg storage query nvme-health' command.
+    def storage_scan_nvme_health(self):
+        """Get the result of the 'dmg storage scan --nvme-health' command.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: If dmg storage scan --nvme-health command fails.
 
         """
-        return self._get_result(("storage", "query", "nvme-health"))
+        return self._get_result(("storage", "scan", "--nvme-health"))
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, group=None, acl_file=None):
