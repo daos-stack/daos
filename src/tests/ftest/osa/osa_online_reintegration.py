@@ -278,6 +278,6 @@ class OSAOnlineReintegration(TestWithServers):
 
         :avocado: tags=all,pr,hw,large,osa,online_reintegration
         """
-        # Perform reintegration testing with 1 to 2 pools
-        for pool_num in range(1, 3):
+        # Perform reintegration testing with 1 pool.
+        for pool_num in range(1, 2):
             self.run_online_reintegration_test(pool_num)
