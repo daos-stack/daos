@@ -107,6 +107,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 	var ranks []system.Rank
 	if len(req.GetRanks()) > 0 {
+		// If the request supplies a specific rank list, use it.
 		ranks = system.RanksFromUint32(req.GetRanks())
 		ranks, err = system.DedupeRanks(ranks)
 		if err != nil {
@@ -114,6 +115,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		}
 		req.Ranks = system.RanksToUint32(ranks)
 	} else {
+		// Otherwise, create the pool across all ranks in the system.
 		ranks, err = svc.sysdb.MemberRanks()
 		if err != nil {
 			return nil, err
