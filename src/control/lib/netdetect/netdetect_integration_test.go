@@ -41,7 +41,7 @@ import (
 
 const maxConcurrent = 1000
 
-func getSocketID(t *testing.T, pid int32, wg *sync.WaitGroup, ctx context.Context) error {
+func getSocketID(ctx context.Context, t *testing.T, pid int32, wg *sync.WaitGroup) error {
 	defer wg.Done()
 	numaNode, err := GetNUMASocketIDForPid(ctx, int32(pid))
 	if err != nil {
@@ -64,20 +64,19 @@ func TestConcurrentGetNUMASocket(t *testing.T) {
 	var wg sync.WaitGroup
 	pid := syscall.Getpid()
 	rand.Seed(time.Now().UnixNano())
-	r := rand.Intn(1500)
-	for i := 0; i < maxConcurrent+r; i++ {
+	for i := 0; i < maxConcurrent; i++ {
 		wg.Add(1)
-		go func(n int32, ctx context.Context) {
+		go func(ctx context.Context, n int32) {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
-			err := getSocketID(t, n, &wg, ctx)
+			err := getSocketID(ctx, t, n, &wg)
 			common.AssertEqual(t, err, nil, fmt.Sprintf("getSocketIDWithContext error: %v", err))
 
-		}(int32(pid), netCtx)
+		}(netCtx, int32(pid))
 	}
 	wg.Wait()
 }
 
-func getSocketAndScanFabric(t *testing.T, pid int32, wg *sync.WaitGroup, ctx context.Context) error {
+func getSocketAndScanFabric(ctx context.Context, t *testing.T, pid int32, wg *sync.WaitGroup) error {
 	defer wg.Done()
 	numaNode, err := GetNUMASocketIDForPid(ctx, int32(pid))
 	if err != nil {
@@ -110,20 +109,19 @@ func TestConcurrentGetNUMASocketAndScanFabric(t *testing.T) {
 	var wg sync.WaitGroup
 	pid := syscall.Getpid()
 	rand.Seed(time.Now().UnixNano())
-	r := rand.Intn(1500)
-	for i := 0; i < 2*maxConcurrent+r; i++ {
+	for i := 0; i < maxConcurrent; i++ {
 		wg.Add(1)
-		go func(n int32, ctx context.Context) {
+		go func(ctx context.Context, n int32) {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
-			err := getSocketAndScanFabric(t, n, &wg, ctx)
+			err := getSocketAndScanFabric(ctx, t, n, &wg)
 			common.AssertEqual(t, err, nil, fmt.Sprintf("getSocketIDWithContext error: %v", err))
 
-		}(int32(pid), netCtx)
+		}(netCtx, int32(pid))
 	}
 	wg.Wait()
 }
 
-func getScanFabric(t *testing.T, wg *sync.WaitGroup, ctx context.Context) error {
+func getScanFabric(ctx context.Context, t *testing.T, wg *sync.WaitGroup) error {
 	defer wg.Done()
 	provider := ""
 	results, err := ScanFabric(ctx, provider)
@@ -155,7 +153,7 @@ func TestConcurrentScanFabric(t *testing.T) {
 		wg.Add(1)
 		go func(ctx context.Context) {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
-			err := getScanFabric(t, &wg, ctx)
+			err := getScanFabric(ctx, t, &wg)
 			common.AssertEqual(t, err, nil, fmt.Sprintf("ScanFabric failure: %v", err))
 
 		}(netCtx)
