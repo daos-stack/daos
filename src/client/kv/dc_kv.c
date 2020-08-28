@@ -38,8 +38,9 @@
 struct io_params {
 	daos_key_t		dkey;
 	daos_iod_t		iod;
-	d_iov_t		iov;
+	d_iov_t			iov;
 	d_sg_list_t		sgl;
+	char			akey_str;
 };
 
 static int
@@ -67,22 +68,23 @@ dc_kv_put(tse_task_t *task)
 {
 	daos_kv_put_t		*args = daos_task_get_args(task);
 	daos_obj_update_t	*update_args;
-	tse_task_t		*update_task;
-	struct io_params	*params;
+	tse_task_t		*update_task = NULL;
+	struct io_params	*params = NULL;
 	int			rc;
 
+	if (args->key == NULL || args->buf_size == 0 || args->buf == NULL)
+		D_GOTO(err_task, rc = -DER_INVAL);
+
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
-		return -DER_NOMEM;
-	}
+	if (params == NULL)
+		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	/** init dkey */
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
 
-	/** init iod. For now set akey = dkey */
-	d_iov_set(&params->iod.iod_name, (void *)args->key,
-		     strlen(args->key));
+	/** init iod. */
+	params->akey_str = '0';
+	d_iov_set(&params->iod.iod_name, &params->akey_str, 1);
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
 	params->iod.iod_size	= args->buf_size;
@@ -91,8 +93,7 @@ dc_kv_put(tse_task_t *task)
 	/** init sgl */
 	params->sgl.sg_nr = 1;
 	params->sgl.sg_iovs = &params->iov;
-	d_iov_set(&params->sgl.sg_iovs[0], (void *)args->buf,
-		     args->buf_size);
+	d_iov_set(&params->sgl.sg_iovs[0], (void *)args->buf, args->buf_size);
 
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
 			      0, NULL, &update_task);
@@ -139,31 +140,32 @@ dc_kv_get(tse_task_t *task)
 {
 	daos_kv_get_t		*args = daos_task_get_args(task);
 	daos_obj_fetch_t	*fetch_args;
-	tse_task_t		*fetch_task;
-	struct io_params	*params;
+	tse_task_t		*fetch_task = NULL;
+	struct io_params	*params = NULL;
 	void			*buf;
 	daos_size_t		*buf_size;
 	int			rc;
+
+	if (args->key == NULL)
+		D_GOTO(err_task, rc = -DER_INVAL);
 
 	buf = args->buf;
 	buf_size = args->buf_size;
 	if (buf_size == NULL) {
 		D_ERROR("Buffer size pointer is NULL\n");
-		return -DER_INVAL;
+		D_GOTO(err_task, rc = -DER_INVAL);
 	}
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
-		return -DER_NOMEM;
-	}
+	if (params == NULL)
+		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	/** init dkey */
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
 
-	/** init iod. For now set akey = dkey */
-	d_iov_set(&params->iod.iod_name, (void *)args->key,
-		     strlen(args->key));
+	/** init iod. */
+	params->akey_str = '0';
+	d_iov_set(&params->iod.iod_name, &params->akey_str, 1);
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
 	params->iod.iod_size	= *buf_size;
@@ -228,14 +230,15 @@ dc_kv_remove(tse_task_t *task)
 	daos_kv_remove_t	*args = daos_task_get_args(task);
 	daos_obj_punch_t	*punch_args;
 	tse_task_t		*punch_task = NULL;
-	struct io_params	*params;
+	struct io_params	*params = NULL;
 	int			rc;
 
+	if (args->key == NULL)
+		D_GOTO(err_task, rc = -DER_INVAL);
+
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
-		return -DER_NOMEM;
-	}
+	if (params == NULL)
+		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	/** init dkey */
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));

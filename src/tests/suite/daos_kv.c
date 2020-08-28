@@ -33,6 +33,8 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
+static daos_ofeat_t feat = DAOS_OF_KV_FLAT;
+
 static void simple_put_get(void **state);
 
 #define NUM_KEYS 1000
@@ -107,7 +109,7 @@ simple_put_get(void **state)
 	D_ALLOC(buf_out, buf_size);
 	assert_non_null(buf_out);
 
-	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -117,6 +119,15 @@ simple_put_get(void **state)
 	/** open the object */
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
+
+	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, NULL, buf_size, buf, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key, 0, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+	rc = daos_kv_get(oh, DAOS_TX_NONE, 0, NULL, NULL, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, 0, NULL, NULL);
+	assert_int_equal(rc, -DER_INVAL);
 
 	print_message("Inserting %d Keys\n", NUM_KEYS);
 	/** Insert Keys */
@@ -262,7 +273,7 @@ kv_cond_ops(void **state)
 	size_t		size;
 	int		rc;
 
-	oid = dts_oid_gen(OC_S1, 0, arg->myrank);
+	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
 
 	/** open the object */
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
@@ -281,14 +292,6 @@ kv_cond_ops(void **state)
 	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_UPDATE, "Key1",
 			 sizeof(int), &val, NULL);
 	assert_int_equal(rc, -DER_NONEXIST);
-
-	val_out = 5;
-	size = sizeof(int);
-	print_message("Conditional FETCH of non existent Key(should fail)\n");
-	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key2",
-			 &size, &val_out, NULL);
-	assert_int_equal(rc, -DER_NONEXIST);
-	assert_int_equal(val_out, 5);
 
 	print_message("Conditional INSERT of non existent Key\n");
 	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
