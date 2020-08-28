@@ -417,7 +417,8 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	int			 rc;
 	uint16_t		 minor_epc = VOS_MINOR_EPC_MAX;
 
-	if (ts_set == NULL || (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
+	if (ts_set == NULL ||
+	    (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
 		if (leaf)
 			goto punch_log;
 		return 0;
@@ -552,7 +553,7 @@ vos_ilog_ts_add(struct vos_ts_set *ts_set, struct ilog_df *ilog,
 {
 	uint32_t	*idx = NULL;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return 0;
 
 	if (ilog != NULL)
