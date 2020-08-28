@@ -30,71 +30,6 @@ static daos_handle_t    co_hdl;
 static dfs_t		*dfs_mt;
 
 static void
-dfs_test_cont(void **state)
-{
-        test_arg_t              *arg = *state;
-        uuid_t                  cuuid;
-        daos_cont_info_t        co_info;
-        daos_handle_t           coh;
-        int                     rc;
-
-        if (arg->myrank != 0)
-                return;
-
-        uuid_generate(cuuid);
-
-        /** create & open a non-posix container */
-        rc = daos_cont_create(arg->pool.poh, cuuid, NULL, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Created non-POSIX Container "DF_UUIDF"\n",
-                      DP_UUID(cuuid));
-
-        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-                            /* &coh*/NULL, &co_info, NULL);
-        assert_int_equal(rc, -DER_INVAL);
-/*
-&co_info no check
-        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-                            &coh, NULL, NULL);
-        assert_int_equal(rc, EINVAL);
-        print_message("NULL parameters should fail\n");
-*/
-        rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Destroyed non-POSIX Container "DF_UUIDF"\n",
-                      DP_UUID(cuuid));
-
-        /** create a DFS container with POSIX layout */
-        rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-
-        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-                            /*&coh*/NULL, &co_info, NULL);
-        assert_int_equal(rc, -DER_INVAL);
-/*
-&co_info no check
-        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-                            &coh, NULL, NULL);
-        assert_int_equal(rc, -DER_INVAL);
-        print_message("NULL parameters should fail\n");
-*/
-        rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-                            &coh, &co_info, NULL);
-        assert_int_equal(rc, 0);
-
-
-        rc = daos_cont_close(coh, NULL);
-        assert_int_equal(rc, 0);
-
-        rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-        assert_int_equal(rc, 0);
-        print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid))\
-		;
-
-}
-
-static void
 dfs_test_mount_umount(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -242,6 +177,10 @@ dfs_test_open_release(void **state)
         assert_int_equal(rc, ENOENT);
         print_message("Access flags should be provided\n");
 
+        rc = dfs_release(/*obj*/NULL);
+        assert_int_equal(rc, EINVAL);
+        print_message("Release should get an object\n");
+
         rc = dfs_open(dfs_mt, NULL, "test", S_IFREG | S_IWUSR | S_IRUSR ,
                       O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
 
@@ -255,15 +194,13 @@ dfs_test_open_release(void **state)
 
 
 static const struct CMUnitTest dfs_unit_tests[] = {
-        { "DFS_UNIT_TEST1: Container open / close / create / destroy",
-          dfs_test_cont,  async_disable, test_case_teardown},
-        { "DFS_UNIT_TEST2: DFS mount / umount",
+        { "DFS_UNIT_TEST1: DFS mount / umount",
           dfs_test_mount_umount, async_disable, test_case_teardown},
-        { "DFS_UNIS TEST3: DFS open / release",
+        { "DFS_UNIS TEST2: DFS open / release",
           dfs_test_open_release,  async_disable, test_case_teardown},
-/*      { "DFS_UNIS T3: S",
+/*      { "DFS_UNIS TEST3: ",
           dfs_test_,  async_disable, test_case_teardown},
-        { "DFS_UNIS T3: S",
+        { "DFS_UNIS TEST4: ",
           dfs_test_,  async_disable, test_case_teardown},
 */
 };
