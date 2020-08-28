@@ -26,7 +26,7 @@ hosts: !mux
 tests: !mux
   proto_np_1:
     name: proto_np_1
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_proto_server -p 4 --name proto_srv_grp"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -36,7 +36,7 @@ tests: !mux
     test_clients_ppn: "1"
   proto_np_2:
     name: proto_np_2
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_proto_server -p 4 --name proto_srv_grp"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -46,7 +46,7 @@ tests: !mux
     test_clients_ppn: "1"
   proto_np_3:
     name: proto_np_3
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_proto_server -p 3 --name proto_srv_grp"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -56,7 +56,7 @@ tests: !mux
     test_clients_ppn: "1"
   test_group:
     name: test_group_basic
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp"
     test_servers_env: "-x D_FI_CONFIG=/usr/etc/fault-inject-cart.yaml"
     test_servers_ppn: "1"
@@ -66,7 +66,7 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_1:
     name: ep_credits_1
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n epc1_srv_grp -s"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -76,7 +76,7 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_2:
     name: ep_credits_2
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -86,7 +86,7 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_3:
     name: ep_credits_3
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -96,7 +96,7 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_4:
     name: ep_credits_4
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -106,7 +106,7 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_5:
     name: ep_credits_5
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -116,7 +116,7 @@ tests: !mux
     test_clients_ppn: "1"
   ep_credits_6:
     name: ep_credits_6
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
     test_servers_env: ""
     test_servers_ppn: "1"
@@ -126,7 +126,7 @@ tests: !mux
     test_clients_ppn: "1"
   no_timeout:
     name: no_timeout_basic
-    test_servers_bin: ../../../../bin/crt_launch
+    test_servers_bin: crt_launch
     test_servers_arg: "-e ../tests/test_group_np_srv --name timeout_srv_grp"
     test_servers_env: "-x CRT_TIMEOUT=10"
     test_servers_ppn: "1"
