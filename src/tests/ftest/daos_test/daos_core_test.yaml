@@ -70,9 +70,12 @@ daos_tests:
     test_e:
       daos_test: e
       test_name: DAOS epoch tests
-    test_X:
-      daos_test: X
-      test_name: DAOS DTX tests
+    test_t:
+      daos_test: t
+      test_name: Single RDG TX tests
+    test_T:
+      daos_test: T
+      test_name: Distributed TX tests
     test_V:
       daos_test: V
       test_name: DAOS verify consistency tests
