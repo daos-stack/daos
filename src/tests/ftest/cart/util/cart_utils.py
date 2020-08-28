@@ -62,7 +62,13 @@ class CartUtils():
 
         unique = random.randint(1, 100000)
 
-        path = './hostfile'
+        # Write hostfile to HOME or DAOS_TEST_SHARED_DIR (can't be '.' or
+        # cwd(), it must be some place writable)
+        hostfile_path_dir = os.environ['HOME']
+        if 'DAOS_TEST_SHARED_DIR' in os.environ:
+          hostfile_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
+
+        path = hostfile_path_dir + '/hostfile'
 
         if not os.path.exists(path):
             os.makedirs(path)
