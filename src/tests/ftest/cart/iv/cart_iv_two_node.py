@@ -221,7 +221,7 @@ class CartIvTwoNodeTest(Test):
                             .format(cli_rtn, command))
 
     # Use of DAOS_TEST_SHARED_DIR should fix this test failure
-    # @skipForTicket("DAOS-5549")
+    @skipForTicket("DAOS-5549")
     def test_cart_iv(self):
         """
         Test CaRT IV
