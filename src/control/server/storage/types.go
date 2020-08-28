@@ -31,6 +31,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // ScmState represents the probed state of SCM modules on the system.
@@ -80,11 +81,13 @@ type (
 	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
 	ScmNamespaces []*ScmNamespace
 
+	// ScmMountPoint represents location SCM filesystem is mounted.
 	ScmMountPoint struct {
 		Info string
 		Path string
 	}
 
+	// ScmMountPoints is a type alias for []ScmMountPoint that implements fmt.Stringer.
 	ScmMountPoints []*ScmMountPoint
 
 	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
@@ -132,6 +135,16 @@ type (
 		Size uint64
 	}
 
+	// SmdDevice contains DAOS storage device information, including
+	// health details if requested.
+	SmdDevice struct {
+		UUID      string                `json:"uuid"`
+		TargetIDs []int32               `hash:"set" json:"tgt_ids"`
+		State     string                `json:"state"`
+		Rank      system.Rank           `json:"rank"`
+		Health    *NvmeControllerHealth `json:"health"`
+	}
+
 	// NvmeController represents a NVMe device controller which includes health
 	// and namespace information and mirrors C.struct_ns_t.
 	NvmeController struct {
@@ -141,8 +154,9 @@ type (
 		PciAddr     string
 		FwRev       string
 		SocketID    int32
-		HealthStats *NvmeControllerHealth `hash:"ignore"`
+		HealthStats *NvmeControllerHealth
 		Namespaces  []*NvmeNamespace
+		SmdDevices  []*SmdDevice
 	}
 
 	// NvmeControllers is a type alias for []*NvmeController which implements fmt.Stringer.

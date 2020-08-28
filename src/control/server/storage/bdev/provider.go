@@ -24,10 +24,12 @@
 package bdev
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -153,6 +155,26 @@ func (p *Provider) IsVMDDisabled() bool {
 	return p.backend.IsVMDDisabled()
 }
 
+func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
+	out := make(storage.NvmeControllers, 0)
+
+	if len(pciFilter) == 0 {
+		return &ScanResponse{Controllers: resp.Controllers}
+	}
+
+	fmt.Printf("filter: %v", pciFilter)
+
+	for _, c := range resp.Controllers {
+		fmt.Printf("filter: %v", pciFilter)
+		if !common.Includes(pciFilter, c.PciAddr) {
+			continue
+		}
+		out = append(out, c)
+	}
+
+	return &ScanResponse{Controllers: out}
+}
+
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.shouldForward(req) {
@@ -162,7 +184,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		defer p.Unlock()
 
 		if p.scanCache == nil || req.Rescan {
-			p.log.Debug("bdev provider rescan requested")
+			p.log.Debug("populating bdev scan cache")
 
 			resp, err := p.fwd.Scan(req)
 			if err != nil {
@@ -171,8 +193,9 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 			p.scanCache = resp
 		}
 
-		return p.scanCache, nil
+		return p.scanCache.filter(req.DeviceList...), nil
 	}
+
 	// set vmd state on remote provider in forwarded request
 	if req.IsForwarded() && req.DisableVMD {
 		p.disableVMD()

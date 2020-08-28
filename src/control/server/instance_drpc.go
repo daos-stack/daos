@@ -25,13 +25,16 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -156,4 +159,98 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *s
 	case result := <-resChan:
 		return result
 	}
+}
+
+func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
+	dresp, err := srv.CallDrpc(drpc.MethodBioHealth, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.BioHealthResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
+	}
+
+	if resp.Status != 0 {
+		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")
+	}
+
+	return resp, nil
+}
+
+func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.SmdDevReq) (*mgmtpb.SmdDevResp, error) {
+	dresp, err := srv.CallDrpc(drpc.MethodSmdDevs, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.SmdDevResp)
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
+	}
+
+	if resp.Status != 0 {
+		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "listSmdDevices failed")
+	}
+
+	return resp, nil
+}
+
+// updateInUseBdevs updates-in-place the input list of controllers with
+// new NVMe health stats and SMD metadata details.
+//
+// First map input controllers to their concatenated model+serial keys then
+// retrieve metadata and health details for each SMD device (blobstore) on
+// "this" IO server instance and update details in input controller list.
+func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
+	smdDevs, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
+	if err != nil {
+		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())
+	}
+
+	for _, dev := range smdDevs.Devices {
+		health, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
+			DevUuid: dev.Uuid,
+		})
+		if err != nil {
+			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
+		}
+
+		modelSerial, emptyField, ok := checkModelSerial(health.Model, health.Serial)
+		if !ok {
+			srv.log.Debugf("instance %d: skipping health stats for uuid %s, %s id empty",
+				srv.Index(), health.DevUuid, emptyField)
+			continue
+		}
+
+		msg := fmt.Sprintf("instance %d: stats received for ctrlr model/serial %s from smd uuid %s",
+			srv.Index(), modelSerial, dev.GetUuid())
+
+		ctrlr, exists := ctrlrMap[modelSerial]
+		if !exists {
+			srv.log.Debug(msg + " didn't match any known controllers")
+			continue
+		}
+
+		srv.log.Debugf("%s->%s", msg, ctrlr.PciAddr)
+
+		// multiple updates for the same key expected when
+		// more than one controller namespaces (and resident
+		// blobstores) exist, stats will be the same for each
+		if err := convert.Types(health, ctrlr.HealthStats); err != nil {
+			return errors.Wrapf(err, "converting health for controller %s %s",
+				modelSerial, ctrlr.PciAddr)
+		}
+
+		smdDev := new(storage.SmdDevice)
+		if err := convert.Types(dev, smdDev); err != nil {
+			return errors.Wrapf(err, "converting smd details for controller %s %s",
+				modelSerial, ctrlr.PciAddr)
+		}
+
+		ctrlr.SmdDevices = append(ctrlr.SmdDevices, smdDev)
+	}
+
+	return nil
 }

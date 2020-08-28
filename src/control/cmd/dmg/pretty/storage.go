@@ -64,7 +64,47 @@ func PrintNvmeHealthMap(hsm control.HostStorageMap, out io.Writer, opts ...contr
 	return w.Err
 }
 
-func printSmdDevice(dev *control.SmdDevice, out io.Writer, opts ...control.PrintConfigOption) error {
+// PrintNvmeMetaMap generates a human-readable representation of the supplied
+// HostStorageMap, with a focus on presenting the NVMe Device Server Meta Data.
+func PrintNvmeMetaMap(hsm control.HostStorageMap, out io.Writer, opts ...control.PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := control.GetPrintHosts(hss.HostSet.RangedString(), opts...)
+		lineBreak := strings.Repeat("-", len(hosts))
+		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
+
+		if len(hss.HostStorage.NvmeDevices) == 0 {
+			fmt.Fprintln(out, "  No NVMe devices detected")
+			continue
+		}
+
+		for _, controller := range hss.HostStorage.NvmeDevices {
+			if err := control.PrintNvmeControllerSummary(controller, out, opts...); err != nil {
+				return err
+			}
+			iw := txtfmt.NewIndentWriter(out)
+			if len(controller.SmdDevices) > 0 {
+				fmt.Fprintln(iw, "SMD Devices")
+
+				for _, device := range controller.SmdDevices {
+					iw1 := txtfmt.NewIndentWriter(iw)
+					if err := printSmdDevice(device, iw1, opts...); err != nil {
+						return err
+					}
+				}
+			} else {
+				fmt.Fprintln(iw, "No devices found")
+			}
+			fmt.Fprintln(out)
+		}
+	}
+
+	return w.Err
+}
+
+func printSmdDevice(dev *storage.SmdDevice, out io.Writer, opts ...control.PrintConfigOption) error {
 	_, err := fmt.Fprintf(out, "UUID:%s Targets:%+v Rank:%d State:%s\n",
 		dev.UUID, dev.TargetIDs, dev.Rank, dev.State)
 	return err
