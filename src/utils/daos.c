@@ -531,6 +531,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	const int		RC_PRINT_HELP = 2;
 	const int		RC_NO_HELP = -2;
 	char			*cmdname = NULL;
+	char			*env_value;
 
 	assert(ap != NULL);
 	ap->p_op = -1;
@@ -572,6 +573,39 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	D_STRNDUP(cmdname, argv[2], strlen(argv[2]));
 	if (cmdname == NULL)
 		D_GOTO(out_free, rc = RC_NO_HELP);
+
+	/* Try to get pool, container, group, and svc from environment */
+	if ((env_value = getenv("DAOS_POOL")) != NULL) {
+		if (uuid_parse(env_value, ap->p_uuid) != 0) {
+			fprintf(stderr,
+				"failed to parse pool UUID %s from env\n",
+				env_value);
+			D_GOTO(out_free, rc = RC_NO_HELP);
+		}
+	}
+
+	if ((env_value = getenv("DAOS_CONT")) != NULL) {
+		if (uuid_parse(env_value, ap->c_uuid) != 0) {
+			fprintf(stderr,
+				"failed to parse cont UUID %s from env\n",
+				env_value);
+			D_GOTO(out_free, rc = RC_NO_HELP);
+		}
+	}
+
+	if ((env_value = getenv("DAOS_GROUP")) != NULL) {
+		D_FREE(ap->sysname);
+		D_STRNDUP(ap->sysname, env_value, strlen(env_value));
+		if (ap->sysname == NULL)
+			D_GOTO(out_free, rc = RC_NO_HELP);
+	}
+
+	if ((env_value = getenv("DAOS_SVCL")) != NULL) {
+		D_STRNDUP(ap->mdsrv_str, env_value, strlen(env_value));
+		if (ap->mdsrv_str == NULL)
+			D_GOTO(out_free, rc = RC_NO_HELP);
+		ap->mdsrv = daos_rank_list_parse(ap->mdsrv_str, ",");
+	}
 
 	/* Parse remaining command-line options (skip resource and command).
 	 * Use goto on any errors here since some options may result in
