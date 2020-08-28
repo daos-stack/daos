@@ -494,12 +494,33 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	struct mgmt_svc			*svc;
 	d_rank_list_t			*rank_list;
 	uuid_t				*tgt_uuids = NULL;
+	d_rank_list_t			*filtered_targets = NULL;
+	d_rank_list_t			*pg_ranks = NULL;
+	uint32_t			pg_size;
 	int				rc;
 	int				rc_cleanup;
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
 		goto out;
+
+	/* Sanity check targets versus cart's current primary group members.
+	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.
+	 */
+	rc = crt_group_size(NULL, &pg_size);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	pg_ranks = d_rank_list_alloc(pg_size);
+	rc = d_rank_list_dup(&filtered_targets, targets);
+	if (rc) {
+		rc = -DER_NOMEM;
+		D_GOTO(out, rc);
+	}
+	/* Remove any targets not found in pg_ranks */
+	d_rank_list_filter(pg_ranks, filtered_targets, false /* exclude */);
+	if (!d_rank_list_identical(filtered_targets, targets)) {
+		D_ERROR("some ranks not found in cart primary group\n");
+		D_GOTO(out, rc = -DER_OOG);
+	}
 
 	rc = pool_create_prepare(svc, pool_uuid, targets, &rank_list);
 	if (rc != 0) {
@@ -557,6 +578,8 @@ out_preparation:
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
+	d_rank_list_free(filtered_targets);
+	d_rank_list_free(pg_ranks);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
 	return rc;
