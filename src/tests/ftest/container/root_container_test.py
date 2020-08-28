@@ -64,7 +64,7 @@ class RootContainerTest(DfuseTestBase):
             TestPool: the newly added pool
 
         """
-        self.pool.append(self.get_pool())
+        self.pool.append(self.get_pool(connect=False))
         return self.pool[-1]
 
     def _create_cont(self, pool, path=None):
