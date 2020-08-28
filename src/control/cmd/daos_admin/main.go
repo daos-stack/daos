@@ -54,8 +54,7 @@ func addMethodHandlers(app *pbin.App) {
 	app.AddHandler("ScmScan", &scmScanHandler{})
 	app.AddHandler("ScmPrepare", &scmPrepHandler{})
 
-	app.AddHandler("BdevInit", &bdevInitHandler{})
-	app.AddHandler("BdevScan", &bdevScanHandler{})
 	app.AddHandler("BdevPrepare", &bdevPrepHandler{})
+	app.AddHandler("BdevScan", &bdevScanHandler{})
 	app.AddHandler("BdevFormat", &bdevFormatHandler{})
 }

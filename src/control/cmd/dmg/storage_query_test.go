@@ -38,7 +38,7 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"NVMe health query",
 			"storage query nvme-health",
-			printRequest(t, &control.StorageScanReq{}),
+			printRequest(t, &control.StorageScanReq{ConfigDevicesOnly: true}),
 			nil,
 		},
 		{

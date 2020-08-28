@@ -46,7 +46,7 @@ obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
 	 *	be unordered. So checking the bitmap may be inefficient.
 	 */
 	for (i = 0; i < map_size; i++) {
-		if (tgt_map[i].dcet_tgt_idx == id) {
+		if (tgt_map[i].dcet_tgt_id == id) {
 			*shard = tgt_map[i].dcet_shard_idx;
 			return true;
 		}
@@ -143,21 +143,9 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 
 	if (tgt_map != NULL) {
 		D_ASSERT(count == map_size);
-
-		if (obj_ec_is_valid_tgt(tgt_map, map_size,
-					tgts[0].st_tgt_id, &tgt_idx))
-			tgt_idx -= start_shard;
-		else
-			/* If the leader (tgt[0]) is not in current EC RDG,
-			 * then set 'tgt_idx' as zero to select 'tgt_oiod'.
-			 * Related modification will not be executed on the
-			 * leader.
-			 */
-			tgt_idx = 0;
 	} else {
 		setbit(tgt_bit_map, tgt_max_idx);
 		count++;
-		tgt_idx = tgt_max_idx;
 	}
 
 	tgt_oiods = obj_ec_tgt_oiod_init(oiods, iod_nr, tgt_bit_map,
@@ -166,8 +154,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	req->osr_tgt_oiods = tgt_oiods;
-	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, count, tgt_idx);
-	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == tgt_idx);
+	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, count, tgt_max_idx);
+	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == tgt_max_idx);
 
 	req->osr_offs = tgt_oiod->oto_offs;
 	split_iods = req->osr_iods;
