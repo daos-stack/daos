@@ -359,7 +359,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
-%attr(0777,root,root) %{_prefix}/lib/daos/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
