@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,8 @@ dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 	/* generate a unique and not scary long object ID */
 	oid.lo	= obj_id_gen++;
 	oid.lo	|= hdr;
-	oid.hi	= rand() % 100;
+	/** Mod by large 32-bit prime */
+	oid.hi	= rand() % 2147483647;
 	daos_obj_generate_id(&oid, ofeats, oclass, 0);
 
 	return oid;
