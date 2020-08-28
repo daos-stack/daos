@@ -193,14 +193,49 @@ dfs_test_open_release(void **state)
 }
 
 
+static void
+dfs_test_mkdir_remove(void **state)
+{
+        int rc;
+ 
+	rc = dfs_mkdir(/*dfs_mt*/ NULL, NULL, "dir", S_IWUSR | S_IRUSR, 0);
+        assert_int_equal(rc, EINVAL);
+        print_message("Mounted file system should be provided\n");
+
+	rc = dfs_mkdir(dfs_mt, NULL, /*"dir"*/ NULL, S_IWUSR | S_IRUSR, 0);
+        assert_int_equal(rc, EINVAL);
+	print_message("Directory name to create should be provided\n");
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir",  0, 0);
+        assert_int_equal(rc, 0);
+        print_message("Permission for at least R or W is not checked\n");
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir", S_IWUSR | S_IRUSR, 0);
+        assert_int_equal(rc, EEXIST);
+	print_message( "Second directory with the same name rejected\n");
+
+        rc = dfs_remove(dfs_mt, NULL, /*"dir"*/ NULL, true, NULL);        
+        assert_int_equal(rc, EINVAL);
+        print_message("Directory name to remove should be provided\n");
+
+        rc = dfs_remove(dfs_mt, NULL, "dir", true, NULL);        
+	assert_int_equal(rc, 0);
+	print_message("Successful rmdir\n");
+
+        rc = dfs_remove(dfs_mt, NULL, "dir", true, NULL);        
+	assert_int_equal(rc, ENOENT);
+	print_message("Not existing directory can not be removed\n");
+}
+
+
 static const struct CMUnitTest dfs_unit_tests[] = {
         { "DFS_UNIT_TEST1: DFS mount / umount",
           dfs_test_mount_umount, async_disable, test_case_teardown},
         { "DFS_UNIS TEST2: DFS open / release",
-          dfs_test_open_release,  async_disable, test_case_teardown},
-/*      { "DFS_UNIS TEST3: ",
-          dfs_test_,  async_disable, test_case_teardown},
-        { "DFS_UNIS TEST4: ",
+          dfs_test_open_release, async_disable, test_case_teardown},
+	{ "DFS_UNIS TEST3: DFS mkdir / remove",
+          dfs_test_mkdir_remove, async_disable, test_case_teardown},
+/*        { "DFS_UNIS TEST4: ",
           dfs_test_,  async_disable, test_case_teardown},
 */
 };
