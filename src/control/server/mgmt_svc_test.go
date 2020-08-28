@@ -627,8 +627,8 @@ func TestServer_MgmtSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &mgmtpb.BioHealthResp{
-							Temperature: 1000000,
-							TempWarn:    true,
+							BdsTemperature: 1000000,
+							BdsTempWarning: true,
 						},
 					},
 				},
@@ -643,8 +643,8 @@ func TestServer_MgmtSvc_SmdQuery(t *testing.T) {
 								Uuid:  common.MockUUID(1),
 								State: "FAULTY",
 								Health: &mgmtpb.BioHealthResp{
-									Temperature: 1000000,
-									TempWarn:    true,
+									BdsTemperature: 1000000,
+									BdsTempWarning: true,
 								},
 							},
 						},
@@ -724,8 +724,8 @@ func TestServer_MgmtSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &mgmtpb.BioHealthResp{
-							Temperature: 1000000,
-							TempWarn:    true,
+							BdsTemperature: 1000000,
+							BdsTempWarning: true,
 						},
 					},
 				},
@@ -740,8 +740,8 @@ func TestServer_MgmtSvc_SmdQuery(t *testing.T) {
 								TgtIds: []int32{0},
 								State:  "FAULTY",
 								Health: &mgmtpb.BioHealthResp{
-									Temperature: 1000000,
-									TempWarn:    true,
+									BdsTemperature: 1000000,
+									BdsTempWarning: true,
 								},
 							},
 						},

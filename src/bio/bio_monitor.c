@@ -237,19 +237,61 @@ out:
 	spdk_bdev_free_io(bdev_io);
 }
 
+static int
+populate_dev_health(struct bio_dev_state *dev_state,
+		    struct spdk_nvme_health_information_page *page,
+		    const struct spdk_nvme_ctrlr_data *cdata)
+{
+	int	written;
+
+	dev_state->bds_warn_temp_time = page->warning_temp_time;
+	dev_state->bds_crit_temp_time = page->critical_temp_time;
+	dev_state->bds_ctrl_busy_time = page->controller_busy_time[0];
+	dev_state->bds_power_cycles = page->power_cycles[0];
+	dev_state->bds_power_on_hours = page->power_on_hours[0];
+	dev_state->bds_unsafe_shutdowns = page->unsafe_shutdowns[0];
+	dev_state->bds_media_errors = page->media_errors[0];
+	dev_state->bds_error_log_entries = page->num_error_info_log_entries[0];
+	dev_state->bds_temperature = page->temperature;
+	dev_state->bds_temp_warning = page->critical_warning.bits.temperature ?
+		true : false;
+	dev_state->bds_avail_spare_warning = \
+		page->critical_warning.bits.available_spare ? true : false;
+	dev_state->bds_dev_reliability_warning = \
+		page->critical_warning.bits.device_reliability ? true : false;
+	dev_state->bds_read_only_warning = \
+		page->critical_warning.bits.read_only ? true : false;
+	dev_state->bds_volatile_mem_warning = \
+		page->critical_warning.bits.volatile_memory_backup ?
+		true : false;
+
+	written = snprintf(dev_state->bds_model, sizeof(dev_state->bds_model),
+			   "%-20.20s", cdata->mn);
+	if (written >= sizeof(dev_state->bds_model)) {
+		D_ERROR("writing model to dev_state");
+		return -DER_TRUNC;
+	}
+
+	written = snprintf(dev_state->bds_serial, sizeof(dev_state->bds_serial),
+			   "%-20.20s", cdata->sn);
+	if (written >= sizeof(dev_state->bds_serial)) {
+		D_ERROR("writing serial to dev_state");
+		return -DER_TRUNC;
+	}
+
+	return 0;
+}
+
 static void
 get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
 	struct bio_dev_health			 *dev_health = cb_arg;
 	struct bio_dev_state			 *dev_state;
-	struct spdk_nvme_health_information_page *hp;
 	struct spdk_bdev			 *bdev;
 	struct spdk_nvme_cmd			  cmd;
 	uint32_t				  cp_sz;
-	uint8_t					  crit_warn;
-	int					  rc;
-	int					  sc, sct;
+	int					  rc, sc, sct;
 	uint32_t				  cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
@@ -265,24 +307,14 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	D_ASSERT(bdev != NULL);
-	hp = dev_health->bdh_health_buf;
 
 	/* Store device health info in in-memory health state log. */
 	dev_state = &dev_health->bdh_health_state;
 	dev_state->bds_timestamp = dev_health->bdh_stat_age;
-	dev_state->bds_temperature = hp->temperature;
-	crit_warn = hp->critical_warning.bits.temperature;
-	dev_state->bds_temp_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.available_spare;
-	dev_state->bds_avail_spare_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.device_reliability;
-	dev_state->bds_dev_reliabilty_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.read_only;
-	dev_state->bds_read_only_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.volatile_memory_backup;
-	dev_state->bds_volatile_mem_warning = crit_warn;
-	memcpy(dev_state->bds_media_errors, hp->media_errors,
-	       sizeof(hp->media_errors));
+	rc = populate_dev_health(dev_state, dev_health->bdh_health_buf,
+				 dev_health->bdh_ctrlr_buf);
+	if (rc != 0)
+		goto out;
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);

@@ -38,23 +38,33 @@ message NvmeController {
 		string ctrlrpciaddr = 3;
 	}
 
+	// Health mirrors bio_dev_state structure.
 	message Health {
-		uint32 temperature = 1;
-		uint32 temp_warn_time = 2; // temperature warning duration
-		uint32 temp_crit_time = 3; // temperature critical duration
-		uint64 ctrl_busy_time = 4; // controller busy duration
-		uint64 power_cycles = 5;
-		uint64 power_on_hours = 6;
-		uint64 unsafe_shutdowns = 7;
-		uint64 media_errors = 8;
-		uint64 error_count = 9; // error log entries
-		// critical warnings
-		bool temp_warn = 10;
-		bool spare_warn = 11;
-		bool device_reliability_warn = 12;
-		bool readonly_warn = 13;
-		bool volatile_memory_warn = 14;
-		string ctrlr_pci_addr = 15;
+		string bds_model = 1;
+		string bds_serial = 2;
+		uint64 bds_timestamp = 3;
+		uint64 bds_error_count = 4;
+		// Device health details
+		uint32 bds_warn_temp_time = 5;
+		uint32 bds_crit_temp_time = 6;
+		uint64 bds_ctrl_busy_time = 7;
+		uint64 bds_power_cycles = 8;
+		uint64 bds_power_on_hours = 9;
+		uint64 bds_unsafe_shutdowns = 10;
+		uint64 bds_media_errors = 11;
+		uint64 bds_error_log_entries = 12;
+		// I/O error counters
+		uint32 bds_bio_read_errs = 13;
+		uint32 bds_bio_write_errs = 14;
+		uint32 bds_bio_unmap_errs = 15;
+		uint32 bds_checksum_errs = 16;
+		uint32 bds_temperature = 17; // in Kelvin
+		// Critical warnings
+		bool bds_temp_warning = 18;
+		bool bds_avail_spare_warning = 19;
+		bool bds_dev_reliability_warning = 20;
+		bool bds_read_only_warning = 21;
+		bool bds_volatile_mem_warning = 22; // volatile memory backup
 	}
 
 	string model = 1;	// model name

@@ -1757,7 +1757,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to query BIO health data\n");
+	D_INFO("Received request to query BIO health data\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -1803,20 +1803,36 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
 	bds = bio_health->mb_dev_state;
-	resp->error_count = bds.bds_error_count;
-	resp->temperature = bds.bds_temperature;
-	resp->media_errors = bds.bds_media_errors[0];
-	resp->read_errors = bds.bds_bio_read_errs;
-	resp->write_errors = bds.bds_bio_write_errs;
-	resp->unmap_errors = bds.bds_bio_unmap_errs;
-	resp->checksum_errors = bds.bds_checksum_errs;
-	resp->temp_warn = bds.bds_temp_warning ? true : false;
-	resp->spare_warn = bds.bds_avail_spare_warning ? true : false;
-	resp->readonly_warn = bds.bds_read_only_warning ? true : false;
-	resp->device_reliability_warn = bds.bds_dev_reliabilty_warning ?
-					true : false;
-	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
-					true : false;
+	resp->bds_error_count = bds.bds_error_count;
+	resp->bds_temperature = bds.bds_temperature;
+	resp->bds_media_errors = bds.bds_media_errors;
+	resp->bds_bio_read_errs = bds.bds_bio_read_errs;
+	resp->bds_bio_write_errs = bds.bds_bio_write_errs;
+	resp->bds_bio_unmap_errs = bds.bds_bio_unmap_errs;
+	resp->bds_checksum_errs = bds.bds_checksum_errs;
+	resp->bds_temp_warning = bds.bds_temp_warning;
+	resp->bds_avail_spare_warning = bds.bds_avail_spare_warning;
+	resp->bds_read_only_warning = bds.bds_read_only_warning;
+	resp->bds_dev_reliability_warning = bds.bds_dev_reliability_warning;
+	resp->bds_volatile_mem_warning = bds.bds_volatile_mem_warning;
+
+	D_ALLOC(resp->bds_model, BIO_DEV_STR_LEN);
+	if (resp->bds_model == NULL) {
+		D_ERROR("failed to allocate model ID buffer");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	strncpy(resp->bds_model, bds.bds_model,
+		strnlen(bds.bds_model, BIO_DEV_STR_LEN-1));
+
+	D_ALLOC(resp->bds_serial, BIO_DEV_STR_LEN);
+	if (resp->bds_serial == NULL) {
+		D_ERROR("failed to allocate serial ID buffer");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	strncpy(resp->bds_serial, bds.bds_serial,
+		strnlen(bds.bds_serial, BIO_DEV_STR_LEN-1));
 
 out:
 	resp->status = rc;
