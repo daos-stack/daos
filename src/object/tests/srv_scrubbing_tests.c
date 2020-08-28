@@ -34,7 +34,6 @@
 #include <fcntl.h>
 #include <daos/tests_lib.h>
 
-
 /**
  * Scrubbing tests are integration tests between checksum functionality
  * and VOS. VOS does not calculate any checksums so the checksums for the
@@ -358,6 +357,17 @@ sts_ctx_do_scrub(struct sts_context *ctx)
 					 ctx->tsc_corruption_handler));
 }
 
+
+/** Test Fake */
+int
+dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
+	       size_t stack_size, ABT_thread *ult)
+{
+	func(arg);
+
+	return 0;
+}
+
 /**
  * ----------------------------------------------------------------------------
  * Tests
@@ -523,7 +533,7 @@ sts_teardown(void **state)
 	{ desc, test_fn, sts_setup, sts_teardown }
 
 static const struct CMUnitTest scrubbing_tests[] = {
-	TS("CSUM_SCRUBBING_01: WIP With no corruption",
+	TS("CSUM_SCRUBBING_01: With no corruption",
 	   scrubbing_with_no_corruption),
 	TS("CSUM_SCRUBBING_02: With a single value corrupted",
 	   scrubbing_with_sv_corrupted),

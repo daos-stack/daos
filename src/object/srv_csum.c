@@ -796,6 +796,30 @@ verify_sv(struct scrubbing_context *ctx, d_iov_t *iov,
 	return rc;
 }
 
+struct scrub_verify_args {
+
+	vos_iter_type_t			 type;
+	struct scrubbing_context	*ctx;
+	daos_iod_t			*iod;
+	d_sg_list_t			*sgl;
+	struct dcs_csum_info		*csum;
+	int				 rc;
+};
+
+void scrub_verify_cb(void *args)
+{
+	struct scrub_verify_args *verify_args = args;
+	int rc;
+
+	if ((*verify_args).type == VOS_ITER_RECX)
+		rc = verify_recx((*verify_args).ctx, &(*verify_args).iod->iod_recxs[0], (*verify_args).iod->iod_size,
+				 &(*verify_args).sgl->sg_iovs[0], (*verify_args).csum);
+	else /** type == VOS_ITER_SINGLE */
+		rc = verify_sv((*verify_args).ctx, &(*verify_args).sgl->sg_iovs[0], (*verify_args).csum);
+
+	verify_args->rc = rc;
+}
+
 /** vos_iter_cb_t */
 static int
 scrub_obj_cb(daos_handle_t ih, vos_iter_entry_t *entry,
@@ -832,16 +856,23 @@ scrub_obj_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = vos_obj_fetch(param->ip_hdl, param->ip_oid, entry->ie_epoch, 0,
 			   &param->ip_dkey, 1, &iod, &sgl);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	if (rc != 0) {
+		D_GOTO(out, rc = 0); /** don't try to verify if fetch failed, but don't kill the iteration either */
+	}
 
-	if (type == VOS_ITER_RECX)
-		rc = verify_recx(ctx, &iod.iod_recxs[0], iod.iod_size,
-				 &sgl.sg_iovs[0], &entry->ie_csum);
-	else /** type == VOS_ITER_SINGLE */
-		rc = verify_sv(ctx, &sgl.sg_iovs[0], &entry->ie_csum);
+	struct scrub_verify_args verify_args = {0};
+	verify_args.type = type;
+	verify_args.ctx = ctx;
+	verify_args.iod = &iod;
+	verify_args.sgl = &sgl;
+	verify_args.csum = &entry->ie_csum;
 
-	if (rc == -DER_CSUM) {
+	ABT_thread		 gc = ABT_THREAD_NULL;
+	rc = dss_ult_create(scrub_verify_cb, &verify_args, DSS_ULT_CHECKSUM,
+			    DSS_TGT_SELF, 0, &gc);
+	ABT_thread_join(gc);
+
+	if (verify_args.rc == -DER_CSUM) {
 		D_WARN("Checksum scrubber found corruption");
 		sc_corrution_handler(ctx);
 

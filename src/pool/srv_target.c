@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/srv_csum.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -192,6 +193,114 @@ struct pool_child_lookup_arg {
 	uint32_t	pla_map_version;
 };
 
+
+struct scrubbing_args {
+	uuid_t pool_uuid;
+};
+
+static int
+corruption_handler()
+{
+	D_PRINT("[RYON] %s:%d [%s()] > Handling corruption\n", __FILE__, __LINE__, __FUNCTION__);
+	return 0;
+}
+
+
+static int
+progress_handler()
+{
+	D_PRINT("[RYON] %s:%d [%s()] > Handling progress ... \n", __FILE__, __LINE__, __FUNCTION__);
+	return 0;
+}
+
+static int
+pool_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		     vos_iter_type_t type, vos_iter_param_t *param,
+		     void *cb_arg, unsigned int *acts)
+{
+	daos_handle_t		coh;
+	struct ds_cont_child	*cont = NULL;
+	struct scrubbing_args	*args = cb_arg;
+
+	vos_cont_open(param->ip_hdl, entry->ie_couuid, &coh);
+
+	ds_cont_child_lookup(args->pool_uuid, entry->ie_couuid, &cont);
+
+	if (daos_csummer_initialized(cont->sc_csummer)) {
+		ds_obj_csum_scrub(coh, cont->sc_csummer, progress_handler, corruption_handler);
+	}
+
+	ds_cont_child_put(cont);
+
+	vos_cont_close(coh);
+
+	return 0;
+}
+
+static void
+scrubbing_ult(void *arg)
+{
+	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
+	struct dss_module_info	*dmi = dss_get_module_info();
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT started\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+
+	D_ASSERT(child->spc_gc_req != NULL);
+	while (!dss_ult_exiting(child->spc_scrubbing_req))
+	{
+		vos_iter_param_t	param = {0};
+		struct vos_iter_anchors anchor = {0};
+		struct scrubbing_args	scrubbing_args = {0};
+
+		param.ip_hdl = child->spc_hdl;
+
+		uuid_copy(scrubbing_args.pool_uuid, child->spc_uuid);
+		vos_iterate(&param, VOS_ITER_COUUID, false, &anchor, pool_cb,
+			    NULL, &scrubbing_args, NULL);
+
+		if (dss_ult_exiting(child->spc_scrubbing_req))
+			break;
+
+		/* It'll be woke up by container destroy or aggregation */
+		sched_req_sleep(child->spc_scrubbing_req, 7ULL * 1000);
+	}
+}
+
+
+static int
+start_scrubbing_ult(struct ds_pool_child *child)
+{
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+	ABT_thread		 thread = ABT_THREAD_NULL;
+	int			 rc;
+
+	D_ASSERT(child != NULL);
+	D_ASSERT(child->spc_scrubbing_req == NULL);
+
+	rc = dss_ult_create(scrubbing_ult, child, DSS_ULT_IO, DSS_TGT_SELF,
+			    0, &thread);
+	if (rc) {
+		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT. %d\n",
+			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);
+		return rc;
+	}
+
+	D_ASSERT(thread != ABT_THREAD_NULL);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
+	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
+	child->spc_scrubbing_req = sched_req_get(&attr, thread);
+	if (child->spc_scrubbing_req == NULL) {
+		D_CRIT(DF_UUID"[%d]: Failed to get req for Scrubbing ULT\n",
+		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		ABT_thread_join(thread);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
 /*
  * Called via dss_thread_collective() to create and add the ds_pool_child object
  * for one thread. This opens the matching VOS pool.
@@ -242,6 +351,12 @@ pool_child_add_one(void *varg)
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
 	rc = start_gc_ult(child);
+	if (rc != 0) {
+		D_FREE(child);
+		return rc;
+	}
+
+	rc = start_scrubbing_ult(child);
 	if (rc != 0) {
 		D_FREE(child);
 		return rc;
