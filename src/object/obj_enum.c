@@ -348,6 +348,8 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		bump_kds_len = true;
 	}
 
+	fill_data_csum(&key_ent->ie_csum, &arg->csum_iov);
+
 	if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
 		 * check if both dkey & akey was already packed
@@ -399,8 +401,6 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 			arg->kds[arg->kds_len].kd_key_len += data_size;
 		}
 	}
-
-	fill_data_csum(&key_ent->ie_csum, &arg->csum_iov);
 
 	D_DEBUG(DB_IO, "Pack rec "DF_U64"/"DF_U64
 		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d/%zd"
