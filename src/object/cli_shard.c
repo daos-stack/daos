@@ -356,6 +356,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						rw_args->shard_args->reasb_req;
 		bool			 is_ec_obj;
 
+		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE)
+			goto out;
+
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
 			/** Should have 1 map per iod */
 			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
@@ -620,8 +623,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		if (fw_shard_tgts != NULL)
 			orw->orw_flags |= ORF_BULK_BIND;
 	} else {
-		if (args->reasb_req && args->reasb_req->orr_size_fetch) {
-			/* NULL bulk and NULL sgl for size_fetch */
+		if ((args->reasb_req && args->reasb_req->orr_size_fetch) ||
+		    auxi->flags & DRF_CHECK_EXISTENCE) {
+			/* NULL bulk/sgl for size_fetch or check existence */
 			orw->orw_sgls.ca_count = 0;
 			orw->orw_sgls.ca_arrays = NULL;
 		} else {
