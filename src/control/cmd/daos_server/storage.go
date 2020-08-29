@@ -83,7 +83,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
-	scmScan, err := cmd.scs.ScmScan()
+	scmScan, err := cmd.scs.ScmScan(scm.ScanRequest{})
 	if err != nil {
 		return common.ConcatErrors(scanErrors, err)
 	}
@@ -131,7 +131,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 	scanErrors := make([]error, 0, 2)
 
-	res, err := svc.NvmeScan()
+	res, err := svc.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
@@ -143,7 +143,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		}
 	}
 
-	scmResp, err := svc.ScmScan()
+	scmResp, err := svc.ScmScan(scm.ScanRequest{})
 	switch {
 	case err != nil:
 		scanErrors = append(scanErrors, err)

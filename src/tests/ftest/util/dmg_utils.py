@@ -345,7 +345,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: If dmg storage scan --nvme-health command fails.
 
         """
-        return self._get_result(("storage", "scan", "--nvme-health"))
+        return self._get_result(("storage", "scan"), nvme_health=True)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, group=None, acl_file=None):

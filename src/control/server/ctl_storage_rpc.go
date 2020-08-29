@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -111,9 +112,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 
 // StoragePrepare configures SSDs for user specific access with SPDK and
 // groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
-func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (
-	*ctlpb.StoragePrepareResp, error) {
-
+func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
 	c.log.Debug("received StoragePrepare RPC; proceeding to instance storage preparation")
 
 	resp := &ctlpb.StoragePrepareResp{}
@@ -143,19 +142,24 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	bsr, err := c.bdev.Scan(bdevReq)
-	if err != nil {
+	bsr, scanErr := c.NvmeScan(bdevReq)
+	if scanErr != nil {
 		resp.Nvme = &ctlpb.ScanNvmeResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_NVME, err.Error(), "", msg+"NVMe"),
+			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_NVME,
+				scanErr.Error(), "", msg+"NVMe"),
 		}
 	} else {
 		pbCtrlrs := make(proto.NvmeControllers, 0, len(bsr.Controllers))
 		if err := pbCtrlrs.FromNative(bsr.Controllers); err != nil {
-			c.log.Errorf("failed to cleanly convert %#v to protobuf: %s", bsr.Controllers, err)
+			return nil, errors.Wrapf(err, "failed to cleanly convert %#v to protobuf", bsr.Controllers)
 		}
 		resp.Nvme = &ctlpb.ScanNvmeResp{
 			State:  newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg+"NVMe"),
 			Ctrlrs: pbCtrlrs,
+		}
+		claimedCtrlrs, err := c.nvmeGetClaimedDevs(bdevReq.DeviceList)
+		if err != nil {
+			c.log.Errorf("failed to retrieve details for claimed nvme controllers")
 		}
 	}
 
@@ -167,7 +171,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	ssr, err := c.scm.Scan(scmReq)
+	ssr, err := c.ScmScan(scmReq)
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg+"SCM"),
