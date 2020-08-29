@@ -51,8 +51,7 @@ dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 	/* generate a unique and not scary long object ID */
 	oid.lo	= obj_id_gen++;
 	oid.lo	|= hdr;
-	/** Mod by large 32-bit prime */
-	oid.hi	= rand() % 2147483647;
+	oid.hi	= rand() % 100;
 	daos_obj_generate_id(&oid, ofeats, oclass, 0);
 
 	return oid;
