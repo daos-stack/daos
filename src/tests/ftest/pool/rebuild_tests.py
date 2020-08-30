@@ -127,7 +127,7 @@ class RebuildTests(TestWithServers):
         for index in range(pool_quantity):
             self.assertTrue(
                 containers[index].read_objects(),
-                "Data verifiaction error after rebuild")
+                "Data verification error after rebuild")
         self.log.info("Test Passed")
 
     @skipForTicket("DAOS-2922")
@@ -138,7 +138,7 @@ class RebuildTests(TestWithServers):
             The most basic rebuild test.
 
         Use Cases:
-            single pool rebuild, single client, various reord/object counts
+            single pool rebuild, single client, various record/object counts
 
         :avocado: tags=all,pr,medium,pool,rebuild,rebuildsimple
         """
@@ -152,7 +152,7 @@ class RebuildTests(TestWithServers):
             Expand on the basic test by rebuilding 2 pools at once.
 
         Use Cases:
-            multipool rebuild, single client, various object and record counds
+            multipool rebuild, single client, various object and record counts
 
         :avocado: tags=all,pr,medium,pool,rebuild,rebuildmulti
         """

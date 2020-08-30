@@ -214,7 +214,7 @@ ext_overlapping(struct vea_free_extent *ext1, struct vea_free_extent *ext2)
  * \param cnt       [IN]	Block count of extent
  *
  * \return			0 - Allocated
- *				1 - Not allcoated
+ *				1 - Not allocated
  *				Negative value on error
  */
 int

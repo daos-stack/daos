@@ -57,7 +57,7 @@ type (
 )
 
 type HostErrorsResp struct {
-	HostErrors HostErrorsMap
+	HostErrors HostErrorsMap `json:"host_errors"`
 }
 
 func (her *HostErrorsResp) addHostError(hostAddr string, hostErr error) error {

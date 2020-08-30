@@ -29,7 +29,7 @@
 #include <daos/common.h>
 #include <daos/dtx.h>
 #include <daos_security.h>
-#include <daos/checksum.h>
+#include <daos/cont_props.h>
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
@@ -352,6 +352,19 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_CO_DEDUP:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_DEDUP_OFF &&
+			    val != DAOS_PROP_CO_DEDUP_MEMCMP &&
+			    val != DAOS_PROP_CO_DEDUP_HASH) {
+				D_ERROR("invalid deduplication parameter"
+						DF_U64".\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+			/** Accepting anything right now */
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_REDUN_RF0 &&
@@ -378,7 +391,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_ENCRYPT:
 			break;
 		default:
-			D_ERROR("invaid dpe_type %d.\n", type);
+			D_ERROR("invalid dpe_type %d.\n", type);
 			return false;
 		}
 	}

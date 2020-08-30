@@ -58,7 +58,7 @@
 #define LIBLUSTRE		"liblustreapi.so"
 
 static bool liblustre_notfound = false;
-/* need to protect against concurent/multi-threaded attempts to bind ? */
+/* need to protect against concurrent/multi-threaded attempts to bind ? */
 static bool liblustre_binded = false;
 static int (*dir_create_foreign)(const char *, mode_t, __u32, __u32,
 				 const char *) = NULL;
@@ -74,12 +74,12 @@ bind_liblustre()
 	if (lib == NULL) {
 		liblustre_notfound = true;
 		D_ERROR("unable to locate/bind %s, dlerror() says '%s', "
-			"reverting to non-lustre behaviour.\n",
+			"reverting to non-lustre behavior.\n",
 			LIBLUSTRE, dlerror());
 		return EINVAL;
 	}
 
-	D_DEBUG(DB_TRACE, "%s has been found and dynamicaly binded !\n",
+	D_DEBUG(DB_TRACE, "%s has been found and dynamically binded !\n",
 		LIBLUSTRE);
 
 	/* now try to map the API methods we need */
@@ -91,7 +91,7 @@ bind_liblustre()
 		D_ERROR("unable to resolve llapi_dir_create_foreign symbol, "
 			"dlerror() says '%s', Lustre version do not seem to "
 			"support foreign LOV/LMV, reverting to non-lustre "
-			"behaviour.\n", dlerror());
+			"behavior.\n", dlerror());
 		return EINVAL;
 	}
 
@@ -105,7 +105,7 @@ bind_liblustre()
 		D_ERROR("unable to resolve llapi_unlink_foreign symbol, "
 			"dlerror() says '%s', Lustre version do not seem to "
 			"support foreign daos type, reverting to non-lustre "
-			"behaviour.\n", dlerror());
+			"behavior.\n", dlerror());
 		return EINVAL;
 	}
 
@@ -281,10 +281,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 #ifdef LUSTRE_INCLUDE
 	if (fs.f_type == LL_SUPER_MAGIC) {
 		rc = duns_resolve_lustre_path(path, attr);
-		if (rc == 0) {
-			free(dir);
+		if (rc == 0)
 			return 0;
-		}
+
 		/* if Lustre specific method fails, fallback to try
 		 * the normal way...
 		 */

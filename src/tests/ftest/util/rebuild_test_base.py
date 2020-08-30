@@ -168,7 +168,7 @@ class RebuildTestBase(TestWithServers):
         if self.container is not None:
             self.assertTrue(
                 self.container.read_objects(txn),
-                "Error verifying contianer data")
+                "Error verifying container data")
 
     def execute_rebuild_test(self, create_container=True):
         """Execute the rebuild test steps.

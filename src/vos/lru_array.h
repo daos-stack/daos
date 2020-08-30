@@ -452,7 +452,7 @@ lrua_array_free(struct lru_array *array);
 /** Aggregate the LRU array
  *
  * Frees up extraneous unused subarrays.   Only applies to arrays with more
- * than 1 sub arrray.
+ * than 1 sub array.
  */
 void
 lrua_array_aggregate(struct lru_array *array);

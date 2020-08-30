@@ -26,6 +26,7 @@ import socket
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
+from general_utils import get_log_file
 
 
 def include_local_host(hosts):
@@ -57,7 +58,7 @@ class DaosAgentCommand(YamlCommand):
         Args:
             path (str): path to location of daos_agent binary
             yaml_cfg (DaosAgentYamlParameters, optional): agent configuration
-                parameters. Defauts to None.
+                parameters. Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 60 seconds.
         """
@@ -175,13 +176,16 @@ class DaosAgentManager(SubprocessManager):
         self.log.info(
             "<AGENT> Starting daos_agent on %s with %s",
             self._hosts, self.manager.command)
+        # Copy certificates
+        self.manager.job.copy_certificates(
+            get_log_file("daosCA/certs"), self._hosts)
         super(DaosAgentManager, self).start()
 
     def stop(self):
         """Stop the agent through the job manager.
 
         Raises:
-            CommandFailure: if there was an errror stopping the agents.
+            CommandFailure: if there was an error stopping the agents.
 
         """
         self.log.info("<AGENT> Stopping agent %s command", self.manager.command)

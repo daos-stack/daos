@@ -433,10 +433,27 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
 }
 
 void
-mock_ds_mgmt_exclude_setup(void)
+mock_ds_mgmt_tgt_update_setup(void)
 {
 	ds_mgmt_target_update_return = 0;
 	uuid_clear(ds_mgmt_target_update_uuid);
+}
+
+int     ds_mgmt_pool_extend_return;
+uuid_t  ds_mgmt_pool_extend_uuid;
+int
+ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
+			char *tgt_dev,  size_t scm_size, size_t nvme_size)
+{
+	uuid_copy(ds_mgmt_pool_extend_uuid, pool_uuid);
+	return ds_mgmt_pool_extend_return;
+}
+
+void
+mock_ds_mgmt_pool_extend_setup(void)
+{
+	ds_mgmt_pool_extend_return = 0;
+	uuid_clear(ds_mgmt_pool_extend_uuid);
 }
 
 int     ds_mgmt_pool_evict_return;

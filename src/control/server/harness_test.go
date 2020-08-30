@@ -53,6 +53,7 @@ const (
 	testShortTimeout   = 50 * time.Millisecond
 	testLongTimeout    = 1 * time.Minute
 	delayedFailTimeout = 20 * testShortTimeout
+	maxIOServers       = 2
 )
 
 func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
@@ -279,7 +280,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
 			waitTimeout:   10 * testShortTimeout,
 			expStartErr:   context.DeadlineExceeded,
-			expStartCount: 2, // both start but dont proceed so context times out
+			expStartCount: 2, // both start but don't proceed so context times out
 		},
 		"delayed failure occurs before notify ready": {
 			dontNotifyReady: true,
@@ -570,7 +571,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				CmpErr(t, tc.expIoErrs[srv.Index()], srv._lastErr)
 			}
-			members := membership.Members()
+			members := membership.Members(nil)
 			AssertEqual(t, len(tc.expMembers), len(members), "unexpected number in membership")
 			for i, member := range members {
 				if diff := cmp.Diff(fmt.Sprintf("%v", member),

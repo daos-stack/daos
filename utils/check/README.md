@@ -41,7 +41,7 @@ This is the second script to run.
 This is a script that will do the following.
 
 1. Install the DAOS rpms that were previously downloaded.
-1. Find all the ELF executables and shared libaries that were installed.
+1. Find all the ELF executables and shared libraries that were installed.
 1. Run the hardening-check utility on all the ELF executables to check
    if stack protection is on.  It will produce a file with results.
 1. Find all the shared libraries from other packages that DAOS depends on.

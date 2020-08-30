@@ -75,9 +75,9 @@ func PrintWithHostPorts() PrintConfigOption {
 	}
 }
 
-// getPrintConfig is a helper that returns a format configuration
+// GetPrintConfig is a helper that returns a format configuration
 // for a format function.
-func getPrintConfig(opts ...PrintConfigOption) *PrintConfig {
+func GetPrintConfig(opts ...PrintConfigOption) *PrintConfig {
 	cfg := &PrintConfig{}
 	*cfg = *defaultPrintConfig
 	for _, opt := range opts {
@@ -90,7 +90,7 @@ func getPrintConfig(opts ...PrintConfigOption) *PrintConfig {
 // host strings according to the format configuration.
 func GetPrintHosts(in string, opts ...PrintConfigOption) string {
 	var out []string
-	fc := getPrintConfig(opts...)
+	fc := GetPrintConfig(opts...)
 
 	for _, hostStr := range strings.Split(in, ",") {
 		if fc.ShowHostPorts {
@@ -315,7 +315,7 @@ func PrintHostStorageMap(hsm HostStorageMap, out io.Writer, opts ...PrintConfigO
 	if len(hsm) == 0 {
 		return nil
 	}
-	fc := getPrintConfig(opts...)
+	fc := GetPrintConfig(opts...)
 
 	if fc.Verbose {
 		return printHostStorageMapVerbose(hsm, out, opts...)
@@ -426,7 +426,7 @@ func PrintStorageFormatMap(hsm HostStorageMap, out io.Writer, opts ...PrintConfi
 	if len(hsm) == 0 {
 		return nil
 	}
-	fc := getPrintConfig(opts...)
+	fc := GetPrintConfig(opts...)
 
 	if fc.Verbose {
 		return printStorageFormatMapVerbose(hsm, out, opts...)

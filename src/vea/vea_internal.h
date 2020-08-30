@@ -55,8 +55,8 @@ struct vea_entry {
 	uint32_t		ve_in_heap:1;
 };
 
-#define VEA_LARGE_EXT_MB	64	/* Large extent threashold in MB */
-#define VEA_HINT_OFF_INVAL	0	/* Inavlid hint offset */
+#define VEA_LARGE_EXT_MB	64	/* Large extent threshold in MB */
+#define VEA_HINT_OFF_INVAL	0	/* Invalid hint offset */
 #define VEA_MIGRATE_INTVL	10	/* Seconds */
 
 struct free_ext_cursor {
@@ -149,6 +149,7 @@ static inline bool ext_is_idle(struct vea_free_extent *vfe)
 
 enum vea_free_flags {
 	VEA_FL_NO_MERGE		= (1 << 0),
+	VEA_FL_NO_ACCOUNTING	= (1 << 1),
 };
 
 /* vea_init.c */

@@ -1,8 +1,8 @@
 # DAOS Debugging
 
 DAOS uses the debug system defined in [CaRT](https://github.com/daos-stack/cart)
-but more specifically the GURT library. Logging for both client and server are
-written to "/tmp/daos.log" unless otherwise set by `D_LOG_FILE`.
+but more specifically the GURT library. Default server log is "/tmp/daos.log"
+and client default log is stdout, unless otherwise set by `D_LOG_FILE`.
 
 ## Registered Subsystems/Facilities
 
@@ -19,7 +19,7 @@ default all subsystems are enabled ("DD_SUBSYS=all").
 
 ## Priority Logging
 
-All macros which output logs have a priority level, shown in decending order
+All macros which output logs have a priority level, shown in descending order
 below.
 - D_FATAL(fmt, ...)		FATAL
 - D_CRIT(fmt, ...)		CRIT

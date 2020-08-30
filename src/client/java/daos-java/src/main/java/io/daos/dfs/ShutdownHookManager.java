@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,10 +51,23 @@ public final class ShutdownHookManager {
     }));
   }
 
+  /**
+   * add hook.
+   *
+   * @param runnable
+   * runnable task
+   */
   public static void addHook(Runnable runnable) {
     hookStack.add(runnable);
   }
 
+  /**
+   * remove hook.
+   *
+   * @param runnable
+   * runnable task
+   * @return true for successful removing. false otherwise.
+   */
   public static boolean removeHook(Runnable runnable) {
     if (runnable == null) {
       return false;

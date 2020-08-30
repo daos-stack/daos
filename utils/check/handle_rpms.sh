@@ -8,7 +8,7 @@ set -uex
 # The file ${PACKAGES} will contain a list of packages that the RPMs depend
 # on.
 
-# The file ${SOFILES} will contain a list of sharable images depended on by
+# The file ${SOFILES} will contain a list of shareable images depended on by
 # the RPMs.  The default name for ${SOFILES} is "daos_depends_libries".
 
 # This will likely need to be edited for other build systems.
@@ -42,7 +42,7 @@ sudo yum -y remove cart cart-debuginfo cart-devel cart-tests \
                    daos daos-client daos-debuginfo daos-devel daos-server \
                    daos-tests CUnit dpdk fio fuse fuse-lib hwloc \
                    libabt0 libcmocka libfabric libfabric-devel libisa-l \
-                   libopa1 libpmem libpmemblk mercury ndctl\
+                   libisa-l_crypto libopa1 libpmem libpmemblk mercury ndctl\
                    ompi openmpi3 openpa-devel \
                    pexpect protobuf-c pmix \
                    python-configshell python-urwid \

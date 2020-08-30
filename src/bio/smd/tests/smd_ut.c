@@ -41,7 +41,7 @@ smd_ut_setup(void **state)
 {
 	int	rc;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc) {
 		print_error("Error initializing the debug instance\n");
 		return rc;

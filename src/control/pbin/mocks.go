@@ -119,5 +119,6 @@ func (r *mockReadWriter) Close() error {
 func newTestApp(process *mockProcess) *App {
 	app := NewApp()
 	app.process = process
+	app.setupPing() // re-setup the ping handler with the mock process
 	return app
 }

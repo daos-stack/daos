@@ -21,8 +21,6 @@ timeout: 2H15M
 setup:
     start_servers: False
     start_agents: False
-dmg:
-    insecure: True
 server_config:
     name: daos_server
     provider: ofi+sockets
@@ -40,6 +38,14 @@ server_config:
         scm_list: [/dev/pmem0]
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
+    transport_config:
+      allow_insecure: True
+agent_config:
+    transport_config:
+      allow_insecure: True
+dmg:
+    transport_config:
+      allow_insecure: True
 # pool_params - attributes of the pools to create; Currently only create one
 pool_ior:
     mode: 146
@@ -61,6 +67,9 @@ pool_reserved:
     scm_size: 3000000000
     nvme_size: 50000000000
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 container_reserved:
     akey_size: 5
     dkey_size: 5
@@ -89,7 +98,7 @@ soak_stress:
     job_timeout: 20
     nodesperjob:
         - -1
-    # used for perfomance benchmarks
+    # used for performance benchmarks
     taskspernode:
         - 1
         - 16
@@ -102,14 +111,14 @@ soak_stress:
         - fio_stress
 # Commandline parameters
 # Benchmark and application params
-# IOR params -a DAOS and -a MPIIO
+# IOR params -a DFS and -a MPIIO
 # sequential
 ior_stress:
     api:
-        - DAOS
+        - DFS
         - MPIIO
     test_file: daos:testFile
-    flags: -v -w -W -r -R -q
+    flags: -v -w -W -r -R
     block_size:
         - '64M'
         - '4M'
@@ -121,7 +130,7 @@ ior_stress:
         - '1m'
         - '512K'
         - '64k'
-    daos_oclass:
+    dfs_oclass:
         - "SX"
 fio_stress:
   names:

@@ -92,7 +92,7 @@ enum {
 };
 
 /**
- * Tree root descriptor, it consits of tree attributes and reference to the
+ * Tree root descriptor, it consists of tree attributes and reference to the
  * actual root node.
  *
  * NB: Can be stored in pmem
@@ -108,7 +108,7 @@ struct btr_root {
 	uint16_t			tr_depth;
 	/**
 	 * ID to find a registered tree class, which provides customized
-	 * funtions etc.
+	 * functions etc.
 	 */
 	uint32_t			tr_class;
 	/** the actual features of the tree, e.g. hash type, integer key */
@@ -394,7 +394,7 @@ typedef struct {
 	 * \param tins	[IN]	Tree instance which contains the root umem
 	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be checked.
-	 * \parem intent [IN]	The intent for why check the record.
+	 * \param intent [IN]	The intent for why check the record.
 	 *
 	 * \a return	ALB_AVAILABLE_DIRTY	The target is available but with
 	 *					some uncommitted modification

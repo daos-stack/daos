@@ -67,6 +67,14 @@ struct pl_map_ops {
 				  uint32_t *tgt_rank,
 				  uint32_t *shard_id,
 				  unsigned int array_size, int myrank);
+	int (*o_obj_find_addition)(struct pl_map *map,
+				   struct daos_obj_md *md,
+				  struct daos_obj_shard_md *shard_md,
+				  uint32_t reint_ver,
+				  uint32_t *tgt_rank,
+				  uint32_t *shard_id,
+				  unsigned int array_size, int myrank);
+
 };
 
 unsigned int pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,
@@ -98,6 +106,9 @@ int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		struct pool_target *tgt, bool for_reint);
 
+int
+remap_insert_copy_one(d_list_t *remap_list, struct failed_shard *original);
+
 void
 remap_list_free_all(d_list_t *remap_list);
 
@@ -114,7 +125,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		struct daos_obj_shard_md *shard_md, uint32_t rebuild_ver,
 		uint32_t *tgt_id, uint32_t *shard_idx,
 		unsigned int array_size, int myrank, int *idx,
-		struct pl_obj_layout *layout, d_list_t *remap_list);
+		struct pl_obj_layout *layout, d_list_t *remap_list,
+		bool fill_addition);
 
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
@@ -126,5 +138,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 		    struct pool_map *pl_poolmap);
+
+int
+pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
+
+bool
+is_pool_adding(struct pool_domain *dom);
 
 #endif /* __PL_MAP_H__ */

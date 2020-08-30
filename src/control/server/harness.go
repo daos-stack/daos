@@ -54,7 +54,7 @@ type IOServerHarness struct {
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
 		log:              log,
-		instances:        make([]*IOServerInstance, 0, maxIOServers),
+		instances:        make([]*IOServerInstance, 0),
 		started:          atm.NewBool(false),
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
@@ -71,6 +71,31 @@ func (h *IOServerHarness) Instances() []*IOServerInstance {
 	h.RLock()
 	defer h.RUnlock()
 	return h.instances
+}
+
+// FilterInstancesByRankSet returns harness' IOServerInstances that match any
+// of a list of ranks derived from provided rank set string.
+func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerInstance, error) {
+	h.RLock()
+	defer h.RUnlock()
+
+	rankList, err := system.ParseRanks(ranks)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*IOServerInstance, 0)
+
+	for _, i := range h.instances {
+		r, err := i.GetRank()
+		if err != nil {
+			return nil, errors.WithMessage(err, "filtering instances by rank")
+		}
+		if r.InList(rankList) {
+			out = append(out, i)
+		}
+	}
+
+	return out, nil
 }
 
 // AddInstance adds a new IOServer instance to be managed.
@@ -179,7 +204,7 @@ func (h *IOServerHarness) readyRanks() []system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]system.Rank, 0, maxIOServers)
+	ranks := make([]system.Rank, 0)
 	for _, srv := range h.instances {
 		if srv.hasSuperblock() && srv.isReady() {
 			ranks = append(ranks, *srv.getSuperblock().Rank)

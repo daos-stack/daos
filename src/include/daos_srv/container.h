@@ -36,6 +36,8 @@
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/evtree.h>
+#include <daos/container.h>
+#include <daos/cont_props.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -54,6 +56,9 @@ int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 		 uint64_t *ncont);
 
+int ds_cont_tgt_close(uuid_t hdl_uuid);
+int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
+		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas);
 /*
  * Per-thread container (memory) object
  *
@@ -66,6 +71,8 @@ struct ds_cont_child {
 	uuid_t			 sc_uuid;	/* container UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
+	struct daos_csummer	*sc_csummer;
+	struct cont_props	 sc_props;
 
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
@@ -75,9 +82,10 @@ struct ds_cont_child {
 				 sc_dtx_reindex_abort:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
+				 sc_props_fetched:1,
 				 sc_stopping:1;
-	/* Aggregate ULT */
-	struct dss_sleep_ult	 *sc_agg_ult;
+	/* Tracks the schedule request for aggregation ULT */
+	struct sched_request	*sc_agg_req;
 
 	/*
 	 * Snapshot delete HLC (0 means no change), which is used
@@ -126,7 +134,6 @@ struct ds_cont_hdl {
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
-	struct daos_csummer	*sch_csummer;
 	int			sch_ref;
 };
 
@@ -147,6 +154,13 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
 
+/** initialize a csummer based on container properties. Will retrieve the
+ * checksum related properties from IV
+ */
+int ds_cont_csummer_init(struct ds_cont_child *cont);
+int ds_get_csum_cont_props(struct cont_props *cont_props,
+			   struct ds_iv_ns *pool_ns, uuid_t cont_uuid);
+
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
 
@@ -161,8 +175,8 @@ int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
  * Query container properties.
  *
  * \param[in]	ns	pool IV namespace
- * \param[in]	coh_uuid
- *			container handle uuid
+ * \param[in]	co_uuid
+ *			container uuid
  * \param[out]	cont_prop
  *			returned container properties
  *			If it is NULL, return -DER_INVAL;
@@ -180,7 +194,7 @@ int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
  *
  * \return		0 if Success, negative if failed.
  */
-int ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t coh_uuid,
+int ds_cont_fetch_prop(struct ds_iv_ns *ns, uuid_t co_uuid,
 		       daos_prop_t *cont_prop);
 
 /** get all snapshots of the container from IV */
@@ -220,7 +234,7 @@ struct csum_recalc_args {
 	ABT_eventual		 csum_eventual;
 };
 
-/* Callback funtion to pass to vos_aggregation */
+/* Callback function to pass to vos_aggregation */
 void
 ds_csum_recalc(void *args);
 

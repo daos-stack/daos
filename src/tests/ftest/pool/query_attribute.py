@@ -60,19 +60,15 @@ class QueryAttributeTest(TestWithServers):
         # 1. Test pool query.
         # Use the same format as pool query.
         expected_size = "1000000000"
-        kwargs = {"scm_size": expected_size}
-        pool_create_result = self.get_dmg_command().get_output(
-            "pool_create", **kwargs)
-        expected_uuid = pool_create_result[0]
-        sr = pool_create_result[1]
+        expected = self.get_dmg_command().pool_create(scm_size=expected_size)
         daos_cmd = DaosCommand(self.bin)
         # Call daos pool query, obtain pool UUID and SCM size, and compare
         # against those used when creating the pool.
-        kwargs = {"pool": expected_uuid, "svc": sr}
+        kwargs = {"pool": expected["uuid"], "svc": expected["svc"]}
         query_result = daos_cmd.get_output("pool_query", **kwargs)
         actual_uuid = query_result[0][0]
         actual_size = query_result[2][4]
-        self.assertEqual(actual_uuid, expected_uuid)
+        self.assertEqual(actual_uuid, expected["uuid"])
         self.assertEqual(actual_size, expected_size)
 
         # 2. Test pool set-attr, get-attr, and list-attrs.
@@ -86,19 +82,23 @@ class QueryAttributeTest(TestWithServers):
             sample_val = "val" + str(i)
             sample_attrs.append(sample_attr)
             sample_vals.append(sample_val)
-            _ = daos_cmd.pool_set_attr(
+            daos_cmd.pool_set_attr(
                 pool=actual_uuid, attr=sample_attr, value=sample_val,
-                svc=sr).stdout
+                svc=expected["svc"])
             expected_attrs.append(sample_attr)
             expected_attrs_dict[sample_attr] = sample_val
         # List the attribute names and compare against those set.
-        kwargs = {"pool": actual_uuid, "svc": sr}
+        kwargs = {"pool": actual_uuid, "svc": expected["svc"]}
         actual_attrs = daos_cmd.get_output("pool_list_attrs", **kwargs)
         actual_attrs.sort()
         expected_attrs.sort()
         self.assertEqual(actual_attrs, expected_attrs)
         # Get each attribute's value and compare against those set.
         for i in range(5):
-            kwargs = {"pool": actual_uuid, "attr": sample_attrs[i], "svc": sr}
+            kwargs = {
+                "pool": actual_uuid,
+                "attr": sample_attrs[i],
+                "svc": expected["svc"]
+            }
             actual_val = daos_cmd.get_output("pool_get_attr", **kwargs)[0]
             self.assertEqual(sample_vals[i], actual_val)

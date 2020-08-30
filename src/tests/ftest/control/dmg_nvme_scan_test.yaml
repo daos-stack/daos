@@ -6,8 +6,15 @@ hosts:
 server_config:
   name: daos_server
   port: 10001
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
 dmg:
   dmg_sub_command: storage
   storage:
     storage_sub_command: scan
   insecure: True
+  transport_config:
+    allow_insecure: True

@@ -30,6 +30,12 @@
  * - create and open container based on the input container uuid
  */
 int dts_ctx_init(struct dts_context *tsc);
+
+/**
+ * Check if the I/O test context is for asynchronous test.
+ */
+bool dts_is_async(struct dts_context *tsc);
+
 /**
  * Finalize I/O test context:
  * - close and destroy the test container

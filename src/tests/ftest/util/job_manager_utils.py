@@ -150,7 +150,7 @@ class JobManager(ExecutableCommand):
 
             # Add a running state to the list of process states if any remote
             # process was found to be active.  The pcmd method will return a
-            # dictioanry with a single key, e.g. {1: <NodeSet>}, if there are
+            # dictionary with a single key, e.g. {1: <NodeSet>}, if there are
             # no remote processes running on any of the hosts.  If this value
             # is not returned, indicate there are processes running by adding
             # the "R" state to the process state list.
@@ -175,7 +175,7 @@ class Orterun(JobManager):
         load_mpi("openmpi")
         path = os.path.dirname(find_executable("orterun"))
         super(Orterun, self).__init__(
-            "/run/orterun", "orterun", job, path, subprocess)
+            "/run/orterun/*", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
         mca_default = {
@@ -197,6 +197,7 @@ class Orterun(JobManager):
         self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
+        self.working_dir = FormattedParameter("-wdir {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -281,10 +282,23 @@ class Mpirun(JobManager):
         super(Mpirun, self).__init__(
             "/run/mpirun", "mpirun", job, path, subprocess)
 
+        mca_default = None
+        if mpitype == "openmpi":
+            # Default mca values to avoid queue pair errors w/ OpenMPI
+            mca_default = {
+                "btl_openib_warn_default_gid_prefix": "0",
+                "btl": "tcp,self",
+                "oob": "tcp",
+                "pml": "ob1",
+            }
+
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
+        self.working_dir = FormattedParameter("-wdir {}", None)
+
         self.mpitype = mpitype
 
     def assign_hosts(self, hosts, path=None, slots=None):

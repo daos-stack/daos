@@ -1,5 +1,6 @@
 package io.daos.dfs;
 
+import org.apache.commons.lang.StringEscapeUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -8,21 +9,21 @@ public class DaosUtilsTest {
   @Test
   public void normalizeLongPath() throws Exception {
     String path = "job_1581472776049_0003-1581473346405-" +
-            "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependencies.jar-" +
-            "1581473454525-16-1-SUCCEEDED-default-1581473439146.jhist_tmp";
+        "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependencies.jar-" +
+        "1581473454525-16-1-SUCCEEDED-default-1581473439146.jhist_tmp";
 //    String path = "job%";
     DaosUtils.normalize(path);
 
     path = "job_1581472776049_0003-1581473346405-root-autogen%2D7.1%2DSNAPSHOT" +
-            "%2Djar%2Dwith%2Ddependencies.jar-1581473454525-16-1-SUCCEEDED-" +
-            "default-1581473439146.jhist_tmpjob_1581472776049_0003-1581473346405-" +
-            "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependen412345";
+        "%2Djar%2Dwith%2Ddependencies.jar-1581473454525-16-1-SUCCEEDED-" +
+        "default-1581473439146.jhist_tmpjob_1581472776049_0003-1581473346405-" +
+        "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependen412345";
     DaosUtils.normalize(path);
 
     path = "job_1581472776049_0003-1581473346405-root-autogen%2D7.1%2DSNAPSHOT" +
-            "%2Djar%2Dwith%2Ddependencies.jar-1581473454525-16-1-SUCCEEDED-" +
-            "default-1581473439146.jhist_tmpjob_1581472776049_0003-1581473346405-" +
-            "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependen4123456";
+        "%2Djar%2Dwith%2Ddependencies.jar-1581473454525-16-1-SUCCEEDED-" +
+        "default-1581473439146.jhist_tmpjob_1581472776049_0003-1581473346405-" +
+        "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependen4123456";
     try {
       DaosUtils.normalize(path);
     } catch (IllegalArgumentException e) {
@@ -32,7 +33,7 @@ public class DaosUtilsTest {
   }
 
   @Test
-  public void testReplaceForwardSlash(){
+  public void testReplaceForwardSlash() {
     String path = "\\abc\\de\\f\\";
     Assert.assertEquals("/abc/de/f", DaosUtils.normalize(path));
 
@@ -41,7 +42,7 @@ public class DaosUtilsTest {
   }
 
   @Test
-  public void testReplaceMultipleSlash(){
+  public void testReplaceMultipleSlash() {
     String path = "//abc//de/f//";
     Assert.assertEquals("/abc/de/f", DaosUtils.normalize(path));
 
@@ -50,7 +51,7 @@ public class DaosUtilsTest {
   }
 
   @Test
-  public void testEmptyPath(){
+  public void testEmptyPath() {
     String path = null;
     Assert.assertEquals("", DaosUtils.normalize(path));
     path = "";
@@ -60,7 +61,7 @@ public class DaosUtilsTest {
   }
 
   @Test
-  public void testValidCharacter(){
+  public void testValidCharacter() {
     String path = "/";
     Assert.assertEquals("/", DaosUtils.normalize(path));
     path = "a0Ab1B_-";
@@ -70,19 +71,19 @@ public class DaosUtilsTest {
   }
 
   @Test
-  public void testValidIllegalCharacterWhiteSpace(){
+  public void testValidIllegalCharacterWhiteSpace() {
     String path = "/abc /def";
     DaosUtils.normalize(path);
   }
 
   @Test
-  public void testValidIllegalCharacterQuestionMark(){
+  public void testValidIllegalCharacterQuestionMark() {
     String path = "abc?";
     DaosUtils.normalize(path);
   }
 
   @Test
-  public void testSplitPath(){
+  public void testSplitPath() {
     String path = "/";
     String[] pc = DaosUtils.parsePath(DaosUtils.normalize(path));
     Assert.assertEquals(1, pc.length);
@@ -117,8 +118,16 @@ public class DaosUtilsTest {
   }
 
   @Test
-  public void testUuidLength(){
+  public void testUuidLength() {
     String id = DaosUtils.randomUUID();
     Assert.assertEquals(16, id.length());
+  }
+
+  @Test
+  public void testEscapeUnsValue() throws Exception {
+    String value = "ab:c=:def=";
+    String evalue = DaosUtils.escapeUnsValue(value);
+    Assert.assertEquals("ab\\u003ac\\u003d\\u003adef\\u003d", evalue);
+    Assert.assertEquals(value, StringEscapeUtils.unescapeJava(evalue));
   }
 }

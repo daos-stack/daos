@@ -26,6 +26,8 @@
 
 #include <getopt.h>
 #include <daos_types.h>
+#include <daos/common.h>
+#include <daos_mgmt.h>
 #include <daos/object.h>
 #ifdef DAOS_HAS_VALGRIND
 #include <valgrind/valgrind.h>
@@ -66,7 +68,9 @@ daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint8_t ofeats,
  * Create a random (optionally) ordered integer array with \a nr elements, value
  * of this array starts from \a base.
  */
-int *dts_rand_iarr_alloc(int nr, int base, bool shuffle);
+uint64_t *dts_rand_iarr_alloc_set(int nr, int base, bool shuffle);
+uint64_t *dts_rand_iarr_alloc(int nr);
+void dts_rand_iarr_set(uint64_t *array, int nr, int base, bool shuffle);
 
 static inline double
 dts_time_now(void)
@@ -190,7 +194,7 @@ void
 dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	uint32_t count, char *d, ...);
 
-#define DTS_CFG_MAX 128
+#define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
 static inline void
 dts_create_config(char buf[DTS_CFG_MAX], const char *format, ...)
@@ -205,5 +209,98 @@ dts_create_config(char buf[DTS_CFG_MAX], const char *format, ...)
 	if (count >= DTS_CFG_MAX)
 		buf[DTS_CFG_MAX - 1] = 0;
 }
+
+static inline void
+dts_append_config(char buf[DTS_CFG_MAX], const char *format, ...)
+{
+	va_list	ap;
+	int	count = strnlen(buf, DTS_CFG_MAX);
+
+	va_start(ap, format);
+	vsnprintf(buf + count, DTS_CFG_MAX - count, format, ap);
+	va_end(ap);
+
+	if (strlen(buf) >= DTS_CFG_MAX)
+		buf[DTS_CFG_MAX - 1] = 0;
+}
+
+/**
+ * List all pools created in the specified DAOS system.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param group		[IN]	Name of DAOS system managing the service.
+ * \param npools	[IN,OUT]
+ *				[in] \a pools length in items.
+ *				[out] Number of pools in the DAOS system.
+ * \param pools		[OUT]	Array of pool mgmt information structures.
+ *				NULL is permitted in which case only the
+ *				number of pools will be returned in \a npools.
+ *				When non-NULL and on successful return, a
+ *				service replica rank list (mgpi_svc) is
+ *				allocated for each item in \pools.
+ *				The rank lists must be freed by the caller.
+ *
+ * \return			0		Success
+ *				-DER_TRUNC	\a pools cannot hold \a npools
+ *						items
+ */
+int dmg_pool_list(const char *dmg_config_file, const char *group,
+		  daos_size_t *npools, daos_mgmt_pool_info_t *pools);
+
+/**
+ * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
+ * back the pool UUID in \a uuid and the pool service rank(s) in \a svc, which
+ * are required by daos_pool_connect() to establish a pool connection.
+ *
+ * Targets are assumed to share the same \a size.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param uid	[IN]	User owning the pool
+ * \param gid	[IN]	Group owning the pool
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param tgts	[IN]	Optional, allocate targets on this list of ranks
+ *			If set to NULL, create the pool over all the ranks
+ *			available in the service group.
+ * \param scm_size
+ *		[IN]	Target SCM (Storage Class Memory) size in bytes (i.e.,
+ *			maximum amounts of SCM storage space targets can
+ *			consume) in bytes. Passing 0 will use the minimal
+ *			supported target size.
+ * \param nvme_size
+ *		[IN]	Target NVMe (Non-Volatile Memory express) size in bytes.
+ * \param prop	[IN]	Optional, pool properties.
+ * \param svc	[IN]	Number of desired pool service replicas. Callers must
+ *			specify svc->rl_nr and allocate a matching
+ *			svc->rl_ranks; svc->rl_nr and svc->rl_ranks
+ *			content are ignored.
+ *		[OUT]	List of actual pool service replicas. svc->rl_nr
+ *			is the number of actual pool service replicas, which
+ *			shall be equal to or smaller than the desired number.
+ *			The first svc->rl_nr elements of svc->rl_ranks
+ *			shall be the list of pool service ranks.
+ * \param uuid	[OUT]	UUID of the pool created
+ */
+int dmg_pool_create(const char *dmg_config_file,
+		    uid_t uid, gid_t gid, const char *grp,
+		    const d_rank_list_t *tgts,
+		    daos_size_t scm_size, daos_size_t nvme_size,
+		    daos_prop_t *prop,
+		    d_rank_list_t *svc, uuid_t uuid);
+
+/**
+ * Destroy a pool with \a uuid. If there is at least one connection to this
+ * pool, and \a force is zero, then this operation completes with DER_BUSY.
+ * Otherwise, the pool is destroyed when the operation completes.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param uuid	[IN]	UUID of the pool to destroy
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param force	[IN]	Force destruction even if there are active connections
+ */
+int dmg_pool_destroy(const char *dmg_config_file,
+		     const uuid_t uuid, const char *grp, int force);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

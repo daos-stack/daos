@@ -251,6 +251,8 @@ the management API and tool and will be documented here once available.
 
 ### Target Exclusion and Self-Healing
 
+## Pool Exclude
+
 An operator can exclude one or more targets from a specific DAOS pool using the rank
 the target resides on as well as the target idx on that rank. If a target idx list is
 not provided then all targets on the rank will be excluded. Excluding a target will
@@ -265,8 +267,30 @@ $ dmg pool exclude --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},$
 The pool target exclude command accepts 3 parameters:
 
 * The pool UUID of the pool that the targets will be excluded from.
-* The rank of the target(s) te be excluded.
+* The rank of the target(s) to be excluded.
 * The target Indices of the targets to be excluded from that rank (optional).
+
+## Pool Drain
+
+Alternatively when an operator would like to remove one or more pool targets
+without the system operating in degraded mode Drain can be used. A pool drain operation will
+initiate rebuild without excluding the designated target until after the rebuild is complete.
+This allows the target(s) drained to continue to perform I/O while the rebuild
+operation is ongoing. Drain additionally enables non-replicated data to be
+rebuilt onto another target whereas in a conventional failure scenario non-replicated
+data would not be integrated into a rebuild and would be lost.
+
+**To drain a target from a pool:**
+
+```bash
+$ dmg pool drain --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
+```
+
+The pool target drain command accepts 3 parameters:
+
+* The pool UUID of the pool that the targets will be drained from.
+* The rank of the target(s) to be drained.
+* The target Indices of the targets to be drained from that rank (optional).
 
 ### Target Reintegration
 
@@ -306,8 +330,27 @@ $ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
 
 #### Target Addition & Space Rebalancing
 
-Support for online target addition and automatic space rebalancing is
+Full Support for online target addition and automatic space rebalancing is
 planned for DAOS v1.4 and will be documented here once available.
+
+Until then the following command(s) are placeholders and offer limited
+functionality related to Online Server Addition/Rebalancing operations.
+
+An operator can choose to extend a pool to include ranks not currently in the pool.
+This will automatically trigger a server rebalance operation where objects within the extended
+pool will be rebalanced across the new storage.
+
+```
+$ dmg pool extend --pool=${puuid} --ranks=${rank1},${rank2}...
+```
+
+The pool extend command accepts 2 required parameters:
+
+* The pool UUID of the pool to be extended.
+* A comma separated list of server ranks to include in the pool.
+
+The pool rebalance operation will work most efficiently when the pool is extended to its desired
+size in a single operation, as opposed to multiple, small extensions.
 
 #### Pool Shard Resize
 

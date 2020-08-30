@@ -57,6 +57,7 @@ func genMinimalConfig() *server.Configuration {
 		WithFabricProvider("foo").
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
+		WithGetNetworkDeviceClass(getDeviceClassStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithScmClass("ram").
@@ -116,6 +117,10 @@ func cmpEnv(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
 	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}
+}
+
+func getDeviceClassStub(netdev string) (uint32, error) {
+	return 0, nil
 }
 
 func TestStartOptions(t *testing.T) {
@@ -261,10 +266,12 @@ func TestStartOptions(t *testing.T) {
 
 			opts.Start.config = genMinimalConfig().
 				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub)
+				WithNUMAValidator(netdetect.ValidateNUMAStub).
+				WithGetNetworkDeviceClass(getDeviceClassStub)
 			wantConfig := tc.expCfgFn(genDefaultExpected().
 				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub))
+				WithNUMAValidator(netdetect.ValidateNUMAStub).
+				WithGetNetworkDeviceClass(getDeviceClassStub))
 
 			err := parseOpts(append([]string{"start"}, tc.argList...), &opts, log)
 			if err != tc.expErr {

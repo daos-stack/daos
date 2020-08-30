@@ -366,6 +366,8 @@ cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_COMPRESS:
 		case DAOS_PROP_CO_ENCRYPT:
+		case DAOS_PROP_CO_DEDUP:
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_ACL:
@@ -452,6 +454,22 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs,
 				&ds_cont_prop_csum_server_verify, &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_DEDUP:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+				&ds_cont_prop_dedup, &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+			d_iov_set(&value, &entry->dpe_val,
+				     sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+				&ds_cont_prop_dedup_threshold, &value);
 			if (rc)
 				return rc;
 			break;
@@ -1101,7 +1119,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		rc = cont_verify_redun_req(pmap, prop);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": Container does not meet redundancy "
-					"requirments, set DAOS_COO_FORCE to "
+					"requirements, set DAOS_COO_FORCE to "
 					"force container open rc: %d.\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
@@ -1112,8 +1130,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* query the container properties from RDB and update to IV */
 	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
-				 in->coi_op.ci_hdl, in->coi_op.ci_uuid,
-				 prop);
+				 in->coi_op.ci_uuid, prop);
 	daos_prop_free(prop);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_iv_prop_update failed %d.\n",
@@ -1610,7 +1627,29 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			D_GOTO(out, rc = -DER_NOMEM);
 		idx++;
 	}
-
+	if (bits & DAOS_CO_QUERY_PROP_DEDUP) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_dedup,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_DEDUP;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop,
+				   &ds_cont_prop_dedup_threshold,
+				   &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
 out:
 	if (rc)
 		daos_prop_free(prop);
@@ -1706,7 +1745,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			return -DER_NOMEM;
 
 		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_iv_ns,
-					in->cqi_op.ci_hdl, iv_prop);
+					in->cqi_op.ci_uuid, iv_prop);
 		if (rc) {
 			D_ERROR("cont_iv_prop_fetch failed "DF_RC"\n",
 				DP_RC(rc));
@@ -1740,6 +1779,8 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_SNAPSHOT_MAX:
 			case DAOS_PROP_CO_COMPRESS:
 			case DAOS_PROP_CO_ENCRYPT:
+			case DAOS_PROP_CO_DEDUP:
+			case DAOS_PROP_CO_DEDUP_THRESHOLD:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -1873,8 +1914,7 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 		D_GOTO(out, rc);
 
 	/* Update prop IV with merged prop */
-	rc = cont_iv_prop_update(pool->sp_iv_ns,
-				 hdl_uuid, cont->c_uuid, prop_iv);
+	rc = cont_iv_prop_update(pool->sp_iv_ns, cont->c_uuid, prop_iv);
 	if (rc)
 		D_ERROR(DF_UUID": failed to update prop IV for cont, "
 			"%d.\n", DP_UUID(cont->c_uuid), rc);
@@ -2742,3 +2782,44 @@ out:
 	crt_reply_send(rpc);
 }
 
+int
+ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
+{
+	daos_prop_t	*prop = NULL;
+	struct cont_svc	*svc;
+	struct rdb_tx	 tx;
+	struct cont	*cont = NULL;
+	int		 rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
+	cont_put(cont);
+
+	D_ASSERT(prop != NULL);
+	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	*prop_out = prop;
+
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+out_put:
+	cont_svc_put_leader(svc);
+	return rc;
+}

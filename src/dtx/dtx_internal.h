@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,12 +100,10 @@ void dtx_batched_commit(void *arg);
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry **dtes);
-int dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
-		 uint64_t dkey_hash, int max, struct dtx_id **dtis);
+			  struct dtx_entry ***dtes);
 int dtx_lookup_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		   daos_unit_oid_t *oid, uint64_t dkey_hash);
-int dtx_add_cos(struct ds_cont_child *cont, struct dtx_id *dti,
+int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 		daos_unit_oid_t *oid, uint64_t dkey_hash,
 		daos_epoch_t epoch, uint32_t flags);
 int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
@@ -113,11 +111,11 @@ int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
-int dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
-	       int count, uint32_t version, bool drop_cos);
+int dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry **dtes,
+	       int count, bool drop_cos);
 int dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
-	      struct dtx_entry *dtes, int count, uint32_t version);
-int dtx_check(uuid_t po_uuid, uuid_t co_uuid,
-	      struct dtx_entry *dte, struct pl_obj_layout *layout);
+	      struct dtx_entry **dtes, int count);
+int dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte);
+
 
 #endif /* __DTX_INTERNAL_H__ */

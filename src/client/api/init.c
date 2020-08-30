@@ -45,7 +45,7 @@ static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
 
 const struct daos_task_api dc_funcs[] = {
-	/** Managment */
+	/** Management */
 	{dc_mgmt_svc_rip, sizeof(daos_svc_rip_t)},
 	{dc_pool_create, sizeof(daos_pool_create_t)},
 	{dc_pool_destroy, sizeof(daos_pool_destroy_t)},
@@ -110,7 +110,6 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_query, sizeof(daos_obj_query_t)},
 	{dc_obj_query_key, sizeof(daos_obj_query_key_t)},
 	{dc_obj_sync, sizeof(struct daos_obj_sync_args)},
-	{dc_obj_fetch_shard_task,	sizeof(struct daos_obj_fetch_shard)},
 	{dc_obj_fetch_task,		sizeof(daos_obj_fetch_t)},
 	{dc_obj_update_task,		sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},

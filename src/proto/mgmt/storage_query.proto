@@ -39,15 +39,15 @@ message BioHealthResp {
 	uint64 error_count = 3;
 	uint32 temperature = 4;
 	uint64 media_errors = 5;
-	uint32 read_errs = 6;
-	uint32 write_errs = 7;
-	uint32 unmap_errs = 8;
-	uint32 checksum_errs = 9;
-	bool temp = 10;
-	bool spare = 11;
-	bool readonly = 12;
-	bool device_reliability = 13;
-	bool volatile_memory = 14;
+	uint32 read_errors = 6;
+	uint32 write_errors = 7;
+	uint32 unmap_errors = 8;
+	uint32 checksum_errors = 9;
+	bool temp_warn = 10;
+	bool spare_warn = 11;
+	bool readonly_warn = 12;
+	bool device_reliability_warn = 13;
+	bool volatile_memory_warn = 14;
 }
 
 message SmdDevReq {
@@ -57,6 +57,7 @@ message SmdDevResp {
 	message Device {
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
+		string state = 3; // NORMAL or FAULTY
 	}
 	int32 status = 1;
 	repeated Device devices = 2;
@@ -83,4 +84,35 @@ message DevStateResp {
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of blobstore
 	string dev_state=3; //NORMAL or FAULTY
+}
+
+message SmdQueryReq {
+	bool omitDevices = 1; // query should omit devices
+	bool omitPools = 2; // query should omit pools
+	bool includeBioHealth = 3; // query should include BIO health for devices
+	bool setFaulty = 4; // set the specified device to FAULTY
+	string uuid = 5; // constrain query to this UUID (pool or device)
+	uint32 rank = 6; // response should only include information about this rank
+	string target = 7; // response should only include information about this VOS target
+}
+
+message SmdQueryResp {
+	message Device {
+		string uuid = 1; // UUID of blobstore
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		string state = 3; // NORMAL or FAULTY
+		BioHealthResp health = 4; // optional BIO health
+	}
+	message Pool {
+		string uuid = 1; // UUID of VOS pool
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		repeated uint64 blobs = 3; // SPDK blobs
+	}
+	message RankResp {
+		uint32 rank = 1; // rank to which this response corresponds
+		repeated Device devices = 2; // List of devices on the rank
+		repeated Pool pools = 3; // List of pools on the rank
+	}
+	int32 status = 1; // DAOS error code
+	repeated RankResp ranks = 2; // List of per-rank responses
 }

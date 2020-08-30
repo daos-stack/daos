@@ -116,6 +116,37 @@ daos_fail_loc_set(uint64_t fail_loc)
 	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
 }
 
+/* set #nr shards as failure (nr within [1, 4]) */
+uint64_t
+daos_shard_fail_value(uint16_t *shards, int nr)
+{
+	int		i;
+	uint64_t	fail_val = 0;
+
+	if (nr == 0 || nr > 4) {
+		D_ERROR("ignore nr %d, should within [1, 4].\n", nr);
+		return fail_val;
+	}
+	for (i = 0; i < nr; i++)
+		fail_val |= ((uint64_t)shards[i] << (16 * i));
+	return fail_val;
+}
+
+bool
+daos_shard_in_fail_value(uint16_t shard)
+{
+	int		i;
+	uint64_t	mask = 0xFFFF;
+	uint64_t	fail_val = daos_fail_value_get();
+
+	for (i = 0; i < 4; i++) {
+		if (shard == ((fail_val & (mask << (i * 16))) >> (i * 16)))
+			return true;
+	}
+
+	return false;
+}
+
 void
 daos_fail_num_set(uint64_t value)
 {

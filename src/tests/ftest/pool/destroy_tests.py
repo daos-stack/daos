@@ -259,7 +259,7 @@ class DestroyTests(TestWithServers):
         valid_group = self.pool.pool.group
         self.pool.pool.group = ctypes.create_string_buffer(badsetid)
 
-        # Attempt to destroy the pool with an invald server group name
+        # Attempt to destroy the pool with an invalid server group name
         self.validate_pool_destroy(
             hostlist_servers,
             "with an invalid server group name {}".format(badsetid),
@@ -423,7 +423,7 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers({self.server_group: hostlist_servers})
 
-        # Attempt to destroy the pool with an invald server group name
+        # Attempt to destroy the pool with an invalid server group name
         self.validate_pool_creation(hostlist_servers, self.server_group)
 
         # Connect to the pool

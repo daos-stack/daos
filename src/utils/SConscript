@@ -1,12 +1,24 @@
 """Build DAOS utilities"""
 import daos_build
+Import('env')
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
     denv = env.Clone()
+
+    # Build self test
+    SConscript('self_test/SConscript')
+    Default('self_test')
+
+    # Build crt_launch
+    SConscript('crt_launch/SConscript')
+
+    # Build cart_ctl
+    SConscript('ctl/SConscript')
+
+    # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
     daos_extra_files = denv.Object('daos_hdlr.c')

@@ -7,7 +7,7 @@ def scons():
 
     libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid']
-    libraries += ['cmocka']
+    libraries += ['cmocka', 'json-c']
 
     Import('daos_test_tgt')
     Import('daos_epoch_io')

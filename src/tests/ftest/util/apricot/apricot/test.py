@@ -46,6 +46,7 @@ from server_utils_params import \
 from dmg_utils_params import \
     DmgYamlParameters, DmgTransportCredentials
 from dmg_utils import DmgCommand
+from daos_utils import DaosCommand
 from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
@@ -138,7 +139,12 @@ class Test(avocadoTest):
     # pylint: enable=invalid-name
 
     def get_test_name(self):
-        """Obtain test name from self.__str__()."""
+        """Obtain the test method name from the Avocado test name.
+
+        Returns:
+            str: name of the test method
+
+        """
         return (self.__str__().split(".", 4)[3]).split(";", 1)[0]
 
 
@@ -166,7 +172,11 @@ class TestWithoutServers(Test):
         self.fault_file = None
         self.context = None
         self.d_log = None
-        self.test_log = None
+
+        # Create a default TestLogger w/o a DaosLog object to prevent errors in
+        # tearDown() if setUp() is not completed.  The DaosLog is added upon the
+        # completion of setUp().
+        self.test_log = TestLogger(self.log, None)
 
     def setUp(self):
         """Set up run before each test."""
@@ -217,7 +227,7 @@ class TestWithoutServers(Test):
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
-        self.test_log = TestLogger(self.log, self.d_log)
+        self.test_log.daos_log = self.d_log
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -268,6 +278,7 @@ class TestWithServers(TestWithoutServers):
         self.control_log = None
         self.helper_log = None
         self.client_log = None
+        self.config_file_base = "test"
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         self.test_id = "{}-{}".format(
@@ -370,7 +381,7 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             agent_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos agent using a unquie server group name
+                which to start the daos agent using a unique server group name
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
@@ -392,7 +403,7 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(agent_groups, dict):
             for group, hosts in agent_groups.items():
-                transport = DaosAgentTransportCredentials()
+                transport = DaosAgentTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "agent")
                 # Setup the access points with the server hosts
@@ -411,7 +422,7 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             server_groups (dict, optional): dictionary of lists of hosts on
-                which to start the daos server using a unquie server group name
+                which to start the daos server using a unique server group name
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos server on all server
                 hosts specified in the test's yaml file.
@@ -428,12 +439,13 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, hosts in server_groups.items():
-                transport = DaosServerTransportCredentials()
+                transport = DaosServerTransportCredentials(self.workdir)
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "server")
                 dmg_config_file = self.get_config_file(group, "dmg")
                 # Setup the access points with the server hosts
                 common_cfg = CommonConfig(group, transport)
+
                 self.add_server_manager(
                     config_file, dmg_config_file, common_cfg)
                 self.configure_manager(
@@ -455,7 +467,8 @@ class TestWithServers(TestWithoutServers):
             str: daos_agent yaml configuration file full name
 
         """
-        return os.path.join(self.tmp, "test_{}_{}.yaml".format(name, command))
+        filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
+        return os.path.join(self.tmp, filename)
 
     def add_agent_manager(self, config_file=None, common_cfg=None, timeout=30):
         """Add a new daos agent manager object to the agent manager list.
@@ -475,9 +488,8 @@ class TestWithServers(TestWithoutServers):
         if config_file is None:
             config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
-            common_cfg = CommonConfig(
-                self.server_group, DaosAgentTransportCredentials())
-
+            agent_transport = DaosAgentTransportCredentials(self.workdir)
+            common_cfg = CommonConfig(self.server_group, agent_transport)
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
         agent_cmd = DaosAgentCommand(self.bin, agent_cfg, timeout)
@@ -509,12 +521,13 @@ class TestWithServers(TestWithoutServers):
             config_file = self.get_config_file("daos", "server")
         if common_cfg is None:
             common_cfg = CommonConfig(
-                self.server_group, DaosServerTransportCredentials())
+                self.server_group, DaosServerTransportCredentials(self.workdir))
 
         if dmg_config_file is None:
             dmg_config_file = self.get_config_file("daos", "dmg")
+        transport_dmg = DmgTransportCredentials(self.workdir)
         dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
+            dmg_config_file, self.server_group, transport_dmg)
         # Create a ServerCommand to manage with a new ServerManager object
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
         server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
@@ -565,7 +578,7 @@ class TestWithServers(TestWithoutServers):
             manager_list (list): list of SubprocessManager objects to start
         """
         user = getuser()
-        # We probalby want to do this parallel if end up with multiple managers
+        # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
             self.log.info(
                 "Starting %s: group=%s, hosts=%s, config=%s",
@@ -596,7 +609,7 @@ class TestWithServers(TestWithoutServers):
             super(TestWithServers, self).tearDown()
         except OSError as error:
             errors.append(
-                "Error running inheritted teardown(): {}".format(error))
+                "Error running inherited teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
@@ -631,7 +644,7 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
-                # Only close a container that has been openned by the test
+                # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
                         container.close()
@@ -740,13 +753,14 @@ class TestWithServers(TestWithoutServers):
             # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        # Update the log file names.  The path is defined throught the
+        # Update the log file names.  The path is defined through the
         # DAOS_TEST_LOG_DIR environment variable.
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
         self.control_log = "{}_daos_control.log".format(self.test_id)
         self.helper_log = "{}_daos_admin.log".format(self.test_id)
         self.client_log = "{}_daos_client.log".format(self.test_id)
+        self.config_file_base = "{}_".format(self.test_id)
 
     def get_dmg_command(self, index=0):
         """Get a DmgCommand setup to interact with server manager index.
@@ -773,9 +787,19 @@ class TestWithServers(TestWithoutServers):
 
         dmg_config_file = self.get_config_file("daos", "dmg")
         dmg_cfg = DmgYamlParameters(
-            dmg_config_file, self.server_group, DmgTransportCredentials())
+            dmg_config_file, self.server_group,
+            DmgTransportCredentials(self.workdir))
         dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
+
+    def get_daos_command(self):
+        """Get a DaosCommand object.
+
+        Returns:
+            DaosCommand: New DaosCommand object.
+
+        """
+        return DaosCommand(self.bin)
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.
@@ -795,7 +819,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
                 test yaml file. Defaults to None.
-            create ((bool, optional): should the pool be created. Defaults to
+            create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
@@ -805,8 +829,7 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(
-            self.context, dmg_command=self.server_managers[index].dmg)
+        pool = TestPool(self.context, dmg_command=self.get_dmg_command(index))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
@@ -824,7 +847,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
                 test yaml file. Defaults to None.
-            create ((bool, optional): should the pool be created. Defaults to
+            create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
@@ -846,7 +869,7 @@ class TestWithServers(TestWithoutServers):
             TestContainer: the created test container object.
 
         """
-        container = TestContainer(pool)
+        container = TestContainer(pool, daos_command=self.get_daos_command())
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
@@ -867,3 +890,34 @@ class TestWithServers(TestWithoutServers):
                 to True.
         """
         self.container = self.get_container(pool, namespace, create)
+
+    def start_additional_servers(self, additional_servers, index=0):
+        """Start additional servers.
+
+        This method can be used to start a new daos_server during a test.
+
+        Args:
+            additional_servers (list of str): List of hostnames to start
+                daos_server.
+            index (int): Determines which server_managers to use when creating
+                the new server.
+        """
+        self.server_managers.append(
+            DaosServerManager(
+                self.server_managers[index].manager.job,
+                self.manager_class,
+                self.server_managers[index].dmg.yaml
+            )
+        )
+        self.server_managers[-1].manager.assign_environment(
+            EnvironmentVariables({"PATH": None}), True)
+        self.server_managers[-1].hosts = (
+            additional_servers, self.workdir, self.hostfile_servers_slots)
+
+        self.log.info(
+            "Starting %s: group=%s, hosts=%s, config=%s", "server",
+            self.server_managers[-1].get_config_value("name"),
+            self.server_managers[-1].hosts,
+            self.server_managers[-1].get_config_value("filename"))
+        self.server_managers[-1].verify_socket_directory(getuser())
+        self.server_managers[-1].start()

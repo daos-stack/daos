@@ -101,7 +101,7 @@ const (
 type DeviceFirmwareInfo struct {
 	ActiveFWVersion Version // currently running FW version
 	StagedFWVersion Version // FW version to be applied on next reboot
-	FWImageMaxSize  uint32  // maximum FW image size in bytes
-	FWUpdateStatus  uint32  // current status
+	FWImageMaxSize  uint32  // maximum FW image size in 4096-byte chunks
+	FWUpdateStatus  uint32  // last update status
 	Reserved        [4]uint8
 }

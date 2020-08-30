@@ -32,6 +32,11 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
+struct dtx_rsrvd_uint {
+	void			*dru_scm;
+	d_list_t		dru_nvme;
+};
+
 enum dtx_cos_flags {
 	DCF_SHARED	= (1 << 0),
 };
@@ -46,14 +51,30 @@ enum dtx_entry_flags {
 	DTE_LEADER		= (1 << 0),
 	/* The DTX entry is invalid. */
 	DTE_INVALID		= (1 << 1),
+	/* If the DTX with this flag is non-committed, then others
+	 * will be blocked (retry again and again) when access the
+	 * data being modified via this DTX. Currently, it is used
+	 * for distributed transaction. It also can be used for EC
+	 * object modification via standalone update/punch.
+	 */
+	DTE_BLOCK		= (1 << 2),
 };
 
 struct dtx_entry {
-	/** The identifier of the DTX */
-	struct dtx_id		dte_xid;
-	/** The identifier of the modified object (shard). */
-	daos_unit_oid_t		dte_oid;
+	/** The identifier of the DTX. */
+	struct dtx_id			 dte_xid;
+	/** The pool map version when the DTX happened. */
+	uint32_t			 dte_ver;
+	/** The reference count. */
+	uint32_t			 dte_refs;
+	/** The DAOS targets participating in the DTX. */
+	struct dtx_memberships		*dte_mbs;
 };
+
+/* The 'dte_mbs' must be the last member of 'dtx_entry'. */
+D_CASSERT(sizeof(struct dtx_entry) ==
+	  offsetof(struct dtx_entry, dte_mbs) +
+	  sizeof(struct dtx_memberships *));
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -199,10 +220,14 @@ enum {
 	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
 	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
-	/** Indicates the operation should check mvcc timestamps */
-	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 8),
+	VOS_OF_REPLAY_PC	= (1 << 7),
+	/* critical update - skip checks on SCM system/held space */
+	VOS_OF_CRIT		= (1 << 8),
+	/** Instead of update or punch of extents, remove all extents
+	 * under the specified range. Intended for internal use only.
+	 */
+	VOS_OF_REMOVE		= (1 << 9),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -226,7 +251,6 @@ enum {
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
-D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */
 enum {
@@ -270,7 +294,7 @@ enum {
 };
 
 /**
- * Parameters for initialising VOS iterator
+ * Parameters for initializing VOS iterator
  */
 typedef struct {
 	/** standalone prepare:	pool connection handle or container open handle
@@ -355,6 +379,14 @@ typedef struct {
 			uint32_t		ie_dtx_ver;
 			/* The dkey hash for DTX iteration. */
 			uint16_t		ie_dtx_flags;
+			/** DTX tgt count. */
+			uint32_t		ie_dtx_tgt_cnt;
+			/** DTX modified group count. */
+			uint32_t		ie_dtx_grp_cnt;
+			/** DTX mbs data size. */
+			uint32_t		ie_dtx_mbs_dsize;
+			/** DTX participants information. */
+			void			*ie_dtx_mbs;
 		};
 	};
 	/* Flags to describe the entry */
@@ -403,7 +435,7 @@ struct vos_iter_anchors {
 			ia_reprobe_ev:1;
 };
 
-/* Ignores DTX as they are transient records.   Add VEA overheads later */
+/* Ignores DTX as they are transient records */
 enum VOS_TREE_CLASS {
 	VOS_TC_CONTAINER,
 	VOS_TC_OBJECT,
@@ -411,6 +443,7 @@ enum VOS_TREE_CLASS {
 	VOS_TC_AKEY,
 	VOS_TC_SV,
 	VOS_TC_ARRAY,
+	VOS_TC_VEA,
 };
 
 #endif /* __VOS_TYPES_H__ */

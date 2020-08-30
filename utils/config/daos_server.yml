@@ -102,6 +102,25 @@
 #bdev_exclude: ["0000:81:00.1"]
 #
 #
+## Disable VFIO Driver
+#
+## In some circumstances it may be preferable to force SPDK to use the UIO
+## driver for NVMe device access even though an IOMMU is available. Note
+## that use of the UIO driver requires that DAOS must run as root.
+#
+## default: false
+#disable_vfio: true
+#
+#
+## Disable VMD Usage
+#
+## In some circumstances it may be preferable to not use Volume Management
+## Devices even if available.
+#
+## default: true
+#disable_vmd: false
+#
+#
 ## Use Hyperthreads
 #
 ## When Hyperthreading is enabled and supported on the system, this parameter
@@ -152,6 +171,12 @@
 #
 ## default: disabled (errors only to control plane log)
 #helper_log_file: /tmp/daos_admin.log
+#
+#
+## Enable daos_firmware (privileged helper) logging.
+#
+## default: disabled (errors only to control plane log)
+#firmware_helper_log_file: /tmp/daos_firmware.log
 #
 #
 ## When per-server definitions exist, auto-allocation of resources is not
@@ -353,3 +378,9 @@
 #  # block devices that should be different across different server instance.
 #  bdev_class: kdev
 #  bdev_list: [/dev/sdc,/dev/sdd]
+#
+#  # If Volume Management Devices (VMD) are to be used, then the disable_vmd
+#  # flag needs to be set to false (default). The bdev_class will remain the
+#  # default "nvme" type, and bdev_list will include the VMD addresses.
+#  bdev_class: nvme
+#  bdev_list: ["0000:82:00.0","0000:5d:05.5"]

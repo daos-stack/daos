@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,16 +30,17 @@ public final class Constants {
 
   public static final String DAOS_SCHEMA = "daos";
 
+  public static final String UNS_ATTR_NAME_HADOOP = "user.daos.hadoop";
+
   public static final String DAOS_CONFIG_FILE_NAME = "daos-site.xml";
 
-  public static final String DAOS_CONFIG_POOL_KEY_DEFAULT = "default";
-
-  // cannot be zero which is deemed as empty value in hadoop
-  public static final String DAOS_CONFIG_CONTAINER_KEY_DEFAULT = "1";
-
-  public static final String DAOS_CONFIG_CONTAINER_KEY_PREFIX = "c";
-
   public static final String DAOS_DEFAULT_FS = "fs.defaultFS";
+
+  public static final String DAOS_CONFIG_PREFIX = "fs.daos.";
+
+  public static final String DAOS_SERVER_GROUP = "fs.daos.server.group";
+
+  public static final String DAOS_POOL_FLAGS = "fs.daos.pool.flags";
   // daos pool
   public static final String DAOS_POOL_UUID = "fs.daos.pool.uuid";
 
@@ -54,7 +55,6 @@ public final class Constants {
   public static final int DEFAULT_DAOS_CHUNK_SIZE = 1024 * 1024;
   public static final int MAXIMUM_DAOS_CHUNK_SIZE = Integer.MAX_VALUE;
   public static final int MINIMUM_DAOS_CHUNK_SIZE = 4 * 1024;
-
 
   public static final int DAOS_MODLE = 0755;
 
