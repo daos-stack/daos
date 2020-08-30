@@ -127,6 +127,14 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.S
 	return resp, nil
 }
 
+//func (c *StorageControlService) nvmeGetClaimedDevs(devFilter []string) ([]*ctlpb.NvmeController, error) {
+//	c.log.Debug("nvmeGetClaimedDevs(): enter")
+//
+//	pbCtrlrs := make([]*ctlpb.NvmeController, 0)
+//
+//	return pbCtrlrs, nil
+//}
+
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	c.log.Debug("received StorageScan RPC")
@@ -157,10 +165,10 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 			State:  newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg+"NVMe"),
 			Ctrlrs: pbCtrlrs,
 		}
-		claimedCtrlrs, err := c.nvmeGetClaimedDevs(bdevReq.DeviceList)
-		if err != nil {
-			c.log.Errorf("failed to retrieve details for claimed nvme controllers")
-		}
+		//		claimedCtrlrs, err := c.nvmeGetClaimedDevs(bdevReq.DeviceList)
+		//		if err != nil {
+		//			c.log.Errorf("failed to retrieve details for claimed nvme controllers")
+		//		}
 	}
 
 	scmReq := scm.ScanRequest{Rescan: true}

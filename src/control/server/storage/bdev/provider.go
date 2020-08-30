@@ -38,6 +38,7 @@ type (
 		pbin.ForwardableRequest
 		DeviceList []string
 		DisableVMD bool
+		Rescan     bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -106,9 +107,10 @@ type (
 	// Provider encapsulates configuration and logic for interacting with a Block
 	// Device Backend.
 	Provider struct {
-		log     logging.Logger
-		backend Backend
-		fwd     *Forwarder
+		log       logging.Logger
+		backend   Backend
+		fwd       *Forwarder
+		scanCache *ScanResponse
 		firmwareProvider
 	}
 )
@@ -152,7 +154,16 @@ func (p *Provider) IsVMDDisabled() bool {
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.shouldForward(req) {
 		req.DisableVMD = p.IsVMDDisabled()
-		return p.fwd.Scan(req)
+
+		if p.scanCache == nil || req.Rescan {
+			resp, err := p.fwd.Scan(req)
+			if err != nil {
+				return nil, err
+			}
+			p.scanCache = resp
+		}
+
+		return p.scanCache, nil
 	}
 	// set vmd state on remote provider in forwarded request
 	if req.IsForwarded() && req.DisableVMD {

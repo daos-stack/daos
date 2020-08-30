@@ -192,11 +192,3 @@ func (c *StorageControlService) NvmeScan(req bdev.ScanRequest) (*bdev.ScanRespon
 func (c *StorageControlService) ScmScan(req scm.ScanRequest) (*scm.ScanResponse, error) {
 	return c.scm.Scan(req)
 }
-
-func (c *StorageControlService) nvmeGetClaimedDevs(devFilter []string) ([]*ctlpb.NvmeController, error) {
-	c.log.Debug("nvmeGetClaimedDevs(): enter")
-
-	pbCtrlrs := make([]*ctlpb.NvmeController, 0)
-
-	return pbCtrlrs, nil
-}

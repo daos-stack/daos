@@ -45,9 +45,7 @@ type (
 	spdkWrapper struct {
 		spdk.Env
 		spdk.Nvme
-		controllers []spdk.Controller
 
-		initialized bool
 		vmdDisabled bool
 	}
 
