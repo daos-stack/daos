@@ -991,6 +991,11 @@ ev_out:
 out:
 	return rc;
 }
+
+/* Sends the generated parity and the stripe number to the peer
+ * parity target. Handler writes the parity and deletes the replicas
+ * for the stripe.
+ */
 static int
 agg_peer_update(struct ec_agg_entry *entry)
 {
@@ -1081,17 +1086,14 @@ agg_peer_update(struct ec_agg_entry *entry)
 	rc = dss_rpc_send(rpc);
 	if (rc) {
 		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
-		D_PRINT("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
 		crt_bulk_free(ec_agg_in->ea_bulk);
 		goto out;
 	}
-	D_PRINT("Sent RPC\n");
 
 	ec_agg_out = crt_reply_get(rpc);
 	rc = ec_agg_out->ea_status;
 	crt_bulk_free(ec_agg_in->ea_bulk);
 out:
-	//D_FREE(bulk);
 	if (rpc)
 		crt_req_decref(rpc);
 	return rc;
@@ -1364,7 +1366,7 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
-
+ 
 	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 agg_param->ap_agg_entry, NULL);
