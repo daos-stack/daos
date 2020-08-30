@@ -403,7 +403,6 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
 /**
  * Check whether the record (to be accessible) is available to outside or not.
  *
- * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
  * \param entry		[IN]	DTX local id
  * \param epoch		[IN]	Epoch of update
@@ -421,9 +420,8 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  *		negative value	For error cases.
  */
 int
-vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   uint32_t entry, daos_epoch_t epoch,
-			   uint32_t intent, uint32_t type);
+vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.

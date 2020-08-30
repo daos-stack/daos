@@ -21,8 +21,57 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#include <pthread.h>
+
 #include "dfuse_common.h"
 #include "dfuse.h"
+
+/* Async progress thread.
+ *
+ * This thread is started at launch time with an event queue and blocks
+ * on a semaphore until a asynchronous event is created, at which point
+ * the thread wakes up and busy polls in daos_eq_poll() until it's complete.
+ */
+static void *
+dfuse_progress_thread(void *arg)
+{
+	struct dfuse_projection_info *fs_handle = arg;
+	int rc;
+	daos_event_t *dev;
+	struct dfuse_event *ev;
+
+	while (1) {
+
+		errno = 0;
+		rc = sem_wait(&fs_handle->dpi_sem);
+		if (rc != 0) {
+			rc = errno;
+
+			if (rc == EINTR)
+				continue;
+
+			DFUSE_TRA_ERROR(fs_handle,
+					"Error from sem_wait: %d", rc);
+		}
+
+		if (fs_handle->dpi_shutdown)
+			return NULL;
+
+		rc = daos_eq_poll(fs_handle->dpi_eq, 1,
+				  DAOS_EQ_WAIT,
+				1,
+				&dev);
+
+		if (rc == 1) {
+			ev = container_of(dev, struct dfuse_event, de_ev);
+
+			ev->de_complete_cb(ev);
+
+			D_FREE(ev);
+		}
+	}
+	return NULL;
+}
 
 /* Inode record hash table operations */
 
@@ -315,6 +364,22 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 		D_GOTO(err_ie_remove, 0);
 	}
 
+	rc = daos_eq_create(&fs_handle->dpi_eq);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err, 0);
+
+	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
+	if (rc != 0)
+		D_GOTO(err, 0);
+
+	fs_handle->dpi_shutdown = false;
+	rc = pthread_create(&fs_handle->dpi_thread, NULL,
+			    dfuse_progress_thread, fs_handle);
+	if (rc != 0)
+		D_GOTO(err, 0);
+
+	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
+
 	if (!dfuse_launch_fuse(dfuse_info, fuse_ops, &args, fs_handle)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
 		D_GOTO(err_ie_remove, rc = -DER_INVAL);
@@ -388,6 +453,14 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 	int		rcp = 0;
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
+
+
+	fs_handle->dpi_shutdown = true;
+	sem_post(&fs_handle->dpi_sem);
+
+	pthread_join(fs_handle->dpi_thread, NULL);
+
+	sem_destroy(&fs_handle->dpi_sem);
 
 	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 

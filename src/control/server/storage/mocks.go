@@ -84,6 +84,15 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 	}
 }
 
+func MockNvmeControllers(length int) NvmeControllers {
+	result := NvmeControllers{}
+	for i := 0; i < length; i++ {
+		result = append(result, MockNvmeController(int32(i)))
+	}
+
+	return result
+}
+
 func MockScmModule(varIdx ...int32) *ScmModule {
 	idx := uint32(common.GetIndex(varIdx...))
 
@@ -96,6 +105,15 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		Capacity:        uint64(idx),
 		UID:             fmt.Sprintf("Device%d", idx),
 	}
+}
+
+func MockScmModules(length int) ScmModules {
+	result := ScmModules{}
+	for i := 0; i < length; i++ {
+		result = append(result, MockScmModule(int32(i)))
+	}
+
+	return result
 }
 
 func MockScmNamespace(varIdx ...int32) *ScmNamespace {
