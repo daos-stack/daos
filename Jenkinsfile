@@ -1307,7 +1307,8 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+                                                     'centos7-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

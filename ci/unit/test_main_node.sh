@@ -45,8 +45,8 @@ IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
 mkdir -p vm_test
 ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 
+# Remove DAOS_BASE from memcheck xml results
 if [ "$WITH_VALGRIND" == 'memcheck' ]; then
-    # Remove DAOS_BASE from memcheck xml results
     find test_results -maxdepth 1 -name 'results-memcheck-*.xml' \
         -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"
 fi
