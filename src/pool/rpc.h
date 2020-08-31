@@ -113,10 +113,6 @@
 		0, &CQF_pool_tgt_query,					\
 		ds_pool_tgt_query_handler,				\
 		&ds_pool_tgt_query_co_ops),				\
-	X(POOL_TGT_DIST_HDLS,						\
-		0, &CQF_pool_tgt_dist_hdls,				\
-		ds_pool_tgt_dist_hdls_handler,				\
-		NULL),							\
 	X(POOL_PROP_GET,						\
 		0, &CQF_pool_prop_get,					\
 		ds_pool_prop_get_handler,				\

@@ -944,7 +944,7 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uuid_copy(pool->lp_puuid, key->iov_buf);
 	pool->lp_svc = d_rank_list_alloc(rec->pr_nreplicas);
 	if (pool->lp_svc == NULL)
-		return DER_NOMEM;
+		return -DER_NOMEM;
 	for (ri = 0; ri < rec->pr_nreplicas; ri++)
 		pool->lp_svc->rl_ranks[ri] = rec->pr_replicas[ri];
 	return 0;

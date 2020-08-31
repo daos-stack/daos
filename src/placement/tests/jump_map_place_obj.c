@@ -510,6 +510,7 @@ add_object_class(daos_oclass_id_t cid)
 	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
 		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL, &layout);
 		D_ASSERT(rc == 0);
+
 		num_new_spares = pl_obj_find_addition(pl_map, &md_arr[test_num],
 						      NULL, po_ver,
 						      spare_tgt_ranks,

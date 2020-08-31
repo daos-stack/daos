@@ -180,6 +180,10 @@ enum daos_dtx_alb {
 	ALB_AVAILABLE_DIRTY	= 2,
 };
 
+enum daos_tx_flags {
+	DTF_RETRY_COMMIT	= 1, /* TX commit will be retry. */
+};
+
 /** Epoch context of a DTX */
 struct dtx_epoch {
 	/** epoch */

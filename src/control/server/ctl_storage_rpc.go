@@ -135,7 +135,15 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	msg := "Storage Scan "
 	resp := new(ctlpb.StorageScanResp)
 
-	bsr, err := c.bdev.Scan(bdev.ScanRequest{})
+	bdevReq := bdev.ScanRequest{}
+	if req.ConfigDevicesOnly {
+		for _, storageCfg := range c.instanceStorage {
+			bdevReq.DeviceList = append(bdevReq.DeviceList,
+				storageCfg.Bdev.GetNvmeDevs()...)
+		}
+	}
+
+	bsr, err := c.bdev.Scan(bdevReq)
 	if err != nil {
 		resp.Nvme = &ctlpb.ScanNvmeResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_NVME, err.Error(), "", msg+"NVMe"),
@@ -151,7 +159,15 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	ssr, err := c.scm.Scan(scm.ScanRequest{Rescan: true})
+	scmReq := scm.ScanRequest{Rescan: true}
+	if req.ConfigDevicesOnly {
+		for _, storageCfg := range c.instanceStorage {
+			scmReq.DeviceList = append(scmReq.DeviceList,
+				storageCfg.SCM.DeviceList...)
+		}
+	}
+
+	ssr, err := c.scm.Scan(scmReq)
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg+"SCM"),
