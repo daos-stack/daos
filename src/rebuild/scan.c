@@ -409,6 +409,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			 * to delete
 			 */
 			do {
+				/* Inform the iterator and delete the object */
+				*acts |= VOS_ITER_CB_DELETE;
 				rc = vos_obj_delete(param->ip_hdl, oid);
 				if (rc == -DER_BUSY || rc == -DER_INPROGRESS) {
 					D_DEBUG(DB_REBUILD,
@@ -417,6 +419,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 						DF_UOID
 						" during reclaim; retrying\n",
 						DP_RC(rc), DP_UOID(oid));
+					/* Busy - inform iterator and yield */
+					*acts |= VOS_ITER_CB_YIELD;
 					ABT_thread_yield();
 				}
 			} while (rc == -DER_BUSY || rc == -DER_INPROGRESS);
