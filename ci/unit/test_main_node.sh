@@ -33,6 +33,7 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 # set CMOCKA envs here
+echo "debug $WITH_VALGRIND"
 export CMOCKA_MESSAGE_OUTPUT=xml
 if [[ -z ${WITH_VALGRIND} ]]; then
     export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g.xml"
