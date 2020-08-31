@@ -188,6 +188,21 @@ typedef struct {
 	int		 (*mo_tx_add)(struct umem_instance *umm,
 				      umem_off_t umoff, uint64_t offset,
 				      size_t size);
+
+	/**
+	 * Add the specified range of umoff to current memory transaction but
+	 * with flags.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param umoff	[IN]	memory offset to be added to transaction.
+	 * \param offset [IN]	start offset of \a umoff tracked by the
+	 *			transaction.
+	 * \param size	[IN]	size of \a umoff tracked by the transaction.
+	 * \param flags [IN]	PMDK flags
+	 */
+	int		 (*mo_tx_xadd)(struct umem_instance *umm,
+				       umem_off_t umoff, uint64_t offset,
+				       size_t size, uint64_t flags);
 	/**
 	 * Add the directly accessible pointer to current memory transaction.
 	 *
@@ -216,6 +231,18 @@ typedef struct {
 	umem_off_t	 (*mo_reserve)(struct umem_instance *umm,
 				       struct pobj_action *act, size_t size,
 				       unsigned int type_num);
+
+	/**
+	 * Defer free til commit.  For use with reserved extents that are not
+	 * yet published.  For VMEM, it just calls free.
+	 *
+	 * \param umm	[IN]		umem class instance.
+	 * \param off	[IN]		offset of allocation
+	 * \param act	[IN|OUT]	action used for later cancel/publish.
+	 */
+	void		 (*mo_defer_free)(struct umem_instance *umm,
+					  umem_off_t off,
+					  struct pobj_action *act);
 
 	/**
 	 * Cancel the reservation.
@@ -400,6 +427,17 @@ umem_tx_add_range(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
 }
 
 static inline int
+umem_tx_xadd_range(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
+		   size_t size, uint64_t flags)
+{
+	if (umm->umm_ops->mo_tx_xadd)
+		return umm->umm_ops->mo_tx_xadd(umm, umoff, offset, size,
+						flags);
+	else
+		return 0;
+}
+
+static inline int
 umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
 	if (umm->umm_ops->mo_tx_add_ptr)
@@ -408,8 +446,20 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 		return 0;
 }
 
+static inline int
+umem_tx_xadd_ptr(struct umem_instance *umm, void *ptr, size_t size,
+		 uint64_t flags)
+{
+	umem_off_t	offset = umem_ptr2off(umm, ptr);
+
+	return umem_tx_xadd_range(umm, offset, 0, size, flags);
+}
+
 #define umem_tx_add(umm, umoff, size)					\
 	umem_tx_add_range(umm, umoff, 0, size)
+
+#define umem_tx_xadd(umm, umoff, size, flags)				\
+	umem_tx_xadd_range(umm, umoff, 0, size, flags)
 
 static inline int
 umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
@@ -455,6 +505,20 @@ umem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size)
 						UMEM_TYPE_ANY);
 	return UMOFF_NULL;
 }
+
+static inline void
+umem_defer_free(struct umem_instance *umm, umem_off_t off,
+		struct pobj_action *act)
+{
+	if (umm->umm_ops->mo_defer_free)
+		return umm->umm_ops->mo_defer_free(umm, off, act);
+
+	/** Go ahead and free immediately.  The purpose of this function
+	 *  is to allow reserve/publish pair to execute on commit
+	 */
+	umem_free(umm, off);
+}
+
 
 static inline void
 umem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)

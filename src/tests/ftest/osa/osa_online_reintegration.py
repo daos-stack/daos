@@ -63,7 +63,7 @@ class OSAOnlineReintegration(TestWithServers):
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
-        self.ior_daos_oclass = self.params.get("obj_class",
+        self.ior_dfs_oclass = self.params.get("obj_class",
                                                '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
@@ -115,7 +115,7 @@ class OSAOnlineReintegration(TestWithServers):
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.daos_oclass.update(oclass)
+        ior_cmd.dfs_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
         ior_cmd.block_size.update(test[3])
@@ -128,7 +128,7 @@ class OSAOnlineReintegration(TestWithServers):
 
         # Define the job manager for the IOR command
         manager = Mpirun(ior_cmd, mpitype="mpich")
-        manager.job.daos_cont.update(container_info
+        manager.job.dfs_cont.update(container_info
                                      ["{}{}{}".format(oclass,
                                                       api,
                                                       test[2])])
@@ -157,8 +157,8 @@ class OSAOnlineReintegration(TestWithServers):
         target_list = []
         exclude_servers = len(self.hostlist_servers) - 1
 
-        # Exclude target : random two targets
-        n = random.randint(1, 7)
+        # Exclude target : random two targets  (target idx : 0-7)
+        n = random.randint(0, 6)
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
@@ -180,7 +180,7 @@ class OSAOnlineReintegration(TestWithServers):
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
-            for oclass, api, test, flags in product(self.ior_daos_oclass,
+            for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
@@ -207,20 +207,32 @@ class OSAOnlineReintegration(TestWithServers):
             output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                    rank, t_string)
             self.log.info(output)
-            time.sleep(70)
 
-            pver_exclude = self.get_pool_version()
+            fail_count = 0
+            while fail_count <= 20:
+                pver_exclude = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_exclude > (pver_begin + len(target_list)):
+                    break
+
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > (pver_begin + 1),
+            self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
                             "Pool Version Error:  After exclude")
             output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                        rank,
                                                        t_string)
             self.log.info(output)
-            time.sleep(70)
 
-            pver_reint = self.get_pool_version()
+            fail_count = 0
+            while fail_count <= 20:
+                pver_reint = self.get_pool_version()
+                time.sleep(10)
+                fail_count += 1
+                if pver_reint > (pver_exclude + 1):
+                    break
+
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
             self.assertTrue(pver_reint > (pver_exclude + 1),

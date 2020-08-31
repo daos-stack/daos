@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ struct dc_cont {
 	/* pool handler of the container */
 	daos_handle_t		dc_pool_hdl;
 	struct daos_csummer    *dc_csummer;
+	struct cont_props	dc_props;
 	uint32_t		dc_closing:1,
 				dc_slave:1; /* generated via g2l */
 };

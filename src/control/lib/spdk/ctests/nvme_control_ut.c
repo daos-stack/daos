@@ -173,7 +173,7 @@ test_discover_null_controllers(void **state)
 	(void)state; /*unused*/
 
 	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			&mock_get_dev_health_logs);
+			     &mock_get_dev_health_logs);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -191,7 +191,7 @@ test_discover_set_controllers(void **state)
 	g_controllers->next = NULL;
 
 	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			&mock_get_dev_health_logs);
+			     &mock_get_dev_health_logs);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -209,7 +209,7 @@ test_discover_probe_fail(void **state)
 	g_controllers->next = NULL;
 
 	test_ret = _discover(&mock_spdk_nvme_probe_fail, false,
-			&mock_get_dev_health_logs);
+			     &mock_get_dev_health_logs);
 	assert_int_equal(test_ret->rc, -1);
 
 	assert_null(test_ret->ctrlrs);
@@ -222,7 +222,7 @@ test_collect(void **state)
 
 	attach_mock_controllers();
 
-	test_ret = init_ret(0);
+	test_ret = init_ret();
 
 	assert_null(test_ret->ctrlrs);
 	_collect(test_ret, &mock_copy_ctrlr_data,
@@ -230,7 +230,7 @@ test_collect(void **state)
 		 &mock_spdk_pci_device_get_socket_id);
 
 	if (test_ret->rc != 0)
-		fprintf(stderr, "collect err: %s\n", test_ret->err);
+		fprintf(stderr, "collect err: %s\n", test_ret->info);
 	assert_int_equal(test_ret->rc, 0);
 	assert_non_null(test_ret->ctrlrs);
 	assert_string_equal(test_ret->ctrlrs->pci_addr, "0000:01:00.0");
