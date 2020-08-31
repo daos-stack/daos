@@ -114,6 +114,7 @@ class IorCommand(ExecutableCommand):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
 
         # A list of environment variable names to set and export with ior
