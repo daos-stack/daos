@@ -27,8 +27,7 @@ SRC = ['swim.c']
 def scons():
     """Scons function"""
 
-    #Import('env', 'gurt_lib') #DM
-    Import('env', 'prereqs', 'gurt_lib') #DM
+    Import('env', 'prereqs', 'gurt_lib')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
