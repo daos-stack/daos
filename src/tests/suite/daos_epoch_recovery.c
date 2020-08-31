@@ -77,7 +77,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 		}
 
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/ rec_size,
-		       rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req);
+		       rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req, 0);
 	} else {	/* op == VERIFY */
 		char *rec_verify;
 

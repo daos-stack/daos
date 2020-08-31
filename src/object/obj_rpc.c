@@ -902,11 +902,6 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		struct daos_cpd_update	*dcu = &dcsr->dcsr_update;
 
 		if (proc_op == CRT_PROC_DECODE) {
-			D_ALLOC(dcu->dcu_iod_array,
-				sizeof(*dcu->dcu_iod_array));
-			if (dcu->dcu_iod_array == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
 			if (dcsr->dcsr_ec_tgt_nr != 0) {
 				D_ALLOC_ARRAY(dcu->dcu_ec_tgts,
 					      dcsr->dcsr_ec_tgt_nr);
@@ -921,10 +916,6 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 		if (rc != 0)
 			D_GOTO(out, rc = -DER_HG);
 
-		rc = crt_proc_struct_obj_iod_array(proc, dcu->dcu_iod_array);
-		if (rc != 0)
-			D_GOTO(out, rc = -DER_HG);
-
 		for (i = 0; i < dcsr->dcsr_ec_tgt_nr; i++) {
 			rc = crt_proc_uint32_t(proc,
 					&dcu->dcu_ec_tgts[i].dcet_shard_idx);
@@ -936,6 +927,10 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc,
 			if (rc != 0)
 				D_GOTO(out, rc = -DER_HG);
 		}
+
+		rc = crt_proc_struct_obj_iod_array(proc, &dcu->dcu_iod_array);
+		if (rc != 0)
+			D_GOTO(out, rc = -DER_HG);
 
 		rc = crt_proc_uint32_t(proc, &dcu->dcu_start_shard);
 		if (rc != 0)
@@ -1031,7 +1026,6 @@ out:
 
 	switch (dcsr->dcsr_opc) {
 	case DCSO_UPDATE:
-		D_FREE(dcsr->dcsr_update.dcu_iod_array);
 		D_FREE(dcsr->dcsr_update.dcu_ec_tgts);
 		D_FREE(dcsr->dcsr_update.dcu_sgls);
 		break;
