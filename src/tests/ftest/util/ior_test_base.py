@@ -155,14 +155,14 @@ class IorTestBase(TestWithServers):
         if create_pool:
             self.update_ior_cmd_with_pool(create_cont)
 
-        # start dfuse if api is POSIX
+        # start dfuse if api is POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self._start_dfuse()
 
-        # setup test file for POSIX
-        if self.ior_cmd.api.value == "POSIX":
+        # setup test file for POSIX or HDF5 with vol connector
+        if self.ior_cmd.api.value == "POSIX" or plugin_path:
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
