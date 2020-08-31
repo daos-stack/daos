@@ -51,7 +51,7 @@ class ProcessFS(ProcessBase):
         inode_akey = get_dfs_inode_akey()
         fse = FileSystemExplorer(args.path[0])
         fse.set_verbose(args.verbose)
-        fse.set_io_size_size(self.get_io_size())
+        fse.set_io_size(self.get_io_size())
         fse.set_chunk_size(self.get_chunk_size())
         fse.set_dfs_inode(inode_akey)
         fse.explore()
