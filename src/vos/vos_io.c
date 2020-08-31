@@ -482,7 +482,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	ioc->ic_iod_nr = iod_nr;
 	ioc->ic_iods = iods;
-	ioc->ic_epr.epr_hi = dth ? dth->dth_epoch : epoch;
+	ioc->ic_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
 	ioc->ic_epr.epr_lo = 0;
 	ioc->ic_oid = oid;
 	ioc->ic_cont = vos_hdl2cont(coh);

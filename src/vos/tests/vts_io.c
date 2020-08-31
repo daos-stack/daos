@@ -2272,17 +2272,17 @@ io_query_key(void **state)
 	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch++, 0, &dth);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
-			       DAOS_GET_MAX, epoch++, &dkey_read, NULL, NULL,
-			       dth);
+			       DAOS_GET_MAX, 0 /* Ignored epoch */, &dkey_read,
+			       NULL, NULL, dth);
 	assert_int_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, MAX_INT_KEY - KEY_INC);
 
 	vts_dtx_end(dth);
 
-	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch - 3, 0, &dth);
 	/* Now punch the object at earlier epoch */
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, NULL, 0,
-			   NULL, dth);
+	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch - 3, 0, &dth);
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 0 /* ignored epoch */, 0, 0,
+			   NULL, 0, NULL, dth);
 	assert_int_equal(rc, -DER_TX_RESTART);
 	vts_dtx_end(dth);
 
