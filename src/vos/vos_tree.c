@@ -663,6 +663,7 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	 *  modification so just use the current one
 	 */
 	D_ASSERT(dth->dth_op_seq > 0);
+	D_ASSERT(dth->dth_op_seq <= dth->dth_deferred_cnt);
 	i = dth->dth_op_seq - 1;
 	rsrvd_scm = dth->dth_deferred[i];
 	D_ASSERT(rsrvd_scm != NULL);
