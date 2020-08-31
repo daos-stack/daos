@@ -51,8 +51,6 @@ dmg:
 daos_tests:
   num_clients:
     num_clients: 1
-  num_replicas:
-    num_replicas: 1
   Tests: !mux
     test_d:
       daos_test: d
@@ -93,9 +91,6 @@ daos_tests:
     test_K:
       daos_test: K
       test_name: DAOS KV tests
-    test_F:
-      daos_test: F
-      test_name: DAOS File System tests
     test_C:
       daos_test: C
       test_name: DAOS capability tests
