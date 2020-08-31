@@ -33,7 +33,6 @@ sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 # set CMOCKA envs here
-echo "debug $WITH_VALGRIND"
 export CMOCKA_MESSAGE_OUTPUT=xml
 if [[ -z ${WITH_VALGRIND} ]]; then
     export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g.xml"
@@ -46,7 +45,6 @@ IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
 mkdir -p vm_test
 ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 
-echo "debug $WITH_VALGRIND"
 # Remove DAOS_BASE from memcheck xml results
 if [ "$WITH_VALGRIND" == 'memcheck' ]; then
     find test_results -maxdepth 1 -name 'results-memcheck-*.xml' \
