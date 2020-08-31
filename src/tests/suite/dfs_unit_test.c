@@ -123,7 +123,7 @@ dfs_test_mount_umount(void **state)
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 
-        /** create a DFS container with POSIX layout */
+	/** create a DFS container with POSIX layout */
 	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
