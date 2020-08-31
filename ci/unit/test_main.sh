@@ -35,6 +35,7 @@ rm -rf dnt.*.memcheck.xml vm_test/
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
+echo "debug > $WITH_VALGRIND"
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTNAME=$HOSTNAME        \
