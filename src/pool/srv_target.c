@@ -686,11 +686,20 @@ pool_hdl_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 }
 
 static uint32_t
+pool_hdl_key_hash(struct d_hash_table *htable, const void *key,
+		  unsigned int ksize)
+{
+	D_ASSERTF(ksize == sizeof(uuid_t), "%u\n", ksize);
+	return *((const uint32_t *)key);
+}
+
+static uint32_t
 pool_hdl_rec_hash(struct d_hash_table *htable, d_list_t *link)
 {
 	struct ds_pool_hdl *hdl = pool_hdl_obj(link);
+	uint32_t *retp = (uint32_t *)hdl->sph_uuid;
 
-	return d_hash_string_u32((const char *)hdl->sph_uuid, sizeof(uuid_t));
+	return *retp;
 }
 
 static void
@@ -725,6 +734,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 
 static d_hash_table_ops_t pool_hdl_hash_ops = {
 	.hop_key_cmp	= pool_hdl_key_cmp,
+	.hop_key_hash	= pool_hdl_key_hash,
 	.hop_rec_hash	= pool_hdl_rec_hash,
 	.hop_rec_addref	= pool_hdl_rec_addref,
 	.hop_rec_decref	= pool_hdl_rec_decref,
