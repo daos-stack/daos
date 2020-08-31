@@ -62,6 +62,9 @@ class AverageFS(CommonBase):
     def set_dfs_inode(self, akey):
         self._dfs.set_dfs_inode(akey)
 
+    def set_io_size(self, io_size):
+        self._dfs.set_io_size(io_size)
+
     def set_chunk_size(self, chunk_size):
         self._dfs.set_chunk_size(chunk_size)
 
@@ -144,14 +147,15 @@ class DFS(CommonBase):
         super(DFS, self).__init__()
         self._objects = []
         self._chunk_size = 1048576
+        self._io_size = 131072
 
         self._dkey0 = self._create_default_dkey0()
         self._dfs_inode_akey = self._create_default_inode_akey()
 
+    def set_io_size(self, io_size):
+        self._io_size = io_size
+
     def set_chunk_size(self, chunk_size):
-        self._check_value_type(chunk_size, int)
-        if chunk_size <= 0:
-            raise ValueError("chunk size must be bigger than zero")
         self._chunk_size = chunk_size
 
     def set_dfs_file_meta(self, dkey):
@@ -169,6 +173,7 @@ class DFS(CommonBase):
 
     def copy(self):
         new_dfs = DFS()
+        new_dfs._io_size = copy.deepcopy(self._io_size)
         new_dfs._chunk_size = copy.deepcopy(self._chunk_size)
         new_dfs._dkey0 = copy.deepcopy(self._dkey0)
         new_dfs._dfs_inode_akey = copy.deepcopy(self._dfs_inode_akey)
@@ -241,16 +246,27 @@ class DFS(CommonBase):
         akey.add_value(value)
         return akey
 
-    def _create_default_file_dkey(self, size=None):
+    def _create_file_akey(self, size):
+        self._check_positive_number(size)
+        count = size // self._io_size
+        remainder = size % self._io_size
         akey = AKey(
             key_type=KeyType.INTEGER,
             overhead=Overhead.USER,
             value_type=ValType.ARRAY)
-        if size:
-            value = VosValue(size=size)
-        else:
-            value = VosValue(size=self._chunk_size)
-        akey.add_value(value)
+
+        if count > 0:
+            value = VosValue(count=count, size=self._io_size)
+            akey.add_value(value)
+
+        if remainder > 0:
+            value = VosValue(size=remainder)
+            akey.add_value(value)
+
+        return akey
+
+    def _create_file_dkey(self, size):
+        akey = self._create_file_akey(size)
         dkey = DKey(
             key_type=KeyType.INTEGER,
             overhead=Overhead.USER,
@@ -261,7 +277,7 @@ class DFS(CommonBase):
     def _add_chunk_size_elements(self, file_object, file_size):
         count = file_size // self._chunk_size
         if count > 0:
-            dkey = self._create_default_file_dkey()
+            dkey = self._create_file_dkey(self._chunk_size)
             dkey.set_count(count)
             file_object.add_value(dkey)
 
@@ -270,7 +286,7 @@ class DFS(CommonBase):
     def _add_chunk_size_remainder(self, file_object, file_size):
         remainder = file_size % self._chunk_size
         if remainder > 0:
-            dkey = self._create_default_file_dkey(remainder)
+            dkey = self._create_file_dkey(remainder)
             file_object.add_value(dkey)
 
         return file_object
@@ -306,6 +322,10 @@ class FileSystemExplorer(CommonBase):
     def set_dfs_inode(self, akey):
         self._dfs.set_dfs_inode(akey)
         self._avg.set_dfs_inode(akey)
+
+    def set_io_size(self, io_size):
+        self._dfs.set_io_size(io_size)
+        self._avg.set_io_size(io_size)
 
     def set_chunk_size(self, chunk_size):
         self._dfs.set_chunk_size(chunk_size)

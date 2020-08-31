@@ -51,6 +51,7 @@ class ProcessFS(ProcessBase):
         inode_akey = get_dfs_inode_akey()
         fse = FileSystemExplorer(args.path[0])
         fse.set_verbose(args.verbose)
+        fse.set_io_size_size(self.get_io_size())
         fse.set_chunk_size(self.get_chunk_size())
         fse.set_dfs_inode(inode_akey)
         fse.explore()
@@ -157,10 +158,16 @@ explore.add_argument(
     action='store_true',
     help='Use average file size for estimation. (Faster)')
 explore.add_argument(
+    '-i',
+    '--io_size',
+    type=str,
+    help='I/O size.',
+    default='128KiB')
+explore.add_argument(
     '-c',
     '--chunk_size',
     type=str,
-    help='Chunk size',
+    help='Chunk size. Must be multiple of I/O size',
     default='1MiB')
 explore.add_argument(
     '-s',
@@ -240,10 +247,16 @@ csv_file.add_argument(
     help='Average file name length',
     default=32)
 csv_file.add_argument(
+    '-i',
+    '--io_size',
+    type=str,
+    help='I/O size.',
+    default='128KiB')
+csv_file.add_argument(
     '--chunk_size',
     dest='chunk_size',
     type=str,
-    help='Array chunk size.  Must be multiple of I/O size',
+    help='Array chunk size. Must be multiple of I/O size',
     default='1MiB')
 csv_file.add_argument(
     '-s',
