@@ -50,6 +50,7 @@ pool:
 container:
     type: POSIX
     control_method: daos
+    oclass: "RP_2G1"
 ior:
   api: "DFS"
   client_processes:
@@ -65,6 +66,9 @@ ior:
   objectclass:
     RP_2G1:
       dfs_oclass: "RP_2G1"
+  objectdirclass:
+    RP_2G1:
+      dfs_dir_oclass: "RP_2G1"
 faulttests:
   pool_capacity:
     10_Percent:
