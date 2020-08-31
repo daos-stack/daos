@@ -1358,11 +1358,15 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 
 	iter_param.ip_hdl		= DAOS_HDL_INVAL;
 	iter_param.ip_ih		= ih;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_oid		= *oid;
 	iter_param.ip_epr.epr_lo	= 0ULL;
 	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
+
+	/* I forgot one question.
+	 * Is it okay to just use the array range punch to get rid of the parity
+	 * after I re-replicate the stripe?
+	 */
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
