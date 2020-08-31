@@ -78,11 +78,15 @@ class RootContainerTest(DfuseTestBase):
             TestContainer: the newly added container
 
         """
+        # Disconnect from pool otherwise daos container create will fail
+        pool.disconnect()
+
         # Get container params
         container = TestContainer(pool, daos_command=DaosCommand(self.bin))
         container.get_params(self)
         if path is not None:
             container.path.update(path)
+
         # create container
         container.create()
         self.container.append(container)
