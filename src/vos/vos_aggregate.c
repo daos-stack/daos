@@ -1004,9 +1004,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(!bio_addr_is_hole(&addr_dst));
 	mark_yield(&addr_dst, acts);
 
-	if (seg_size < 32)
-		D_ASSERT(addr_dst.ba_type == DAOS_MEDIA_SCM);
-
 	iov.iov_buf = io->ic_buf;
 	iov.iov_buf_len = io->ic_buf_len;
 	iov.iov_len = seg_size;
