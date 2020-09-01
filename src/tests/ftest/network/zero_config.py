@@ -127,11 +127,10 @@ class ZeroConfigTest(TestWithServers):
 
         # get the dmg config file for daos_racer
         dmg = self.get_dmg_command()
-        dmg_config = dmg.yaml.filename
 
         # Let's run daos_racer as a client
         daos_racer = DaosRacerCommand(self.bin,
-                                      self.hostlist_clients[0], dmg_config)
+                                      self.hostlist_clients[0], dmg)
         daos_racer.get_params(self)
 
         # Update env_name list to add OFI_INTERFACE if needed.
