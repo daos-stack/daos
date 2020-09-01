@@ -627,6 +627,84 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             key: getattr(args, value).split(",") if getattr(args, value) else []
             for key, value in YAML_KEYS.items()}
 
+        args_test_clients = []
+        if args.test_clients:
+          args_test_clients = args.test_clients.split(",")
+
+        # Get length of test-servers and test-clients, ensure they
+        # test-clients gets the carry-over from test-servers
+        found_test_servers_count = len(yaml_find["test_servers"])
+
+         # Example case:
+         # Found values: {
+         #      'test_clients_1': ['boro-C'],
+         #      'test_clients_2': ['boro-D'], 
+         #      'test_clients_3': ['boro-E']
+         #      'test_servers': ['boro-A', 'boro-B'],
+         #    }
+         # New values:   {
+              # 'test_clients': [],
+              # 'test_servers': [
+              #     'wolf-103vm2',  'wolf-103vm3',  'wolf-103vm4',
+              #     'wolf-103vm5',  'wolf-103vm6',  'wolf-103vm7',
+              #     'wolf-103vm8', 'wolf-103vm9'
+              # ],
+              # 'test_clients_1': [],
+              # 'test_clients_2': [],
+              # 'test_clients_3': [],
+              # 'test_clients_4': [],
+              # 'test_clients_5': [],
+              # 'test_clients_6': [],
+              # 'bdev_list': []
+        # }
+
+        new_values["test_clients"].extend(
+          new_values["test_servers"][found_test_servers_count:]
+        )
+
+        suffix_idx = 1
+
+        # In the YAML file, distribute list of test_clients supplied at the command-line
+        # across the boro-[ABC...] place-holder strings 
+        #
+        # Assume: test_clients_[1-9] settings in YAML are never assined more than one host
+
+        # Example:
+        # YAML:
+        #   test_clients_1
+        #     - boro-A
+        #   test_clients_1
+        #     - boro-B
+        #   test_clients_1
+        #     - boro-C
+        # Command-line arguments to launch.py:
+        #  -tc wolf-X,wolf-Y,wolf-Z
+        # Resulting YAML:
+        #   test_clients_1
+        #     - wolf-X
+        #   test_clients_1
+        #     - wolf-Y
+        #   test_clients_1
+        #     - wolf-Z
+        for tc1 in new_values["test_clients"]:
+
+          test_client_n = "test_clients_" + str(suffix_idx)
+
+          if yaml_find.get(test_client_n, False):
+            for tc2 in yaml_find[test_client_n]:
+
+                test_client_n_val = None
+                # -tc|--test-clients ommand line argument take precendence over
+                # -ts|--test-servers
+                if len(args_test_clients):
+                  test_client_n_val = args_test_clients.pop(0)
+                else:
+                  test_client_n_val = new_values["test_clients"].pop(0)
+
+                if test_client_n_val is not None:
+                  new_values[test_client_n].append(test_client_n_val)
+                  suffix_idx += 1
+
         # Assign replacement values for the test yaml entries to be replaced
         display(args, "Detecting replacements for {} in {}".format(
             yaml_keys, yaml_file))
@@ -649,8 +727,9 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     # by a new test yaml list entry, e.g.
                     #   '- serverA' --> '- wolf-1'
                     value_format = "- {}"
-                    values_to_replace = [
-                        value_format.format(item) for item in yaml_find[key]]
+                    values_to_replace = []
+                    for item in yaml_find[key]:
+                      values_to_replace.append(item)
 
                 else:
                     # Individual bdev_list NVMe PCI addresses in the test yaml
@@ -664,11 +743,17 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
                 # Add the next user-specified value as a replacement for the key
                 for value in values_to_replace:
+
+                    if (type(new_values[key]) == list):
+                      replacement_value = new_values[key].pop(0)
+                    else:
+                      replacement_value = new_values[key]
+
                     if value in replacements:
                         continue
                     try:
-                        replacements[value] = value_format.format(
-                            new_values[key].pop(0))
+                        # host value could be a list or string
+                        replacements[value] = replacement_value
                     except IndexError:
                         replacements[value] = None
                     display(
@@ -844,6 +929,25 @@ def find_yaml_hosts(test_yaml):
         get_yaml_data(test_yaml),
         [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
+def flatten(l):
+    """Flatten an arbitrarily nested list to a list of scalars
+
+    Args:
+        l: a nested list of depth n
+
+    Returns:
+        result: a unique list of hosts specified in the test's yaml file
+
+    """
+    result = []
+    if type(l) == list:
+      for el in l:
+          if hasattr(el, "__iter__") and not isinstance(el, basestring):
+              result.extend(flatten(el))
+          else:
+              result.append(el)
+      return result
+
 
 def get_hosts_from_yaml(test_yaml, args):
     """Extract the list of hosts from the test yaml file.
@@ -863,10 +967,13 @@ def get_hosts_from_yaml(test_yaml, args):
     if args.include_localhost:
         host_set.add(socket.gethostname().split(".")[0])
     found_client_key = False
+
+
     for key, value in find_yaml_hosts(test_yaml).items():
-        host_set.update(value)
-        if key in YAML_KEYS["test_clients"]:
-            found_client_key = True
+        for host in flatten(value):
+          host_set.update([host.split(".")[0]])
+          if key in YAML_KEYS["test_clients"]:
+              found_client_key = True
 
     # Include this host as a client if no clients are specified
     if not found_client_key:
