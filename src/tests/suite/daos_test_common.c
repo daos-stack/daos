@@ -178,20 +178,40 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 				arg->srv_disabled_ntgts = info.pi_ndisabled;
 			}
 		}
+		fprintf(stderr, "Rank 0 bcast pool info\n");
 	}
 
 	/** broadcast pool connect result */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		fprintf(stderr, "%d: Starting bcast %d..\n", arg->myrank, rc);
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
+		fprintf(stderr, "%d: DONE rc bcast %d..\n", arg->myrank, rc);
+		MPI_Barrier(MPI_COMM_WORLD);
 		if (!rc) {
 			/** broadcast pool info */
 			MPI_Bcast(&arg->pool.pool_info,
 				  sizeof(arg->pool.pool_info),
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			MPI_Barrier(MPI_COMM_WORLD);
+			if (arg->myrank == 0)
+				fprintf(stderr, "%d: DONE pool info bcast..\n", arg->myrank);
+			MPI_Barrier(MPI_COMM_WORLD);
 			/** l2g and g2l the pool handle */
 			handle_share(&arg->pool.poh, HANDLE_POOL,
 				     arg->myrank, arg->pool.poh, 0);
+			MPI_Barrier(MPI_COMM_WORLD);
+			if (arg->myrank == 0)
+				fprintf(stderr, "%d: DONE handle share bcast..\n", arg->myrank);
+			MPI_Barrier(MPI_COMM_WORLD);
 		}
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (arg->myrank == 0)
+			fprintf(stderr, "%d: DONE pool bcast..\n", arg->myrank);
+		MPI_Barrier(MPI_COMM_WORLD);
 	}
 	return rc;
 }

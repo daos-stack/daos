@@ -579,7 +579,6 @@ func numNUMANodes(topology C.hwloc_topology_t) int {
 // It looks for an intersection between the nodeset or cpuset of this pid and the nodeset or cpuset of each
 // NUMA node looking for a match to identify the corresponding NUMA socket ID.
 func GetNUMASocketIDForPid(ctx context.Context, pid int32) (int, error) {
-
 	ndc, err := getContext(ctx)
 	if err != nil {
 		return 0, errors.Errorf("netdetect context was not initialized")
@@ -591,7 +590,10 @@ func GetNUMASocketIDForPid(ctx context.Context, pid int32) (int, error) {
 
 	cpuset := C.hwloc_bitmap_alloc()
 	defer C.hwloc_bitmap_free(cpuset)
+
+	mutex.Lock()
 	status := C.hwloc_get_proc_cpubind(ndc.topology, C.int(pid), cpuset, 0)
+	mutex.Unlock()
 	if status != 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}

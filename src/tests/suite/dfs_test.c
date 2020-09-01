@@ -891,18 +891,28 @@ dfs_setup(void **state)
 {
 	test_arg_t		*arg;
 	int			rc = 0;
-	int mpirank;
+	char			buf[2121];
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
-	printf("%d: Starting pool connect..\n", mpirank);
+	int myrank;
+
+	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+	if (myrank == 0)
+		dts_buf_render(buf, 2121);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	printf("%d: Start Initial Bcast\n", myrank);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	MPI_Bcast(buf, 2121, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	printf("%d: DONE Initial Bcast\n", myrank);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
 			NULL);
 	assert_int_equal(rc, 0);
-
-	MPI_Barrier(MPI_COMM_WORLD);
-	printf("%d: Done pool connect..\n", mpirank);
+	printf("Done pool connect..\n");
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	arg = *state;
@@ -914,10 +924,6 @@ dfs_setup(void **state)
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
-
-	MPI_Barrier(MPI_COMM_WORLD);
-	printf("%d: sharing handle..\n", mpirank);
-	MPI_Barrier(MPI_COMM_WORLD);
 
 	handle_share(&co_hdl, HANDLE_CO, arg->myrank, arg->pool.poh, 0);
 	dfs_share(arg->pool.poh, co_hdl, arg->myrank, &dfs_mt);

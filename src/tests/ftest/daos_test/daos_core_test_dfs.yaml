@@ -12,7 +12,7 @@ hosts:
     - client-G
     - client-H
 
-timeout: 250
+timeout: 500
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G

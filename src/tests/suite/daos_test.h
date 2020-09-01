@@ -404,11 +404,15 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 		else
 			rc = daos_cont_local2global(*hdl, &ghdl);
 		assert_int_equal(rc, 0);
+		fprintf(stderr, "%d: size of GH = %zu\n", rank, ghdl.iov_buf_len);
 	}
 
 	/** broadcast size of global handle to all peers */
 	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 	assert_int_equal(rc, MPI_SUCCESS);
+	MPI_Barrier(MPI_COMM_WORLD);
+	fprintf(stderr, "%d: size of GH = %zu\n", rank, ghdl.iov_buf_len);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** allocate buffer for global pool handle */
 	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
@@ -427,24 +431,23 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 		assert_int_equal(rc, 0);
 		if (verbose)
 			print_message("success\n");
+		fprintf(stderr, "%d: 2nd size of GH = %zu\n", rank, ghdl.iov_buf_len);
 	}
-
+	ghdl.iov_len = ghdl.iov_buf_len;
 	/** broadcast global handle to all peers */
-	if (rank == 0 && verbose == 1)
-		print_message("rank 0 broadcast global %s handle ...",
-			      (type == HANDLE_POOL) ? "pool" : "container");
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0,
-		       MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
+	fprintf(stderr, "%d: Start broadcast global handle ...\n", rank);
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_buf_len, MPI_BYTE, 0, MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
+	fprintf(stderr, "%d: hdl bcast done\n", rank);
 	assert_int_equal(rc, MPI_SUCCESS);
-	if (rank == 0 && verbose == 1)
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (rank == 0)
 		print_message("success\n");
 
 	if (rank != 0) {
 		/** unpack global handle */
-		if (verbose)
-			print_message("rank %d call global2local on %s handle",
-				      rank, type == HANDLE_POOL ?
-				      "pool" : "container");
 		if (type == HANDLE_POOL) {
 			/* NB: Only pool_global2local are different */
 			rc = daos_pool_global2local(ghdl, hdl);
@@ -453,8 +456,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 		}
 
 		assert_int_equal(rc, 0);
-		if (verbose)
-			print_message("rank %d global2local success\n", rank);
+		print_message("rank %d global2local success\n", rank);
 	}
 
 	D_FREE(ghdl.iov_buf);

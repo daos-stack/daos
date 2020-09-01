@@ -20,7 +20,6 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
 // +build concurrency
 
 package netdetect
@@ -34,53 +33,73 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const maxConcurrent = 1000
 
-func getSocketID(t *testing.T, pid int32, wg *sync.WaitGroup) {
+func getSocketID(t *testing.T, pid int32, wg *sync.WaitGroup, ctx context.Context) error {
 	defer wg.Done()
-
-	netCtx, err := Init(context.Background())
-	defer CleanUp(netCtx)
-	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
-
-	numaNode, err := GetNUMASocketIDForPid(netCtx, int32(pid))
-	common.AssertEqual(t, err, nil, fmt.Sprintf("GetNUMASocketIDForPid error on NUMA %d / pid %d", numaNode, pid))
+	numaNode, err := GetNUMASocketIDForPid(ctx, int32(pid))
+	if err != nil {
+		return errors.Errorf("GetNUMASocketIDForPid error on NUMA %d / pid %d / error: %v", numaNode, pid, err)
+	}
+	return nil
 }
 
-// TestConcurrentGetNUMASocket launches maxConcurrent go routines
-// that concurrently access the hwloc topology.  This test verifies that there are
-// no race conditions when the topology is initialized on each access
+// TestConcurrentGetNUMASocket launches go routines
+// that concurrently call GetNUMASocketIDForPid() by itself to verify that there are
+// no race conditions
 func TestConcurrentGetNUMASocket(t *testing.T) {
 	_, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
+	netCtx, err := Init(context.Background())
+	defer CleanUp(netCtx)
+	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
+
 	var wg sync.WaitGroup
 	pid := syscall.Getpid()
 	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < maxConcurrent; i++ {
+	r := rand.Intn(1500)
+	for i := 0; i < maxConcurrent+r; i++ {
 		wg.Add(1)
-		go func(n int32) {
+		go func(n int32, ctx context.Context) {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
-			getSocketID(t, n, &wg)
-		}(int32(pid))
+			err := getSocketID(t, n, &wg, ctx)
+			common.AssertEqual(t, err, nil, fmt.Sprintf("getSocketIDWithContext error: %v", err))
+
+		}(int32(pid), netCtx)
 	}
 	wg.Wait()
 }
 
-func getSocketIDWithContext(t *testing.T, pid int32, wg *sync.WaitGroup, ctx context.Context) {
+func getSocketAndScanFabric(t *testing.T, pid int32, wg *sync.WaitGroup, ctx context.Context) error {
 	defer wg.Done()
 	numaNode, err := GetNUMASocketIDForPid(ctx, int32(pid))
-	common.AssertEqual(t, err, nil, fmt.Sprintf("GetNUMASocketIDForPid error on NUMA %d / pid %d", numaNode, pid))
+	if err != nil {
+		return errors.Errorf("GetNUMASocketIDForPid error on NUMA %d / pid %d / error: %v", numaNode, pid, err)
+	}
+
+	provider := ""
+	results, err := ScanFabric(ctx, provider)
+	if err != nil {
+		return err
+	}
+
+	if len(results) == 0 {
+		return errors.Errorf("len was 0")
+	}
+	return err
 }
 
-// TestConcurrentGetNUMASocket launches maxConcurrent go routines
-// that concurrently access the hwloc topology.  This test verifies that there are
-// no race conditions when using a shared topology pointer
-func TestConcurrentGetNUMASocketWithContext(t *testing.T) {
+// TestConcurrentGetNUMASocketAndScanFabric launches go routines
+// that concurrently call GetNUMASocketIDForPid() and ScanFabric() together to verify that there are
+// no race conditions when called in this sequence
+func TestConcurrentGetNUMASocketAndScanFabric(t *testing.T) {
 	_, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -91,12 +110,55 @@ func TestConcurrentGetNUMASocketWithContext(t *testing.T) {
 	var wg sync.WaitGroup
 	pid := syscall.Getpid()
 	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < maxConcurrent; i++ {
+	r := rand.Intn(1500)
+	for i := 0; i < 2*maxConcurrent+r; i++ {
 		wg.Add(1)
 		go func(n int32, ctx context.Context) {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
-			getSocketIDWithContext(t, n, &wg, ctx)
+			err := getSocketAndScanFabric(t, n, &wg, ctx)
+			common.AssertEqual(t, err, nil, fmt.Sprintf("getSocketIDWithContext error: %v", err))
+
 		}(int32(pid), netCtx)
+	}
+	wg.Wait()
+}
+
+func getScanFabric(t *testing.T, wg *sync.WaitGroup, ctx context.Context) error {
+	defer wg.Done()
+	provider := ""
+	results, err := ScanFabric(ctx, provider)
+	if err != nil {
+		return err
+	}
+
+	if len(results) == 0 {
+		return errors.Errorf("len was 0")
+	}
+	return err
+}
+
+// TestConcurrentScanFabric launches go routines
+// that concurrently call ScanFabric() by itself to verify that there are
+// no race conditions
+func TestConcurrentScanFabric(t *testing.T) {
+	_, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	netCtx, err := Init(context.Background())
+	defer CleanUp(netCtx)
+	common.AssertEqual(t, err, nil, fmt.Sprintf("Failed to initialize NetDetectContext: %v", err))
+
+	var wg sync.WaitGroup
+	rand.Seed(time.Now().UnixNano())
+	r := rand.Intn(1500)
+	for i := 0; i < 2*maxConcurrent+r; i++ {
+		wg.Add(1)
+		go func(ctx context.Context) {
+			time.Sleep(time.Duration(rand.Intn(100)) * time.Microsecond)
+			err := getScanFabric(t, &wg, ctx)
+			common.AssertEqual(t, err, nil, fmt.Sprintf("ScanFabric failure: %v", err))
+
+		}(netCtx)
 	}
 	wg.Wait()
 }
