@@ -48,14 +48,14 @@ from dmg_utils_params import \
 from dmg_utils import DmgCommand
 from daos_utils import DaosCommand
 from server_utils import DaosServerCommand, DaosServerManager
-from general_utils import get_partition_hosts, stop_processes
+from general_utils import \
+    get_partition_hosts, stop_processes, get_job_manager_class
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 from write_host_file import write_host_file
-from job_manager_utils import get_job_manager
 
 
 # pylint: disable=invalid-name
@@ -373,7 +373,7 @@ class TestWithServers(TestWithoutServers):
         manager_mpi_type = self.params.get(
             "job_manager_mpi_type", default="mpich")
         if manager_class_name is not None:
-            self.job_manager = get_job_manager(
+            self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
 
     def stop_leftover_processes(self, processes, hosts):

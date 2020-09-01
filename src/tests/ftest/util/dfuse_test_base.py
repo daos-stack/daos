@@ -42,7 +42,7 @@ class DfuseTestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            self.stop_dfuse()
+            self.stop_dfuse(force=True)
         finally:
             # Stop the servers and agents
             super(DfuseTestBase, self).tearDown()
