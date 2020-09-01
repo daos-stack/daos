@@ -445,8 +445,6 @@ bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 	struct spdk_bdev		*bdev;
 	struct spdk_io_channel		*channel;
 
-	D_INFO("bio_xs_io_stat(): enter\n");
-
 	/* check if IO_STAT_PERIOD environment variable is set */
 	if (io_stat_period == 0)
 		return;
