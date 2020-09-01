@@ -296,6 +296,9 @@ class Mpirun(JobManager):
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
+        self.working_dir = FormattedParameter("-wdir {}", None)
+
         self.mpitype = mpitype
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.mca = FormattedParameter("--mca {}", None)

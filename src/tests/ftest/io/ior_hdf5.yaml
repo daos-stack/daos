@@ -41,7 +41,6 @@ ior:
     iorflags:
           ior_flags:
             - "-v -W -w -r -R"
-            - "-v -W -w -r -R -F"
           transfer_block_size:
             - [256B, 2M]
             - [1M, 32M]

@@ -56,14 +56,6 @@ class IorHdf5(IorTestBase):
                 # run ior
                 self.run_ior_with_pool(plugin_path=hdf5_plugin_path)
 
-        # Running a variant for ior fpp
-        self.ior_cmd.flags.update(flags[1])
-        self.ior_cmd.block_size.update((transfer_block_size[1])[1])
-        self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
-        self.ior_cmd.dfs_oclass.update(obj_class[0])
-        # run ior
-        self.run_ior_with_pool(plugin_path=hdf5_plugin_path)
-
     def test_ior_hdf5(self):
         """Jira ID: DAOS-4909.
 
