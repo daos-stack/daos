@@ -98,7 +98,7 @@ dfs_test_mount_umount(void **state)
 	assert_int_equal(rc, EINVAL);
 	print_message("Mounting wrong parameters\n");
 
-	/** NUL Ldfs mount */
+	/** NULL dfs mount */
 	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDWR, /*&dfs*/ NULL);
 	assert_int_equal(rc, EINVAL);
 	print_message("Mounting NULL dfs\n");
@@ -184,12 +184,12 @@ dfs_test_mkdir_remove(void **state)
         assert_int_equal(rc, EINVAL);
 	print_message("Directory name to create should be provided\n");
 
-        /** The directory with permissions to do nothing may be created*/
+        /** The directory with permissions to do nothing may be created */
 	rc = dfs_mkdir(dfs_mt, NULL, "dir",  0, 0);
         assert_int_equal(rc, 0);
         print_message("Permission for at least R or W is not checked\n");
 
-        /** The directory with existing name can not be created*/
+        /** The directory with existing name can not be created */
 	rc = dfs_mkdir(dfs_mt, NULL, "dir", S_IWUSR | S_IRUSR, 0);
         assert_int_equal(rc, EEXIST);
 	print_message( "Another directory with existing name rejected\n");
