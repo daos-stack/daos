@@ -36,6 +36,19 @@ class DmgCommand(DmgCommandBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a dmg command with helper methods."""
 
+    # Member state defined in control/system/member.go. Used for dmg system
+    # query.
+    UNKNOWN = 0
+    AWAIT_FORMAT = 1
+    STARTING = 2
+    READY = 3
+    JOINED = 4
+    STOPPING = 5
+    STOPPED = 6
+    EVICTED = 7
+    ERRORED = 8
+    UNRESPONSIVE = 9
+
     # As the handling of these regular expressions are moved inside their
     # respective methods, they should be removed from this definition.
     METHOD_REGEX = {
@@ -595,24 +608,25 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def system_query(self, rank=None, verbose=True):
+    def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 
         Args:
-            rank: Specify specific rank to obtain it's status
-                  Defaults to None, which means report all available
-                  ranks.
+            ranks (str): Specify specific ranks to obtain it's status. Use
+                comma separated list for multiple ranks. e.g., 0,1.
+                Defaults to None, which means report all available ranks.
             verbose (bool): To obtain detailed query report
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg system query command fails.
 
         """
-        return self._get_result(("system", "query"), rank=rank, verbose=verbose)
+        return self._get_result(
+            ("system", "query"), ranks=ranks, verbose=verbose)
 
     def system_start(self):
         """Start the system.
@@ -627,10 +641,12 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("system", "start"))
 
-    def system_stop(self, force=False):
+    def system_stop(self, ranks=None, force=False):
         """Stop the system.
 
         Args:
+            ranks (str, optional): comman separated ranks to stop. Defaults to
+                None.
             force (bool, optional): whether to force the stop. Defaults to
                 False.
 
@@ -642,7 +658,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system stop command fails.
 
         """
-        return self._get_result(("system", "stop"), force=force)
+        return self._get_result(("system", "stop"), ranks=ranks, force=force)
 
 
 def check_system_query_status(stdout_str):

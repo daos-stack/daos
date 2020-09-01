@@ -559,7 +559,7 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.SystemSubCommand.QuerySubCommand,
                     self).__init__(
                         "/run/dmg/system/query/*", "query")
-                self.rank = FormattedParameter("--rank={}")
+                self.ranks = FormattedParameter("--ranks={}")
                 self.verbose = FormattedParameter("--verbose", False)
 
         class StartSubCommand(CommandWithParameters):
@@ -582,3 +582,4 @@ class DmgCommandBase(YamlCommand):
                     self).__init__(
                         "/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
+                self.ranks = FormattedParameter("--ranks={}")
