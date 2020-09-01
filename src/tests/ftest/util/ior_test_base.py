@@ -55,7 +55,6 @@ class IorTestBase(DfuseTestBase):
         self.hostfile_clients_slots = None
         self.container = None
         self.lock = None
-        self.mpirun = None
 
     def setUp(self):
         """Set up each test case."""
@@ -175,12 +174,9 @@ class IorTestBase(DfuseTestBase):
         else:
             self.fail("Unsupported IOR API")
 
-        if self.subprocess:
-            self.mpirun = Mpirun(self.ior_cmd, True, mpitype="mpich")
-        else:
-            self.mpirun = Mpirun(self.ior_cmd, mpitype="mpich")
+        self.job_manager = Mpirun(self.ior_cmd, self.subprocess, "mpich")
 
-        return self.mpirun
+        return self.job_manager
 
     def check_subprocess_status(self, operation="write"):
         """Check subprocess status."""
@@ -193,7 +189,7 @@ class IorTestBase(DfuseTestBase):
                       for subprocess status check")
 
         if not self.ior_cmd.check_ior_subprocess_status(
-                self.mpirun.process, self.ior_cmd):
+                self.job_manager.process, self.ior_cmd):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True):
@@ -236,10 +232,10 @@ class IorTestBase(DfuseTestBase):
             manager (str): mpi job manager command
         """
         self.log.info(
-            "<IOR> Stopping in-progress IOR command: %s", self.mpirun.__str__())
+            "<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
 
         try:
-            out = self.mpirun.stop()
+            out = self.job_manager.stop()
             return out
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))

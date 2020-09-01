@@ -96,7 +96,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         # VOL needs to run from a file system that supports xattr.  Currently
         # nfs does not have this attribute so it was recommended to create and
         # use a dfuse dir and run vol tests from there.
-        self.manager.working_dir.value = self.dfuse.mount_dir.value
+        self.job_manager.working_dir.value = self.dfuse.mount_dir.value
 
         # Run macsio
         self.log.info("Running MACSio with DAOS VOL connector")

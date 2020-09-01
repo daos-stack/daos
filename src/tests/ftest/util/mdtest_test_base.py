@@ -88,9 +88,11 @@ class MdtestBase(DfuseTestBase):
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            return Mpirun(self.mdtest_cmd, mpitype="mpich")
+            self.job_manager = Mpirun(self.mdtest_cmd, mpitype="mpich")
+        else:
+            self.job_manager = Orterun(self.mdtest_cmd)
 
-        return Orterun(self.mdtest_cmd)
+        return self.job_manager
 
     def run_mdtest(self, manager, processes):
         """Run the Mdtest command.

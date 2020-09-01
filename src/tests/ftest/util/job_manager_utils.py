@@ -22,13 +22,49 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from distutils.spawn import find_executable
+from importlib import import_module
 import os
 
 from command_utils import ExecutableCommand
-from command_utils_base import FormattedParameter, EnvironmentVariables
+from command_utils_base import \
+    FormattedParameter, EnvironmentVariables, CommandFailure
 from env_modules import load_mpi
 from general_utils import pcmd
 from write_host_file import write_host_file
+
+
+def get_job_manager(name, job=None, subprocess=False, mpi="openmpi"):
+    """Get the job manager class that matches the specified name.
+
+    Enables assigning a JobManager class from the test's yaml settings.
+
+    Args:
+        name (str): JobManager-based class name
+        job (ExecutableCommand, optional): command object to manage. Defaults
+            to None.
+        subprocess (bool, optional): whether the command is run as a
+            subprocess. Defaults to False.
+        mpi (str, optional): MPI type to use with the Mpirun class only.
+            Defaults to "openmpi".
+
+    Raises:
+        CommandFailure: if an invalid JobManager class name is provided.
+
+    Returns:
+        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+
+    """
+    try:
+        manager_module = import_module("job_manager_utils")
+        manager_class = getattr(manager_module, name)
+    except (ImportError, AttributeError) as error:
+        raise CommandFailure(
+            "Invalid '{}' job manager class: {}".format(name, error))
+    if isinstance(manager_class, Mpirun):
+        manager = manager_class(job, subprocess=subprocess, mpitype=mpi)
+    else:
+        manager = manager_class(job, subprocess=subprocess)
+    return manager
 
 
 class JobManager(ExecutableCommand):
@@ -300,8 +336,6 @@ class Mpirun(JobManager):
         self.working_dir = FormattedParameter("-wdir {}", None)
 
         self.mpitype = mpitype
-        self.working_dir = FormattedParameter("-wdir {}", None)
-        self.mca = FormattedParameter("--mca {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).

@@ -55,6 +55,7 @@ from test_utils_container import TestContainer
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 from write_host_file import write_host_file
+from job_manager_utils import get_job_manager
 
 
 # pylint: disable=invalid-name
@@ -285,6 +286,7 @@ class TestWithServers(TestWithoutServers):
             os.path.split(self.filename)[1], self.name.str_uid)
         # self.debug = False
         # self.config = None
+        self.job_manager = None
 
     def setUp(self):
         """Set up each test case."""
@@ -362,6 +364,17 @@ class TestWithServers(TestWithoutServers):
         # Start the servers
         if self.setup_start_servers:
             self.start_servers()
+
+        # Setup a job manager command for running the test command
+        manager_class_name = self.params.get(
+            "job_manager_class_name", default=None)
+        manager_subprocess = self.params.get(
+            "job_manager_subprocess", default=False)
+        manager_mpi_type = self.params.get(
+            "job_manager_mpi_type", default="mpich")
+        if manager_class_name is not None:
+            self.job_manager = get_job_manager(
+                manager_class_name, None, manager_subprocess, manager_mpi_type)
 
     def stop_leftover_processes(self, processes, hosts):
         """Stop leftover processes on the specified hosts before starting tests.
@@ -589,6 +602,10 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
+        # Stop any jobs that may still be running
+        if self.job_manager:
+            self.job_manager.stop()
+
         # Tear down any test-specific items
         errors = self.pre_tear_down()
 

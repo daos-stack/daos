@@ -36,16 +36,12 @@ class MacsioTestBase(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a MacsioTestBase object."""
         super(MacsioTestBase, self).__init__(*args, **kwargs)
-        self.manager = None
         self.macsio = None
 
     def setUp(self):
         """Set up each test case."""
         super(MacsioTestBase, self).setUp()
 
-        # Support using different job managers to launch the daos agent/servers
-        mpi_type = self.params.get("mpi_type", default="mpich")
-        self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):
@@ -72,7 +68,7 @@ class MacsioTestBase(TestWithServers):
         including the path to the macsio executable.
 
         By default mpirun will be used to run macsio.  This can be overridden by
-        redfining the self.manager attribute prior to calling this method.
+        redfining the self.job_manager attribute prior to calling this method.
 
         Args:
             pool_uuid (str): pool uuid
@@ -96,12 +92,12 @@ class MacsioTestBase(TestWithServers):
         self.macsio.daos_pool = pool_uuid
         self.macsio.daos_svcl = pool_svcl
         self.macsio.daos_cont = cont_uuid
-        self.manager.job = self.macsio
-        self.manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.manager.assign_processes(len(self.hostlist_clients))
-        self.manager.assign_environment(env)
+        self.job_manager.job = self.macsio
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.job_manager.assign_processes(len(self.hostlist_clients))
+        self.job_manager.assign_environment(env)
         try:
-            return self.manager.run()
+            return self.job_manager.run()
 
         except CommandFailure as error:
             self.log.error("MACSio Failed: %s", str(error))

@@ -104,19 +104,19 @@ class NvmePoolCapacity(TestWithServers):
                                test[2])] = str(uuid.uuid4())
 
         # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
-        manager.job.dfs_cont.update(container_info
+        self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
+        self.job_manager.job.dfs_cont.update(container_info
                                      ["{}{}{}".format(oclass,
                                                       api,
                                                       test[2])])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
+        env = ior_cmd.get_default_env(str(self.job_manager))
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.job_manager.assign_processes(processes)
+        self.job_manager.assign_environment(env, True)
 
         # run IOR Command
         try:
-            manager.run()
+            self.job_manager.run()
         except CommandFailure as _error:
             results.put("FAIL")
 

@@ -138,17 +138,24 @@ class Dfuse(DfuseCommand):
         _, missing_nodes = check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
         if len(missing_nodes):
-
-            cmd = "mkdir -p {}".format(self.mount_dir.value)
-            ret_code = pcmd(missing_nodes, cmd, timeout=30)
-            if len(ret_code) > 1 or 0 not in ret_code:
-                error_hosts = NodeSet(
-                    ",".join(
-                        [str(node_set) for code, node_set in ret_code.items()
-                         if code != 0]))
-                raise CommandFailure(
-                    "Error creating the {} dfuse mount point on the following "
-                    "hosts: {}".format(self.mount_dir.value, error_hosts))
+            # Remove any filenames matching the directory name to avoid errors
+            command_list = [
+                "ls -al {}".format(self.mount_dir.value),
+                "rm -fr {}".format(self.mount_dir.value),
+                "mkdir -p {}".format(self.mount_dir.value),
+            ]
+            for cmd in command_list:
+                ret_code = pcmd(missing_nodes, cmd, timeout=30)
+                if "mkdir" in cmd and len(ret_code) > 1 or 0 not in ret_code:
+                    failed_nodes = [
+                        str(node_set) for code, node_set in ret_code.items()
+                        if code != 0
+                    ]
+                    error_hosts = NodeSet(",".join(failed_nodes))
+                    raise CommandFailure(
+                        "Error creating the {} dfuse mount point on the "
+                        "following hosts: {}".format(
+                            self.mount_dir.value, error_hosts))
 
     def remove_mount_point(self, fail=True):
         """Remove dfuse directory.
