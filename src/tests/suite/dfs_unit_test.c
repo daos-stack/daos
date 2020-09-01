@@ -35,7 +35,7 @@ dfs_test_mount_umount(void **state)
 	test_arg_t		*arg = *state;
 	uuid_t			cuuid;
 	daos_cont_info_t	co_info;
-	daos_handle_t		coh;
+	daos_handle_t		conph;
 	dfs_t			*dfs;
 	int			rc;
 
@@ -49,101 +49,65 @@ dfs_test_mount_umount(void **state)
 	print_message("Created non-POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+			    &conph, &co_info, NULL);
 	assert_int_equal(rc, 0);
 
 	/** try to mount DFS on it, should fail. */
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	rc = dfs_mount(arg->pool.poh, conph, O_RDWR, &dfs);
 	assert_int_equal(rc, EINVAL);
 
-	rc = daos_cont_close(coh, NULL);
+	rc = daos_cont_close(conph, NULL);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 
-	/** create a DFS container with POSIX layout */
-	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	/** open the container with POSIX layout */
+	rc = daos_cont_open(arg->pool.poh, co_uuid, DAOS_COO_RW,
+			    &co_hdl, &co_info, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	/** RW mount for the container with POSIX layout */
+	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
+	print_message("Mounting RW\n");
 
+	/** Second mount without umount for the container with POSIX layout */
+	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDWR, &dfs);
+	assert_int_equal(rc, 0);
+	print_message("Second mounting without umount\n");
+
+	/** RW umount with POSIX layout */
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Unmounting RW\n");
 
-	/** create a DFS container with POSIX layout */
-	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	/** R mount for the container with POSIX layout */
+	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDONLY, &dfs);
 	assert_int_equal(rc, 0);
 	print_message("Mounting readonly\n");
-	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
-	assert_int_equal(rc, 0);
-	print_message("Unmounting readonly\n");
+
+	/** R umount for the container with POSIX layout */
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
-	print_message("Container closing\n");
-	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Container destroying\n");
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
-		      DP_UUID(cuuid));
+	print_message("Unmounting readonly\n");
 
-	/** create a DFS container with POSIX layout */
-	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
-	assert_int_equal(rc, 0);
+	/** Wrong parameteres mount for the container with POSIX layout */
+	rc = dfs_mount(arg->pool.poh, co_hdl, -1, &dfs);
+	assert_int_equal(rc, EINVAL);
 	print_message("Mounting wrong parameters\n");
-	rc = dfs_mount(arg->pool.poh, coh, -1, &dfs);
-	assert_int_equal(rc, EINVAL);
-	print_message("Container closing\n");
-	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Container destroying\n");
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
-		      DP_UUID(cuuid));
 
-        /** create a DFS container with POSIX layout */
-	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Mounting NULL dfs\n");
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, /*&dfs*/ NULL);
+	/** NUL Ldfs mount */
+	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDWR, /*&dfs*/ NULL);
 	assert_int_equal(rc, EINVAL);
-	print_message("Unmount NULL dfs\n");
+	print_message("Mounting NULL dfs\n");
+
+	/** NULL dfs umount */
 	rc = dfs_umount(/*dfs*/ NULL);
 	assert_int_equal(rc, EINVAL);
-	print_message("Container closing\n");
-	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Container destroying\n");
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
-		      DP_UUID(cuuid));
+	print_message("Unmount NULL dfs\n");
+
 }
 
 static void
@@ -153,78 +117,102 @@ dfs_test_open_release(void **state)
         daos_size_t             chunk_size = 64;
         int                     rc;
 
+	/** NULL dfs mount openning */
         rc = dfs_open(/*dfs_mt*/NULL, NULL, "test",
                       S_IFREG | S_IWUSR | S_IRUSR , O_RDWR | O_CREAT,
                       OC_S1, chunk_size, NULL, &obj);
         assert_int_equal(rc, EINVAL);
         print_message("Mounted file system should be provided\n");
 
+	/** NULL file name openning */
         rc = dfs_open(dfs_mt, NULL, /*"test"*/NULL,
                       S_IFREG | S_IWUSR | S_IRUSR , O_RDWR | O_CREAT,
                       OC_S1, chunk_size, NULL, &obj);
         assert_int_equal(rc, EINVAL);
         print_message("File name should be provided\n");
 
+	/** No mode openning */
         rc = dfs_open(dfs_mt, NULL, "test",
                       /*S_IFREG | S_IWUSR | S_IRUSR*/ 0, O_RDWR | O_CREAT,
                       OC_S1, chunk_size, NULL, &obj);
         assert_int_equal(rc, EINVAL);
         print_message("mode_t (permissions + type) should be provided\n");
 
+	/** Not existing file openning without creating */
         rc = dfs_open(dfs_mt, NULL, "test",
                       S_IFREG | S_IWUSR | S_IRUSR , /*O_RDWR | O_CREAT*/0,
                       OC_S1, chunk_size, NULL, &obj);
         assert_int_equal(rc, ENOENT);
-        print_message("Access flags should be provided\n");
+        print_message("Not existing file can not be openn without creating\n");
 
+	/** NULL object openning */
+        rc = dfs_open(dfs_mt, NULL, "test",
+                      S_IFREG | S_IWUSR | S_IRUSR , O_RDWR | O_CREAT,
+                      OC_S1, chunk_size, NULL, /*&obj*/ NULL);
+        assert_int_equal(rc, EINVAL);
+        print_message("Open should get a pointer to an object\n");
+
+	/** NULL object releasing */
         rc = dfs_release(/*obj*/NULL);
         assert_int_equal(rc, EINVAL);
         print_message("Release should get an object\n");
 
+	/** Successful object openning */
         rc = dfs_open(dfs_mt, NULL, "test", S_IFREG | S_IWUSR | S_IRUSR ,
                       O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
-
         assert_int_equal(rc, 0);
+        print_message("Successfull object openning\n");
+
 
         rc = dfs_release(obj);
-
         assert_int_equal(rc, 0);
-
+        print_message("Successfull object releasing\n");
 }
-
 
 static void
 dfs_test_mkdir_remove(void **state)
 {
         int rc;
  
+	/** NULL dfs mount directory making */
 	rc = dfs_mkdir(/*dfs_mt*/ NULL, NULL, "dir", S_IWUSR | S_IRUSR, 0);
         assert_int_equal(rc, EINVAL);
-        print_message("Mounted file system should be provided\n");
+        print_message("Mounted file system should be provided for mkdir\n");
 
+	/** NULL directory name making*/
 	rc = dfs_mkdir(dfs_mt, NULL, /*"dir"*/ NULL, S_IWUSR | S_IRUSR, 0);
         assert_int_equal(rc, EINVAL);
 	print_message("Directory name to create should be provided\n");
 
+        /** The directory with permissions to do nothing may be created*/
 	rc = dfs_mkdir(dfs_mt, NULL, "dir",  0, 0);
         assert_int_equal(rc, 0);
         print_message("Permission for at least R or W is not checked\n");
 
+        /** The directory with existing name can not be created*/
 	rc = dfs_mkdir(dfs_mt, NULL, "dir", S_IWUSR | S_IRUSR, 0);
         assert_int_equal(rc, EEXIST);
-	print_message( "Second directory with the same name rejected\n");
+	print_message( "Another directory with existing name rejected\n");
 
+	/** NULL directory name removing*/
         rc = dfs_remove(dfs_mt, NULL, /*"dir"*/ NULL, true, NULL);        
         assert_int_equal(rc, EINVAL);
         print_message("Directory name to remove should be provided\n");
 
+	/** Successful directory removing */
         rc = dfs_remove(dfs_mt, NULL, "dir", true, NULL);        
 	assert_int_equal(rc, 0);
 	print_message("Successful rmdir\n");
 
+	/** Not existing directory can not be removed */
         rc = dfs_remove(dfs_mt, NULL, "dir", true, NULL);        
 	assert_int_equal(rc, ENOENT);
 	print_message("Not existing directory can not be removed\n");
+
+	/** NULL dfs mount directory removing */
+        rc = dfs_remove(/*dfs_mt*/ NULL, NULL, "dir", true, NULL);        
+	assert_int_equal(rc, EINVAL);
+        print_message("Mounted file system should be provided for rmdir\n");
 }
 
 
