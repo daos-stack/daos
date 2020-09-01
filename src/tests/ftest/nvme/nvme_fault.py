@@ -25,7 +25,6 @@ import os
 from nvme_utils import ServerFillUp
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
-from apricot import skipForTicket
 
 class NvmeFault(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -52,7 +51,6 @@ class NvmeFault(ServerFillUp):
         #Set to True to generate the NVMe fault during IO
         self.set_faulty_device = True
 
-    @skipForTicket("DAOS-5497")
     def test_nvme_fault(self):
         """Jira ID: DAOS-4722.
 
