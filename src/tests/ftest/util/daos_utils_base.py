@@ -186,6 +186,12 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.GetAttrSubCommand()
             elif self.sub_command.value == "set-attr":
                 self.sub_command_class = self.SetAttrSubCommand()
+            elif self.sub_command.value == "get-prop":
+                self.sub_command_class = self.GetPropSubCommand()
+            elif self.sub_command.value == "set-prop":
+                self.sub_command_class = self.SetPropSubCommand()
+            elif self.sub_command.value == "set-owner":
+                self.sub_command_class = self.SetOwnerSubCommand()
             elif self.sub_command.value == "create-snap":
                 self.sub_command_class = self.CreateSnapSubCommand()
             elif self.sub_command.value == "list-snaps":
@@ -318,7 +324,6 @@ class DaosCommandBase(CommandWithSubCommand):
                 super(
                     DaosCommandBase.ContainerSubCommand.UpdateAclSubCommand,
                     self).__init__("update-acl")
-                self.acl_file = FormattedParameter("--acl-file={}")
                 self.entry = FormattedParameter("--entry={}")
 
         class DeleteAclSubCommand(CommonContainerSubCommand):
@@ -379,6 +384,37 @@ class DaosCommandBase(CommandWithSubCommand):
                     self).__init__("set-attr")
                 self.attr = FormattedParameter("--attr={}")
                 self.value = FormattedParameter("--value={}")
+
+        class GetPropSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container get-prop command."""
+
+            def __init__(self):
+                """Create a daos container get-prop command object."""
+                super(
+                    DaosCommandBase.ContainerSubCommand.GetPropSubCommand,
+                    self).__init__("get-prop")
+                self.prop = FormattedParameter("--prop={}")
+
+        class SetPropSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container set-prop command."""
+
+            def __init__(self):
+                """Create a daos container set-prop command object."""
+                super(
+                    DaosCommandBase.ContainerSubCommand.SetPropSubCommand,
+                    self).__init__("set-prop")
+                self.prop = FormattedParameter("--properties={}")
+
+        class SetOwnerSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container set-owner command."""
+
+            def __init__(self):
+                """Create a daos container set-owner command object."""
+                super(
+                    DaosCommandBase.ContainerSubCommand.SetOwnerSubCommand,
+                    self).__init__("set-owner")
+                self.user = FormattedParameter("--user={}")
+                self.group = FormattedParameter("--group={}")
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""

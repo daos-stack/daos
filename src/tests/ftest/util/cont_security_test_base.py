@@ -89,8 +89,7 @@ class ContSecurityTestBase(TestWithServers):
 
         return pool_uuid, pool_svc
 
-
-    def create_container_with_daos(self, pool, acl_type=None):
+    def create_container_with_daos(self, pool, acl_type=None, acl_file=None):
         """Create a container with the daos tool
 
         Also, obtains the container uuid from the operation's result.
@@ -106,15 +105,17 @@ class ContSecurityTestBase(TestWithServers):
         get_acl_file = None
         expected_acl_types = [None, "valid", "invalid"]
 
-        if acl_type not in expected_acl_types:
-            self.fail(
-                "    Invalid '{}' acl type passed.".format(acl_type))
-
-        if acl_type:
-            get_acl_file = "acl_{}.txt".format(acl_type)
-            file_name = os.path.join(self.tmp, get_acl_file)
+        if acl_file is None:
+            if acl_type not in expected_acl_types:
+                self.fail(
+                    "    Invalid '{}' acl type passed.".format(acl_type))
+            if acl_type:
+                get_acl_file = "acl_{}.txt".format(acl_type)
+                file_name = os.path.join(self.tmp, get_acl_file)
+            else:
+                get_acl_file = ""
         else:
-            get_acl_file = ""
+            file_name = acl_file
 
         try:
             self.container = TestContainer(pool=pool,
@@ -129,7 +130,6 @@ class ContSecurityTestBase(TestWithServers):
             container_uuid = None
 
         return container_uuid
-
 
     def get_container_acl_list(self, pool_uuid, pool_svc, container_uuid,
                                verbose=False, outfile=None):
@@ -173,6 +173,142 @@ class ContSecurityTestBase(TestWithServers):
                     cont_permission_list.append(line)
         return cont_permission_list
 
+    def overwrite_container_acl(self, acl_file):
+        """Overwrite existing container acl-entries with acl_file.
+
+        Args:
+            acl_file (str): acl filename.
+
+        Return:
+            result (str): daos_tool.container_overwrite_acl.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_overwrite_acl(
+            self.pool_uuid, self.container_uuid, acl_file, self.pool_svc)
+        return result
+
+    def update_container_acl(self, entry):
+        """Update container acl entry.
+
+        Args:
+            entry (str): acl entry to be updated.
+
+        Return:
+            result (str): daos_tool.container_update_acl.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_update_acl(
+            self.pool_uuid, self.container_uuid, entry, self.pool_svc)
+        return result
+
+    def set_container_attribute(
+            self, pool_uuid, pool_svc, container_uuid, attr, value):
+        """Write/Set container attribute.
+
+        Args:
+            pool_uuid (str): pool uuid.
+            pool_svc  (str): pool service replica.
+            container_uuid (str): container uuid.
+            attr (str): container attribute.
+            value (str): container attribute value to be set.
+
+        Return:
+            result (str): daos_tool.container_set_attr result.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_set_attr(
+            pool_uuid, container_uuid, attr, value, pool_svc)
+        return result
+
+    def get_container_attribute(
+            self, pool_uuid, pool_svc, container_uuid, attr):
+        """Get container attribute.
+
+        Args:
+            pool_uuid (str): pool uuid.
+            pool_svc  (str): pool service replica.
+            container_uuid (str): container uuid.
+            attr (str): container attribute.
+
+        Return:
+            result (str): daos_tool.container_get_attr result.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_get_attr(
+            pool_uuid, container_uuid, attr, pool_svc)
+        return result
+
+    def list_container_attribute(
+            self, pool_uuid, pool_svc, container_uuid):
+        """List container attribute.
+
+        Args:
+            pool_uuid (str): pool uuid.
+            pool_svc  (str): pool service replica.
+            container_uuid (str): container uuid.
+
+        Return:
+            result (str): daos_tool.container_list_attrs result.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_list_attrs(
+            pool_uuid, container_uuid, pool_svc)
+        return result
+
+
+    def set_container_property(
+        self, pool_uuid, pool_svc, container_uuid, prop, value):
+        """Write/Set container property.
+
+        Args:
+            pool_uuid (str): pool uuid.
+            pool_svc  (str): pool service replica.
+            container_uuid (str): container uuid.
+            prop (str): container property name.
+            value (str): container property value to be set.
+
+        Return:
+            result (str): daos_tool.container_set_prop result.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_set_prop(
+            pool_uuid, container_uuid, prop, value, pool_svc)
+        return result
+
+    def get_container_property(self, pool_uuid, pool_svc, container_uuid):
+        """Get container property.
+
+        Args:
+            pool_uuid (str): pool uuid.
+            pool_svc  (str): pool service replica.
+            container_uuid (str): container uuid.
+
+        Return:
+            result (str): daos_tool.container_get_prop.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_get_prop(
+            pool_uuid, container_uuid, pool_svc)
+        return result
+
+    def set_container_owner(
+        self, pool_uuid, pool_svc, container_uuid, user, group):
+        """Set container owner.
+
+        Args:
+            pool_uuid (str): pool uuid.
+            pool_svc  (str): pool service replica.
+            container_uuid (str): container uuid.
+            user (str): container user-name to be set owner to.
+            group (str): container group-name to be set owner to.
+
+        Return:
+            result (str): daos_tool.container_set_owner.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_set_owner(
+            pool_uuid, container_uuid, user, group, pool_svc)
+        return result
 
     def compare_acl_lists(self, get_acl_list, expected_list):
         """Compares two permission lists

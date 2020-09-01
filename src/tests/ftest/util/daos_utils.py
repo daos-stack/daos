@@ -287,6 +287,116 @@ class DaosCommand(DaosCommandBase):
             ("container", "query"), pool=pool, svc=svc, cont=cont,
             sys_name=sys_name)
 
+    def container_update_acl(self, pool, cont, entry, svc=None):
+        """Call daos container update-acl.
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            entry (str): Container acl entry to be updated.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container update-acl command fails.
+
+        """
+        return self._get_result(
+            ("container", "update-acl"),
+            pool=pool, svc=svc, cont=cont, entry=entry)
+
+    def container_overwrite_acl(self, pool, cont, acl_file, svc=None):
+        """Call daos container overwrite-acl.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            acl_file (str): Container acl filename.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container overwrite-acl command fails.
+
+        """
+        return self._get_result(
+            ("container", "overwrite-acl"),
+            pool=pool, svc=svc, cont=cont, acl_file=acl_file)
+
+    def container_set_prop(self, pool, cont, prop, value, svc=None):
+        """Call daos container set-prop.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            prop (str): Container property-name.
+            value (str): Container property-name value to set.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container set-prop command fails.
+
+        """
+        prop_value = ":".join([prop, value])
+        return self._get_result(
+            ("container", "set-prop"),
+            pool=pool, svc=svc, cont=cont, prop=prop_value)
+
+    def container_get_prop(self, pool, cont, svc=None):
+        """Call daos container get-prop.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container get-prop command fails.
+
+        """
+        return self._get_result(
+            ("container", "get-prop"), pool=pool, svc=svc, cont=cont)
+
+    def container_set_owner(self, pool, cont, user, group, svc=None):
+        """Call daos container set-owner.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            user (str): New-user who will own the container.
+            group (str): New-group who will own the container.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container set-owner command fails.
+
+        """
+        return self._get_result(
+            ("container", "set-owner"),
+            pool=pool, svc=svc, cont=cont, user=user, group=group)
+
     def container_set_attr(
             self, pool, cont, attr, val, svc=None, sys_name=None):
         """Call daos container set-attr.
