@@ -253,6 +253,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 {
 	struct bio_dev_health			 *dev_health = cb_arg;
 	struct bio_dev_state			 *dev_state;
+	struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_nvme_health_information_page *hp;
 	struct spdk_bdev			 *bdev;
 	struct spdk_nvme_cmd			  cmd;
@@ -278,6 +279,9 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	D_ASSERT(bdev != NULL);
 	hp = dev_health->bdh_health_buf;
+
+	cdata = dev_health->bdh_ctrlr_buf;
+	D_INFO("log page completion, model serial: %-40.40s %-20.20s", cdata->mn, cdata->sn);
 
 	/* Store device health info in in-memory health state log. */
 	dev_state = &dev_health->bdh_health_state;
@@ -346,6 +350,7 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 {
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
+	struct spdk_nvme_ctrlr_data	*cdata;
 	uint32_t		 numd, numdl, numdu;
 	uint32_t		 health_page_sz;
 	int			 rc;
@@ -374,6 +379,9 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 	if (dev_health->bdh_inflights)
 		return;
 	dev_health->bdh_inflights++;
+
+	cdata = dev_health->bdh_ctrlr_buf;
+	D_INFO("collector health, model serial: %-40.40s %-20.20s", cdata->mn, cdata->sn);
 
 	/* Prep NVMe command to get SPDK device health data */
 	health_page_sz = sizeof(struct spdk_nvme_health_information_page);
