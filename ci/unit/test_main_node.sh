@@ -46,7 +46,9 @@ mkdir -p vm_test
 ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 
 # Remove DAOS_BASE from memcheck xml results
+ls
+ls test_results || true
 if [ "$WITH_VALGRIND" == 'memcheck' ]; then
-    find test_results -maxdepth 1 -name 'results-memcheck-*.xml' \
+    find test_results -maxdepth 1 -name '*.memcheck.xml' \
         -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"
 fi
