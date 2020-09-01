@@ -50,9 +50,9 @@ under consideration.
 DAOS RPMs are available from the Intel&copy; Registration Center.
 Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.com/forms/?productid=3412) link will take you to the registration center, where you will create an account. After creating an account, the following files can be downloaded:
 
-- daos_debug.tar
-- daos_packages.tar
-- daos_source.tar
+- daos_debug.tar - _debuginfo_ packages
+- daos_packages.tar - client and server main packages
+- daos_source.tar - source RPMs
 
 **Recommended steps after download:**
 
