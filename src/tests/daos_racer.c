@@ -134,20 +134,21 @@ pack_dkey_iod_sgl(char *dkey, d_iov_t *dkey_iov, char akeys[][MAX_KEY_SIZE],
 
 	for (i = 0; i < iod_nr; i++) {
 		unsigned size;
+		unsigned val = rand() % 8;
 
 		sprintf(akeys[i], "%d", rand() % max_akey_per_dkey);
 		d_iov_set(&iods[i].iod_name, akeys[i], strlen(akeys[i]));
 
 		iods[i].iod_nr = 1;
-		if (rand() % 2 == 1) {
-			recxs[i].rx_idx = rand() % MAX_REC_SIZE;
-			recxs[i].rx_nr = rand() % MAX_REC_SIZE;
+		if (val % 2 == 1) {
+			recxs[i].rx_idx = rand() % (MAX_REC_SIZE / val);
+			recxs[i].rx_nr = rand() % (MAX_REC_SIZE / val);
 			iods[i].iod_recxs = &recxs[i];
 			iods[i].iod_size = 1;
 			size = recxs[i].rx_nr;
 			iods[i].iod_type = DAOS_IOD_ARRAY;
 		} else {
-			iods[i].iod_size = rand() % MAX_REC_SIZE;
+			iods[i].iod_size = rand() % (MAX_REC_SIZE / (val + 1));
 			size = iods[i].iod_size;
 			iods[i].iod_type = DAOS_IOD_SINGLE;
 		}
