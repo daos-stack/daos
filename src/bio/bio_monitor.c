@@ -206,6 +206,8 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 	cdata = dev_health->bdh_ctrlr_buf;
 
+	D_INFO("model serial: %-40.40s %-20.20s", cdata->mn, cdata->sn);
+
 	/* Prep NVMe command to get device error log pages */
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
 	numd = ep_sz / sizeof(uint32_t) - 1u;
