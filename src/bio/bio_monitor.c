@@ -52,6 +52,8 @@ bio_get_dev_state_internal(void *msg_arg)
 	D_ASSERT(dsm != NULL);
 
 	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
+	D_INFO("bio_get_dev_state_internal(): model (%s) serial (%s)\n", dsm->devstate.model, dsm->devstate.serial);
+
 	ABT_eventual_set(dsm->eventual, NULL, 0);
 }
 
@@ -259,7 +261,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	struct spdk_nvme_cmd			  cmd;
 	uint32_t				  cp_sz;
 	uint8_t					  crit_warn;
-	int					  rc;
+	int					  rc, written;
 	int					  sc, sct;
 	uint32_t				  cdw0;
 
@@ -299,6 +301,14 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	dev_state->bds_volatile_mem_warning = crit_warn;
 	memcpy(dev_state->bds_media_errors, hp->media_errors,
 	       sizeof(hp->media_errors));
+	written = snprintf(dev_state->model, sizeof(dev_state->model), "%-20.20s",
+			   cdata->mn);
+	if (written >= sizeof(dev_state->model))
+		D_ERROR("writing model to dev_state");
+	written = snprintf(dev_state->serial, sizeof(dev_state->serial), "%-20.20s",
+			   cdata->sn);
+	if (written >= sizeof(dev_state->serial))
+		D_ERROR("writing serial to dev_state");
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);

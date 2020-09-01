@@ -101,6 +101,8 @@ struct bio_blob_hdr {
  * bio_bs_monitor(). Used to determine faulty device status.
  */
 struct bio_dev_state {
+	char		 model[128];
+	char		 serial[128];
 	uint64_t	 bds_timestamp;
 	uint64_t	 bds_media_errors[2]; /* supports 128-bit values */
 	uint64_t	 bds_error_count; /* error log page */

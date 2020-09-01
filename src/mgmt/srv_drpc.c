@@ -1758,7 +1758,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to query BIO health data\n");
+	D_INFO("Received request to query BIO health data\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -1818,6 +1818,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					true : false;
 	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
 					true : false;
+	D_INFO("health data received for SSD with model %s and serial %s\n", bds.model, bds.serial);
 
 out:
 	resp->status = rc;
