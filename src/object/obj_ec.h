@@ -449,7 +449,7 @@ obj_shadow_list_vos2daos(uint32_t nr, struct daos_recx_ep_list *lists,
 		list = &lists[i];
 		for (j = 0; j < list->re_nr; j++) {
 			recx = &list->re_items[j].re_recx;
-			D_ASSERT(recx->rx_idx % cell_rec_nr == 0);
+			recx->rx_idx = rounddown(recx->rx_idx, cell_rec_nr);
 			stripe_nr = roundup(recx->rx_nr, cell_rec_nr) /
 				    cell_rec_nr;
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
@@ -489,7 +489,8 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 		for (j = 0; j < stripe_nr; j++) {
 			if (j == 0) {
 				new_recx[i].rx_idx = recx->rx_idx;
-				new_recx[i].rx_nr = cell_size - recx->rx_idx;
+				new_recx[i].rx_nr = cell_size -
+						    (recx->rx_idx % cell_size);
 				rec_nr -= new_recx[i].rx_nr;
 			} else {
 				new_recx[i + j].rx_idx =
