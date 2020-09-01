@@ -64,7 +64,6 @@ container_reserved:
     record_size: 100
     array_size: 1
     type: POSIX
-    control_method: daos
 faults:
     fault_list:
     #    - DAOS_DTX_LOST_RPC_REQUEST

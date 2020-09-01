@@ -65,7 +65,6 @@ container_reserved:
     record_size: 100
     array_size: 1
     type: POSIX
-    control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
