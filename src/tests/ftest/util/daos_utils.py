@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from daos_utils_base import DaosCommandBase
+import re
 
 
 class DaosCommand(DaosCommandBase):
@@ -78,10 +79,7 @@ class DaosCommand(DaosCommandBase):
         #  04/20-17:52:33.63 wolf-3 Container attributes:
         #  04/20-17:52:33.63 wolf-3 attr1
         #  04/20-17:52:33.63 wolf-3 attr2
-        "container_list_attrs": r"\n \S+ \S+ (.+)",
-        # Sample create-snap output.
-        # snapshot/epoch 1582610056530034697 has been created
-        "container_create_snap": r"[A-Za-z\/]+\s[0-9]+\s[a-z\s]+"
+        "container_list_attrs": r"\n \S+ \S+ (.+)"
     }
 
     def pool_query(self, pool, sys_name=None, svc=None, sys=None):
@@ -204,7 +202,7 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos pool list-containers command fails.
 
         """
         return self._get_result(
@@ -224,7 +222,7 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos pool set-attr command fails.
 
         """
         return self._get_result(
@@ -261,7 +259,7 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos pool list-attrs command fails.
 
         """
         return self._get_result(("pool", "list-attrs"), pool=pool, svc=svc)
@@ -282,7 +280,7 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos container query command fails.
 
         """
         return self._get_result(
@@ -308,7 +306,7 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos container set-attr command fails.
 
         """
         return self._get_result(
@@ -332,7 +330,7 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos get-attr command fails.
 
         """
         return self._get_result(
@@ -355,7 +353,7 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos container list-attrs command fails.
 
         """
         return self._get_result(
@@ -369,37 +367,48 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            snap_name (str, optional): Snapshot name.
-            epoch (str, optional): Epoch number.
+            snap_name (str, optional): Snapshot name. Defaults to None.
+            epoch (str, optional): Epoch number. Defaults to None.
             svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
                 to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: Dictionary that stores the created epoch in the key "epoch".
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos container create-snap command fails.
 
         """
-        return self._get_result(
+        self._get_result(
             ("container", "create-snap"), pool=pool, svc=svc, cont=cont,
-            sys_name=sys_name, snap=snap_name, epc=epoch, )
+            sys_name=sys_name, snap=snap_name, epc=epoch)
 
-    def container_destroy_snap(self, pool, cont, snap_name=None, epoch=None,
-                               svc=None, sys_name=None):
-        """Call daos container create-snap.
+        # Sample create-snap output.
+        # snapshot/epoch 1582610056530034697 has been created
+        data = {}
+        match = re.findall(
+            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout)
+        if match:
+            data["epoch"] = match[0]
+        return data
+
+    def container_destroy_snap(self, pool, cont, snap_name=None, epc=None,
+                               svc=None, sys_name=None, epcrange=None):
+        """Call daos container destroy-snap.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            snap_name (str, optional): Snapshot name.
-            epoch (str, optional): Epoch number.
+            snap_name (str, optional): Snapshot name. Defaults to None.
+            epc (str, optional): Epoch value of the snapshot to be destroyed.
+                Defaults to None.
             svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
                 to None.
             sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+            epcrange (str, optional): Epoch range in the format "<start>-<end>".
                 Defaults to None.
 
         Returns:
@@ -407,9 +416,40 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos pool query command fails.
+            CommandFailure: if the daos container destroy-snap command fails.
 
         """
-        return self._get_result(
-            ("container", "destroy-snap"), pool=pool, svc=svc, cont=cont,
-            sys_name=sys_name, snap=snap_name, epc=epoch, )
+        kwargs = {
+            "pool": pool,
+            "svc": svc,
+            "cont": cont,
+            "sys_name": sys_name,
+            "snap": snap_name,
+            "epc": epc,
+            "epcrange": epcrange
+        }
+        return self._get_result(("container", "destroy-snap"), **kwargs)
+
+    def container_list_snaps(self, pool, cont, svc=None):
+        """List snapshot in a container.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str): Service replicas. Defaults to None.
+
+        Returns:
+            dict: Dictionary that contains epoch values in key "epochs". Value
+                is a list of string.
+        """
+        self._get_result(
+            ("container", "list-snaps"), pool=pool, cont=cont, svc=svc)
+
+        # Sample container list-snaps output.
+        # Container's snapshots :
+        # 1598478249040609297 1598478258840600594 1598478287952543761
+        data = {}
+        match = re.findall(r"(\d{19})", self.result.stdout)
+        if match:
+            data["epochs"] = match
+        return data
