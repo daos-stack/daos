@@ -908,6 +908,7 @@ class SoakTestBase(TestWithServers):
         # self.pool[0] will always be the reserved pool
         self.add_pools(["pool_reserved"])
         self.pool[0].connect()
+
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
         self.add_container(self.pool[0], "/run/container_reserved/*")
