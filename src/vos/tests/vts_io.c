@@ -2269,6 +2269,11 @@ io_query_key(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, KEY_INC * 2);
 
+	if (getenv("DAOS_IO_BYPASS"))
+		return;
+
+	/* Only execute the transactional tests when rollback is available */
+
 	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch++, 0, &dth);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
