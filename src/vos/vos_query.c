@@ -349,17 +349,21 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		cflags = VOS_TS_READ_OBJ;
 	}
 
-	if (flags & VOS_GET_AKEY && akey == NULL) {
-		D_ERROR("akey can't be NULL with VOS_GET_AKEY\n");
-		return -DER_INVAL;
+	if (flags & VOS_GET_AKEY) {
+		if (akey == NULL) {
+			D_ERROR("akey can't be NULL with VOS_GET_AKEY\n");
+			return -DER_INVAL;
+		}
 
 		if (cflags == 0)
 			cflags = VOS_TS_READ_DKEY;
 	}
 
-	if (flags & VOS_GET_RECX && recx == NULL) {
-		D_ERROR("recx can't be NULL with VOS_GET_RECX\n");
-		return -DER_INVAL;
+	if (flags & VOS_GET_RECX) {
+		if (recx == NULL) {
+			D_ERROR("recx can't be NULL with VOS_GET_RECX\n");
+			return -DER_INVAL;
+		}
 
 		nr_akeys = 1;
 		if (cflags == 0)
