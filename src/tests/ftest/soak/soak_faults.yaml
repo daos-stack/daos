@@ -21,8 +21,6 @@ timeout: 24H15M
 setup:
     start_servers: True
     start_agents: True
-dmg:
-    insecure: True
 server_config:
     name: daos_server
     provider: ofi+sockets

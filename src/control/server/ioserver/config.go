@@ -298,12 +298,6 @@ func (c *Config) WithModules(mList string) *Config {
 	return c
 }
 
-// WithShmID sets the shared memory segment ID to be used with SPDK.
-func (c *Config) WithShmID(shmID int) *Config {
-	c.Storage.Bdev.ShmID = shmID
-	return c
-}
-
 // WithFabricProvider sets the name of the CArT fabric provider.
 func (c *Config) WithFabricProvider(provider string) *Config {
 	c.Fabric.Provider = provider

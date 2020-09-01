@@ -12,10 +12,6 @@
    fun:calloc
    fun:_dlerror_run
    fun:dlopen@@GLIBC_2.2.5
-   fun:fi_ini
-   ...
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
    ...
    fun:crt_hg_ctx_init
    ...
@@ -29,9 +25,6 @@
    fun:fi_ibv_init_info
    fun:fi_ibv_getinfo
    ...
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-   ...
    fun:crt_hg_ctx_init
    ...
 }
@@ -44,9 +37,6 @@
    fun:fi_ibv_init_info
    fun:fi_verbs_ini
    fun:fi_ini
-   ...
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
    ...
    fun:crt_hg_ctx_init
    ...
@@ -160,5 +150,14 @@
    fun:na_ofi_initialize
    ...
    fun:crt_hg_ctx_init
+   ...
+}
+{
+   dl open leaks
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:_dl_init
    ...
 }

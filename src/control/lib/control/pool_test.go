@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -251,16 +252,8 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"invalid UUID": {
-			req: &PoolCreateReq{
-				UUID: "bad",
-			},
-			expErr: errors.New("invalid UUID"),
-		},
 		"success": {
-			req: &PoolCreateReq{
-				UUID: MockUUID,
-			},
+			req: &PoolCreateReq{},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
@@ -269,7 +262,6 @@ func TestControl_PoolCreate(t *testing.T) {
 				),
 			},
 			expResp: &PoolCreateResp{
-				UUID:    MockUUID,
 				SvcReps: []uint32{0, 1, 2},
 			},
 		},
@@ -292,7 +284,8 @@ func TestControl_PoolCreate(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpt := cmpopts.IgnoreFields(PoolCreateResp{}, "UUID")
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpt); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
