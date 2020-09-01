@@ -1,6 +1,6 @@
 # DAOS Internals
 
-The purpose of this document is to describe the internal code structure and major algorithms used by DAOS. It assumes prior knowledge of the <a href="/doc/storage_model.md">DAOS storage model</a> and <a href="/doc/terminology.md">acronyms</a>.
+The purpose of this document is to describe the internal code structure and major algorithms used by DAOS. It assumes prior knowledge of the <a href="/doc/overview/storage.md">DAOS storage model</a> and <a href="/doc/overview/terminology.md">acronyms</a>.
 This document contains the following sections:
 
 - <a href="#1">DAOS Components</a>
@@ -66,7 +66,7 @@ The libdaos and libdfs libraries provide the foundation to support domain-specif
 <a id="13"></a>
 ### Agent
 
-The <a href="control/cmd/agent/README.md">DAOS agent</a> is a daemon residing on the client node and interacts with the DAOS client library through dRPC to authenticate the application process. It is a trusted entity that can sign the DAOS Client credentials using local certificates. The agent can support different authentication frameworks and uses a Unix Domain Socket to communicate with the client library. The DAOS agent is written in Go and communicates through gRPC with the control plane component of each DAOS server to provide DAOS system membership information to the client library and to support pool listing.
+The <a href="control/cmd/daos_agent/README.md">DAOS agent</a> is a daemon residing on the client node and interacts with the DAOS client library through dRPC to authenticate the application process. It is a trusted entity that can sign the DAOS Client credentials using local certificates. The agent can support different authentication frameworks and uses a Unix Domain Socket to communicate with the client library. The DAOS agent is written in Go and communicates through gRPC with the control plane component of each DAOS server to provide DAOS system membership information to the client library and to support pool listing.
 
 <a id="2"></a>
 ## Network Transport and Communications
