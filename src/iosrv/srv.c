@@ -1269,6 +1269,7 @@ dss_dump_ABT_state()
 	ABT_sched		sched;
 	ABT_pool		pools[DSS_POOL_CNT];
 
+	fprintf(stderr, " == List of all ESs ==\n");
 	rc = ABT_info_print_all_xstreams(stderr);
 	if (rc != ABT_SUCCESS)
 		D_ERROR("ABT_info_print_all_xstreams() error, rc = %d\n", rc);
@@ -1276,6 +1277,8 @@ dss_dump_ABT_state()
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	for (idx = 0; idx < xstream_data.xd_xs_nr; idx++) {
 		dx = xstream_data.xd_xs_ptrs[idx];
+		fprintf(stderr, "== per ES (%p) details ==\n",
+			dx->dx_xstream);
 		rc = ABT_info_print_xstream(stderr, dx->dx_xstream);
 		if (rc != ABT_SUCCESS)
 			D_ERROR("ABT_info_print_xstream() error, rc = %d, for "
@@ -1283,9 +1286,18 @@ dss_dump_ABT_state()
 				dx->dx_xstream);
 		/* one progress ULT per xstream */
 		if (dx->dx_progress != ABT_THREAD_NULL) {
+			fprintf(stderr, "== ES (%p) progress ULT (%p) ==\n",
+				dx->dx_xstream, dx->dx_progress);
 			rc = ABT_info_print_thread(stderr, dx->dx_progress);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_thread() error, "
+					"rc = %d, for DAOS xstream %p, ABT "
+					"xstream %p, progress ULT %p\n", rc, dx,
+					dx->dx_xstream, dx->dx_progress);
+			rc = ABT_info_print_thread_stack(stderr,
+							 dx->dx_progress);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_thread_stack() error, "
 					"rc = %d, for DAOS xstream %p, ABT "
 					"xstream %p, progress ULT %p\n", rc, dx,
 					dx->dx_xstream, dx->dx_progress);
@@ -1337,6 +1349,8 @@ dss_dump_ABT_state()
 			continue;
 		}
 		for (i = 0; i < num_pools; i++) {
+			fprintf(stderr, "== per POOL (%p) details ==\n",
+				pools[i]);
 			if (pools[i] == ABT_POOL_NULL) {
 				D_WARN("DAOS xstream %p, ABT xstream %p, "
 				       "sched %p, no pool[%d]\n", dx,
@@ -1355,11 +1369,14 @@ dss_dump_ABT_state()
 					"for DAOS xstream %p, ABT xstream %p, "
 					"sched %p, pool[%d]\n", rc, dx,
 					dx->dx_xstream, dx->dx_sched, i);
+			rc = ABT_info_print_thread_stacks_in_pool(stderr,
+								  pools[i]);
+			if (rc != ABT_SUCCESS)
+				D_ERROR("ABT_info_print_thread_stacks_in_pool() error, rc = %d, "
+					"for DAOS xstream %p, ABT xstream %p, "
+					"sched %p, pool[%d]\n", rc, dx,
+					dx->dx_xstream, dx->dx_sched, i);
 		}
-		/* XXX last, each pool's ULTs infos (and stacks?!) will need to
-		 * be also dumped, when a new pool method will be available to
-		 * list all ULTs in a pool (ABT issue #12)
-		 */
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 }

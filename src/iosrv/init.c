@@ -946,15 +946,26 @@ main(int argc, char **argv)
 			break;
 		}
 
-		/* use this iosrv main thread's context to dump Argobot internal
-		 * infos upon SIGUSR1
+		/* use this iosrv main thread's context to dump Argobots internal
+		 * infos and ULTs stacks whithout internal synchro
 		 */
 		if (sig == SIGUSR1) {
+			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks\n");
 			dss_dump_ABT_state();
 			continue;
 		}
 
-		/* SIGINT/SIGTERM/SIGUSR2 cause server shutdown */
+		/* trigger dump of all Argobots ULTs stacks with internal
+		 * synchro (timeout of 10s)
+		 */
+		if (sig == SIGUSR2) {
+			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks\n");
+			ABT_info_trigger_print_all_thread_stacks(stderr, 10.0,
+								 NULL, NULL);
+			continue;
+		}
+
+		/* SIGINT/SIGTERM cause server shutdown */
 		break;
 	}
 
