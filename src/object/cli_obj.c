@@ -2250,8 +2250,10 @@ shard_io_task(tse_task_t *task)
 	th = shard_auxi->obj_auxi->th;
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(&shard_auxi->epoch)) {
 		rc = dc_tx_get_epoch(task, th, &shard_auxi->epoch);
-		if (rc < 0)
+		if (rc < 0) {
+			tse_task_complete(task, rc);
 			return rc;
+		}
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
 	}
@@ -4464,8 +4466,10 @@ shard_query_key_task(tse_task_t *task)
 	/* See the similar shard_io_task. */
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
 		rc = dc_tx_get_epoch(task, th, epoch);
-		if (rc < 0)
+		if (rc < 0) {
+			tse_task_complete(task, rc);
 			return rc;
+		}
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
 	}

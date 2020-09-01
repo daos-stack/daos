@@ -47,12 +47,23 @@
 #define DTX_SUB_REQ_MAX		((1ULL << 32) - 1)
 #define DTX_SUB_REQ_DEF		16
 
+/**
+ * Client transaction status
+ *
+ * If a TX operation encounters
+ *
+ *   - -DER_EXIST or -DER_NONEXIST, the TX remains OPEN;
+ *   - a retryable operation error, the TX remains OPEN;
+ *   - -DER_TX_RESTART or -DER_STALE, the TX becomes FAILED; or
+ *   - an error not listed above, the TX becomes FAILED or ABORTED (currently
+ *     always becomes FAILED).
+ */
 enum dc_tx_status {
 	TX_OPEN,
 	TX_COMMITTING,
 	TX_COMMITTED,
-	TX_ABORTED,
-	TX_FAILED,
+	TX_ABORTED,	/**< no more new TX generations */
+	TX_FAILED,	/**< may restart a new TX generation */
 };
 
 /*
@@ -480,7 +491,7 @@ dc_tx_cleanup(struct dc_tx *tx)
 }
 
 /**
- * End a operation associated with transaction \a th.
+ * End a TX operation associated with \a th.
  *
  * \param[in]	task		current task
  * \param[in]	th		transaction handle
@@ -493,12 +504,17 @@ dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
 	     int rep_rc, daos_epoch_t rep_epoch)
 {
 	struct dc_tx	*tx;
+	bool		 fail_tx = false;
 	int		 rc = 0;
 
 	D_ASSERT(task != NULL);
 	D_ASSERT(daos_handle_is_valid(th));
 
-	if (rep_rc == 0 && (dtx_epoch_chosen(req_epoch) || rep_epoch == 0))
+	if (rep_rc != 0 && rep_rc != -DER_EXIST && rep_rc != -DER_NONEXIST &&
+	    !obj_retry_error(rep_rc))
+		fail_tx = true;
+
+	if (!fail_tx && (dtx_epoch_chosen(req_epoch) || rep_epoch == 0))
 		return 0;
 
 	tx = dc_tx_hdl2ptr(th);
@@ -517,7 +533,8 @@ dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
 		goto out;
 	}
 
-	/* TODO: Change the TX status according to rep_rc. */
+	if (fail_tx)
+		tx->tx_status = TX_FAILED;
 
 	if (rep_epoch == DAOS_EPOCH_MAX) {
 		D_ERROR("invalid reply epoch: DAOS_EPOCH_MAX\n");
@@ -530,7 +547,6 @@ dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
 		tx->tx_epoch.oe_value = rep_epoch;
 		if (tx->tx_epoch.oe_first == 0)
 			tx->tx_epoch.oe_first = tx->tx_epoch.oe_value;
-
 		D_DEBUG(DB_IO, DF_X64"/%p: set: value="DF_U64" first="DF_U64
 			" flags=%x, rpc flags %x\n", th.cookie, task,
 			tx->tx_epoch.oe_value, tx->tx_epoch.oe_first,
@@ -1899,8 +1915,8 @@ dc_tx_restart(tse_task_t *task)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
 	D_MUTEX_LOCK(&tx->tx_lock);
-	if (tx->tx_status != TX_OPEN && tx->tx_status != TX_FAILED) {
-		D_ERROR("Can't restart non-open/non-failed state TX (%d)\n",
+	if (tx->tx_status != TX_FAILED) {
+		D_ERROR("Can't restart non-failed state TX (%d)\n",
 			tx->tx_status);
 		rc = -DER_NO_PERM;
 	} else {
