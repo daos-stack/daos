@@ -47,6 +47,8 @@ bio_get_dev_state_internal(void *msg_arg)
 {
 	struct dev_state_msg_arg	*dsm = msg_arg;
 
+	D_INFO("bio_get_dev_state_internal(): enter\n");
+
 	D_ASSERT(dsm != NULL);
 
 	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
@@ -94,6 +96,8 @@ bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
+
+	D_INFO("bio_get_dev_state(): enter\n");
 
 	rc = ABT_eventual_create(0, &dsm.eventual);
 	if (rc != ABT_SUCCESS)
@@ -155,6 +159,8 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int					  sc, sct;
 	uint32_t				  cdw0;
 
+	D_INFO("get_spdk_err_log_page_completion(): enter\n");
+
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
 	/* Additional NVMe status information */
@@ -182,6 +188,8 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int				 rc;
 	int				 sc, sct;
 	uint32_t			 cdw0;
+
+	D_INFO("get_spdk_identify_ctrlr_completion(): enter\n");
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -251,6 +259,8 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int					  rc;
 	int					  sc, sct;
 	uint32_t				  cdw0;
+
+	D_INFO("get_spdk_log_page_completion(): enter\n");
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -338,6 +348,8 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 	uint32_t		 health_page_sz;
 	int			 rc;
 
+	D_INFO("collect_raw_health_data(): enter\n");
+
 	D_ASSERT(dev_health != NULL);
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 	D_ASSERT(dev_health->bdh_desc != NULL);
@@ -397,6 +409,8 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	int			 rc;
 	uint64_t		 monitor_period;
 
+	D_INFO("bio_bs_monitor(): enter\n");
+
 	D_ASSERT(ctxt != NULL);
 	D_ASSERT(ctxt->bxc_blobstore != NULL);
 	dev_health = &ctxt->bxc_blobstore->bb_dev_health;
@@ -430,6 +444,8 @@ bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 	struct spdk_bdev_io_stat	 stat;
 	struct spdk_bdev		*bdev;
 	struct spdk_io_channel		*channel;
+
+	D_INFO("bio_xs_io_stat(): enter\n");
 
 	/* check if IO_STAT_PERIOD environment variable is set */
 	if (io_stat_period == 0)
@@ -466,6 +482,8 @@ void
 bio_fini_health_monitoring(struct bio_blobstore *bb)
 {
 	struct bio_dev_health	*bdh = &bb->bb_dev_health;
+
+	D_INFO("bio_fini_health_monitoring(): enter\n");
 
 	/* Free NVMe admin passthru DMA buffers */
 	if (bdh->bdh_health_buf) {
@@ -509,6 +527,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	uint32_t			 ep_buf_sz;
 	int				 rc;
 
+	D_INFO("bio_init_health_monitoring(): enter\n");
 	D_ASSERT(bb != NULL);
 	D_ASSERT(bdev != NULL);
 

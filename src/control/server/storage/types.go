@@ -30,6 +30,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 // ScmState represents the probed state of SCM modules on the system.
@@ -137,6 +138,7 @@ type (
 		SocketID    int32
 		HealthStats *NvmeDeviceHealth `hash:"ignore"`
 		Namespaces  []*NvmeNamespace
+		SmdDevices  []*control.SmdDevice `hash:"ignore"`
 	}
 
 	// NvmeControllers is a type alias for []*NvmeController which implements fmt.Stringer.

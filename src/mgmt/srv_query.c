@@ -39,7 +39,7 @@ bio_health_query(void *arg)
 	int			 rc;
 
 	D_ASSERT(info != NULL);
-	D_DEBUG(DB_MGMT, "BIO health stats query on xs:%d, tgt:%d\n",
+	D_INFO("BIO health stats query on xs:%d, tgt:%d\n",
 		info->dmi_xs_id, info->dmi_tgt_id);
 
 	bxc = info->dmi_nvme_ctxt;
@@ -65,6 +65,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	int			 tgt_id;
 	int			 rc = 0;
 
+	D_INFO("BIO health stats query\n");
 	if (uuid_is_null(dev_uuid) && strlen(tgt) == 0) {
 		/* Either dev uuid or tgt id needs to be specified for query */
 		D_ERROR("Neither dev_uuid or tgt_id specified for BIO query\n");

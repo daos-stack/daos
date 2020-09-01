@@ -1625,6 +1625,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__smd_dev_resp__init(resp);
 
+	D_INFO("ds_mgmt_smd_list_devs()\n");
 	rc = ds_mgmt_smd_list_devs(resp);
 	if (rc != 0)
 		D_ERROR("Failed to list SMD devices :"DF_RC"\n", DP_RC(rc));
