@@ -304,9 +304,16 @@ The ownership of the container corresponds to the special principals `OWNER@`
 and `GROUP@` in the ACL. These values are a part of the container properties.
 They may be set on container creation and changed later.
 
-The owner-user (`OWNER@`) always has set-ACL and get-ACL permissions, even if
-they are not explicitly granted by the ACL. This applies regardless of the other
-permissions they are granted by ACE(s) in the ACL.
+#### Privileges
+
+The owner-user (`OWNER@`) has implicit privileges on their container. The
+owner-user can always open the container, and has set-ACL (A) and get-ACL (a)
+permissions. These permissions are included alongside any permissions that the
+user was explicitly granted by entries in the ACL.
+
+Because the owner's special permissions are implicit, they apply to access
+control decisions even if they do not appear in the `OWNER@` entry, and even if
+the `OWNER@` entry is deleted.
 
 The owner-group (`GROUP@`) has no special permissions outside what they are
 granted by the ACL.
