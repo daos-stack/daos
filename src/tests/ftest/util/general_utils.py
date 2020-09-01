@@ -575,3 +575,36 @@ def get_remote_file_size(host, file_name):
     result = run_command(cmd)
 
     return int(result.stdout)
+
+def error_count(error, hostlist, log_file):
+    """
+    Function to count any specific ERROR in client log. This function also
+    return other ERROR count from same log file.
+
+    Args:
+        error (str): DAOS error to look for in .log file. for example -1007
+        hostlist (list): System list to looks for an error.
+        log_file (str): Log file name (server/client log).
+
+    return:
+        daos_error_count (int): requested error count
+        other_error_count (int): Other error count
+
+    """
+    #Get the Client side Error from client_log file.
+    output = []
+    requested_error_count = 0
+    other_error_count = 0
+    cmd = 'cat {} | grep ERR'.format(get_log_file(log_file))
+    task = run_task(hostlist, cmd)
+    for buf, _nodes in task.iter_buffers():
+        output = str(buf).split('\n')
+
+    for line in output:
+        if 'ERR' in line:
+            if error in line:
+                requested_error_count += 1
+            else:
+                other_error_count += 1
+
+    return requested_error_count, other_error_count

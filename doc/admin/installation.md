@@ -68,7 +68,7 @@ maintained in the Docker files:
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
+Check the [utils/docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
 directory for different Linux distribution versions.
 
 Some DAOS tests use MPI.   The DAOS build process

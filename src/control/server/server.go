@@ -55,8 +55,6 @@ const (
 	ControlPlaneName = "DAOS Control Server"
 	// DataPlaneName defines a consistent name for the ioserver.
 	DataPlaneName = "DAOS I/O Server"
-	// define supported maximum number of I/O servers
-	maxIOServers = 2
 
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
@@ -70,10 +68,6 @@ func cfgHasBdev(cfg *Configuration) bool {
 	}
 
 	return false
-}
-
-func instanceShmID(idx int) int {
-	return os.Getpid() + idx + 1
 }
 
 func iommuDetected() bool {
@@ -187,11 +181,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 	defer netdetect.CleanUp(netCtx)
 
-	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIOServers {
-			break
-		}
+	// On a NUMA-aware system, emit a message when the configuration
+	// may be sub-optimal.
+	numaCount := netdetect.NumNumaNodes(netCtx)
+	if numaCount > 0 && len(cfg.Servers) > numaCount {
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
+	}
 
+	for i, srvCfg := range cfg.Servers {
 		// Provide special handling for the ofi+verbs provider.
 		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
@@ -215,12 +212,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
 		}
 
-		// Each instance must have a unique shmid in order to run as SPDK primary.
-		// Use a stable identifier that's easy to construct elsewhere if we don't
-		// have access to the instance configuration.
-		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
 		// Indicate whether VMD devices have been detected and can be used.
-		srvCfg.Storage.Bdev.VmdEnabled = bdevProvider.IsVmdEnabled()
+		srvCfg.Storage.Bdev.VmdDisabled = bdevProvider.IsVMDDisabled()
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {

@@ -1,5 +1,5 @@
 #!python
-# (C) Copyright 2016-2020 Intel Corporation.
+# (C) Copyright 2018-2020 Intel Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,29 +20,25 @@
 # Any reproduction of computer software, computer software documentation, or
 # portions thereof marked with this legend must also reproduce the markings.
 #
-"""Build self test"""
+"""Build cart_ctl test"""
 
 import os
 import daos_build
 
-SELF_TEST = 'self_test.c'
+SRC = ['cart_ctl.c']
 
 def scons():
     """scons function"""
-
     Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 
     tenv = env.Clone()
-
-    tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart', '#/src/cart/src/test'])
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
+    tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/tests/ftest/cart'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
     prereqs.require(tenv, 'mercury')
-    tenv.AppendUnique(LIBPATH=['#/src/cart/src/cart'])
-    tenv.AppendUnique(FLAGS='-pthread')
 
-    self_test = daos_build.program(tenv, SELF_TEST)
-    tenv.Requires(self_test, [cart_lib, gurt_lib])
-    tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
+    ctl = daos_build.program(tenv, SRC)
+    tenv.Requires(ctl, [cart_lib, gurt_lib])
+    tenv.Install(os.path.join("$PREFIX", 'bin'), ctl)
 
 if __name__ == "SCons.Script":
     scons()

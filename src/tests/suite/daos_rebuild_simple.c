@@ -565,7 +565,7 @@ rebuild_large_rec(void **state)
 			      &req);
 
 		insert(key, 1, &lakey, &iod_size, &rx_nr,
-		       &offset, &data, DAOS_TX_NONE, &req);
+		       &offset, &data, DAOS_TX_NONE, &req, 0);
 	}
 	ioreq_fini(&req);
 

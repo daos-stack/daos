@@ -348,6 +348,8 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		bump_kds_len = true;
 	}
 
+	fill_data_csum(&key_ent->ie_csum, &arg->csum_iov);
+
 	if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
 		 * check if both dkey & akey was already packed
@@ -384,13 +386,21 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	if (inline_data && data_size > 0) {
 		d_iov_t iov_out;
 
-		/* inline packing for the small recx located on SCM */
-		D_ASSERTF(key_ent->ie_biov.bi_addr.ba_type == DAOS_MEDIA_SCM,
-			  "Invalid ba_type %d, ba_off "DF_X64
-			  ", thres %ld, data_size %ld, type %d, iod_size %ld\n",
-			  key_ent->ie_biov.bi_addr.ba_type,
-			  key_ent->ie_biov.bi_addr.ba_off,
-			  arg->inline_thres, data_size, type, iod_size);
+		/* For SV case, inline data must be located on SCM.
+		 * For EV case, the inline data may be only part of
+		 * the original extent. The other part(s) of the EV
+		 * may be invisible to current enumeration. Then it
+		 * may be located on SCM or NVMe.
+		 */
+		if (type != OBJ_ITER_RECX)
+			D_ASSERTF(key_ent->ie_biov.bi_addr.ba_type ==
+				  DAOS_MEDIA_SCM,
+				  "Invalid storage media type %d, ba_off "
+				  DF_X64", thres %ld, data_size %ld, type %d, "
+				  "iod_size %ld\n",
+				  key_ent->ie_biov.bi_addr.ba_type,
+				  key_ent->ie_biov.bi_addr.ba_off,
+				  arg->inline_thres, data_size, type, iod_size);
 
 		d_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
 				       iovs[arg->sgl_idx].iov_len, data_size);
@@ -404,8 +414,6 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 			arg->kds[arg->kds_len].kd_key_len += data_size;
 		}
 	}
-
-	fill_data_csum(&key_ent->ie_csum, &arg->csum_iov);
 
 	D_DEBUG(DB_IO, "Pack rec "DF_U64"/"DF_U64
 		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d/%zd"

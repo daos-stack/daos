@@ -423,9 +423,11 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 static inline void
 obj_io_desc_fini(struct obj_io_desc *oiod)
 {
-	if (oiod->oiod_siods != NULL)
-		D_FREE(oiod->oiod_siods);
-	memset(oiod, 0, sizeof(*oiod));
+	if (oiod != NULL) {
+		if (oiod->oiod_siods != NULL)
+			D_FREE(oiod->oiod_siods);
+		memset(oiod, 0, sizeof(*oiod));
+	}
 }
 
 /* translate the queried VOS shadow list to daos extents */
@@ -622,9 +624,10 @@ void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 
 /* cli_ec.c */
-int obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
+int obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 		     struct daos_oclass_attr *oca,
-		     struct obj_reasb_req *reasb_req, bool update);
+		     struct obj_reasb_req *reasb_req,
+		     uint32_t iod_nr, bool update);
 void obj_ec_recxs_fini(struct obj_ec_recx_array *recxs);
 void obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter);
 void obj_ec_tgt_oiod_fini(struct obj_tgt_oiod *tgt_oiods);

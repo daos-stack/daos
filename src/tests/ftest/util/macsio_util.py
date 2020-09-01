@@ -425,7 +425,7 @@ class MacsioCommand(ExecutableCommand):
 
         #   --log []
         #       Use logging Virtual File Driver (see H5Pset_fapl_log)
-        self.log_virtual_file_driver = FormattedParameter("--log {}", "log")
+        self.log_virtual_file_driver = FormattedParameter("--log {}")
 
         # DAOS parameters
         self.daos_pool = None
