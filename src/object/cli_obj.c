@@ -674,8 +674,7 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 
 static int
 obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
-		    struct dtx_epoch *epoch, struct obj_auxi_args *obj_auxi,
-		    bool spec_shard)
+		    struct dtx_epoch *epoch, struct obj_auxi_args *obj_auxi)
 {
 	struct obj_reasb_req	*reasb_req = &obj_auxi->reasb_req;
 	daos_obj_id_t		 oid = obj->cob_md.omd_id;
@@ -691,11 +690,10 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	}
 	obj_auxi->iod_nr = args->nr;
 
-	if (args->extra_flags & DIOF_CHECK_EXISTENCE)
-		return 0;
-
 	/** XXX possible re-order/merge for both replica and EC */
-	if (!daos_oclass_is_ec(oid, &oca) || spec_shard)
+	if (args->extra_flags & DIOF_CHECK_EXISTENCE ||
+			args->extra_flags & DIOF_TO_SPEC_SHARD ||
+			!daos_oclass_is_ec(oid, &oca))
 		return 0;
 
 	if (!obj_auxi->req_reasbed) {
@@ -3768,8 +3766,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= DRF_CHECK_EXISTENCE;
 	} else {
-		rc = obj_rw_req_reassemb(obj, args, &epoch, obj_auxi,
-				 args->extra_flags & DIOF_TO_SPEC_SHARD);
+		rc = obj_rw_req_reassemb(obj, args, &epoch, obj_auxi);
 		if (rc != 0) {
 			D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
 				DP_OID(obj->cob_md.omd_id), rc);
@@ -3882,7 +3879,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
-	rc = obj_rw_req_reassemb(obj, args, NULL, obj_auxi, false);
+	rc = obj_rw_req_reassemb(obj, args, NULL, obj_auxi);
 	if (rc) {
 		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);

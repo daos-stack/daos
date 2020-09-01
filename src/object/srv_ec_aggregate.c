@@ -94,7 +94,7 @@ struct ec_agg_entry {
 	daos_handle_t		 ae_cont_hdl;    /* Container handle	    */
 	daos_handle_t		 ae_chdl;	 /* Vos container handle */
 	daos_handle_t		 ae_thdl;	 /* Iterator handle */
-	daos_epoch_range_t	 ae_epoch_range; /* hi/lo extent threshold */
+	daos_epoch_range_t	 ae_epr;	 /* hi/lo extent threshold */
 	daos_key_t		 ae_dkey;	 /* Current dkey */
 	daos_key_t		 ae_akey;	 /* Current akey */
 	daos_size_t		 ae_rsize;	 /* Record size of cur array */
@@ -1404,7 +1404,7 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 					 ae_cur_stripe.as_dextents);
 			agg_param->ap_agg_entry->ae_pool_info =
 					&agg_param->ap_pool_info;
-
+			agg_param->ap_agg_entry->ae_epr = param->ip_epr;
 		}
 		/* Some of these can be set at creation. They don't change. */
 		agg_reset_entry(agg_param->ap_cont_handle,
@@ -1527,8 +1527,8 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	}
 
 	iter_param.ip_hdl		= cont->sc_hdl;
-	iter_param.ip_epr.epr_lo	= 0ULL;
-	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
+	iter_param.ip_epr.epr_lo	= epr->epr_lo;
+	iter_param.ip_epr.epr_hi	= epr->epr_hi;
 
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
