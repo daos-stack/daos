@@ -57,9 +57,9 @@ Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.
 **Recommended steps after download:**
 
 	sudo tar -C / -xf daos_packages.tar 
-	sudo cp opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
-	rm opt/intel/daos_rpms/packages/libabt*
-	(cd opt/intel/daos_rpms/packages/ && createrepo .)
+	sudo cp /opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
+	rm /opt/intel/daos_rpms/packages/libabt*
+	(cd /opt/intel/daos_rpms/packages/ && createrepo .)
 	sudo yum install daos-server
 	sudo yum install daos-client
 
