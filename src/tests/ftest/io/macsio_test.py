@@ -36,7 +36,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
     def setUp(self):
         """Set up each test case."""
         # Cancel any test using MPICH w/ MACSio due to DAOS-5265
-        mpi_type = self.params.get("mpi_type")
+        mpi_type = self.params.get("job_manager_mpi_type")
         if mpi_type == "mpich":
             self.cancelForTicket("DAOS-5265")
         super(MacsioTest, self).setUp()

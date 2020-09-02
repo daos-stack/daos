@@ -137,7 +137,7 @@ class Dfuse(DfuseCommand):
 
         _, missing_nodes = check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
-        if len(missing_nodes):
+        if missing_nodes:
             # Remove any filenames matching the directory name to avoid errors
             command_list = [
                 "ls -al {}".format(self.mount_dir.value),
@@ -146,7 +146,7 @@ class Dfuse(DfuseCommand):
             ]
             for cmd in command_list:
                 ret_code = pcmd(missing_nodes, cmd, timeout=30)
-                if "mkdir" in cmd and len(ret_code) > 1 or 0 not in ret_code:
+                if "mkdir" in cmd and (len(ret_code) > 1 or 0 not in ret_code):
                     failed_nodes = [
                         str(node_set) for code, node_set in ret_code.items()
                         if code != 0
