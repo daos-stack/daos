@@ -105,10 +105,10 @@ if [ -d "/mnt/daos" ]; then
     #fi
 
     # Tests
-    run_test "${SL_BUILD_DIR}/src/cart/test/utest/test_linkage"
+    #run_test "${SL_BUILD_DIR}/src/cart/test/utest/test_linkage"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
-    run_test "${SL_BUILD_DIR}/src/cart/test/utest/utest_hlc"
-    run_test "${SL_BUILD_DIR}/src/cart/test/utest/utest_swim"
+    #run_test "${SL_BUILD_DIR}/src/cart/test/utest/utest_hlc"
+    #run_test "${SL_BUILD_DIR}/src/cart/test/utest/utest_swim"
     #run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     #run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     #export DAOS_IO_BYPASS=pm
@@ -116,7 +116,7 @@ if [ -d "/mnt/daos" ]; then
     #export DAOS_IO_BYPASS=pm_snap
     #run_test "${SL_PREFIX}/bin/vos_tests" -A 50
     #unset DAOS_IO_BYPASS
-    #run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
+    run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     #run_test "${SL_BUILD_DIR}/src/common/tests/sched"
     #run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
     #run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
