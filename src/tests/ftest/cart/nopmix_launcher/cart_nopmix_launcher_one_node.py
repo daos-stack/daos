@@ -22,6 +22,9 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=import-error
+# pylint: bad-continuation
+
 from __future__ import print_function
 
 import os
@@ -30,7 +33,6 @@ import subprocess
 
 from apricot import skipForTicket
 
-import avocado
 from avocado       import Test
 from avocado       import main
 

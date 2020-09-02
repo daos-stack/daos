@@ -22,6 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=import-error
+# pylint: disable=bad-continuation
+# pylint: disable=line-too-long
+
 from __future__ import print_function
 
 import os

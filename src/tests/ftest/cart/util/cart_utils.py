@@ -22,11 +22,15 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
-#pylint: disable=broad-except
+# pylint: disable=broad-except
+# pylint: disable=bad-continuation
+# pylint: disable=unused-variable
+# pylint: disable=redefined-outer
+# pylint: disable=unused-argument
 
 import time
 from distutils.spawn import find_executable
-import os
+import os, fnmatch
 import random
 # MPI environment module needs this
 #pylint: disable=unused-import
@@ -38,11 +42,9 @@ import logging
 import cart_logparse
 import cart_logtest
 
-import avocado
 from avocado  import Test
 from avocado  import main
-
-import os, fnmatch
+from write_host_file import write_host_file
 
 class CartUtils():
     """CartUtils Class"""

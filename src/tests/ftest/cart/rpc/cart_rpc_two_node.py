@@ -28,7 +28,6 @@ import sys
 
 from apricot import skipForTicket
 
-import avocado
 from avocado  import Test
 from avocado  import main
 

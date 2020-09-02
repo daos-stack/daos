@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+#pylint: disable=import-error
+
 from __future__ import print_function
 
 import sys

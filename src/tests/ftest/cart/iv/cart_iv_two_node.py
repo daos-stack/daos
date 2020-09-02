@@ -22,6 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=import-error
+# pylint: disable=broad-except
+# pylint: disable=bad-indentation
+# pylint: disable=bad-whitespace
+
 from __future__ import print_function
 
 import sys
@@ -36,7 +41,6 @@ import shlex
 
 from apricot import skipForTicket
 
-import avocado
 from avocado  import Test
 from avocado  import main
 

@@ -22,6 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=bad-whitespace
+# pylint: disable=import-error
+# pylint: disable=broad-except
+
 from __future__ import print_function
 
 import sys
