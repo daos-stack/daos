@@ -105,7 +105,7 @@ if [ -d "/mnt/daos" ]; then
     #fi
 
     # Tests
-    #run_test "${SL_BUILD_DIR}/src/cart/test/utest/test_linkage"
+    run_test "${SL_BUILD_DIR}/src/cart/test/utest/test_linkage"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
     #run_test "${SL_BUILD_DIR}/src/cart/test/utest/utest_hlc"
     #run_test "${SL_BUILD_DIR}/src/cart/test/utest/utest_swim"
@@ -117,8 +117,8 @@ if [ -d "/mnt/daos" ]; then
     #run_test "${SL_PREFIX}/bin/vos_tests" -A 50
     #unset DAOS_IO_BYPASS
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
-    #run_test "${SL_BUILD_DIR}/src/common/tests/sched"
-    #run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/sched"
+    run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
     #run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
     #run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
     #run_test "${SL_PREFIX}/bin/vea_ut"
