@@ -4,7 +4,7 @@ hosts:
   test_servers:
     - server-A
   test_clients:
-    - server-A   #server client different host
+    - server-A
 timeout: 210
 server_config:
   name: daos_server
@@ -30,8 +30,8 @@ container_acl:
     no_permission:
       perm_expect:
          - ""     #container read/write permission
-         - deny   #read expect
-         - deny   #write expect
+         - deny   #expecting read
+         - deny   #expectingsg write
     read_only:
       perm_expect:
          - r
