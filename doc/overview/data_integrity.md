@@ -45,9 +45,29 @@ Up coming features not supported yet
 1. Event Logging - When silent data corruption is discovered, an event should
  be logged in such a way that it can be retrieved with other system health and
  diagnostic information.
-1. Proactive background service task - A background task on
- the server which scans for and detects (audits checksums) silent data
- corruption and corrects.
+2. (Currently in progress) Proactive background service task - A background task
+   on the server which scans for and detects (audits checksums) silent data
+   corruption and corrects.
+   
+# Data Corruption
+There are two main types of corruption that DAOS may detect. Depending on how
+the data integrity feature is configured, DAOS may not know where the corruption
+occurred. 
+1. Data corruption that occurs over the network on an object update or fetch
+   between a DAOS client and the DAOS IO Server.
+2. Data corruption that occurs on media due to HW failures, power loss, etc.
+
+## Checksum Error Counts
+The following counters will be incremented each time a distinct data corruption
+error is discovered. 
+- **Checksum Media Errors**: Whenever a new error is detected and it is known it
+  is a media error. This counter can be viewed with the NVMe Health Statistics,
+  but needs to be modified to not increment every time a checksum error happens.
+- **Checksum Network Error**: Whenever a new error is detected and is known to
+  be over network (on server verify update or on client fetch when server verify
+  fetch is enabled). (Note: doesn't exist yet)
+- **Checksum General Error**: Whenever it's not known if it's a media or network
+   error. Not sure where this counter will be. (Note: doesn't exist yet) 
 
 # Keys and Value Objects
 Because DAOS is a key/value store, the data for both keys and values is
@@ -184,100 +204,94 @@ export DAOS_CSUM_TEST_ALL_TYPE=1
 ---
 
 # Checksum Scrubbing (In Development)
-- [ ] Define properties that will define policy actions when corruption is detected. (In place data repaired vs SSD eviction)
-- [ ] Decide on API to update vos records and increment counters
+- [ ] How to throttle
 - [ ] Decide where to put new counters (network corruption, general corruption)
-- [ ] Take corruption location in to account more
 
-A background task will scan (when the storage server is idle to limit performance impact) 
-the Version Object Store (VOS) trees to verify the data integrity with the checksums.  When a
-configured threshold of corruption is reached for an SSD the SSD will be evicted. 
-See [SSD Eviction Vs. In Place Data Repair](#ssd-eviction-vs-in-place-data-repair)
+A background task will scan (when the storage server is idle to limit
+performance impact) the Version Object Store (VOS) trees to verify the data
+integrity with the checksums. Corrective actions can be taken When corruption is
+detected. See [Corrective Actions](#corrective-actions)
 
 ## Scanner Schedule
-The scanning process will run in a per pool ULT and will be continuous (once complete it will 
-immediately start over). To limit the performance impact while Checksum Scrubbing is 
-running, the scanner will only be allowed to consume a configurable number of 
-credits until it must yield. Credits will be consumed for each checksum calculated.
+### Goals/Requirements
+- Do not impact I/O performance. Two aspects here. 1- Don't use too much CPU
+  during checksum calculations. 2- Don't use too much SSD bandwidth. Be able to
+  throttle both. 
+- Do not access media too frequently because it can cause it to wear out too
+  quickly. 
+- Be continuous instead of running on a schedule. Once complete immediately
+  start over. Throttling approaches should prevent from scrubbing same objects
+  too frequently.
+  
+ 
+### Design
+- Per Pool ULT (I/O xstream) that will scan the containers and object tree. If a
+  record value (SV or array) is visible and not marked corrupted ... (**??
+  Confirm record visibility info from iteration entry.**)
+  - Fetch data (vos_obj_fetch)
+  - Create new ULT (helper xstream) to calculate checksum for data and verify
+    with stored checksum. For each checksum that is calculated decrement
+    "verification credits". If 0 is reached, yield.
+  - If corruption is found by verification ULT, update record as corrupted
+- For each iteration decrement "I/O credits", If 0 is reached, yield. 
+- (**?? Are credits enough to throttle and prevent excesive media access?**)
 
-Also, objects should be scanned infrequently (i.e. once a week or month). When a 
-system is completely idle and with sufficiently low number of objects to scan, it is
-possible that objects could be scanned too frequently. To limit this, at the 
-beginning of a scan, the number of checksums needing to be calculated will be
-counted and then divided into a configurable interval. For example, if the interval is
-1 week and there are 70 checksums that need to be calculated, then at a maximum 10 checksums 
-are calculated a day, spaced roughly every 2.4 hours. 
-
-It may not be performant to actually iterate the VOS trees just to count the number of 
-checksums that will need to be calculated during a scan. It is suffient to remember the 
-number of checksums from the previous scan. The first scan would just scan everything 
-without a time interval. It is expected that the actual number of 
-checksums calculated during a scan will be different than the counted checksums (whether during a previous 
-scan or a dedicated VOS tree scan) anyway because of active I/O during the scan.
-
-## Checksum Error Counts
-- **Checksum Media Errors**: Whenever a new error is detected (checksum calculations don't match) and it is known 
-  it is a media error. (This counter already exists, but need to change so only gets incremented when is a new error)
-- **Checksum Network Error**: Whenever a new error is detected and is known to be over network (on server verify update 
-  or on client fetch when server verify fetch is enabled). Not sure where this counter will be.
-- **Checksum General Error**: Whenever it's not known if it's a media or network error. Not sure where this counter will be.
 
 ## VOS Changes > src/vos/README.md
-- Add corrupted bit to evt_desc/vos_irec_df (Track if corruption has already been detected)
+- Add flags to bio_addr_t and add CORRUPTED flag.
 - On fetch, if value is already marked corrupted, return -DER_CSUM
-- API to mark SV/extent as corrupted
-```
-vos_obj_corrupt(daos_handle_t coh, daos_unit_oid_t oid, 
-            daos_epoch_t epoch, daos_key_t *dkey,
-            unsigned int iod_nr, daos_iod_t *iods);
-```
-or just add new flag to vos_obj_update??
-``` VOS_OF_CORRUPT ```
+- To mark a value as corrupted, use new flag in vos_obj_update (VOS_OF_CORRUPT)
 
 ## Object Changes > src/object/README.md
-- When corruption is detected during fetch (daos_obj_fetch), aggregation, or rebuild the client or server calls API to mark corrupted value?
-        - Update client shard checksum verify code
-        - Update server object code that verifies extents on fetch
-        - Update aggragation code that verifies extents
-- Add Server side verifying on fetch so can know if media or network corruption (note: need something so extents aren't double verified?)
+- When corruption is detected on the server during a fetch, aggregation, or
+  rebuild the server calls VOS to update value as corrupted. 
+- Add Server side verifying on fetch so can know if media or network corruption
+  (note: need something so extents aren't double verified?) 
+- New function to Server Object Checksum that will iterate all objects within a
+  container to do actual scrubbing.
 
 ## Pool Changes > src/pool/README.md
-- Add scrubbing ULT (Use "Credits")
-- Iterate containers (vos_iterate), open container, iterate objects recursively (vos_iterate)
-- For each VOS_ITER_SINGLE/RECX fetch data (vos_obj_fetch)
-- If not already corrupted, calculate checksum and compare with stored checksum(s) (stored checksum might already be available in iterator entry)
-        - For each checksum calculated, decrement credits. As soon as 0 is reached yield.
-        - Sleep for minimum duration between checksum calculations based on number of checksum calculations and desired duration (see [Scanner Schedule](#scanner-schedule))
-- If corruption detected, call VOS to mark value as corrupted, increment counter for corruption on SSD?
-        - If SSD corruption counter has reached threshold, quit scan and evict SSD. (If automatically evicting)
+- Add scrubbing ULT 
+- Iterate containers (vos_iterate), open container, iterate objects recursively
+  (vos_iterate) and call the Server Object Checksum function to scann the
+  objects in the container. Provide a corruption handler so can initiate in
+  place data repair or SSD eviction based on container configuration.
+- See [Scanner Schedule](#scanner-schedule) for considerations on how to prevent
+  the scrubber from impacting performance or reading the SSD too frequently. 
+
+## Corrective Actions
+There are two main options for corrective actions when data corruption is
+discovered, in place data repair and SSD eviction. 
+
+### In Place Data Repair
+If enabled, when corruption is detected, the value identifier (dkey, akey, recx)
+will be placed in a queue. When there are available cycles, the value identifier
+will be used to request the data from a replica if exists and rewrite the data
+locally. This will continue until the SSD Eviction threshold is reached, in
+which case, the SSD is assumed to be bad enough that it isn't worth fixing
+locally and it will be requested t obe evicted.
+
+### SSD Eviction 
+If enabled, when the SSD Eviction Threshold is reached the SSD will be evicted.
+Current eviction methods are pool and target based so there will need to be a
+mapping and mechanism in place to evict an SSD. When an SSD is evicted, the
+rebuild protocol will be invoked.
+
+Also, once the SSD Eviction Threshold is reached, the scanner should quit
+scanning anything on that SSD.
 
 ## Additional Checksum Properties > doc/user/container.md
-**Hot play configs** Can update properties and updates should be active right away (don't wait until next scan)
-- Scanner Interval - Minimum number of days scanning will take. Could take longer, but if only a few records will pad so takes longer. 
+These properties are provided when a container is created, but should also be 
+able to update them. When updated, they should be active right away.
+- Scanner Interval - Minimum number of days scanning will take. Could take
+  longer, but if only a few records will pad so takes longer. 
 - Scanner Credits - number of checksums to process before yielding
 - Disable scrubbing - at container level & pool level
-- (Tentative) Threshold for when to evict SSD (% of device is marked as corrupted, number of corruption events, ??)
+- Threshold for when to evict SSD (% of device is marked as
+  corrupted, number of corruption events, ??)
+- In Place Correction - If the number checksum errors is below the Eviction
+  Threshold, DAOS will attempt to repair the corrupted data using replicas if
+  they exist.
 
 **Not directly related to scanner**
 - Server verify on **fetch**
-
-## Corrective Action Considerations
-There are two main options for automatic corrective actions when data corruption is discovered. Also, a 
-system administrator can manually evict an SSD based on health statistics, one of which is 
-number of checksum errors.
-
-### In Place Data Repair
-When corruption is detected, the value identifier (dkey, akey, recx) will be placed in a queue. When there are available 
-cycles, the the value identifier will be used to request the data from a replica if exists and rewrite the data locally.
-
-- Pro: Data is repaired more proactively. 
-- Pro: Only corrupt data is rewritten.
-- Risk: If SSD really is bad and creating lots of corruption, will have to evict anyway.
-- Risk: New development
-
-### SSD Eviction 
-Evict SSD, a new SSD is picked by placement algorithm and the rebuild process is initiated.
-        - Risk: Corrupted data may not be repaired immediately or ever (until threshold reached)
-        - Risk: Have to rebuild all data, not just corrupted.	
-	
-
