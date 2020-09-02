@@ -538,7 +538,7 @@ const ProtobufCMessageDescriptor mgmt__bio_health_req__descriptor =
   (ProtobufCMessageInit) mgmt__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[14] =
+static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[16] =
 {
   {
     "status",
@@ -708,6 +708,30 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[1
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "model",
+    15,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__BioHealthResp, model),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "serial",
+    16,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__BioHealthResp, serial),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
   8,   /* field[8] = checksum_errors */
@@ -715,8 +739,10 @@ static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
   12,   /* field[12] = device_reliability_warn */
   2,   /* field[2] = error_count */
   4,   /* field[4] = media_errors */
+  14,   /* field[14] = model */
   5,   /* field[5] = read_errors */
   11,   /* field[11] = readonly_warn */
+  15,   /* field[15] = serial */
   10,   /* field[10] = spare_warn */
   0,   /* field[0] = status */
   9,   /* field[9] = temp_warn */
@@ -728,7 +754,7 @@ static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__bio_health_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 14 }
+  { 0, 16 }
 };
 const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
 {
@@ -738,7 +764,7 @@ const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
   "Mgmt__BioHealthResp",
   "mgmt",
   sizeof(Mgmt__BioHealthResp),
-  14,
+  16,
   mgmt__bio_health_resp__field_descriptors,
   mgmt__bio_health_resp__field_indices_by_name,
   1,  mgmt__bio_health_resp__number_ranges,
@@ -786,7 +812,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_dev_resp__device__field_descript
     offsetof(Mgmt__SmdDevResp__Device, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -919,7 +945,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descripto
     offsetof(Mgmt__SmdPoolResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -931,7 +957,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descripto
     offsetof(Mgmt__SmdPoolResp__Pool, blobs),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1252,7 +1278,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__device__field_descri
     offsetof(Mgmt__SmdQueryResp__Device, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1329,7 +1355,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__pool__field_descript
     offsetof(Mgmt__SmdQueryResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1341,7 +1367,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__pool__field_descript
     offsetof(Mgmt__SmdQueryResp__Pool, blobs),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

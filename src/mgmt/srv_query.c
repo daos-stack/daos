@@ -58,14 +58,13 @@ bio_health_query(void *arg)
 
 int
 ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
-			char *tgt)
+			 char *tgt)
 {
 	struct smd_dev_info	*dev_info;
 	ABT_thread		 thread;
 	int			 tgt_id;
 	int			 rc = 0;
 
-	D_INFO("BIO health stats query\n");
 	if (uuid_is_null(dev_uuid) && strlen(tgt) == 0) {
 		/* Either dev uuid or tgt id needs to be specified for query */
 		D_ERROR("Neither dev_uuid or tgt_id specified for BIO query\n");

@@ -1818,7 +1818,12 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					true : false;
 	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
 					true : false;
-	D_INFO("health data received for SSD with model %s and serial %s\n", bds.model, bds.serial);
+	strncpy(resp->model, bds.model,
+		strnlen(bds.model, sizeof(resp->model)));
+	strncpy(resp->serial, bds.serial,
+		strnlen(bds.serial, sizeof(resp->serial)));
+	D_INFO("health data received for SSD with model %s and serial %s\n",
+		bds.model, bds.serial);
 
 out:
 	resp->status = rc;

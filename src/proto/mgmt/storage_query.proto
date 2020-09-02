@@ -48,6 +48,8 @@ message BioHealthResp {
 	bool readonly_warn = 12;
 	bool device_reliability_warn = 13;
 	bool volatile_memory_warn = 14;
+	string model = 15;
+	string serial = 16;
 }
 
 message SmdDevReq {
