@@ -34,6 +34,7 @@ from sys import version_info
 import time
 import yaml
 import errno
+import xml.etree.ElementTree as ET
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
@@ -83,6 +84,16 @@ def display(args, message):
         print(message)
 
 
+def display_disk_space(path):
+    """Display disk space of provided path destination.
+
+    Args:
+        path (str): path to directory to print disk space for.
+    """
+    print("Current disk space usage of {}".format(path))
+    print(get_output(["df", "-h", path]))
+
+
 def get_build_environment():
     """Obtain DAOS build environment variables from the .build_vars.json file.
 
@@ -122,6 +133,37 @@ def get_temporary_directory(base_dir=None):
     return tmp_dir
 
 
+def human_to_bytes(h_size):
+    """Convert human readable size values to respective byte value.
+
+    Args:
+        h_size (str): human readable size value to be converted.
+
+    Returns:
+        int: value translated to bytes.
+
+    """
+    units = {"b": 1,
+             "kb": (2**10),
+             "k": (2**10),
+             "mb": (2**20),
+             "m": (2**20),
+             "gb": (2**30),
+             "g": (2**30)}
+    pattern = r"([0-9.]+|[a-zA-Z]+)"
+    val, unit = re.findall(pattern, h_size)
+
+    # Check if float or int and then convert
+    val = float(val) if "." in val else int(val)
+    if unit.lower() in units:
+        val = val * units[unit.lower()]
+    else:
+        print("Unit not found! Provide a valid unit i.e: b,k,kb,m,mb,g,gb")
+        val = -1
+
+    return val
+
+
 def set_test_environment(args):
     """Set up the test environment.
 
@@ -159,7 +201,7 @@ def set_test_environment(args):
             if state.lower() == "up":
                 # Get the interface speed - used to select the fastest available
                 with open(os.path.join(net_path, device, "speed"), "r") as \
-                    fileh:
+                     fileh:
                     try:
                         speed = int(fileh.read().strip())
                         # KVM/Qemu/libvirt returns an EINVAL
@@ -235,7 +277,8 @@ def set_test_environment(args):
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
 
-def get_output(cmd, check=True):
+
+def get_output(cmd, check=True, stdin=None):
     """Get the output of given command executed on this host.
 
     Args:
@@ -250,7 +293,7 @@ def get_output(cmd, check=True):
     """
     print("Running {}".format(" ".join(cmd)))
     process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=stdin)
     stdout, _ = process.communicate()
     retcode = process.poll()
     if check and retcode:
@@ -441,7 +484,7 @@ def get_test_list(tags):
         tags (list): a list of tag or test file names
 
     Returns:
-        (list, list): a tuple of an avacado tag filter list and lists of tests
+        (list, list): a tuple of an avocado tag filter list and lists of tests
 
     """
     test_tags = []
@@ -712,6 +755,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     # Return the untouched or modified yaml file
     return yaml_file
 
+
 def generate_certs():
     """Generate the certificates for the test."""
     daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
@@ -720,6 +764,62 @@ def generate_certs():
     subprocess.call(
         ["../../../../lib64/daos/certgen/gen_certificates.sh",
          daos_test_log_dir])
+
+
+def get_remote_files(hosts, avocado_logs_dir, destination, source_files,
+                     size_threshold=None, test_name=None):
+    """Wrapper function that will execute get_remote_files.sh script.
+
+    If size_threshold is provided, get_remote_files.sh will use clush to access
+    the remote files to first check their size and tag them as BIG_FILES.
+    Else, the script will compress the log files remotely and scp them to the
+    provided local direcotry path.
+
+    NOTE: The script will compress the files remotely only if it finds that it
+    is running on a HW system, not on a VM. If remote script is running on a VM
+    the compression step will be skipped.
+
+    Once get_remote_files.sh has finished, the output will be parsed for the
+    BIG_FILE tag and collected to be passed to create_results_xml().
+
+    Args:
+        hosts (list): list of hosts to get remote files from.
+        avocado_logs_dir (str): path to the avocado log files
+        destination (str): path to which to archive files
+        source_files (str): remote files to archive
+        size_threshold (str): value to use as threhold to classify BIG_FILEs
+        test_name (str): name of test currently runnning
+
+    Returns:
+        bool or None: status of junit xml creation, if failed then False
+            else True. If no big log files are reported, status is None.
+
+    """
+    print("Archiving files from {} in {}".format(hosts, destination))
+    get_output(["mkdir", destination])
+    display_disk_space(destination)
+
+    command = [
+        "/bin/bash", "{}/get_remote_files.sh".format(os.getcwd()), "-v",
+        "-s \"{}\"".format(",".join(hosts)),
+        "-r \"{}\"".format(source_files),
+        "-d \"{}\"".format(destination),
+    ]
+
+    status = None
+    if size_threshold:
+        command.append("-t {}".format(human_to_bytes(size_threshold)))
+        res = re.findall(r"BIG_FILE\s+(.*):", get_output(command))
+        if res:
+            print("Big files found! Writing junit xml.")
+            d = os.path.join(avocado_logs_dir, "latest")
+            status = create_results_xml(hosts, test_name, "\n".join(res), d)
+        else:
+            print("No log files found exceeding {}".format(size_threshold))
+    else:
+        status = time_command(command)
+    return status
+
 
 def run_tests(test_files, tag_filter, args):
     """Run or display the test commands.
@@ -771,19 +871,18 @@ def run_tests(test_files, tag_filter, args):
                 "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
             return_code |= time_command(test_command_list)
 
-            # Optionally get the size of the logs and log_dir of the tests
-            if args.size_limit:
-                cur_logs_dir = os.path.join(avocado_logs_dir, "latest")
-                daos_logs_dir = os.environ.get(
-                    "DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-                get_log_size(
-                    args, cur_logs_dir, daos_logs_dir, test_file["yaml"])
-
-            # Optionally store all of the daos server and client log files
-            # along with the test results
+            # Optionally store all of the daos server and client config files
+            # and also archive remote logs and report big log files, if any.
             if args.archive:
-                archive_logs(avocado_logs_dir, test_file["yaml"], args)
                 archive_config_files(avocado_logs_dir)
+                status = archive_log_files(avocado_logs_dir, test_file, args)
+                if status is False:
+                    return_code = 16
+                elif isinstance(status, int):
+                    return_code |= status
+
+                # Compress any log file that haven't been remotely compressed.
+                compress_log_files(avocado_logs_dir, args)
 
             # Optionally rename the test results directory for this test
             if args.rename:
@@ -889,85 +988,24 @@ def clean_logs(test_yaml, args):
     return True
 
 
-def archive_logs(avocado_logs_dir, test_yaml, args):
-    """Copy all of the host test log files to the avocado results directory.
+def compress_log_files(avocado_logs_dir, args):
+    """Compress log files.
 
     Args:
         avocado_logs_dir (str): path to the avocado log files
-        test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    this_host = socket.gethostname().split(".")[0]
-    host_list = get_hosts_from_yaml(test_yaml, args)
+    destination = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
-    # Create a subdirectory in the avocado logs directory for this test
-    daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
-    print("Archiving host logs from {} in {}".format(host_list, daos_logs_dir))
-    os.mkdir(daos_logs_dir)
-    print(get_output(["df", "-h", daos_logs_dir]))
-
-    # Copy any log files that exist on the test hosts and remove them from the
-    # test host if the copy is successful.  Attempt all of the commands and
-    # report status at the end of the loop.  Include a listing of the file
-    # related to any failed command.
-    commands = [
-        "set -eu",
-        "rc=0",
-        "copied=()",
-        "for file in $(ls {}/*.log)".format(logs_dir),
-        "do ls -sh $file",
-        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, daos_logs_dir),
-        "then copied+=($file)",
-        "if ! sudo rm -fr $file",
-        "then ((rc++))",
-        "ls -al $file",
-        "fi",
-        "fi",
-        "done",
-        "echo Copied ${copied[@]:-no files}",
-        "exit $rc",
-    ]
-    spawn_commands(host_list, "; ".join(commands), 900)
-
-
-def document_log_sizes(hosts, logs_src, log_size_file):
-    """Get the size of the the directory of the host test log files in
-    the avocado results directory and store the values in a file.
-
-    Args:
-        hosts (list): list of hosts
-        logs_src (str): the test python file from where logs are being created
-        log_size_file (str): file to store the sizes
-    """
-    # Create a file that contains the sizes for the logs selected.
-    command = "du -ab -d 1 {} &> {}".format(logs_src, log_size_file)
-    spawn_commands(hosts, command, 30)
-
-
-def get_log_size(args, cur_logs_dir, daos_logs_dir, test_yaml):
-    """ Wrapper function to call check_log_size function for different logs.
-
-    Args:
-        args (argparse.Namespace): command line arguments for this program
-        cur_logs_dir (str): path to the current test logs
-        daos_logs_dir (str): path to daos logs
-        test_yaml (str): yaml file containing host names
-    """
-    # Parse user input
-    for logs_type in args.logs_size.split(","):
-        if "daos_logs" in logs_type:
-            document_log_sizes(
-                get_hosts_from_yaml(test_yaml, args),
-                daos_logs_dir,
-                os.path.join(daos_logs_dir, "daos_log_size.log"))
-        if "job_logs" in logs_type:
-            document_log_sizes(
-                [socket.gethostname().split(".")[0]],
-                os.path.join(cur_logs_dir, "job.log"),
-                os.path.join(cur_logs_dir, "job_log_size.log"))
+    # Check is directory is empty
+    if len(os.listdir(destination)) == 0:
+        print("No files found in {} to compress!".format(destination))
+    else:
+        files = get_output([
+            "find", destination + "/*",
+            "-maxdepth", "0", "-type", "f", "-size", "+1M", "-print0"
+        ])
+        get_output(["lbzip2"], stdin=files)
 
 
 def archive_config_files(avocado_logs_dir):
@@ -976,37 +1014,36 @@ def archive_config_files(avocado_logs_dir):
     Args:
         avocado_logs_dir (str): path to the avocado log files
     """
-    # Run the command locally as the config files are written to a shared dir
-    this_host = socket.gethostname().split(".")[0]
-    host_list = [this_host]
+    get_remote_files(
+        hosts=[socket.gethostname().split(".")[0]],
+        avocado_logs_dir=avocado_logs_dir,
+        destination=os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+        source_files="{}/*_*_*.yaml".format(
+            get_temporary_directory(get_build_environment()["PREFIX"]))
+    )
 
-    # Get the source directory for the config files
-    base_dir = get_build_environment()["PREFIX"]
-    config_file_dir = get_temporary_directory(base_dir)
 
-    # Get the destination directory for the config file
-    daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_configs")
-    print(
-        "Archiving config files from {} in {}".format(host_list, daos_logs_dir))
-    get_output(["mkdir", daos_logs_dir])
+def archive_log_files(avocado_logs_dir, test_files, args):
+    """Archive all of the remote logs files to the avocado results directory.
 
-    # Archive any yaml configuration files.  Currently these are always written
-    # to a shared directory for all of hosts.
-    commands = [
-        "set -eu",
-        "rc=0",
-        "copied=()",
-        "for file in $(ls {}/test_*.yaml)".format(config_file_dir),
-        "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, daos_logs_dir),
-        "then copied+=($file)",
-        "else ((rc++))",
-        "fi",
-        "done",
-        "echo Copied ${copied[@]:-no files}",
-        "exit $rc",
-    ]
-    spawn_commands(host_list, "; ".join(commands), timeout=900)
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+        test_files (dict): dictionary of the test script/yaml file
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        bool: returns status of get_remote_files function.
+
+    """
+    return get_remote_files(
+        hosts=get_hosts_from_yaml(test_files["yaml"], args),
+        avocado_logs_dir=avocado_logs_dir,
+        destination=os.path.join(avocado_logs_dir, "latest", "daos_logs"),
+        source_files="{}/*.log".format(
+            os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)),
+        size_threshold=args.logs_th if args.logs_th else None,
+        test_name=get_test_category(test_files["py"])
+    )
 
 
 def rename_logs(avocado_logs_dir, test_file):
@@ -1031,12 +1068,70 @@ def rename_logs(avocado_logs_dir, test_file):
                 test_logs_dir, new_test_logs_dir, error))
 
 
+def create_results_xml(hosts, testname, output, destination):
+    """Create Junit xml file.
+
+    Args:
+        hosts (list): list of host names
+        testname (str): name of test
+        output (dict): result of the command.
+        destination (str): directory where junit xml will be created
+
+    Returns:
+        bool: status of writing to junit file
+
+    """
+    testsuite_attrs = {
+        "name": "{}".format(testname),
+        "errors": "1",
+        "failures": "0",
+        "skipped": "0",
+        "test": "1",
+        "time": "0.0",
+    }
+    testcase_attrs = {
+        "name": "ALL",
+        "time": "0.0",
+    }
+    error_atttrs = {
+        "message": "Log size has exceed threshold for this test on: {}".format(
+            hosts)
+    }
+
+    # Create xml tree
+    testsuite = ET.Element("testsuite", testsuite_attrs)
+    testcase = ET.SubElement(testsuite, "testcase", testcase_attrs)
+    ET.SubElement(testcase, "error", error_atttrs)
+    system_out = ET.SubElement(testcase, "system-out")
+    system_out.text = "<![CDATA[{}]]>".format(output)
+
+    # Get xml as string and write it to a file
+    junit_xml = ET.tostring(testsuite)
+    filen = os.path.join(
+        destination, "{}_biglogs.xml".format(testname))
+    try:
+        with open(filen, "w") as results_xml:
+            results_xml.write(junit_xml)
+    except IOError as error:
+        print("Failed to create xml file: {}".format(error))
+        return False
+
+
 USE_DEBUGINFO_INSTALL = True
 
 
 def resolve_debuginfo(pkg):
-    """ given a package name, return it's debuginfo package """
-    import yum # pylint: disable=import-error,import-outside-toplevel
+    """Return the debuginfo package for a given package name.
+
+    Args:
+        pkg (str): a package name
+
+    Returns:
+        str: the debuginfo package name
+
+    """
+    import yum      # pylint: disable=import-error,import-outside-toplevel
+
 
     yum_base = yum.YumBase()
     yum_base.conf.assumeyes = True
@@ -1063,6 +1158,7 @@ def resolve_debuginfo(pkg):
             'version': pkg_data['version'],
             'release': pkg_data['release'],
             'epoch': pkg_data['epoch']}
+
 
 def install_debuginfos():
     """Install debuginfo packages."""
@@ -1336,13 +1432,12 @@ def main():
         action="store_true",
         help="process core files from tests")
     parser.add_argument(
-        "-ls", "--logs-size",
+        "-dl", "--daos-logs",
         action="store",
-        dest="logs_size",
-        nargs=1,
-        type=str,
-        help="comma-separated list of log areas to collect the log sizes for"
-             "e.g. daos_logs,job_logs")
+        dest="logs_th",
+        help="collect daos-log sizes and report log sizes that go past"
+             "provided threshold. e.g. -dl 5MB"
+             "Valid threshold units are: b, kb, mb, gb")
     parser.add_argument(
         "-s", "--sparse",
         action="store_true",
@@ -1424,6 +1519,9 @@ def main():
             ret_code = 1
         if status & 4 == 4:
             print("ERROR: Detected one or more failed avocado commands!")
+            ret_code = 1
+        if status & 16 == 16:
+            print("ERROR: Detected one or more tests with unreported big logs!")
             ret_code = 1
         if status & 128 == 128:
             print("ERROR: Failed to clean logs in preparation for test run!")

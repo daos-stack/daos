@@ -61,6 +61,9 @@ if [ -n "${3}" ]; then
     NVME_ARG="-n ${3}"
 fi
 
+# Log size thresholds
+DAOS_LOG_TH="1mb"
+
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
@@ -404,8 +407,8 @@ enabled=0
 EOF\"
 
 # now run it!
-if ! ./launch.py -crispa -ls daos_logs,job_logs -ts \
-${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -crispa -dl ${DAOS_LOG_TH} \
+-ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
