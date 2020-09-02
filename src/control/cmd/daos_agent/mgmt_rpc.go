@@ -54,7 +54,8 @@ type mgmtModule struct {
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
-	if method != drpc.MethodGetAttachInfo {
+	if method != drpc.MethodGetAttachInfo &&
+		method != drpc.MethodDisconnect {
 		return nil, drpc.UnknownMethodFailure()
 	}
 
@@ -75,7 +76,14 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 		return nil, err
 	}
 
-	return mod.handleGetAttachInfo(req, cred.Pid)
+	switch method {
+	case drpc.MethodGetAttachInfo:
+		return mod.handleGetAttachInfo(req, cred.Pid)
+	case drpc.MethodDisconnect:
+		return mod.handleDisconnect(req, cred.Pid)
+	}
+
+	return nil, drpc.UnknownMethodFailure()
 }
 
 func (mod *mgmtModule) ID() drpc.ModuleID {
@@ -164,4 +172,8 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	}
 
 	return mod.aiCache.getResponse(numaNode)
+}
+
+func (mod *mgmtModule) handleDisconnect(reqb []byte, pid int32) ([]byte, error) {
+	return nil, errors.New("Disconnect is currently not implemented")
 }

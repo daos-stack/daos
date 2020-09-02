@@ -231,6 +231,8 @@ const (
 	MethodPoolSetProp mgmtMethod = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 	// MethodContSetOwner defines a method for setting the container's owner
 	MethodContSetOwner mgmtMethod = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
+	// MethodDisconnect defines a method for signaling a clean client shutdown
+	MethodDisconnect mgmtMethod = C.DRPC_METHOD_MGMT_DISCONNECT
 )
 
 type srvMethod int32
