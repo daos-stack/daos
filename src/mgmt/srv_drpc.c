@@ -1771,6 +1771,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__bio_health_resp__init(resp);
 
+	D_DEBUG(DB_MGMT, "drpc response structure initialised\n");
+
 	if (strlen(req->dev_uuid) != 0) {
 		rc = uuid_parse(req->dev_uuid, uuid);
 		if (rc != 0) {
@@ -1781,12 +1783,16 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */
 
+	D_DEBUG(DB_MGMT, "uuid Arsed\n");
+
 	D_ALLOC_PTR(bio_health);
 	if (bio_health == NULL) {
 		D_ERROR("Failed to allocate bio health struct\n");
 		rc = -DER_NOMEM;
 		goto out;
 	}
+
+	D_DEBUG(DB_MGMT, "health object ptr allocated\n");
 
 	rc = ds_mgmt_bio_health_query(bio_health, uuid, req->tgt_id);
 	if (rc != 0) {
@@ -1795,12 +1801,16 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
+	D_DEBUG(DB_MGMT, "health query completed\n");
+
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
 		D_ERROR("failed to allocate buffer");
 		rc = -DER_NOMEM;
 		goto out;
 	}
+
+	D_DEBUG(DB_MGMT, "allocate buffer for response uuid\n");
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
 	bds = bio_health->mb_dev_state;
@@ -1818,10 +1828,23 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					true : false;
 	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
 					true : false;
-	strncpy(resp->model, bds.model,
-		strnlen(bds.model, sizeof(resp->model)));
-	strncpy(resp->serial, bds.serial,
-		strnlen(bds.serial, sizeof(resp->serial)));
+
+	D_ALLOC(resp->model, 1024);
+	if (resp->model == NULL) {
+		D_ERROR("failed to allocate model ID buffer");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	strncpy(resp->model, bds.model, strnlen(bds.model, 1023));
+
+	D_ALLOC(resp->serial, 1024);
+	if (resp->serial == NULL) {
+		D_ERROR("failed to allocate serial ID buffer");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	strncpy(resp->serial, bds.serial, strnlen(bds.serial, 1023));
+
 	D_INFO("health data received for SSD with model %s and serial %s\n",
 		bds.model, bds.serial);
 

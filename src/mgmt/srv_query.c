@@ -39,7 +39,7 @@ bio_health_query(void *arg)
 	int			 rc;
 
 	D_ASSERT(info != NULL);
-	D_INFO("BIO health stats query on xs:%d, tgt:%d\n",
+	D_DEBUG(DB_MGMT, "BIO health stats query on xs:%d, tgt:%d\n",
 		info->dmi_xs_id, info->dmi_tgt_id);
 
 	bxc = info->dmi_nvme_ctxt;
@@ -49,11 +49,15 @@ bio_health_query(void *arg)
 		return;
 	}
 
+	D_DEBUG(DB_MGMT, "BIO NVMe context initialized\n");
+
 	rc = bio_get_dev_state(&mbh->mb_dev_state, bxc);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device state\n");
 		return;
 	}
+
+	D_DEBUG(DB_MGMT, "BIO device state populated\n");
 }
 
 int
