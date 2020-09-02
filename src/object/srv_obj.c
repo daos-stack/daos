@@ -952,7 +952,7 @@ obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
 }
 
 /** Filter and prepare for the sing value EC update/fetch */
-static int
+int
 obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 		       daos_epoch_t epoch, uint32_t flags, uint32_t start_shard,
 		       uint32_t nr, bool for_update, bool deg_fetch,
@@ -984,7 +984,8 @@ obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 		if (!obj_ec_singv_one_tgt(iod, NULL, oca)) {
 			obj_ec_singv_local_sz(iod->iod_size, oca, tgt_idx,
 					      &loc);
-			offs[i] = loc.esl_off;
+			if (offs != NULL)
+				offs[i] = loc.esl_off;
 			if (for_update)
 				iod->iod_size = loc.esl_size;
 			if (deg_fetch)
