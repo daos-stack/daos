@@ -262,12 +262,14 @@ vos_pool_destroy(const char *path, uuid_t uuid);
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
+ * \param small	[IN]	Pool is small
+ *			(system memory reservation shall be small, to fit)
  * \param poh	[OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
