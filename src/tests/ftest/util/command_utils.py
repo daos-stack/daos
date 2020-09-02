@@ -33,8 +33,7 @@ from command_utils_base import \
     CommandFailure, BasicParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, stop_processes, get_log_file, \
-    run_command, DaosTestError
-from job_manager_utils import get_job_manager
+    run_command, DaosTestError, get_job_manager_class
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -801,7 +800,7 @@ class SubprocessManager(object):
         self.log = getLogger(__name__)
 
         # Define the JobManager class used to manage the command as a subprocess
-        self.manager = get_job_manager(manager, command, True)
+        self.manager = get_job_manager_class(manager, command, True)
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []
