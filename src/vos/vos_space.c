@@ -31,7 +31,7 @@
 #define POOL_NVME_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_NVME])
 
 static inline daos_size_t
-get_frag_overhead(daos_size_t tot_size, int media)
+get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
 {
 	daos_size_t	min_sz = (2ULL << 30);	/* 2GB */
 	daos_size_t	max_sz = (10ULL << 30);	/* 10GB */
@@ -40,10 +40,13 @@ get_frag_overhead(daos_size_t tot_size, int media)
 	ovhd = (media == DAOS_MEDIA_SCM) ?
 		(tot_size * 5) / 100 : (tot_size * 2) / 100;
 
-	if (ovhd < min_sz)
-		ovhd = min_sz;
-	else if (ovhd > max_sz)
-		ovhd = max_sz;
+	/* If caller specified the pool is small, do not enforce a range */
+	if (!small_pool) {
+		if (ovhd < min_sz)
+			ovhd = min_sz;
+		else if (ovhd > max_sz)
+			ovhd = max_sz;
+	}
 
 	return ovhd;
 }
@@ -54,8 +57,10 @@ vos_space_sys_init(struct vos_pool *pool)
 	daos_size_t	scm_tot = pool->vp_pool_df->pd_scm_sz;
 	daos_size_t	nvme_tot = pool->vp_pool_df->pd_nvme_sz;
 
-	POOL_SCM_SYS(pool) = get_frag_overhead(scm_tot, DAOS_MEDIA_SCM);
-	POOL_NVME_SYS(pool) = get_frag_overhead(nvme_tot, DAOS_MEDIA_NVME);
+	POOL_SCM_SYS(pool) =
+		get_frag_overhead(scm_tot, DAOS_MEDIA_SCM, pool->vp_small);
+	POOL_NVME_SYS(pool) =
+		get_frag_overhead(nvme_tot, DAOS_MEDIA_NVME, pool->vp_small);
 
 	gc_reserve_space(&pool->vp_space_sys[0]);
 	agg_reserve_space(&pool->vp_space_sys[0]);

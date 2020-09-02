@@ -817,7 +817,7 @@ io_obj_cache_test(void **state)
 	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0);
 	assert_int_equal(rc, 0);
 
-	rc = vos_pool_open(po_name, pool_uuid, &l_poh);
+	rc = vos_pool_open(po_name, pool_uuid, false /* small */, &l_poh);
 	assert_int_equal(rc, 0);
 
 	rc = vos_cont_create(l_poh, ctx->tc_co_uuid);
@@ -1386,7 +1386,7 @@ pool_cont_same_uuid(void **state)
 	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M, 0);
 	assert_int_equal(ret, 0);
 
-	ret = vos_pool_open(arg->fname, pool_uuid, &poh);
+	ret = vos_pool_open(arg->fname, pool_uuid, false /* small */, &poh);
 	assert_int_equal(ret, 0);
 
 	ret = vos_cont_create(poh, co_uuid);
@@ -1396,7 +1396,7 @@ pool_cont_same_uuid(void **state)
 	assert_int_equal(ret, 0);
 
 	poh = DAOS_HDL_INVAL;
-	ret = vos_pool_open(arg->fname, pool_uuid, &poh);
+	ret = vos_pool_open(arg->fname, pool_uuid, false /* small */, &poh);
 	assert_int_equal(ret, 0);
 
 	ret = vos_cont_open(poh, co_uuid, &coh);
