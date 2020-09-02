@@ -2333,6 +2333,7 @@ again:
 					iod_recx.rx_idx + iod_recx.rx_nr) -
 				    ovl.rx_idx;
 			rec_nr += recov_recx.rx_idx - iod_recx.rx_idx;
+			break;
 		}
 		D_ASSERT(overlapped);
 		iod_off = rec_nr * iod_size;
