@@ -29,6 +29,7 @@
 #include <abt.h>
 #include <spdk/env.h>
 #include <spdk/nvme.h>
+#include <spdk/vmd.h>
 #include <spdk/thread.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -94,11 +95,44 @@ static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
 
 static int
+is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
+		     int num_whitelist_devices)
+{
+	int			i;
+	struct spdk_pci_addr    tmp;
+
+	if (spdk_pci_addr_parse(&tmp, pci_addr) != 0) {
+		D_ERROR("Invalid address %s\n", pci_addr);
+		return -DER_INVAL;
+	}
+
+	for (i = 0; i < num_whitelist_devices; i++) {
+		if (spdk_pci_addr_compare(&tmp, &whitelist[i]) == 0) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Add PCI address to spdk_env_opts whitelist, ignoring any duplicates.
+ */
+static int
 opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		  char *traddr)
 {
-	struct spdk_pci_addr *tmp = *list;
-	size_t count = opts->num_pci_addr;
+	int			rc;
+	size_t			count = opts->num_pci_addr;
+	struct spdk_pci_addr   *tmp = *list;
+
+	rc = is_addr_in_whitelist(traddr, *list, count);
+	if (rc < 0) {
+		return rc;
+	}
+	if (rc == 1) {
+		return 0;
+	}
 
 	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
 	if (tmp == NULL) {
@@ -116,6 +150,69 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 	return 0;
 }
 
+/*
+ * Convert a transport id in the BDF form of "5d0505:01:00.0" or something
+ * similar to the VMD address in the form of "0000:5d:05.5" that can be parsed
+ * by DPDK.
+ *
+ * \param dst String to be populated as output.
+ * \param src Input bdf.
+ */
+static int
+traddr_to_vmd(char *dst, const char *src)
+{
+	char traddr_tmp[SPDK_NVMF_TRADDR_MAX_LEN + 1];
+	char vmd_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1] = "0000:";
+	char *ptr;
+	const char ch = ':';
+	char addr_split[3];
+	int position, iteration;
+	int n;
+
+	n = snprintf(traddr_tmp, SPDK_NVMF_TRADDR_MAX_LEN, "%s", src);
+	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
+		D_ERROR("snprintf failed\n");
+		return -DER_INVAL;
+	}
+
+	/* Only the first chunk of data from the traddr is useful */
+	ptr = strchr(traddr_tmp, ch);
+	if (ptr == NULL) {
+		D_ERROR("Transport id not valid\n");
+		return -DER_INVAL;
+	}
+	position = ptr - traddr_tmp;
+	traddr_tmp[position] = '\0';
+
+	ptr = traddr_tmp;
+	iteration = 0;
+	while (*ptr != '\0') {
+		n = snprintf(addr_split, sizeof(addr_split), "%s", ptr);
+		if (n < 0) {
+			D_ERROR("snprintf failed\n");
+			return -DER_INVAL;
+		}
+		strcat(vmd_addr, addr_split);
+
+		if (iteration != 0) {
+			strcat(vmd_addr, ".");
+			ptr = ptr + 3;
+			strncat(vmd_addr, ptr, 1);
+			break;
+		}
+		strcat(vmd_addr, ":");
+		ptr = ptr + 2;
+		iteration++;
+	}
+	n = snprintf(dst, SPDK_NVMF_TRADDR_MAX_LEN, "%s", vmd_addr);
+	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
+		D_ERROR("snprintf failed\n");
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 static int
 populate_whitelist(struct spdk_env_opts *opts)
 {
@@ -124,10 +221,18 @@ populate_whitelist(struct spdk_env_opts *opts)
 	const char			*val;
 	size_t				 i;
 	int				 rc = 0;
+	bool				 vmd_enabled = false;
 
 	/* Don't need to pass whitelist for non-NVMe devices */
 	if (nvme_glb.bd_bdev_class != BDEV_CLASS_NVME)
 		return 0;
+
+	/*
+	 * Optionally VMD devices will be used, and will require a different
+	 * transport id to pass to whitelist for DPDK.
+	 */
+	if (spdk_conf_find_section(NULL, "Vmd") != NULL)
+		vmd_enabled = true;
 
 	sp = spdk_conf_find_section(NULL, "Nvme");
 	if (sp == NULL) {
@@ -158,6 +263,24 @@ populate_whitelist(struct spdk_env_opts *opts)
 			D_ERROR("unexpected non-PCIE transport\n");
 			rc = -DER_INVAL;
 			break;
+		}
+
+		if (vmd_enabled) {
+			if (strncmp(trid->traddr, "0", 1) != 0) {
+				/*
+				 * We can assume this is the transport id of the
+				 * backing NVMe SSD behind the VMD. DPDK will
+				 * not recognize this transport ID, instead need
+				 * to pass VMD address as the whitelist param.
+				 */
+				rc = traddr_to_vmd(trid->traddr, trid->traddr);
+				if (rc < 0) {
+					D_ERROR("Invalid traddr=%s\n",
+						trid->traddr);
+					rc = -DER_INVAL;
+					break;
+				}
+			}
 		}
 
 		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
@@ -214,6 +337,26 @@ bio_spdk_env_init(void)
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
+
+	if (spdk_conf_find_section(NULL, "Vmd") != NULL) {
+		/**
+		 * Enumerate VMD devices and hook them into the SPDK PCI
+		 * subsystem.
+		 */
+		rc = spdk_vmd_init();
+		if (rc != 0) {
+			rc = -DER_INVAL; /* spdk_vmd_init() returns -1 */
+			D_ERROR("Failed to initialize VMD env, "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+
+		/**
+		 * TODO spdk_vmd_hotplug_monitor() will need to be called
+		 * periodically on 'init' xstream to monitor VMD hotremove/
+		 * hotplug events.
+		 */
 	}
 
 	spdk_unaffinitize_thread();
@@ -292,14 +435,14 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {
-		D_WARN("Malloc device will be used!\n");
+		D_WARN("Malloc device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_MALLOC;
 		nvme_glb.bd_bs_opts.cluster_sz = (1ULL << 20);
 		nvme_glb.bd_bs_opts.num_md_pages = 10;
 		size_mb = 2;
 		bio_chk_cnt_max = 32;
 	} else if (env && strcasecmp(env, "AIO") == 0) {
-		D_WARN("AIO device will be used!\n");
+		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
 
@@ -554,6 +697,9 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	/* Try to load blobstore without specifying 'bstype' first */
 	bs = load_blobstore(ctxt, bdev, NULL, false);
 	if (bs == NULL) {
+		D_DEBUG(DB_MGMT, "Creating bs for %s\n",
+			spdk_bdev_get_name(bdev));
+
 		/* Create blobstore if it wasn't created before */
 		uuid_generate(bs_uuid);
 		bs = load_blobstore(ctxt, bdev, &bs_uuid, true);
@@ -612,6 +758,11 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 {
 	struct spdk_bdev *bdev;
 	int rc = 0;
+
+	if (spdk_bdev_first() == NULL) {
+		D_ERROR("No SPDK bdevs found!");
+		rc = -DER_NONEXIST;
+	}
 
 	for (bdev = spdk_bdev_first(); bdev != NULL;
 	     bdev = spdk_bdev_next(bdev)) {

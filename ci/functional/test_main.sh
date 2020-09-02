@@ -26,6 +26,11 @@ clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
 trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 '"set -x; umount /mnt/share"' EXIT
 
+# Setup the Jenkins build artifacts directory before running the tests to ensure
+# there is enough disk space to report the results.
+rm -rf "Functional/"
+mkdir "Functional/"
+
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
@@ -37,11 +42,6 @@ if $TEST_RPMS; then
        TNODES=\"$tnodes\"                            \
        FTEST_ARG=\"$FTEST_ARG\"                      \
        $(cat ci/functional/test_main_node.sh)"
-    # now collect up the logs and store them like non-RPM test does
-    mkdir -p install/lib/daos/TESTING/
-    # scp doesn't copy symlinks, it resolves them
-    ssh -i ci_key -l jenkins "${first_node}" tar -C /var/tmp/ -czf - ftest |
-        tar -C install/lib/daos/TESTING/ -xzf -
 else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
 fi

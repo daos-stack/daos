@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package storage
 
 import (
@@ -30,8 +31,13 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func concat(base string, idx int32) string {
-	return fmt.Sprintf("%s-%d", base, idx)
+func concat(base string, idx int32, altSep ...string) string {
+	sep := "-"
+	if len(altSep) == 1 {
+		sep = altSep[0]
+	}
+
+	return fmt.Sprintf("%s%s%d", base, sep, idx)
 }
 
 func getRandIdx(n ...int32) int32 {
@@ -70,12 +76,21 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 	return &NvmeController{
 		Model:       concat("model", idx),
 		Serial:      concat("serial", getRandIdx()),
-		PciAddr:     concat("pciAddr", idx),
+		PciAddr:     concat("0000:80:00", idx, "."),
 		FwRev:       concat("fwRev", idx),
 		SocketID:    idx,
 		HealthStats: MockNvmeDeviceHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
 	}
+}
+
+func MockNvmeControllers(length int) NvmeControllers {
+	result := NvmeControllers{}
+	for i := 0; i < length; i++ {
+		result = append(result, MockNvmeController(int32(i)))
+	}
+
+	return result
 }
 
 func MockScmModule(varIdx ...int32) *ScmModule {
@@ -90,6 +105,15 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		Capacity:        uint64(idx),
 		UID:             fmt.Sprintf("Device%d", idx),
 	}
+}
+
+func MockScmModules(length int) ScmModules {
+	result := ScmModules{}
+	for i := 0; i < length; i++ {
+		result = append(result, MockScmModule(int32(i)))
+	}
+
+	return result
 }
 
 func MockScmNamespace(varIdx ...int32) *ScmNamespace {

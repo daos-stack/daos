@@ -37,6 +37,23 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
+/** Initialize the vos reserve/cancel related fields in dtx handle
+ *
+ * \param dth	[IN]	The dtx handle
+ *
+ * \return	0 on success
+ *		-DER_NOMEM on failure
+ */
+int
+vos_dtx_rsrvd_init(struct dtx_handle *dth);
+
+/** Finalize the vos reserve/cancel related fields in dtx handle
+ *
+ * \param dth	[IN]	The dtx handle
+ */
+void
+vos_dtx_rsrvd_fini(struct dtx_handle *dth);
+
 /**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
@@ -245,12 +262,14 @@ vos_pool_destroy(const char *path, uuid_t uuid);
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
+ * \param small	[IN]	Pool is small
+ *			(system memory reservation shall be small, to fit)
  * \param poh	[OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -678,6 +697,8 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
+ * \param dedup [IN]	Whether deduplication is enabled for this I/O
+ * \param dedup_th [IN]	Deduplication threshold size
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
@@ -687,7 +708,8 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 daos_handle_t *ioh, struct dtx_handle *dth);
+		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
+		 struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -1047,4 +1069,14 @@ int
 vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
+
+/**
+ * Helper functions to create/free duplicated bsgl for dedup verify.
+ */
+int
+vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
+		   struct bio_sglist *bsgl_dup);
+void
+vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+
 #endif /* __VOS_API_H */

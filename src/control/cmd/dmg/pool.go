@@ -79,7 +79,6 @@ type PoolCreateCmd struct {
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
 	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
-	UUID       string `short:"p" long:"pool" description:"UUID to be used when creating the pool, randomly generated if not specified"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -134,7 +133,6 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, Ranks: ranks,
 		NumSvcReps: c.NumSvcReps, Sys: c.Sys,
 		User: c.UserName, UserGroup: c.GroupName, ACL: acl,
-		UUID: c.UUID,
 	}
 
 	ctx := context.Background()
@@ -419,7 +417,7 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	resp, err := control.PoolQuery(ctx, c.ctlInvoker, req)
 
 	if c.jsonOutputEnabled() {
-		return c.errorJSON(err)
+		return c.outputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -460,7 +458,7 @@ func (c *PoolSetPropCmd) Execute(_ []string) error {
 	resp, err := control.PoolSetProp(ctx, c.ctlInvoker, req)
 
 	if c.jsonOutputEnabled() {
-		return c.errorJSON(err)
+		return c.outputJSON(resp, err)
 	}
 
 	if err != nil {

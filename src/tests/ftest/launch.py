@@ -573,7 +573,7 @@ def get_nvme_replacement(args):
     # Get a list of NVMe devices from each specified server host
     host_list = args.test_servers.split(",")
     command_list = [
-        "/usr/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
+        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
         command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
     command = " | ".join(command_list)
@@ -1132,7 +1132,6 @@ def resolve_debuginfo(pkg):
     """
     import yum      # pylint: disable=import-error,import-outside-toplevel
 
-
     yum_base = yum.YumBase()
     yum_base.conf.assumeyes = True
     yum_base.setCacheDir(force=True, reuse=True)
@@ -1228,7 +1227,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
-    import fnmatch # pylint: disable=import-outside-toplevel
+    import fnmatch  # pylint: disable=import-outside-toplevel
 
     this_host = socket.gethostname().split(".")[0]
     host_list = get_hosts_from_yaml(test_yaml, args)
@@ -1280,7 +1279,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             pattern (str): the fnmatch/glob pattern of core files to
                            run gdb on
         """
-        import magic # pylint: disable=import-error
+        import magic    # pylint: disable=import-error
 
         for corefile in cores:
             if not fnmatch.fnmatch(corefile, pattern):
@@ -1289,18 +1288,16 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             exe_magic = magic.open(magic.NONE)
             exe_magic.load()
             exe_type = exe_magic.file(corefile_fqpn)
-            exe_name_start = exe_type.find("execfn: '") + 9
             exe_name_end = 0
-            if exe_name_start > 8:
-                exe_name_end = exe_type.find("', platform:")
-            else:
-                exe_name_start = exe_type.find("from '") + 6
-                if exe_name_start > 5:
-                    exe_name_end = exe_type[exe_name_start:].find(" ") + \
-                                   exe_name_start
+            if exe_type:
+                exe_name_start = exe_type.find("execfn: '") + 9
+                if exe_name_start > 8:
+                    exe_name_end = exe_type.find("', platform:")
                 else:
-                    print("Unable to determine executable name from: "
-                          "{}\nNot creating stacktrace".format(exe_type))
+                    exe_name_start = exe_type.find("from '") + 6
+                    if exe_name_start > 5:
+                        exe_name_end = exe_type[exe_name_start:].find(" ") + \
+                                    exe_name_start
             if exe_name_end:
                 exe_name = exe_type[exe_name_start:exe_name_end]
                 cmd = [
@@ -1313,8 +1310,16 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 ]
                 stack_trace_file = os.path.join(
                     daos_cores_dir, "{}.stacktrace".format(corefile))
-                with open(stack_trace_file, "w") as stack_trace:
-                    stack_trace.writelines(get_output(cmd))
+                try:
+                    with open(stack_trace_file, "w") as stack_trace:
+                        stack_trace.writelines(get_output(cmd))
+                except IOError as error:
+                    print(
+                        "Error writing {}: {}".format(stack_trace_file, error))
+            else:
+                print(
+                    "Unable to determine executable name from: '{}'\nNot "
+                    "creating stacktrace".format(exe_type))
             print("Removing {}".format(corefile_fqpn))
             os.unlink(corefile_fqpn)
 
@@ -1421,8 +1426,8 @@ def main():
              "replacement values for the bdev_list in each test's yaml file.  "
              "Using the 'auto[:<filter>]' keyword will auto-detect the NVMe "
              "PCI address list on each of the '--test_servers' hosts - the "
-             "optonal '<filter>' can be used to limit auto-detected addresses, "
-             "e.g. 'auto:Optane' for Intel Optane NVMe devices.")
+             "optional '<filter>' can be used to limit auto-detected "
+             "addresses, e.g. 'auto:Optane' for Intel Optane NVMe devices.")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",

@@ -193,6 +193,22 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 					       myrank);
 }
 
+int
+pl_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
+		     struct daos_obj_shard_md *shard_md,
+		    uint32_t reint_ver, uint32_t *tgt_rank,
+		    uint32_t *shard_id, unsigned int array_size, int myrank)
+{
+	D_ASSERT(map->pl_ops != NULL);
+
+	if (!map->pl_ops->o_obj_find_addition)
+		return -DER_NOSYS;
+
+	return map->pl_ops->o_obj_find_addition(map, md, shard_md, reint_ver,
+					       tgt_rank, shard_id, array_size,
+					       myrank);
+}
+
 void
 pl_obj_layout_free(struct pl_obj_layout *layout)
 {
@@ -333,7 +349,7 @@ pl_hop_key_hash(struct d_hash_table *htab, const void *key,
 		unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(uuid_t));
-	return d_hash_string_u32((const char *)key, ksize);
+	return *((const uint32_t *)key);
 }
 
 static bool
@@ -579,7 +595,11 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 
 		/* Single replicated object will not rebuild. */
 		D_ASSERT(!shard->po_rebuilding);
-		D_ASSERT(shard->po_shard == shard_idx);
+		/* During target adding, it will add some -1 targets
+		 * into the object layout, so this assert is not right
+		 * anymore. see pl_map_extend().
+		 */
+		/*D_ASSERT(shard->po_shard == shard_idx);*/
 
 		if (for_tgt_id)
 			return shard->po_target;
