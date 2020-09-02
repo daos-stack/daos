@@ -8,7 +8,8 @@
 ## Name associated with the DAOS system.
 ## Immutable after reformat.
 #
-# NOTE: Changing the name is not supported in DAOS 1.0, it must be daos_server
+## NOTE: Changing the name is not supported in DAOS 1.0, it must not be changed
+##       from the default "daos_server".
 #
 ## default: daos_server
 #name: daos_server
