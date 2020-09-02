@@ -60,6 +60,7 @@ Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.
 	sudo cp /opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
 	rm /opt/intel/daos_rpms/packages/libabt*
 	(cd /opt/intel/daos_rpms/packages/ && createrepo .)
+	sudo yum install epel-release
 	sudo yum install daos-server
 	sudo yum install daos-client
 
