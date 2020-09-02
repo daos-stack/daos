@@ -223,7 +223,7 @@ pool_init(struct dts_context *tsc)
 		if (rc)
 			goto out;
 
-		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, &poh);
+		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
 		if (rc)
 			goto out;
 

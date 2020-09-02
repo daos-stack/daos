@@ -130,7 +130,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	}
 	tcx->tc_step = TCX_PO_CREATE;
 
-	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, &tcx->tc_po_hdl);
+	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, false,
+			   &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vos pool open %s "DF_UUIDF" error: %d\n",
 			    tcx->tc_po_name, DP_UUID(tcx->tc_po_uuid), rc);
@@ -271,7 +272,7 @@ pool_init(struct dts_context *tsc)
 	if (rc)
 		goto out;
 
-	rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, &poh);
+	rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
 	if (rc)
 		goto out;
 
