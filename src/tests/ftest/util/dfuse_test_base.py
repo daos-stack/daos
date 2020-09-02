@@ -39,13 +39,19 @@ class DfuseTestBase(TestWithServers):
         super(DfuseTestBase, self).__init__(*args, **kwargs)
         self.dfuse = None
 
-    def tearDown(self):
-        """Tear down each test case."""
+    def pre_tear_down(self):
+        """Tear down steps to optionally run before tearDown().
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        error_list = super(DfuseTestBase, self).pre_tear_down()
         try:
-            self.stop_dfuse(force=True)
-        finally:
-            # Stop the servers and agents
-            super(DfuseTestBase, self).tearDown()
+            self.stop_dfuse()
+        except CommandFailure as error:
+            error_list.append("Error stopping dfuse: {}".format(error))
+        return error_list
 
     def start_dfuse(self, hosts, pool, container):
         """Create a DfuseCommand object and use it to start Dfuse.

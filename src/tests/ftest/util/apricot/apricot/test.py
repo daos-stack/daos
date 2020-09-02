@@ -602,12 +602,11 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
-        # Stop any jobs that may still be running
-        if self.job_manager:
-            self.job_manager.stop()
-
         # Tear down any test-specific items
         errors = self.pre_tear_down()
+
+        # Stop any test jobs that may still be running
+        errors.extend(self.stop_job_managers())
 
         # Destroy any containers first
         errors.extend(self.destroy_containers(self.container))
@@ -643,6 +642,16 @@ class TestWithServers(TestWithoutServers):
         """
         self.log.info("teardown() started")
         return []
+
+    def stop_job_managers(self):
+        """Stop the test job manager.
+
+        Returns:
+            list: a list of exceptions raised stopping the agents
+
+        """
+        self.test_log.info("Stopping test job manager")
+        return self._stop_managers([self.job_manager], "test job manager")
 
     def destroy_containers(self, containers):
         """Close and destroy one or more containers.

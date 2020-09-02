@@ -276,7 +276,7 @@ class Dfuse(DfuseCommand):
             raise CommandFailure('dfuse not running')
         return True
 
-    def stop(self, force=False):
+    def stop(self):
         """Stop dfuse.
 
         Try to stop dfuse.  Try once nicely by using fusermount, then if that
@@ -285,10 +285,6 @@ class Dfuse(DfuseCommand):
         not worked correctly.
 
         Finally, try and remove the mount point, and that itself should work.
-
-        Args:
-            force (bool, optional): force all stop steps (i.e. tearDown).
-                Defaults to False
 
         Raises:
             CommandFailure: In case dfuse stop fails
@@ -300,54 +296,49 @@ class Dfuse(DfuseCommand):
             self.running_hosts)
 
         if self.mount_dir.value and self.running_hosts:
-            # Stop dfuse on all hosts detailing where it may still be running
-            retcodes = stop_processes(self.running_hosts, "dfuse")
-            if 1 in retcodes:
-                msg = "Error stopping dfuse command on the following " \
-                    "hosts: {}".format(retcodes[1])
-                self.log.info(msg)
-                if not force:
-                    raise CommandFailure(msg)
-
-            # List any fuseblk mounted devices
-            command = "stat -c %T -f {0} | grep -v fuseblk".format(
+            # Predefine commands
+            stat_command = "stat -c %T -f {0} | grep -v fuseblk".format(
                 self.mount_dir.value)
-            retcodes = pcmd(self.running_hosts, command, expect_rc=None)
-            error_hosts = []
-            for retcode, hosts in retcodes.items():
-                if retcode != 1:
-                    error_hosts.extend(list(hosts))
-            if error_hosts:
-                msg = "The dfuse mount point is not mounted as a fuseblk " \
-                    "device on the following hosts: {}".format(
-                        NodeSet.fromlist(error_hosts))
-                self.log.info(msg)
-                if not force:
-                    raise CommandFailure(msg)
-
-            # Attempt to unmount the fuseblk mounted devices on all hosts
-            umount_cmd = [
+            umount_command = [
                 "if [ -x '$(command -v fusermount)' ]",
                 "then fusermount -u {0}".format(self.mount_dir.value),
                 "else fusermount3 -u {0}".format(self.mount_dir.value),
                 "fi"
             ]
-            retcodes = pcmd(self.running_hosts, command, expect_rc=None)
-            error_hosts = []
-            for retcode, hosts in retcodes.items():
-                if retcode != 0:
-                    error_hosts.extend(list(hosts))
-            if error_hosts:
-                msg = "Error unmounting the {} dfuse fuseblk device on the " \
-                    "following hosts: {}".format(
-                        NodeSet.fromlist(error_hosts))
-                self.log.info(msg)
-                if not force:
-                    raise CommandFailure(msg)
+            kill_command = "pkill dfuse --signal KILL"
+
+            # Initially assume all hosts have the dfuse mount point mounted
+            fuseblk_hosts = self.running_hosts.copy()
+
+            # Loop until all fuseblk mounted devices are unmounted
+            counter = 0
+            while fuseblk_hosts and counter < 3:
+                # List any fuseblk mounted devices
+                retcodes = pcmd(fuseblk_hosts, stat_command, expect_rc=None)
+                for retcode, hosts in retcodes.items():
+                    if retcode != 1:
+                        # These hosts do not have the mount point mounted as a
+                        # fuseblk device, so remove them from the list
+                        for host in hosts:
+                            fuseblk_hosts.remove(host)
+                if fuseblk_hosts and counter < 2:
+                    # Attempt to kill dfuse on subsequent passes
+                    if counter > 0:
+                        pcmd(fuseblk_hosts, kill_command, timeout=30)
+                    # Attempt to unmount the fuseblk mounted devices
+                    pcmd(fuseblk_hosts, umount_command, expect_rc=None)
+                    time.sleep(2)
+
+                # Increment the loop counter
+                counter += 1
 
             # Remove mount points
-            time.sleep(2)
-            self.remove_mount_point(fail=(not force))
+            self.remove_mount_point()
+
+            # Report any errors
+            if fuseblk_hosts:
+                raise CommandFailure(
+                    "Error stopping dfuse on {}".format(fuseblk_hosts))
 
         elif self.mount_dir.value is None:
             self.log.info("No dfuse mount directory defined - nothing to stop")
