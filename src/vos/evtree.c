@@ -31,13 +31,27 @@
 #define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #endif
 
+/** Get the length of the extent from durable format */
+static inline uint64_t
+evt_len_read(const struct evt_rect_df *rin)
+{
+	return ((uint64_t)rin->rd_len_hi << 16) + rin->rd_len_lo;
+}
+
+/** Store length into durable format */
+static inline void
+evt_len_write(struct evt_rect_df *rout, uint64_t len)
+{
+	rout->rd_len_hi = len >> 16;
+	rout->rd_len_lo = len & 0xffff;
+}
+
+/** Convert rect_df to an extent */
 static inline void
 evt_ext_read(struct evt_extent *ext, const struct evt_rect_df *rin)
 {
-	uint64_t	len = ((uint64_t)rin->rd_len_hi << 16) + rin->rd_len_lo;
-
 	ext->ex_lo = rin->rd_lo;
-	ext->ex_hi = rin->rd_lo + len  - 1;
+	ext->ex_hi = rin->rd_lo + evt_len_read(rin)  - 1;
 }
 
 /** Read and translate the rectangle in durable format to in-memory format */
@@ -53,10 +67,7 @@ evt_rect_read(struct evt_rect *rout, const struct evt_rect_df *rin)
 static inline void
 evt_rect_write(struct evt_rect_df *rout, const struct evt_rect *rin)
 {
-	uint64_t len = rin->rc_ex.ex_hi - rin->rc_ex.ex_lo + 1;
-
-	rout->rd_len_hi = len >> 16;
-	rout->rd_len_lo = len & 0xffff;
+	evt_len_write(rout, evt_rect_width(rin));
 	rout->rd_epc = rin->rc_epc;
 	rout->rd_minor_epc = rin->rc_minor_epc;
 	rout->rd_lo = rin->rc_ex.ex_lo;
