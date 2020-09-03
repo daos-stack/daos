@@ -31,7 +31,6 @@
 
 #include <daos/mem.h>
 #include <abt.h>
-#include <spdk/nvme.h>
 #include "bio_types.h"
 
 static inline void
@@ -508,20 +507,6 @@ bio_yield(void)
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	ABT_thread_yield();
 }
-
-/*
- * Helper function to initialize device health state fields from controller data
- * and health information page.
- *
- * \param dev_state	[OUT]	BIO device health state
- * \param health_page	[IN]	NVMe health information page
- * \param cdata		[IN]	NVMe controller data
- *
- * \return			Zero on success, negative value on error
- */
-int populate_dev_health(struct bio_dev_state *dev_state,
-			struct spdk_nvme_health_information_page *health_page,
-			const struct spdk_nvme_ctrlr_data *cdata);
 
 /*
  * Helper function to get the device health state for a given xstream.

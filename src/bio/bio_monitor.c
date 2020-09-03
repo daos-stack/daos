@@ -237,7 +237,7 @@ out:
 	spdk_bdev_free_io(bdev_io);
 }
 
-int
+static int
 populate_dev_health(struct bio_dev_state *dev_state,
 		    struct spdk_nvme_health_information_page *page,
 		    const struct spdk_nvme_ctrlr_data *cdata)
@@ -249,7 +249,7 @@ populate_dev_health(struct bio_dev_state *dev_state,
 	dev_state->bds_crit_temp_time = page->critical_temp_time;
 	memcpy(dev_state->bds_ctrl_busy_time, page->controller_busy_time,
 	       sizeof(page->controller_busy_time));
-	memcpy(dev_state->bds_power_cycles, hp->power_cycles,
+	memcpy(dev_state->bds_power_cycles, page->power_cycles,
 	       sizeof(page->power_cycles));
 	memcpy(dev_state->bds_power_on_hours, page->power_on_hours,
 	       sizeof(page->power_on_hours));

@@ -25,7 +25,7 @@
 #include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/vmd.h>
-#include <daos_srv/bio.h>
+#include <daos_srv/bio_types.h>
 
 #include "nvme_control_common.h"
 
@@ -293,6 +293,58 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 	return 0;
 }
 
+static int
+populate_dev_health(struct bio_dev_state *dev_state,
+		    struct spdk_nvme_health_information_page *page,
+		    const struct spdk_nvme_ctrlr_data *cdata)
+{
+	int	written;
+	uint8_t	crit_warn;
+
+	dev_state->bds_warn_temp_time = page->warning_temp_time;
+	dev_state->bds_crit_temp_time = page->critical_temp_time;
+	memcpy(dev_state->bds_ctrl_busy_time, page->controller_busy_time,
+	       sizeof(page->controller_busy_time));
+	memcpy(dev_state->bds_power_cycles, page->power_cycles,
+	       sizeof(page->power_cycles));
+	memcpy(dev_state->bds_power_on_hours, page->power_on_hours,
+	       sizeof(page->power_on_hours));
+	memcpy(dev_state->bds_unsafe_shutdowns, page->unsafe_shutdowns,
+	       sizeof(page->unsafe_shutdowns));
+	memcpy(dev_state->bds_media_errors, page->media_errors,
+	       sizeof(page->media_errors));
+	memcpy(dev_state->bds_error_log_entries,
+	       page->num_error_info_log_entries,
+	       sizeof(page->num_error_info_log_entries));
+	dev_state->bds_temperature = page->temperature;
+	crit_warn = page->critical_warning.bits.temperature;
+	dev_state->bds_temp_warning = crit_warn;
+	crit_warn = page->critical_warning.bits.available_spare;
+	dev_state->bds_avail_spare_warning = crit_warn;
+	crit_warn = page->critical_warning.bits.device_reliability;
+	dev_state->bds_dev_reliabilty_warning = crit_warn;
+	crit_warn = page->critical_warning.bits.read_only;
+	dev_state->bds_read_only_warning = crit_warn;
+	crit_warn = page->critical_warning.bits.volatile_memory_backup;
+	dev_state->bds_volatile_mem_warning = crit_warn;
+
+	written = snprintf(dev_state->bds_model, sizeof(dev_state->bds_model),
+			   "%-20.20s", cdata->mn);
+	if (written >= sizeof(dev_state->bds_model)) {
+		D_ERROR("writing model to dev_state");
+		return -DER_TRUNC;
+	}
+
+	written = snprintf(dev_state->bds_serial, sizeof(dev_state->bds_serial),
+			   "%-20.20s", cdata->sn);
+	if (written >= sizeof(dev_state->bds_serial)) {
+		D_ERROR("writing serial to dev_state");
+		return -DER_TRUNC;
+	}
+
+	return 0;
+}
+
 void
 _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	 socket_id_getter get_socket_id)
@@ -368,9 +420,8 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			rc = populate_dev_health(ctrlr_tmp->stats,
 						 &ctrlr_entry->health->page,
 						 cdata);
-			if (rc != 0) {
+			if (rc != 0)
 				goto fail;
-			}
 		}
 
 		ctrlr_tmp->next = ret->ctrlrs;
@@ -411,17 +462,15 @@ cleanup(bool detach)
 	centry = g_controllers;
 
 	while (centry) {
-		if ((centry->ctrlr) && (detach)) {
+		if ((centry->ctrlr) && (detach))
 			spdk_nvme_detach(centry->ctrlr);
-		}
 		while (centry->nss) {
 			nentry = centry->nss->next;
 			free(centry->nss);
 			centry->nss = nentry;
 		}
-		if (centry->health) {
+		if (centry->health)
 			free(centry->health);
-		}
 
 		cnext = centry->next;
 		free(centry);

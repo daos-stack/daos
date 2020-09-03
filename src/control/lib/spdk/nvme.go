@@ -95,7 +95,10 @@ type Namespace struct {
 // and describes the raw SPDK device health stats
 // of a controller (NVMe SSD).
 type DeviceHealth struct {
-	Temperature     uint32
+	Model           string
+	Serial          string
+	Timestamp       uint64
+	ErrorCount      uint64
 	TempWarnTime    uint32
 	TempCritTime    uint32
 	CtrlBusyTime    uint64
@@ -104,11 +107,13 @@ type DeviceHealth struct {
 	UnsafeShutdowns uint64
 	MediaErrors     uint64
 	ErrorLogEntries uint64
+	ChecksumErrors  uint32
+	Temperature     uint32
 	TempWarn        bool
 	AvailSpareWarn  bool
 	ReliabilityWarn bool
 	ReadOnlyWarn    bool
-	VolatileWarn    bool
+	VolatileMemWarn bool
 }
 
 // FormatResult struct mirrors C.struct_wipe_res_t
@@ -232,23 +237,35 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	}
 }
 
+func getBool(in uint8) bool {
+	if in > 0 {
+		return true
+	}
+	return false
+}
+
 // c2GoDeviceHealth is a private translation function.
-func c2GoDeviceHealth(health *C.struct_dev_health_t) *DeviceHealth {
+func c2GoDeviceHealth(health *C.struct_bio_dev_state) *DeviceHealth {
 	return &DeviceHealth{
-		Temperature:     uint32(health.temperature),
-		TempWarnTime:    uint32(health.warn_temp_time),
-		TempCritTime:    uint32(health.crit_temp_time),
-		CtrlBusyTime:    uint64(health.ctrl_busy_time),
-		PowerCycles:     uint64(health.power_cycles),
-		PowerOnHours:    uint64(health.power_on_hours),
-		UnsafeShutdowns: uint64(health.unsafe_shutdowns),
-		MediaErrors:     uint64(health.media_errors),
-		ErrorLogEntries: uint64(health.error_log_entries),
-		TempWarn:        bool(health.temp_warning),
-		AvailSpareWarn:  bool(health.avail_spare_warning),
-		ReliabilityWarn: bool(health.dev_reliabilty_warning),
-		ReadOnlyWarn:    bool(health.read_only_warning),
-		VolatileWarn:    bool(health.volatile_mem_warning),
+		Model:           C.GoString(&health.bds_model[0]),
+		Serial:          C.GoString(&health.bds_serial[0]),
+		Timestamp:       uint64(health.bds_timestamp),
+		ErrorCount:      uint64(health.bds_error_count),
+		TempWarnTime:    uint32(health.bds_warn_temp_time),
+		TempCritTime:    uint32(health.bds_crit_temp_time),
+		CtrlBusyTime:    uint64(health.bds_ctrl_busy_time[0]),
+		PowerCycles:     uint64(health.bds_power_cycles[0]),
+		PowerOnHours:    uint64(health.bds_power_on_hours[0]),
+		UnsafeShutdowns: uint64(health.bds_unsafe_shutdowns[0]),
+		MediaErrors:     uint64(health.bds_media_errors[0]),
+		ErrorLogEntries: uint64(health.bds_error_log_entries[0]),
+		ChecksumErrors:  uint32(health.bds_checksum_errs),
+		Temperature:     uint32(health.bds_temperature),
+		TempWarn:        getBool(uint8(health.bds_temp_warning)),
+		//		AvailSpareWarn:  getBool(health.bds_avail_spare_warning),
+		//		ReliabilityWarn: getBool(health.bds_dev_reliabilty_warning),
+		//		ReadOnlyWarn:    getBool(health.bds_read_only_warning),
+		//		VolatileMemWarn: getBool(health.bds_volatile_mem_warning),
 	}
 }
 
