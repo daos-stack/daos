@@ -23,6 +23,11 @@
 
 package main
 
+/*
+#include "mgmt.h"
+*/
+import "C"
+
 import (
 	"context"
 	"os"
@@ -37,6 +42,7 @@ import (
 
 const (
 	agentSockName = "agent.sock"
+	protocolVersion = C.GET_ATTACH_INFO_PROTOCOL_VERSION
 )
 
 type startCmd struct {
@@ -85,6 +91,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		aiCache:    &attachInfoCache{log: cmd.log, enabled: enabled},
 		numaAware:  numaAware,
 		netCtx:     netCtx,
+		version:    protocolVersion,
 	})
 
 	err = drpcServer.Start()

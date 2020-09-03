@@ -45,6 +45,7 @@ int dc_mgmt_profile(char *path, int avg, bool start);
 int dc_mgmt_add_mark(const char *mark);
 
 #define SYS_INFO_BUF_SIZE 16
+#define GET_ATTACH_INFO_PROTOCOL_VERSION 0x00000001
 
 /** GetAttachInfo system info */
 struct sys_info {

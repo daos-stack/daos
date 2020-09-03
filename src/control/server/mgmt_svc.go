@@ -23,6 +23,11 @@
 
 package server
 
+/*
+#include "mgmt.h"
+*/
+import "C"
+
 import (
 	"fmt"
 	"net"
@@ -41,6 +46,8 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+const protocolVersion = C.GET_ATTACH_INFO_PROTOCOL_VERSION
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
 // only performing the check and printing the result for now.
@@ -183,6 +190,8 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
+	resp.Version = protocolVersion
+
 	return resp, nil
 }
 
