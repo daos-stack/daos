@@ -650,9 +650,12 @@ class TestWithServers(TestWithoutServers):
             list: a list of exceptions raised stopping the agents
 
         """
+        error_list = []
         if self.job_manager:
             self.test_log.info("Stopping test job manager")
-            return self._stop_managers([self.job_manager], "test job manager")
+            error_list = self._stop_managers(
+                [self.job_manager], "test job manager")
+        return error_list
 
     def destroy_containers(self, containers):
         """Close and destroy one or more containers.
