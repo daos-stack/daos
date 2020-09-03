@@ -30,7 +30,7 @@ from test_utils_base import TestDaosApiBase
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
-                        daos_cref, str_to_c_uuid)
+                        daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 
@@ -289,73 +289,90 @@ class TestPool(TestDaosApiBase):
                     "Error: Undefined control_method: %s",
                     self.control_method.value)
 
-    @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def get_info(self):
         """Query the pool for information.
 
         Sets the self.info attribute.
         """
-        # pylint: disable=too-many-nested-blocks
         if self.pool:
-            self.log.info("Querying pool: %s", self.uuid)
+            self.connect()
+            self._call_method(self.pool.pool_query, {})
+            self.info = self.pool.pool_info
 
-            if self.control_method.value == self.USE_DMG and self.dmg:
-                kwargs = {"pool": self.uuid}
-                self._log_method("dmg.pool_query", kwargs)
-                data = self.dmg.pool_query(**kwargs)
+    def get_info_attr(self, attributes, index=None):
+        """Get the pool info value for the specified attribute.
 
-                # Create a PoolInfo object with the data from the dmg pool query
-                self.info = daos_cref.PoolInfo()
-                self.info.pi_uuid = str_to_c_uuid(data["uuid"])
-                self.info.pi_ntargets = int(data["ntarget"])
-                self.info.pi_ndisabled = int(data["disabled"])
-                self.info.pi_leader = int(data["leader"])
-                self.info.pi_space = daos_cref.PoolSpace()
-                self.info.pi_space.ps_space = daos_cref.Daos_Space()
-                self.info.pi_space.ps_space.s_total = (
-                    int(data["scm"]["total"]),
-                    int(data["nvme"]["total"])
-                )
-                self.info.pi_space.ps_space.s_free = (
-                    int(data["scm"]["free"]),
-                    int(data["nvme"]["free"])
-                )
-                self.info.pi_space.ps_free_min = (
-                    int(data["scm"]["free_min"]),
-                    int(data["nvme"]["free_min"])
-                )
-                self.info.pi_space.ps_free_max = (
-                    int(data["scm"]["free_max"]),
-                    int(data["nvme"]["free_max"])
-                )
-                self.info.pi_space.ps_free_mean = (
-                    int(data["scm"]["free_mean"]),
-                    int(data["nvme"]["free_mean"])
-                )
-                self.info.pi_space.ps_ntargets = int(data["target_count"])
-                self.info.pi_rebuild_st = daos_cref.RebuildStatus()
-                self.info.pi_rebuild_st.rs_version = int(data["version"])
-                self.info.pi_rebuild_st.rs_done = 0
-                if data["rebuild"]["state"] == "idle":
-                    self.info.pi_rebuild_st.rs_done = 1
-                self.info.pi_rebuild_st.rs_obj_nr = int(
-                    data["rebuild"]["objects"])
-                self.info.pi_rebuild_st.rs_rec_nr = int(
-                    data["rebuild"]["records"])
+        Args:
+            attributes (str): a string of dot (.) separated pool info attribute
+                names, e.g. 'pi_space.ps_space.s_total'
+            index (int, optional): index of the attribute value to return.
+                Defaults to None.
 
-            elif self.control_method.value == self.USE_DMG:
-                raise CommandFailure("Error: Undefined dmg command")
+        Returns:
+            object: value of the specified attribute
 
-            elif self.control_method.value == self.USE_API:
-                self.connect()
-                self._call_method(self.pool.pool_query, {})
-                self.info = self.pool.pool_info
+        """
+        if isinstance(attributes, (list, tuple)):
+            attributes = ".".join(attributes)
 
-            else:
-                raise CommandFailure(
-                    "Error: Undefined control_method: {}".format(
-                        self.control_method.value))
+        # Map API PoolInfo attributes to dmg populated PoolInfo attributes
+        attribute_mapping = {
+            "pi_uuid": "uuid",
+            "pi_ntargets": "ntarget",
+            "pi_nnodes": "target_count",
+            "pi_ndisabled": "disabled",
+            "pi_map_ver": "version",
+            "pi_leader": "leader",
+            "pi_bits": None,
+            "pi_space.ps_ntargets": None,
+            "pi_space.ps_padding": None,
+            "pi_space.ps_space.s_total": "total",
+            "pi_space.ps_space.s_free": "free",
+            "pi_space.ps_free_min": "free_min",
+            "pi_space.ps_free_max": "free_max",
+            "pi_space.ps_free_mean": "free_mean",
+            "pi_rebuild_st.rs_version": None,
+            "pi_rebuild_st.rs_seconds": None,
+            "pi_rebuild_st.rs_errno": None,
+            "pi_rebuild_st.rs_done": None,
+            "pi_rebuild_st.rs_padding32": None,
+            "pi_rebuild_st.rs_fail_rank": None,
+            "pi_rebuild_st.rs_toberb_obj_nr": None,
+            "pi_rebuild_st.rs_obj_nr": "rebuild.objects",
+            "pi_rebuild_st.rs_rec_nr": "rebuild.records",
+            "pi_rebuild_st.rs_size": None,
+        }
+
+        if isinstance(self.info, PoolInfo):
+            if attributes in attribute_mapping:
+                attributes = attribute_mapping[attributes]
+                index_mapping = {0: "scm", 1: ""}
+                if index in index_mapping:
+                    attributes = ".".join(
+                        [index_mapping[index], attributes])
+            index = None
+        else:
+            if attributes.startswith("scm."):
+                attributes = attributes[4:]
+                index = 0
+            elif attributes.startswith("nvme."):
+                attributes = attributes[5:]
+                index = 1
+            api_mapping = {
+                value: key for key, value in attribute_mapping.items() if value}
+            if attributes in api_mapping:
+                attributes = api_mapping[attributes]
+
+        value = None
+        if attributes:
+            value = self.info
+            for key in attributes.split("."):
+                value = getattr(value, key)
+            if value is not None and index is not None:
+                value = value[index]
+
+        return value
 
     def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nnodes=None,
                         pi_ndisabled=None, pi_map_ver=None, pi_leader=None,
@@ -390,8 +407,9 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         checks = [
             (key,
-             c_uuid_to_str(getattr(self.info, key))
-             if key == "pi_uuid" else getattr(self.info, key),
+             c_uuid_to_str(self.get_info_attr(key))
+             if key == "pi_uuid" and not isinstance(self.info, PoolInfo) else
+             self.get_info_attr(key),
              val)
             for key, val in locals().items()
             if key != "self" and val is not None]
@@ -435,12 +453,12 @@ class TestPool(TestDaosApiBase):
                 for index, item in val:
                     checks.append((
                         "{}[{}]".format(key, index),
-                        getattr(self.info.pi_space, key)[index],
+                        self.get_info_attr(("pi_space", key), index),
                         item))
         for key in ("ps_ntargets", "ps_padding"):
             val = locals()[key]
             if val is not None:
-                checks.append(key, getattr(self.info.pi_space, key), val)
+                checks.append(key, self.get_info_attr(("pi_space", key)), val)
         return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
@@ -469,7 +487,7 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         checks = [
             ("{}_{}".format(key, index),
-             getattr(self.info.pi_space.ps_space, key)[index],
+             self.get_info_attr(("pi_space", "ps_space", key), index),
              item)
             for key, val in locals().items()
             if key != "self" and val is not None
@@ -516,7 +534,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         checks = [
-            (key, getattr(self.info.pi_rebuild_st, key), val)
+            (key, self.get_info_attr(("pi_rebuild_st", key)), val)
             for key, val in locals().items()
             if key != "self" and val is not None]
         return self._check_info(checks)
@@ -529,7 +547,7 @@ class TestPool(TestDaosApiBase):
 
         """
         self.display_pool_rebuild_status()
-        return self.info.pi_rebuild_st.rs_done == 1
+        return self.get_info_attr("pi_rebuild_st.rs_done") == 1
 
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
@@ -645,7 +663,7 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         keys = ("s_total", "s_free")
         return {
-            key: getattr(self.info.pi_space.ps_space, key) for key in keys}
+            key: self.get_info_attr(("pi_space.ps_space", key)) for key in keys}
 
     def get_pool_free_space(self, device="scm"):
         """Get SCM or NVME free space.
@@ -688,17 +706,12 @@ class TestPool(TestDaosApiBase):
 
         Returns:
             dict: a dictionary of SCM/NVMe pool space usage in %(float)
-
         """
-        space = self.get_pool_daos_space()
-        pool_percent = {
-            'scm': round(
-                float(space["s_free"][0]) / float(space["s_total"][0]) * 100,
-                2),
-            'nvme': round(
-                float(space["s_free"][1]) / float(space["s_total"][1]) * 100,
-                2)
-        }
+        daos_space = self.get_pool_daos_space()
+        pool_percent = {'scm':round(float(daos_space["s_free"][0])/
+                                    float(daos_space["s_total"][0]) * 100, 2),
+                        'nvme':round(float(daos_space["s_free"][1])/
+                                     float(daos_space["s_total"][1]) * 100, 2)}
         return pool_percent
 
     def get_pool_rebuild_status(self):
@@ -712,7 +725,7 @@ class TestPool(TestDaosApiBase):
         keys = (
             "rs_version", "rs_padding32", "rs_errno", "rs_done",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
-        return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
+        return {key: self.get_info_attr(("pi_rebuild_st", key)) for key in keys}
 
     def display_pool_rebuild_status(self):
         """Display the pool info rebuild status attributes."""

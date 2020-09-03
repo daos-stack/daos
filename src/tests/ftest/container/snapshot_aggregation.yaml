@@ -1,4 +1,4 @@
-timeout: 300
+timeout: 360
 hosts:
   test_servers:
     - server-A

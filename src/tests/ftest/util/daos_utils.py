@@ -369,7 +369,7 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            snap (str, optional): Snapshot name.
+            snap_name (str, optional): Snapshot name.
             epoch (str, optional): Epoch number.
             svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
                 to None.
