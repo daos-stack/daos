@@ -52,7 +52,8 @@ class CartSelfThreeNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @skipForTicket("DAOS-5547")
+    # Use of DAOS_TEST_SHARED_DIR should fix this test failure
+    # @skipForTicket("DAOS-5547")
     def test_cart_selftest(self):
         """
         Test CaRT Self Test

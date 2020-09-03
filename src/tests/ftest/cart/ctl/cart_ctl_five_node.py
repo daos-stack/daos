@@ -53,7 +53,7 @@ class CartCtlFiveNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @skipForTicket("DAOS-5547")
+    # @skipForTicket("DAOS-5547")
     def test_cart_ctl(self):
         """
         Test CaRT ctl
