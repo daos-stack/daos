@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	agentSockName = "agent.sock"
+	agentSockName   = "agent.sock"
 	protocolVersion = C.GET_ATTACH_INFO_PROTOCOL_VERSION
 )
 
