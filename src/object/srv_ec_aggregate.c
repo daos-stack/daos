@@ -185,8 +185,7 @@ static unsigned int
 agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 {
 	/*
-	unsigned int	stripe_size =
-			entry->ae_oca->u.ec.e_k * entry->ae_oca->u.ec.e_len;
+	unsigned int	stripe_size = obj_ec_stripe_rec_nr(oca);
 
 	daos_off_t	start_stripe = agg_extent->ae_recx.rx_idx ?
 				stripe_size / agg_extent->ae_recx.rx_idx : 0;
@@ -237,7 +236,7 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 static inline daos_off_t
 agg_stripenum(struct ec_agg_entry *entry, daos_off_t ex_lo)
 {
-	return ex_lo / (entry->ae_oca->u.ec.e_k * entry->ae_oca->u.ec.e_len);
+	return ex_lo / obj_ec_stripe_rec_nr(entry->ae_oca);
 }
 
 /* Call back for the nested iterator used to find the parity for a stripe.
