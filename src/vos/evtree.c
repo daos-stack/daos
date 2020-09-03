@@ -34,8 +34,10 @@
 static inline void
 evt_ext_read(struct evt_extent *ext, const struct evt_rect_df *rin)
 {
+	uint64_t	len = ((uint64_t)rin->rd_len_hi << 16) + rin->rd_len_lo;
+
 	ext->ex_lo = rin->rd_lo;
-	ext->ex_hi = rin->rd_lo + rin->rd_len - 1;
+	ext->ex_hi = rin->rd_lo + len  - 1;
 }
 
 /** Read and translate the rectangle in durable format to in-memory format */
@@ -51,7 +53,10 @@ evt_rect_read(struct evt_rect *rout, const struct evt_rect_df *rin)
 static inline void
 evt_rect_write(struct evt_rect_df *rout, const struct evt_rect *rin)
 {
-	rout->rd_len = rin->rc_ex.ex_hi - rin->rc_ex.ex_lo + 1;
+	uint64_t len = rin->rc_ex.ex_hi - rin->rc_ex.ex_lo + 1;
+
+	rout->rd_len_hi = len >> 16;
+	rout->rd_len_lo = len & 0xffff;
 	rout->rd_epc = rin->rc_epc;
 	rout->rd_minor_epc = rin->rc_minor_epc;
 	rout->rd_lo = rin->rc_ex.ex_lo;
