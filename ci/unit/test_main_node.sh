@@ -45,8 +45,11 @@ IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" utils/run_test.sh
 mkdir -p vm_test
 
 # Remove DAOS_BASE from memcheck xml results
+set -x
+echo "debug in test_main_node.sh"
 ls
 ls test_results || true
+ls unit_test_memcheck_logs || true
 if [ "$WITH_VALGRIND" == 'memcheck' ]; then
     find test_results -maxdepth 1 -name '*.memcheck.xml' \
         -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"

@@ -1313,7 +1313,8 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
-                                                     'centos7-gcc-unit-memcheck']
+                                                     'centos7-gcc-unit-memcheck'],
+                                  valgrind_pattern: '*.memcheck.xml'
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

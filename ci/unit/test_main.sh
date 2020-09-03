@@ -35,6 +35,12 @@ rm -rf dnt.*.memcheck.xml vm_test/
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
+set -x
+echo "debug in test_main.sh"
+ls
+ls test_results || true
+ls unit_test_memcheck_logs || true
+
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTNAME=$HOSTNAME        \
