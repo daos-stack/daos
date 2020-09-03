@@ -31,6 +31,7 @@ package spdk
 #cgo LDFLAGS: -L . -lnvme_control -lspdk
 
 #include "stdlib.h"
+#include "daos_srv/bio_types.h"
 #include "spdk/stdinc.h"
 #include "spdk/nvme.h"
 #include "spdk/env.h"

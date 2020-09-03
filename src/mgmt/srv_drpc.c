@@ -1829,24 +1829,26 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->volatile_memory_warn = bds.bds_volatile_mem_warning ?
 					true : false;
 
-	D_ALLOC(resp->model, 1024);
+	D_ALLOC(resp->model, BIO_DEV_STR_LEN);
 	if (resp->model == NULL) {
 		D_ERROR("failed to allocate model ID buffer");
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	strncpy(resp->model, bds.model, strnlen(bds.model, 1023));
+	strncpy(resp->model, bds.bds_model,
+		strnlen(bds.bds_model, BIO_DEV_STR_LEN-1));
 
-	D_ALLOC(resp->serial, 1024);
+	D_ALLOC(resp->serial, BIO_DEV_STR_LEN);
 	if (resp->serial == NULL) {
 		D_ERROR("failed to allocate serial ID buffer");
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	strncpy(resp->serial, bds.serial, strnlen(bds.serial, 1023));
+	strncpy(resp->serial, bds.bds_serial,
+		strnlen(bds.bds_serial, BIO_DEV_STR_LEN-1));
 
-	D_INFO("health data received for SSD with model %s and serial %s\n",
-		bds.model, bds.serial);
+	D_INFO("health data received for SSD with model %s and serial %s, power on seconds\n",
+		bds.bds_model, bds.bds_serial);
 
 out:
 	resp->status = rc;
