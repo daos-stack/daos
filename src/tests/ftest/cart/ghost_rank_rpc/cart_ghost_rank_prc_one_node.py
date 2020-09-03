@@ -39,7 +39,7 @@ class CartCoRpcOneNodeTest(Test):
     """
     Runs CaRT ghost rank RPC test
 
-    #:avocado: tags=all,all_cart,pr,ghost_rank_rpc,one_node
+    #:avocado: tags=all,cart,pr,ghost_rank_rpc,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -55,7 +55,7 @@ class CartCoRpcOneNodeTest(Test):
         """
         Test ghost rank RPC
 
-        #:avocado: tags=all,all_cart,pr,ghost_rank_rpc,one_node
+        #:avocado: tags=all,cart,pr,ghost_rank_rpc,one_node
         """
 
         cmd = self.utils.build_cmd(self, self.env, "test_servers")
