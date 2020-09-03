@@ -9,7 +9,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc', 'argobots')
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
 
@@ -24,7 +24,7 @@ def scons():
     libs += ['spdk_vmd']
 
     # Other libs
-    libs += ['numa', 'dl']
+    libs += ['numa', 'dl', 'bio']
 
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
