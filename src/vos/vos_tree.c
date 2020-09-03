@@ -591,6 +591,37 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	return svt_rec_alloc_common(tins, rec, skey, rbund);
 }
 
+/** Find the nvme extent in reserved list and move it to deferred cancel list */
+static void
+cancel_nvme_exts(bio_addr_t *addr, struct dtx_handle *dth)
+{
+	struct vea_resrvd_ext	*ext;
+	struct dtx_rsrvd_uint	*dru;
+	int			 i;
+	uint64_t		 blk_off;
+
+	if (addr->ba_type != DAOS_MEDIA_NVME)
+		return;
+
+	blk_off = vos_byte2blkoff(addr->ba_off);
+
+	/** Find the allocation and move it to the deferred list */
+	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
+		dru = &dth->dth_rsrvds[i];
+
+		d_list_for_each_entry(ext, &dru->dru_nvme, vre_link) {
+			if (ext->vre_blk_off == blk_off) {
+				d_list_del(&ext->vre_link);
+				d_list_add_tail(&ext->vre_link,
+						&dth->dth_deferred_nvme);
+				return;
+			}
+		}
+	}
+
+	D_ASSERT(0);
+}
+
 static int
 svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 		      bool overwrite)
@@ -615,37 +646,36 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
 				  irec->ir_dtx, *epc, rec->rec_off);
 
-	/** TODO: handle NVME */
-	/* SCM value is stored together with vos_irec_df */
-	if (addr->ba_type == DAOS_MEDIA_NVME) {
-		struct vos_pool *pool = tins->ti_priv;
+	if (!overwrite) {
+		/** TODO: handle NVME */
+		/* SCM value is stored together with vos_irec_df */
+		if (addr->ba_type == DAOS_MEDIA_NVME) {
+			struct vos_pool *pool = tins->ti_priv;
 
-		D_ASSERT(pool != NULL);
-		vos_bio_addr_free(pool, addr, irec->ir_size);
-	}
+			D_ASSERT(pool != NULL);
+			vos_bio_addr_free(pool, addr, irec->ir_size);
+		}
 
-	if (!overwrite)
 		return umem_free(&tins->ti_umm, rec->rec_off);
-
-	/** Find an empty slot for the deferred free */
-	for (i = 0; i < dth->dth_deferred_cnt; i++) {
-		rsrvd_scm = dth->dth_deferred[i];
-		D_ASSERT(rsrvd_scm != NULL);
-
-		if (rsrvd_scm->rs_actv_at >= rsrvd_scm->rs_actv_cnt)
-			continue; /* Can't really be > but keep it simple */
-
-		act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
-		umem_defer_free(&tins->ti_umm, rec->rec_off, act);
-		rsrvd_scm->rs_actv_at++;
-
-		return 0;
 	}
 
-	/** We didn't reserve enough space */
-	D_ASSERT(0);
+	/** There can't be more cancellations than updates in this
+	 *  modification so just use the current one
+	 */
+	D_ASSERT(dth->dth_op_seq > 0);
+	D_ASSERT(dth->dth_op_seq <= dth->dth_deferred_cnt);
+	i = dth->dth_op_seq - 1;
+	rsrvd_scm = dth->dth_deferred[i];
+	D_ASSERT(rsrvd_scm != NULL);
+	D_ASSERT(rsrvd_scm->rs_actv_at < rsrvd_scm->rs_actv_cnt);
 
-	return -DER_MISC;
+	act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
+	umem_defer_free(&tins->ti_umm, rec->rec_off, act);
+	rsrvd_scm->rs_actv_at++;
+
+	cancel_nvme_exts(addr, dth);
+
+	return 0;
 }
 
 static int

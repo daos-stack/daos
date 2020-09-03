@@ -453,6 +453,28 @@ daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
 		   daos_event_t *ev);
 
 /**
+ * Delete a list of user-defined container attributes.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[],
+		   daos_event_t *ev);
+
+/**
  * Allocate a unique set of 64 bit unsigned integers to be used for object ID
  * generation for that container. This is an optional helper function for
  * applications to use to guarantee unique object IDs on the container when more
