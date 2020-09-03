@@ -1845,8 +1845,9 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	strncpy(resp->serial, bds.bds_serial,
 		strnlen(bds.bds_serial, BIO_DEV_STR_LEN-1));
 
-	D_INFO("health data received for SSD with model %s and serial %s, power on seconds\n",
-		bds.bds_model, bds.bds_serial);
+	D_INFO("health data received for SSD %s %s, power on hours %lu, %lu\n",
+		bds.bds_model, bds.bds_serial, bds.bds_power_on_hours[0],
+		bds.bds_power_on_hours[1]);
 
 out:
 	resp->status = rc;

@@ -142,7 +142,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	msg := "Storage Scan "
 	resp := new(ctlpb.StorageScanResp)
 
-	bdevReq := bdev.ScanRequest{}
+	bdevReq := bdev.ScanRequest{Rescan: true}
 	if req.ConfigDevicesOnly {
 		for _, storageCfg := range c.instanceStorage {
 			bdevReq.DeviceList = append(bdevReq.DeviceList,

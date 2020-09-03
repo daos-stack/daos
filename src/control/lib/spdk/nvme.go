@@ -186,8 +186,13 @@ func pciAddressList(ctrlrs []Controller) []string {
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
-	ctrlrs, err := collectCtrlrs(C.nvme_discover(),
-		"NVMe Discover(): C.nvme_discover")
+	retPtr := C.nvme_discover()
+	log.Debugf("health data received for SSD %s %s, power on hours %d, %d\n",
+		C.GoString(&retPtr.ctrlrs.stats.bds_model[0]),
+		C.GoString(&retPtr.ctrlrs.stats.bds_serial[0]),
+		uint64(retPtr.ctrlrs.stats.bds_power_on_hours[0]),
+		uint64(retPtr.ctrlrs.stats.bds_power_on_hours[1]))
+	ctrlrs, err := collectCtrlrs(retPtr, "NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
