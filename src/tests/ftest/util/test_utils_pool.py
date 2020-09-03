@@ -300,80 +300,6 @@ class TestPool(TestDaosApiBase):
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
 
-    def get_info_attr(self, attributes, index=None):
-        """Get the pool info value for the specified attribute.
-
-        Args:
-            attributes (str): a string of dot (.) separated pool info attribute
-                names, e.g. 'pi_space.ps_space.s_total'
-            index (int, optional): index of the attribute value to return.
-                Defaults to None.
-
-        Returns:
-            object: value of the specified attribute
-
-        """
-        if isinstance(attributes, (list, tuple)):
-            attributes = ".".join(attributes)
-
-        # Map API PoolInfo attributes to dmg populated PoolInfo attributes
-        attribute_mapping = {
-            "pi_uuid": "uuid",
-            "pi_ntargets": "ntarget",
-            "pi_nnodes": "target_count",
-            "pi_ndisabled": "disabled",
-            "pi_map_ver": "version",
-            "pi_leader": "leader",
-            "pi_bits": None,
-            "pi_space.ps_ntargets": None,
-            "pi_space.ps_padding": None,
-            "pi_space.ps_space.s_total": "total",
-            "pi_space.ps_space.s_free": "free",
-            "pi_space.ps_free_min": "free_min",
-            "pi_space.ps_free_max": "free_max",
-            "pi_space.ps_free_mean": "free_mean",
-            "pi_rebuild_st.rs_version": None,
-            "pi_rebuild_st.rs_seconds": None,
-            "pi_rebuild_st.rs_errno": None,
-            "pi_rebuild_st.rs_done": None,
-            "pi_rebuild_st.rs_padding32": None,
-            "pi_rebuild_st.rs_fail_rank": None,
-            "pi_rebuild_st.rs_toberb_obj_nr": None,
-            "pi_rebuild_st.rs_obj_nr": "rebuild.objects",
-            "pi_rebuild_st.rs_rec_nr": "rebuild.records",
-            "pi_rebuild_st.rs_size": None,
-        }
-
-        if isinstance(self.info, PoolInfo):
-            if attributes in attribute_mapping:
-                attributes = attribute_mapping[attributes]
-                index_mapping = {0: "scm", 1: ""}
-                if index in index_mapping:
-                    attributes = ".".join(
-                        [index_mapping[index], attributes])
-            index = None
-        else:
-            if attributes.startswith("scm."):
-                attributes = attributes[4:]
-                index = 0
-            elif attributes.startswith("nvme."):
-                attributes = attributes[5:]
-                index = 1
-            api_mapping = {
-                value: key for key, value in attribute_mapping.items() if value}
-            if attributes in api_mapping:
-                attributes = api_mapping[attributes]
-
-        value = None
-        if attributes:
-            value = self.info
-            for key in attributes.split("."):
-                value = getattr(value, key)
-            if value is not None and index is not None:
-                value = value[index]
-
-        return value
-
     def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nnodes=None,
                         pi_ndisabled=None, pi_map_ver=None, pi_leader=None,
                         pi_bits=None):
@@ -407,9 +333,8 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         checks = [
             (key,
-             c_uuid_to_str(self.get_info_attr(key))
-             if key == "pi_uuid" and not isinstance(self.info, PoolInfo) else
-             self.get_info_attr(key),
+             c_uuid_to_str(getattr(self.info, key))
+             if key == "pi_uuid" else getattr(self.info, key),
              val)
             for key, val in locals().items()
             if key != "self" and val is not None]
@@ -453,12 +378,12 @@ class TestPool(TestDaosApiBase):
                 for index, item in val:
                     checks.append((
                         "{}[{}]".format(key, index),
-                        self.get_info_attr(("pi_space", key), index),
+                        getattr(self.info.pi_space, key)[index],
                         item))
         for key in ("ps_ntargets", "ps_padding"):
             val = locals()[key]
             if val is not None:
-                checks.append(key, self.get_info_attr(("pi_space", key)), val)
+                checks.append(key, getattr(self.info.pi_space, key), val)
         return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
@@ -487,7 +412,7 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         checks = [
             ("{}_{}".format(key, index),
-             self.get_info_attr(("pi_space", "ps_space", key), index),
+             getattr(self.info.pi_space.ps_space, key)[index],
              item)
             for key, val in locals().items()
             if key != "self" and val is not None
@@ -534,7 +459,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         checks = [
-            (key, self.get_info_attr(("pi_rebuild_st", key)), val)
+            (key, getattr(self.info.pi_rebuild_st, key), val)
             for key, val in locals().items()
             if key != "self" and val is not None]
         return self._check_info(checks)
@@ -547,7 +472,7 @@ class TestPool(TestDaosApiBase):
 
         """
         self.display_pool_rebuild_status()
-        return self.get_info_attr("pi_rebuild_st.rs_done") == 1
+        return self.info.pi_rebuild_st.rs_done == 1
 
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
@@ -662,8 +587,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = ("s_total", "s_free")
-        return {
-            key: self.get_info_attr(("pi_space.ps_space", key)) for key in keys}
+        return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
 
     def get_pool_free_space(self, device="scm"):
         """Get SCM or NVME free space.
@@ -725,7 +649,7 @@ class TestPool(TestDaosApiBase):
         keys = (
             "rs_version", "rs_padding32", "rs_errno", "rs_done",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
-        return {key: self.get_info_attr(("pi_rebuild_st", key)) for key in keys}
+        return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
     def display_pool_rebuild_status(self):
         """Display the pool info rebuild status attributes."""

@@ -83,7 +83,7 @@ class PoolSvc(TestWithServers):
 
             try:
                 self.pool.get_info()
-                leader = int(self.pool.get_info_attr("pi_leader"))
+                leader = self.pool.info.pi_leader
                 if createsvc[0] == 3:
                     # kill pool leader and exclude it
                     self.pool.pool.pool_svc_stop()
