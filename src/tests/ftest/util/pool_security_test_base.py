@@ -317,7 +317,7 @@ class PoolSecurityTestBase(TestWithServers):
             user_name (str): Conatiner user_name.
             perm_name (str): Conatiner permission type:
                              (attribute, property, acl, or ownership)
-            user_name (str): Conatiner permission read write action.
+            perm_action (str): Conatiner permission read/write action.
 
         """
         permission = "none"
