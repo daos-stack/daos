@@ -141,7 +141,6 @@ static void
 dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		    bool evict)
 {
-	struct umem_instance	*umm = vos_cont2umm(cont);
 	daos_unit_oid_t		*oids;
 	int			 max;
 	int			 i;
@@ -158,7 +157,7 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		oids = &DAE_OID_INLINE(dae);
 		max = 1;
 	} else {
-		oids = umem_off2ptr(umm, DAE_OID_OFF(dae));
+		oids = umem_off2ptr(vos_cont2umm(cont), DAE_OID_OFF(dae));
 		max = DAE_OID_CNT(dae);
 	}
 
@@ -295,14 +294,6 @@ dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 
 	dce = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	D_ASSERT(dce != NULL);
-
-	if (!umoff_is_null(DCE_OID_OFF(dce))) {
-		int	rc;
-
-		rc = umem_free(&tins->ti_umm, DCE_OID_OFF(dce));
-		if (rc != 0)
-			return rc;
-	}
 
 	rec->rec_off = UMOFF_NULL;
 	d_list_del(&dce->dce_committed_link);
@@ -804,15 +795,36 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = epoch;
 		if (dth->dth_oid_array != NULL) {
-			D_ASSERT(dth->dth_oid_cnt == 1);
+			if (dth->dth_oid_cnt == 1) {
+				DCE_OID(dce) = dth->dth_oid_array[0];
+				DCE_OID_CNT(dce) = 1;
+			} else {
+				struct umem_instance	*umm;
+				size_t			 size;
+				umem_off_t		 rec_off;
 
-			DCE_OID(dce) = dth->dth_oid_array[0];
+				umm = vos_cont2umm(cont);
+				size = sizeof(daos_unit_oid_t) *
+					dth->dth_oid_cnt;
+				rec_off = umem_zalloc(umm, size);
+
+				if (umoff_is_null(rec_off)) {
+					D_ERROR("No space to store CMT DTX OID "
+						DF_DTI"\n", DP_DTI(dti));
+					D_GOTO(out, rc = -DER_NOSPACE);
+				}
+
+				memcpy(umem_off2ptr(umm, rec_off),
+				       dth->dth_oid_array, size);
+				DCE_OID_OFF(dce) = rec_off;
+				DCE_OID_CNT(dce) = dth->dth_oid_cnt;
+			}
 		} else {
 			D_ASSERT(dth->dth_oid_cnt == 0);
 
 			DCE_OID(dce) = dth->dth_leader_oid;
+			DCE_OID_CNT(dce) = 1;
 		}
-		DCE_OID_CNT(dce) = 1;
 	}
 
 	dce->dce_reindex = 0;
@@ -1046,8 +1058,7 @@ out:
 }
 
 static int
-vos_dtx_append(struct umem_instance *umm, struct dtx_handle *dth,
-	       umem_off_t record, uint32_t type)
+vos_dtx_append(struct dtx_handle *dth, umem_off_t record, uint32_t type)
 {
 	struct vos_dtx_act_ent		*dae = dth->dth_ent;
 	umem_off_t			*rec;
@@ -1092,9 +1103,8 @@ vos_dtx_append(struct umem_instance *umm, struct dtx_handle *dth,
 }
 
 int
-vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   uint32_t entry, daos_epoch_t epoch, uint32_t intent,
-			   uint32_t type)
+vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type)
 {
 	struct dtx_handle		*dth = vos_dth_get();
 	struct vos_container		*cont;
@@ -1256,7 +1266,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			return rc;
 	}
 
-	rc = vos_dtx_append(umm, dth, record, type);
+	rc = vos_dtx_append(dth, record, type);
 	if (rc == 0) {
 		struct vos_dtx_act_ent	*dae = dth->dth_ent;
 
@@ -1871,12 +1881,21 @@ vos_dtx_aggregate(daos_handle_t coh)
 	     !d_list_empty(&cont->vc_dtx_committed_list); i++) {
 		struct vos_dtx_cmt_ent	*dce;
 		d_iov_t			 kiov;
+		umem_off_t		 umoff;
 
 		dce = d_list_entry(cont->vc_dtx_committed_list.next,
 				   struct vos_dtx_cmt_ent, dce_committed_link);
+		umoff = DCE_OID_OFF(dce);
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
 		dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 			      &kiov, NULL);
+
+		if (!umoff_is_null(umoff)) {
+			rc = umem_free(umm, umoff);
+			if (rc != 0)
+				D_WARN("Failed to release OIDs array "DF_RC"\n",
+				       DP_RC(rc));
+		}
 	}
 
 	tmp = umem_off2ptr(umm, dbd->dbd_next);
@@ -2188,7 +2207,7 @@ out:
 }
 
 void
-vos_dtx_cleanup(struct dtx_handle *dth)
+vos_dtx_cleanup_internal(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae = NULL;
@@ -2213,6 +2232,54 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 			dtx_evict_lid(cont, dae);
 		}
 	}
+}
 
-	vos_tx_end(dth, vos_cont2umm(cont), -DER_CANCELED);
+void
+vos_dtx_cleanup(struct dtx_handle *dth)
+{
+	struct vos_container	*cont;
+
+	if (!dtx_is_valid_handle(dth) || !dth->dth_active)
+		return;
+
+	cont = vos_hdl2cont(dth->dth_coh);
+	/** This will abort the transaction and callback to
+	 *  vos_dtx_cleanup_internal
+	 */
+	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, -DER_CANCELED);
+}
+
+/** Allocate space for saving the vos reservations and deferred actions */
+int
+vos_dtx_rsrvd_init(struct dtx_handle *dth)
+{
+	dth->dth_rsrvd_cnt = 0;
+	dth->dth_deferred_cnt = 0;
+	D_INIT_LIST_HEAD(&dth->dth_deferred_nvme);
+
+	if (dth->dth_modification_cnt <= 1) {
+		dth->dth_rsrvds = &dth->dth_rsrvd_inline;
+		return 0;
+	}
+
+	D_ALLOC_ARRAY(dth->dth_rsrvds, dth->dth_modification_cnt);
+	if (dth->dth_rsrvds == NULL)
+		return -DER_NOMEM;
+
+	D_ALLOC_ARRAY(dth->dth_deferred, dth->dth_modification_cnt);
+	if (dth->dth_deferred == NULL) {
+		D_FREE(dth->dth_rsrvds);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+void
+vos_dtx_rsrvd_fini(struct dtx_handle *dth)
+{
+	D_ASSERT(d_list_empty(&dth->dth_deferred_nvme));
+	D_FREE(dth->dth_deferred);
+	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
+		D_FREE(dth->dth_rsrvds);
 }

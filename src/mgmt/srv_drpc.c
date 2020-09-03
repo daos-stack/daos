@@ -1362,7 +1362,7 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	} else if (pools_len != 0) {
 		D_ERROR("Invalid results - pools=NULL, pools_len=%lu\n",
 			pools_len);
-		D_GOTO(out, rc = -DER_UNKNOWN);
+		D_GOTO(out, rc = -DER_MISC);
 	}
 
 out:

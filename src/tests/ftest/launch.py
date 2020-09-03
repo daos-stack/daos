@@ -1096,17 +1096,7 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "copied=()",
         "for file in $({} {})".format(ls_cmd, source_files),
         "do ls -sh $file",
-    ]
-
-    # If we have a directory, tar it before scp-ing it.
-    if do_tar:
-        commands.extend([
-            "tarfile=$(basename $file).tar",
-            "tar cf $tarfile $file",
-            "file=$tarfile",
-        ])
-
-    commands.extend([
+        "/lib/cart/TESTING/util/cart_logtest.py $file",
         "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, destination),
           "then copied+=($file)",

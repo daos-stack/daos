@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 
 	if (kill) {
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
-				 args[0]->group, &args[0]->pool.alive_svc,
+				 args[0]->group, args[0]->pool.alive_svc,
 				 rank);
 		print_message("sleep 120 seconds for rebuild to start\n");
 		sleep(120);
@@ -67,7 +67,7 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	for (i = 0; i < arg_cnt; i++) {
 		daos_exclude_target(args[i]->pool.pool_uuid,
 				    args[i]->group, args[i]->dmg_config,
-				    &args[i]->pool.svc,
+				    args[i]->pool.svc,
 				    rank, tgt_idx);
 		sleep(2);
 	}
@@ -84,7 +84,7 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 			daos_add_target(args[i]->pool.pool_uuid,
 					args[i]->group,
 					args[i]->dmg_config,
-					&args[i]->pool.svc,
+					args[i]->pool.svc,
 					rank, tgt_idx);
 		sleep(2);
 	}
@@ -101,7 +101,7 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 			daos_drain_target(args[i]->pool.pool_uuid,
 					args[i]->group,
 					args[i]->dmg_config,
-					&args[i]->pool.svc,
+					args[i]->pool.svc,
 					rank, tgt_idx);
 		sleep(2);
 	}
@@ -247,9 +247,9 @@ rebuild_pool_connect_internal(void *data)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			&arg->pool.svc, DAOS_PC_RW,
-			&arg->pool.poh, &arg->pool.pool_info,
-			NULL /* ev */);
+				       arg->pool.svc, DAOS_PC_RW,
+				       &arg->pool.poh, &arg->pool.pool_info,
+				       NULL /* ev */);
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
 
@@ -367,7 +367,7 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 
 		for (i = 0; i < nr; i++)
 			daos_add_target(arg->pool.pool_uuid, arg->group,
-					arg->dmg_config, &arg->pool.svc,
+					arg->dmg_config, arg->pool.svc,
 					failed_rank,
 					failed_tgts ? failed_tgts[i] : -1);
 	}
@@ -579,6 +579,45 @@ rebuild_pool_destroy(test_arg_t *arg)
 	sleep(1);
 }
 
+d_rank_t
+get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
+		      uint32_t shard)
+{
+	struct daos_obj_layout	*layout;
+	uint32_t		grp_idx;
+	uint32_t		idx;
+	d_rank_t		rank;
+
+	daos_obj_layout_get(arg->coh, oid, &layout);
+	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
+	idx = shard % layout->ol_shards[0]->os_replica_nr;
+	rank = layout->ol_shards[grp_idx]->os_ranks[idx];
+
+	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
+	daos_obj_layout_free(layout);
+	return rank;
+}
+
+d_rank_t
+get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, bool parity)
+{
+	struct daos_oclass_attr *oca;
+	uint32_t		shard = 0;
+
+	oca = daos_oclass_attr_find(oid);
+	if (oca->ca_resil == DAOS_RES_REPL) {
+		shard = 0;
+	} else if (oca->ca_resil == DAOS_RES_EC) {
+		if (parity)
+			shard = oca->u.ec.e_k;
+		else
+			shard = 0;
+	}
+
+	print_message("get shard %u k %u\n", shard, oca->u.ec.e_k);
+	return get_rank_by_oid_shard(arg, oid, shard);
+}
+
 static void
 save_group_state(void **state)
 {
@@ -600,17 +639,43 @@ restore_group_state(void **state)
 int
 rebuild_sub_setup(void **state)
 {
+	test_arg_t	*arg;
+	int		rc;
+
 	save_group_state(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true,
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SUBTEST_POOL_SIZE, NULL);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
 }
 
 int
 rebuild_small_sub_setup(void **state)
 {
+	test_arg_t	*arg;
+	int rc;
+
 	save_group_state(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true,
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SMALL_POOL_SIZE, NULL);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
 }
 
 int

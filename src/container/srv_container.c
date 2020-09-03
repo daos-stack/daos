@@ -2095,6 +2095,27 @@ cont_attr_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 }
 
 static int
+cont_attr_del(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+	      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+{
+	struct cont_attr_del_in		*in = crt_req_get(rpc);
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cadi_op.ci_uuid),
+		rpc, DP_UUID(in->cadi_op.ci_hdl));
+
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to del container attr\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cadi_op.ci_uuid));
+		return -DER_NO_PERM;
+	}
+
+	return ds_rsvc_del_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
+				in->cadi_bulk, rpc, in->cadi_count);
+}
+
+static int
 cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
@@ -2368,6 +2389,8 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return cont_attr_get(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_ATTR_SET:
 		return cont_attr_set(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_ATTR_DEL:
+		return cont_attr_del(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_AGGREGATE:
 		return ds_cont_epoch_aggregate(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_LIST:

@@ -163,7 +163,6 @@ type storageFormatCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	rankListCmd
 	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Reformat bool `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)"`
 }
@@ -181,14 +180,6 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 
 		if len(resp.Members) == 0 {
 			cmd.log.Debug("no system members, reformat host list")
-			if cmd.Ranks != "" {
-				return false, errors.New(
-					"--ranks parameter invalid as membership is empty")
-			}
-			if cmd.Hosts != "" {
-				return false, errors.New(
-					"--rank-hosts parameter invalid as membership is empty")
-			}
 
 			return false, nil
 		}
@@ -214,26 +205,12 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 		return true, nil
 	}
 
-	if cmd.Ranks != "" {
-		return false, errors.New("--ranks parameter invalid if --reformat is not set")
-	}
-	if cmd.Hosts != "" {
-		return false, errors.New("--rank-hosts parameter invalid if --reformat is not set")
-	}
-
 	return false, nil
 }
 
 func (cmd *storageFormatCmd) systemReformat(ctx context.Context) error {
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
-		return err
-	}
-	srReq := new(control.SystemResetFormatReq)
-	srReq.Hosts = *hostSet
-	srReq.Ranks = *rankSet
-
-	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker, srReq)
+	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
+		new(control.SystemResetFormatReq))
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)

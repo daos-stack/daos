@@ -1193,6 +1193,36 @@ single_value(void **state)
 };
 
 static void
+dtx_with_csum(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct csum_test_ctx	 ctx = { 0 };
+	daos_handle_t		 th = { 0 };
+	daos_oclass_id_t	 oc = dts_csum_oc;
+	int			 rc;
+
+
+	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
+		skip();
+
+	setup_from_test_args(&ctx, arg);
+	setup_simple_data(&ctx);
+
+	/** Server verify enabled, no corruption. */
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
+	rc = daos_tx_open(ctx.coh, &th, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	daos_obj_update(ctx.oh, th, 0, &ctx.dkey, 1, &ctx.update_iod,
+			&ctx.update_sgl, NULL);
+	rc = daos_tx_commit(th, NULL);
+	assert_int_equal(rc, 0);
+
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
+}
+
+static void
 mix_test(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
@@ -1441,6 +1471,10 @@ many_iovs_with_single_values(void **state)
 	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
 			    AKEY_NR, iods, sgls, NULL, NULL);
 	assert_int_equal(0, rc);
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
 }
 
 static void
@@ -1475,6 +1509,10 @@ request_non_existent_data(void **state)
 			    1, &ctx.fetch_iod,
 			    &ctx.fetch_sgl, NULL, NULL);
 	assert_success(rc);
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
 }
 
 static void
@@ -1622,7 +1660,7 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg);
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, &arg->pool.alive_svc,
+			    arg->dmg_config, arg->pool.alive_svc,
 			    layout1->ol_shards[0]->os_ranks[0]);
 	assert_true(disabled_nr < disabled_targets(arg));
 
@@ -1650,7 +1688,7 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	assert_success(rc);
 
 	daos_add_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			&arg->pool.alive_svc, rank_to_exclude);
+			arg->pool.alive_svc, rank_to_exclude);
 	assert_int_equal(disabled_nr, disabled_targets(arg));
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
@@ -1869,7 +1907,7 @@ test_enumerate_object(void **state)
 	d_iov_t			 csum_iov = {0};
 	d_sg_list_t		 sgl = {0};
 	struct dcs_csum_info	*csum_info = NULL;
-	void			*csum_ptr;
+	void			*end_byte;
 	const uint32_t		 akey_nr = 5;
 	/** will enumerate for each akey, value of each akey, and 1 dkey */
 	const uint32_t		 enum_nr = akey_nr * 2 + 1;
@@ -1929,15 +1967,16 @@ test_enumerate_object(void **state)
 	assert_int_equal(enum_nr, nr);
 
 	/** Make sure csum iov is correct */
-	csum_ptr = csum_iov.iov_buf;
-	while (csum_ptr < csum_iov.iov_buf + csum_iov.iov_len) {
+	end_byte = csum_iov.iov_buf + csum_iov.iov_len;
+	while (csum_iov.iov_buf < end_byte) {
 		ci_cast(&csum_info, &csum_iov);
-		assert_int_equal(1, csum_info->cs_nr);
-		csum_ptr += ci_size(*csum_info);
+		csum_iov.iov_buf += ci_size(*csum_info);
+		csum_iov.iov_buf_len -= ci_size(*csum_info);
+		csum_iov.iov_len -= ci_size(*csum_info);
 		csum_count++;
 	}
 
-	assert_int_equal(13, csum_count);
+	assert_int_equal(enum_nr, csum_count);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
@@ -1956,7 +1995,7 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	d_iov_t			csum_iov = {0};
 	d_sg_list_t		sgl = {0};
 	const uint32_t		akey_nr = 5;
-	const uint32_t		enum_nr = akey_nr * 2 + 1;
+	const uint32_t		enum_nr = akey_nr * 2 + 2;
 	daos_key_desc_t		kds[enum_nr];
 	const size_t		csum_buf_len = 10;
 	uint8_t			csum_buf[csum_buf_len];
@@ -2078,6 +2117,8 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM18: request extent starts much later than the "
 		  "beginning of the stored extent",
 		  request_is_after_extent_start),
+	CSUM_TEST("DAOS_CSUM19: DTX with checksum enabled against REP obj",
+		  dtx_with_csum),
 	CSUM_TEST("DAOS_CSUM_REBUILD01: Array, Data is inlined", rebuild_1),
 	CSUM_TEST("DAOS_CSUM_REBUILD02: Array, Data not inlined, not bulk",
 		  rebuild_2),
@@ -2091,6 +2132,8 @@ static const struct CMUnitTest csum_tests[] = {
 	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
 		     io_with_server_side_verify),
 	EC_CSUM_TEST("DAOS_EC_CSUM02: Single Value Checksum", single_value),
+	EC_CSUM_TEST("DAOS_EC_CSUM03: DTX with checksum enabled against EC obj",
+		     dtx_with_csum),
 };
 
 static int

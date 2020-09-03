@@ -104,7 +104,7 @@ void drpc_progress_context_close(struct drpc_progress_context *ctx);
  *		-DER_TIMEDOUT		No activity
  *		-DER_AGAIN		Couldn't process activity, try again
  *		-DER_NOMEM		Out of memory
- *		-DER_UNKNOWN		Unexpected error
+ *		-DER_MISC		Unexpected error
  */
 int drpc_progress(struct drpc_progress_context *ctx, int timeout);
 

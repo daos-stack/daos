@@ -94,7 +94,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		ds := drpc.DaosStatus(resp.GetStatus())
 		switch ds {
 		// retryable errors
-		case drpc.DaosGroupVersionMismatch:
+		case drpc.DaosGroupVersionMismatch, drpc.DaosTimedOut:
 			svc.log.Infof("MgmtSvc.PoolCreate (try %d), retrying due to %s", try, ds)
 			try++
 			select {

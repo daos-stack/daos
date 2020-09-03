@@ -3,14 +3,29 @@
 set -uex
 
 cd "$DAOS_BASE"
-mkdir run_test.sh
-mkdir vm_test
-mv nlt-errors.json vm_test/
+test_log_dir="run_test.sh"
+vm_log_dir="unit_vm_test"
+case $STAGE_NAME in
+  *Bullseye*)
+    test_log_dir="covc_test_logs"
+    vm_log_dir="covc_vm_test"
+    ;;
+  *Unit*)
+    test_log_dir="unit_test_logs"
+    vm_log_dir="unit_vm_test"
+    ;;
+esac
+mkdir "${test_log_dir}"
+mkdir "${vm_log_dir}"
+if [ -e nlt-errors.json ]; then
+  cp nlt-errors.json "$vm_log_dir"/
+  mv nlt-errors.json vm_test/
+fi
 if ls /tmp/daos*.log > /dev/null; then
-  mv /tmp/daos*.log run_test.sh/
+  mv /tmp/daos*.log "$test_log_dir"/
 fi
 if ls /tmp/dnt*.log > /dev/null; then
-  mv /tmp/dnt*.log vm_test/
+  mv /tmp/dnt*.log "$vm_log_dir"/
 fi
 # servers can sometimes take a while to stop when the test is done
 x=0
