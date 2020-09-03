@@ -196,6 +196,11 @@ func (n *NvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
 
 	pciAddrs := pciAddressList(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
+	for _, c := range ctrlrs {
+		log.Debugf("ctrlr health data received for SSD %s %s, power on hours %d\n",
+			c.HealthStats.Model, c.HealthStats.Serial,
+			c.HealthStats.PowerOnHours)
+	}
 
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
