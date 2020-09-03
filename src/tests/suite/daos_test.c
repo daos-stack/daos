@@ -34,7 +34,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpcetTViADKFCoRvbOzUdrNb"
+#define TESTS "mpcetTViADKFCoRvSbOzUdrNb"
 /**
  * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
@@ -79,6 +79,7 @@ print_usage(int rank)
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -v|--rebuild_simple\n");
+	print_message("daos_test -S|--rebuild_ec\n");
 	print_message("daos_test -b|--drain_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -a|--daos_all_tests\n");
@@ -266,6 +267,14 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_drain_simple_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
+		case 'S':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS rebuild ec tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_rebuild_simple_ec_test(rank, size,
+								     sub_tests,
+								sub_tests_size);
+			break;
 
 		default:
 			D_ASSERT(0);
@@ -359,7 +368,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdtTVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvbl:",
+				  "ampcCdtTVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvbSl:",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
