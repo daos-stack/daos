@@ -633,7 +633,9 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
         # Get length of test-servers and test-clients, ensure they
         # test-clients gets the carry-over from test-servers
-        found_test_servers_count = len(yaml_find["test_servers"])
+        found_test_servers_count = 0
+        if "test_servers" in yaml_find:
+          found_test_servers_count = len(yaml_find["test_servers"])
 
          # Example case:
          # Found values: {
@@ -657,6 +659,9 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
               # 'test_clients_6': [],
               # 'bdev_list': []
         # }
+
+        if "test_clients" not in new_values:
+          new_values["test_clients"] = []
 
         new_values["test_clients"].extend(
           new_values["test_servers"][found_test_servers_count:]
