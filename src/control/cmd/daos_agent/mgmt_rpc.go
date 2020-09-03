@@ -49,6 +49,7 @@ type mgmtModule struct {
 	aiCache    *attachInfoCache
 	numaAware  bool
 	netCtx     context.Context
+	version    uint32
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -93,6 +94,22 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 // "DAOS_AGENT_DISABLE_CACHE=true" in the environment running the daos_agent.
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, error) {
 	var err error
+	pbReq := new(mgmtpb.GetAttachInfoReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
+
+	if pbReq.Sys != mod.sys {
+		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
+	}
+
+	version := pbReq.GetVersion()
+	if version != mod.version {
+		return nil, errors.Errorf("get attach info client/agent protocol mismatch: client version: %#x, agent version %#x", pbReq.Version, mod.version)
+	}
+
 	numaNode := mod.aiCache.defaultNumaNode
 
 	if mod.numaAware {
@@ -106,17 +123,6 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return mod.aiCache.getResponse(numaNode)
 	}
 
-	pbReq := new(mgmtpb.GetAttachInfoReq)
-	if err := proto.Unmarshal(reqb, pbReq); err != nil {
-		return nil, drpc.UnmarshalingPayloadFailure()
-	}
-
-	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
-
-	if pbReq.Sys != mod.sys {
-		return nil, errors.Errorf("unknown system name %s", pbReq.Sys)
-	}
-
 	ctx := context.TODO() // FIXME: Should be the top-level context.
 	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, &control.GetAttachInfoReq{
 		System: pbReq.Sys,
@@ -127,6 +133,10 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 
 	if resp.Provider == "" {
 		return nil, errors.New("GetAttachInfo response contained no provider.")
+	}
+
+	if resp.Version != mod.version {
+		return nil, errors.Errorf("get attach info protocol server/agent mismatch: server version: %#x, agent version %#x", resp.Version, mod.version)
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
