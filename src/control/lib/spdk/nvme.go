@@ -237,13 +237,6 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	}
 }
 
-func getBool(in uint8) bool {
-	if in > 0 {
-		return true
-	}
-	return false
-}
-
 // c2GoDeviceHealth is a private translation function.
 func c2GoDeviceHealth(health *C.struct_bio_dev_state) *DeviceHealth {
 	return &DeviceHealth{
@@ -261,11 +254,11 @@ func c2GoDeviceHealth(health *C.struct_bio_dev_state) *DeviceHealth {
 		ErrorLogEntries: uint64(health.bds_error_log_entries[0]),
 		ChecksumErrors:  uint32(health.bds_checksum_errs),
 		Temperature:     uint32(health.bds_temperature),
-		TempWarn:        getBool(uint8(health.bds_temp_warning)),
-		//		AvailSpareWarn:  getBool(health.bds_avail_spare_warning),
-		//		ReliabilityWarn: getBool(health.bds_dev_reliabilty_warning),
-		//		ReadOnlyWarn:    getBool(health.bds_read_only_warning),
-		//		VolatileMemWarn: getBool(health.bds_volatile_mem_warning),
+		TempWarn:        bool(health.bds_temp_warning),
+		AvailSpareWarn:  bool(health.bds_avail_spare_warning),
+		ReliabilityWarn: bool(health.bds_dev_reliabilty_warning),
+		ReadOnlyWarn:    bool(health.bds_read_only_warning),
+		VolatileMemWarn: bool(health.bds_volatile_mem_warning),
 	}
 }
 
@@ -324,7 +317,7 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller,
 			}
 		}
 
-		healthPtr := ctrlrPtr.dev_health
+		healthPtr := ctrlrPtr.stats
 		if healthPtr == nil {
 			err = FaultCtrlrNoHealth
 

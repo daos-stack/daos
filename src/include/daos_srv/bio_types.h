@@ -122,10 +122,10 @@ struct bio_dev_state {
 	uint32_t	 bds_checksum_errs;
 	uint16_t	 bds_temperature; /* in Kelvin */
 	/* Critical warnings */
-	uint8_t		 bds_temp_warning : 1;
-	uint8_t		 bds_avail_spare_warning : 1;
-	uint8_t		 bds_dev_reliabilty_warning : 1;
-	uint8_t		 bds_read_only_warning : 1;
-	uint8_t		 bds_volatile_mem_warning: 1; /*volatile memory backup*/
+	bool		 bds_temp_warning;
+	bool		 bds_avail_spare_warning;
+	bool		 bds_dev_reliabilty_warning;
+	bool		 bds_read_only_warning;
+	bool		 bds_volatile_mem_warning; /*volatile memory backup*/
 };
 #endif /* __BIO_TYPES_H__ */

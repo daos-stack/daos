@@ -262,15 +262,15 @@ populate_dev_health(struct bio_dev_state *dev_state,
 	       sizeof(page->num_error_info_log_entries));
 	dev_state->bds_temperature = page->temperature;
 	crit_warn = page->critical_warning.bits.temperature;
-	dev_state->bds_temp_warning = crit_warn;
+	dev_state->bds_temp_warning = crit_warn ? true : false;
 	crit_warn = page->critical_warning.bits.available_spare;
-	dev_state->bds_avail_spare_warning = crit_warn;
+	dev_state->bds_avail_spare_warning = crit_warn ? true : false;
 	crit_warn = page->critical_warning.bits.device_reliability;
-	dev_state->bds_dev_reliabilty_warning = crit_warn;
+	dev_state->bds_dev_reliabilty_warning = crit_warn ? true : false;
 	crit_warn = page->critical_warning.bits.read_only;
-	dev_state->bds_read_only_warning = crit_warn;
+	dev_state->bds_read_only_warning = crit_warn ? true : false;
 	crit_warn = page->critical_warning.bits.volatile_memory_backup;
-	dev_state->bds_volatile_mem_warning = crit_warn;
+	dev_state->bds_volatile_mem_warning = crit_warn ? true : false;
 
 	written = snprintf(dev_state->bds_model, sizeof(dev_state->bds_model),
 			   "%-20.20s", cdata->mn);
