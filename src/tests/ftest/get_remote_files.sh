@@ -140,7 +140,7 @@ get_remote_files() {
     if [[ "${VERBOSE}"  == "true" ]]; then
         echo "Running: clush -B -w ${1}  ${clush_cmd}";
     fi
-    clush -B -w ${1} "${clush_cmd}"
+    clush -B -l jenkins -R ssh -S -w ${1} "${clush_cmd}"
 }
 
 ####### MAIN #######

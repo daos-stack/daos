@@ -800,7 +800,7 @@ def get_remote_files(hosts, avocado_logs_dir, destination, source_files,
     display_disk_space(destination)
 
     command = [
-        "/bin/bash", "{}/get_remote_files.sh".format(os.getcwd()), "-v",
+        "/bin/bash", "{}/get_remote_files.sh".format(os.getcwd()),
         "-s \"{}\"".format(",".join(hosts)),
         "-r \"{}\"".format(source_files),
         "-d \"{}\"".format(destination),
@@ -809,6 +809,8 @@ def get_remote_files(hosts, avocado_logs_dir, destination, source_files,
     status = None
     if size_threshold:
         command.append("-t {}".format(human_to_bytes(size_threshold)))
+        print("Size threshold provided, running command: \n{}".format(
+            " ".join(command)))
         res = re.findall(r"BIG_FILE\s+(.*):", get_output(command))
         if res:
             print("Big files found! Writing junit xml.")
@@ -817,6 +819,7 @@ def get_remote_files(hosts, avocado_logs_dir, destination, source_files,
         else:
             print("No log files found exceeding {}".format(size_threshold))
     else:
+        print("Running command: \n{}".format(" ".join(command)))
         status = time_command(command)
     return status
 
