@@ -507,7 +507,7 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 			}
 		}
 		for (j = i + 1; j < iod->iod_nr; j++)
-			new_recx[j + stripe_nr] = iod->iod_recxs[j];
+			new_recx[j + stripe_nr - 1] = iod->iod_recxs[j];
 		i += (stripe_nr - 1);
 		iod->iod_nr += (stripe_nr - 1);
 		D_FREE(iod->iod_recxs);
