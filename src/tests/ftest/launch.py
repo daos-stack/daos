@@ -61,7 +61,7 @@ except ImportError:
 
         def __del__(self):
             """Destroy a TemporaryDirectory object."""
-            # rmtree(self.name)
+            rmtree(self.name)
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = {
