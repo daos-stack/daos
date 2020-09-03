@@ -1,10 +1,10 @@
-# DAOS control configuration file.
+# DAOS manager (dmg) configuration file.
 #
 # Location of this configuration file is determined by first checking for the
 # path specified through the -o option of the dmg command line.
-# Otherwise, etc/daos_control.yml is used.
+# Otherwise, /etc/daos/daos_control.yml is used.
 #
-# Section describing the control configuration
+# Section describing the DAOS manager (dmg) configuration
 #
 # Although not supported for now, one might want to connect to multiple
 # DAOS installations from the same node in the future.
@@ -12,8 +12,10 @@
 # Specify the associated DAOS systems.
 # Name must match name specified in the daos_server.yml file on the server.
 #
+# NOTE: Changing the name is not supported in DAOS 1.0, it must be daos_server
+#
 # default: daos_server
-#name: daos
+#name: daos_server
 
 # Default destination port to use if port not specified in host list addresses.
 # default: 10001

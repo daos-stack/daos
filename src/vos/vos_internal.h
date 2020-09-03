@@ -153,6 +153,8 @@ struct vos_pool {
 	/** number of openers */
 	int			vp_opened:30;
 	int			vp_dying:1;
+	/** caller specifies pool is small (for sys space reservation) */
+	bool			vp_small;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */

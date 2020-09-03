@@ -662,8 +662,9 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	/** There can't be more cancellations than updates in this
 	 *  modification so just use the current one
 	 */
-	D_ASSERT(dth->dth_deferred_cnt > 0);
-	i = dth->dth_deferred_cnt - 1;
+	D_ASSERT(dth->dth_op_seq > 0);
+	D_ASSERT(dth->dth_op_seq <= dth->dth_deferred_cnt);
+	i = dth->dth_op_seq - 1;
 	rsrvd_scm = dth->dth_deferred[i];
 	D_ASSERT(rsrvd_scm != NULL);
 	D_ASSERT(rsrvd_scm->rs_actv_at < rsrvd_scm->rs_actv_cnt);
