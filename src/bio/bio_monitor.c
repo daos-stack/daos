@@ -243,34 +243,27 @@ populate_dev_health(struct bio_dev_state *dev_state,
 		    const struct spdk_nvme_ctrlr_data *cdata)
 {
 	int	written;
-	uint8_t	crit_warn;
 
 	dev_state->bds_warn_temp_time = page->warning_temp_time;
 	dev_state->bds_crit_temp_time = page->critical_temp_time;
-	memcpy(dev_state->bds_ctrl_busy_time, page->controller_busy_time,
-	       sizeof(page->controller_busy_time));
-	memcpy(dev_state->bds_power_cycles, page->power_cycles,
-	       sizeof(page->power_cycles));
-	memcpy(dev_state->bds_power_on_hours, page->power_on_hours,
-	       sizeof(page->power_on_hours));
-	memcpy(dev_state->bds_unsafe_shutdowns, page->unsafe_shutdowns,
-	       sizeof(page->unsafe_shutdowns));
-	memcpy(dev_state->bds_media_errors, page->media_errors,
-	       sizeof(page->media_errors));
-	memcpy(dev_state->bds_error_log_entries,
-	       page->num_error_info_log_entries,
-	       sizeof(page->num_error_info_log_entries));
+	dev_state->bds_ctrl_busy_time = page->controller_busy_time[0];
+	dev_state->bds_power_cycles = page->power_cycles[0];
+	dev_state->bds_power_on_hours = page->power_on_hours[0];
+	dev_state->bds_unsafe_shutdowns = page->unsafe_shutdowns[0];
+	dev_state->bds_media_errors = page->media_errors[0];
+	dev_state->bds_error_log_entries = page->num_error_info_log_entries[0];
 	dev_state->bds_temperature = page->temperature;
-	crit_warn = page->critical_warning.bits.temperature;
-	dev_state->bds_temp_warning = crit_warn ? true : false;
-	crit_warn = page->critical_warning.bits.available_spare;
-	dev_state->bds_avail_spare_warning = crit_warn ? true : false;
-	crit_warn = page->critical_warning.bits.device_reliability;
-	dev_state->bds_dev_reliabilty_warning = crit_warn ? true : false;
-	crit_warn = page->critical_warning.bits.read_only;
-	dev_state->bds_read_only_warning = crit_warn ? true : false;
-	crit_warn = page->critical_warning.bits.volatile_memory_backup;
-	dev_state->bds_volatile_mem_warning = crit_warn ? true : false;
+	dev_state->bds_temp_warning = page->critical_warning.bits.temperature ?
+		true : false;
+	dev_state->bds_avail_spare_warning = \
+		page->critical_warning.bits.available_spare ? true : false;
+	dev_state->bds_dev_reliability_warning = \
+		page->critical_warning.bits.device_reliability ? true : false;
+	dev_state->bds_read_only_warning = \
+		page->critical_warning.bits.read_only ? true : false;
+	dev_state->bds_volatile_mem_warning = \
+		page->critical_warning.bits.volatile_memory_backup ?
+		true : false;
 
 	written = snprintf(dev_state->bds_model, sizeof(dev_state->bds_model),
 			   "%-20.20s", cdata->mn);

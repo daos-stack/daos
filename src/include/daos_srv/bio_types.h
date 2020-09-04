@@ -108,13 +108,12 @@ struct bio_dev_state {
 	/* Device health details */
 	uint32_t	 bds_warn_temp_time;
 	uint32_t	 bds_crit_temp_time;
-	/* Support 128-bit values */
-	uint64_t	 bds_ctrl_busy_time[2];
-	uint64_t	 bds_power_cycles[2];
-	uint64_t	 bds_power_on_hours[2];
-	uint64_t	 bds_unsafe_shutdowns[2];
-	uint64_t	 bds_media_errors[2];
-	uint64_t	 bds_error_log_entries[2];
+	uint64_t	 bds_ctrl_busy_time;
+	uint64_t	 bds_power_cycles;
+	uint64_t	 bds_power_on_hours;
+	uint64_t	 bds_unsafe_shutdowns;
+	uint64_t	 bds_media_errors;
+	uint64_t	 bds_error_log_entries;
 	/* I/O error counters */
 	uint32_t	 bds_bio_read_errs;
 	uint32_t	 bds_bio_write_errs;
@@ -124,7 +123,7 @@ struct bio_dev_state {
 	/* Critical warnings */
 	bool		 bds_temp_warning;
 	bool		 bds_avail_spare_warning;
-	bool		 bds_dev_reliabilty_warning;
+	bool		 bds_dev_reliability_warning;
 	bool		 bds_read_only_warning;
 	bool		 bds_volatile_mem_warning; /*volatile memory backup*/
 };

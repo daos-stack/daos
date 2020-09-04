@@ -26,7 +26,6 @@ package bdev
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"sort"
@@ -92,19 +91,6 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func convert(in interface{}, out interface{}) error {
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, out)
-}
-
-func convertController(in spdk.Controller, out *storage.NvmeController) error {
-	return convert(in, out)
-}
-
 func newBackend(log logging.Logger, sr *spdkSetupScript) *spdkBackend {
 	return &spdkBackend{
 		log:     log,
@@ -127,24 +113,15 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 	return b.binding.vmdDisabled
 }
 
-func convertControllers(bcs []spdk.Controller, pciFilter ...string) ([]*storage.NvmeController, error) {
-	scs := make([]*storage.NvmeController, 0, len(bcs))
-
-	for _, bc := range bcs {
-		if len(pciFilter) > 0 && !common.Includes(pciFilter, bc.PCIAddr) {
+func filterControllers(in storage.NvmeControllers, pciFilter ...string) (out storage.NvmeControllers) {
+	for _, c := range in {
+		if len(pciFilter) > 0 && !common.Includes(pciFilter, c.PciAddr) {
 			continue
 		}
-
-		sc := &storage.NvmeController{}
-		if err := convertController(bc, sc); err != nil {
-			return nil, errors.Wrapf(err,
-				"failed to convert spdk controller %+v", bc)
-		}
-
-		scs = append(scs, sc)
+		out = append(out, c)
 	}
 
-	return scs, nil
+	return
 }
 
 // Scan discovers NVMe controllers accessible by SPDK.
@@ -164,17 +141,14 @@ func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 		return nil, errors.Wrap(err, "failed to init spdk env")
 	}
 
-	scs, err := b.binding.Discover(b.log)
+	cs, err := b.binding.Discover(b.log)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover nvme")
 	}
 
-	bcs, err := convertControllers(scs, req.DeviceList...)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ScanResponse{Controllers: bcs}, nil
+	return &ScanResponse{
+		Controllers: filterControllers(cs, req.DeviceList...),
+	}, nil
 }
 
 func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*FormatResponse, error) {
@@ -398,20 +372,20 @@ func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) er
 		return errors.Wrap(err, "failed to init spdk env")
 	}
 
-	scs, err := b.binding.Discover(b.log)
+	cs, err := b.binding.Discover(b.log)
 	if err != nil {
 		return errors.Wrap(err, "failed to discover nvme")
 	}
 
-	var spdkController *spdk.Controller
-	for _, c := range scs {
-		if c.PCIAddr == pciAddr {
-			spdkController = &c
+	var found bool
+	for _, c := range cs {
+		if c.PciAddr == pciAddr {
+			found = true
 			break
 		}
 	}
 
-	if spdkController == nil {
+	if !found {
 		return FaultPCIAddrNotFound(pciAddr)
 	}
 

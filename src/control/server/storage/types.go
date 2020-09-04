@@ -97,37 +97,42 @@ type (
 		UpdateStatus      ScmFirmwareUpdateStatus
 	}
 
-	// NvmeDeviceHealth represents a set of health statistics for a NVMe device.
-	NvmeDeviceHealth struct {
-		TempWarnTime    uint32 `json:"temp_warn_time"`
-		TempCritTime    uint32 `json:"temp_crit_time"`
-		CtrlBusyTime    uint64 `json:"ctrl_busy_time"`
-		PowerCycles     uint64 `json:"power_cycles"`
-		PowerOnHours    uint64 `json:"power_on_hours"`
-		UnsafeShutdowns uint64 `json:"unsafe_shutdowns"`
-		// everything below here should be compatible with BIO health info
-		Temperature     uint32 `json:"temperature"`
-		ReadErrors      uint32 `json:"read_errors"`
-		WriteErrors     uint32 `json:"write_errors"`
-		UnmapErrors     uint32 `json:"unmap_errors"`
-		ChecksumErrors  uint32 `json:"checksum_errors"`
-		MediaErrors     uint64 `json:"media_errors"`
-		ErrorLogEntries uint64 `json:"error_count"`
-		TempWarn        bool   `json:"temp_warn"`
-		AvailSpareWarn  bool   `json:"spare_warn"`
-		ReliabilityWarn bool   `json:"device_reliability_warn"`
-		ReadOnlyWarn    bool   `json:"readonly_warn"`
-		VolatileWarn    bool   `json:"volatile_memory_warn"`
+	// NvmeControllerHealth represents a set of health statistics for a NVMe device
+	// and mirrors C.struct_bio_dev_state.
+	NvmeControllerHealth struct {
+		Model           string `json:"bds_model"`
+		Serial          string `json:"bds_serial"`
+		Timestamp       uint64 `json:"bds_timestamp"`
+		ErrorCount      uint64 `json:"bds_error_count"`
+		TempWarnTime    uint32 `json:"bds_warn_temp_time"`
+		TempCritTime    uint32 `json:"bds_crit_temp_time"`
+		CtrlBusyTime    uint64 `json:"bds_ctrl_busy_time"`
+		PowerCycles     uint64 `json:"bds_power_cycles"`
+		PowerOnHours    uint64 `json:"bds_power_on_hours"`
+		UnsafeShutdowns uint64 `json:"bds_unsafe_shutdowns"`
+		MediaErrors     uint64 `json:"bds_media_errors"`
+		ErrorLogEntries uint64 `json:"bds_error_log_entries"`
+		ReadErrors      uint32 `json:"bds_bio_read_errs"`
+		WriteErrors     uint32 `json:"bds_bio_write_errs"`
+		UnmapErrors     uint32 `json:"bds_bio_unmap_errs"`
+		ChecksumErrors  uint32 `json:"bds_checksum_errs"`
+		Temperature     uint32 `json:"bds_temperature"`
+		TempWarn        bool   `json:"bds_temp_warning"`
+		AvailSpareWarn  bool   `json:"bds_avail_spare_warning"`
+		ReliabilityWarn bool   `json:"bds_dev_reliability_warning"`
+		ReadOnlyWarn    bool   `json:"bds_read_only_warning"`
+		VolatileWarn    bool   `json:"bds_volatile_mem_warning"`
 	}
 
-	// NvmeNamespace represents an individual NVMe namespace on a device.
+	// NvmeNamespace represents an individual NVMe namespace on a device and
+	// mirrors C.struct_ns_t.
 	NvmeNamespace struct {
 		ID   uint32
 		Size uint64
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
-	// and namespace information.
+	// and namespace information and mirrors C.struct_ns_t.
 	NvmeController struct {
 		Info        string
 		Model       string
@@ -135,7 +140,7 @@ type (
 		PciAddr     string
 		FwRev       string
 		SocketID    int32
-		HealthStats *NvmeDeviceHealth `hash:"ignore"`
+		HealthStats *NvmeControllerHealth `hash:"ignore"`
 		Namespaces  []*NvmeNamespace
 		//SmdDevices  []*control.SmdDevice `hash:"ignore"`
 	}
@@ -168,15 +173,15 @@ func (s ScmFirmwareUpdateStatus) String() string {
 	return "Unknown"
 }
 
-func (ndh *NvmeDeviceHealth) TempK() uint32 {
+func (ndh *NvmeControllerHealth) TempK() uint32 {
 	return uint32(ndh.Temperature)
 }
 
-func (ndh *NvmeDeviceHealth) TempC() float32 {
+func (ndh *NvmeControllerHealth) TempC() float32 {
 	return float32(ndh.Temperature) - 273.15
 }
 
-func (ndh *NvmeDeviceHealth) TempF() float32 {
+func (ndh *NvmeControllerHealth) TempF() float32 {
 	return ndh.TempC()*(9/5) + 32
 }
 

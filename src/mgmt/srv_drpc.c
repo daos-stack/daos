@@ -1816,7 +1816,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	bds = bio_health->mb_dev_state;
 	resp->error_count = bds.bds_error_count;
 	resp->temperature = bds.bds_temperature;
-	resp->media_errors = bds.bds_media_errors[0];
+	resp->media_errors = bds.bds_media_errors;
 	resp->read_errors = bds.bds_bio_read_errs;
 	resp->write_errors = bds.bds_bio_write_errs;
 	resp->unmap_errors = bds.bds_bio_unmap_errs;
@@ -1824,7 +1824,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->temp_warn = bds.bds_temp_warning;
 	resp->spare_warn = bds.bds_avail_spare_warning;
 	resp->readonly_warn = bds.bds_read_only_warning;
-	resp->device_reliability_warn = bds.bds_dev_reliabilty_warning;
+	resp->device_reliability_warn = bds.bds_dev_reliability_warning;
 	resp->volatile_memory_warn = bds.bds_volatile_mem_warning;
 
 	D_ALLOC(resp->model, BIO_DEV_STR_LEN);
@@ -1845,9 +1845,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	strncpy(resp->serial, bds.bds_serial,
 		strnlen(bds.bds_serial, BIO_DEV_STR_LEN-1));
 
-	D_INFO("health data received for SSD %s %s, power on hours %lu, %lu\n",
-		bds.bds_model, bds.bds_serial, bds.bds_power_on_hours[0],
-		bds.bds_power_on_hours[1]);
+	D_INFO("health data received for SSD %s %s, power on hours %lu\n",
+		bds.bds_model, bds.bds_serial, bds.bds_power_on_hours);
 
 out:
 	resp->status = rc;

@@ -156,11 +156,18 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		req.DisableVMD = p.IsVMDDisabled()
 
 		if p.scanCache == nil || req.Rescan {
+			p.log.Debug("bdev provider rescan requested")
+
 			resp, err := p.fwd.Scan(req)
 			if err != nil {
 				return nil, err
 			}
 			p.scanCache = resp
+		}
+		for _, c := range p.scanCache.Controllers {
+			p.log.Debugf("ctrlr health data received for SSD %s %s, power on hours %d\n",
+				c.HealthStats.Model, c.HealthStats.Serial,
+				c.HealthStats.PowerOnHours)
 		}
 
 		return p.scanCache, nil
