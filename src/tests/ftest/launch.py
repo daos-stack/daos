@@ -1108,7 +1108,7 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
-    ])
+    ]
   
     spawn_commands(host_list, "; ".join(commands), timeout=900)
 
