@@ -92,7 +92,10 @@ daos_tests:
       test_name: DAOS KV tests
     test_F:
       daos_test: F
-      test_name: DAOS File System tests
+      test_name: DAOS File System parallel tests
+    test_I:
+      daos_test: I
+      test_name: DAOS File System unit tests
     test_C:
       daos_test: C
       test_name: DAOS capability tests

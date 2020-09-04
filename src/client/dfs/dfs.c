@@ -1281,7 +1281,7 @@ dfs_umount(dfs_t *dfs)
 int
 dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 {
-	if (dfs == NULL || !dfs->mounted)
+	if (dfs == NULL || !dfs->mounted || attr == NULL)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
@@ -1333,6 +1333,9 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	uuid_t			cont_uuid;
 	daos_size_t		glob_buf_size;
 	int			rc = 0;
+
+	if (dfs == NULL)
+		return EINVAL;
 
 	if (glob == NULL) {
 		D_ERROR("Invalid parameter, NULL glob pointer.\n");

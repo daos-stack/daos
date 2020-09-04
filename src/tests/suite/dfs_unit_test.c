@@ -35,46 +35,52 @@ dfs_test_mount_umount(void **state)
 	test_arg_t		*arg = *state;
 	uuid_t			cuuid;
 	daos_cont_info_t	co_info;
-	daos_handle_t		conph;
+	daos_handle_t		coh;
 	dfs_t			*dfs;
 	int			rc;
 
-	if (arg->myrank != 0)
-		return;
-
-	/** create & open a non-posix container */
 	uuid_generate(cuuid);
+
+	/** create a non-posix container */
 	rc = daos_cont_create(arg->pool.poh, cuuid, NULL, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Created non-POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &conph, &co_info, NULL);
+
+        /** open a non-posix container */
+ 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
+        print_message("Opened non-POSIX Container \n");
 
 	/** try to mount DFS on it, should fail. */
-	rc = dfs_mount(arg->pool.poh, conph, O_RDWR, &dfs);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, EINVAL);
+        print_message("non-POSIX Container has not mounted\n");
 
-	rc = daos_cont_close(conph, NULL);
+        /** close a non-posix container */
+	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
+        print_message("non-POSIX Container closed\n");
+
+        /** destroy a non-posix container */
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n",
 		      DP_UUID(cuuid));
 
-	/** open the container with POSIX layout */
-	rc = daos_cont_open(arg->pool.poh, co_uuid, DAOS_COO_RW,
-			    &co_hdl, &co_info, NULL);
+	/** create & open the container with POSIX layout without mounting it */
+	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, &coh, NULL);
 	assert_int_equal(rc, 0);
+	printf("Created and open DFS Container "DF_UUIDF"\n", DP_UUID(cuuid));
 
 	/** RW mount for the container with POSIX layout */
-	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDWR, &dfs);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
 	print_message("Mounting RW\n");
 
 	/** Second mount without umount for the container with POSIX layout */
-	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDWR, &dfs);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
 	print_message("Second mounting without umount\n");
 
@@ -84,7 +90,7 @@ dfs_test_mount_umount(void **state)
 	print_message("Unmounting RW\n");
 
 	/** R mount for the container with POSIX layout */
-	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDONLY, &dfs);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY, &dfs);
 	assert_int_equal(rc, 0);
 	print_message("Mounting readonly\n");
 
@@ -94,12 +100,12 @@ dfs_test_mount_umount(void **state)
 	print_message("Unmounting readonly\n");
 
 	/** Wrong parameteres mount for the container with POSIX layout */
-	rc = dfs_mount(arg->pool.poh, co_hdl, -1, &dfs);
+	rc = dfs_mount(arg->pool.poh, coh, -1, &dfs);
 	assert_int_equal(rc, EINVAL);
 	print_message("Mounting wrong parameters\n");
 
 	/** NULL dfs mount */
-	rc = dfs_mount(arg->pool.poh, co_hdl, O_RDWR, /*&dfs*/ NULL);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, /*&dfs*/ NULL);
 	assert_int_equal(rc, EINVAL);
 	print_message("Mounting NULL dfs\n");
 
@@ -125,7 +131,7 @@ dfs_test_open_release(void **state)
         print_message("Mounted file system should be provided\n");
 
 	/** NULL file name openning */
-        rc = dfs_open(dfs_mt, NULL, /*"test"*/NULL,
+        rc = dfs_open(dfs_mt, NULL, /*"test"*/ NULL,
                       S_IFREG | S_IWUSR | S_IRUSR , O_RDWR | O_CREAT,
                       OC_S1, chunk_size, NULL, &obj);
         assert_int_equal(rc, EINVAL);
@@ -150,23 +156,63 @@ dfs_test_open_release(void **state)
                       S_IFREG | S_IWUSR | S_IRUSR , O_RDWR | O_CREAT,
                       OC_S1, chunk_size, NULL, /*&obj*/ NULL);
         assert_int_equal(rc, EINVAL);
-        print_message("Open should get a pointer to an object\n");
+        print_message("Open should get a pointer for an object\n");
 
 	/** NULL object releasing */
         rc = dfs_release(/*obj*/NULL);
         assert_int_equal(rc, EINVAL);
         print_message("Release should get an object\n");
 
-	/** Successful object openning */
+	/** Successful object creating for RW */
         rc = dfs_open(dfs_mt, NULL, "test", S_IFREG | S_IWUSR | S_IRUSR ,
                       O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
         assert_int_equal(rc, 0);
-        print_message("Successfull object openning\n");
+        print_message("Successfull object creating for RW\n");
 
-
+        /** Successful object releasin */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
-        print_message("Successfull object releasing\n");
+        print_message("Successful object releasing\n");
+
+        /** Successful object openning for RW */
+        rc = dfs_open(dfs_mt, NULL, "test", S_IFREG | S_IWUSR | S_IRUSR ,
+                      O_RDWR, OC_S1, chunk_size, NULL, &obj);
+        assert_int_equal(rc, 0);
+        print_message("Successfull object openning for RW\n");
+
+        /** Successful object releasin */
+        rc = dfs_release(obj);
+        assert_int_equal(rc, 0);
+        print_message("Successful object releasing\n");
+
+        /** Successful object creating for RDONLY */
+        rc = dfs_open(dfs_mt, NULL, "testR", S_IFREG | S_IWUSR | S_IRUSR ,
+                      O_RDONLY | O_CREAT, OC_S1, chunk_size, NULL, &obj);
+        assert_int_equal(rc, 0);
+        print_message("Successfull object creating for RDONLY\n");
+
+        /** Successful object releasin */
+        rc = dfs_release(obj);
+        assert_int_equal(rc, 0);
+        print_message("Successful object releasing\n");
+
+        /** Failure in object for RDONLY openning for RW */
+        rc = dfs_open(dfs_mt, NULL, "testR", S_IFREG | S_IWUSR | S_IRUSR ,
+                      O_RDWR, OC_S1, chunk_size, NULL, &obj);
+        assert_int_equal(rc, /*EROFS*/ 0);
+        print_message("Failed to open RDONLY object  for RW\n");
+
+        /** Successful RDONLY object openning for RDONLY */
+        rc = dfs_open(dfs_mt, NULL, "testR", S_IFREG | S_IWUSR | S_IRUSR ,
+                      O_RDONLY, OC_S1, chunk_size, NULL, &obj);
+        assert_int_equal(rc, 0);
+        print_message("Successfull open RDONLY object for RDONLY\n");
+
+        /** Successful object releasin */
+        rc = dfs_release(obj);
+        assert_int_equal(rc, 0);
+        print_message("Successful object releasing\n");
+
 }
 
 static void
@@ -215,17 +261,106 @@ dfs_test_mkdir_remove(void **state)
         print_message("Mounted file system should be provided for rmdir\n");
 }
 
+static void
+dfs_test_query(void **state)
+{
+	dfs_attr_t         attr;
+        int                rc;
+
+	/** NULL dfs query */
+ 	rc = dfs_query(/*dfs_mt*/ NULL, &attr);
+	assert_int_equal(rc, EINVAL);
+	print_message("Query NULL dfs\n");
+
+        /** NULL attrs for query */
+	rc = dfs_query(dfs_mt, /*&attr*/ NULL);
+	assert_int_equal(rc, EINVAL);
+	print_message("Query with NULL attrs\n");
+
+        /** Successful query */
+ 	rc = dfs_query(dfs_mt, &attr);
+	assert_int_equal(rc, 0);
+	print_message("Successful Query\n");
+}
+
+static void
+dfs_test_global_local(void **state)
+{
+	d_iov_t            glob = { NULL, 0, 0 };
+	dfs_t		  *dfs;
+	daos_handle_t      poh;
+        int                rc;
+
+	/** NULL dfs mount for local */
+	rc = dfs_local2global(/*dfs_mt*/ NULL, &glob);
+	assert_int_equal(rc, EINVAL);
+        print_message("Mounted file system should be provided as local\n");
+
+	/** NULL for global result */
+	rc = dfs_local2global(dfs_mt, /*&glob*/ NULL);
+        assert_int_equal(rc, EINVAL);
+        print_message("local2global should get a pointer for the global\n");
+
+	/** Successful local2global length getting */
+	rc = dfs_local2global(dfs_mt, &glob);
+        assert_int_equal(rc, 0);
+	print_message("Successful local2global length getting\n");
+
+	/** NULL dfs mount for local result */
+	rc = dfs_global2local(poh, co_hdl, O_RDWR, glob, /*&dfs*/ NULL);
+        assert_int_equal(rc, EINVAL);
+        print_message("global2local should get a pointer for the local\n");
+
+	/** NULL iov_buf in glob */
+	rc = dfs_global2local(poh, co_hdl, O_RDWR, glob, &dfs);
+        assert_int_equal(rc, EINVAL);
+	print_message("global2local should have buffer allocated for the resuly\n");
+
+        /** allocate buffer for global pool handle */
+        D_ALLOC(glob.iov_buf, glob.iov_buf_len);
+
+        /** Buffer for glob should be big enough (it is still 0 size) */
+        rc = dfs_global2local(poh, co_hdl, O_RDWR, glob, &dfs);
+        assert_int_equal(rc, EINVAL);
+        print_message("global2local should have buffer big enough for the result\n");
+
+        glob.iov_len = glob.iov_buf_len;
+
+        /** Local data should actualy come to global */
+        rc = dfs_global2local(poh, co_hdl, /*O_RDWR*/ 0, glob, &dfs_mt);
+        assert_int_equal(rc, EINVAL);
+        print_message("global2locall failed because of magic\n");
+
+	/** Successful local2global data getting */
+	rc = dfs_local2global(dfs_mt, &glob);
+        assert_int_equal(rc, 0);
+	print_message("Successful local2global data getting\n");
+
+        /** Successful global2local */
+        rc = dfs_global2local(poh, co_hdl, /*O_RDWR*/ 0, glob, &dfs);
+        assert_int_equal(rc, 0);
+        print_message("Successful global2locall\n");
+
+	if (rc != 0) return;
+
+	/** local from global should be umont */
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	print_message("Unmounting local from global\n");
+
+}
 
 static const struct CMUnitTest dfs_unit_tests[] = {
-        { "DFS_UNIT_TEST1: DFS mount / umount",
+        { "DFS_UNIT_TEST1: DFS mount / umount / query",
           dfs_test_mount_umount, async_disable, test_case_teardown},
         { "DFS_UNIS TEST2: DFS open / release",
           dfs_test_open_release, async_disable, test_case_teardown},
 	{ "DFS_UNIS TEST3: DFS mkdir / remove",
           dfs_test_mkdir_remove, async_disable, test_case_teardown},
-/*        { "DFS_UNIS TEST4: ",
-          dfs_test_,  async_disable, test_case_teardown},
-*/
+        { "DFS_UNIS TEST4: DFS  query: ",
+          dfs_test_query,        async_disable, test_case_teardown},
+	{ "DFS_UNIS TEST5: Global / Local",
+          dfs_test_global_local, async_disable, test_case_teardown},
 };
 
 
