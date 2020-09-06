@@ -22,6 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=import-error
+# pylint: disable=bad-continuation
+# pylint: disable=line-too-long
+
 from __future__ import print_function
 
 import os
@@ -39,7 +43,7 @@ class CartNoPmixOneNodeTest(Test):
     """
     Runs basic CaRT no_pmix tests
 
-    :avocado: tags=all,all_cart,pr,no_pmix,one_node
+    :avocado: tags=all,cart,pr,no_pmix,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -65,7 +69,7 @@ class CartNoPmixOneNodeTest(Test):
         """
         Test CaRT NoPmix
 
-        :avocado: tags=all,all_cart,pr,no_pmix,one_node
+        :avocado: tags=all,cart,pr,no_pmix,one_node
         """
 
         cmd = self.params.get("tst_bin", '/run/tests/*/')

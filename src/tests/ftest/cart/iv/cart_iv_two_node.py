@@ -22,6 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=import-error
+# pylint: disable=broad-except
+# pylint: disable=bad-indentation
+# pylint: disable=bad-whitespace
+
 from __future__ import print_function
 
 import sys
@@ -36,7 +41,6 @@ import shlex
 
 from apricot import skipForTicket
 
-import avocado
 from avocado  import Test
 from avocado  import main
 
@@ -96,7 +100,7 @@ class CartIvTwoNodeTest(Test):
     """
     Runs basic CaRT tests on one-node
 
-    :avocado: tags=all,all_cart,pr,iv,two_node
+    :avocado: tags=all,cart,pr,iv,two_node
     """
     def setUp(self):
         """ Test setup """
@@ -226,7 +230,7 @@ class CartIvTwoNodeTest(Test):
         """
         Test CaRT IV
 
-        :avocado: tags=all,all_cart,pr,iv,two_node
+        :avocado: tags=all,cart,pr,iv,two_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")

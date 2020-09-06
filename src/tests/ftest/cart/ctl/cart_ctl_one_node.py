@@ -22,13 +22,15 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=import-error
+# pylint: disable=broad-except
+
 from __future__ import print_function
 
 import sys
 
 from apricot import skipForTicket
 
-import avocado
 from avocado       import Test
 from avocado       import main
 
@@ -40,7 +42,7 @@ class CartCtlOneNodeTest(Test):
     """
     Runs basic CaRT ctl tests
 
-    :avocado: tags=all,all_cart,pr,ctl,one_node
+    :avocado: tags=all,cart,pr,ctl,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -57,7 +59,7 @@ class CartCtlOneNodeTest(Test):
         """
         Test CaRT ctl
 
-        :avocado: tags=all,all_cart,pr,ctl,one_node
+        :avocado: tags=all,cart,pr,ctl,one_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")

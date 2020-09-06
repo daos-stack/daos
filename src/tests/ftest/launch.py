@@ -61,23 +61,15 @@ except ImportError:
 
         def __del__(self):
             """Destroy a TemporaryDirectory object."""
-            # rmtree(self.name)
+            rmtree(self.name)
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = {
     "test_servers": "test_servers",
     "test_clients": "test_clients",
-    "test_clients_1": "test_clients_1",
-    "test_clients_2": "test_clients_2",
-    "test_clients_3": "test_clients_3",
-    "test_clients_4": "test_clients_4",
-    "test_clients_5": "test_clients_5",
-    "test_clients_6": "test_clients_6",
     "bdev_list": "nvme",
 }
-YAML_KEY_ORDER = ("test_servers", "test_clients",
-                  "test_clients_1", "test_clients_2", "test_clients_3",
-                  "test_clients_4", "test_clients_5", "test_clients_6", "bdev_list")
+YAML_KEY_ORDER = ("test_servers", "test_clients", "bdev_list")
 
 def display(args, message):
     """Display the message if verbosity is set.
@@ -1469,36 +1461,6 @@ def main():
         help="test category or file to run")
     parser.add_argument(
         "-tc", "--test_clients",
-        action="store",
-        help="comma-separated list of hosts to use as replacement values for "
-             "client placeholders in each test's yaml file")
-    parser.add_argument(
-        "-tc1", "--test_clients_1",
-        action="store",
-        help="comma-separated list of hosts to use as replacement values for "
-             "client placeholders in each test's yaml file")
-    parser.add_argument(
-        "-tc2", "--test_clients_2",
-        action="store",
-        help="comma-separated list of hosts to use as replacement values for "
-             "client placeholders in each test's yaml file")
-    parser.add_argument(
-        "-tc3", "--test_clients_3",
-        action="store",
-        help="comma-separated list of hosts to use as replacement values for "
-             "client placeholders in each test's yaml file")
-    parser.add_argument(
-        "-tc4", "--test_clients_4",
-        action="store",
-        help="comma-separated list of hosts to use as replacement values for "
-             "client placeholders in each test's yaml file")
-    parser.add_argument(
-        "-tc5", "--test_clients_5",
-        action="store",
-        help="comma-separated list of hosts to use as replacement values for "
-             "client placeholders in each test's yaml file")
-    parser.add_argument(
-        "-tc6", "--test_clients_6",
         action="store",
         help="comma-separated list of hosts to use as replacement values for "
              "client placeholders in each test's yaml file")

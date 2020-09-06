@@ -22,6 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=bad-whitespace
+# pylint: disable=import-error
+# pylint: disable=broad-except
+
 from __future__ import print_function
 
 import sys
@@ -112,7 +116,7 @@ class CartIvOneNodeTest(Test):
     """
     Runs basic CaRT tests on one-node
 
-    :avocado: tags=all,all_cart,pr,iv,one_node
+    :avocado: tags=all,cart,pr,iv,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -280,7 +284,7 @@ class CartIvOneNodeTest(Test):
         """
         Test CaRT IV
 
-        :avocado: tags=all,all_cart,pr,iv,one_node
+        :avocado: tags=all,cart,pr,iv,one_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")

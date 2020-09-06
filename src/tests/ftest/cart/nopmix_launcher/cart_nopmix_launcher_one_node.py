@@ -22,6 +22,9 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
+# pylint: disable=import-error
+# pylint: bad-continuation
+
 from __future__ import print_function
 
 import os
@@ -30,7 +33,6 @@ import subprocess
 
 from apricot import skipForTicket
 
-import avocado
 from avocado       import Test
 from avocado       import main
 
@@ -42,7 +44,7 @@ class CartNoPmixLauncherOneNodeTest(Test):
     """
     Runs basic CaRT no_pmix_launcher tests
 
-    :avocado: tags=all,all_cart,pr,no_pmix_launcher,one_node
+    :avocado: tags=all,cart,pr,no_pmix_launcher,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -59,7 +61,7 @@ class CartNoPmixLauncherOneNodeTest(Test):
         """
         Test CaRT NoPmix Launcher
 
-        :avocado: tags=all,all_cart,pr,no_pmix_launcher,one_node
+        :avocado: tags=all,cart,pr,no_pmix_launcher,one_node
         """
 
         cli_bin = self.params.get("test_clients_bin", '/run/tests/*/')
