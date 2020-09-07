@@ -130,24 +130,28 @@ obj_rw_complete(crt_rpc_t *rpc, unsigned int map_version,
 }
 
 static void
-obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version, uint64_t epoch,
-	     struct ds_cont_child *cont)
+obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
+	     struct obj_io_context *ioc)
 {
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
 	int			 rc;
 	int			 i;
 
 	obj_reply_set_status(rpc, status);
-	obj_reply_map_version_set(rpc, map_version);
+	obj_reply_map_version_set(rpc, ioc->ioc_map_ver);
 	orwo->orw_epoch = epoch;
 
 	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_U64
-		", status %d\n", rpc, opc_get(rpc->cr_opc), map_version, epoch,
-		status);
+		", status %d\n", rpc, opc_get(rpc->cr_opc),
+		ioc->ioc_map_ver, epoch, status);
 
-	rc = crt_reply_send(rpc);
-	if (rc != 0)
-		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+	if (!ioc->ioc_lost_reply) {
+		rc = crt_reply_send(rpc);
+		if (rc != 0)
+			D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+	} else {
+		D_WARN("lost reply rpc %p\n", rpc);
+	}
 
 	if (obj_rpc_is_fetch(rpc)) {
 		if (orwo->orw_iod_sizes.ca_arrays != NULL) {
@@ -173,14 +177,29 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version, uint64_t epoch,
 			orwo->orw_maps.ca_count = 0;
 		}
 
-		if (cont) {
-			daos_csummer_free_ic(cont->sc_csummer,
+		if (ioc->ioc_coc) {
+			daos_csummer_free_ic(ioc->ioc_coc->sc_csummer,
 				&orwo->orw_iod_csums.ca_arrays);
 			orwo->orw_iod_csums.ca_count = 0;
 		}
 
 		daos_recx_ep_list_free(orwo->orw_rels.ca_arrays,
 				       orwo->orw_rels.ca_count);
+	
+		if (ioc->ioc_free_sgls) {
+			struct obj_rw_in *orw = crt_req_get(rpc);
+			d_sg_list_t *sgls = orwo->orw_sgls.ca_arrays;
+			int j;
+
+			for (i = 0; i < orw->orw_nr; i++) {
+				for (j = 0; j < sgls[i].sg_nr; j++) {
+					if (sgls[i].sg_iovs[j].iov_buf == NULL)
+						continue;
+					D_FREE(sgls[i].sg_iovs[j].iov_buf);
+					sgls[i].sg_iovs[j].iov_buf = NULL;
+				}
+			}
+		}
 	}
 }
 
@@ -1187,6 +1206,65 @@ out:
 	return rc;
 }
 
+int
+obj_prep_fetch_sgls(crt_rpc_t *rpc, struct obj_io_context *ioc)
+{
+	struct obj_rw_in	*orw = crt_req_get(rpc);
+	struct obj_rw_out	*orwo = crt_reply_get(rpc);
+	d_sg_list_t		*sgls = orw->orw_sgls.ca_arrays;
+	int			nr = orw->orw_sgls.ca_count;
+	bool			need_alloc = false;
+	int			i;
+	int			j;
+	int			rc = 0;
+
+	for (i = 0; i < nr; i++) {
+		for (j = 0; j < sgls[i].sg_nr; j++) {
+			d_iov_t *iov = &sgls[i].sg_iovs[j];
+
+			if (iov->iov_len < iov->iov_buf_len) {
+				need_alloc = true;
+				break;
+			}
+		}
+	}
+
+	/* reuse input sgls */
+	orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
+	orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
+	if (!need_alloc)
+		return 0;
+
+	/* Reset the iov first, easier for error cleanup */
+	for (i = 0; i < nr; i++) {
+		for (j = 0; j < sgls[i].sg_nr; j++)
+			sgls[i].sg_iovs[j].iov_buf = NULL;
+	}
+
+	sgls = orwo->orw_sgls.ca_arrays;
+	for (i = 0; i < nr; i++) {
+		for (j = 0; j < sgls[i].sg_nr; j++) {
+			d_iov_t *iov = &sgls[i].sg_iovs[j];
+
+			D_ALLOC(iov->iov_buf, iov->iov_buf_len);
+			if (iov->iov_buf == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+	}
+	ioc->ioc_free_sgls = 1;
+out:
+	if (rc) {
+		for (i = 0; i < nr; i++) {
+			for (i = 0; j < sgls[i].sg_nr; j++) {
+				D_FREE(sgls[i].sg_iovs[j].iov_buf);
+				sgls[i].sg_iovs[j].iov_buf = NULL;
+			}
+		}
+	}
+
+	return rc;
+}
+
 static int
 obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	     daos_iod_t *split_iods, struct dcs_iod_csums *split_csums,
@@ -1337,8 +1415,9 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (rc != 0)
 				goto out;
 		} else {
-			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
-			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
+			rc = obj_prep_fetch_sgls(rpc, ioc);
+			if (rc)
+				goto out;
 		}
 		recov_lists = vos_ioh2recx_list(ioh);
 		rc = obj_singv_ec_rw_filter(&orw->orw_oid, iods, offs,
@@ -1779,7 +1858,7 @@ out:
 		rc = -DER_IO;
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
-	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, 0, ioc.ioc_coc);
+	obj_rw_reply(rpc, rc, 0, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
@@ -1981,7 +2060,8 @@ again:
 			D_GOTO(out, rc);
 		}
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
-		goto cleanup;
+		ioc.ioc_lost_reply = 1;
+		D_GOTO(out, rc);
 	}
 
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
@@ -2087,12 +2167,9 @@ again:
 
 	if (opc == DAOS_OBJ_RPC_UPDATE && !(orw->orw_flags & ORF_RESEND) &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
-		goto cleanup;
-
+		ioc.ioc_lost_reply = 1;
 out:
-	obj_rw_reply(rpc, rc, ioc.ioc_map_ver, epoch.oe_value, ioc.ioc_coc);
-
-cleanup:
+	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
 	D_TIME_END(time_start, OBJ_PF_UPDATE);
 	if (sleep_ult != NULL)
 		dss_sleep_ult_destroy(sleep_ult);
