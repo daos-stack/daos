@@ -1336,7 +1336,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				    orw->orw_sgls.ca_count);
 		}
 
-		if (rma && ioc->ioc_coc->sc_props.dcp_dedup &&
+		if (rma && ioc->ioc_coc->sc_props.dcp_dedup_enabled &&
 		    ioc->ioc_coc->sc_props.dcp_dedup_verify) {
 			/**
 			 * If deduped data need to be compared, then perform
@@ -1354,7 +1354,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			      orw->orw_epoch, orw->orw_api_flags,
 			      dkey, orw->orw_nr, iods,
 			      iod_csums,
-			      ioc->ioc_coc->sc_props.dcp_dedup,
+			      ioc->ioc_coc->sc_props.dcp_dedup_enabled,
 			      ioc->ioc_coc->sc_props.dcp_dedup_size,
 			      &ioh, dth);
 		if (rc) {
@@ -3287,7 +3287,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 				dcsr->dcsr_oid, dcsh->dcsh_epoch.oe_value,
 				dcsr->dcsr_api_flags, &dcsr->dcsr_dkey,
 				dcsr->dcsr_nr, iods, csums,
-				ioc->ioc_coc->sc_props.dcp_dedup,
+				ioc->ioc_coc->sc_props.dcp_dedup_enabled,
 				ioc->ioc_coc->sc_props.dcp_dedup_size,
 				&iohs[i], dth);
 		if (rc != 0)
@@ -3310,7 +3310,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
 
-			if (ioc->ioc_coc->sc_props.dcp_dedup &&
+			if (ioc->ioc_coc->sc_props.dcp_dedup_enabled &&
 			    ioc->ioc_coc->sc_props.dcp_dedup_verify) {
 				if (bsgls_dups == NULL) {
 					D_ALLOC_ARRAY(bsgls_dups,
