@@ -23,7 +23,6 @@
 '''
 from apricot import TestWithServers, skipForTicket
 from daos_utils import DaosCommand
-from test_utils_container import TestContainer
 
 
 class DaosSnapshotTest(TestWithServers):
@@ -73,7 +72,8 @@ class DaosSnapshotTest(TestWithServers):
         for _ in range(count):
             epochs.append(
                 self.daos_cmd.container_create_snap(pool=pool_uuid,
-                cont=cont_uuid, svc=svc)["epoch"])
+                                                    cont=cont_uuid,
+                                                    svc=svc)["epoch"])
         return epochs
 
     def prepare_pool_container(self):
