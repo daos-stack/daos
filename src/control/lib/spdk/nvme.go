@@ -41,7 +41,6 @@ package spdk
 import "C"
 
 import (
-	"encoding/json"
 	"os"
 	"unsafe"
 
@@ -177,19 +176,6 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 	return wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
 }
 
-func convert(in interface{}, out interface{}) error {
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, out)
-}
-
-func convertControllerHealth(in C.struct_bio_dev_state, out *storage.NvmeControllerHealth) error {
-	return convert(in, out)
-}
-
 // c2GoController is a private translation function.
 func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
 	return &storage.NvmeController{
@@ -198,6 +184,31 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
 		PciAddr:  C.GoString(&ctrlr.pci_addr[0]),
 		FwRev:    C.GoString(&ctrlr.fw_rev[0]),
 		SocketID: int32(ctrlr.socket_id),
+	}
+}
+
+// c2GoDeviceHealth is a private translation function.
+func c2GoDeviceHealth(health *C.struct_bio_dev_state) *storage.NvmeControllerHealth {
+	return &storage.NvmeControllerHealth{
+		Model:           C.GoString(&health.bds_model[0]),
+		Serial:          C.GoString(&health.bds_serial[0]),
+		Timestamp:       uint64(health.bds_timestamp),
+		ErrorCount:      uint64(health.bds_error_count),
+		TempWarnTime:    uint32(health.bds_warn_temp_time),
+		TempCritTime:    uint32(health.bds_crit_temp_time),
+		CtrlBusyTime:    uint64(health.bds_ctrl_busy_time),
+		PowerCycles:     uint64(health.bds_power_cycles),
+		PowerOnHours:    uint64(health.bds_power_on_hours),
+		UnsafeShutdowns: uint64(health.bds_unsafe_shutdowns),
+		MediaErrors:     uint64(health.bds_media_errors),
+		ErrorLogEntries: uint64(health.bds_error_log_entries),
+		ChecksumErrors:  uint32(health.bds_checksum_errs),
+		Temperature:     uint32(health.bds_temperature),
+		TempWarn:        bool(health.bds_temp_warning),
+		AvailSpareWarn:  bool(health.bds_avail_spare_warning),
+		ReliabilityWarn: bool(health.bds_dev_reliability_warning),
+		ReadOnlyWarn:    bool(health.bds_read_only_warning),
+		VolatileWarn:    bool(health.bds_volatile_mem_warning),
 	}
 }
 
@@ -262,12 +273,7 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeC
 
 			return
 		}
-		ctrlr.HealthStats = &storage.NvmeControllerHealth{}
-		if err := convertControllerHealth(*healthPtr, ctrlr.HealthStats); err != nil {
-			return nil, errors.Wrapf(err,
-				"failed to convert spdk controller health %+v",
-				*healthPtr)
-		}
+		ctrlr.HealthStats = c2GoDeviceHealth(healthPtr)
 
 		ctrlrs = append(ctrlrs, ctrlr)
 
