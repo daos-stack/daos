@@ -41,6 +41,7 @@ package spdk
 import "C"
 
 import (
+	"encoding/json"
 	"os"
 	"unsafe"
 
@@ -142,6 +143,12 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 		C.GoString(&retPtr.ctrlrs.stats.bds_model[0]),
 		C.GoString(&retPtr.ctrlrs.stats.bds_serial[0]),
 		uint64(retPtr.ctrlrs.stats.bds_power_on_hours))
+	data, err := json.Marshal(&retPtr.ctrlrs.stats)
+	if err != nil {
+		return nil, err
+	}
+	log.Debugf("health data in json %s", string(data))
+
 	ctrlrs, err := collectCtrlrs(retPtr, "NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
