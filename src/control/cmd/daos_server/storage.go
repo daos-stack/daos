@@ -137,6 +137,10 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
 		if err := control.PrintNvmeControllers(nvmeResp.Controllers, &bld); err != nil {
 			return err
 		}
@@ -147,10 +151,18 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	case err != nil:
 		scanErrors = append(scanErrors, err)
 	case len(scmResp.Namespaces) > 0:
-		if err := control.PrintScmModules(scmResp.Modules, &bld); err != nil {
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
+		if err := control.PrintScmNamespaces(scmResp.Namespaces, &bld); err != nil {
 			return err
 		}
 	default:
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
 		if err := control.PrintScmModules(scmResp.Modules, &bld); err != nil {
 			return err
 		}

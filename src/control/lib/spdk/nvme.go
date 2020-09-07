@@ -138,14 +138,7 @@ func pciAddressList(ctrlrs storage.NvmeControllers) []string {
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
-	retPtr := C.nvme_discover()
-	data, err := json.Marshal(retPtr.ctrlrs.stats)
-	if err != nil {
-		return nil, err
-	}
-	log.Debugf("health data in json %s", string(data))
-
-	ctrlrs, err := collectCtrlrs(retPtr, "NVMe Discover(): C.nvme_discover")
+	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
@@ -184,24 +177,18 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 	return wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
 }
 
-//func convert(in interface{}, out interface{}) error {
-//	data, err := json.Marshal(in)
-//	if err != nil {
-//		return err
-//	}
-//
-//	return json.Unmarshal(data, out)
-//}
-//
-//func convertController(in spdk.Controller, out *storage.NvmeController) error {
-//	return convert(in, out)
-//}
-//
-//		sc := &storage.NvmeController{}
-//		if err := convertController(c, sc); err != nil {
-//			return nil, errors.Wrapf(err,
-//				"failed to convert spdk controller %+v", c)
-//		}
+func convert(in interface{}, out interface{}) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(data, out)
+}
+
+func convertControllerHealth(in C.struct_bio_dev_state, out *storage.NvmeControllerHealth) error {
+	return convert(in, out)
+}
 
 // c2GoController is a private translation function.
 func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
@@ -211,31 +198,6 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
 		PciAddr:  C.GoString(&ctrlr.pci_addr[0]),
 		FwRev:    C.GoString(&ctrlr.fw_rev[0]),
 		SocketID: int32(ctrlr.socket_id),
-	}
-}
-
-// c2GoDeviceHealth is a private translation function.
-func c2GoDeviceHealth(health *C.struct_bio_dev_state) *storage.NvmeControllerHealth {
-	return &storage.NvmeControllerHealth{
-		Model:           C.GoString(&health.bds_model[0]),
-		Serial:          C.GoString(&health.bds_serial[0]),
-		Timestamp:       uint64(health.bds_timestamp),
-		ErrorCount:      uint64(health.bds_error_count),
-		TempWarnTime:    uint32(health.bds_warn_temp_time),
-		TempCritTime:    uint32(health.bds_crit_temp_time),
-		CtrlBusyTime:    uint64(health.bds_ctrl_busy_time),
-		PowerCycles:     uint64(health.bds_power_cycles),
-		PowerOnHours:    uint64(health.bds_power_on_hours),
-		UnsafeShutdowns: uint64(health.bds_unsafe_shutdowns),
-		MediaErrors:     uint64(health.bds_media_errors),
-		ErrorLogEntries: uint64(health.bds_error_log_entries),
-		ChecksumErrors:  uint32(health.bds_checksum_errs),
-		Temperature:     uint32(health.bds_temperature),
-		TempWarn:        bool(health.bds_temp_warning),
-		AvailSpareWarn:  bool(health.bds_avail_spare_warning),
-		ReliabilityWarn: bool(health.bds_dev_reliability_warning),
-		ReadOnlyWarn:    bool(health.bds_read_only_warning),
-		VolatileWarn:    bool(health.bds_volatile_mem_warning),
 	}
 }
 
@@ -300,7 +262,12 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeC
 
 			return
 		}
-		ctrlr.HealthStats = c2GoDeviceHealth(healthPtr)
+		ctrlr.HealthStats = &storage.NvmeControllerHealth{}
+		if err := convertControllerHealth(*healthPtr, ctrlr.HealthStats); err != nil {
+			return nil, errors.Wrapf(err,
+				"failed to convert spdk controller health %+v",
+				*healthPtr)
+		}
 
 		ctrlrs = append(ctrlrs, ctrlr)
 
