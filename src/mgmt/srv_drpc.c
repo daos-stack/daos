@@ -1625,7 +1625,6 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__smd_dev_resp__init(resp);
 
-	D_INFO("ds_mgmt_smd_list_devs()\n");
 	rc = ds_mgmt_smd_list_devs(resp);
 	if (rc != 0)
 		D_ERROR("Failed to list SMD devices :"DF_RC"\n", DP_RC(rc));
@@ -1771,8 +1770,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__bio_health_resp__init(resp);
 
-	D_DEBUG(DB_MGMT, "drpc response structure initialised\n");
-
 	if (strlen(req->dev_uuid) != 0) {
 		rc = uuid_parse(req->dev_uuid, uuid);
 		if (rc != 0) {
@@ -1783,16 +1780,12 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */
 
-	D_DEBUG(DB_MGMT, "uuid Arsed\n");
-
 	D_ALLOC_PTR(bio_health);
 	if (bio_health == NULL) {
 		D_ERROR("Failed to allocate bio health struct\n");
 		rc = -DER_NOMEM;
 		goto out;
 	}
-
-	D_DEBUG(DB_MGMT, "health object ptr allocated\n");
 
 	rc = ds_mgmt_bio_health_query(bio_health, uuid, req->tgt_id);
 	if (rc != 0) {
@@ -1801,16 +1794,12 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "health query completed\n");
-
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
 		D_ERROR("failed to allocate buffer");
 		rc = -DER_NOMEM;
 		goto out;
 	}
-
-	D_DEBUG(DB_MGMT, "allocate buffer for response uuid\n");
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
 	bds = bio_health->mb_dev_state;
@@ -1844,9 +1833,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	strncpy(resp->bds_serial, bds.bds_serial,
 		strnlen(bds.bds_serial, BIO_DEV_STR_LEN-1));
-
-	D_INFO("health data received for SSD %s %s, power on hours %lu\n",
-		bds.bds_model, bds.bds_serial, bds.bds_power_on_hours);
 
 out:
 	resp->status = rc;

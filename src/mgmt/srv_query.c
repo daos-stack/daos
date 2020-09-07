@@ -49,20 +49,16 @@ bio_health_query(void *arg)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "BIO NVMe context initialized\n");
-
 	rc = bio_get_dev_state(&mbh->mb_dev_state, bxc);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device state\n");
 		return;
 	}
-
-	D_DEBUG(DB_MGMT, "BIO device state populated\n");
 }
 
 int
 ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
-			 char *tgt)
+			char *tgt)
 {
 	struct smd_dev_info	*dev_info;
 	ABT_thread		 thread;
