@@ -42,7 +42,7 @@ class DaosSnapshotTest(TestWithServers):
         1. Create snapshots.
         2. List the snapshots, obtain the epoch values, and compare against
             those returned during create-snap.
-        3. Destory all the snapshots with --epcrange. Use the first epoch for B
+        3. Destroy all the snapshots with --epcrange. Use the first epoch for B
             and the last epoch for E.
         3. List and verify that there's no snapshot.
 
