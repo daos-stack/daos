@@ -11,6 +11,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -945,10 +946,151 @@ public class DaosObjectIT {
       byte[] bytes = generateDataArray(dataSize);
       list.add(createEntryForUpdate("akey1", 1, 0, dataSize, bytes));
       IODataDesc desc = object.createDataDescForUpdate("dkey1", list);
-      object.update(desc);
+      try {
+        object.update(desc);
+      } finally {
+        desc.release();
+      }
       Assert.assertEquals(1, object.getRecordSize("dkey1", "akey1"));
       Assert.assertEquals(0, object.getRecordSize("dkey1", "akey2"));
       Assert.assertEquals(0, object.getRecordSize("dkey2", "akey2"));
+    } finally {
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
+  }
+
+  @Test
+  public void testReuseDataDesc() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    IODataDesc desc = object.createReusableDesc(IODataDesc.IodType.ARRAY, 1, true);
+    IODataDesc fetchDesc = object.createReusableDesc(IODataDesc.IodType.ARRAY, 1, false);
+    try {
+      object.open();
+      // initial
+      writeAndFetchWithReused(object, desc, fetchDesc, "dkey1", "akey", 2, 7);
+      // reuse same amount of entries
+      writeAndFetchWithReused(object, desc, fetchDesc, "dkey2", "akey2", 2, 7);
+      // reuse same amount of entries with different length
+      writeAndFetchWithReused(object, desc, fetchDesc, "dkey2", "akey2", 2, 9);
+      // reuse same amount of entries with different akey and length
+      writeAndFetchWithReused(object, desc, fetchDesc, "dkey4", "akey4", 2, 9);
+      // reuse all of entries
+      writeAndFetchWithReused(object, desc, fetchDesc, "dkey3", "akey3", 5, 7);
+      // reuse all of entries with different length
+      writeAndFetchWithReused(object, desc, fetchDesc, "dkey5", "akey5", 5, 11);
+    } finally {
+      desc.release();
+      fetchDesc.release();
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
+  }
+
+  private long generateLong(int valueLen) {
+    StringBuilder sb = new StringBuilder();
+    Random r = new Random();
+    sb.append(1);
+    for (int i = 0; i < valueLen - 1; i++) {
+      sb.append(r.nextInt(10));
+    }
+    return Long.valueOf(sb.toString());
+  }
+
+  private void writeAndFetchWithReused(DaosObject object, IODataDesc desc, IODataDesc fetchDesc,
+                                       String dkey, String akey, int nbrOfEntries, int valueLen) throws IOException {
+    // write
+    desc.setDkey(dkey);
+    fetchDesc.setDkey(dkey);
+    long l = generateLong(valueLen);
+    for (int i = 0; i < nbrOfEntries; i++) {
+      IODataDesc.Entry entry = desc.getEntry(i);
+      // buffer index
+      ByteBuf buf = entry.reuseBuffer();
+      buf.writeLong(l);
+      entry.setKey(akey + i, 0, buf);
+      IODataDesc.Entry fetchEntry = fetchDesc.getEntry(i);
+      fetchEntry.getDataBuffer().clear();
+      fetchEntry.setKey(akey + i, 0, 8);
+    }
+    object.update(desc);
+    // fetch
+    object.fetch(fetchDesc);
+    for (int i = 0; i < nbrOfEntries; i++) {
+      IODataDesc.Entry entry = fetchDesc.getEntry(i);
+      Assert.assertEquals(8, entry.getActualSize());
+      Assert.assertEquals(l, entry.getDataBuffer().readLong());
+    }
+  }
+
+  @Test
+  public void testReuseWriteDescArgument() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    try {
+      object.open();
+      // set dkey
+      IODataDesc desc = object.createReusableDesc(IODataDesc.IodType.ARRAY, 1, true);
+      Exception ee = null;
+      try {
+        object.update(desc);
+      } catch (Exception e) {
+        ee = e;
+      }
+      Assert.assertTrue(ee instanceof IllegalArgumentException);
+      Assert.assertTrue(ee.getMessage().contains("please set dkey first"));
+      ee = null;
+      IODataDesc.Entry et = desc.getEntry(0);
+      try {
+        et.setKey("", 0, et.getDataBuffer());
+      } catch (Exception e) {
+        ee = e;
+      }
+      Assert.assertTrue(ee instanceof IllegalArgumentException);
+      Assert.assertTrue(ee.getMessage().contains("key is blank"));
+      ee = null;
+      try {
+        et.setKey("akey1", 0, et.getDataBuffer());
+      } catch (Exception e) {
+        ee = e;
+      }
+      Assert.assertTrue(ee instanceof IllegalArgumentException);
+      Assert.assertTrue(ee.getMessage().contains("data size should be positive"));
+      desc.release();
+      // entry
+      desc = object.createReusableDesc(IODataDesc.IodType.ARRAY, 1, true);
+      desc.setDkey("dkey1");
+      try {
+        object.update(desc);
+      } catch (Exception e) {
+        ee = e;
+      } finally {
+        desc.release();
+      }
+      Assert.assertTrue(ee instanceof IllegalArgumentException);
+      Assert.assertTrue(ee.getMessage().contains("at least one of entries should have been reused"));
+      // success
+      ee = null;
+      desc = object.createReusableDesc(IODataDesc.IodType.ARRAY, 1, true);
+      IODataDesc.Entry entry = desc.getEntry(0);
+      entry.getDataBuffer().writeLong(1234567L);
+      desc.setDkey("dkey1");
+      entry.setKey("akey1", 0, entry.getDataBuffer());
+      try {
+        object.update(desc);
+      } catch (Exception e) {
+        ee = e;
+      } finally {
+        desc.release();
+      }
+      Assert.assertNull(ee);
     } finally {
       if (object.isOpen()) {
         object.punch();

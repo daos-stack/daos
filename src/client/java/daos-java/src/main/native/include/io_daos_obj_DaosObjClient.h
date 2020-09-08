@@ -66,18 +66,18 @@ JNIEXPORT jbyteArray JNICALL Java_io_daos_obj_DaosObjClient_queryObjectAttribute
 /*
  * Class:     io_daos_obj_DaosObjClient
  * Method:    fetchObject
- * Signature: (JJIJ)V
+ * Signature: (JJIJJI)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_fetchObject
-  (JNIEnv *, jobject, jlong, jlong, jint, jlong);
+  (JNIEnv *, jobject, jlong, jlong, jint, jlong, jlong, jint);
 
 /*
  * Class:     io_daos_obj_DaosObjClient
  * Method:    updateObject
- * Signature: (JJIJ)V
+ * Signature: (JJIJJI)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_updateObject
-  (JNIEnv *, jobject, jlong, jlong, jint, jlong);
+  (JNIEnv *, jobject, jlong, jlong, jint, jlong, jlong, jint);
 
 /*
  * Class:     io_daos_obj_DaosObjClient
@@ -102,6 +102,14 @@ JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_listObjectAkeys
  */
 JNIEXPORT jint JNICALL Java_io_daos_obj_DaosObjClient_getRecordSize
   (JNIEnv *, jobject, jlong, jlong);
+
+/*
+ * Class:     io_daos_obj_DaosObjClient
+ * Method:    releaseDesc
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_releaseDesc
+  (JNIEnv *, jclass, jlong);
 
 #ifdef __cplusplus
 }

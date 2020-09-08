@@ -196,11 +196,15 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and list of {@link IODataDesc} of akeys, types, offset, record
    * sizes, index in value buffer and how many records to fetch
+   * @param eqHandle
+   * handle of native EQ
+   * @param eventIdx
+   * event index associated with the EQ
    * @throws DaosIOException
    * {@link io.daos.DaosIOException}
    */
-  native void fetchObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress)
-      throws DaosIOException;
+  native void fetchObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress, long eqHandle,
+                          int eventIdx) throws DaosIOException;
 
   /**
    * update object records of given dkey and akeys.
@@ -214,11 +218,15 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and serialized list of {@link IODataDesc} of akeys, types,
    * offset and record sizes, index in value buffer and how many records to update
+   * @param eqHandle
+   * handle of native EQ
+   * @param eventIdx
+   * event index associated with the EQ
    * @throws DaosIOException
    * {@link io.daos.DaosIOException}
    */
-  native void updateObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress)
-      throws DaosIOException;
+  native void updateObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress, long eqHandle,
+                           int eventIdx) throws DaosIOException;
 
   /**
    * list dkeys of given object.
@@ -275,6 +283,14 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @throws DaosIOException
    */
   native int getRecordSize(long objectPtr, long address) throws DaosIOException;
+
+  /**
+   * release the native IO desc identified by <code>descPtr</code>.
+   *
+   * @param descPtr
+   * pointer of native IO desc
+   */
+  public static native void releaseDesc(long descPtr);
 
   protected long getContPtr() {
     return contPtr;

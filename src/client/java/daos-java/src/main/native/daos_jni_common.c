@@ -90,6 +90,11 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 		printf("error msg: %s\n", d_errstr(rc));
 		return rc;
 	}
+	rc = daos_eq_lib_init();
+    if (rc) {
+        printf("Failed daos_eq_lib_init: %d\n", rc);
+        return rc;
+    }
 	return JNI_VERSION;
 }
 
@@ -162,5 +167,6 @@ JNI_OnUnload(JavaVM* vm, void *reserved)
 	(*env)->DeleteGlobalRef(env, new_exception_cause);
 	(*env)->DeleteGlobalRef(env, new_exception_msg_code_msg);
 	(*env)->DeleteGlobalRef(env, new_exception_msg_code_cause);
+	daos_eq_lib_fini();
 	daos_fini();
 }

@@ -42,12 +42,27 @@
 #define _INCLUDED_DAOS_JNI_COMMON
 
 typedef struct {
-    uint16_t type;
-    uint32_t offset;
-    uint32_t record_size;
-    uint32_t bufferIdx;
-    uint32_t data_size;
-} record_desc_t;
+    int nbrOfEvents;
+    daos_handle_t eqhdl;
+    daos_event_t **events;
+} event_queue_wrapper_t;
+
+typedef struct {
+    int reusable;
+    int nbrOfAkeys;
+    int maxDkeyLen;
+    int maxAkeyLen;
+    daos_iod_t *iods;
+    d_sg_list_t *sgls;
+    daos_recx_t *recxs;
+    d_iov_t *iovs;
+    daos_iod_type_t iod_type;
+    int record_size;
+    long desc_buf_addr;
+    int loc_offset;
+    int ret_offset;
+    long data_buf_addr;
+} data_desc_t;
 
 static jint JNI_VERSION = JNI_VERSION_1_8;
 

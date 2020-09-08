@@ -45,7 +45,7 @@
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-buffer</artifactId>
-      <version>5.0.0.Alpha2</version>
+      <version>4.1.45.Final</version>
     </dependency>
     <dependency>
       <groupId>com.google.code.findbugs</groupId>
@@ -94,6 +94,17 @@
             <phase>compile</phase>
             <goals>
               <goal>javah</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>test-jar</goal>
             </goals>
           </execution>
         </executions>

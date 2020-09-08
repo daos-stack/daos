@@ -180,6 +180,88 @@ Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
 	}
 }
 
+JNIEXPORT jlong JNICALL Java_io_daos_DaosClient_createEventQueue
+  (JNIEnv *env, jclass clientClass, jint nbrOfEvents)
+{
+    daos_handle_t eqhdl;
+    int rc = daos_eq_create(&eqhdl);
+
+    if (rc) {
+        char *msg = "Failed to create EQ";
+
+        throw_exception_const_msg(env, msg, rc);
+        return -1;
+    }
+    int i;
+    event_queue_wrapper_t *eq = (event_queue_wrapper_t *)malloc(
+            sizeof(event_queue_wrapper_t) +
+            nbrOfEvents * sizeof(daos_event_t *));
+
+    eq->nbrOfEvents = nbrOfEvents;
+    eq->eqhdl = eqhdl;
+    for (i = 0; i < nbrOfEvents; i++) {
+        rc = daos_event_init(eq->events[i], eqhdl, NULL);
+        if (rc) {
+            goto fail;
+        }
+        eq->events[i]->ev_debug = i;
+    }
+
+fail:
+    if (rc) {
+        daos_eq_destroy(eqhdl, 1);
+        i--;
+        while (i >= 0) {
+            daos_event_fini(eq->events[i]);
+            i--;
+        }
+        free(eq);
+    }
+    return *(jlong*)&eq;
+}
+
+JNIEXPORT void JNICALL Java_io_daos_DaosClient_pollCompleted
+  (JNIEnv *env, jclass clientClass, jlong eqWrapperHdl, jlong memAddress,
+   jint nbrOfEvents)
+{
+    event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
+    struct daos_event **eps = (struct daos_event **)malloc(
+        sizeof(struct daos_event *) * nbrOfEvents);
+    int rc = daos_eq_poll(eq->eqhdl, 0, -1, nbrOfEvents, eps);
+    char *buffer = (char *)memAddress;
+    int idx;
+    int i;
+
+    if (rc < 0) {
+        char *tmp = "Failed to poll completed events, max events: %d";
+        char *msg = (char *)malloc(strlen(tmp) + 10);
+
+        sprintf(msg, tmp, nbrOfEvents);
+        throw_exception_base(env, msg, rc, 1, 0);
+        return;
+    }
+    memcpy(buffer, &rc, 4);
+    buffer += 4;
+    for (i = 0; i < rc; i++) {
+        idx = eps[i]->ev_debug;
+        memcpy(buffer, &idx, 4);
+        buffer += 4;
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_daos_DaosClient_destroyEventQueue
+  (JNIEnv *env, jclass clientClass, jlong eqWrapperHdl)
+{
+    event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
+    int i;
+
+    daos_eq_destroy(eq->eqhdl, 1);
+    for (i = 0; i < eq->nbrOfEvents; i++) {
+        daos_event_fini(eq->events[i]);
+    }
+    free(eq);
+}
+
 /**
  * JNI method to finalize DAOS.
  *

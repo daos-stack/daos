@@ -75,6 +75,7 @@ public class DaosClient implements ForceCloseable {
       public void run() {
         try {
           closeAll();
+          DaosEventQueue.destroyAll();
           daosSafeFinalize();
           log.info("daos finalized");
           ShutdownHookManager.removeHook(this);
@@ -182,6 +183,36 @@ public class DaosClient implements ForceCloseable {
    * {@link DaosIOException}
    */
   static native void daosCloseContainer(long contPtr) throws IOException;
+
+  /**
+   * create event queue with given number of events.
+   *
+   * @param nbrOfEvents
+   * number of events to associate with the queue
+   * @return the handler of event queue
+   */
+  public static native long createEventQueue(int nbrOfEvents) throws IOException;
+
+  /**
+   * poll completed events without wait.
+   *
+   * @param eqWrapperHdl
+   * handle of EQ wrapper
+   * @param memoryAddress
+   * memory address of ByteBuf to hold indices of completed events
+   * @param nbrOfEvents
+   * maximum number of events to complete
+   * @throws IOException
+   */
+  public static native void pollCompleted(long eqWrapperHdl, long memoryAddress, int nbrOfEvents) throws IOException;
+
+  /**
+   * destroy event queue identified by <code>queueHdl</code>.
+   *
+   * @param queueHdl
+   * queue handler
+   */
+  public static native void destroyEventQueue(long queueHdl) throws IOException;
 
   /**
    * close pool.

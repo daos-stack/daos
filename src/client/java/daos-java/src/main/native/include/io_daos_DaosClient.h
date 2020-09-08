@@ -33,6 +33,30 @@ JNIEXPORT void JNICALL Java_io_daos_DaosClient_daosCloseContainer
 
 /*
  * Class:     io_daos_DaosClient
+ * Method:    createEventQueue
+ * Signature: (I)J
+ */
+JNIEXPORT jlong JNICALL Java_io_daos_DaosClient_createEventQueue
+  (JNIEnv *, jclass, jint);
+
+/*
+ * Class:     io_daos_DaosClient
+ * Method:    pollCompleted
+ * Signature: (JJI)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_DaosClient_pollCompleted
+  (JNIEnv *, jclass, jlong, jlong, jint);
+
+/*
+ * Class:     io_daos_DaosClient
+ * Method:    destroyEventQueue
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_DaosClient_destroyEventQueue
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     io_daos_DaosClient
  * Method:    daosClosePool
  * Signature: (J)V
  */

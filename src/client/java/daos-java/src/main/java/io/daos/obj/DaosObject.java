@@ -287,9 +287,13 @@ public class DaosObject {
    * Check {@link #createDataDescForFetch(String, List)} and
    * {@link IODataDesc#createEntryForFetch(String, IODataDesc.IodType, int, int, int)}.
    * User should release internal buffer of <code>desc</code> by himself.
+   * @param eqHandle
+   * handle of native EQ
+   * @param eventIdx
+   * event index associated with the EQ
    * @throws DaosObjectException
    */
-  public void fetch(IODataDesc desc) throws DaosObjectException {
+  public void fetch(IODataDesc desc, long eqHandle, int eventIdx) throws DaosObjectException {
     checkOpen();
     desc.encode();
 
@@ -298,7 +302,8 @@ public class DaosObject {
     }
     ByteBuf descBuffer = desc.getDescBuffer();
     try {
-      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress());
+      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress(),
+          eqHandle, eventIdx);
       desc.parseResult();
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
@@ -309,14 +314,41 @@ public class DaosObject {
   }
 
   /**
+   * fetch object with given <code>desc</code>. User should get result from each entry, like below code snippet.
+   * <code>
+   *   for (Entry e : desc.getAkeyEntries()) {
+   *     int actualSize = e.getActualSize();
+   *     if (actualSize > 0 ) {
+   *       byte[] bytes = new byte[actualSize];
+   *       e.read(bytes) // or e.read(byteBuffer)
+   *     }
+   *   }
+   * </code>
+   * blocking call.
+   *
+   * @param desc
+   * {@link IODataDesc} describes list of {@link io.daos.obj.IODataDesc.Entry} to fetch akeyes' data under dkey.
+   * Check {@link #createDataDescForFetch(String, List)} and
+   * {@link IODataDesc#createEntryForFetch(String, IODataDesc.IodType, int, int, int)}.
+   * User should release internal buffer of <code>desc</code> by himself.
+   */
+  public void fetch(IODataDesc desc) throws DaosObjectException {
+    fetch(desc, -1, -1);
+  }
+
+  /**
    * update object with given <code>desc</code>.
    *
    * @param desc
    * {@link IODataDesc} describes list of {@link io.daos.obj.IODataDesc.Entry} to update on dkey.
    * User should release internal buffer of <code>desc</code> by himself.
+   * @param eqHandle
+   * handle of native EQ
+   * @param eventIdx
+   * event index associated with the EQ
    * @throws DaosObjectException
    */
-  public void update(IODataDesc desc) throws DaosObjectException {
+  public void update(IODataDesc desc, long eqHandle, int eventIdx) throws DaosObjectException {
     checkOpen();
     desc.encode();
 
@@ -324,7 +356,8 @@ public class DaosObject {
       log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress());
+      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
+          eqHandle, eventIdx);
       desc.succeed();
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
@@ -332,6 +365,18 @@ public class DaosObject {
       desc.setCause(de);
       throw de;
     }
+  }
+
+  /**
+   * update object with given <code>desc</code>. Blocking call.
+   *
+   * @param desc
+   * {@link IODataDesc} describes list of {@link io.daos.obj.IODataDesc.Entry} to update on dkey.
+   * User should release internal buffer of <code>desc</code> by himself.
+   * @throws DaosObjectException
+   */
+  public void update(IODataDesc desc) throws DaosObjectException {
+    update(desc, -1L, -1);
   }
 
   /**
@@ -515,6 +560,46 @@ public class DaosObject {
   public IODataDesc createDataDescForFetch(String dkey, List<IODataDesc.Entry> entries) throws IOException {
     IODataDesc desc = new IODataDesc(dkey, entries, false);
     return desc;
+  }
+
+  /**
+   * create reusable IODataDesc object.
+   *
+   * @param maxDkeyLen
+   * maximum length of dkey can reuse this IODataDesc object
+   * @param maxAkeyLen
+   * maxium length of akey can reuse this IODataDesc object
+   * @param nbrOfEntries
+   * number of akey entries available
+   * @param entryBufLen
+   * entry's buffer length
+   * @param iodType
+   * IOD type of all entries
+   * @param recordSize
+   * record size of all entries
+   * @param updateOrFetch
+   * for update or fetch
+   * @return IODataDesc instance
+   */
+  public IODataDesc createReusableDesc(int maxDkeyLen, int maxAkeyLen, int nbrOfEntries, int entryBufLen,
+                                       IODataDesc.IodType iodType, int recordSize, boolean updateOrFetch) {
+    return new IODataDesc(maxDkeyLen, maxAkeyLen, nbrOfEntries, entryBufLen, iodType, recordSize, updateOrFetch);
+  }
+
+  /**
+   * create reusable IODataDesc object with default values.
+   * maxDkeyLen: {@link IODataDesc#DEFAULT_LEN_REUSE_DKEY}
+   * maxAkeyLen: {@link IODataDesc#DEFAULT_LEN_REUSE_AKEY}
+   * nbrOfEntries: {@link IODataDesc#DEFAULT_NUMBER_OF_ENTRIES}
+   * entryBufLen: {@link IODataDesc#DEFAULT_LEN_REUSE_BUFFER}.
+   *
+   * @param iodType
+   * @param recordSize
+   * @param updateOrFetch
+   * @return
+   */
+  public IODataDesc createReusableDesc(IODataDesc.IodType iodType, int recordSize, boolean updateOrFetch) {
+    return new IODataDesc(iodType, recordSize, updateOrFetch);
   }
 
   /**
