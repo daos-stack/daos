@@ -23,7 +23,7 @@
 """
 from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
-from general_utils import get_log_file
+from general_utils import get_log_file, pcmd
 
 
 class MacsioCommand(ExecutableCommand):
@@ -472,11 +472,12 @@ class MacsioCommand(ExecutableCommand):
                 env[key] = mapping[key]
         return env
 
-    def check_results(self, result):
+    def check_results(self, result, hosts):
         """Check the macsio command results.
 
         Args:
             results (CmdResult): macsio command execution result
+            hosts (list): list of hosts on which the macsio output files exist
 
         Returns:
             bool: status of the macsio command results
@@ -488,4 +489,12 @@ class MacsioCommand(ExecutableCommand):
 
         # Basic check of the macsio command status
         status = result.exit_status == 0
+
+        # Display the results from the macsio log and timings files
+        macsio_files = (self.log_file_name.value, self.timings_file_name.value)
+        for macsio_file in macsio_files:
+            if macsio_file:
+                self.log.info("Output from %s", macsio_file)
+                pcmd(hosts, "cat {}".format(macsio_file), timeout=30)
+
         return status
