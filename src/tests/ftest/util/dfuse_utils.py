@@ -27,7 +27,7 @@ import time
 from command_utils_base import CommandFailure, FormattedParameter
 from command_utils import ExecutableCommand
 from ClusterShell.NodeSet import NodeSet
-from general_utils import check_file_exists, pcmd, stop_processes
+from general_utils import check_file_exists, pcmd
 
 
 class DfuseCommand(ExecutableCommand):
@@ -150,33 +150,55 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case of error creating directory
 
         """
-        # raise exception if mount point not specified
+        # Raise exception if mount point not specified
         if self.mount_dir.value is None:
             raise CommandFailure("Mount point not specified, "
                                  "check test yaml file")
 
-        _, missing_nodes = check_file_exists(
-            self.hosts, self.mount_dir.value, directory=True)
-        if missing_nodes:
-            # Remove any filenames matching the directory name to avoid errors
-            command_list = [
-                "ls -al {}".format(self.mount_dir.value),
-                self.get_umount_command(True),
-                "rm -fr {}".format(self.mount_dir.value),
-                "mkdir -p {}".format(self.mount_dir.value),
-            ]
-            for cmd in command_list:
-                ret_code = pcmd(missing_nodes, cmd, timeout=30)
-                if "mkdir" in cmd and (len(ret_code) > 1 or 0 not in ret_code):
-                    failed_nodes = [
-                        str(node_set) for code, node_set in ret_code.items()
-                        if code != 0
-                    ]
-                    error_hosts = NodeSet(",".join(failed_nodes))
-                    raise CommandFailure(
-                        "Error creating the {} dfuse mount point on the "
-                        "following hosts: {}".format(
-                            self.mount_dir.value, error_hosts))
+        # Create the mount point on any host without dfuse already mounted
+        state = self.check_mount_state()
+        if state["unmounted"]:
+            command = "mkdir -p {}".format(self.mount_dir.value)
+            ret_code = pcmd(state["unmounted"], command, timeout=30)
+            if len(ret_code) > 1 or 0 not in ret_code:
+                failed_nodes = [
+                    str(node_set) for code, node_set in ret_code.items()
+                    if code != 0
+                ]
+                error_hosts = NodeSet(",".join(failed_nodes))
+                raise CommandFailure(
+                    "Error creating the {} dfuse mount point on the "
+                    "following hosts: {}".format(
+                        self.mount_dir.value, error_hosts))
+
+    def check_mount_state(self, nodes=None):
+        """Check the dfuse mount point mounted state on the hosts.
+
+        Args:
+            nodes (NodeSet, optional): hosts on which to check if dfuse is
+                mounted. Defaults to None, which will use all of the hosts.
+
+        Returns:
+            dict: a dictionary of NodeSets of hosts with the dfuse mount point
+                either "mounted" or "unmounted"
+
+        """
+        state = {"mounted": NodeSet(), "unmounted": NodeSet()}
+        if not nodes:
+            nodes = NodeSet.fromlist(self.hosts)
+
+        # Detect which hosts have fuseblk mounted devices
+        stat_command = "stat -c %T -f {0} | grep -v fuseblk".format(
+            self.mount_dir.value)
+        retcodes = pcmd(nodes, stat_command, expect_rc=None)
+        for retcode, hosts in retcodes.items():
+            for host in hosts:
+                if retcode == 1:
+                    state["mounted"].add(host)
+                else:
+                    state["unmounted"].add(host)
+
+        return state
 
     def remove_mount_point(self, fail=True):
         """Remove dfuse directory.
@@ -290,19 +312,28 @@ class Dfuse(DfuseCommand):
         Run a command to verify dfuse is running on hosts where it is supposed
         to be.  Use grep -v and rc=1 here so that if it isn't, then we can
         see what is being used instead.
+
+        Args:
+            fail_on_error (bool, optional): should an exception be raised if an
+                error is detected. Defaults to True.
+
+        Raises:
+            CommandFailure: raised if dfuse is found not running on any expected
+                nodes and fail_on_error is set.
+
+        Returns:
+            bool: whether or not dfuse is running
+
         """
-        retcodes = pcmd(
-            self.running_hosts,
-            "stat -c %T -f {0} | grep -v fuseblk".format(self.mount_dir.value),
-            expect_rc=1)
-        if 1 in retcodes:
-            del retcodes[1]
-        if len(retcodes):
-            self.log.error('Errors checking running: %s', retcodes)
-            if not fail_on_error:
-                return False
-            raise CommandFailure('dfuse not running')
-        return True
+        status = True
+        state = self.check_mount_state(self.running_hosts)
+        if state["unmounted"]:
+            self.log.error(
+                "Error: dfuse not running on %s", str(state["unmounted"]))
+            status = False
+            if fail_on_error:
+                raise CommandFailure("dfuse not running")
+        return status
 
     def stop(self):
         """Stop dfuse.
@@ -318,41 +349,37 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case dfuse stop fails
 
         """
+        # Include all hosts when stopping to ensure all mount points in any
+        # state are properly removed
+        self.running_hosts.add(NodeSet.fromlist(self.hosts))
+
         self.log.info(
             "Stopping dfuse at %s on %s",
-            self.mount_dir.value,
-            self.running_hosts)
+            self.mount_dir.value, self.running_hosts)
 
         if self.mount_dir.value and self.running_hosts:
             error_list = []
 
-            # Predefine commands
-            stat_command = "stat -c %T -f {0} | grep -v fuseblk".format(
-                self.mount_dir.value)
-            kill_command = "pkill dfuse --signal KILL"
-
             # Loop until all fuseblk mounted devices are unmounted
             counter = 0
             while self.running_hosts and counter < 3:
-                # List any fuseblk mounted devices
-                retcodes = pcmd(
-                    self.running_hosts, stat_command, expect_rc=None)
-                for retcode, hosts in retcodes.items():
-                    if retcode != 1:
-                        # These hosts do not have the mount point mounted as a
-                        # fuseblk device, so remove them from the list
-                        for host in hosts:
-                            self.running_hosts.remove(host)
-                if self.running_hosts and counter < 2:
-                    # Attempt to kill dfuse on subsequent passes
-                    if counter > 0:
-                        pcmd(self.running_hosts, kill_command, timeout=30)
-                    # Attempt to unmount the fuseblk mounted devices - use force
-                    # after the first attempt
+                # Attempt to kill dfuse on after first unmount fails
+                if self.running_hosts and counter > 1:
+                    kill_command = "pkill dfuse --signal KILL"
+                    pcmd(self.running_hosts, kill_command, timeout=30)
+
+                # Attempt to unmount any fuseblk mounted devices after detection
+                if self.running_hosts and counter > 0:
                     pcmd(
                         self.running_hosts,
-                        self.get_umount_command(counter > 0), expect_rc=None)
+                        self.get_umount_command(counter > 1), expect_rc=None)
                     time.sleep(2)
+
+                # Detect which hosts have fuseblk mounted devices and remove any
+                # hosts which no longer have the dfuse mount point mounted
+                state = self.check_mount_state(self.running_hosts)
+                for host in state["unmounted"]:
+                    self.running_hosts.remove(host)
 
                 # Increment the loop counter
                 counter += 1
