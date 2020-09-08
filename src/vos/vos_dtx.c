@@ -2255,6 +2255,7 @@ vos_dtx_rsrvd_init(struct dtx_handle *dth)
 {
 	dth->dth_rsrvd_cnt = 0;
 	dth->dth_deferred_cnt = 0;
+	D_INIT_LIST_HEAD(&dth->dth_deferred_nvme);
 
 	if (dth->dth_modification_cnt <= 1) {
 		dth->dth_rsrvds = &dth->dth_rsrvd_inline;
@@ -2277,6 +2278,7 @@ vos_dtx_rsrvd_init(struct dtx_handle *dth)
 void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth)
 {
+	D_ASSERT(d_list_empty(&dth->dth_deferred_nvme));
 	D_FREE(dth->dth_deferred);
 	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
 		D_FREE(dth->dth_rsrvds);

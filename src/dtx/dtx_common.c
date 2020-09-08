@@ -726,6 +726,7 @@ abort:
 			  dth->dth_epoch, &dte, 1);
 	}
 
+	vos_dtx_rsrvd_fini(dth);
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid))
 		D_DEBUG(DB_IO,
@@ -749,8 +750,6 @@ out:
 
 	D_FREE(dlh->dlh_subs);
 	D_FREE(dth->dth_oid_array);
-
-	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }
@@ -840,8 +839,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 
 	D_FREE(dth->dth_oid_array);
 
-	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
-		D_FREE(dth->dth_rsrvds);
+	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }

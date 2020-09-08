@@ -280,15 +280,31 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 			lrua_lookup(parent->te_info->ti_array, neg_idx,
 				    &ts_source);
 		}
-		if (ts_source == NULL) /* for negative and uncached entries */
+		if (ts_source == NULL)
 			ts_source = parent;
 
+		if ((type & 1) != 0) {
+			/* This is a new negative entry. The low timestamp of
+			 * the parent should cover this case so copy it to
+			 * both timestamps.
+			 */
+			vos_ts_copy(&entry->te_ts.tp_ts_rh,
+				    &entry->te_ts.tp_tx_rh,
+				    ts_source->te_ts.tp_ts_rl,
+				    &ts_source->te_ts.tp_tx_rl);
+		} else {
+			/** It is either copying from a negative entry
+			 * or its parent was evicted so copy both timestamps
+			 */
+			vos_ts_copy(&entry->te_ts.tp_ts_rh,
+				    &entry->te_ts.tp_tx_rh,
+				    ts_source->te_ts.tp_ts_rh,
+				    &ts_source->te_ts.tp_tx_rh);
+		}
+		/** Low timestamp is always copied as is */
 		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
 			    ts_source->te_ts.tp_ts_rl,
 			    &ts_source->te_ts.tp_tx_rl);
-		vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
-			    ts_source->te_ts.tp_ts_rh,
-			    &ts_source->te_ts.tp_tx_rh);
 	}
 
 	/** Set the lower bounds for the entry */
