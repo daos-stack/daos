@@ -91,6 +91,8 @@ class MacsioTestBase(TestWithServers):
             # Include DAOS VOL environment settings
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = "{}".format(plugin)
+            env["DAOS_POOL"] = pool_uuid
+            env["DAOS_SVCL"] = pool_svcl
 
         # Setup the job manager (mpirun) to run the macsio command
         self.macsio.daos_pool = pool_uuid
