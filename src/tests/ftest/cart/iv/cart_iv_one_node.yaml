@@ -5,7 +5,7 @@ defaultENV:
   #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/no_sep
   #!filter-only : /run/tests/iv
   D_LOG_MASK: "DEBUG,MEM=ERR"
-  CRT_PHY_ADDR_STR: "ofi+sockets"
+  CRT_PHY_ADDR_STR: "ofi+psm2"
   OFI_INTERFACE: "eth0"
   test_servers_CRT_CTX_NUM: "2"
   test_clients_CRT_CTX_NUM: "2"
