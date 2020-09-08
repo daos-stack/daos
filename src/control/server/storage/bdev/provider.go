@@ -164,6 +164,11 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 			}
 			p.scanCache = resp
 		}
+		for _, c := range p.scanCache.Controllers {
+			p.log.Debugf("ctrlr health data received for SSD %s %s, power on hours %d\n",
+				c.HealthStats.Model, c.HealthStats.Serial,
+				c.HealthStats.PowerOnHours)
+		}
 
 		return p.scanCache, nil
 	}

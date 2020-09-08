@@ -41,6 +41,7 @@ package spdk
 import "C"
 
 import (
+	"encoding/json"
 	"os"
 	"unsafe"
 
@@ -137,10 +138,26 @@ func pciAddressList(ctrlrs storage.NvmeControllers) []string {
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
-	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
+	retPtr := C.nvme_discover()
+	log.Debugf("health data received for SSD %s %s, power on hours %d\n",
+		C.GoString(&retPtr.ctrlrs.stats.bds_model[0]),
+		C.GoString(&retPtr.ctrlrs.stats.bds_serial[0]),
+		uint64(retPtr.ctrlrs.stats.bds_power_on_hours))
+	data, err := json.Marshal(retPtr.ctrlrs.stats)
+	if err != nil {
+		return nil, err
+	}
+	log.Debugf("health data in json %s", string(data))
+
+	ctrlrs, err := collectCtrlrs(retPtr, "NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
+	for _, c := range ctrlrs {
+		log.Debugf("ctrlr health data received for SSD %s %s, power on hours %d\n",
+			c.HealthStats.Model, c.HealthStats.Serial,
+			c.HealthStats.PowerOnHours)
+	}
 
 	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
 }
