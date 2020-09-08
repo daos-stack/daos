@@ -54,7 +54,7 @@ test_run(d_rank_t my_rank)
 		  "crt_group_config_save() failed. rc: %d\n", rc);
 	DBG_PRINT("Group config saved\n");
 
-	if (test.tg_save_cfg && my_rank == 0) {
+	if (my_rank == 0) {
 		rc = crt_group_config_path_set(test.tg_cfg_path);
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
