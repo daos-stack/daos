@@ -123,6 +123,26 @@ class Dfuse(DfuseCommand):
         if len(self.running_hosts):
             self.log.error('Dfuse object deleted without shutting down')
 
+    def get_umount_command(self, force=False):
+        """Get the command to umount the dfuse mount point.
+
+        Args:
+            force (bool, optional): whether to force the umount with a lazy
+                unmount. Defaults to False.
+
+        Returns:
+            str: the dfuse umount command
+
+        """
+        umount = "-uz" if force else "-u"
+        command = [
+            "if [ -x '$(command -v fusermount)' ]",
+            "then fusermount {0} {1}".format(umount, self.mount_dir.value),
+            "else fusermount3 {0} {1}".format(umount, self.mount_dir.value),
+            "fi"
+        ]
+        return ";".join(command)
+
     def create_mount_point(self):
         """Create dfuse directory.
 
@@ -141,6 +161,7 @@ class Dfuse(DfuseCommand):
             # Remove any filenames matching the directory name to avoid errors
             command_list = [
                 "ls -al {}".format(self.mount_dir.value),
+                self.get_umount_command(True),
                 "rm -fr {}".format(self.mount_dir.value),
                 "mkdir -p {}".format(self.mount_dir.value),
             ]
@@ -308,18 +329,6 @@ class Dfuse(DfuseCommand):
             # Predefine commands
             stat_command = "stat -c %T -f {0} | grep -v fuseblk".format(
                 self.mount_dir.value)
-            umount_command = ";".join([
-                "if [ -x '$(command -v fusermount)' ]",
-                "then fusermount -u {0}".format(self.mount_dir.value),
-                "else fusermount3 -u {0}".format(self.mount_dir.value),
-                "fi"
-            ])
-            umount_command_force = ";".join([
-                "if [ -x '$(command -v fusermount)' ]",
-                "then fusermount -uz {0}".format(self.mount_dir.value),
-                "else fusermount3 -uz {0}".format(self.mount_dir.value),
-                "fi"
-            ])
             kill_command = "pkill dfuse --signal KILL"
 
             # Loop until all fuseblk mounted devices are unmounted
@@ -338,13 +347,11 @@ class Dfuse(DfuseCommand):
                     # Attempt to kill dfuse on subsequent passes
                     if counter > 0:
                         pcmd(self.running_hosts, kill_command, timeout=30)
-                    # Attempt to unmount the fuseblk mounted devices
-                    if counter == 0:
-                        pcmd(self.running_hosts, umount_command, expect_rc=None)
-                    else:
-                        pcmd(
-                            self.running_hosts, umount_command_force,
-                            expect_rc=None)
+                    # Attempt to unmount the fuseblk mounted devices - use force
+                    # after the first attempt
+                    pcmd(
+                        self.running_hosts,
+                        self.get_umount_command(counter > 0), expect_rc=None)
                     time.sleep(2)
 
                 # Increment the loop counter
