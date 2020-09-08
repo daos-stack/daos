@@ -142,7 +142,6 @@ type (
 		SocketID    int32
 		HealthStats *NvmeControllerHealth `hash:"ignore"`
 		Namespaces  []*NvmeNamespace
-		//SmdDevices  []*control.SmdDevice `hash:"ignore"`
 	}
 
 	// NvmeControllers is a type alias for []*NvmeController which implements fmt.Stringer.

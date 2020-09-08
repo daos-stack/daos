@@ -24,6 +24,8 @@
 package bdev
 
 import (
+	"sync"
+
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/fault"
@@ -107,11 +109,12 @@ type (
 	// Provider encapsulates configuration and logic for interacting with a Block
 	// Device Backend.
 	Provider struct {
+		sync.Mutex // ensure mutually exclusive access to scan cache
+		firmwareProvider
 		log       logging.Logger
 		backend   Backend
 		fwd       *Forwarder
 		scanCache *ScanResponse
-		firmwareProvider
 	}
 )
 
@@ -154,6 +157,9 @@ func (p *Provider) IsVMDDisabled() bool {
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.shouldForward(req) {
 		req.DisableVMD = p.IsVMDDisabled()
+
+		p.Lock()
+		defer p.Unlock()
 
 		if p.scanCache == nil || req.Rescan {
 			p.log.Debug("bdev provider rescan requested")

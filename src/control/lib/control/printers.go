@@ -160,9 +160,11 @@ func PrintResponseErrors(resp hostErrorsGetter, out io.Writer, opts ...PrintConf
 }
 
 func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
 	if len(controllers) == 0 {
 		fmt.Fprintln(out, "\tNo NVMe devices found")
-		return nil
+		return w.Err
 	}
 
 	pciTitle := "NVMe PCI"
@@ -190,19 +192,26 @@ func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 	}
 
 	formatter.Format(table)
-	return nil
+	return w.Err
 }
 
 func PrintNvmeControllerSummary(nvme *storage.NvmeController, out io.Writer, opts ...PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "PCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		nvme.PciAddr, nvme.Model, nvme.FwRev, nvme.SocketID, humanize.Bytes(nvme.Capacity()))
-	return err
+	w := txtfmt.NewErrWriter(out)
+
+	if _, err := fmt.Fprintf(out, "PCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
+		nvme.PciAddr, nvme.Model, nvme.FwRev, nvme.SocketID, humanize.Bytes(nvme.Capacity())); err != nil {
+		return err
+	}
+
+	return w.Err
 }
 
 func PrintNvmeControllerHealth(stat *storage.NvmeControllerHealth, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
 	if stat == nil {
 		fmt.Fprintln(out, "Health Stats Unavailable")
-		return nil
+		return w.Err
 	}
 
 	fmt.Fprintln(out, "Health Stats:")
@@ -268,13 +277,15 @@ func PrintNvmeControllerHealth(stat *storage.NvmeControllerHealth, out io.Writer
 		fmt.Fprintf(iw, "OK\n")
 	}
 
-	return nil
+	return w.Err
 }
 
 func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
 	if len(modules) == 0 {
 		fmt.Fprintln(out, "\tNo SCM modules found")
-		return nil
+		return w.Err
 	}
 
 	physicalIdTitle := "SCM Module ID"
@@ -304,13 +315,15 @@ func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintCon
 	}
 
 	formatter.Format(table)
-	return nil
+	return w.Err
 }
 
 func PrintScmNamespaces(namespaces storage.ScmNamespaces, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
 	if len(namespaces) == 0 {
 		fmt.Fprintln(out, "\tNo SCM namespaces found")
-		return nil
+		return w.Err
 	}
 
 	deviceTitle := "SCM Namespace"
@@ -332,7 +345,7 @@ func PrintScmNamespaces(namespaces storage.ScmNamespaces, out io.Writer, opts ..
 	}
 
 	formatter.Format(table)
-	return nil
+	return w.Err
 }
 
 func printScmMountPoints(mountpoints storage.ScmMountPoints, out io.Writer, opts ...PrintConfigOption) error {

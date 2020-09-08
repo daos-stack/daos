@@ -91,6 +91,21 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
+func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (func(), error) {
+	restore, err := w.suppressOutput()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to suppress spdk output")
+	}
+
+	// provide empty whitelist on init so all devices are discovered
+	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
+		restore()
+		return nil, errors.Wrap(err, "failed to init spdk env")
+	}
+
+	return restore, nil
+}
+
 func newBackend(log logging.Logger, sr *spdkSetupScript) *spdkBackend {
 	return &spdkBackend{
 		log:     log,
@@ -126,20 +141,13 @@ func filterControllers(in storage.NvmeControllers, pciFilter ...string) (out sto
 
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
-	spdkOpts := spdk.EnvOptions{
+	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
 		DisableVMD: b.IsVMDDisabled(),
-	}
-
-	restore, err := b.binding.suppressOutput()
+	})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to suppress spdk output")
+		return nil, err
 	}
-	defer restore()
-
-	// provide empty whitelist on init so all devices are discovered
-	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
-		return nil, errors.Wrap(err, "failed to init spdk env")
-	}
+	defer restoreOutput()
 
 	cs, err := b.binding.Discover(b.log)
 	if err != nil {
@@ -258,10 +266,11 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 		DisableVMD:   b.IsVMDDisabled(),
 	}
 
-	// provide bdev as whitelist so only formatting devices are bound
-	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
-		return nil, errors.Wrap(err, "failed to init spdk env")
+	restoreOutput, err := b.binding.init(b.log, spdkOpts)
+	if err != nil {
+		return nil, err
 	}
+	defer restoreOutput()
 	defer b.binding.FiniSPDKEnv(b.log, spdkOpts)
 	defer b.binding.CleanLockfiles(b.log, req.DeviceList...)
 
@@ -357,20 +366,13 @@ func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) er
 		return FaultBadPCIAddr("")
 	}
 
-	spdkOpts := spdk.EnvOptions{
+	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
 		DisableVMD: b.IsVMDDisabled(),
-	}
-
-	restore, err := b.binding.suppressOutput()
+	})
 	if err != nil {
-		return errors.Wrap(err, "failed to suppress spdk output")
+		return err
 	}
-	defer restore()
-
-	// provide empty whitelist on init so all devices are discovered
-	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
-		return errors.Wrap(err, "failed to init spdk env")
-	}
+	defer restoreOutput()
 
 	cs, err := b.binding.Discover(b.log)
 	if err != nil {
