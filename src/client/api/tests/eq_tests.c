@@ -980,6 +980,69 @@ out_free:
 	return rc;
 }
 
+static int
+inc_cb(void *udata, daos_event_t *ev, int ret)
+{
+	int *num = (int *)udata;
+
+	D_ASSERT(ret == 0);
+	*num = 999;
+
+	return 0;
+}
+
+static int
+eq_test_8()
+{
+	struct daos_event	*ep;
+	struct daos_event	ev;
+	int			*udata;
+	int			rc = 0;
+
+	DAOS_TEST_ENTRY("8", "Event Completion Callback");
+
+	rc = daos_event_init(&ev, my_eqh, NULL);
+	if (rc) {
+		print_error("daos_event_init() failed (%d)\n", rc);
+		goto out;
+	}
+
+	D_ALLOC_ARRAY(udata, 1);
+	D_ASSERT(udata != NULL);
+	*udata = 0;
+
+	rc = daos_event_register_comp_cb(&ev, inc_cb, udata);
+	if (rc) {
+		print_error("daos_event_register_comp_cb() failed (%d)\n", rc);
+		goto out;
+	}
+
+	rc = daos_event_launch(&ev);
+	if (rc) {
+		print_error("daos_event_launch() failed (%d)\n", rc);
+		goto out;
+	}
+
+	daos_event_complete(&ev, 0);
+	if (*udata != 999) {
+		print_error("invalid udata value (%d)\n", *udata);
+		rc =  -DER_INVAL;
+		goto out;
+	}
+
+	rc = daos_eq_poll(my_eqh, 0, 0, 1, &ep);
+	if (rc != 1) {
+		print_error("Failed to drain EQ: %d\n", rc);
+		goto out;
+	}
+	rc = 0;
+
+	daos_event_fini(&ev);
+out:
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1053,6 +1116,12 @@ main(int argc, char **argv)
 	rc = eq_test_7();
 	if (rc != 0) {
 		print_error("EQ TEST 7 failed: %d\n", rc);
+		test_fail++;
+	}
+
+	rc = eq_test_8();
+	if (rc != 0) {
+		print_error("EQ TEST 8 failed: %d\n", rc);
 		test_fail++;
 	}
 
