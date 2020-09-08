@@ -614,7 +614,7 @@ typedef enum {
 	CRT_IV_SYNC_BIDIRECTIONAL = 0x2,
 } crt_iv_sync_flag_t;
 
-typedef int (*crt_iv_sync_done_cb_t)(void *cb_arg);
+typedef int (*crt_iv_sync_done_cb_t)(void *cb_arg, int rc);
 typedef struct {
 	crt_iv_sync_mode_t	ivs_mode;
 	crt_iv_sync_event_t	ivs_event;
