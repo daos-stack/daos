@@ -40,7 +40,7 @@ struct io_params {
 	daos_iod_t		iod;
 	d_iov_t			iov;
 	d_sg_list_t		sgl;
-	char			akey_str;
+	char			akey_val;
 };
 
 static int
@@ -83,8 +83,8 @@ dc_kv_put(tse_task_t *task)
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
 
 	/** init iod. */
-	params->akey_str = '0';
-	d_iov_set(&params->iod.iod_name, &params->akey_str, 1);
+	params->akey_val = '0';
+	d_iov_set(&params->iod.iod_name, &params->akey_val, 1);
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
 	params->iod.iod_size	= args->buf_size;
@@ -164,8 +164,8 @@ dc_kv_get(tse_task_t *task)
 	d_iov_set(&params->dkey, (void *)args->key, strlen(args->key));
 
 	/** init iod. */
-	params->akey_str = '0';
-	d_iov_set(&params->iod.iod_name, &params->akey_str, 1);
+	params->akey_val = '0';
+	d_iov_set(&params->iod.iod_name, &params->akey_val, 1);
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
 	params->iod.iod_size	= *buf_size;
