@@ -201,6 +201,18 @@ co_attribute(void **state)
 	assert_int_equal(out_sizes[0], in_sizes[0]);
 	assert_int_equal(out_sizes[1], in_sizes[1]);
 
+	rc = daos_cont_del_attr(arg->coh, n, names, arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("Verifying all attributes deletion\n");
+	total_size = 0;
+	rc = daos_cont_list_attr(arg->coh, NULL, &total_size,
+				 arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(total_size, 0);
+
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
