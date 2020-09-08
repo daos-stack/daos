@@ -68,6 +68,7 @@ typedef enum {
 	DAOS_OPC_POOL_LIST_ATTR,
 	DAOS_OPC_POOL_GET_ATTR,
 	DAOS_OPC_POOL_SET_ATTR,
+	DAOS_OPC_POOL_DEL_ATTR,
 	DAOS_OPC_POOL_STOP_SVC,
 	DAOS_OPC_POOL_LIST_CONT,
 
@@ -86,6 +87,7 @@ typedef enum {
 	DAOS_OPC_CONT_LIST_ATTR,
 	DAOS_OPC_CONT_GET_ATTR,
 	DAOS_OPC_CONT_SET_ATTR,
+	DAOS_OPC_CONT_DEL_ATTR,
 	DAOS_OPC_CONT_ALLOC_OIDS,
 	DAOS_OPC_CONT_LIST_SNAP,
 	DAOS_OPC_CONT_CREATE_SNAP,
@@ -326,6 +328,16 @@ typedef struct {
 	size_t const		*sizes;
 } daos_pool_set_attr_t;
 
+/** pool del attributes args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t		poh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_pool_del_attr_t;
+
 /** pool add/remove replicas args */
 typedef struct {
 	/** UUID of the pool. */
@@ -496,6 +508,16 @@ typedef struct {
 	/** Array of \a n elements containing the sizes of attribute values. */
 	size_t const		*sizes;
 } daos_cont_set_attr_t;
+
+/** Container attribute del args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_cont_del_attr_t;
 
 /** Container Object ID allocation args */
 typedef struct {
