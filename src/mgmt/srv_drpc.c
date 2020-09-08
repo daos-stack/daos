@@ -1847,6 +1847,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("health data received for SSD %s %s, power on hours %lu\n",
 		bds.bds_model, bds.bds_serial, bds.bds_power_on_hours);
+	D_INFO("health data converted drpc resp for SSD %s %s, power on hours %lu\n",
+		resp->bds_model, resp->bds_serial, resp->bds_power_on_hours);
 
 out:
 	resp->status = rc;
