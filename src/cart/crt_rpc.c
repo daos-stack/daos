@@ -622,7 +622,7 @@ out:
 	/* Force complete and destroy chained rpc */
 	if (rc != 0) {
 		crt_context_req_untrack(chained_rpc_priv);
-		crt_rpc_complete(chained_rpc_priv, rc);
+		crt_rpc_complete_keep_referenced(chained_rpc_priv, rc);
 	}
 
 	/* Addref done in crt_issue_uri_lookup() */
@@ -929,7 +929,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 finish_rpc:
 	if (rc != 0) {
 		crt_context_req_untrack(rpc_priv);
-		crt_rpc_complete(rpc_priv, rc);
+		crt_rpc_complete_keep_referenced(rpc_priv, rc);
 	}
 
 out:
@@ -1113,7 +1113,7 @@ out:
 	/* internally destroy the req when failed */
 	if (rc != 0) {
 		if (!rpc_priv->crp_coll) {
-			crt_rpc_complete(rpc_priv, rc);
+			crt_rpc_complete_keep_referenced(rpc_priv, rc);
 			/* failure already reported through complete cb */
 			if (complete_cb != NULL)
 				rc = 0;
@@ -1186,7 +1186,7 @@ crt_req_abort(crt_rpc_t *req)
 			  "rpc_priv->crp_state %#x, not inflight, complete it "
 			  "as canceled.\n",
 			  rpc_priv->crp_state);
-		crt_rpc_complete(rpc_priv, -DER_CANCELED);
+		crt_rpc_complete_keep_referenced(rpc_priv, -DER_CANCELED);
 		D_GOTO(out, rc = 0);
 	}
 
@@ -1194,7 +1194,7 @@ crt_req_abort(crt_rpc_t *req)
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, rc: %d, "
 			  "opc: %#x.\n", rc, rpc_priv->crp_pub.cr_opc);
-		crt_rpc_complete(rpc_priv, rc);
+		crt_rpc_complete_keep_referenced(rpc_priv, rc);
 		D_GOTO(out, rc);
 	}
 
