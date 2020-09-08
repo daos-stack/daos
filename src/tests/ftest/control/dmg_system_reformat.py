@@ -34,7 +34,8 @@ class DmgSystemReformatTest(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
 
-    Test to verify that dmg storage system format command reformat option.
+    Test to verify dmg storage format reformat option works as expected on a
+    DAOS system after a controlled shutdown.
 
     :avocado: recursive
     """
