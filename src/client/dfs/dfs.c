@@ -3997,7 +3997,8 @@ out:
 int
 dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 {
-	if (oid == NULL)
+	if ((obj == NULL)|| 
+	    (oid == NULL))
 		return EINVAL;
 	oid_cp(oid, obj->oid);
 	return 0;

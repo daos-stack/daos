@@ -119,7 +119,7 @@ dfs_test_mount_umount(void **state)
 static void
 dfs_test_open_release(void **state)
 {
-        dfs_obj_t               *obj;
+        dfs_obj_t              *obj;
         daos_size_t             chunk_size = 64;
         int                     rc;
 
@@ -169,7 +169,7 @@ dfs_test_open_release(void **state)
         assert_int_equal(rc, 0);
         print_message("Successfull object creating for RW\n");
 
-        /** Successful object releasin */
+        /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
         print_message("Successful object releasing\n");
@@ -180,7 +180,7 @@ dfs_test_open_release(void **state)
         assert_int_equal(rc, 0);
         print_message("Successfull object openning for RW\n");
 
-        /** Successful object releasin */
+        /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
         print_message("Successful object releasing\n");
@@ -191,7 +191,7 @@ dfs_test_open_release(void **state)
         assert_int_equal(rc, 0);
         print_message("Successfull object creating for RDONLY\n");
 
-        /** Successful object releasin */
+        /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
         print_message("Successful object releasing\n");
@@ -208,7 +208,7 @@ dfs_test_open_release(void **state)
         assert_int_equal(rc, 0);
         print_message("Successfull open RDONLY object for RDONLY\n");
 
-        /** Successful object releasin */
+        /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
         print_message("Successful object releasing\n");
@@ -300,54 +300,114 @@ dfs_test_global_local(void **state)
 	rc = dfs_local2global(dfs_mt, /*&glob*/ NULL);
         assert_int_equal(rc, EINVAL);
         print_message("local2global should get a pointer for the global\n");
-
+	
 	/** Successful local2global length getting */
 	rc = dfs_local2global(dfs_mt, &glob);
         assert_int_equal(rc, 0);
 	print_message("Successful local2global length getting\n");
-
+	
 	/** NULL dfs mount for local result */
 	rc = dfs_global2local(poh, co_hdl, O_RDWR, glob, /*&dfs*/ NULL);
         assert_int_equal(rc, EINVAL);
         print_message("global2local should get a pointer for the local\n");
-
+	
 	/** NULL iov_buf in glob */
 	rc = dfs_global2local(poh, co_hdl, O_RDWR, glob, &dfs);
         assert_int_equal(rc, EINVAL);
-	print_message("global2local should have buffer allocated for the resuly\n");
-
+	print_message("global2local should get result buffer allocated\n");
+	
         /** allocate buffer for global pool handle */
         D_ALLOC(glob.iov_buf, glob.iov_buf_len);
-
+	
         /** Buffer for glob should be big enough (it is still 0 size) */
         rc = dfs_global2local(poh, co_hdl, O_RDWR, glob, &dfs);
         assert_int_equal(rc, EINVAL);
-        print_message("global2local should have buffer big enough for the result\n");
-
+        print_message("global2local should get buffer  enough for result\n");
+	
         glob.iov_len = glob.iov_buf_len;
-
+	
         /** Local data should actualy come to global */
-        rc = dfs_global2local(poh, co_hdl, /*O_RDWR*/ 0, glob, &dfs_mt);
+        rc = dfs_global2local(poh, co_hdl, /*O_RDWR*/ 0, glob, &dfs);
         assert_int_equal(rc, EINVAL);
         print_message("global2locall failed because of magic\n");
-
+	
 	/** Successful local2global data getting */
 	rc = dfs_local2global(dfs_mt, &glob);
         assert_int_equal(rc, 0);
 	print_message("Successful local2global data getting\n");
-
+	
         /** Successful global2local */
         rc = dfs_global2local(poh, co_hdl, /*O_RDWR*/ 0, glob, &dfs);
         assert_int_equal(rc, 0);
         print_message("Successful global2locall\n");
-
+	
 	if (rc != 0) return;
-
+	
 	/** local from global should be umont */
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	print_message("Unmounting local from global\n");
+}
 
+static void
+dfs_test_set_prefix(void **state)
+{
+        int                rc;
+ 
+        /** NULL dfs mount for prefix */
+        rc = dfs_set_prefix(/*dfs_mt*/ NULL, "prefix");
+	assert_int_equal(rc, EINVAL);
+        print_message("Mounted file system should be provided for prefix\n");
+
+        /** Failure to set wrong file path */
+        rc = dfs_set_prefix(dfs_mt, "test");
+        assert_int_equal(rc, EINVAL);
+        print_message("Refused to set prefix to not existing file path\n"); 
+	
+        /** Successful set_prefix */
+        rc = dfs_set_prefix(dfs_mt, "/");
+        assert_int_equal(rc, 0);
+        print_message("Successful gset_prefix to legal path\n"); 
+	
+        /** Successful reset prefix with set_prefix */
+        rc = dfs_set_prefix(dfs_mt, NULL);
+        assert_int_equal(rc, 0);
+        print_message("Successful reset prefix\n"); 
+}
+
+static void
+dfs_test_obj2id(void **state)
+{
+        int            rc;
+        dfs_obj_t     *obj;
+        daos_obj_id_t  oid;
+        daos_size_t    chunk_size = 64;
+	
+        /** NULL dfs mount for obj2id */
+        rc = dfs_obj2id(/*obj*/ NULL, &oid);
+        assert_int_equal(rc, EINVAL);
+        print_message("Object should be provided for obj2id\n");
+
+	/** NULL for oid result */
+        rc = dfs_obj2id(obj, /*&oid*/ NULL);
+        assert_int_equal(rc, EINVAL);
+        print_message("obj2id should get a pointer for the oid\n");
+	
+	/** Successful object creating for RW */
+        rc = dfs_open(dfs_mt, NULL, "test", S_IFREG | S_IWUSR | S_IRUSR ,
+                      O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
+        assert_int_equal(rc, 0);
+        print_message("Successfull object creating for obj2id\n");
+
+        /** Successful obj2id */
+        rc = dfs_obj2id(obj, &oid);
+        assert_int_equal(rc, 0);
+        print_message("Successful obj2id\n");
+	
+        /** Successful object releasing */
+        rc = dfs_release(obj);
+        assert_int_equal(rc, 0);
+        print_message("Successful object releasing\n");
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
@@ -357,10 +417,14 @@ static const struct CMUnitTest dfs_unit_tests[] = {
           dfs_test_open_release, async_disable, test_case_teardown},
 	{ "DFS_UNIS TEST3: DFS mkdir / remove",
           dfs_test_mkdir_remove, async_disable, test_case_teardown},
-        { "DFS_UNIS TEST4: DFS  query: ",
+        { "DFS_UNIS TEST4: DFS query: ",
           dfs_test_query,        async_disable, test_case_teardown},
 	{ "DFS_UNIS TEST5: Global / Local",
           dfs_test_global_local, async_disable, test_case_teardown},
+	{ "DFS_UNIS TEST6: DFS set prefix",
+          dfs_test_set_prefix,   async_disable, test_case_teardown},
+	{ "DFS_UNIS TEST7: Obj 2 id",
+          dfs_test_obj2id,       async_disable, test_case_teardown},
 };
 
 
