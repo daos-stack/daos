@@ -54,7 +54,7 @@ class DfuseContainerCheck(DfuseTestBase):
 
         for cont_type in cont_types:
             # Get container params
-            self.add_container(create=False)
+            self.add_container(self.pool, create=False)
             # create container
             if cont_type == "POSIX":
                 self.container.type.update(cont_type)

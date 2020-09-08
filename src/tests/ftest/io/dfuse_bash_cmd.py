@@ -78,7 +78,7 @@ class BashCmd(DfuseTestBase):
             self.add_pool(connect=False)
             # perform test for multiple containers.
             for count in range(cont_count):
-                self.add_container()
+                self.add_container(self.pool)
                 mount_dir = "/tmp/{}_daos_dfuse{}".format(self.pool.uuid, count)
                 self.start_dfuse(
                     self.hostlist_clients, self.pool, self.container, mount_dir)
