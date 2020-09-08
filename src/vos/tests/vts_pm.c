@@ -31,6 +31,7 @@
 #include "vts_io.h"
 #include "vts_array.h"
 
+static int start_epoch = 5;
 #define BUF_SIZE 2000
 static int buf_size = BUF_SIZE;
 struct pm_info {
@@ -1221,7 +1222,7 @@ cond_test(void **state)
 	daos_unit_oid_t		 oid;
 	d_sg_list_t		 sgl[MAX_SGL] = {0};
 	d_iov_t			 iov[MAX_SGL];
-	daos_epoch_t		 epoch = 5;
+	daos_epoch_t		 epoch = start_epoch;
 	int			 i;
 
 	if (getenv("DAOS_IO_BYPASS"))
@@ -1322,6 +1323,45 @@ cond_test(void **state)
 			0, -DER_NO_PERM, sgl, 5, "new",
 			"foo", "f", "bar", "d", "val", "e", "flag", "new",
 			"temp");
+
+	start_epoch = epoch + 1;
+}
+
+#define NUM_OIDS 1000
+static void
+multiple_oid_cond_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid;
+	d_sg_list_t		 sgl = {0};
+	d_iov_t			 iov = {0};
+	daos_epoch_t		 epoch = start_epoch + NUM_OIDS * 3;
+	int			 i;
+
+	if (getenv("DAOS_IO_BYPASS"))
+		skip();
+
+	start_epoch = epoch + 1;
+
+	test_args_reset(arg, VPOOL_SIZE);
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+
+	/** Same dkey/akey, multiple objects */
+	for (i = 0; i < NUM_OIDS; i++) {
+		oid = gen_oid(0);
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+			       epoch - 2, "dkey", "akey", 0, 0, &sgl, "foo");
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+			       epoch - 1, "dkey", "akey2",
+			       VOS_OF_COND_AKEY_UPDATE, -DER_NONEXIST, &sgl,
+			       "foo");
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid,
+			       epoch, "dkey", "akey2", VOS_OF_COND_AKEY_INSERT,
+			       0, &sgl, "foo");
+		epoch -= 3;
+	}
 }
 
 #define REM_VAL1 "xyz"
@@ -1340,7 +1380,7 @@ remove_test(void **state)
 	daos_recx_t		 recx[SM_BUF_LEN];
 	char			 rbuf[SM_BUF_LEN];
 	daos_unit_oid_t		 oid;
-	daos_epoch_t		 epoch = 1000;
+	daos_epoch_t		 epoch = start_epoch;
 	int			 rc = 0;
 	char			 key1 = 'a';
 	char			 key2 = 'b';
@@ -1430,6 +1470,7 @@ remove_test(void **state)
 	assert_memory_equal(rbuf + sizeof(REM_VAL2) + sizeof(REM_VAL1) - 2,
 			    REM_VAL3, sizeof(REM_VAL3) - 1);
 
+	start_epoch = epoch + 1;
 }
 
 static void
@@ -1504,7 +1545,7 @@ minor_epoch_punch_sv(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = 2000;
+	daos_epoch_t		epoch = start_epoch;
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
 	const char		*expected = "xxxxx";
@@ -1580,6 +1621,7 @@ tx_end:
 	assert_memory_equal(buf, expected, strlen(expected));
 
 	daos_sgl_fini(&sgl, false);
+	start_epoch = epoch + 1;
 }
 
 static void
@@ -1592,7 +1634,7 @@ minor_epoch_punch_array(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = 3000;
+	daos_epoch_t		epoch = start_epoch;
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
 	const char		*expected = "xxxxxLonelyWorld";
@@ -1675,6 +1717,7 @@ tx_end:
 	assert_memory_equal(buf, expected, strlen(expected));
 
 	daos_sgl_fini(&sgl, false);
+	start_epoch = epoch + 1;
 }
 
 static void
@@ -1687,7 +1730,7 @@ minor_epoch_punch_rebuild(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
-	daos_epoch_t		epoch = 2000;
+	daos_epoch_t		epoch = start_epoch;
 	const char		*expected = "xxxxxlonelyworld";
 	const char		*first = "hello";
 	const char		*second = "lonelyworld";
@@ -1767,6 +1810,8 @@ minor_epoch_punch_rebuild(void **state)
 	epoch += 2;
 
 	daos_sgl_fini(&sgl, false);
+
+	start_epoch = epoch + 1;
 }
 
 static const struct CMUnitTest punch_model_tests[] = {
@@ -1794,6 +1839,8 @@ static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS813: Minor epoch punch array", minor_epoch_punch_array, NULL,
 		NULL },
 	{ "VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
+		NULL },
+	{ "VOS815: Multiple oid cond test", multiple_oid_cond_test, NULL,
 		NULL },
 };
 

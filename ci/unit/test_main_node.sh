@@ -3,7 +3,7 @@
 # This is a script to be run by the unit/test_main.sh to run a test
 # on a CI node.
 
-set -x
+set -uex
 
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
 if grep /mnt/daos\  /proc/mounts; then
@@ -15,6 +15,16 @@ sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
 sudo cp "$DAOS_BASE/install/bin/daos_admin" /usr/bin/daos_admin
+set +x
+if [ -n "$BULLSEYE" ]; then
+  pushd "$DAOS_BASE/bullseye"
+    sudo ./install --quiet --key "${BULLSEYE}" \
+                   --prefix /opt/BullseyeCoverage
+  popd
+  rm -rf bullseye
+  export COVFILE="$DAOS_BASE/test.cov"
+  export PATH="/opt/BullseyeCoverage/bin:$PATH"
+fi
 sudo chown root /usr/bin/daos_admin
 sudo chmod 4755 /usr/bin/daos_admin
 /bin/rm "$DAOS_BASE/install/bin/daos_admin"

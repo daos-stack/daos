@@ -100,7 +100,7 @@ pool_ref_count_test(void **state)
 	uuid_generate(uuid);
 	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
 	for (i = 0; i < num; i++) {
-		ret = vos_pool_open(arg->fname[0], uuid,
+		ret = vos_pool_open(arg->fname[0], uuid, false /*small */,
 				    &arg->poh[i]);
 		assert_int_equal(ret, 0);
 	}
@@ -130,7 +130,7 @@ pool_interop(void **state)
 	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
 	assert_int_equal(ret, 0);
 
-	ret = vos_pool_open(arg->fname[0], uuid, &poh);
+	ret = vos_pool_open(arg->fname[0], uuid, false, &poh);
 	assert_int_equal(ret, -DER_DF_INCOMPT);
 
 	ret = vos_pool_destroy(arg->fname[0], uuid);
@@ -169,6 +169,7 @@ pool_ops_run(void **state)
 			case OPEN:
 				ret = vos_pool_open(arg->fname[j],
 						    arg->uuid[j],
+						    false /* small */,
 						    &arg->poh[j]);
 				break;
 			case CLOSE:

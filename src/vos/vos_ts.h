@@ -450,6 +450,9 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 	if (idx == NULL)
 		goto calc_hash;
 
+	if (ts_set->ts_init_count == ts_set->ts_set_size)
+		return -DER_BUSY; /** No more room in the set */
+
 	if (vos_ts_lookup(ts_set, idx, false, &entry)) {
 		expected_type = entry->te_info->ti_type;
 		D_ASSERT(expected_type == ts_set->ts_etype);
@@ -684,6 +687,9 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 	if (!vos_ts_in_tx(ts_set))
 		return;
 
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_READ_TS))
+		return;
+
 	if ((ts_set->ts_cflags & VOS_TS_READ_MASK) == 0)
 		return;
 
@@ -722,4 +728,31 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 	}
 }
 
+/** Save the current state of the set
+ *
+ * \param[in]	ts_set	The timestamp set
+ * \param[out]	statep	Target to save state to
+ */
+static inline void
+vos_ts_set_save(struct vos_ts_set *ts_set, int *statep)
+{
+	if (ts_set == NULL)
+		return;
+
+	*statep = ts_set->ts_init_count;
+}
+
+/** Restore previously saved state of the set
+ *
+ * \param[in]	ts_set	The timestamp set
+ * \param[in]	state	The saved state
+ */
+static inline void
+vos_ts_set_restore(struct vos_ts_set *ts_set, int state)
+{
+	if (ts_set == NULL)
+		return;
+
+	ts_set->ts_init_count = state;
+}
 #endif /* __VOS_TS__ */

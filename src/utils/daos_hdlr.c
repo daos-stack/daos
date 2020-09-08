@@ -246,6 +246,48 @@ out:
 }
 
 int
+pool_del_attr_hdlr(struct cmd_args_s *ap)
+{
+	int				rc = 0;
+	int				rc2;
+
+	assert(ap != NULL);
+	assert(ap->p_op == POOL_DEL_ATTR);
+
+	if (ap->attrname_str == NULL) {
+		fprintf(stderr, "attribute name must be provided\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+			       ap->mdsrv, DAOS_PC_RW, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_pool_del_attr(ap->pool, 1,
+				(const char * const*)&ap->attrname_str, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "pool del attr failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+out_disconnect:
+	/* Pool disconnect  in normal and error flows: preserve rc */
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+
+	if (rc == 0)
+		rc = rc2;
+out:
+	return rc;
+
+}
+
+int
 pool_get_attr_hdlr(struct cmd_args_s *ap)
 {
 	size_t	attr_size, expected_size;
@@ -537,14 +579,16 @@ out:
  *
  * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_del_attr_hdlr()
- * int cont_rollback_hdlr()
  */
 
+/* this routine can be used to list all snapshots or to map a snapshot name
+ * to its epoch number.
+ */
 int
-cont_list_snaps_hdlr(struct cmd_args_s *ap)
+cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname, daos_epoch_t *epoch)
 {
-	daos_epoch_t *buf = NULL;
+	daos_epoch_t *epochs = NULL;
+	char **names = NULL;
 	daos_anchor_t anchor;
 	int rc, i, snaps_count, expected_count;
 
@@ -558,7 +602,9 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	D_PRINT("Container's snapshots :\n");
+	if (snapname == NULL)
+		D_PRINT("Container's snapshots :\n");
+
 	if (!daos_anchor_is_eof(&anchor)) {
 		fprintf(stderr, "too many snapshots returned\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -568,13 +614,21 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	D_ALLOC_ARRAY(buf, snaps_count);
-	if (buf == NULL)
+	D_ALLOC_ARRAY(epochs, snaps_count);
+	if (epochs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(names, snaps_count);
+	if (names == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	for (i = 0; i < snaps_count; i++) {
+		D_ALLOC_ARRAY(names[i], DAOS_SNAPSHOT_MAX_LEN);
+		if (names[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	expected_count = snaps_count;
 	memset(&anchor, 0, sizeof(anchor));
-	rc = daos_cont_list_snap(ap->cont, &snaps_count, buf, NULL, &anchor,
+	rc = daos_cont_list_snap(ap->cont, &snaps_count, epochs, names, &anchor,
 				 NULL);
 	if (rc != 0) {
 		fprintf(stderr, "cont list snaps failed: %d\n", rc);
@@ -583,13 +637,30 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	if (expected_count < snaps_count)
 		fprintf(stderr, "size required to gather all snapshots has raised, list has been truncated\n");
 
-	for (i = 0; i < min(expected_count, snaps_count); i++)
-		D_PRINT(DF_U64" ", buf[i]);
-	D_PRINT("\n");
+	if (snapname == NULL) {
+		for (i = 0; i < min(expected_count, snaps_count); i++)
+			D_PRINT(DF_U64" %s\n", epochs[i], names[i]);
+	} else {
+		for (i = 0; i < min(expected_count, snaps_count); i++)
+			if (strcmp(snapname, names[i]) == 0) {
+				if (epoch != NULL)
+					*epoch = epochs[i];
+				break;
+			}
+		if (i == min(expected_count, snaps_count)) {
+			fprintf(stderr, "%s not found in snapshots list\n",
+				snapname);
+			rc = -DER_NONEXIST;
+		}
+	}
 
 out:
-	if (buf != NULL)
-		D_FREE(buf);
+	D_FREE(epochs);
+	if (names != NULL) {
+		for (i = 0; i < snaps_count; i++)
+			D_FREE(names[i]);
+		D_FREE(names);
+	}
 
 	return rc;
 }
@@ -663,6 +734,28 @@ cont_set_attr_hdlr(struct cmd_args_s *ap)
 				(const size_t *)&value_size, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "cont set attr failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	return rc;
+
+}
+
+int
+cont_del_attr_hdlr(struct cmd_args_s *ap)
+{
+	int				rc = 0;
+
+	if (ap->attrname_str == NULL) {
+		fprintf(stderr, "attribute name must be provided\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = daos_cont_del_attr(ap->cont, 1,
+				(const char * const*)&ap->attrname_str, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont del attr failed: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1341,8 +1434,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 		return rc;
 	}
 
-	/* TODO: when API supports, change arg 3 to ap->force_destroy. */
-	rc = daos_cont_destroy(ap->pool, ap->c_uuid, 1, NULL);
+	rc = daos_cont_destroy(ap->pool, ap->c_uuid, ap->force, NULL);
 	if (rc != 0)
 		fprintf(stderr, "failed to destroy container: %d\n", rc);
 	else
@@ -1698,6 +1790,38 @@ cont_set_owner_hdlr(struct cmd_args_s *ap)
 	}
 
 	fprintf(stdout, "successfully updated owner for container\n");
+	return rc;
+}
+
+int
+cont_rollback_hdlr(struct cmd_args_s *ap)
+{
+	int	rc;
+
+	if (ap->epc == 0 && ap->snapname_str == NULL) {
+		fprintf(stderr,
+			"either parameter --epc or --snap is required\n");
+		return -DER_INVAL;
+	}
+	if (ap->epc != 0 && ap->snapname_str != NULL) {
+		fprintf(stderr,
+			"both parameters --epc and --snap could not be specified\n");
+		return -DER_INVAL;
+	}
+
+	if (ap->snapname_str != NULL) {
+		rc = cont_list_snaps_hdlr(ap, ap->snapname_str, &ap->epc);
+		if (rc != 0)
+			return rc;
+	}
+	rc = daos_cont_rollback(ap->cont, ap->epc, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to rollback container: %d\n", rc);
+		return rc;
+	}
+
+	fprintf(stdout, "successfully rollback container\n");
 	return rc;
 }
 

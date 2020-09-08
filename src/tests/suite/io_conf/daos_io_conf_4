@@ -74,6 +74,12 @@ update --tx 6 -r "[65540, 130000]11"
 fail_shard_fetch set 0 1
 fetch --tx 7 -r "[0, 262144]"
 fail_shard_fetch clear
+fail_shard_fetch set 0 1
+fetch --tx 7 -r "[163840, 262144]"
+fail_shard_fetch clear
+fail_shard_fetch set 0 1
+fetch --tx 7 -r "[0, 32768] [65542, 65588] [65591, 65598]"
+fail_shard_fetch clear
 
 akey akey_single_1
 iod_size 102
