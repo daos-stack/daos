@@ -543,7 +543,7 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	myrank = co_info->co_grp_priv->gp_self;
 	am_root = (myrank == co_info->co_root);
 	if (am_root) {
-		crt_rpc_complete(rpc_priv, co_info->co_rc);
+		crt_rpc_complete_keep_referenced(rpc_priv, co_info->co_rc);
 	} else {
 		if (co_info->co_rc != 0)
 			crt_corpc_fail_parent_rpc(rpc_priv, co_info->co_rc);
