@@ -444,8 +444,7 @@ int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
 int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
-		      daos_recx_t *recxs, int nr, daos_recx_t **output_recxs,
-		      int *output_nr);
+		      daos_recx_t **recxs_p, unsigned int *nr);
 int obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
 		       uint32_t iod_nr, struct daos_oclass_attr *oca);
 void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
@@ -460,6 +459,8 @@ int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 			tse_task_t **taskp);
 
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
+int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
+			   daos_recx_t **recxs_p, unsigned int *iod_nr);
 
 static inline bool
 obj_retry_error(int err)
@@ -535,7 +536,9 @@ struct obj_io_context {
 	struct ds_cont_child	*ioc_coc;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
-	uint32_t		 ioc_began:1;
+	uint32_t		 ioc_began:1,
+				 ioc_free_sgls:1,
+				 ioc_lost_reply:1;
 };
 
 struct ds_obj_exec_arg {
