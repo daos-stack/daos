@@ -265,19 +265,23 @@ populate_dev_health(struct bio_dev_state *dev_state,
 		page->critical_warning.bits.volatile_memory_backup ?
 		true : false;
 
+	D_DEBUG(DB_MGMT, "populate_dev_health: %-20.20s", cdata->mn);
 	written = snprintf(dev_state->bds_model, sizeof(dev_state->bds_model),
 			   "%-20.20s", cdata->mn);
 	if (written >= sizeof(dev_state->bds_model)) {
 		D_ERROR("writing model to dev_state");
 		return -DER_TRUNC;
 	}
+	D_DEBUG(DB_MGMT, "populate_dev_health ds: %-20.20s", dev_state->bds_model);
 
+	D_DEBUG(DB_MGMT, "populate_dev_health: %-20.20s", cdata->sn);
 	written = snprintf(dev_state->bds_serial, sizeof(dev_state->bds_serial),
 			   "%-20.20s", cdata->sn);
 	if (written >= sizeof(dev_state->bds_serial)) {
 		D_ERROR("writing serial to dev_state");
 		return -DER_TRUNC;
 	}
+	D_DEBUG(DB_MGMT, "populate_dev_health ds: %-20.20s", dev_state->bds_serial);
 
 	return 0;
 }

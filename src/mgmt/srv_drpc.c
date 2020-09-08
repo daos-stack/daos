@@ -1814,6 +1814,14 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
 	bds = bio_health->mb_dev_state;
+	resp->bds_timestamp = bds.bds_timestamp;
+	resp->bds_warn_temp_time = bds.bds_warn_temp_time;
+	resp->bds_crit_temp_time = bds.bds_crit_temp_time;
+	resp->bds_ctrl_busy_time = bds.bds_ctrl_busy_time;
+	resp->bds_power_cycles = bds.bds_power_cycles;
+	resp->bds_power_on_hours = bds.bds_power_on_hours;
+	resp->bds_unsafe_shutdowns = bds.bds_unsafe_shutdowns;
+	resp->bds_error_log_entries = bds.bds_error_log_entries;
 	resp->bds_error_count = bds.bds_error_count;
 	resp->bds_temperature = bds.bds_temperature;
 	resp->bds_media_errors = bds.bds_media_errors;
