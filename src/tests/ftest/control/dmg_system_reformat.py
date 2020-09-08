@@ -40,6 +40,28 @@ class DmgSystemReformatTest(TestWithServers):
     """
 
     @fail_on(CommandFailure)
+    def create_pool_at_full_capacity(self):
+        """Create a pool at full capacity.
+
+        Raises:
+            CommandFailure: raise exception if pool creation fails.
+
+        """
+        host = self.hostlist_servers[0]
+
+        storage_info = self.get_dmg_command().storage_scan()
+        scm_capacity = storage_info[host]["scm"]["capacity"]
+        nvme_capacity = storage_info[host]["nvme"]["capacity"]
+
+        # Create pool object
+        self.add_pool(create=False, connect=False)
+
+        # update pool size to full capacity
+        self.pool.scm_size.update(scm_capacity)
+        self.pool.nvme_size.update(nvme_capacity)
+        self.pool.create()
+
+    @fail_on(CommandFailure)
     @fail_on(ServerFailed)
     def test_dmg_system_reformat(self):
         """
@@ -49,26 +71,34 @@ class DmgSystemReformatTest(TestWithServers):
 
         :avocado: tags=all,small,pr,hw,control,sys_reformat,dmg
         """
+        self.create_pool_at_full_capacity()
 
-        # Create pool and container
-        self.prepare_pool()
-        self.add_container(pool=self.pool, daos_command=DaosCommand(self.bin))
+        self.log.info("Disable raising an exception to check for ENOSPACE \
+                       error on pool create")
+        self.get_dmg_command().exit_status_exception = False
+
+        # Try to create second pool and check that it fails with ENOSPACE
+        self.get_pool()
+        if self.get_dmg_command().result.exit_status != 0:
+            self.log.info("Pool create failed: {}".format(
+                self.get_dmg_command().result.stderr))
+            if "ENOSPACE" not in self.get_dmg_command().result.stderr:
+                self.fail("Pool create did not fail do to ENOSPACE!")
+
+        self.info("Re-enable raising exceptions for dmg.")
+        self.get_dmg_command().exit_status_exception = True
 
         self.log.info("Stop running io_server instancess: 'dmg system stop'")
-        data = self.server_managers[-1].dmg.system_stop(force=True)
-
-        # Verify
-        if not data:
+        self.get_dmg_command().system_stop(force=True)
+        if self.get_dmg_command().result.exit_status != 0:
             self.fail("Detected issues performing a system stop: {}".format(
-                self.server_managers[-1].dmg.result.stderr))
+                self.get_dmg_command().result.stderr))
 
         self.log.info("Perform dmg storage format on all system ranks:")
-        format_data = self.server_managers[-1].dmg.storage_format(reformat=True)
-
-        # Verify
-        if not format_data:
+        self.get_dmg_command().storage_format(reformat=True)
+        if self.get_dmg_command().result.exit_status != 0:
             self.fail("Detected issues performing storage format: {}".format(
-                self.server_managers[-1].dmg.result.stderr))
+                self.get_dmg_command().result.stderr))
 
         # Check that io_servers starts up again
         self.log.info("<SERVER> Waiting for the daos_io_servers to start")
@@ -78,12 +108,15 @@ class DmgSystemReformatTest(TestWithServers):
             self.server_managers[-1].kill()
             raise ServerFailed("Failed to start servers after format")
 
-        # Check that we have cleared
-        pool_info = self.server_managers[-1].dmg.pool_list()
-        if pool_info:
+        # Check that we have cleared storage by checking pool list
+        if self.get_dmg_command().pool_list():
             self.fail("Detected pools in storage after refomat: {}".format(
-                self.server_managers[-1].dmg.result.stdout))
+                self.get_dmg_command().result.stdout))
 
         # Remove pools and containers since they were wiped from memory
         self.pool = None
         self.container = None
+        self.log.info("Create pool at full capacity again to verify storage \
+                       has cleared.")
+        self.create_pool_at_full_capacity()
+
