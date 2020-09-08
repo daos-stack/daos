@@ -6,7 +6,7 @@ hosts:
     - server-D
   test_clients:
     - client-E
-timeout: 1200
+timeout: 1300
 server_config:
   name: daos_server
   servers:
@@ -30,7 +30,7 @@ ior:
   no_parallel_job: 10
   clientslots:
     slots: 2
-  test_file: daos:testFile
+  test_file: /testFile
   repetitions: 1
   dfs_destroy: False
   iorflags:
@@ -45,3 +45,6 @@ ior:
     #    The values are set to be in the multiples of 10.
     #    Values are appx GB.
     - [4000000000, 18000000000, 4000, 50000000, PASS]          #[4G, 18G, 4K, 51M, PASS]
+daos_racer:
+  runtime: 480
+  clush_timeout: 1000

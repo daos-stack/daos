@@ -5,14 +5,17 @@
 
 set -uex
 
-mb_modifier=
+# However note, that we don't want to do this on branch landings since
+# we want the full run for a branch landing so that the lastSuccessfulBuild
+# will always have artifacts in it.
 if [ "$CHANGE_ID" = "null" ]; then
-    mb_modifier=^
+    # exiting 1 means doc-only change
+    exit 0
 fi
-# TARGET_BRANCH can not be used with stacked PRs, as it will
-# emit an 'Not a valid object name' fatal error.
-# In this case, fall back to the master branch.
+
+# The fetch of $TARGET_BRANCH gets the branch for the compare as a commit hash
+# with the temporary name FETCH_HEAD.
 git fetch origin "${TARGET_BRANCH}"
 git diff-tree --no-commit-id --name-only                                \
-  "$(git merge-base origin/"${TARGET_BRANCH}"$mb_modifier HEAD)" HEAD | \
+  "$(git merge-base "FETCH_HEAD" HEAD)" HEAD | \
   grep -v -e "^doc$"

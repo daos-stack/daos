@@ -197,6 +197,7 @@ class Orterun(JobManager):
         self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
+        self.working_dir = FormattedParameter("-wdir {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -281,10 +282,22 @@ class Mpirun(JobManager):
         super(Mpirun, self).__init__(
             "/run/mpirun", "mpirun", job, path, subprocess)
 
+        mca_default = None
+        if mpitype == "openmpi":
+            # Default mca values to avoid queue pair errors w/ OpenMPI
+            mca_default = {
+                "btl_openib_warn_default_gid_prefix": "0",
+                "btl": "tcp,self",
+                "oob": "tcp",
+                "pml": "ob1",
+            }
+
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
+        self.working_dir = FormattedParameter("-wdir {}", None)
         self.mpitype = mpitype
 
     def assign_hosts(self, hosts, path=None, slots=None):

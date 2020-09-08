@@ -349,7 +349,7 @@ pl_hop_key_hash(struct d_hash_table *htab, const void *key,
 		unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(uuid_t));
-	return d_hash_string_u32((const char *)key, ksize);
+	return *((const uint32_t *)key);
 }
 
 static bool
@@ -595,7 +595,11 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 
 		/* Single replicated object will not rebuild. */
 		D_ASSERT(!shard->po_rebuilding);
-		D_ASSERT(shard->po_shard == shard_idx);
+		/* During target adding, it will add some -1 targets
+		 * into the object layout, so this assert is not right
+		 * anymore. see pl_map_extend().
+		 */
+		/*D_ASSERT(shard->po_shard == shard_idx);*/
 
 		if (for_tgt_id)
 			return shard->po_target;
