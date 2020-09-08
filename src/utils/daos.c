@@ -118,6 +118,8 @@ pool_op_parse(const char *str)
 		return POOL_GET_ATTR;
 	else if (strcmp(str, "set-attr") == 0)
 		return POOL_SET_ATTR;
+	else if (strcmp(str, "del-attr") == 0)
+		return POOL_DEL_ATTR;
 	else if (strcmp(str, "list-attrs") == 0)
 		return POOL_LIST_ATTRS;
 	return -1;
@@ -769,9 +771,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (ap->c_op != -1 &&
 	    (ap->c_op == CONT_LIST_OBJS ||
-	     ap->c_op == CONT_STAT ||
-	     ap->c_op == CONT_DEL_ATTR ||
-	     ap->c_op == CONT_ROLLBACK)) {
+	     ap->c_op == CONT_STAT)) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
@@ -862,6 +862,9 @@ pool_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case POOL_LIST_ATTRS:
 		rc = pool_list_attrs_hdlr(ap);
+		break;
+	case POOL_DEL_ATTR:
+		rc = pool_del_attr_hdlr(ap);
 		break;
 	default:
 		break;
@@ -1014,7 +1017,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_list_attrs_hdlr(ap);
 		break;
 	case CONT_DEL_ATTR:
-		/* rc = cont_del_attr_hdlr(ap); */
+		rc = cont_del_attr_hdlr(ap);
 		break;
 	case CONT_GET_ATTR:
 		rc = cont_get_attr_hdlr(ap);
@@ -1026,13 +1029,13 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_create_snap_hdlr(ap);
 		break;
 	case CONT_LIST_SNAPS:
-		rc = cont_list_snaps_hdlr(ap);
+		rc = cont_list_snaps_hdlr(ap, NULL, NULL);
 		break;
 	case CONT_DESTROY_SNAP:
 		rc = cont_destroy_snap_hdlr(ap);
 		break;
 	case CONT_ROLLBACK:
-		/* rc = cont_rollback_hdlr(ap); */
+		rc = cont_rollback_hdlr(ap);
 		break;
 	case CONT_GET_ACL:
 		rc = cont_get_acl_hdlr(ap);
@@ -1245,7 +1248,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	  query            query a pool\n"
 		"	  stat             get pool statistics\n"
 		"	  list-attrs       list pool user-defined attributes\n"
-		"	  get-attr         get pool user-defined attribute\n");
+		"	  get-attr         get pool user-defined attribute\n"
+		"	  set-attr         set pool user-defined attribute\n"
+		"	  del-attr         del pool user-defined attribute\n");
 
 		fprintf(stream,
 		"pool options:\n"
@@ -1253,7 +1258,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	--sys-name=STR     DAOS system name context for servers (\"%s\")\n"
 		"	--sys=STR\n"
 		"	--svc=RANKS        pool service replicas like 1,2,3\n"
-		"	--attr=NAME        pool attribute name to get\n",
+		"	--attr=NAME        pool attribute name to get, set, del\n"
+		"	--value=VALUESTR   pool attribute name to set\n",
 			default_sysname);
 
 	} else if (strcmp(argv[2], "container") == 0 ||
