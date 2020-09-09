@@ -31,7 +31,6 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-//#include "daos_iotest.h"
 #include "daos_test.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
@@ -95,7 +94,7 @@ iov_update_fill(d_iov_t *iov)
 	char	*dest = iov->iov_buf;
 	int	 i;
 
-	for ( i = 0; i < iov->iov_len; i++)
+	for (i = 0; i < iov->iov_len; i++)
 		dest[i] = i % 128;
 }
 
@@ -134,7 +133,7 @@ static void
 ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 		       daos_size_t offset, daos_size_t data_bytes)
 {
-	if ( mode != EC_SPECIFIED)
+	if (mode != EC_SPECIFIED)
 		return;
 	/* else set databytes based on oclass */
 
@@ -186,7 +185,7 @@ ec_cleanup_cont_obj(struct ec_agg_test_ctx *ctx)
 	rc = daos_obj_close(ctx->oh, NULL);
 	assert_int_equal(rc, 0);
 
-	// Close & Destroy Container
+	/* Close & Destroy Container */
 	rc = daos_cont_close(ctx->coh, NULL);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
@@ -200,14 +199,6 @@ ec_cleanup_data(struct ec_agg_test_ctx *ctx)
 	d_sgl_fini(&ctx->fetch_sgl, true);
 }
 
-/*
-static inline void
-setup_incremental_data(struct ec_agg_test_ctx *ctx)
-{
-	setup_single_recx_data(ctx, EC_SPECIFIED, 2 << 13);
-}
-*/
-
 static void
 test_filled_stripe(void **statep)
 {
@@ -216,7 +207,7 @@ test_filled_stripe(void **statep)
 	unsigned int		shard = 2; /* 2+1, 1 group leadeer */
 	int			i, rc;
 
-	ec_setup_from_test_args(&ctx, (test_arg_t*) *statep);
+	ec_setup_from_test_args(&ctx, (test_arg_t *) *statep);
 	ec_setup_cont_obj(&ctx, dts_ec_agg_oc);
 	for (i = 0; i < 256; i++) {
 		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (1 << 14),
@@ -276,14 +267,14 @@ static const struct CMUnitTest ec_agg_tests[] = {
 
 
 int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
-			         int sub_tests_size)
+				 int sub_tests_size)
 {
 
 	int rc = 0;
 
-        if (rank != 0) {
+	if (rank != 0) {
 		MPI_Barrier(MPI_COMM_WORLD);
-	        return rc;
+		return rc;
 	}
 	rc = cmocka_run_group_tests_name("DAOS EC AGGREGATION TESTS",
 					 ec_agg_tests, ec_setup, test_teardown);

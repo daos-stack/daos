@@ -1571,7 +1571,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	memset(ioc, 0, sizeof(*ioc));
 	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
 	if (rc) {
-		if (rc == -DER_NONEXIST) 
+		if (rc == -DER_NONEXIST)
 			rc = -DER_NO_HDL;
 		return rc;
 	}

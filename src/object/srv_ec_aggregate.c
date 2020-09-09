@@ -43,7 +43,8 @@ struct ec_agg_pool_info {
 	uuid_t		 api_cont_uuid;		/* container uuid */
 	uuid_t		 api_coh_uuid;		/* container handle uuid */
 	daos_handle_t	 api_cont_hdl;		/* container handle, returned by
-						   container open*/
+						 * container open
+						 */
 	uint32_t	 api_pool_version;	/* pool vers,fo check leader*/
 	d_rank_list_t	*api_svc_list;		/* service list */
 	struct ds_pool	*api_pool;		/* Used for IV fetch */
@@ -184,7 +185,7 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 static unsigned int
 agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 {
-	/*
+#if 0
 	unsigned int	stripe_size = obj_ec_stripe_rec_nr(oca);
 
 	daos_off_t	start_stripe = agg_extent->ae_recx.rx_idx ?
@@ -192,13 +193,12 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 	daos_off_t	end_stripe = stripe_size / (agg_extent->ae_recx.rx_idx
 						  + agg_extent->ae_recx.rx_nr);
 
-	// What if an extent carries over, and the tail is the only extent in
-	// the next stripe?
+	/* What if an extent carries over, and the tail is the only extent in
+	 * the next stripe?
+	 */
 
-	//D_PRINT("start stripe: %lu, end stripe: %lu\n", start_stripe,
-	//	end_stripe);
-	*/
 	return 0;
+#endif
 }
 
 /* Clears the extent list of all extents completed for the processed stripe.
@@ -285,7 +285,7 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	} else {
 		unsigned int *buf = NULL;
 		 D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf,
-			                     ent_buf_len);
+			   ent_buf_len);
 		 if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -566,14 +566,13 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	}
 	if (opened) {
 		d_rank_t myrank, prevrank = ~0;
+
 		crt_group_rank(NULL, &myrank);
 		D_PRINT("agg: my rank: %u\n", myrank);
 		dc_obj_layout_get(entry->ae_obj_hdl, &layout);
 		for (i = 0; i < layout->ol_nr; i++)
 			for (j = 0; j < layout->ol_shards[i]->os_replica_nr;
 			     j++) {
-				D_PRINT("i: %d, j: %d, rank: %u\n",i, j,
-					layout->ol_shards[i]->os_ranks[j]);
 				if (layout->ol_shards[i]->os_ranks[j] == myrank)
 					entry->ae_peer_rank = prevrank;
 				else
@@ -819,7 +818,7 @@ agg_recalc_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 	unsigned char	*parity_bufs[p];
 	unsigned char	*data[k];
 	unsigned char	*buf;
-	int	 i, r, l = 0;;
+	int	 i, r, l = 0;
 
 	for (i = 0, r = 0; i < k; i++) {
 		unsigned char *rbuf =
@@ -828,9 +827,9 @@ agg_recalc_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 			entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
 
 		if (isset(bit_map, i))
-		    data[i] = &rbuf[r++ * cell_bytes];
+			data[i] = &rbuf[r++ * cell_bytes];
 		 else
-		    data[i] = &lbuf[l++ * cell_bytes];
+			data[i] = &lbuf[l++ * cell_bytes];
 	}
 	D_ASSERT(r == cell_cnt);
 	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
@@ -1001,7 +1000,6 @@ agg_peer_update(struct ec_agg_entry *entry)
 	d_iov_t			 iov = { 0 };
 	d_sg_list_t		 sgl = { 0 };
 	crt_endpoint_t		 tgt_ep = { 0 };
-	//crt_bulk_t		*bulk = NULL;
 	unsigned char		*buf = NULL;
 	struct obj_ec_agg_in	*ec_agg_in = NULL;
 	struct obj_ec_agg_out	*ec_agg_out = NULL;
@@ -1017,10 +1015,10 @@ agg_peer_update(struct ec_agg_entry *entry)
 	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
 	if (rc != 1 || (target->ta_comp.co_status != PO_COMP_ST_UPIN
 			&& target->ta_comp.co_status != PO_COMP_ST_UP)) {
-		// Remote target has failed, no need retry, but not
-		// report failure as well and next rebuild will handle
-		// it anyway.
-		//
+		/* Remote target has failed, no need retry, but not
+		 * report failure as well and next rebuild will handle
+		 * it anyway.
+		 */
 		ABT_rwlock_unlock(pool->sp_lock);
 		D_DEBUG(DB_TRACE, "Can not find tgt %d or target is down %d\n",
 			tgt_id, target->ta_comp.co_status);
@@ -1036,7 +1034,6 @@ agg_peer_update(struct ec_agg_entry *entry)
 	D_PRINT("target tag: %u\n", tgt_ep.ep_tag);
 	tgt_ep.ep_rank = entry->ae_peer_rank;
 	tgt_ep.ep_tag = 1;
-	//D_PRINT("tgt_ep.ep_tag: %u\n", tgt_ep.ep_tag);
 	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_AGGREGATE, DAOS_OBJ_MODULE,
 				 DAOS_OBJ_VERSION);
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
@@ -1068,13 +1065,6 @@ agg_peer_update(struct ec_agg_entry *entry)
 	iov.iov_buf_len = entry->ae_oca->u.ec.e_len * entry->ae_rsize;
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr = 1;
-	/*
-	D_ALLOC_PTR(bulk);
-	if (bulk == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	*/
 	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &sgl, CRT_BULK_RW,
 			     &ec_agg_in->ea_bulk);
 	if (rc) {
@@ -1369,7 +1359,7 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
- 
+
 	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
 			 agg_param->ap_agg_entry, NULL);
@@ -1462,8 +1452,6 @@ agg_iv_ult(void *arg)
 out:
 	ABT_eventual_set(agg_param->ap_pool_info.api_eventual,
 			 (void *)&rc, sizeof(rc));
-	// daos_prop_entries_free(prop);
-	//D_FREE(prop);
 }
 
 /* Iterates entire VOS. Invokes nested iterator to recurse through trees
