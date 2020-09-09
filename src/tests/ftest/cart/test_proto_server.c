@@ -47,7 +47,7 @@ test_run(d_rank_t my_rank)
 		D_ASSERTF(rc == 0,
 			  "crt_group_config_save() failed. rc: %d\n", rc);
 	}
-	// END: FIXME: always save 
+	/* END: FIXME: always save */
 
 	switch (test.tg_num_proto) {
 	case 4:
