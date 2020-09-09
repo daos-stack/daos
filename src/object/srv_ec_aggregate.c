@@ -407,6 +407,7 @@ out:
 }
 
 /* Encodes a full stripe. Called when replicas form a full stripe.
+ * TBD: offload parity calculation to helper xstream.
  */
 static void
 agg_encode_full_stripe(void *arg)
