@@ -53,6 +53,6 @@ ls unit_test_memcheck_logs || true
 if [ "$WITH_VALGRIND" == 'memcheck' ]; then
     find test_results -maxdepth 1 -name '*.memcheck.xml' \
         -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"
-else
+elif [ -z "$BULLSEYE" ]; then
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
 fi
