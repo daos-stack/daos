@@ -2090,7 +2090,8 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 
 	if (iv_sync->isc_sync_type.ivs_comp_cb)
 		iv_sync->isc_sync_type.ivs_comp_cb(
-			iv_sync->isc_sync_type.ivs_comp_cb_arg);
+			iv_sync->isc_sync_type.ivs_comp_cb_arg,
+			cb_info->cci_rc);
 
 	if (iv_sync->isc_ivns_internal)
 		IVNS_DECREF(iv_sync->isc_ivns_internal);
@@ -2256,7 +2257,7 @@ exit:
 			D_FREE(iv_sync_cb);
 		}
 		if (sync_type->ivs_comp_cb)
-			sync_type->ivs_comp_cb(sync_type->ivs_comp_cb_arg);
+			sync_type->ivs_comp_cb(sync_type->ivs_comp_cb_arg, rc);
 	}
 
 	return rc;
@@ -3173,7 +3174,7 @@ put:
 	iv_ops->ivo_on_put(ivns, NULL, priv);
 exit:
 	if (rc != 0 && sync_type.ivs_comp_cb)
-		sync_type.ivs_comp_cb(sync_type.ivs_comp_cb_arg);
+		sync_type.ivs_comp_cb(sync_type.ivs_comp_cb_arg, rc);
 
 	if (ivns_internal)
 		IVNS_DECREF(ivns_internal);
@@ -3204,7 +3205,7 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 			rc, cb_arg);
 
 		if (sync_type.ivs_comp_cb)
-			sync_type.ivs_comp_cb(sync_type.ivs_comp_cb_arg);
+			sync_type.ivs_comp_cb(sync_type.ivs_comp_cb_arg, rc);
 		D_GOTO(exit, rc);
 	}
 
