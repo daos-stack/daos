@@ -181,6 +181,7 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 }
 
 /* Determines if the extent carries over into the next stripe.
+ * TBD: deals with extents that span stripes.
  */
 static unsigned int
 agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
@@ -197,8 +198,8 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 	 * the next stripe?
 	 */
 
-	return 0;
 #endif
+	return 0;
 }
 
 /* Clears the extent list of all extents completed for the processed stripe.
@@ -568,7 +569,6 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 		d_rank_t myrank, prevrank = ~0;
 
 		crt_group_rank(NULL, &myrank);
-		D_PRINT("agg: my rank: %u\n", myrank);
 		dc_obj_layout_get(entry->ae_obj_hdl, &layout);
 		for (i = 0; i < layout->ol_nr; i++)
 			for (j = 0; j < layout->ol_shards[i]->os_replica_nr;
@@ -755,7 +755,6 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 			   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 			   DIOF_TO_SPEC_SHARD, &pshard);
 
-	D_PRINT("parity fetched from: %u, ret: %d\n", pshard, rc);
 	return rc;
 }
 
@@ -1010,7 +1009,6 @@ agg_peer_update(struct ec_agg_entry *entry)
 	crt_rpc_t		*rpc;
 	int			 rc = 0;
 
-	D_PRINT("tgt_id: %u\n", tgt_id);
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
 	if (rc != 1 || (target->ta_comp.co_status != PO_COMP_ST_UPIN
@@ -1022,16 +1020,12 @@ agg_peer_update(struct ec_agg_entry *entry)
 		ABT_rwlock_unlock(pool->sp_lock);
 		D_DEBUG(DB_TRACE, "Can not find tgt %d or target is down %d\n",
 			tgt_id, target->ta_comp.co_status);
-		D_PRINT("Can not find tgt %d or target is down %d\n",
-			tgt_id, target->ta_comp.co_status);
 		return -DER_NONEXIST;
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
 	tgt_ep.ep_rank = target->ta_comp.co_rank;
 	tgt_ep.ep_tag = target->ta_comp.co_index+1;
-	D_PRINT("target rank: %u\n", tgt_ep.ep_rank);
-	D_PRINT("target tag: %u\n", tgt_ep.ep_tag);
 	tgt_ep.ep_rank = entry->ae_peer_rank;
 	tgt_ep.ep_tag = 1;
 	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_AGGREGATE, DAOS_OBJ_MODULE,
@@ -1044,15 +1038,12 @@ agg_peer_update(struct ec_agg_entry *entry)
 	}
 
 	ec_agg_in = crt_req_get(rpc);
-	D_PRINT("source pool uuid: "DF_UUID"\n",
-		DP_UUID(entry->ae_pool_info->api_pool_uuid));
 
 	uuid_copy(ec_agg_in->ea_pool_uuid, entry->ae_pool_info->api_pool_uuid);
 	uuid_copy(ec_agg_in->ea_poh_uuid, entry->ae_pool_info->api_poh_uuid);
 	uuid_copy(ec_agg_in->ea_cont_uuid, entry->ae_pool_info->api_cont_uuid);
 	uuid_copy(ec_agg_in->ea_coh_uuid, entry->ae_pool_info->api_coh_uuid);
 	ec_agg_in->ea_oid = entry->ae_oid;
-	D_PRINT("rc == %d\n", rc);
 	ec_agg_in->ea_dkey = entry->ae_dkey;
 	ec_agg_in->ea_epoch = entry->ae_cur_stripe.as_hi_epoch;
 	ec_agg_in->ea_stripenum = entry->ae_cur_stripe.as_stripenum;
@@ -1068,10 +1059,9 @@ agg_peer_update(struct ec_agg_entry *entry)
 	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &sgl, CRT_BULK_RW,
 			     &ec_agg_in->ea_bulk);
 	if (rc) {
-		D_PRINT("crt_bulk_create returned: %d\n", rc);
+		D_ERROR("crt_bulk_create returned: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
-	D_PRINT("Sending RPC\n");
 	rc = dss_rpc_send(rpc);
 	if (rc) {
 		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
@@ -1109,7 +1099,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 						entry->ae_oca->u.ec.e_len);
 	iter_param.ip_recx.rx_nr	= entry->ae_oca->u.ec.e_len;
 
-	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
+	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
 
@@ -1118,7 +1108,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	if (rc != 0)
 		goto out;
 
-	D_PRINT("Par query: epoch: %lu, offset: %lu, length: %lu\n",
+	D_DEBUG(DB_TRACE, "Par query: epoch: %lu, offset: %lu, length: %lu\n",
 		entry->ae_par_extent.ape_epoch,
 		entry->ae_par_extent.ape_recx.rx_idx,
 		entry->ae_par_extent.ape_recx.rx_nr);
@@ -1215,10 +1205,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
-	D_PRINT("adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
-		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
-		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
-		agg_entry->ae_oid.id_shard);
 	D_DEBUG(DB_TRACE, "adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
