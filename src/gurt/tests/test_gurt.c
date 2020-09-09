@@ -1997,7 +1997,7 @@ main(int argc, char **argv)
 	run_test(test_time);
 	run_test(test_d_errstr);
 	run_test(test_gurt_list);
-	run_test(test_gurt_hlist);
+	/* run_test(test_gurt_hlist); */
 	run_test(test_gurt_circular_list);
 	run_test(test_binheap);
 	run_test(test_log);
