@@ -77,12 +77,6 @@ test_run(d_rank_t my_rank)
 		DBG_PRINT("Group config file saved\n");
 	}
 
-	if (test_g.t_save_cfg && my_rank == 0) {
-		rc = crt_group_config_path_set(test_g.t_cfg_path);
-		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
-	}
-
-
 	if (test_g.t_hold)
 		sleep(test_g.t_hold_time);
 

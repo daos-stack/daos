@@ -56,11 +56,6 @@ test_run(d_rank_t my_rank)
 		DBG_PRINT("Group config saved\n");
 	}
 
-	if (test.tg_save_cfg && my_rank == 0) {
-		rc = crt_group_config_path_set(test.tg_cfg_path);
-		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
-	}
-
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
 	DBG_PRINT("joined progress thread.\n");
