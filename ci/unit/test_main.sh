@@ -9,16 +9,16 @@ echo "debug in test_main.sh, beginning"
 ls
 ls test_results || true
 ls unit_test_memcheck_logs || true
-find . -name *.memcheck.xml | true
+find . -name "*.memcheck.xml" || true
 
 echo "debug checking with git"
 git ls-files --other || true
 git ls-files --ignored --exclude-standard || true
 
 
+rm -rf unit_memcheck_vm_test unit_test_memcheck_logs
+rm -rf unit_vm_test unit_test_logs
 rm -rf test_results
-rm -rf unit_test_memcheck_logs
-rm *.memcheck.xml
 mkdir test_results
 
 # Check if this is a Bulleye stage
@@ -51,8 +51,6 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 set -x
 echo "debug in test_main.sh"
 ls
-ls test_results || true
-ls unit_test_memcheck_logs || true
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
