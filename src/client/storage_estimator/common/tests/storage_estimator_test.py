@@ -624,13 +624,14 @@ class FSTestCase(unittest.TestCase):
             stats["objects"] += 1
             for dkey in object["dkeys"]:
                 stats["dkey_size"] += dkey.get("size", 0)
-                stats["dkeys"] += 1
+                stats["dkeys"] += dkey.get("count", 1)
                 for akey in dkey["akeys"]:
                     stats["akey_size"] += akey.get("size", 0)
-                    stats["akeys"] += 1
+                    stats["akeys"] += akey.get("count", 1)
                     for value in akey["values"]:
-                        stats["value_size"] += value.get("size", 0)
-                        stats["values"] += 1
+                        stats["value_size"] += value.get(
+                            "count", 1) * value.get("size", 0)
+                        stats["values"] += value.get("count", 1)
 
         return stats
 
@@ -647,6 +648,8 @@ class FSTestCase(unittest.TestCase):
         fse = FileSystemExplorer(self.root_dir)
         akey = self._create_inode_akey("DFS_INODE", 64)
         fse.set_dfs_inode(akey)
+        fse.set_io_size(131072)
+        fse.set_chunk_size(1048576)
         fse.explore()
         dfs = fse.get_dfs()
         container = dfs.get_container()

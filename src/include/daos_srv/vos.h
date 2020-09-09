@@ -262,12 +262,14 @@ vos_pool_destroy(const char *path, uuid_t uuid);
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
+ * \param small	[IN]	Pool is small
+ *			(system memory reservation shall be small, to fit)
  * \param poh	[OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -439,8 +441,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
- *			is provided by \a iods.
+ * \param epoch	[IN]	Epoch for the fetch.
  * \param flags	[IN]	Fetch flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
@@ -467,8 +468,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
- *			is provided by \a iods.
+ * \param epoch	[IN]	Epoch for the fetch.  Ignored if a valid DTX handle
+ *			is provided.
  * \param flags	[IN]	Fetch flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
@@ -494,8 +495,8 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
- *			range is provided by \a iods (kvl::kv_epr).
+ * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
+ *			is provided.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param flags	[IN]	Update flags
@@ -529,8 +530,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
- *			range is provided by \a iods (kvl::kv_epr).
+ * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
+ *			is provided.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param flags	[IN]	Update flags
@@ -582,7 +583,8 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID, the full object will be punched if \a dkey
  *			and \a akeys are not provided.
- * \param epoch	[IN]	Epoch for the punch.
+ * \param epoch	[IN]	Epoch for the punch. Ignored if a DTX handle
+ *			is provided.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param flags [IN]	Object punch flags, including VOS_OF_REPLAY_PC and
@@ -639,8 +641,8 @@ enum vos_fetch_flags {
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
- *			is provided by \a iods.
+ * \param epoch	[IN]	Epoch for the fetch. Ignored if a DTX handle
+ *			is provided.
  * \param cond_flags [IN]
  *			conditional flags
  * \param dkey	[IN]	Distribution key.
@@ -686,8 +688,8 @@ vos_fetch_end(daos_handle_t ioh, int err);
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
- *			range is provided by \a iods (kvl::kv_epr).
+ * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
+ *			is provided.
  * \param flags [IN]	conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
