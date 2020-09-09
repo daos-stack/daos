@@ -45,7 +45,7 @@ struct ec_agg_pool_info {
 	daos_handle_t	 api_cont_hdl;		/* container handle, returned by
 						 * container open
 						 */
-	uint32_t	 api_pool_version;	/* pool vers,fo check leader*/
+	uint32_t	 api_pool_version;	/* pool vers, for check leader*/
 	d_rank_list_t	*api_svc_list;		/* service list */
 	struct ds_pool	*api_pool;		/* Used for IV fetch */
 	/* Shared handle UUIDs, and service list
