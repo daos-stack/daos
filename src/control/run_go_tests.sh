@@ -46,6 +46,7 @@ function setup_environment()
 
 	src_include="$(pwd)/src/include"
 	echo "including path \"${src_include}\" in CGO_CFLAGS"
+	echo "including path \"/usr/include\" in CGO_CFLAGS"
 
 	# allow cgo to find and link to third-party libs
 	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib64}
@@ -61,7 +62,7 @@ function setup_environment()
 	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_ISAL_PREFIX+ -I${SL_ISAL_PREFIX}/include}"
-	CGO_CFLAGS+=" -I${src_include}"
+	CGO_CFLAGS+=" -I${src_include} -I/usr/include"
 }
 
 function check_formatting()
