@@ -105,7 +105,7 @@ class Stats(object):
 
     def pretty_print(self):
         """Pretty print statistics"""
-        print("Metadata totals:")
+        print("Metadata breakdown:")
         self.stats["scm_total"] = self.stats["total"] - self.stats["nvme_total"]
         self.print_stat("pool")
         self.print_stat("container")
@@ -114,11 +114,17 @@ class Stats(object):
         self.print_stat("akey")
         self.print_stat("single_value")
         self.print_stat("array")
-        self.print_stat("total_meta")
         self.print_stat("user_meta")
+        self.print_stat("total_meta")
+        print("Data breakdown:")
+        self.print_stat("total_meta")
         self.print_stat("user_value")
+        self.print_stat("total")
+        print("Physical storage estimation:")
         self.print_stat("scm_total")
-        print("Total bytes with user data: %s" % (convert(self.stats["total"])))
+        self.print_stat("nvme_total")
+        pretty_total = convert(self.stats["total"])
+        print("Total storage required: {0}".format(pretty_total))
 
 # pylint: disable=too-many-instance-attributes
 class MetaOverhead(object):
@@ -135,6 +141,10 @@ class MetaOverhead(object):
                                "count" : 0})
         self.next_cont = 1
         self.next_object = 1
+        self._scm_cutoff = meta_yaml.get("scm_cutoff", 4096)
+
+    def set_scm_cutoff(self, scm_cutoff):
+        self._scm_cutoff = scm_cutoff
 
     def init_container(self, cont_spec):
         """Handle a container specification"""
@@ -223,7 +233,7 @@ class MetaOverhead(object):
             raise RuntimeError("No size in value spec %s" % value_spec)
         size = value_spec.get("size")
         nvme = True
-        if self.meta.get("scm_cutoff") > size:
+        if self._scm_cutoff > size:
             nvme = False
         csum_size = cont["csum_size"]
         if csum_size != 0:

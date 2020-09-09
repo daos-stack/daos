@@ -298,10 +298,7 @@ class Mpirun(JobManager):
         self.envlist = FormattedParameter("-envlist {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
-
         self.mpitype = mpitype
-        self.working_dir = FormattedParameter("-wdir {}", None)
-        self.mca = FormattedParameter("--mca {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).
