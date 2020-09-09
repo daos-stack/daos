@@ -58,6 +58,7 @@ function setup_environment()
 	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_ISAL_PREFIX+ -I${SL_ISAL_PREFIX}/include}"
+	CGO_CFLAGS+="${SL_PMDK_PREFIX+ -I${SL_PMDK_PREFIX}/include}"
 
 	src_include="$(readlink -f $(pwd)/src/include)"
 	if [ -d "$src_include" ]; then
