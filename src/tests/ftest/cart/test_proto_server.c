@@ -41,8 +41,8 @@ test_run(d_rank_t my_rank)
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	// START: FIXME: always save 
-	if (my_rank == 0) { 
+	/* START: FIXME: always save */
+	if (my_rank == 0) {
 		rc = crt_group_config_save(NULL, true);
 		D_ASSERTF(rc == 0,
 			  "crt_group_config_save() failed. rc: %d\n", rc);
