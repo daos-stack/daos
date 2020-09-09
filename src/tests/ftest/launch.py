@@ -909,9 +909,11 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Create tar archives of orterun log dirs to prevent name collisions (e.g.,
     # we'll have many # hundreds of tests with output files named "stdout")
-    archive_files(destination, host_list, "{}/*_output.orterun_log".format(logs_dir), do_tar=True)
+    archive_files(destination, host_list, 
+      "{}/*_output.orterun_log".format(logs_dir), do_tar=True)
 
-    # Plain files need not be tar'd, then can simply be scp'd to the archive destination
+    # Plain files need not be tar'd, then can simply be scp'd to the archive
+    # destination
     archive_files(destination, host_list, "{}/*.{{tar*,log*}}".format(logs_dir))
 
 def archive_config_files(avocado_logs_dir):
@@ -959,8 +961,8 @@ def archive_files(destination, host_list, source_files, do_tar=False):
     print("Current disk space usage of {}".format(destination))
     print(get_output(["df", "-h", destination]))
 
-    # If we're tar-ing, then we're our source files ought to be a directory, hence
-    # the -d option to ls here.
+    # If we're tar-ing, then we're our source files ought to be a directory,
+    # hence the -d option to ls here.
     ls_cmd = "ls"
     if do_tar:
       ls_cmd = "ls -d"
@@ -987,6 +989,8 @@ def archive_files(destination, host_list, source_files, do_tar=False):
             "file=$tarfile",
         ])
 
+    # Pylint might not like this indentation, but it improves readability
+    # pylint: disable=bad-continuation
     commands.extend([
         "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, destination),
@@ -1000,7 +1004,7 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ])
-  
+
     spawn_commands(host_list, "; ".join(commands), timeout=900)
 
 

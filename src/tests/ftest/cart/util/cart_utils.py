@@ -33,7 +33,7 @@ from __future__ import print_function
 
 import time
 from distutils.spawn import find_executable
-import os, fnmatch
+import os
 import random
 # MPI environment module needs this
 #pylint: disable=unused-import
@@ -45,7 +45,6 @@ import logging
 import cart_logparse
 import cart_logtest
 
-from avocado  import Test
 from avocado  import main
 from write_host_file import write_host_file
 
@@ -229,7 +228,7 @@ class CartUtils():
 
         self.init_mpi("openmpi")
 
-        orterun_bin = find_executable("orterun", 
+        orterun_bin = find_executable("orterun",
           os.environ["PATH"] + ":/usr/lib64/openmpi3/bin:/usr/lib64/mpi/gcc/openmpi3/bin")
 
         if orterun_bin is None:
@@ -347,7 +346,7 @@ class CartUtils():
 
         try:
             with open(os.devnull, 'w') as devnull:
-                subprocess.check_call(['sh', '-l', '-c', 'module -V'], 
+                subprocess.check_call(['sh', '-l', '-c', 'module -V'],
                   stdout=devnull,
                   stderr=devnull)
         except subprocess.CalledProcessError:
