@@ -1994,6 +1994,22 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_atomic),
 		cmocka_unit_test(test_gurt_string_buffer),
 	};
+	run_test(test_time);
+	run_test(test_d_errstr);
+	run_test(test_gurt_list);
+	run_test(test_gurt_hlist);
+	run_test(test_gurt_circular_list);
+	run_test(test_binheap);
+	run_test(test_log);
+	run_test(test_gurt_hash_empty);
+	run_test(test_gurt_hash_insert_lookup_delete);
+	run_test(test_gurt_hash_decref);
+	run_test(test_gurt_alloc);
+	run_test(test_gurt_hash_parallel_same_operations);
+	run_test(test_gurt_hash_parallel_different_operations);
+	run_test(test_gurt_hash_parallel_refcounting);
+	run_test(test_gurt_atomic);
+	run_test(test_gurt_string_buffer);
 
 	d_register_alt_assert(mock_assert);
 
