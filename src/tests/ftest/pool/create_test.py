@@ -163,7 +163,6 @@ class PoolCreateTests(TestWithServers):
         self.define_pools(1, 0.9, 0.9)
         self.check_pool_creation(240)
 
-    # @skipForTicket("DAOS-5202")
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-3599.
 
