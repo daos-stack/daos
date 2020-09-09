@@ -44,7 +44,7 @@ function setup_environment()
 
 	source "${build_source}"
 
-	src_include="$(pwd)/../src/include"
+	src_include="$(pwd)/src/include"
 	echo "including path \"${src_include}\" in CGO_CFLAGS"
 
 	# allow cgo to find and link to third-party libs
