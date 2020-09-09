@@ -1,3 +1,4 @@
+#!python
 # Copyright (C) 2016-2020 Intel Corporation
 # All rights reserved.
 #
@@ -34,44 +35,73 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""install test scripts"""
+"""Build crt tests"""
+
+import os
+import daos_build
+
+SIMPLE_TEST_SRC = ['threaded_client.c',
+                   'no_pmix_multi_ctx.c', 'threaded_server.c',
+                   'test_corpc_prefwd.c',
+                   'test_corpc_exclusive.c',
+                   'test_proto_server.c', 'test_proto_client.c',
+                   'test_no_timeout.c', 'test_ep_cred_server.c',
+                   'test_ep_cred_client.c', 'no_pmix_launcher_server.c',
+                   'no_pmix_launcher_client.c', 'no_pmix_group_test.c',
+                   'test_rpc_to_ghost_rank.c', 'no_pmix_corpc_errors.c']
+BASIC_SRC = ['crt_basic.c']
+TEST_GROUP_SRC = 'test_group.c'
+IV_TESTS = ['iv_client.c', 'iv_server.c']
+#TEST_RPC_ERR_SRC = 'test_rpc_error.c'
+#CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
+SWIM_TESTS = ['test_swim.c', 'test_swim_net.c']
+HLC_TESTS = ['test_hlc_net.c']
+TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
+                       'no_pmix_group_version.c']
 
 def scons():
-    """Run scons"""
+    """scons function"""
 
-    Import('env')
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 
-    # Build the unit tests
-    SConscript('utest/SConscript')
+    tenv = env.Clone()
 
-    env.Replace(CRT_TSTDIR="$PREFIX/lib/daos/TESTING")
+    tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
+    prereqs.require(tenv, 'crypto', 'mercury')
 
-    # move the test files (.py) to the TESTING scripts directory
-    env.Install("$CRT_TSTDIR", Glob("launch.py"))
-    env.Install("$CRT_TSTDIR/util", Glob("util/*.py"))
-    env.Install("$CRT_TSTDIR/util", Glob("util/*.yaml"))
-    env.Install("$CRT_TSTDIR/rpc", Glob("rpc/*.py"))
-    env.Install("$CRT_TSTDIR/rpc", Glob("rpc/*.yaml"))
-    env.Install("$CRT_TSTDIR/ctl", Glob("ctl/*.py"))
-    env.Install("$CRT_TSTDIR/ctl", Glob("ctl/*.yaml"))
-    env.Install("$CRT_TSTDIR/corpc", Glob("corpc/*.py"))
-    env.Install("$CRT_TSTDIR/corpc", Glob("corpc/*.yaml"))
-    env.Install("$CRT_TSTDIR/iv", Glob("iv/*.py"))
-    env.Install("$CRT_TSTDIR/iv", Glob("iv/*.yaml"))
-    env.Install("$CRT_TSTDIR/singleton", Glob("singleton/*.py"))
-    env.Install("$CRT_TSTDIR/singleton", Glob("singleton/*.yaml"))
-    env.Install("$CRT_TSTDIR/no_pmix", Glob("no_pmix/*.py"))
-    env.Install("$CRT_TSTDIR/no_pmix", Glob("no_pmix/*.yaml"))
-    env.Install("$CRT_TSTDIR/selftest", Glob("selftest/*.py"))
-    env.Install("$CRT_TSTDIR/selftest", Glob("selftest/*.yaml"))
-    env.Install("$CRT_TSTDIR/group_tiers", Glob("group_tiers/*.py"))
-    env.Install("$CRT_TSTDIR/group_tiers", Glob("group_tiers/*.yaml"))
-    env.Install("$CRT_TSTDIR/nopmix_launcher", Glob("nopmix_launcher/*.py"))
-    env.Install("$CRT_TSTDIR/nopmix_launcher", Glob("nopmix_launcher/*.yaml"))
-    env.Install("$CRT_TSTDIR/group_test", Glob("group_test/*.yaml"))
-    env.Install("$CRT_TSTDIR/group_test", Glob("group_test/*.py"))
-    env.Install("$CRT_TSTDIR/group_test", Glob("ghost_rank_rpc/*.yaml"))
-    env.Install("$CRT_TSTDIR/group_test", Glob("ghost_rank_rpc/*.py"))
+    tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
+    # Compile all of the tests
+    for test in SIMPLE_TEST_SRC:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
 
-if __name__ == 'SCons.Script':
+    for test in IV_TESTS:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    for test in SWIM_TESTS:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    for test in HLC_TESTS:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    for test in TEST_GROUP_NP_TESTS:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    benv = tenv.Clone()
+
+    benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
+    basic_target = daos_build.test(tenv, BASIC_SRC)
+    benv.Requires(basic_target, [cart_lib, gurt_lib])
+
+if __name__ == "SCons.Script":
     scons()
