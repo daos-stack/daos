@@ -308,7 +308,7 @@ func printSCMFirmwareQueryMapByHost(fwMap control.HostSCMQueryMap, out io.Writer
 		}
 
 		for _, res := range fwResults {
-			err := printScmModule(&res.Module, iw)
+			err := control.PrintScmModule(&res.Module, iw)
 			if err != nil {
 				return err
 			}
