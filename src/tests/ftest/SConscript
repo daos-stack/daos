@@ -1,6 +1,8 @@
 """Build ftest"""
 import os
 
+# pylint: disable=unused-variable
+
 def scons():
     """Execute build"""
     Import('env')

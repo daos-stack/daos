@@ -25,6 +25,7 @@
 # pylint: disable=bad-whitespace
 # pylint: disable=import-error
 # pylint: disable=broad-except
+# pylint: disable=bad-indentation
 
 from __future__ import print_function
 
@@ -46,16 +47,6 @@ import traceback
 sys.path.append('./util')
 
 from cart_utils import CartUtils
-
-def PrintException():
-    import linecache
-    exc_type, exc_obj, tb = sys.exc_info()
-    f = tb.tb_frame
-    lineno = tb.tb_lineno
-    filename = f.f_code.co_filename
-    linecache.checkcache(filename)
-    line = linecache.getline(filename, lineno, f.f_globals)
-    print('EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj))
 
 def _check_value(expected_value, received_value):
     """
@@ -88,6 +79,7 @@ def _check_value(expected_value, received_value):
 
     return True
 
+# pylint: disable=missing-function-docstring
 def _check_key(key_rank, key_idx, received_key_hex):
     """
         Checks that the received key is the same as the sent key
@@ -95,13 +87,8 @@ def _check_key(key_rank, key_idx, received_key_hex):
         received_key_hex is hex(key_rank|key_idx)
     """
 
-    print('DEBUG log: line 84, received_key_hex = ', received_key_hex)
-    print('DEBUG log: line 84, key_rank = ', key_rank)
-    print('DEBUG log: line 84, key_idx = ', key_idx)
-    print('DEBUG log: line 88, received_key_hex[:8] = ', received_key_hex[:8])
 
     if len(received_key_hex) != 16:
-        print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:100")
         return False
 
     rank = struct.unpack("<I",
@@ -109,7 +96,6 @@ def _check_key(key_rank, key_idx, received_key_hex):
     idx = struct.unpack("<I",
                         codecs.decode(received_key_hex[8:], "hex"))[0]
 
-    print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:108")
     return (rank == key_rank) and (idx == key_idx)
 
 class CartIvOneNodeTest(Test):
@@ -130,7 +116,6 @@ class CartIvOneNodeTest(Test):
 
     def _verify_action(self, action):
         """verify the action"""
-        print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:129")
         if (('operation' not in action) or
                 ('rank' not in action) or
                 ('key' not in action)):
@@ -144,7 +129,6 @@ class CartIvOneNodeTest(Test):
 
     def _verify_fetch_operation(self, action):
         """verify fetch operation"""
-        print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:143")
         if (('return_code' not in action) or
                 ('expected_value' not in action)):
             self.utils.print("Error: fetch operation was malformed")
@@ -153,9 +137,7 @@ class CartIvOneNodeTest(Test):
     def _iv_test_actions(self, cmd, actions):
         #pylint: disable=too-many-locals
         """Go through each action and perform the test"""
-        print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:152")
         for action in actions:
-            print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:154")
             clicmd = cmd
             command = 'tests/iv_client'
 
@@ -167,7 +149,6 @@ class CartIvOneNodeTest(Test):
             key_idx = int(action['key'][1])
 
             if "fetch" in operation:
-                print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:166")
                 self._verify_fetch_operation(action)
                 expected_rc = int(action['return_code'])
 
@@ -178,7 +159,6 @@ class CartIvOneNodeTest(Test):
 
                 log_fd, log_path = tempfile.mkstemp(dir = log_path_dir)
 
-                print('DEBUG log: line 175, log_path = ', log_path)
 
                 # try writing to an unwritable spot
                 # log_path = "/"
@@ -187,14 +167,11 @@ class CartIvOneNodeTest(Test):
                     .format(command, operation, rank, key_rank, key_idx,
                             log_path)
                 clicmd += command
-                print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:180")
 
                 self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
 
-                print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:185")
                 if cli_rtn != 0:
-                    print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:187")
                     raise ValueError('Error code {!s} running command "{!s}"' \
                         .format(cli_rtn, command))
 
@@ -213,12 +190,9 @@ class CartIvOneNodeTest(Test):
 
                 # DEBUGGING: dump contents of JSON file to screen
                 with open(log_path, 'r') as f:
-                    print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:206")
-                    print("TRACE, Contents of log_path:")
                     print(f.read())
 
                 test_result = json.load(log_file)
-                print('DEBUG log: line 168, test_result = ', test_result)
 
                 log_file.close()
                 os.close(log_fd)
@@ -226,7 +200,6 @@ class CartIvOneNodeTest(Test):
 
                 # Parse return code and make sure it matches
                 if expected_rc != test_result["return_code"]:
-                    print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:212")
                     raise ValueError("Fetch returned return code {!s} != " \
                                      "expected value {!s}".format(
                                          test_result["return_code"],
@@ -234,18 +207,15 @@ class CartIvOneNodeTest(Test):
 
                 # Other values will be invalid if return code is failure
                 if expected_rc != 0:
-                    print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:220")
                     continue
 
                 # Check that returned key matches expected one
                 if not _check_key(key_rank, key_idx, test_result["key"]):
-                    print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:225")
                     raise ValueError("Fetch returned unexpected key")
 
                 # Check that returned value matches expected one
                 if not _check_value(action['expected_value'],
                                     test_result["value"]):
-                    print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:231")
                     raise ValueError("Fetch returned unexpected value")
 
             if "update" in operation:
@@ -257,10 +227,8 @@ class CartIvOneNodeTest(Test):
                                 action['value'])
                 clicmd += command
 
-                print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:243")
                 self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
-                print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:246")
 
                 if cli_rtn != 0:
                     raise ValueError('Error code {!s} running command "{!s}"' \
@@ -271,10 +239,8 @@ class CartIvOneNodeTest(Test):
                     command, operation, rank, key_rank, key_idx)
                 clicmd += command
 
-                print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:257")
                 self.utils.print("\nClient cmd : %s\n" % clicmd)
                 cli_rtn = subprocess.call(shlex.split(clicmd))
-                print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:260")
 
                 if cli_rtn != 0:
                     raise ValueError('Error code {!s} running command "{!s}"' \
@@ -288,7 +254,6 @@ class CartIvOneNodeTest(Test):
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
-        print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:274")
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
@@ -298,7 +263,6 @@ class CartIvOneNodeTest(Test):
 
         # Verify the server is still running.
         if not self.utils.check_process(srv_rtn):
-            print("TRACE, src/tests/ftest/cart/iv/cart_iv_one_node.py:284")
             procrtn = self.utils.stop_process(srv_rtn, self.utils)
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
@@ -333,7 +297,6 @@ class CartIvOneNodeTest(Test):
             # raise ValueError
         except ValueError as exception:
             failed = True
-            PrintException()
             traceback.print_stack()
             self.utils.print("TEST FAILED: %s" % str(exception))
 

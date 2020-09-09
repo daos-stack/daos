@@ -27,6 +27,9 @@ from __future__ import print_function
 # pylint: disable=unused-variable
 # pylint: disable=redefined-outer
 # pylint: disable=unused-argument
+# pylint: disable=bad-indentation
+# pylint: disable=line-too-long
+# pylint: disable=bad-continuation
 
 import time
 from distutils.spawn import find_executable
@@ -226,7 +229,6 @@ class CartUtils():
 
         self.init_mpi("openmpi")
 
-        import os
         orterun_bin = find_executable("orterun", 
           os.environ["PATH"] + ":/usr/lib64/openmpi3/bin:/usr/lib64/mpi/gcc/openmpi3/bin")
 
@@ -376,7 +378,6 @@ class CartUtils():
 
         self.print("\nCMD : %s\n" % cmd)
 
-        import os
         self.print("\nENV : %s\n" % os.environ)
 
         cmd = shlex.split(cmd)
