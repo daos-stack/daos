@@ -104,6 +104,9 @@ if [ -d "/mnt/daos" ]; then
         fi
     fi
 
+    echo "Environment:"
+    echo "  CMOCKA_MESSAGE_OUTPUT $CMOCKA_MESSAGE_OUTPUT"
+    echo "  CMOCKA_XML_FILE: $CMOCKA_XML_FILE"
     # Tests
     run_test "${SL_BUILD_DIR}/src/cart/test/utest/test_linkage"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
