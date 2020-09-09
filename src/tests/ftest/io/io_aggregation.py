@@ -116,7 +116,7 @@ class IoAggregation(IorTestBase):
         highest_epc_before_snap_destroy = self.highest_epoch(kwargs)
 
         # delete snapshot
-        self.container.destroy_snap(epoch=self.container.epoch)
+        self.container.destroy_snap(epc=self.container.epoch)
 
         # Shutdown the servers and restart
         self.get_dmg_command().system_stop(True)

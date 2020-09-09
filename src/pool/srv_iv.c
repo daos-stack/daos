@@ -361,6 +361,23 @@ pool_iv_conn_insert(struct pool_iv_conns *conns, struct pool_iv_conn *new_conn)
 }
 
 static int
+pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int new_size)
+{
+	struct pool_iv_entry *iv_ent = sgl->sg_iovs[0].iov_buf;
+	struct pool_iv_conns *old_conns = &iv_ent->piv_conn_hdls;
+	struct pool_iv_conns *new_conns;
+
+	D_REALLOC(new_conns, old_conns, new_size);
+	if (new_conns == NULL)
+		return -DER_NOMEM;
+
+	new_conns->pic_buf_size = new_size - sizeof(*new_conns);
+	sgl->sg_iovs[0].iov_buf = new_conns;
+	sgl->sg_iovs[0].iov_buf_len = new_size;
+	return 0; 
+}
+
+static int
 pool_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 		 struct ds_iv_entry *entry)
 {
@@ -464,6 +481,7 @@ pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst, d_sg_list_t *src)
 			if (rc) {
 				if (rc == -DER_REC2BIG)
 					pik->pik_entry_size =
+						sizeof(*src_conns) + 
 						src_conns->pic_size +
 						dst_conns->pic_size;
 				D_GOTO(out, rc);
@@ -478,6 +496,7 @@ pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst, d_sg_list_t *src)
 				if (rc) {
 					if (rc == -DER_REC2BIG)
 						pik->pik_entry_size =
+							sizeof(*src_conns) + 
 							src_conns->pic_size +
 							dst_conns->pic_size;
 					D_GOTO(out, rc);
@@ -516,6 +535,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
 	struct ds_pool		*pool;
 	d_rank_t		rank;
+	bool			retried = false;
 	int			rc;
 
 	pool = ds_pool_lookup(entry->ns->iv_pool_uuid);
@@ -568,7 +588,20 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	ds_pool_put(pool);
 
-	return pool_iv_ent_copy(key, &entry->iv_value, src);
+retry:
+	rc = pool_iv_ent_copy(key, &entry->iv_value, src);
+	if (rc == -DER_REC2BIG && key->class_id == IV_POOL_CONN && !retried) {
+		struct pool_iv_key *pik = key2priv(key);
+
+		rc = pool_iv_conns_resize(&entry->iv_value,
+					  pik->pik_entry_size);
+		if (rc == 0) {
+			retried = true;
+			goto retry;
+		}
+	}
+
+	return rc;
 }
 
 int
@@ -632,6 +665,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_iov_t			*dst_iov = &entry->iv_value.sg_iovs[0];
 	struct pool_iv_entry	*src_iv;
 	struct ds_pool		*pool;
+	bool			retried = false;
 	int			rc;
 
 	/* Update pool map version or pool map */
@@ -663,7 +697,19 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	}
 
+retry:
 	rc = pool_iv_ent_copy(key, &entry->iv_value, src);
+	if (rc == -DER_REC2BIG && key->class_id == IV_POOL_CONN && !retried) {
+		struct pool_iv_key *pik = key2priv(key);
+
+		rc = pool_iv_conns_resize(&entry->iv_value,
+					  pik->pik_entry_size);
+		if (rc == 0) {
+			retried = true;
+			goto retry;
+		}
+	}
+
 	if (rc)
 		return rc;
 

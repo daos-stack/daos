@@ -1617,7 +1617,7 @@ enumerate_simple(void **state)
 	/** Records could be merged with previous updates by aggregation */
 	print_message("key_nr = %d\n", key_nr);
 
-	for (i = 0; i < 5; i++)
+	for (i = 0; i < 10; i++)
 		insert_single_with_rxnr("d_key", "a_lrec", i * 128 * 1024,
 					data_buf, 1, 128 * 1024, DAOS_TX_NONE,
 					&req);
