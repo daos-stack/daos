@@ -1401,6 +1401,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	uuid_copy(task->dst_pool_uuid, uuid);
 	D_INIT_LIST_HEAD(&task->dst_list);
 
+	/* TODO: Merge everything for reclaim */
 	rc = pool_target_id_list_merge(&task->dst_tgts, tgts);
 	if (rc)
 		D_GOTO(free, rc);

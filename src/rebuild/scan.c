@@ -387,6 +387,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM) {
 		struct pl_obj_layout *layout = NULL;
 		bool still_needed;
+		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
 
 		/*
 		 * Compute placement for the object, then check if the layout
@@ -398,7 +399,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			D_GOTO(out, rc);
 
 		still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map,
-						      layout, myrank);
+						      layout, myrank, mytarget);
 		if (!still_needed) {
 			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
 				" which is no longer reachable on this rank",
