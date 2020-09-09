@@ -88,7 +88,6 @@ class DynamicStartStop(TestWithServers):
         self.start_additional_servers(additional_servers=extra_servers)
 
         self.dmg_cmd = self.get_dmg_command()
-        self.dmg_cmd.json.update(True)
 
         # Call dmg system query and verify that the State of all ranks is
         # Joined.

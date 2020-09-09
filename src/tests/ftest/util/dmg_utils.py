@@ -27,6 +27,7 @@ from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
+import json
 
 from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
@@ -408,12 +409,35 @@ class DmgCommand(DmgCommandBase):
 
         # Extract the new pool UUID and SVC list from the command output
         data = {}
-        match = re.findall(
-            r"UUID:\s+([A-Za-z0-9-]+),\s+Service replicas:\s+([A-Za-z0-9-]+)",
-            self.result.stdout)
-        if match:
-            data["uuid"] = match[0][0]
-            data["svc"] = match[0][1]
+        if self.json.value:
+            # Sample json output.
+            # "response": {
+            #     "UUID": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
+            #     "Svcreps": [
+            #     0
+            #     ]
+            # },
+            # "error": null,
+            # "status": 0
+            output = json.loads(self.result.stdout)
+            data["uuid"] = output["response"]["UUID"]
+            svc_list = output["response"]["Svcreps"]
+            svc_comma_separated = ""
+            for svc in svc_list:
+                if svc_comma_separated == "":
+                    svc_comma_separated = str(svc)
+                else:
+                    svc_comma_separated += ",{}".format(svc)
+            data["svc"] = svc_comma_separated
+
+        else:
+            match = re.findall(
+                r"UUID:\s+([A-Za-z0-9-]+),\s+Service replicas:\s+([A-Za-z0-9-]+)",
+                self.result.stdout)
+            if match:
+                data["uuid"] = match[0][0]
+                data["svc"] = match[0][1]
+        
         return data
 
     def pool_query(self, pool):
