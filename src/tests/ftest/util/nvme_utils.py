@@ -130,7 +130,7 @@ class ServerFillUp(IorTestBase):
         print('Maximum Storage space from the servers is {}'
               .format(int(min(drive_capa) * 0.96)))
 
-        #Return the 99% of storage space as it wont be used 100% for
+        #Return the 99% of storage space as it won't be used 100% for
         #pool creation.
         return int(min(drive_capa) * 0.96)
 
@@ -431,7 +431,7 @@ class ServerFillUp(IorTestBase):
         #Create the Pool
         self.pool.create()
 
-    def start_ior_load(self, storage='NVMe', operation="Write", precent=1):
+    def start_ior_load(self, storage='NVMe', operation="Write", percent=1):
         """
         Method to Fill up the server either SCM or NVMe.
         Fill up based on percent amount given using IOR.
@@ -439,12 +439,12 @@ class ServerFillUp(IorTestBase):
         arg:
             storage(string): SCM or NVMe, by default it will fill NVMe.
             operation(string): Write/Read operation
-            precent(int): % of storage to be filled
+            percent(int): % of storage to be filled
 
         Returns:
             None
         """
-        self.capacity = precent
+        self.capacity = percent
         # Fill up NVMe by default
         self.nvme_fill = True if 'NVMe' in storage else False
         self.scm_fill = True if 'SCM' in storage else False

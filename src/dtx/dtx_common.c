@@ -481,6 +481,7 @@ out:
  * \param dti_cos_cnt	[IN]	The @dti_cos array size.
  * \param tgts		[IN]	targets for distribute transaction.
  * \param tgt_cnt	[IN]	number of targets.
+ * \param solo		[IN]	single operand or not.
  * \param sync		[IN]	sync mode or not.
  * \param mbs		[IN]	DTX participants information.
  * \param dth		[OUT]	Pointer to the DTX handle.
@@ -492,7 +493,7 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
-		 struct daos_shard_tgt *tgts, int tgt_cnt, bool sync,
+		 struct daos_shard_tgt *tgts, int tgt_cnt, bool solo, bool sync,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
@@ -524,7 +525,7 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 init:
 	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
-			     true, tgt_cnt == 0 ? true : false, sync, dth);
+			     true, solo, sync, dth);
 
 	D_DEBUG(DB_IO, "Start %s DTX "DF_DTI" sub_reqs %d, ver %u, leader "
 		DF_UOID", dti_cos_cnt %d: "DF_RC"\n",
@@ -571,16 +572,16 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	int				 saved = result;
 	int				 rc = 0;
 
-	if (dlh->dlh_sub_cnt == 0)
-		goto out;
-
 	D_ASSERT(cont != NULL);
 
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
 
-	rc = dtx_leader_wait(dlh);
+	if (dlh->dlh_sub_cnt != 0)
+		rc = dtx_leader_wait(dlh);
+	else if (dth->dth_modification_cnt <= 1)
+		goto out;
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);

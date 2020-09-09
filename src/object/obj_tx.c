@@ -1613,7 +1613,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tx->tx_head.dcs_buf = dcsh;
 
 
-	/* XXX: Currently, we only pack singal DTX per CPD RPC, then elect
+	/* XXX: Currently, we only pack single DTX per CPD RPC, then elect
 	 *	the first targets in the dispatch list as the leader.
 	 */
 
