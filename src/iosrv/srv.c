@@ -1262,40 +1262,44 @@ failed:
 }
 
 void
-dss_dump_ABT_state()
+dss_dump_ABT_state(FILE *fp)
 {
 	int			rc, num_pools, i, idx;
 	struct dss_xstream	*dx;
 	ABT_sched		sched;
 	ABT_pool		pools[DSS_POOL_CNT];
 
-	fprintf(stderr, " == List of all ESs ==\n");
-	rc = ABT_info_print_all_xstreams(stderr);
+	/* print Argobots config first */
+	fprintf(stderr, " == ABT config ==\n");
+	rc = ABT_info_print_config(stderr);
+	if (rc != ABT_SUCCESS)
+		D_ERROR("ABT_info_print_config() error, rc = %d\n", rc);
+
+	fprintf(fp, " == List of all ESs ==\n");
+	rc = ABT_info_print_all_xstreams(fp);
 	if (rc != ABT_SUCCESS)
 		D_ERROR("ABT_info_print_all_xstreams() error, rc = %d\n", rc);
 
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	for (idx = 0; idx < xstream_data.xd_xs_nr; idx++) {
 		dx = xstream_data.xd_xs_ptrs[idx];
-		fprintf(stderr, "== per ES (%p) details ==\n",
-			dx->dx_xstream);
-		rc = ABT_info_print_xstream(stderr, dx->dx_xstream);
+		fprintf(fp, "== per ES (%p) details ==\n", dx->dx_xstream);
+		rc = ABT_info_print_xstream(fp, dx->dx_xstream);
 		if (rc != ABT_SUCCESS)
 			D_ERROR("ABT_info_print_xstream() error, rc = %d, for "
 				"DAOS xstream %p, ABT xstream %p\n", rc, dx,
 				dx->dx_xstream);
 		/* one progress ULT per xstream */
 		if (dx->dx_progress != ABT_THREAD_NULL) {
-			fprintf(stderr, "== ES (%p) progress ULT (%p) ==\n",
+			fprintf(fp, "== ES (%p) progress ULT (%p) ==\n",
 				dx->dx_xstream, dx->dx_progress);
-			rc = ABT_info_print_thread(stderr, dx->dx_progress);
+			rc = ABT_info_print_thread(fp, dx->dx_progress);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_thread() error, "
 					"rc = %d, for DAOS xstream %p, ABT "
 					"xstream %p, progress ULT %p\n", rc, dx,
 					dx->dx_xstream, dx->dx_progress);
-			rc = ABT_info_print_thread_stack(stderr,
-							 dx->dx_progress);
+			rc = ABT_info_print_thread_stack(fp, dx->dx_progress);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_thread_stack() error, "
 					"rc = %d, for DAOS xstream %p, ABT "
@@ -1316,14 +1320,14 @@ dss_dump_ABT_state()
 			D_WARN("DAOS xstream main sched %p differs from ABT "
 			       "registered one %p, dumping both\n",
 			       dx->dx_sched, sched);
-			rc = ABT_info_print_sched(stderr, sched);
+			rc = ABT_info_print_sched(fp, sched);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_sched() error, rc = "
 					"%d, for DAOS xstream %p, ABT xstream "
 					"%p, sched %p\n", rc, dx,
 					dx->dx_xstream, sched);
 		}
-		rc = ABT_info_print_sched(stderr, dx->dx_sched);
+		rc = ABT_info_print_sched(fp, dx->dx_sched);
 		if (rc != ABT_SUCCESS)
 			D_ERROR("ABT_info_print_sched() error, rc = %d, for "
 				"DAOS xstream %p, ABT xstream %p, sched %p\n",
@@ -1349,8 +1353,7 @@ dss_dump_ABT_state()
 			continue;
 		}
 		for (i = 0; i < num_pools; i++) {
-			fprintf(stderr, "== per POOL (%p) details ==\n",
-				pools[i]);
+			fprintf(fp, "== per POOL (%p) details ==\n", pools[i]);
 			if (pools[i] == ABT_POOL_NULL) {
 				D_WARN("DAOS xstream %p, ABT xstream %p, "
 				       "sched %p, no pool[%d]\n", dx,
@@ -1363,14 +1366,13 @@ dss_dump_ABT_state()
 				       i, dx->dx_pools[i], pools[i],
 				       dx->dx_sched);
 			}
-			rc = ABT_info_print_pool(stderr, pools[i]);
+			rc = ABT_info_print_pool(fp, pools[i]);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_pool() error, rc = %d, "
 					"for DAOS xstream %p, ABT xstream %p, "
 					"sched %p, pool[%d]\n", rc, dx,
 					dx->dx_xstream, dx->dx_sched, i);
-			rc = ABT_info_print_thread_stacks_in_pool(stderr,
-								  pools[i]);
+			rc = ABT_info_print_thread_stacks_in_pool(fp, pools[i]);
 			if (rc != ABT_SUCCESS)
 				D_ERROR("ABT_info_print_thread_stacks_in_pool() error, rc = %d, "
 					"for DAOS xstream %p, ABT xstream %p, "

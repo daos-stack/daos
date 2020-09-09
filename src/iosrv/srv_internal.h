@@ -117,7 +117,7 @@ int dss_module_cleanup_all(void);
 /* srv.c */
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
-void dss_dump_ABT_state(void);
+void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
