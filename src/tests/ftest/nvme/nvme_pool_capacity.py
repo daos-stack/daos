@@ -59,10 +59,10 @@ class NvmePoolCapacity(TestWithServers):
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get(
+            "ior_test_sequence", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get(
+            "obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -71,6 +71,7 @@ class NvmePoolCapacity(TestWithServers):
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
         """Start threads and wait until all threads are finished.
+
         Args:
             pool (object): pool handle
             oclass (str): IOR object class
@@ -81,6 +82,7 @@ class NvmePoolCapacity(TestWithServers):
 
         Returns:
             None
+
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
@@ -105,10 +107,8 @@ class NvmePoolCapacity(TestWithServers):
 
         # Define the job manager for the IOR command
         self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
-        self.job_manager.job.dfs_cont.update(container_info
-                                     ["{}{}{}".format(oclass,
-                                                      api,
-                                                      test[2])])
+        key = "{}{}{}".format(oclass, api, test[2])
+        self.job_manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(self.job_manager))
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.job_manager.assign_processes(processes)

@@ -258,6 +258,7 @@ class Dfuse(DfuseCommand):
                 self.mount_dir.value, self.hosts)
 
     def run(self, check=True):
+        # pylint: disable=arguments-differ
         """Run the dfuse command.
 
         Args:

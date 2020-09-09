@@ -62,10 +62,10 @@ class NvmeFragmentation(TestWithServers):
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_transfer_size = self.params.get("transfer_block_size",
-                                                 '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
+        self.ior_transfer_size = self.params.get(
+            "transfer_block_size", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get(
+            "obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -115,10 +115,8 @@ class NvmeFragmentation(TestWithServers):
 
             # Define the job manager for the IOR command
             self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
-            self.job_manager.job.dfs_cont.update(container_info
-                                         ["{}{}{}".format(oclass,
-                                                          api,
-                                                          test[0])])
+            key = "{}{}{}".format(oclass, api, test[0])
+            self.job_manager.job.dfs_cont.update(container_info[key])
             env = ior_cmd.get_default_env(str(self.job_manager))
             self.job_manager.assign_hosts(
                 self.hostlist_clients, self.workdir, None)
@@ -140,6 +138,7 @@ class NvmeFragmentation(TestWithServers):
                 container_info[key]
 
             try:
+                # pylint: disable=protected-access
                 cmd._get_result()
             except CommandFailure as _error:
                 results.put("FAIL")

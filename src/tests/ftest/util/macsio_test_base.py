@@ -23,7 +23,6 @@
 """
 from apricot import TestWithServers
 from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
 
 

@@ -91,10 +91,9 @@ class DaosAggregationBasic(IorTestBase):
 
         space_used_by_ior = initial_free_space - free_space_after_first_ior
 
-        self.log.info("Space used by first ior = {}".format(
-            space_used_by_ior))
-        self.log.info("Free space after first ior = {}".format(
-            free_space_after_first_ior))
+        self.log.info("Space used by first ior = %s", space_used_by_ior)
+        self.log.info(
+            "Free space after first ior = %s", free_space_after_first_ior)
         self.assertTrue(free_space_after_first_ior < initial_free_space,
                         "IOR run was not successful.")
 
@@ -103,8 +102,8 @@ class DaosAggregationBasic(IorTestBase):
         self.run_ior_with_pool(create_pool=False)
         free_space_after_second_ior = self.get_free_space(storage_index)
 
-        self.log.info("Free space after second ior = {}".format(
-            free_space_after_second_ior))
+        self.log.info(
+            "Free space after second ior = %s", free_space_after_second_ior)
 
         # Verify the free space after second ior is less at least twice the
         # size of space_used_by_ior from initial_free_space
@@ -121,8 +120,8 @@ class DaosAggregationBasic(IorTestBase):
             and finish")
         time.sleep(120)
         free_space_after_aggregate = self.get_free_space(storage_index)
-        self.log.info("Free space after aggregation = {}".format(
-            free_space_after_aggregate))
+        self.log.info(
+            "Free space after aggregation = %s", free_space_after_aggregate)
 
         # Verify the space taken by second ior is reclaimed after aggregation
         # (logical locations will be overwritten as part of aggregation)

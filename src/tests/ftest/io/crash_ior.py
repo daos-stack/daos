@@ -23,7 +23,9 @@ import time
 from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
 
+
 class CrashIor(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: DAOS server does not need to be restarted
                                when the application crashes.
     :avocado: recursive
