@@ -70,10 +70,12 @@ test_run(d_rank_t my_rank)
 	}
 	DBG_PRINT("Contexts created %d\n", test_g.t_srv_ctx_num);
 
-	rc = crt_group_config_save(NULL, true);
-	D_ASSERTF(rc == 0,
-		  "crt_group_config_save() failed. rc: %d\n", rc);
-	DBG_PRINT("Group config file saved\n");
+	if (my_rank == 0) { 
+		rc = crt_group_config_save(NULL, true);
+		D_ASSERTF(rc == 0,
+				"crt_group_config_save() failed. rc: %d\n", rc);
+		DBG_PRINT("Group config file saved\n");
+	}
 
 	if (test_g.t_save_cfg && my_rank == 0) {
 		rc = crt_group_config_path_set(test_g.t_cfg_path);
