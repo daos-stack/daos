@@ -172,7 +172,7 @@ dfs_test_open_release(void **state)
         /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
-        print_message("Successful object releasing\n");
+        print_message("Successful object released\n");
 
         /** Successful object openning for RW */
         rc = dfs_open(dfs_mt, NULL, "test", S_IFREG | S_IWUSR | S_IRUSR ,
@@ -183,7 +183,7 @@ dfs_test_open_release(void **state)
         /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
-        print_message("Successful object releasing\n");
+        print_message("Successful object released\n");
 
         /** Successful object creating for RDONLY */
         rc = dfs_open(dfs_mt, NULL, "testR", S_IFREG | S_IWUSR | S_IRUSR ,
@@ -194,7 +194,7 @@ dfs_test_open_release(void **state)
         /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
-        print_message("Successful object releasing\n");
+        print_message("Successful object released\n");
 
         /** Failure in object for RDONLY openning for RW */
         rc = dfs_open(dfs_mt, NULL, "testR", S_IFREG | S_IWUSR | S_IRUSR ,
@@ -211,7 +211,7 @@ dfs_test_open_release(void **state)
         /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
-        print_message("Successful object releasing\n");
+        print_message("Successful object released\n");
 
 }
 
@@ -383,7 +383,7 @@ dfs_test_obj2id(void **state)
         daos_obj_id_t  oid;
         daos_size_t    chunk_size = 64;
 	
-        /** NULL dfs mount for obj2id */
+        /** NULL object for obj2id */
         rc = dfs_obj2id(/*obj*/ NULL, &oid);
         assert_int_equal(rc, EINVAL);
         print_message("Object should be provided for obj2id\n");
@@ -407,7 +407,66 @@ dfs_test_obj2id(void **state)
         /** Successful object releasing */
         rc = dfs_release(obj);
         assert_int_equal(rc, 0);
-        print_message("Successful object releasing\n");
+        print_message("Successful object released\n");
+}
+
+static void
+dfs_test_lookup(void **state)
+{
+        int            rc;
+        dfs_obj_t     *obj;
+	struct stat    stbuf;
+	mode_t         mode;
+
+        /** NULL dfs mount for lookup */
+ 	rc = dfs_lookup(/*dfs_mt*/ NULL, "/",  O_RDWR, &obj, &mode, &stbuf);
+        assert_int_equal(rc, EINVAL);
+        print_message("Mounted file system should be provided for lookup\n");
+
+        /** NULL path for lookup */
+ 	rc = dfs_lookup(dfs_mt, /*"/"*/ NULL,  O_RDWR, &obj, &mode, &stbuf);
+        assert_int_equal(rc, EINVAL);
+        print_message("Not NULL path should be provided for lookup\n");
+
+        /** Not existing path for lookup */
+ 	rc = dfs_lookup(dfs_mt, "bad path",  O_RDWR, &obj, &mode, &stbuf);
+        assert_int_equal(rc, EINVAL);
+        print_message("Existing path should be provided for lookup\n");
+
+        /** NULL obj provided for lookup */
+ 	rc = dfs_lookup(dfs_mt, "/",  O_RDWR, /*&obj*/ NULL, &mode, &stbuf);
+        assert_int_equal(rc, EINVAL);
+        print_message("Not NULL object should be provided for lookup\n");
+
+        /** NULL provided for lookup mode result */
+ 	rc = dfs_lookup(dfs_mt, "/",  O_RDWR, &obj, /*&mode*/ NULL, &stbuf);
+        assert_int_equal(rc, 0);
+        print_message("Lookuped does not requre result mode to be not NULL\n");
+
+        /** Lookuped without result mode object releasing */
+        rc = dfs_release(obj);
+        assert_int_equal(rc, 0);
+        print_message("Lookuped without result mode object released\n");
+
+        /** NULL provided for lookup stbuf result */
+ 	rc = dfs_lookup(dfs_mt, "/",  O_RDWR, &obj, &mode, /*&stbuf*/ NULL);
+        assert_int_equal(rc, 0);
+        print_message("Lookuped does not requre result stbuf to be not NULL\n");
+
+        /** Lookuped without result stbuf object releasing */
+        rc = dfs_release(obj);
+        assert_int_equal(rc, 0);
+        print_message("Lookuped without result stbuf object released\n");
+
+        /** Successful lookup */
+ 	rc = dfs_lookup(dfs_mt, "/",  O_RDWR, &obj, &mode, &stbuf);
+        assert_int_equal(rc, 0);
+        print_message("Successful lookup %x\n", mode);
+	
+        /** Successful object releasing */
+        rc = dfs_release(obj);
+        assert_int_equal(rc, 0);
+        print_message("Successful lookup object released\n");
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
@@ -425,6 +484,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
           dfs_test_set_prefix,   async_disable, test_case_teardown},
 	{ "DFS_UNIS TEST7: Obj 2 id",
           dfs_test_obj2id,       async_disable, test_case_teardown},
+        { "DFS_UNIS TEST8: Lookup",
+          dfs_test_lookup,       async_disable, test_case_teardown},
 };
 
 
