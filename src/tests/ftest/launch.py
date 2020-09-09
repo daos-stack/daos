@@ -901,7 +901,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    archive_files(destination, host_list, "{}/*.log".format(logs_dir))
+    archive_files(destination, host_list, "{}/*.log*".format(logs_dir))
 
 
 def archive_config_files(avocado_logs_dir):
