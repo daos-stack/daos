@@ -185,7 +185,7 @@ test_drpc_listener_init_cant_create_socket(void **state)
 {
 	socket_return = -1; /* Make the drpc_listen call fail */
 
-	assert_int_equal(drpc_listener_init(), -DER_UNKNOWN);
+	assert_int_equal(drpc_listener_init(), -DER_MISC);
 }
 
 static void

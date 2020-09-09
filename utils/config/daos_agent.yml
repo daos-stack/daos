@@ -1,10 +1,10 @@
-# DAOS client configuration file.
+# DAOS agent configuration file.
 #
 # Location of this configuration file is determined by first checking for the
 # path specified through the -o option of the daos_agent command line.
-# Otherwise, etc/daos_agent.yml is used.
+# Otherwise, /etc/daos/daos_agent.yml is used.
 #
-# Section describing the agent configuration
+# Section describing the daos_agent configuration
 #
 # Although not supported for now, one might want to connect to multiple
 # DAOS installations from the same node in the future.
@@ -12,8 +12,10 @@
 # Specify the associated DAOS systems.
 # Name must match name specified in the daos_server.yml file on the server.
 #
+# NOTE: changing the name is not supported in DAOS 1.0, it must be daos_server
+#
 # default: daos_server
-#name: daos
+#name: daos_server
 
 # Management server access points
 # Must have the same value for all agents and servers in a system.

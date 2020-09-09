@@ -261,6 +261,14 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 				},
 			},
 		},
+		"request nonexistent device": {
+			inputPath:    testPath,
+			inputDevices: []string{"Device3", "NotReal"},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes: defaultModules,
+			},
+			expErr: errors.New("no module found with UID \"NotReal\""),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

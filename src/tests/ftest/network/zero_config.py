@@ -125,8 +125,12 @@ class ZeroConfigTest(TestWithServers):
         cnt_before = self.get_port_cnt(
             self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
+        # get the dmg config file for daos_racer
+        dmg = self.get_dmg_command()
+
         # Let's run daos_racer as a client
-        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
+        daos_racer = DaosRacerCommand(self.bin,
+                                      self.hostlist_clients[0], dmg)
         daos_racer.get_params(self)
 
         # Update env_name list to add OFI_INTERFACE if needed.

@@ -33,6 +33,17 @@
 #include "vts_io.h"
 #include "vts_array.h"
 
+struct tx_helper {
+	/** Current transaction handle */
+	struct dtx_handle	*th_dth;
+	/** Number of total ops in current tx */
+	uint32_t		 th_nr_ops;
+	/** Number of write ops in current tx */
+	uint32_t		 th_nr_mods;
+	/** Current op number */
+	uint32_t		 th_op_seq;
+};
+
 struct mvcc_arg {
 	int		i;	/* used to generate different oids, etc. */
 	daos_epoch_t	epoch;	/* used to generate different epochs */
@@ -73,7 +84,7 @@ enum write_type {
 	W_NIL		/* not applicable */
 };
 
-typedef int (*op_func_t)(struct io_test_args *arg, struct dtx_id *dti,
+typedef int (*op_func_t)(struct io_test_args *arg, struct tx_helper *txh,
 			 char *path, daos_epoch_t epoch);
 
 struct op {
@@ -183,25 +194,75 @@ set_value(int i, char *path, d_iov_t *value)
 	value->iov_len = strlen(value->iov_buf) + 1;
 }
 
+static struct dtx_handle *
+start_tx(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	 struct tx_helper *txh)
+{
+	struct dtx_handle	*dth;
+
+	if (txh == NULL)
+		return NULL;
+
+	dth = txh->th_dth;
+
+	if (dth == NULL) {
+		vts_dtx_begin_ex(&oid, coh, epoch, 0, txh->th_nr_mods,
+				 &dth);
+		txh->th_dth = dth;
+	}
+
+	return dth;
+}
+
+static void
+stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
+{
+	struct dtx_handle	*dth;
+	struct dtx_id		 xid;
+	int			 err;
+
+	if (txh == NULL)
+		return;
+
+	dth = txh->th_dth;
+
+	if (write)
+		dth->dth_op_seq++;
+
+	if (txh->th_nr_ops == txh->th_op_seq) {
+		xid = dth->dth_xid;
+		vts_dtx_end(dth);
+		if (txh->th_nr_mods != 0) {
+			if (success) {
+				err = vos_dtx_commit(coh, &xid, 1, NULL);
+				assert_int_equal(err, 1);
+			}
+		}
+	}
+
+	txh->th_op_seq++;
+}
+
 static int
-tx_fetch(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t oid,
+tx_fetch(daos_handle_t coh, struct tx_helper *txh, daos_unit_oid_t oid,
 	 daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
 	 unsigned int iod_nr, daos_iod_t *iod, d_sg_list_t *sgl)
 {
 	struct dtx_handle	*dth;
 	int			 rc;
 
-	vts_dtx_begin(&oid, coh, epoch, 0, &dth);
-	if (dti != NULL)
-		dth->dth_xid = *dti;
+	dth = start_tx(coh, oid, epoch, txh);
+
 	rc = vos_obj_fetch_ex(coh, oid, epoch, flags, dkey, iod_nr, iod, sgl,
 			      dth);
-	vts_dtx_end(dth);
+
+	stop_tx(coh, txh, rc == 0, false);
+
 	return rc;
 }
 
 static int
-fetch_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
+fetch_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 		 daos_epoch_t epoch, uint64_t flags)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -229,47 +290,38 @@ fetch_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &value;
 
-	return tx_fetch(arg->ctx.tc_co_hdl, dti, oid, epoch, flags, &dkey,
+	return tx_fetch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, &dkey,
 			1 /* iod_nr */, &iod, &sgl);
 }
 
 static int
-fetch_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+fetch_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	daos_epoch_t epoch)
 {
-	return fetch_with_flags(arg, dti, path, epoch, 0 /* flags */);
+	return fetch_with_flags(arg, txh, path, epoch, 0 /* flags */);
 }
 
 static int
-tx_update(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t oid,
+tx_update(daos_handle_t coh, struct tx_helper *txh, daos_unit_oid_t oid,
 	  daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
 	  unsigned int iod_nr, daos_iod_t *iod, d_sg_list_t *sgl)
 {
 	struct dtx_handle	*dth;
-	struct dtx_id		 xid;
 	int			 rc;
 
-	vts_dtx_begin(&oid, coh, epoch, 0, &dth);
-	if (dti != NULL)
-		dth->dth_xid = *dti;
+	dth = start_tx(coh, oid, epoch, txh);
+
 	rc = vos_obj_update_ex(coh, oid, epoch, 0 /* pm_ver */, flags,
 			       dkey, iod_nr, iod, NULL /* iods_csums */,
 			       sgl, dth);
-	xid = dth->dth_xid;
-	vts_dtx_end(dth);
 
-	if (rc == 0) {
-		int err;
-
-		err = vos_dtx_commit(coh, &xid, 1, NULL);
-		assert_int_equal(err, 1);
-	}
+	stop_tx(coh, txh, rc == 0, true);
 
 	return rc;
 }
 
 static int
-update_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
+update_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 		  daos_epoch_t epoch, uint64_t flags)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -298,78 +350,69 @@ update_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &value;
 
-	return tx_update(arg->ctx.tc_co_hdl, dti, oid, epoch, flags, &dkey,
+	return tx_update(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, &dkey,
 			 1 /* iod_nr */, &iod, &sgl);
 }
 
 static int
-update_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+update_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	 daos_epoch_t epoch)
 {
-	return update_with_flags(arg, dti, path, epoch, 0 /* flags */);
+	return update_with_flags(arg, txh, path, epoch, 0 /* flags */);
 }
 
 static int
-update_de_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+update_de_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	    daos_epoch_t epoch)
 {
-	return update_with_flags(arg, dti, path, epoch,
+	return update_with_flags(arg, txh, path, epoch,
 				 VOS_OF_COND_DKEY_INSERT);
 }
 
 static int
-update_dne_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+update_dne_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
-	return update_with_flags(arg, dti, path, epoch,
+	return update_with_flags(arg, txh, path, epoch,
 				 VOS_OF_COND_DKEY_UPDATE);
 }
 
 static int
-update_ae_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+update_ae_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	    daos_epoch_t epoch)
 {
-	return update_with_flags(arg, dti, path, epoch,
+	return update_with_flags(arg, txh, path, epoch,
 				 VOS_OF_COND_AKEY_INSERT);
 }
 
 static int
-update_ane_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+update_ane_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
-	return update_with_flags(arg, dti, path, epoch,
+	return update_with_flags(arg, txh, path, epoch,
 				 VOS_OF_COND_AKEY_UPDATE);
 }
 
 static int
-tx_punch(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t oid,
+tx_punch(daos_handle_t coh, struct tx_helper *txh, daos_unit_oid_t oid,
 	 daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
 	 unsigned int akey_nr, daos_key_t *akeys)
 {
 	struct dtx_handle	*dth;
-	struct dtx_id		 xid;
 	int			 rc;
 
-	vts_dtx_begin(&oid, coh, epoch, 0, &dth);
-	if (dti != NULL)
-		dth->dth_xid = *dti;
+	dth = start_tx(coh, oid, epoch, txh);
+
 	rc = vos_obj_punch(coh, oid, epoch, 0 /* pm_ver */, flags, dkey,
 			   akey_nr, akeys, dth);
-	xid = dth->dth_xid;
-	vts_dtx_end(dth);
 
-	if (rc == 0) {
-		int err;
-
-		err = vos_dtx_commit(coh, &xid, 1, NULL);
-		assert_int_equal(err, 1);
-	}
+	stop_tx(coh, txh, rc == 0, true);
 
 	return rc;
 }
 
 static int
-puncho_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
+puncho_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 		  daos_epoch_t epoch, uint64_t flags)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -377,26 +420,26 @@ puncho_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
 
 	set_oid(mvcc_arg->i, path, &oid);
 
-	return tx_punch(arg->ctx.tc_co_hdl, dti, oid, epoch, flags,
+	return tx_punch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags,
 			NULL /* dkey */, 0 /* akey_nr */, NULL /* akeys */);
 }
 
 static int
-puncho_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+puncho_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	 daos_epoch_t epoch)
 {
-	return puncho_with_flags(arg, dti, path, epoch, 0 /* flags */);
+	return puncho_with_flags(arg, txh, path, epoch, 0 /* flags */);
 }
 
 static int
-puncho_one_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+puncho_one_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
-	return puncho_with_flags(arg, dti, path, epoch, VOS_OF_COND_PUNCH);
+	return puncho_with_flags(arg, txh, path, epoch, VOS_OF_COND_PUNCH);
 }
 
 static int
-punchd_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
+punchd_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 		  daos_epoch_t epoch, uint64_t flags)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -407,26 +450,26 @@ punchd_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
 	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 
-	return tx_punch(arg->ctx.tc_co_hdl, dti, oid, epoch, flags, &dkey,
+	return tx_punch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, &dkey,
 			0 /* akey_nr */, NULL /* akeys */);
 }
 
 static int
-punchd_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+punchd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	 daos_epoch_t epoch)
 {
-	return punchd_with_flags(arg, dti, path, epoch, 0 /* flags */);
+	return punchd_with_flags(arg, txh, path, epoch, 0 /* flags */);
 }
 
 static int
-punchd_dne_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+punchd_dne_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
-	return punchd_with_flags(arg, dti, path, epoch, VOS_OF_COND_PUNCH);
+	return punchd_with_flags(arg, txh, path, epoch, VOS_OF_COND_PUNCH);
 }
 
 static int
-puncha_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
+puncha_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 		  daos_epoch_t epoch, uint64_t flags)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
@@ -440,22 +483,22 @@ puncha_with_flags(struct io_test_args *arg, struct dtx_id *dti, char *path,
 	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
 
-	return tx_punch(arg->ctx.tc_co_hdl, dti, oid, epoch, flags, &dkey,
+	return tx_punch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, &dkey,
 			1 /* akey_nr */, &akey);
 }
 
 static int
-puncha_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+puncha_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	 daos_epoch_t epoch)
 {
-	return puncha_with_flags(arg, dti, path, epoch, 0 /* flags */);
+	return puncha_with_flags(arg, txh, path, epoch, 0 /* flags */);
 }
 
 static int
-puncha_ane_f(struct io_test_args *arg, struct dtx_id *dti, char *path,
+puncha_ane_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
-	return puncha_with_flags(arg, dti, path, epoch, VOS_OF_COND_PUNCH);
+	return puncha_with_flags(arg, txh, path, epoch, VOS_OF_COND_PUNCH);
 }
 
 static struct op operations[] = {
@@ -527,7 +570,12 @@ static struct conflicting_rw_excluded_case conflicting_rw_excluded_cases[] = {
 	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	0, false},
 	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	1, false},
 	{false,	"puncha_ane",	"coda",	"punchd_dne",	"cod",	0, false},
-	{false,	"puncha_ane",	"coda",	"punchd_dne",	"cod",	1, false}
+	{false,	"puncha_ane",	"coda",	"punchd_dne",	"cod",	1, false},
+	{false, "puncha_ane",   "coda", "puncho_one",   "co",   0, true},
+	{false, "punchd_dne",   "cod",  "puncho_one",   "co",   0, true},
+	{false, "puncha_ane",   "coda", "update_de",    "coda", 0, true},
+	{false, "puncha_ane",   "coda", "update_dne",   "coda", 0, true},
+	{false, "puncha_ane",   "coda", "punchd_dne",   "cod",  0, true},
 };
 
 static int64_t
@@ -569,47 +617,18 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 			struct op *r, char *rp, daos_epoch_t re,
 			struct op *w, char *wp, daos_epoch_t we, bool same_tx)
 {
-	struct mvcc_arg	*mvcc_arg = arg->custom;
-	struct dtx_id	 rtx;
-	struct dtx_id	 wtx;
-	int		 expected_rrc = 0;
-	int		 expected_wrc = 0;
-	int		 nfailed = 0;
-	int		 rc;
+	struct mvcc_arg		*mvcc_arg = arg->custom;
+	struct tx_helper	*rtx;
+	struct tx_helper	*wtx;
+	struct tx_helper	 txh1 = {0};
+	struct tx_helper	 txh2 = {0};
+	int			 expected_rrc = 0;
+	int			 expected_wrc = 0;
+	int			 nfailed = 0;
+	int			 rc;
 
-#if 1 /* FIXME: Many "same TX" cases fail currently. */
-	if (same_tx)
-		goto out;
-#endif
 	if (is_excluded(empty, r, rp, re, w, wp, we, same_tx))
 		goto out;
-
-	print_message("CASE %d.%d: %s, %s(%s, "DF_U64"), %s(%s, "DF_U64"), "
-		      "%s TX [%d]\n", i, j, empty ? "empty" : "nonemtpy",
-		      r->o_name, rp, re, w->o_name, wp, we,
-		      same_tx ? "same" : "diff", mvcc_arg->i);
-
-	/* Generate the TX IDs. */
-	daos_dti_gen_unique(&rtx);
-	if (same_tx)
-		wtx = rtx;
-	else
-		daos_dti_gen_unique(&wtx);
-
-	/* If requested, prepare the data that will be read. */
-	if (!empty) {
-		char	pp[L_COUNT + 1] = "coda";
-
-		memcpy(pp, rp, strlen(rp));
-		print_message("  update(%s, "DF_U64") before %s(%s, "
-			      DF_U64"): ", pp, re - 1, r->o_name, rp, re);
-		rc = update_f(arg, NULL /* dti */, pp, re - 1);
-		print_message("%d\n", rc);
-		if (rc != 0) {
-			nfailed++;
-			goto out;
-		}
-	}
 
 	/*
 	 * Figure out the expected read result, perform read, and verify the
@@ -619,9 +638,57 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		expected_rrc = -DER_EXIST;
 	else if (r->o_rtype == R_NE && empty)
 		expected_rrc = -DER_NONEXIST;
+
+	if (same_tx && expected_rrc != 0) {
+		/** Not a valid use case as conditional updates are split in the
+		 *  context of distributed transactions.  The conditional fetch
+		 *  would mean either the update doesn't execute or should abort
+		 *  the transaction if it returns -DER_EXIST
+		 */
+		goto out;
+	}
+
+	print_message("CASE %d.%d: %s, %s(%s, "DF_U64"), %s(%s, "DF_U64"), "
+		      "%s TX [%d]\n", i, j, empty ? "empty" : "nonemtpy",
+		      r->o_name, rp, re, w->o_name, wp, we,
+		      same_tx ? "same" : "diff", mvcc_arg->i);
+
+	if (same_tx) {
+		rtx = wtx = &txh1;
+		txh1.th_nr_ops = 2;
+		txh1.th_op_seq = 1;
+		if (is_rw(r))
+			txh1.th_nr_mods = 2;
+		else
+			txh1.th_nr_mods = 1;
+	} else {
+		rtx = &txh1;
+		wtx = &txh2;
+		txh1.th_nr_ops = txh2.th_nr_ops = 1;
+		txh1.th_op_seq = txh2.th_op_seq = 1;
+		txh2.th_nr_mods = 1;
+		if (is_rw(r))
+			txh1.th_nr_mods = 1;
+	}
+
+	/* If requested, prepare the data that will be read. */
+	if (!empty) {
+		char	pp[L_COUNT + 1] = "coda";
+
+		memcpy(pp, rp, strlen(rp));
+		print_message("  update(%s, "DF_U64") before %s(%s, "
+			      DF_U64"): ", pp, re - 1, r->o_name, rp, re);
+		rc = update_f(arg, NULL /* txh */, pp, re - 1);
+		print_message("%d\n", rc);
+		if (rc != 0) {
+			nfailed++;
+			goto out;
+		}
+	}
+
 	print_message("  %s(%s, "DF_U64") (expect %d): ",
 		      r->o_name, rp, re, expected_rrc);
-	rc = r->o_func(arg, &rtx, rp, re);
+	rc = r->o_func(arg, rtx, rp, re);
 	print_message("%d\n", rc);
 	if (rc != expected_rrc) {
 		nfailed++;
@@ -655,7 +722,7 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	}
 	print_message("  %s(%s, "DF_U64") (expect %d): ",
 		      w->o_name, wp, we, expected_wrc);
-	rc = w->o_func(arg, &wtx, wp, we);
+	rc = w->o_func(arg, wtx, wp, we);
 	print_message("%d\n", rc);
 	if (rc != expected_wrc)
 		nfailed++;
