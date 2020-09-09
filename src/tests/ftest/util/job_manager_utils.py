@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from distutils.spawn import find_executable
+import math
 import os
 
 from command_utils import ExecutableCommand
@@ -311,6 +312,8 @@ class Mpirun(JobManager):
         """
         self._hosts = hosts
         kwargs = {"hostlist": self._hosts, "slots": slots}
+        if self.mpitype == "mpich":
+            kwargs["segment"] = ":"
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)

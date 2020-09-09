@@ -99,7 +99,8 @@ class MacsioTestBase(TestWithServers):
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = "{}".format(plugin)
         self.manager.job = self.macsio
-        self.manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.manager.assign_hosts(
+            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         self.manager.assign_processes(len(self.hostlist_clients))
         self.manager.assign_environment(env)
 
