@@ -887,8 +887,7 @@ class SoakTestBase(TestWithServers):
             obj_class = "_".join(["OC", str(
                 self.params.get("dfs_oclass", "/run/rebuild/*")[0])])
         else:
-            obj_class = self.params.get(
-                "object_class", "/run/container_reserved/*")
+            obj_class = "OC_SX"
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak
         # self.pool[0] will always be the reserved pool
