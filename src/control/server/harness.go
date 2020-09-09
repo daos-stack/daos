@@ -54,7 +54,7 @@ type IOServerHarness struct {
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
 		log:              log,
-		instances:        make([]*IOServerInstance, 0, maxIOServers),
+		instances:        make([]*IOServerInstance, 0),
 		started:          atm.NewBool(false),
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
@@ -83,7 +83,7 @@ func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerIns
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*IOServerInstance, 0, maxIOServers)
+	out := make([]*IOServerInstance, 0)
 
 	for _, i := range h.instances {
 		r, err := i.GetRank()
@@ -204,7 +204,7 @@ func (h *IOServerHarness) readyRanks() []system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]system.Rank, 0, maxIOServers)
+	ranks := make([]system.Rank, 0)
 	for _, srv := range h.instances {
 		if srv.hasSuperblock() && srv.isReady() {
 			ranks = append(ranks, *srv.getSuperblock().Rank)

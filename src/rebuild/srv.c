@@ -601,7 +601,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			 */
 			rc = rebuild_iv_update(pool->sp_iv_ns,
 					       &iv, CRT_IV_SHORTCUT_NONE,
-					       CRT_IV_SYNC_LAZY);
+					       CRT_IV_SYNC_LAZY, false);
 			if (rc) {
 				D_WARN("rebuild master iv update failed: %d\n",
 				       rc);
@@ -1043,8 +1043,8 @@ rebuild_task_ult(void *arg)
 	struct rebuild_task			*task = arg;
 	struct ds_pool				*pool;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
-	struct rebuild_iv			iv = { 0 };
-	int					 rc;
+	struct rebuild_iv                       iv = { 0 };
+	int					rc;
 
 	pool = ds_pool_lookup(task->dst_pool_uuid);
 	if (pool == NULL) {
@@ -1164,8 +1164,8 @@ iv_stop:
 		iv.riv_size		= rgt->rgt_status.rs_size;
 		iv.riv_seconds          = rgt->rgt_status.rs_seconds;
 
-		rc = rebuild_iv_update(pool->sp_iv_ns, &iv,
-				       CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY);
+		rc = rebuild_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
+				       CRT_IV_SYNC_LAZY, true);
 		if (rc)
 			D_ERROR("iv final update fails"DF_UUID":rc %d\n",
 				DP_UUID(task->dst_pool_uuid), rc);
@@ -1687,7 +1687,7 @@ rebuild_tgt_status_check_ult(void *arg)
 			else
 				rc = rebuild_iv_update(rpt->rt_pool->sp_iv_ns,
 						   &iv, CRT_IV_SHORTCUT_TO_ROOT,
-						   CRT_IV_SYNC_NONE);
+						   CRT_IV_SYNC_NONE, false);
 			if (rc == 0) {
 				if (rpt->rt_re_report) {
 					rpt->rt_reported_toberb_objs =
@@ -1703,6 +1703,13 @@ rebuild_tgt_status_check_ult(void *arg)
 			} else {
 				D_WARN("rebuild tgt iv update failed: %d\n",
 					rc);
+				/* Already finish rebuilt, but it can not
+				 * its rebuild status on the leader, i.e.
+				 * it can not find the IV see crt_iv_hdlr_xx().
+				 * let's just stop the rebuild.
+				 */
+				if (rc == -DER_NONEXIST && !status.rebuilding)
+					rpt->rt_global_done = 1;
 			}
 		}
 
