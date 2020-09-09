@@ -57,8 +57,6 @@ class GroupTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    # Use of DAOS_TEST_SHARED_DIR should fix this test failure
-    # @skipForTicket("DAOS-5549")
     def test_group(self):
         """
         Test CaRT NoPmix Launcher
