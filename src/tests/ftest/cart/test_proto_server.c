@@ -49,7 +49,7 @@ test_run(d_rank_t my_rank)
 	}
 	// END: FIXME: always save 
 
-	if (test.tg_save_cfg && my_rank == 0) {
+	if (my_rank == 0) {
 		rc = crt_group_config_path_set(test.tg_cfg_path);
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
