@@ -1051,7 +1051,7 @@ initpydaos_shim_27(void)
 	module = Py_InitModule("pydaos_shim_27", daosMethods);
 #endif
 
-#define DEFINE_PY_RETURN_CODE(name, desc) \
+#define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
 	PyModule_AddIntConstant(module, ""#name, desc);
 
 	/** export return codes */

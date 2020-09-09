@@ -23,10 +23,12 @@
 /**
  * This file is part of GURT.
  */
+#include <string.h>
+
 #include <daos_errno.h>
-#include "gurt/debug.h"
-#include "gurt/list.h"
-#include "gurt/common.h"
+#include <gurt/debug.h>
+#include <gurt/list.h>
+#include <gurt/common.h>
 
 static D_LIST_HEAD(g_error_reg_list);
 
@@ -35,12 +37,16 @@ struct d_error_reg {
 	int			er_base;
 	int			er_limit;
 	const char * const	*er_strings;
+	const char * const	*er_strerror;
 	bool			er_alloc;
 };
 
 #define D_DEFINE_COMP_ERRSTR(name, base)				\
 	static const char * const g_##name##_errstr[] = {		\
 		D_FOREACH_##name##_ERR(D_DEFINE_ERRSTR)			\
+	};								\
+	static const char * const g_##name##_errstr_desc[] = {		\
+		D_FOREACH_##name##_ERR(D_DEFINE_ERRDESC)		\
 	};								\
 	D_CASSERT((sizeof(g_##name##_errstr) /				\
 			 sizeof(g_##name##_errstr[0])) ==		\
@@ -50,6 +56,7 @@ struct d_error_reg {
 		.er_base	= DER_ERR_##name##_BASE,		\
 		.er_limit	= DER_ERR_##name##_LIMIT,		\
 		.er_strings	= g_##name##_errstr,			\
+		.er_strerror	= g_##name##_errstr_desc,		\
 		.er_alloc	= false,				\
 	};
 
@@ -95,7 +102,8 @@ const char *d_errstr(int rc)
 }
 
 int
-d_errno_register_range(int start, int end, const char * const *error_strings)
+d_errno_register_range(int start, int end, const char * const *error_strings,
+		       const char * const *strerror)
 {
 	struct	d_error_reg	*entry;
 
@@ -110,6 +118,7 @@ d_errno_register_range(int start, int end, const char * const *error_strings)
 	entry->er_base = start;
 	entry->er_limit = end;
 	entry->er_strings = error_strings;
+	entry->er_strerror = strerror;
 	entry->er_alloc = true;
 	d_list_add(&entry->er_link, &g_error_reg_list);
 
@@ -132,4 +141,23 @@ d_errno_deregister_range(int start)
 	}
 	D_ERROR("Attempted to deregister non-existent error range from %d\n",
 		start);
+}
+
+const char *
+d_strerror(int errnum)
+{
+	struct d_error_reg *entry;
+
+	if (errnum == 0)
+		return "Success";
+
+	errnum = D_ABS(errnum);
+
+	d_list_for_each_entry(entry, &g_error_reg_list, er_link) {
+		if (errnum <= entry->er_base || errnum >= entry->er_limit)
+			continue;
+		return entry->er_strerror[errnum - entry->er_base - 1];
+	}
+
+	return strerror(errnum);
 }
