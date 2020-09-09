@@ -37,8 +37,13 @@ enum {
 	/** The transaction is read only. */
 	DAOS_TF_RDONLY		= (1 << 0),
 	/**
-	 * Not copy application buffer (neither key buffer nor value buffer)
-	 * when cache modification on client for the distributed transaction.
+	 * Not copy application data buffer when cache modification on client
+	 * for the distributed transaction.
+	 *
+	 * Please note that the key buffer will always be copied when caching.
+	 * Then the TX sponsor can reuse or release related key' buffer after
+	 * the operation returning to avoid more programming restriction under
+	 * DAOS transaction model.
 	 */
 	DAOS_TF_ZERO_COPY	= (1 << 1),
 };

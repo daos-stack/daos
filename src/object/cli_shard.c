@@ -158,6 +158,7 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
 	struct daos_csummer	*csummer;
+	struct daos_csummer	*csummer_copy = NULL;
 	d_sg_list_t		*sgls;
 	struct obj_rw_in	*orw;
 	struct obj_rw_out	*orwo;
@@ -172,6 +173,13 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	csummer = dc_cont_hdl2csummer(rw_args->dobj->do_co_hdl);
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		return 0;
+
+	/** Used to do actual checksum calculations. This prevents conflicts
+	 * between tasks
+	 */
+	csummer_copy = daos_csummer_copy(csummer);
+	if (csummer_copy == NULL)
+		return -DER_NOMEM;
 
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
@@ -210,7 +218,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			continue;
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i],
+		rc = daos_csummer_verify_iod(csummer_copy, iod, &sgls[i],
 					     iod_csum, singv_lo, shard_idx,
 					     map);
 		if (rc != 0) {
@@ -231,6 +239,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			break;
 		}
 	}
+	daos_csummer_destroy(&csummer_copy);
 
 	return rc;
 }
@@ -347,6 +356,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						rw_args->shard_args->reasb_req;
 		bool			 is_ec_obj;
 
+		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE)
+			goto out;
+
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
 			/** Should have 1 map per iod */
 			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
@@ -383,7 +395,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		/* update the sizes in iods */
 		for (i = 0; i < orw->orw_nr; i++) {
-			iods[i].iod_size = sizes[i];
+			if (!is_ec_obj || reasb_req->orr_fail == NULL ||
+			    iods[i].iod_size == 0)
+				iods[i].iod_size = sizes[i];
 			if (is_ec_obj && reasb_req->orr_recov &&
 			    reasb_req->orr_fail->efi_uiods[i].iod_size == 0) {
 				reasb_req->orr_fail->efi_uiods[i].iod_size =
@@ -548,10 +562,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
-	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" %d %s rank:%d tag:%d eph "
-		DF_U64"\n", req, opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
-		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag,
-		auxi->epoch.oe_value);
+	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" "DF_KEY" rank:%d tag:%d eph "
+		DF_U64"\n", req, opc, DP_UOID(shard->do_id), DP_KEY(dkey),
+		tgt_ep.ep_rank, tgt_ep.ep_tag, auxi->epoch.oe_value);
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
@@ -599,10 +612,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					 0 : nr;
 	orw->orw_iod_array.oia_offs = args->offs;
 
-	D_DEBUG(DB_IO, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
+	D_DEBUG(DB_IO, "opc %d "DF_UOID" "DF_KEY" rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
-		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
-		tgt_ep.ep_tag, auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
+		DP_KEY(dkey), tgt_ep.ep_rank, tgt_ep.ep_tag,
+		auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
 
 	if (args->bulks != NULL) {
 		orw->orw_sgls.ca_count = 0;
@@ -612,8 +625,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		if (fw_shard_tgts != NULL)
 			orw->orw_flags |= ORF_BULK_BIND;
 	} else {
-		if (args->reasb_req && args->reasb_req->orr_size_fetch) {
-			/* NULL bulk and NULL sgl for size_fetch */
+		if ((args->reasb_req && args->reasb_req->orr_size_fetch) ||
+		    auxi->flags & DRF_CHECK_EXISTENCE) {
+			/* NULL bulk/sgl for size_fetch or check existence */
 			orw->orw_sgls.ca_count = 0;
 			orw->orw_sgls.ca_arrays = NULL;
 		} else {
