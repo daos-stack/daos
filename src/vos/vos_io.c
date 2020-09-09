@@ -482,7 +482,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	ioc->ic_iod_nr = iod_nr;
 	ioc->ic_iods = iods;
-	ioc->ic_epr.epr_hi = epoch;
+	ioc->ic_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
 	ioc->ic_epr.epr_lo = 0;
 	ioc->ic_oid = oid;
 	ioc->ic_cont = vos_hdl2cont(coh);
@@ -2032,10 +2032,8 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		"\n", DP_UOID(oid), iod_nr,
 		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch);
 
-	rc = vos_ioc_create(coh, oid, false,
-			    dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch,
-			    flags, iod_nr, iods, iods_csums, 0, NULL, dedup,
-			    dedup_th, dth, &ioc);
+	rc = vos_ioc_create(coh, oid, false, epoch, flags, iod_nr, iods,
+			    iods_csums, 0, NULL, dedup, dedup_th, dth, &ioc);
 	if (rc != 0)
 		return rc;
 

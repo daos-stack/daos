@@ -121,3 +121,7 @@ daos_tests:
       daos_test: z
       test_name: Checksum tests
       test_timeout: 900
+    test_S:
+      daos_test: S 
+      test_name: DAOS rebuild ec tests
+      test_timeout: 900

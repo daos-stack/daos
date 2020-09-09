@@ -105,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				10
+#define POOL_DF_VERSION				11
 
 /**
  * Durable format for VOS pool
