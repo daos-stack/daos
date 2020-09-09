@@ -763,8 +763,9 @@ def dfuse_wrapper(server, conf):
     dfuse = DFuse(server, conf, pool=pool, container=container)
     dfuse.start()
     readdir_test(dfuse, 30)
-    dfuse.stop()
+    ret = dfuse.stop()
     destroy_container(conf, pool, container)
+    return ret
 
 def readdir_test(dfuse, count):
     """Run a rudimentary readdir test"""
@@ -1312,7 +1313,7 @@ def main():
     elif len(sys.argv) == 2 and sys.argv[1] == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif len(sys.argv) == 2 and sys.argv[1] == 'readdir':
-        dfuse_wrapper(server, conf)
+        fatal_errors.add_result(dfuse_wrapper(server, conf))
     elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
         fatal_errors = test_alloc_fail(conf)
     elif args.mode == 'all':
