@@ -855,8 +855,7 @@ class TestWithServers(TestWithoutServers):
         """
         self.pool = self.get_pool(namespace, create, connect, index)
 
-    def get_container(self, pool, namespace=None, create=True,
-                      daos_command=None):
+    def get_container(self, pool, namespace=None, create=True):
         """Get a test container object.
 
         Args:
@@ -865,8 +864,6 @@ class TestWithServers(TestWithoutServers):
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults
                 to True.
-            daos_command (DaosCommand): Daos command object used as control
-                object for container functions.
 
         Returns:
             TestContainer: the created test container object.
@@ -880,8 +877,7 @@ class TestWithServers(TestWithoutServers):
             container.create()
         return container
 
-    def add_container(self, pool, namespace=None, create=True,
-                      daos_command=None):
+    def add_container(self, pool, namespace=None, create=True):
         """Add a container to the test case.
 
         This method defines the common test container creation sequence.
@@ -892,11 +888,8 @@ class TestWithServers(TestWithoutServers):
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults
                 to True.
-            daos_command (DaosCommand): Daos command object used as control
-                object for container functions.
         """
-        self.container = self.get_container(
-            pool, namespace, create, daos_command)
+        self.container = self.get_container(pool, namespace, create)
 
     def start_additional_servers(self, additional_servers, index=0):
         """Start additional servers.
