@@ -26,7 +26,6 @@ import ctypes
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj)
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 
 
 class ChecksumContainerValidation(TestWithServers):
@@ -58,9 +57,7 @@ class ChecksumContainerValidation(TestWithServers):
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')
 
-        self.pool = TestPool(self.context)
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool(connect=False)
         self.pool.connect(2)
 
         self.csum = self.params.get("enable_checksum", '/run/container/*')
