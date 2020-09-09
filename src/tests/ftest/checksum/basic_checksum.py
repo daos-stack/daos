@@ -35,9 +35,6 @@ class ChecksumContainerValidation(TestWithServers):
     single object inserts and verifies
     contents. This is a basic sanity
     test for enabling checksum testing.
-    This test case doesn't use TestPool/
-    TestContainer for now. TestPool/TestContainer
-    needs changes to support checksum.
     :avocado: recursive
     """
     # pylint: disable=too-many-instance-attributes
