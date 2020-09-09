@@ -55,7 +55,8 @@ class DynamicStartStop(TestWithServers):
         for member in members:
             if member["Rank"] in self.stopped_ranks:
                 self.assertEqual(
-                    member["State"], self.dmg_cmd.STOPPED,
+                    member["State"],
+                    self.dmg_cmd.SYSTEM_QUERY_STATES["STOPPED"],
                     "State isn't Stopped! Actual: {}".format(member["State"]))
                 self.assertEqual(
                     member["Info"], "system stop",
@@ -63,7 +64,7 @@ class DynamicStartStop(TestWithServers):
                         member["Info"]))
             else:
                 self.assertEqual(
-                    member["State"], self.dmg_cmd.JOINED,
+                    member["State"], self.dmg_cmd.SYSTEM_QUERY_STATES["JOINED"],
                     "State isn't Joined! Actual: {}".format(member["State"]))
 
     def test_dynamic_server_addition(self):
@@ -118,5 +119,5 @@ class DynamicStartStop(TestWithServers):
         self.stopped_ranks.add(1)
         self.verify_system_query()
 
-        # Stopping newly added server and destroy pool causes -1006.
+        # Stopping newly added server and destroy pool causes -1006. DAOS-5606
         self.pool = None
