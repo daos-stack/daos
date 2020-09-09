@@ -16,7 +16,7 @@ git ls-files --other || true
 git ls-files --ignored --exclude-standard || true
 
 
-rm -rf unit_memcheck_vm_test unit_test_memcheck_logs
+rm -rf unit_memcheck_vm_test unit_test_memcheck_logs unit-test*.memcheck.xml
 rm -rf unit_vm_test unit_test_logs
 rm -rf test_results
 mkdir test_results
