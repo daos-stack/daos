@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from distutils.spawn import find_executable
-import math
 import os
 
 from command_utils import ExecutableCommand
