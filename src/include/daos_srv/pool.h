@@ -137,7 +137,7 @@ int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
-			   bool activate, unsigned int map_version);
+			   unsigned int map_version);
 
 /*
  * TODO: Make the following internal functions of ds_pool after merging in

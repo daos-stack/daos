@@ -184,7 +184,7 @@ int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 int pool_map_comp_cnt(struct pool_map *map);
 
-int  pool_map_create(struct pool_buf *buf, uint32_t version, bool activate,
+int  pool_map_create(struct pool_buf *buf, uint32_t version,
 		     struct pool_map **mapp);
 void pool_map_addref(struct pool_map *map);
 void pool_map_decref(struct pool_map *map);
@@ -226,6 +226,7 @@ int pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 int pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  struct pool_target ***tgt_ppp,
 				  unsigned int *tgt_cnt, d_rank_t rank);
+int pool_map_activate_new_target(struct pool_map *map, uint32_t id);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
 
@@ -285,10 +286,6 @@ pool_component_unavail(struct pool_component *comp, bool for_reint)
 
 	/* Targets being drained should not be used */
 	if (status == PO_COMP_ST_DRAIN)
-		return true;
-
-	/* Targets being added should not be used */
-	if (status == PO_COMP_ST_NEW)
 		return true;
 
 	/*

@@ -246,7 +246,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	struct pool_map	       *map;
 	int			rc;
 
-	rc = pool_map_create(map_buf, map_version, true, &map);
+	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
 		D_ERROR("failed to create local pool map: "DF_RC"\n",
 			DP_RC(rc));
@@ -890,7 +890,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	if (rc < 0)
 		goto out;
 
-	rc = pool_map_create(map_buf, pool_glob->dpg_map_version, true,
+	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
 			     &pool->dp_map);
 	if (rc != 0) {
 		D_ERROR("failed to create local pool map: "DF_RC"\n",

@@ -307,6 +307,7 @@ rank_list_to_string(const d_rank_list_t *rank_list)
 	for (i = 0; i < rank_list->rl_nr; i++)
 		idx += sprintf(&ranks_str[idx], "%d,", rank_list->rl_ranks[i]);
 	ranks_str[width - 1] = '\0';
+	ranks_str[width - 2] = '\0';
 
 	return ranks_str;
 }

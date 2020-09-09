@@ -374,7 +374,7 @@ pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int new_size)
 	new_conns->pic_buf_size = new_size - sizeof(*new_conns);
 	sgl->sg_iovs[0].iov_buf = new_conns;
 	sgl->sg_iovs[0].iov_buf_len = new_size;
-	return 0; 
+	return 0;
 }
 
 static int
@@ -481,7 +481,7 @@ pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst, d_sg_list_t *src)
 			if (rc) {
 				if (rc == -DER_REC2BIG)
 					pik->pik_entry_size =
-						sizeof(*src_conns) + 
+						sizeof(*src_conns) +
 						src_conns->pic_size +
 						dst_conns->pic_size;
 				D_GOTO(out, rc);
@@ -496,7 +496,7 @@ pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst, d_sg_list_t *src)
 				if (rc) {
 					if (rc == -DER_REC2BIG)
 						pik->pik_entry_size =
-							sizeof(*src_conns) + 
+							sizeof(*src_conns) +
 							src_conns->pic_size +
 							dst_conns->pic_size;
 					D_GOTO(out, rc);
@@ -568,7 +568,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rc = ds_pool_tgt_map_update(pool,
 			src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 			&src_iv->piv_map.piv_pool_buf : NULL,
-			true, src_iv->piv_map.piv_pool_map_ver);
+			src_iv->piv_map.piv_pool_map_ver);
 		if (rc)
 			return rc;
 
@@ -740,7 +740,7 @@ retry:
 		rc = ds_pool_tgt_map_update(pool,
 				src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 				&src_iv->piv_map.piv_pool_buf : NULL,
-				true, src_iv->piv_map.piv_pool_map_ver);
+				src_iv->piv_map.piv_pool_map_ver);
 	} else if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		rc = ds_pool_iv_refresh_hdl(pool, &src_iv->piv_hdl);
 	}
@@ -782,7 +782,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank);
 
-	rc = ds_pool_tgt_map_update(pool, map_buf, true,
+	rc = ds_pool_tgt_map_update(pool, map_buf,
 				    v->piv_map.piv_pool_map_ver);
 
 	ABT_mutex_lock(pool->sp_mutex);

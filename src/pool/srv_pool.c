@@ -160,7 +160,7 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 	if (rc != 0)
 		return rc;
 
-	return pool_map_create(buf, version, true, map);
+	return pool_map_create(buf, version, map);
 }
 
 /* Store uuid in file path. */
@@ -988,7 +988,7 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 			DP_UUID(svc->ps_uuid));
 		return -DER_NONEXIST;
 	}
-	rc = ds_pool_tgt_map_update(pool, map_buf, true, map_version);
+	rc = ds_pool_tgt_map_update(pool, map_buf, map_version);
 	if (rc != 0) {
 		ds_pool_put(pool);
 		return rc;
@@ -2737,7 +2737,7 @@ process_query_result(daos_pool_info_t *info, uuid_t pool_uuid,
 	int			rc;
 	unsigned int		num_disabled = 0;
 
-	rc = pool_map_create(map_buf, map_version, true, &map);
+	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
 		D_ERROR("failed to create local pool map: %d\n", rc);
 		return rc;
@@ -3743,7 +3743,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	updated = true;
 
 	/* Update svc->ps_pool to match the new pool map. */
-	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, true, map_version);
+	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to update pool map cache: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -4197,7 +4197,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 
 	updated = true;
 	/* Update svc->ps_pool to match the new pool map. */
-	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, false, map_version);
+	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, map_version);
 	if (rc != 0) {
 		/*
 		* We must resign to avoid handling future requests with a

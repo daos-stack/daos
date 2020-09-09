@@ -934,12 +934,10 @@ pool_map_finalise(struct pool_map *map)
  * Install a component tree to a pool map.
  *
  * \param map		[IN]	The pool map to be initialized.
- * \param activate	[IN]	Activate pool components.
  * \param tree		[IN]	Component tree for the pool map.
  */
 static int
-pool_map_initialise(struct pool_map *map, bool activate,
-		    struct pool_domain *tree)
+pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 {
 	struct pool_comp_cntr	 cntr;
 	int			 i;
@@ -994,13 +992,8 @@ pool_map_initialise(struct pool_map *map, bool activate,
 		D_DEBUG(DB_TRACE, "domain %s, ndomains %d\n",
 			pool_domain_name(&tree[0]), sorter->cs_nr);
 
-		for (j = 0; j < sorter->cs_nr; j++) {
-			if (activate &&
-			    tree[j].do_comp.co_status == PO_COMP_ST_NEW)
-				tree[j].do_comp.co_status = PO_COMP_ST_UPIN;
-
+		for (j = 0; j < sorter->cs_nr; j++)
 			sorter->cs_comps[j] = &tree[j].do_comp;
-		}
 
 		rc = comp_sorter_sort(sorter);
 		if (rc != 0)
@@ -1019,9 +1012,6 @@ pool_map_initialise(struct pool_map *map, bool activate,
 
 		ta = &map->po_tree->do_targets[i];
 		map->po_target_sorter.cs_comps[i] = &ta->ta_comp;
-
-		if (activate && ta->ta_comp.co_status == PO_COMP_ST_NEW)
-			ta->ta_comp.co_status = PO_COMP_ST_UPIN;
 	}
 
 	rc = comp_sorter_sort(&map->po_target_sorter);
@@ -1182,7 +1172,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	if (src_map == NULL)
 		return -DER_NOMEM;
 
-	rc = pool_map_initialise(src_map, false, tree);
+	rc = pool_map_initialise(src_map, tree);
 	if (rc != 0) {
 		D_DEBUG(DB_MGMT, "Failed to create scratch map for buffer\n");
 		goto failed;
@@ -1356,7 +1346,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	pool_map_finalise(map);
 
 	/* install new buffer for pool map */
-	rc = pool_map_initialise(map, false, dst_tree);
+	rc = pool_map_initialise(map, dst_tree);
 	D_ASSERT(rc == 0 || rc == -DER_NOMEM);
 
 	map->po_version = version;
@@ -1540,12 +1530,10 @@ error_tree:
  *
  * \param buf		[IN]	The buffer to input pool components.
  * \param version	[IN]	Version for the new created pool map.
- * \param activate	[IN]	Activate pool components.
  * \param mapp		[OUT]	The returned pool map.
  */
 int
-pool_map_create(struct pool_buf *buf, uint32_t version, bool activate,
-		struct pool_map **mapp)
+pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 {
 	struct pool_domain *tree = NULL;
 	struct pool_map	   *map = NULL;
@@ -1569,7 +1557,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, bool activate,
 		goto failed;
 	}
 
-	rc = pool_map_initialise(map, activate, tree);
+	rc = pool_map_initialise(map, tree);
 	if (rc != 0) {
 		D_ERROR("pool_map_initialise failed, rc "DF_RC"\n", DP_RC(rc));
 		/* pool_tree_free() did in pool_map_initialise */
@@ -1859,6 +1847,66 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 
 	return 1;
 }
+
+static int
+activate_new_target(struct pool_domain *domain, uint32_t id)
+{
+	int i;
+
+	D_ASSERT(domain->do_targets != NULL);
+
+	/*
+	 * If this component has children, recurse over them.
+	 *
+	 * If the target ID is found in any of the children, activate
+	 * this component and abort the search
+	 */
+	if (domain->do_children != NULL) {
+		for (i = 0; i < domain->do_child_nr; i++) {
+			int found = activate_new_target(&domain->do_children[i],
+							id);
+			if (found) {
+				domain->do_comp.co_status = PO_COMP_ST_UPIN;
+				return found;
+			}
+		}
+	}
+
+	/*
+	 * Check the targets in this domain to see if they match
+	 *
+	 * If they do, activate them and activate the current domain */
+	for (i = 0; i < domain->do_target_nr; i++) {
+		struct pool_component *comp = &domain->do_targets[i].ta_comp;
+
+		if (comp->co_id == id && (comp->co_status == PO_COMP_ST_NEW ||
+					  comp->co_status == PO_COMP_ST_UP)) {
+			comp->co_status = PO_COMP_ST_UPIN;
+			domain->do_comp.co_status = PO_COMP_ST_UPIN;
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * Activate (move to UPIN) a NEW or UP target and all of its parent domains
+ *
+ * \param map	[IN]		The pool map to search
+ * \param id	[IN]		Target ID to search
+ *
+ * \return		0 if target was not found or not in NEW state
+ *                      1 if target was found and activated
+ */
+int
+pool_map_activate_new_target(struct pool_map *map, uint32_t id)
+{
+	if (map->po_tree != NULL)
+		return activate_new_target(map->po_tree, id);
+	return 0;
+}
+
 
 /**
  * Check if all targets under one node matching the status.

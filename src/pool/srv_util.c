@@ -217,6 +217,8 @@ static int
 update_one_tgt(struct pool_map *map, struct pool_target *target,
 	       struct pool_domain *dom, int opc, bool evict_rank,
 	       uint32_t *version) {
+	int rc;
+
 	D_ASSERTF(target->ta_comp.co_status == PO_COMP_ST_UP ||
 		  target->ta_comp.co_status == PO_COMP_ST_NEW ||
 		  target->ta_comp.co_status == PO_COMP_ST_UPIN ||
@@ -277,6 +279,10 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_NEW:
+			D_ERROR("Can't drain new target (rank %u idx %u)\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			return -DER_BUSY;
 		case PO_COMP_ST_UP:
 			D_ERROR("Can't drain reint target (rank %u idx %u)\n",
 				target->ta_comp.co_rank,
@@ -299,16 +305,21 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 	case POOL_REINT:
 		switch (target->ta_comp.co_status) {
 		case PO_COMP_ST_NEW:
+			/* Nothing to do, already added */
+			D_INFO("Can't reint new target (rank %u idx %u)\n",
+			       target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			return -DER_BUSY;
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
 			/* Nothing to do, already added */
-			D_INFO("Skip add up target (rank %u idx %u)\n",
+			D_INFO("Skip reint up target (rank %u idx %u)\n",
 			       target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
-			D_ERROR("Can't add rebuilding tgt (rank %u idx %u)\n",
+			D_ERROR("Can't reint rebuilding tgt (rank %u idx %u)\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			return -DER_BUSY;
@@ -319,7 +330,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_fseq = ++(*version);
 
-			D_PRINT("Target (rank %u idx %u) is added.\n",
+			D_PRINT("Target (rank %u idx %u) start reintegration\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
 			D_DEBUG(DF_DSMS, "change rank %u to UP\n",
@@ -335,7 +346,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			/* Nothing to do, already UPIN */
 			D_INFO("Skip ADD_IN UPIN target (rank %u idx %u)\n",
 			       target->ta_comp.co_rank,
-				target->ta_comp.co_index);
+			       target->ta_comp.co_index);
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
@@ -349,7 +360,13 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			D_DEBUG(DF_DSMS, "change target %u/%u to UPIN %p\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_UPIN;
+			/*
+			 * Need to update this target AND all of its parents
+			 * domains from NEW -> UPIN
+			 */
+			rc = pool_map_activate_new_target(map,
+					target->ta_comp.co_id);
+			D_ASSERT(rc != 0); /* This target must be findable */
 			(*version)++;
 			break;
 		}
