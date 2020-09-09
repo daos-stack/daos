@@ -520,7 +520,6 @@ class SoakTestBase(TestWithServers):
         Returns dfuse(obj):         Dfuse obj
                 cmd(list):          list of dfuse commands to add to jobscript
         """
-        commands = []
         # Get Dfuse params
         dfuse = Dfuse(self.hostlist_clients, self.tmp)
         dfuse.get_params(self)
@@ -531,21 +530,13 @@ class SoakTestBase(TestWithServers):
         dfuse.mount_dir.update(mount_dir)
         dfuse.set_dfuse_params(pool)
         dfuse.set_dfuse_cont_param(self.get_container(pool))
-        # create dfuse mount point
-        commands.append(slurm_utils.srun_str(
-            hosts=None,
-            cmd="mkdir -p {}".format(dfuse.mount_dir.value),
-            srun_params=None))
-        commands.append(slurm_utils.srun_str(
-            hosts=None,
-            cmd="{}".format(dfuse.__str__()),
-            srun_params=None))
-        commands.append("sleep 10")
-        commands.append(slurm_utils.srun_str(
-            hosts=None,
-            cmd="df -h {}".format(dfuse.mount_dir.value),
-            srun_params=None))
-        return dfuse, commands
+
+        dfuse_start_cmds = [
+            "mkdir -p {}".format(dfuse.mount_dir.value),
+            "{}".format(dfuse.__str__()),
+            "df -h {}".format(dfuse.mount_dir.value)
+        ]
+        return dfuse, dfuse_start_cmds
 
     def stop_dfuse(self, dfuse):
         """Create dfuse stop command line for slurm.
@@ -553,17 +544,13 @@ class SoakTestBase(TestWithServers):
         Args:
             dfuse (obj): Dfuse obj
 
-        Returns list:    list of cmds to pass to slurm script
+        Returns cmd(list):    list of cmds to pass to slurm script
         """
         self.log.info("\n")
-        dfuse_stop_cmds = [slurm_utils.srun_str(
-            hosts=None,
-            cmd="fusermount3 -u {0}".format(dfuse.mount_dir.value),
-            srun_params=None)]
-        dfuse_stop_cmds.append(slurm_utils.srun_str(
-            hosts=None,
-            cmd="rm -rf {0}".format(dfuse.mount_dir.value),
-            srun_params=None))
+        dfuse_stop_cmds = [
+            "fusermount3 -uz {0}".format(dfuse.mount_dir.value),
+            "rm -rf {0}".format(dfuse.mount_dir.value)
+        ]
         return dfuse_stop_cmds
 
     def cleanup_dfuse(self):
@@ -571,7 +558,7 @@ class SoakTestBase(TestWithServers):
         cmd = [
             "/usr/bin/bash -c 'pkill dfuse",
             "for dir in /tmp/daos_dfuse*",
-            "do fusermount3 -u $dir",
+            "do fusermount3 -uz $dir",
             "rm -rf $dir",
             "done'"]
         try:
@@ -620,7 +607,6 @@ class SoakTestBase(TestWithServers):
                         "global", "rw", rw,
                         "fio --name=global --rw")
                     srun_cmds = []
-
                     # add srun start dfuse cmds if api is POSIX
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
@@ -631,15 +617,14 @@ class SoakTestBase(TestWithServers):
                         "global", "directory",
                         dfuse.mount_dir.value,
                         "fio --name=global --directory")
-                    # add srun and srun params to fio cmline
-                    srun_cmds.append(slurm_utils.srun_str(
-                        hosts=None,
-                        cmd=str(fio_cmd.__str__()),
-                        srun_params=None))
+                    # add fio cmline
+                    srun_cmds.append(str(fio_cmd.__str__()))
+                    srun_cmds.append("status=$?")
                     # If posix, add the srun dfuse stop cmds
                     if fio_cmd.api.value == "POSIX":
                         srun_cmds.extend(self.stop_dfuse(dfuse))
-
+                    # exit code
+                    srun_cmds.append("exit $status")
                     log_name = "{}_{}_{}".format(blocksize, size, rw)
                     commands.append([srun_cmds, log_name])
                     self.log.info("<<Fio cmdlines>>:")
@@ -912,10 +897,8 @@ class SoakTestBase(TestWithServers):
 
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
-        self.container = TestContainer(self.pool[0])
-        self.container.namespace = "/run/container_reserved/*"
-        self.container.get_params(self)
-        self.container.create()
+        self.container = self.get_container(
+            self.pool[0], "/run/container_reserved/*", True)
         self.container.write_objects(rank, obj_class)
         self.all_failed_jobs = []
         # cleanup soak log directories before test on all nodes
