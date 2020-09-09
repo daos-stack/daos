@@ -61,10 +61,9 @@ func Rc2err(label string, rc C.int) error {
 	return fmt.Errorf("%s: %d", label, rc)
 }
 
-// EnvOptions describe parameters to be used when initializing a process'
+// EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	ShmID        int      // shared memory segment identifier for SPDK IPC
 	MemSize      int      // size in MiB to be allocated to SPDK proc
 	PciWhiteList []string // restrict SPDK device access
 	DisableVMD   bool     // flag if VMD devices should not be included
@@ -74,10 +73,6 @@ func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr *unsafe.P
 	opts = new(C.struct_spdk_env_opts)
 
 	C.spdk_env_opts_init(opts)
-
-	if o.ShmID > 0 {
-		opts.shm_id = C.int(o.ShmID)
-	}
 
 	if o.MemSize > 0 {
 		opts.mem_size = C.int(o.MemSize)

@@ -58,6 +58,8 @@ type Nvme interface {
 	Format(logging.Logger) ([]*FormatResult, error)
 	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
 	CleanLockfiles(logging.Logger, ...string) error
+	// Update updates the firmware on a specific PCI address and slot
+	Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error
 }
 
 // NvmeImpl is an implementation of the Nvme interface.
@@ -204,23 +206,18 @@ func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	//	return
 }
 
-// Update calls C.nvme_fwupdate to update controller firmware image.
-//
-// Retrieves image from path and updates given firmware slot/register
-// then remove lockfile for updated device.
-func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) (ctrlrs []Controller, err error) {
+// Update updates the firmware image via SPDK in a given slot on the device.
+func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
-	ctrlrs, err = collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
+	_, err := collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
 		"NVMe Update(): C.nvme_fwupdate")
 
-	err = wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
-
-	return
+	return wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
 }
 
 // c2GoController is a private translation function.

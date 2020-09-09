@@ -40,7 +40,7 @@
 #
 
 # Pull base image
-FROM centos:7
+FROM centos:7.8.2003
 MAINTAINER <daos@daos.groups.io>
 
 # Build arguments can be set via --build-arg
@@ -73,8 +73,9 @@ RUN yum -y install \
            python2-clustershell python2-Cython                 \
            python36-clustershell python36-paramiko             \
            python36-numpy python36-jira python3-pip Lmod       \
-           fuse3-devel libipmctl-devel openmpi3-devel          \
-           hwloc-devel patchelf python36-tabulate
+           fuse3-devel libipmctl-devel                         \
+           hwloc-devel patchelf python36-tabulate java-1.8.0-openjdk
+RUN yum -y install openmpi3-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
@@ -118,6 +119,22 @@ ARG QUICKBUILD_DEPS=""
 ARG REPOS=""
 ARG REPO_URL=""
 ARG REPO_EL7=""
+# Need to clean this up later
+RUN if [ -n "$REPO_URL" ]; then                                               \
+      cversion=$(cut -d ' ' -f4 /etc/centos-release);                         \
+      version=${cversion%.*} ;                                                \
+      MY_REPO="${REPO_URL}repository/centos-${version}-x86_64-group/";        \
+      MY_NAME="${MY_REPO#*//}";                                               \
+      MY_NAME="${MY_NAME//\//_}";                                             \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/local-centos-group.repo;                \
+      yum --assumeyes install yum-utils;                                      \
+      yum-config-manager --assumeyes --quiet                                  \
+                         --disable base epel extra updates;                   \
+    fi
 RUN if $QUICKBUILD; then                                                      \
         MY_REPO="${REPO_URL}${REPO_EL7}";                                     \
         MY_NAME="${MY_REPO#*//}";                                             \
@@ -147,6 +164,20 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
         echo "Installing: $QUICKBUILD_DEPS";                                  \
         echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 yum -y install;     \
     fi
+
+ARG BULLSEYE=""
+RUN if [ "x$BULLSEYE" != "x" ]; then \
+      curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
+        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
+      mkdir -p bullseye; \
+      tar -C bullseye --strip-components=1 -xf bullseye.tar; \
+      pushd bullseye; \
+        ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage; \
+      popd; \
+      rm -f bullseye.tar; \
+      rm -rf bullseye; \
+    fi
+
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1

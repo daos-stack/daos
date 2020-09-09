@@ -296,7 +296,8 @@ int run_daos_md_replication_test(int rank, int size);
 int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
-int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
+int run_daos_base_tx_test(int rank, int size, int *tests, int test_size);
+int run_daos_dist_tx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
@@ -308,6 +309,8 @@ int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
+				    int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
@@ -341,6 +344,12 @@ void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
 		     const char *dmg_config, const d_rank_list_t *svc,
 		     d_rank_t rank);
+
+d_rank_t
+get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, bool parity);
+
+d_rank_t
+get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,

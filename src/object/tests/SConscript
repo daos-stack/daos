@@ -3,33 +3,13 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'common_test_utils', 'prereqs', 'utest_utils', 'vts_targets')
+    Import('denv', 'common_test_utils')
 
     unit_env = denv.Clone()
     srv_checksum_tests = daos_build.test(unit_env, 'srv_checksum_tests',
                     ['srv_checksum_tests.c', '../srv_csum.c'],
                     LIBS=['daos_common', 'gurt', 'cmocka'])
 
-
-    libraries = ['vos', 'bio', 'abt', 'isal', 'pthread', 'daos_common', 'daos_tests',
-                 'gurt', 'cart', 'uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp'] 
-
-    prereqs.require(denv, 'argobots')
-
-    # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
-    vtsenv = denv.Clone()
-
-    vtsenv.Append(CPPDEFINES={'AGG_UNIT_TEST' : '1'})
-    vtsenv.AppendUnique(CPPPATH=['../../vos/tests', '../../vos'])
-    srv_ec_aggregate_tests = daos_build.program(vtsenv, 'srv_ec_aggregate_tests',
-   				 ['srv_ec_aggregate_test.c',
-                    '../srv_ec_aggregate.c', '../obj_class.c', vts_targets],
-		    LIBS=libraries)
-				   
-    denv.AppendUnique(CPPPATH=["../../common/tests"])
-
-    denv.Install('$PREFIX/bin/', [srv_ec_aggregate_tests])
 
     unit_env.Install('$PREFIX/bin/', [srv_checksum_tests])
 

@@ -327,15 +327,52 @@ next_fail:
 	(*current) = (*current)->next;
 }
 
+#define STACK_TGTS_SIZE	32
+bool
+grp_map_is_set(uint32_t *grp_map, uint32_t grp_map_size, uint32_t tgt_id)
+{
+	int i;
+
+	for (i = 0; i < grp_map_size; i++) {
+		if (grp_map[i] == tgt_id)
+			return true;
+	}
+
+	return false;
+}
+
+uint32_t*
+grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
+{
+	uint32_t *new_grp_map;
+	uint32_t new_grp_size = *grp_map_size + STACK_TGTS_SIZE;
+	int	 i;
+
+	if (*grp_map_size > STACK_TGTS_SIZE)
+		D_REALLOC_ARRAY(new_grp_map, grp_map, new_grp_size);
+	else
+		D_ALLOC_ARRAY(new_grp_map, new_grp_size);
+
+	for (i = *grp_map_size; i < new_grp_size; i++)
+		grp_map[i] = -1;
+
+	*grp_map_size = new_grp_size;
+	return new_grp_map;
+}
+
 int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 {
 	struct pl_obj_shard	*new_shards;
 	struct pl_obj_shard     *org_shard;
 	struct failed_shard	*f_shard;
-	d_list_t		*current;
-	uint8_t                 *grp_map;
-	uint32_t                *grp_count;
+	struct failed_shard	*tmp;
+	uint32_t                *grp_map = NULL;
+	uint32_t		grp_map_idx = 0;
+	uint32_t		grp_map_size;
+	uint32_t		grp_map_array[STACK_TGTS_SIZE] = {-1};
+	uint32_t                *grp_count = NULL;
+	uint32_t		grp_cnt_array[STACK_TGTS_SIZE] = {0};
 	uint32_t                max_fail_grp;
 	uint32_t		new_group_size;
 	uint32_t		grp;
@@ -343,43 +380,50 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	int i, j, k = 0;
 	int rc = 0;
 
-	grp_map = NULL;
-	grp_count = NULL;
-
 	/* Empty list, no extension needed */
-	if (extended_list == extended_list->next)
+	if (d_list_empty(extended_list))
 		goto out;
 
-	D_ALLOC_ARRAY(grp_map, (layout->ol_nr / 8) + 1);
-	D_ALLOC_ARRAY(grp_count, layout->ol_grp_nr);
-	if (grp_count == NULL || grp_map == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	grp_map = grp_map_array;
+	grp_map_size = STACK_TGTS_SIZE;
+	if (layout->ol_grp_nr <= STACK_TGTS_SIZE) {
+		grp_count = grp_cnt_array;
+	} else {
+		D_ALLOC_ARRAY(grp_count, layout->ol_grp_nr);
+		if (grp_count == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	i = 0;
 	max_fail_grp = 0;
 
-	current = extended_list->next;
-	while (current != extended_list) {
-		f_shard = d_list_entry(current, struct failed_shard, fs_list);
-		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
-
-		if (isset(grp_map, f_shard->fs_tgt_id) == false) {
-			setbit(grp_map, f_shard->fs_tgt_id);
-			grp_count[grp]++;
-
-			if (max_fail_grp < grp_count[grp])
-				max_fail_grp = grp_count[grp];
-		} else
+	/* Eliminate duplicate targets and calculate the grp number. */
+	d_list_for_each_entry_safe(f_shard, tmp, extended_list, fs_list) {
+		if (grp_map_is_set(grp_map, grp_map_idx, f_shard->fs_tgt_id)) {
 			d_list_del_init(&f_shard->fs_list);
+			D_FREE_PTR(f_shard);
+			continue;
+		}
 
-		current = current->next;
+		if (grp_map_idx > grp_map_size) {
+			uint32_t *new_grp_map;
+
+			new_grp_map = grp_map_extend(grp_map, &grp_map_size);
+			if (new_grp_map == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			grp_map = new_grp_map;
+		}
+		grp_map[grp_map_idx++] = f_shard->fs_tgt_id;
+		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
+		grp_count[grp]++;
+		if (max_fail_grp < grp_count[grp])
+			max_fail_grp = grp_count[grp];
 	}
-
 
 	new_group_size = layout->ol_grp_size + max_fail_grp;
 	D_ALLOC_ARRAY(new_shards, new_group_size * layout->ol_grp_nr);
 	if (new_shards == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	while (k < layout->ol_nr) {
 		for (j = 0; j < layout->ol_grp_size; ++j, ++k, ++i)
@@ -390,9 +434,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		}
 	}
 
-	current = extended_list->next;
-	while (current != extended_list) {
-		f_shard = d_list_entry(current, struct failed_shard, fs_list);
+	d_list_for_each_entry(f_shard, extended_list, fs_list) {
 		org_shard = &new_shards[f_shard->fs_shard_idx];
 
 		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
@@ -408,8 +450,6 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 			new_shards[grp_idx].po_rebuilding = 1;
 		else
 			new_shards[grp_idx].po_rebuilding = 0;
-
-		current = current->next;
 	}
 
 	layout->ol_grp_size += max_fail_grp;
@@ -419,8 +459,10 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	layout->ol_shards = new_shards;
 
 out:
-	D_FREE(grp_map);
-	D_FREE(grp_count);
+	if (grp_map != grp_map_array && grp_map != NULL)
+		D_FREE(grp_map);
+	if (grp_count != grp_cnt_array && grp_count != NULL)
+		D_FREE(grp_count);
 	remap_list_free_all(extended_list);
 	return rc;
 }
