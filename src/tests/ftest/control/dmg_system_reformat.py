@@ -25,7 +25,6 @@ from __future__ import print_function
 
 from avocado import fail_on
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 from server_utils import ServerFailed
 from command_utils import CommandFailure
 
@@ -81,12 +80,12 @@ class DmgSystemReformatTest(TestWithServers):
         # Try to create second pool and check that it fails with ENOSPACE
         self.get_pool()
         if self.get_dmg_command().result.exit_status != 0:
-            self.log.info("Pool create failed: {}".format(
-                self.get_dmg_command().result.stderr))
+            self.log.info("Pool create failed: %s",
+                          self.get_dmg_command().result.stderr)
             if "ENOSPACE" not in self.get_dmg_command().result.stderr:
                 self.fail("Pool create did not fail do to ENOSPACE!")
 
-        self.info("Re-enable raising exceptions for dmg.")
+        self.log.info("Re-enable raising exceptions for dmg.")
         self.get_dmg_command().exit_status_exception = True
 
         self.log.info("Stop running io_server instancess: 'dmg system stop'")
@@ -120,4 +119,3 @@ class DmgSystemReformatTest(TestWithServers):
         self.log.info("Create pool at full capacity again to verify storage \
                        has cleared.")
         self.create_pool_at_full_capacity()
-
