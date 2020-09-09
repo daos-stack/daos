@@ -73,8 +73,9 @@ RUN yum -y install \
            python2-clustershell python2-Cython                 \
            python36-clustershell python36-paramiko             \
            python36-numpy python36-jira python3-pip Lmod       \
-           fuse3-devel libipmctl-devel openmpi3-devel          \
+           fuse3-devel libipmctl-devel                         \
            hwloc-devel patchelf python36-tabulate java-1.8.0-openjdk
+RUN yum -y install openmpi3-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635

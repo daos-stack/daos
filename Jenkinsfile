@@ -118,6 +118,10 @@ String daos_repos(String distro) {
 
 String unit_packages() {
     Map stage_info = parseStageInfo()
+    boolean need_qb = quickbuild()
+    if (env.STAGE_NAME.contains('Bullseye')) {
+        need_qb = true
+    }
     if (stage_info['target'] == 'centos7') {
         String packages =  'gotestsum openmpi3 ' +
                            'hwloc-devel argobots ' +
@@ -129,7 +133,7 @@ String unit_packages() {
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate '
-        if (quickbuild()) {
+        if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
                         " boost-devel libisa-l_crypto libfabric-debuginfo"
@@ -210,11 +214,17 @@ String functional_packages() {
 
 String functional_packages(String distro) {
     String pkgs = get_daos_packages(distro)
-    pkgs += " openmpi3 hwloc ndctl " +
+    pkgs += " openmpi3 hwloc ndctl fio " +
             "ior-hpc-cart-4-daos-0 " +
-            "romio-tests-cart-4-daos-0 hdf5-mpich2-tests-daos-0 " +
-            "testmpio-cart-4-daos-0 fio " +
-            "mpi4py-tests-cart-4-daos-0 MACSio"
+            "romio-tests-cart-4-daos-0 " +
+            "testmpio-cart-4-daos-0 " + 
+            "mpi4py-tests-cart-4-daos-0 " +
+            "hdf5-mpich2-tests-daos-0 " +
+            "hdf5-openmpi3-tests-daos-0 " +
+            "hdf5-vol-daos-mpich2-tests-daos-0 " +
+            "hdf5-vol-daos-openmpi3-tests-daos-0 " +
+            "MACSio-mpich2-daos-0 " +
+            "MACSio-openmpi3-daos-0"
     if (quickbuild()) {
         pkgs += " spdk_tools"
     }
@@ -586,7 +596,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
+                                '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
@@ -1255,7 +1265,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
+                                '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +

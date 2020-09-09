@@ -296,7 +296,7 @@ class Dfuse(DfuseCommand):
         self.check_running()
         umount_cmd = [
             "if [ -x '$(command -v fusermount)' ]",
-            "then fusermount -u {0}",
+            "then fusermount -u {0}".format(self.mount_dir.value),
             "else fusermount3 -u {0}".format(self.mount_dir.value),
             "fi"
         ]

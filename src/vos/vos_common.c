@@ -167,6 +167,11 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 			return rc;
 	}
 
+	/** Handle the deferred NVMe cancellations */
+	if (!publish)
+		vos_publish_blocks(cont, &dth->dth_deferred_nvme,
+				   false, VOS_IOS_GENERIC);
+
 	return 0;
 }
 
@@ -205,6 +210,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		tmp.dth_local_tx_started = started ? 1 : 0;
 		tmp.dth_rsrvds = &dth->dth_rsrvd_inline;
 		tmp.dth_coh = vos_cont2hdl(cont);
+		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
 	}
 
 	if (rsrvd_scmp != NULL) {

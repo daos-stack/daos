@@ -42,7 +42,10 @@ class MacsioTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(MacsioTestBase, self).setUp()
-        self.manager = Mpirun(None, subprocess=False, mpitype="mpich")
+
+        # Support using different job managers to launch the daos agent/servers
+        mpi_type = self.params.get("mpi_type", default="mpich")
+        self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):
@@ -53,17 +56,16 @@ class MacsioTestBase(TestWithServers):
 
         """
         # Create the macsio command
-        test_repo = self.params.get("macsio", "/run/test_repo/*", "")
-        macsio = MacsioCommand(test_repo)
+        path = self.params.get("macsio_path", default="")
+        macsio = MacsioCommand(path)
         macsio.get_params(self)
-
         # Create all the macsio output files in the same directory as the other
         # test log files
         macsio.set_output_file_path()
 
         return macsio
 
-    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None):
+    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None, plugin=None):
         """Run the macsio.
 
         Parameters for the macsio command are obtained from the test yaml file,
@@ -76,12 +78,20 @@ class MacsioTestBase(TestWithServers):
             pool_uuid (str): pool uuid
             pool_svcl (str): pool service replica
             cont_uuid (str, optional): container uuid. Defaults to None.
+            plugin (str, optional): plugin path to use with DAOS VOL connector
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
                 information.
 
         """
+        env = self.macsio.get_environment(
+            self.server_managers[0], self.client_log)
+        if plugin:
+            # Include DAOS VOL environment settings
+            env["HDF5_VOL_CONNECTOR"] = "daos"
+            env["HDF5_PLUGIN_PATH"] = "{}".format(plugin)
+
         # Setup the job manager (mpirun) to run the macsio command
         self.macsio.daos_pool = pool_uuid
         self.macsio.daos_svcl = pool_svcl
@@ -89,9 +99,7 @@ class MacsioTestBase(TestWithServers):
         self.manager.job = self.macsio
         self.manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.manager.assign_processes(len(self.hostlist_clients))
-        self.manager.assign_environment(
-            self.macsio.get_environment(
-                self.server_managers[0], self.client_log))
+        self.manager.assign_environment(env)
         try:
             return self.manager.run()
 
