@@ -201,6 +201,22 @@ class ContSecurityTestBase(TestWithServers):
             self.pool_uuid, self.container_uuid, entry, self.pool_svc)
         return result
 
+    def test_container_destroy(self, pool_uuid, pool_svc, container_uuid):
+        """Test container destroy/delete.
+
+        Args:
+            pool_uuid (str): pool uuid.
+            pool_svc  (str): pool service replica.
+            container_uuid (str): container uuid.
+
+        Return:
+            result (str): daos_tool.container_destroy result.
+        """
+        self.daos_tool.exit_status_exception = False
+        result = self.daos_tool.container_destroy(
+            pool_uuid, pool_svc, container_uuid, True)
+        return result
+
     def set_container_attribute(
             self, pool_uuid, pool_svc, container_uuid, attr, value):
         """Write/Set container attribute.

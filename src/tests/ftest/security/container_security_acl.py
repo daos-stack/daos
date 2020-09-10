@@ -34,10 +34,10 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
     :avocado: recursive
     """
 
-    def test_container_user(self):
+    def test_container_user_acl(self):
         """
         Description:
-            DAOS-4838: Verify container user with ACL.
+            DAOS-4838: Verify container user security with ACL.
             DAOS-4390: Test daos_cont_set_owner
         Test container user acl permissions:
             w  - set_container_attribute or data
@@ -62,6 +62,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         """
 
         #(1)Setup
+        self.log.info("(1)==>Setup container user acl test.")
         base_acl_entries = ["",
             secTestBase.acl_entry("user", self.current_user, ""),
             secTestBase.acl_entry("group", "GROUP", ""),
@@ -84,7 +85,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
                 "acl_file_name", "/run/container_acl/*", "cont_test_acl.txt"))
 
         #(2)Create pool and container with acl
-        self.log.info("(2)Create a pool and a container with acl\n",
+        self.log.info("(2)==>Create a pool and a container with acl\n",
                       "   base_acl_entries= %s\n", base_acl_entries,
                       "   acl_file_name= %s\n", acl_file_name)
         self.pool_uuid, self.pool_svc = self.create_pool_with_dmg()
@@ -130,7 +131,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         #(5)Verify container permissions aA, rw-acl
         permission_type = "acl"
-        self.log.info("(5)Verify container permission aA, rw-acl ")
+        self.log.info("(5)==>Verify container permission aA, rw-acl ")
         self.log.info(
             "(5.1)Update container-acl %s, %s, permission_type: %s with %s",
             user_type, self.current_user, permission_type, cont_permission)
@@ -165,9 +166,26 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         self.verify_cont_rw_property("read", expect)
 
         #(7)Verify container permission d, delete
-        self.log.info(" ")
-        self.log.info("(7)==>Verify container d, delete ")
+        self.log.info("(7)==>Verify cont-delete on container and pool"
+            "with/without d permission.")
+        permission_type = "delete"
+        cont_permission = "rwaAtTod"
+        pool_permission = "rctd"
         expect = "pass"
+        if "r" not in cont_permission:  #remove d from cont_permission
+            cont_permission = "rwaAtTo"
+        if "w" not in cont_permission:  #remove d from pool_permission
+            pool_permission = "rct"
+        if cont_permission == "":
+            expect = "deny"
+        self.update_container_acl(secTestBase.acl_entry(user_type,
+                                                        self.current_user,
+                                                        cont_permission))
+        self.update_pool_acl_entry(self.pool_uuid,
+                                   "update",
+                                   secTestBase.acl_entry(user_type,
+                                                         "OWNER",
+                                                         pool_permission))
         self.verify_cont_delete(expect)
 
         #(8)Cleanup

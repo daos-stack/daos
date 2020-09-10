@@ -302,11 +302,13 @@ class PoolSecurityTestBase(TestWithServers):
             expect (str): expecting pass or deny.
 
         """
-        result = self.destroy_containers(self.container)
+        action = "cont_delete"
+        result = self.test_container_destroy(
+            self.pool_uuid, self.pool_svc, self.container)
         self.log.info(
-            "  In verify_cont_delete.\n =daos_cmd.run() result:\n%s",
-            result)
-        self.verify_cont_test_result(result, expect)
+            "  In verify_cont_delete %s.\n =test_container_destroy() result:"
+            "\n%s", action, result)
+        self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
 
     def setup_container_acl_and_permission(
         self, user_type, user_name, perm_type, perm_action):
