@@ -48,7 +48,7 @@ static struct ret_t	*test_ret;
 
 static int
 mock_get_health_logs(struct spdk_nvme_ctrlr *ctrlr,
-			 struct health_entry *health)
+		     struct health_entry *health)
 {
 	struct spdk_nvme_health_information_page hp;
 
