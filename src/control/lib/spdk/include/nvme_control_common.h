@@ -56,15 +56,15 @@ enum nvme_control_status_code {
  * \brief NVMe controller details
  */
 struct ctrlr_t {
-	char			 model[BUFLEN];
-	char			 serial[BUFLEN];
-	char			 pci_addr[BUFLEN];
-	char			 fw_rev[BUFLEN];
-	char			 pci_type[BUFLEN];
-	int			 socket_id;
-	struct ns_t		*nss;
-	struct bio_dev_state	*stats;
-	struct ctrlr_t		*next;
+	char				 model[BUFLEN];
+	char				 serial[BUFLEN];
+	char				 pci_addr[BUFLEN];
+	char				 fw_rev[BUFLEN];
+	char				 pci_type[BUFLEN];
+	int				 socket_id;
+	struct ns_t			*nss;
+	struct nvme_health_stats	*stats;
+	struct ctrlr_t			*next;
 };
 
 /**

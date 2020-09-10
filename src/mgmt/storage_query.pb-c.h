@@ -54,45 +54,45 @@ struct  _Mgmt__BioHealthReq
 struct  _Mgmt__BioHealthResp
 {
   ProtobufCMessage base;
-  char *bds_model;
-  char *bds_serial;
-  uint64_t bds_timestamp;
-  uint64_t bds_error_count;
+  char *model;
+  char *serial;
+  uint64_t timestamp;
+  uint64_t err_count;
   /*
    * Device health details
    */
-  uint32_t bds_warn_temp_time;
-  uint32_t bds_crit_temp_time;
-  uint64_t bds_ctrl_busy_time;
-  uint64_t bds_power_cycles;
-  uint64_t bds_power_on_hours;
-  uint64_t bds_unsafe_shutdowns;
-  uint64_t bds_media_errors;
-  uint64_t bds_error_log_entries;
+  uint32_t warn_temp_time;
+  uint32_t crit_temp_time;
+  uint64_t ctrl_busy_time;
+  uint64_t power_cycles;
+  uint64_t power_on_hours;
+  uint64_t unsafe_shutdowns;
+  uint64_t media_errs;
+  uint64_t err_log_entries;
   /*
    * I/O error counters
    */
-  uint32_t bds_bio_read_errs;
-  uint32_t bds_bio_write_errs;
-  uint32_t bds_bio_unmap_errs;
-  uint32_t bds_checksum_errs;
+  uint32_t bio_read_errs;
+  uint32_t bio_write_errs;
+  uint32_t bio_unmap_errs;
+  uint32_t checksum_errs;
   /*
    * in Kelvin
    */
-  uint32_t bds_temperature;
+  uint32_t temperature;
   /*
    * Critical warnings
    */
-  protobuf_c_boolean bds_temp_warning;
-  protobuf_c_boolean bds_avail_spare_warning;
-  protobuf_c_boolean bds_dev_reliability_warning;
-  protobuf_c_boolean bds_read_only_warning;
+  protobuf_c_boolean temp_warn;
+  protobuf_c_boolean avail_spare_warn;
+  protobuf_c_boolean dev_reliability_warn;
+  protobuf_c_boolean read_only_warn;
   /*
    * volatile memory backup
    */
-  protobuf_c_boolean bds_volatile_mem_warning;
+  protobuf_c_boolean volatile_mem_warn;
   /*
-   * DAOS error code
+   * DAOS err code
    */
   int32_t status;
   /*

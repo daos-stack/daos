@@ -30,8 +30,71 @@
 #define __BIO_API_H__
 
 #include <daos/mem.h>
+#include <daos/common.h>
+#include <daos_srv/control.h>
 #include <abt.h>
-#include "bio_types.h"
+
+typedef struct {
+	/*
+	 * Byte offset within PMDK pmemobj pool for SCM;
+	 * Byte offset within SPDK blob for NVMe.
+	 */
+	uint64_t	ba_off;
+	/* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
+	uint16_t	ba_type;
+	/* Is the address a hole ? */
+	uint16_t	ba_hole;
+	uint16_t	ba_dedup;
+	uint16_t	ba_padding;
+} bio_addr_t;
+
+/** Ensure this remains compatible */
+D_CASSERT(sizeof(((bio_addr_t *)0)->ba_off) == sizeof(umem_off_t));
+
+struct bio_iov {
+	/*
+	 * For SCM, it's direct memory address of 'ba_off';
+	 * For NVMe, it's a DMA buffer allocated by SPDK malloc API.
+	 */
+	void		*bi_buf;
+	/* Data length in bytes */
+	size_t		 bi_data_len;
+	bio_addr_t	 bi_addr;
+
+	/** can be used to fetch more than actual address. Useful if more
+	 * data is needed for processing (like checksums) than requested.
+	 * Prefix and suffix are needed because 'extra' needed data might
+	 * be before or after actual requested data.
+	 */
+	size_t		 bi_prefix_len; /** bytes before */
+	size_t		 bi_suffix_len; /** bytes after */
+};
+
+struct bio_sglist {
+	struct bio_iov	*bs_iovs;
+	unsigned int	 bs_nr;
+	unsigned int	 bs_nr_out;
+};
+
+/* Opaque I/O descriptor */
+struct bio_desc;
+/* Opaque I/O context */
+struct bio_io_context;
+/* Opaque per-xstream context */
+struct bio_xs_context;
+
+/**
+ * Header for SPDK blob per VOS pool
+ */
+struct bio_blob_hdr {
+	uint32_t	bbh_magic;
+	uint32_t	bbh_blk_sz;
+	uint32_t	bbh_hdr_sz; /* blocks reserved for blob header */
+	uint32_t	bbh_vos_id; /* service xstream id */
+	uint64_t	bbh_blob_id;
+	uuid_t		bbh_blobstore;
+	uuid_t		bbh_pool;
+};
 
 static inline void
 bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
@@ -517,7 +580,7 @@ bio_yield(void)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct bio_dev_state *dev_state,
+int bio_get_dev_state(struct nvme_health_stats *dev_state,
 		      struct bio_xs_context *xs);
 
 /*

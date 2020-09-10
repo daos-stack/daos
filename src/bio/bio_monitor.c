@@ -36,12 +36,12 @@
  * the device owner xstream.
  */
 struct dev_state_msg_arg {
-	struct bio_xs_context	*xs;
-	struct bio_dev_state	 devstate;
-	ABT_eventual		 eventual;
+	struct bio_xs_context		*xs;
+	struct nvme_health_stats	 devstate;
+	ABT_eventual			 eventual;
 };
 
-/* Copy out the bio_dev_state in the device owner xstream context */
+/* Copy out the nvme_health_stats in the device owner xstream context */
 static void
 bio_get_dev_state_internal(void *msg_arg)
 {
@@ -90,7 +90,7 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 
 /* Call internal method to get BIO device state from the device owner xstream */
 int
-bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
+bio_get_dev_state(struct nvme_health_stats *dev_state, struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
@@ -238,41 +238,40 @@ out:
 }
 
 static int
-populate_dev_health(struct bio_dev_state *dev_state,
+populate_dev_health(struct nvme_health_stats *dev_state,
 		    struct spdk_nvme_health_information_page *page,
 		    const struct spdk_nvme_ctrlr_data *cdata)
 {
 	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
 	int					written;
 
-	dev_state->bds_warn_temp_time = page->warning_temp_time;
-	dev_state->bds_crit_temp_time = page->critical_temp_time;
-	dev_state->bds_ctrl_busy_time = page->controller_busy_time[0];
-	dev_state->bds_power_cycles = page->power_cycles[0];
-	dev_state->bds_power_on_hours = page->power_on_hours[0];
-	dev_state->bds_unsafe_shutdowns = page->unsafe_shutdowns[0];
-	dev_state->bds_media_errors = page->media_errors[0];
-	dev_state->bds_error_log_entries = page->num_error_info_log_entries[0];
-	dev_state->bds_temperature = page->temperature;
-	dev_state->bds_temp_warning = cw.bits.temperature ? true : false;
-	dev_state->bds_avail_spare_warning = cw.bits.available_spare ?
+	dev_state->warn_temp_time = page->warning_temp_time;
+	dev_state->crit_temp_time = page->critical_temp_time;
+	dev_state->ctrl_busy_time = page->controller_busy_time[0];
+	dev_state->power_cycles = page->power_cycles[0];
+	dev_state->power_on_hours = page->power_on_hours[0];
+	dev_state->unsafe_shutdowns = page->unsafe_shutdowns[0];
+	dev_state->media_errs = page->media_errors[0];
+	dev_state->err_log_entries = page->num_error_info_log_entries[0];
+	dev_state->temperature = page->temperature;
+	dev_state->temp_warn = cw.bits.temperature ? true : false;
+	dev_state->avail_spare_warn = cw.bits.available_spare ? true : false;
+	dev_state->dev_reliability_warn = cw.bits.device_reliability ?
 		true : false;
-	dev_state->bds_dev_reliability_warning = cw.bits.device_reliability ?
-		true : false;
-	dev_state->bds_read_only_warning = cw.bits.read_only ? true : false;
-	dev_state->bds_volatile_mem_warning = cw.bits.volatile_memory_backup ?
+	dev_state->read_only_warn = cw.bits.read_only ? true : false;
+	dev_state->volatile_mem_warn = cw.bits.volatile_memory_backup ?
 		true : false;
 
-	written = snprintf(dev_state->bds_model, sizeof(dev_state->bds_model),
+	written = snprintf(dev_state->model, sizeof(dev_state->model),
 			   "%-20.20s", cdata->mn);
-	if (written >= sizeof(dev_state->bds_model)) {
+	if (written >= sizeof(dev_state->model)) {
 		D_ERROR("writing model to dev_state");
 		return -DER_TRUNC;
 	}
 
-	written = snprintf(dev_state->bds_serial, sizeof(dev_state->bds_serial),
+	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
 			   "%-20.20s", cdata->sn);
-	if (written >= sizeof(dev_state->bds_serial)) {
+	if (written >= sizeof(dev_state->serial)) {
 		D_ERROR("writing serial to dev_state");
 		return -DER_TRUNC;
 	}
@@ -285,7 +284,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
 	struct bio_dev_health			 *dev_health = cb_arg;
-	struct bio_dev_state			 *dev_state;
+	struct nvme_health_stats		 *dev_state;
 	struct spdk_bdev			 *bdev;
 	struct spdk_nvme_cmd			  cmd;
 	uint32_t				  cp_sz;
@@ -308,7 +307,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 
 	/* Store device health info in in-memory health state log. */
 	dev_state = &dev_health->bdh_health_state;
-	dev_state->bds_timestamp = dev_health->bdh_stat_age;
+	dev_state->timestamp = dev_health->bdh_stat_age;
 	rc = populate_dev_health(dev_state, dev_health->bdh_health_buf,
 				 dev_health->bdh_ctrlr_buf);
 	if (rc != 0)

@@ -31,7 +31,7 @@ package spdk
 #cgo LDFLAGS: -L . -lnvme_control -lspdk
 
 #include "stdlib.h"
-#include "daos_srv/bio_types.h"
+#include "daos_srv/control.h"
 #include "spdk/stdinc.h"
 #include "spdk/nvme.h"
 #include "spdk/env.h"
@@ -188,27 +188,27 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
 }
 
 // c2GoDeviceHealth is a private translation function.
-func c2GoDeviceHealth(health *C.struct_bio_dev_state) *storage.NvmeControllerHealth {
+func c2GoDeviceHealth(health *C.struct_nvme_health_stats) *storage.NvmeControllerHealth {
 	return &storage.NvmeControllerHealth{
-		Model:           C.GoString(&health.bds_model[0]),
-		Serial:          C.GoString(&health.bds_serial[0]),
-		Timestamp:       uint64(health.bds_timestamp),
-		ErrorCount:      uint64(health.bds_error_count),
-		TempWarnTime:    uint32(health.bds_warn_temp_time),
-		TempCritTime:    uint32(health.bds_crit_temp_time),
-		CtrlBusyTime:    uint64(health.bds_ctrl_busy_time),
-		PowerCycles:     uint64(health.bds_power_cycles),
-		PowerOnHours:    uint64(health.bds_power_on_hours),
-		UnsafeShutdowns: uint64(health.bds_unsafe_shutdowns),
-		MediaErrors:     uint64(health.bds_media_errors),
-		ErrorLogEntries: uint64(health.bds_error_log_entries),
-		ChecksumErrors:  uint32(health.bds_checksum_errs),
-		Temperature:     uint32(health.bds_temperature),
-		TempWarn:        bool(health.bds_temp_warning),
-		AvailSpareWarn:  bool(health.bds_avail_spare_warning),
-		ReliabilityWarn: bool(health.bds_dev_reliability_warning),
-		ReadOnlyWarn:    bool(health.bds_read_only_warning),
-		VolatileWarn:    bool(health.bds_volatile_mem_warning),
+		Model:           C.GoString(&health.model[0]),
+		Serial:          C.GoString(&health.serial[0]),
+		Timestamp:       uint64(health.timestamp),
+		ErrorCount:      uint64(health.err_count),
+		TempWarnTime:    uint32(health.warn_temp_time),
+		TempCritTime:    uint32(health.crit_temp_time),
+		CtrlBusyTime:    uint64(health.ctrl_busy_time),
+		PowerCycles:     uint64(health.power_cycles),
+		PowerOnHours:    uint64(health.power_on_hours),
+		UnsafeShutdowns: uint64(health.unsafe_shutdowns),
+		MediaErrors:     uint64(health.media_errs),
+		ErrorLogEntries: uint64(health.err_log_entries),
+		ChecksumErrors:  uint32(health.checksum_errs),
+		Temperature:     uint32(health.temperature),
+		TempWarn:        bool(health.temp_warn),
+		AvailSpareWarn:  bool(health.avail_spare_warn),
+		ReliabilityWarn: bool(health.dev_reliability_warn),
+		ReadOnlyWarn:    bool(health.read_only_warn),
+		VolatileWarn:    bool(health.volatile_mem_warn),
 	}
 }
 

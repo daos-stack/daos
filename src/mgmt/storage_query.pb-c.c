@@ -541,264 +541,264 @@ const ProtobufCMessageDescriptor mgmt__bio_health_req__descriptor =
 static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[24] =
 {
   {
-    "bds_model",
+    "model",
     1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_model),
+    offsetof(Mgmt__BioHealthResp, model),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_serial",
+    "serial",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_serial),
+    offsetof(Mgmt__BioHealthResp, serial),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_timestamp",
+    "timestamp",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_timestamp),
+    offsetof(Mgmt__BioHealthResp, timestamp),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_error_count",
+    "err_count",
     4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_error_count),
+    offsetof(Mgmt__BioHealthResp, err_count),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_warn_temp_time",
+    "warn_temp_time",
     5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_warn_temp_time),
+    offsetof(Mgmt__BioHealthResp, warn_temp_time),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_crit_temp_time",
+    "crit_temp_time",
     6,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_crit_temp_time),
+    offsetof(Mgmt__BioHealthResp, crit_temp_time),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_ctrl_busy_time",
+    "ctrl_busy_time",
     7,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_ctrl_busy_time),
+    offsetof(Mgmt__BioHealthResp, ctrl_busy_time),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_power_cycles",
+    "power_cycles",
     8,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_power_cycles),
+    offsetof(Mgmt__BioHealthResp, power_cycles),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_power_on_hours",
+    "power_on_hours",
     9,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_power_on_hours),
+    offsetof(Mgmt__BioHealthResp, power_on_hours),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_unsafe_shutdowns",
+    "unsafe_shutdowns",
     10,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_unsafe_shutdowns),
+    offsetof(Mgmt__BioHealthResp, unsafe_shutdowns),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_media_errors",
+    "media_errs",
     11,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_media_errors),
+    offsetof(Mgmt__BioHealthResp, media_errs),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_error_log_entries",
+    "err_log_entries",
     12,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_error_log_entries),
+    offsetof(Mgmt__BioHealthResp, err_log_entries),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_bio_read_errs",
+    "bio_read_errs",
     13,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_bio_read_errs),
+    offsetof(Mgmt__BioHealthResp, bio_read_errs),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_bio_write_errs",
+    "bio_write_errs",
     14,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_bio_write_errs),
+    offsetof(Mgmt__BioHealthResp, bio_write_errs),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_bio_unmap_errs",
+    "bio_unmap_errs",
     15,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_bio_unmap_errs),
+    offsetof(Mgmt__BioHealthResp, bio_unmap_errs),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_checksum_errs",
+    "checksum_errs",
     16,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_checksum_errs),
+    offsetof(Mgmt__BioHealthResp, checksum_errs),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_temperature",
+    "temperature",
     17,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_temperature),
+    offsetof(Mgmt__BioHealthResp, temperature),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_temp_warning",
+    "temp_warn",
     18,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_temp_warning),
+    offsetof(Mgmt__BioHealthResp, temp_warn),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_avail_spare_warning",
+    "avail_spare_warn",
     19,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_avail_spare_warning),
+    offsetof(Mgmt__BioHealthResp, avail_spare_warn),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_dev_reliability_warning",
+    "dev_reliability_warn",
     20,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_dev_reliability_warning),
+    offsetof(Mgmt__BioHealthResp, dev_reliability_warn),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_read_only_warning",
+    "read_only_warn",
     21,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_read_only_warning),
+    offsetof(Mgmt__BioHealthResp, read_only_warn),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "bds_volatile_mem_warning",
+    "volatile_mem_warn",
     22,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__BioHealthResp, bds_volatile_mem_warning),
+    offsetof(Mgmt__BioHealthResp, volatile_mem_warn),
     NULL,
     NULL,
     0,             /* flags */
@@ -830,30 +830,30 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[2
   },
 };
 static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
-  18,   /* field[18] = bds_avail_spare_warning */
-  12,   /* field[12] = bds_bio_read_errs */
-  14,   /* field[14] = bds_bio_unmap_errs */
-  13,   /* field[13] = bds_bio_write_errs */
-  15,   /* field[15] = bds_checksum_errs */
-  5,   /* field[5] = bds_crit_temp_time */
-  6,   /* field[6] = bds_ctrl_busy_time */
-  19,   /* field[19] = bds_dev_reliability_warning */
-  3,   /* field[3] = bds_error_count */
-  11,   /* field[11] = bds_error_log_entries */
-  10,   /* field[10] = bds_media_errors */
-  0,   /* field[0] = bds_model */
-  7,   /* field[7] = bds_power_cycles */
-  8,   /* field[8] = bds_power_on_hours */
-  20,   /* field[20] = bds_read_only_warning */
-  1,   /* field[1] = bds_serial */
-  17,   /* field[17] = bds_temp_warning */
-  16,   /* field[16] = bds_temperature */
-  2,   /* field[2] = bds_timestamp */
-  9,   /* field[9] = bds_unsafe_shutdowns */
-  21,   /* field[21] = bds_volatile_mem_warning */
-  4,   /* field[4] = bds_warn_temp_time */
+  18,   /* field[18] = avail_spare_warn */
+  12,   /* field[12] = bio_read_errs */
+  14,   /* field[14] = bio_unmap_errs */
+  13,   /* field[13] = bio_write_errs */
+  15,   /* field[15] = checksum_errs */
+  5,   /* field[5] = crit_temp_time */
+  6,   /* field[6] = ctrl_busy_time */
+  19,   /* field[19] = dev_reliability_warn */
   23,   /* field[23] = dev_uuid */
+  3,   /* field[3] = err_count */
+  11,   /* field[11] = err_log_entries */
+  10,   /* field[10] = media_errs */
+  0,   /* field[0] = model */
+  7,   /* field[7] = power_cycles */
+  8,   /* field[8] = power_on_hours */
+  20,   /* field[20] = read_only_warn */
+  1,   /* field[1] = serial */
   22,   /* field[22] = status */
+  17,   /* field[17] = temp_warn */
+  16,   /* field[16] = temperature */
+  2,   /* field[2] = timestamp */
+  9,   /* field[9] = unsafe_shutdowns */
+  21,   /* field[21] = volatile_mem_warn */
+  4,   /* field[4] = warn_temp_time */
 };
 static const ProtobufCIntRange mgmt__bio_health_resp__number_ranges[1 + 1] =
 {

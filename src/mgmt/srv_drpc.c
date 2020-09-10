@@ -1723,7 +1723,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__BioHealthReq	*req = NULL;
 	Mgmt__BioHealthResp	*resp = NULL;
 	struct mgmt_bio_health	*bio_health = NULL;
-	struct bio_dev_state	 bds;
+	struct nvme_health_stats stats;
 	uuid_t			 uuid;
 	uint8_t			*body;
 	size_t			 len;
@@ -1783,36 +1783,36 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
-	bds = bio_health->mb_dev_state;
-	resp->bds_timestamp = bds.bds_timestamp;
-	resp->bds_warn_temp_time = bds.bds_warn_temp_time;
-	resp->bds_crit_temp_time = bds.bds_crit_temp_time;
-	resp->bds_ctrl_busy_time = bds.bds_ctrl_busy_time;
-	resp->bds_power_cycles = bds.bds_power_cycles;
-	resp->bds_power_on_hours = bds.bds_power_on_hours;
-	resp->bds_unsafe_shutdowns = bds.bds_unsafe_shutdowns;
-	resp->bds_error_log_entries = bds.bds_error_log_entries;
-	resp->bds_error_count = bds.bds_error_count;
-	resp->bds_temperature = bds.bds_temperature;
-	resp->bds_media_errors = bds.bds_media_errors;
-	resp->bds_bio_read_errs = bds.bds_bio_read_errs;
-	resp->bds_bio_write_errs = bds.bds_bio_write_errs;
-	resp->bds_bio_unmap_errs = bds.bds_bio_unmap_errs;
-	resp->bds_checksum_errs = bds.bds_checksum_errs;
-	resp->bds_temp_warning = bds.bds_temp_warning;
-	resp->bds_avail_spare_warning = bds.bds_avail_spare_warning;
-	resp->bds_read_only_warning = bds.bds_read_only_warning;
-	resp->bds_dev_reliability_warning = bds.bds_dev_reliability_warning;
-	resp->bds_volatile_mem_warning = bds.bds_volatile_mem_warning;
+	stats = bio_health->mb_dev_state;
+	resp->timestamp = stats.timestamp;
+	resp->warn_temp_time = stats.warn_temp_time;
+	resp->crit_temp_time = stats.crit_temp_time;
+	resp->ctrl_busy_time = stats.ctrl_busy_time;
+	resp->power_cycles = stats.power_cycles;
+	resp->power_on_hours = stats.power_on_hours;
+	resp->unsafe_shutdowns = stats.unsafe_shutdowns;
+	resp->err_log_entries = stats.err_log_entries;
+	resp->err_count = stats.err_count;
+	resp->temperature = stats.temperature;
+	resp->media_errs = stats.media_errs;
+	resp->bio_read_errs = stats.bio_read_errs;
+	resp->bio_write_errs = stats.bio_write_errs;
+	resp->bio_unmap_errs = stats.bio_unmap_errs;
+	resp->checksum_errs = stats.checksum_errs;
+	resp->temp_warn = stats.temp_warn;
+	resp->avail_spare_warn = stats.avail_spare_warn;
+	resp->read_only_warn = stats.read_only_warn;
+	resp->dev_reliability_warn = stats.dev_reliability_warn;
+	resp->volatile_mem_warn = stats.volatile_mem_warn;
 
-	D_STRNDUP(resp->bds_model, bds.bds_model, BIO_DEV_STR_LEN);
-	if (resp->bds_model == NULL) {
+	D_STRNDUP(resp->model, stats.model, HEALTH_STAT_STR_LEN);
+	if (resp->model == NULL) {
 		D_ERROR("failed to allocate model ID buffer");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	D_STRNDUP(resp->bds_serial, bds.bds_serial, BIO_DEV_STR_LEN);
-	if (resp->bds_serial == NULL) {
+	D_STRNDUP(resp->serial, stats.serial, HEALTH_STAT_STR_LEN);
+	if (resp->serial == NULL) {
 		D_ERROR("failed to allocate serial ID buffer");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}

@@ -225,8 +225,7 @@ func (svc *mgmtSvc) getBioHealth(ctx context.Context, srv *IOServerInstance, req
 		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
 	}
 
-	svc.log.Debugf("bio health response, model %s serial %s", resp.GetBdsModel(),
-		resp.GetBdsSerial())
+	svc.log.Debugf("bio health response, model %s serial %s", resp.GetModel(), resp.GetSerial())
 
 	if resp.Status != 0 {
 		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")

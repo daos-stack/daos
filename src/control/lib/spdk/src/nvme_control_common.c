@@ -25,7 +25,7 @@
 #include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/vmd.h>
-#include <daos_srv/bio_types.h>
+#include <daos_srv/control.h>
 
 #include "nvme_control_common.h"
 
@@ -294,40 +294,40 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 }
 
 static int
-populate_dev_health(struct bio_dev_state *dev_state,
+populate_dev_health(struct nvme_health_stats *dev_state,
 		    struct spdk_nvme_health_information_page *page,
 		    const struct spdk_nvme_ctrlr_data *cdata)
 {
 	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
 	int					written;
 
-	dev_state->bds_warn_temp_time = page->warning_temp_time;
-	dev_state->bds_crit_temp_time = page->critical_temp_time;
-	dev_state->bds_ctrl_busy_time = page->controller_busy_time[0];
-	dev_state->bds_power_cycles = page->power_cycles[0];
-	dev_state->bds_power_on_hours = page->power_on_hours[0];
-	dev_state->bds_unsafe_shutdowns = page->unsafe_shutdowns[0];
-	dev_state->bds_media_errors = page->media_errors[0];
-	dev_state->bds_error_log_entries = page->num_error_info_log_entries[0];
-	dev_state->bds_temperature = page->temperature;
-	dev_state->bds_temp_warning = cw.bits.temperature ? true : false;
-	dev_state->bds_avail_spare_warning = cw.bits.available_spare ?
+	dev_state->warn_temp_time = page->warning_temp_time;
+	dev_state->crit_temp_time = page->critical_temp_time;
+	dev_state->ctrl_busy_time = page->controller_busy_time[0];
+	dev_state->power_cycles = page->power_cycles[0];
+	dev_state->power_on_hours = page->power_on_hours[0];
+	dev_state->unsafe_shutdowns = page->unsafe_shutdowns[0];
+	dev_state->media_errs = page->media_errors[0];
+	dev_state->err_log_entries = page->num_error_info_log_entries[0];
+	dev_state->temperature = page->temperature;
+	dev_state->temp_warn = cw.bits.temperature ? true : false;
+	dev_state->avail_spare_warn = cw.bits.available_spare ?
 		true : false;
-	dev_state->bds_dev_reliability_warning = cw.bits.device_reliability ?
+	dev_state->dev_reliability_warn = cw.bits.device_reliability ?
 		true : false;
-	dev_state->bds_read_only_warning = cw.bits.read_only ? true : false;
-	dev_state->bds_volatile_mem_warning = cw.bits.volatile_memory_backup ?
+	dev_state->read_only_warn = cw.bits.read_only ? true : false;
+	dev_state->volatile_mem_warn = cw.bits.volatile_memory_backup ?
 		true : false;
 
-	written = snprintf(dev_state->bds_model, sizeof(dev_state->bds_model),
+	written = snprintf(dev_state->model, sizeof(dev_state->model),
 			   "%-20.20s", cdata->mn);
-	if (written >= sizeof(dev_state->bds_model)) {
+	if (written >= sizeof(dev_state->model)) {
 		return -NVMEC_ERR_WRITE_TRUNC;
 	}
 
-	written = snprintf(dev_state->bds_serial, sizeof(dev_state->bds_serial),
+	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
 			   "%-20.20s", cdata->sn);
-	if (written >= sizeof(dev_state->bds_serial)) {
+	if (written >= sizeof(dev_state->serial)) {
 		return -NVMEC_ERR_WRITE_TRUNC;
 	}
 
@@ -341,6 +341,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_pci_device			*pci_dev;
+	struct nvme_health_stats		*cstats;
 	struct ctrlr_t				*ctrlr_tmp;
 	int					 rc, written;
 
@@ -398,19 +399,22 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		/* Alloc device health stats per controller */
 		if (ctrlr_entry->health) {
-			ctrlr_tmp->stats = calloc(1,
-						  sizeof(struct bio_dev_state));
-			if (ctrlr_tmp->stats == NULL) {
+			cstats = calloc(1, sizeof(struct nvme_health_stats));
+			if (cstats == NULL) {
 				rc = -ENOMEM;
 				goto fail;
 			}
 
 			/* Store device health stats for export */
-			rc = populate_dev_health(ctrlr_tmp->stats,
+			rc = populate_dev_health(cstats,
 						 &ctrlr_entry->health->page,
 						 cdata);
-			if (rc != 0)
+			if (rc != 0) {
+				free(cstats);
 				goto fail;
+			}
+
+			ctrlr_tmp->stats = cstats;
 		}
 
 		ctrlr_tmp->next = ret->ctrlrs;
