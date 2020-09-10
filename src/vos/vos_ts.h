@@ -194,7 +194,7 @@ ts_set_get_parent(struct vos_ts_set *ts_set)
 }
 
 /** Returns true of we are inside a transaction and the
- *  timestamp set is valid
+ *  timestamp set is valid.
  *
  * \param[in]	ts_set	The timestamp set
  */
@@ -351,7 +351,7 @@ vos_ts_set_get_entry(struct vos_ts_set *ts_set)
 {
 	struct vos_ts_set_entry	*entry;
 
-	if (!vos_ts_in_tx(ts_set))
+	if (!vos_ts_in_tx(ts_set) || ts_set->ts_init_count == 0)
 		return NULL;
 
 	entry = &ts_set->ts_entries[ts_set->ts_init_count - 1];
@@ -608,8 +608,7 @@ vos_ts_copy(daos_epoch_t *dest_epc, struct dtx_id *dest_id,
 	    daos_epoch_t src_epc, const struct dtx_id *src_id)
 {
 	*dest_epc = src_epc;
-	uuid_copy(dest_id->dti_uuid, src_id->dti_uuid);
-	dest_id->dti_hlc = src_id->dti_hlc;
+	daos_dti_copy(dest_id, src_id);
 }
 
 /** Internal API to update low read timestamp and tx id */
