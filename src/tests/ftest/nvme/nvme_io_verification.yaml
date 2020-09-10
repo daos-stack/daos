@@ -34,6 +34,7 @@ ior:
  api: DFS
  object_type: 'SX'
  dfs_destroy: False
+ test_file: /testFile
  transfersize: !mux
    case1:
      block_size: 30000000
