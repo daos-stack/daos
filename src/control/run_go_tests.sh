@@ -60,7 +60,7 @@ function setup_environment()
 	CGO_CFLAGS+="${SL_ISAL_PREFIX+ -I${SL_ISAL_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_PMDK_PREFIX+ -I${SL_PMDK_PREFIX}/include}"
 
-	src_include="$(readlink -f $(pwd)/src/include)"
+	src_include="$(dirname "$build_source")/src/include"
 	if [ -d "$src_include" ]; then
 		echo "including path \"${src_include}\" in CGO_CFLAGS"
 		CGO_CFLAGS+=" -I${src_include}"
