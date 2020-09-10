@@ -27,6 +27,7 @@ from ior_test_base import IorTestBase
 
 class IorHdf5(IorTestBase):
     # pylint: disable=too-few-public-methods
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR/HDF5 on 2 server with basic parameters.
 
     :avocado: recursive
