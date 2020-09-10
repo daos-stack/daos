@@ -108,6 +108,16 @@ DAOS debug logs (both server and client) are written to /tmp/daos.log by
 default. This can be modified by setting this environment variable
 ("D_LOG_FILE=/tmp/daos_server").
 
+### `D_LOG_SIZE`
+
+DAOS debug logs (both server and client) have a 1GB file size limit by
+default. When this limit is reached, current log file is closed and
+renamed with a .old suffix, and a new one is opened. This mechanism
+will repeat each time limit will be reached, meaning that available
+saved log records could be found in both ${D_LOG_FILE}[.old] files.
+This can be modified by setting this environment variable
+("D_LOG_SIZE=536870912").
+
 ### `DD_SUBSYS`
 
 Used to specify which subsystems to enable. DD_SUBSYS can be set to individual
