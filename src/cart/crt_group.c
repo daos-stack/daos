@@ -2109,54 +2109,85 @@ out:
 }
 
 int
-crt_register_event_cb(crt_event_cb event_handler, void *arg)
+crt_register_event_cb(crt_event_cb func, void *args)
 {
-	struct crt_event_cb_priv	*cb_priv, *cb_priv2;
-	int				 rc = DER_SUCCESS;
+	struct crt_event_cb_priv *cbs_event;
+	size_t i, cbs_size;
+	int rc = 0;
 
-	D_ALLOC_PTR(cb_priv);
-	if (cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	cb_priv->cecp_func = event_handler;
-	cb_priv->cecp_args = arg;
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry(cb_priv2, &crt_plugin_gdata.cpg_event_cbs,
-			      cecp_link) {
-		if (cb_priv2->cecp_func == event_handler &&
-		    cb_priv2->cecp_args == arg) {
-			D_FREE(cb_priv);
-			rc = -DER_EXIST;
-			break;
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	cbs_event = crt_plugin_gdata.cpg_event_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_event[i].cecp_func == func &&
+		    cbs_event[i].cecp_args == args) {
+			D_GOTO(out_unlock, rc = -DER_EXIST);
 		}
 	}
-	if (rc == 0)
-		d_list_add_tail(&cb_priv->cecp_link,
-				&crt_plugin_gdata.cpg_event_cbs);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
 
-out:
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_event[i].cecp_func == NULL) {
+			cbs_event[i].cecp_args = args;
+			cbs_event[i].cecp_func = func;
+			D_GOTO(out_unlock, rc = 0);
+		}
+	}
+
+	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
+
+	crt_plugin_gdata.cpg_event_cbs_old = cbs_event;
+	cbs_size += CRT_CALLBACKS_NUM;
+
+	D_ALLOC_ARRAY(cbs_event, cbs_size);
+	if (cbs_event == NULL) {
+		crt_plugin_gdata.cpg_event_cbs_old = NULL;
+		D_GOTO(out_unlock, rc = -DER_NOMEM);
+	}
+
+	if (i > 0)
+		memcpy(cbs_event, crt_plugin_gdata.cpg_event_cbs_old,
+		       i * sizeof(*cbs_event));
+	cbs_event[i].cecp_args = args;
+	cbs_event[i].cecp_func = func;
+
+	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
+	crt_plugin_gdata.cpg_event_size = cbs_size;
+
+out_unlock:
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 
 int
-crt_unregister_event_cb(crt_event_cb event_handler, void *arg)
+crt_unregister_event_cb(crt_event_cb func, void *args)
 {
-	struct crt_event_cb_priv	*cb_priv;
-	int				 rc = -DER_NONEXIST;
+	struct crt_event_cb_priv *cb_event;
+	size_t i, cbs_size;
+	int rc = -DER_NONEXIST;
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_event_rwlock);
-	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_event_cbs,
-			      cecp_link) {
-		if (cb_priv->cecp_func == event_handler &&
-		    cb_priv->cecp_args == arg) {
-			d_list_del(&cb_priv->cecp_link);
-			D_FREE(cb_priv);
-			rc = DER_SUCCESS;
-			break;
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	cb_event = crt_plugin_gdata.cpg_event_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cb_event[i].cecp_func == func &&
+		    cb_event[i].cecp_args == args) {
+			cb_event[i].cecp_func = NULL;
+			cb_event[i].cecp_args = NULL;
+			D_GOTO(out_unlock, rc = 0);
 		}
 	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_event_rwlock);
+
+out_unlock:
+	if (crt_plugin_gdata.cpg_event_cbs_old != NULL) {
+		D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
+		crt_plugin_gdata.cpg_event_cbs_old = NULL;
+	}
+
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 
