@@ -1828,6 +1828,8 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	}
 
 	rank = grp_priv->gp_self;
+
+	/* TODO: Per provider address needs to be stored in future */
 	addr = crt_gdata.cg_addr;
 
 	grpid = grp_priv->gp_pub.cg_grpid;
