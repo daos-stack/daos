@@ -13,20 +13,8 @@ else
   exit 1
 fi
 
-echo "debug in test_post_always.sh"
-ls
-ls test_results || true
-ls unit_test_memcheck_logs || true
-find . -name "*.memcheck.xml" || true
-
 rm -rf run_test.sh unit_vm_test covc_vm_test covc_test_logs unit_test_logs \
        unit_memcheck_vm_test unit_test_memcheck_logs
-
-echo "debug in test_post_always.sh after clean up"
-ls
-ls test_results || true
-ls unit_test_memcheck_logs || true
-find . -name "*.memcheck.xml" || true
 
 DAOS_BASE="${SL_PREFIX%/install*}"
 NODE="${NODELIST%%,*}"
