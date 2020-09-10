@@ -269,8 +269,8 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 	return 0;
 }
 
-static void
-crt_rpc_complete_exec(struct crt_rpc_priv *rpc_priv, int rc, bool deref)
+void
+crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
 	D_ASSERT(rpc_priv != NULL);
 
@@ -304,22 +304,8 @@ crt_rpc_complete_exec(struct crt_rpc_priv *rpc_priv, int rc, bool deref)
 
 		rpc_priv->crp_complete_cb(&cbinfo);
 	}
-	if(deref) {
-		RPC_DECREF(rpc_priv);
-	}
+	RPC_DECREF(rpc_priv);
 }
-void
-crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
-{
-	crt_rpc_complete_exec(rpc_priv, rc, true);
-}
-
-void
-crt_rpc_complete_keep_referenced(struct crt_rpc_priv *rpc_priv, int rc)
-{
-	crt_rpc_complete_exec(rpc_priv, rc, false);
-}
-
 /* Flag bits definition for crt_ctx_epi_abort */
 #define CRT_EPI_ABORT_FORCE	(0x1)
 #define CRT_EPI_ABORT_WAIT	(0x2)
