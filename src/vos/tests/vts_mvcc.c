@@ -520,7 +520,7 @@ static struct op operations[] = {
 
 	/* Reads */
 	{"fetch",       T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
-	{"fetch_dne",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	fetch_dne_f},
+	{"fetch_dne",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_dne_f},
 	{"fetch_ane",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_ane_f},
 	{"listc",       T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
 	{"listo",       T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
