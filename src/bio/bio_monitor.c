@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -242,7 +242,8 @@ populate_dev_health(struct bio_dev_state *dev_state,
 		    struct spdk_nvme_health_information_page *page,
 		    const struct spdk_nvme_ctrlr_data *cdata)
 {
-	int	written;
+	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
+	int					written;
 
 	dev_state->bds_warn_temp_time = page->warning_temp_time;
 	dev_state->bds_crit_temp_time = page->critical_temp_time;
@@ -253,16 +254,13 @@ populate_dev_health(struct bio_dev_state *dev_state,
 	dev_state->bds_media_errors = page->media_errors[0];
 	dev_state->bds_error_log_entries = page->num_error_info_log_entries[0];
 	dev_state->bds_temperature = page->temperature;
-	dev_state->bds_temp_warning = page->critical_warning.bits.temperature ?
+	dev_state->bds_temp_warning = cw.bits.temperature ? true : false;
+	dev_state->bds_avail_spare_warning = cw.bits.available_spare ?
 		true : false;
-	dev_state->bds_avail_spare_warning = \
-		page->critical_warning.bits.available_spare ? true : false;
-	dev_state->bds_dev_reliability_warning = \
-		page->critical_warning.bits.device_reliability ? true : false;
-	dev_state->bds_read_only_warning = \
-		page->critical_warning.bits.read_only ? true : false;
-	dev_state->bds_volatile_mem_warning = \
-		page->critical_warning.bits.volatile_memory_backup ?
+	dev_state->bds_dev_reliability_warning = cw.bits.device_reliability ?
+		true : false;
+	dev_state->bds_read_only_warning = cw.bits.read_only ? true : false;
+	dev_state->bds_volatile_mem_warning = cw.bits.volatile_memory_backup ?
 		true : false;
 
 	written = snprintf(dev_state->bds_model, sizeof(dev_state->bds_model),
