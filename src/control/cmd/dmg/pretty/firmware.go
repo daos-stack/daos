@@ -308,8 +308,7 @@ func printSCMFirmwareQueryMapByHost(fwMap control.HostSCMQueryMap, out io.Writer
 		}
 
 		for _, res := range fwResults {
-			err := control.PrintScmModule(&res.Module, iw)
-			if err != nil {
+			if err := printScmModule(&res.Module, iw); err != nil {
 				return err
 			}
 
@@ -394,8 +393,7 @@ func PrintSCMFirmwareUpdateMapVerbose(fwMap control.HostSCMUpdateMap, out io.Wri
 		}
 
 		for _, res := range fwResults {
-			err := printScmModule(&res.Module, iw)
-			if err != nil {
+			if err := printScmModule(&res.Module, iw); err != nil {
 				return err
 			}
 
@@ -448,16 +446,14 @@ func condenseNVMeQueryMap(fwMap control.HostNVMeQueryMap) (hostDeviceResultMap, 
 	for _, host := range fwMap.Keys() {
 		results := fwMap[host]
 		if len(results) == 0 {
-			err := successes.AddHost(nvmeNotFound, host)
-			if err != nil {
+			if err := successes.AddHost(nvmeNotFound, host); err != nil {
 				return nil, nil, err
 			}
 			continue
 		}
 
 		for _, devRes := range results {
-			err := successes.AddHostDevice(getNVMeFirmwareQueryStr(devRes), host, devRes.Device.PciAddr)
-			if err != nil {
+			if err := successes.AddHostDevice(getNVMeFirmwareQueryStr(devRes), host, devRes.Device.PciAddr); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -532,8 +528,7 @@ func condenseNVMeUpdateMap(fwMap control.HostNVMeUpdateMap) (hostDeviceResultMap
 	for _, host := range fwMap.Keys() {
 		results := fwMap[host]
 		if len(results) == 0 {
-			err := successes.AddHost(nvmeNotFound, host)
-			if err != nil {
+			if err := successes.AddHost(nvmeNotFound, host); err != nil {
 				return nil, nil, err
 			}
 			continue
