@@ -111,10 +111,12 @@ default. This can be modified by setting this environment variable
 ### `D_LOG_SIZE`
 
 DAOS debug logs (both server and client) have a 1GB file size limit by
-default. When this limit is reached, current log file is closed and
+default. When this limit is reached, the current log file is closed and
 renamed with a .old suffix, and a new one is opened. This mechanism
-will repeat each time limit will be reached, meaning that available
-saved log records could be found in both ${D_LOG_FILE}[.old] files.
+will repeat each time the limit is reached, meaning that available
+saved log records could be found in both ${D_LOG_FILE} and last
+generation of ${D_LOG_FILE}.old files, to a maximum of the most recent
+2*D_LOG_SIZE records.
 This can be modified by setting this environment variable
 ("D_LOG_SIZE=536870912").
 
