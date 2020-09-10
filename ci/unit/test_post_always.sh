@@ -31,4 +31,6 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
 
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE
-python utils/fix_cmocka_xml.py
+if [[ -z ${WITH_VALGRIND} ]]; then
+    python utils/fix_cmocka_xml.py
+fi
