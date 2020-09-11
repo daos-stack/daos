@@ -545,8 +545,9 @@ struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
 	struct obj_io_context	*ioc;
 	void			*args;
-	uint32_t		 flags;
-	uint32_t		 start; /* The start shard for EC obj. */
+	daos_unit_oid_t		oid;
+	uint32_t		flags;
+	uint32_t		start; /* The start shard for EC obj. */
 };
 
 int
