@@ -58,7 +58,8 @@ def write_host_file(hostlist, path='/tmp', slots=1, segment=" slots="):
 
     log.info(
         "Writing hostfile:\n  hosts: %s\n  slots: %s\n  file:  %s",
-        hostlist, slots if not slots else "".join([segment, slots]), hostfile)
+        hostlist, slots if not slots else "".join([segment, str(slots)]),
+        hostfile)
     with open(hostfile, "w") as hostfile_handle:
         for host in hostlist:
             if slots is None:
