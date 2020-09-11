@@ -377,6 +377,9 @@ rebuild_destroy_pool_cb(void *data)
 	rebuild_pool_disconnect_internal(data);
 
 	if (arg->myrank == 0) {
+		/* Disable fail_loc and start rebuild */
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
 		rc = daos_pool_destroy(arg->pool.pool_uuid, NULL, true, NULL);
 		if (rc)
 			print_message("failed to destroy pool"DF_UUIDF" %d\n",
@@ -386,10 +389,6 @@ rebuild_destroy_pool_cb(void *data)
 	arg->pool.destroyed = true;
 	print_message("pool destroyed "DF_UUIDF"\n",
 		      DP_UUID(arg->pool.pool_uuid));
-	/* Disable fail_loc and start rebuild */
-	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     0, 0, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
