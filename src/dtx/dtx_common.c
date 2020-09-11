@@ -259,7 +259,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		uint16_t sub_modification_cnt, uint32_t pm_ver,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
-		bool solo, struct dtx_handle *dth)
+		bool solo, bool sync, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -298,12 +298,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_ent = NULL;
 	dth->dth_flags = leader ? DTE_LEADER : 0;
 
-	/* Set 'DTE_BLOCK' flag for EC object modification or
-	 * distributed transaction. At the same time, ask DTX
-	 * to 'sync' commit.
-	 */
-	if (daos_oclass_is_ec(leader_oid->id_pub, NULL) ||
-	    (mbs != NULL && mbs->dm_grp_cnt > 1)) {
+	if (sync) {
 		dth->dth_flags |= DTE_BLOCK;
 		dth->dth_sync = 1;
 	} else {
@@ -486,6 +481,8 @@ out:
  * \param dti_cos_cnt	[IN]	The @dti_cos array size.
  * \param tgts		[IN]	targets for distribute transaction.
  * \param tgt_cnt	[IN]	number of targets.
+ * \param solo		[IN]	single operand or not.
+ * \param sync		[IN]	sync mode or not.
  * \param mbs		[IN]	DTX participants information.
  * \param dth		[OUT]	Pointer to the DTX handle.
  *
@@ -496,7 +493,7 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
-		 struct daos_shard_tgt *tgts, int tgt_cnt,
+		 struct daos_shard_tgt *tgts, int tgt_cnt, bool solo, bool sync,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
@@ -528,11 +525,11 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 init:
 	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
-			     true, tgt_cnt == 0 ? true : false, dth);
+			     true, solo, sync, dth);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, leader "DF_UOID
-		", dti_cos_cnt %d: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt,
+	D_DEBUG(DB_IO, "Start %s DTX "DF_DTI" sub_reqs %d, ver %u, leader "
+		DF_UOID", dti_cos_cnt %d: "DF_RC"\n",
+		sync ? "sync" : "async", DP_DTI(dti), sub_modification_cnt,
 		dth->dth_ver, DP_UOID(*leader_oid), dti_cos_cnt, DP_RC(rc));
 
 	if (rc != 0)
@@ -575,16 +572,16 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	int				 saved = result;
 	int				 rc = 0;
 
-	if (dlh->dlh_sub_cnt == 0)
-		goto out;
-
 	D_ASSERT(cont != NULL);
 
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
 
-	rc = dtx_leader_wait(dlh);
+	if (dlh->dlh_sub_cnt != 0)
+		rc = dtx_leader_wait(dlh);
+	else if (dth->dth_modification_cnt <= 1)
+		goto out;
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
@@ -730,6 +727,7 @@ abort:
 			  dth->dth_epoch, &dte, 1);
 	}
 
+	vos_dtx_rsrvd_fini(dth);
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid))
 		D_DEBUG(DB_IO,
@@ -753,8 +751,6 @@ out:
 
 	D_FREE(dlh->dlh_subs);
 	D_FREE(dth->dth_oid_array);
-
-	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }
@@ -796,7 +792,7 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 
 	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
-			     false, false, dth);
+			     false, false, false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
 		"dti_cos_cnt %d: "DF_RC"\n",
@@ -844,8 +840,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 
 	D_FREE(dth->dth_oid_array);
 
-	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
-		D_FREE(dth->dth_rsrvds);
+	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }

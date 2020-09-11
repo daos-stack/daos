@@ -78,10 +78,10 @@ class ProcessCSV(ProcessBase):
                     "total_objects",
                     0)) - total_items
 
-            self._info("Total files {0} files".format(count_files))
-            self._info("Processing {0} directories".format(count_dir))
-            self._info("Unsupported {0} items".format(unknown_items))
-            self._info("Processing {0} symlinks".format(count_symlink))
+            self._debug("total files {0}".format(count_files))
+            self._debug("total directories {0}".format(count_dir))
+            self._debug("total symlinks {0}".format(count_symlink))
+            self._debug("skipping {0} unsupported items".format(unknown_items))
 
             if count_dir > 0:
                 items_per_dir = total_items // count_dir
@@ -89,14 +89,16 @@ class ProcessCSV(ProcessBase):
                 items_per_dir = 0
 
             self._debug(
-                'using average {0} items per directory'.format(items_per_dir))
+                'assuming {0} items per directory'.format(items_per_dir))
             self._debug(
-                'using average symlink size of {0} bytes'.format(symlink_size))
+                'assuming average symlink size of {0} bytes'.format(symlink_size))
 
             afs = AverageFS()
+            afs.set_verbose(self._verbose)
             inode_akey = get_dfs_inode_akey()
             afs.set_dfs_inode(inode_akey)
-            afs.set_chunk_size(self._args.chunk_size)
+            afs.set_io_size(self._io_size)
+            afs.set_chunk_size(self._chunk_size)
             afs.set_total_symlinks(count_symlink)
             afs.set_avg_symlink_size(symlink_size)
             afs.set_total_directories(count_dir)

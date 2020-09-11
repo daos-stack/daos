@@ -23,6 +23,9 @@ pool:
   name: daos_server
   scm_size: 5G
   nvme_size: 10G
+container:
+  control_method: daos
+  type: POSIX
 macsio:
   interface: hdf5
   parallel_file_mode: SIF 1
@@ -31,5 +34,14 @@ macsio:
   part_size: 10M
   avg_num_parts: 2.5
   num_dumps: 2
-test_repo:
-  macsio: /usr/bin
+mpi: !mux
+  mpich:
+    mpi_type: "mpich"
+    macsio_path: /usr/lib64/mpich/bin
+    plugin_path: /usr/lib64/mpich/lib
+  openmpi:
+    mpi_type: "openmpi"
+    macsio_path: /usr/lib64/openmpi3/bin
+    plugin_path: /usr/lib64/openmpi3/lib
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"

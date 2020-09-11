@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,21 +41,22 @@ mdr_stop_pool_svc(void **argv)
 	/* Create the pool. */
 	if (arg->myrank == 0) {
 		print_message("creating pool\n");
-		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
-				      NULL, "pmem", 128*1024*1024, 0, NULL,
-				      &arg->pool.svc, uuid, NULL);
+		rc = dmg_pool_create(dmg_config_file,
+				     geteuid(), getegid(), arg->group,
+				     NULL, 128 * 1024 * 1024, 0,
+				     NULL, arg->pool.svc, uuid);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	assert_int_equal(rc, 0);
 	MPI_Bcast(uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&arg->pool.svc.rl_nr, sizeof(arg->pool.svc.rl_nr), MPI_CHAR,
+	MPI_Bcast(&arg->pool.svc->rl_nr, sizeof(arg->pool.svc->rl_nr), MPI_CHAR,
 		  0, MPI_COMM_WORLD);
 	MPI_Bcast(arg->pool.ranks,
-		  sizeof(arg->pool.ranks[0]) * arg->pool.svc.rl_nr,
+		  sizeof(arg->pool.ranks[0]) * arg->pool.svc->rl_nr,
 		  MPI_CHAR, 0, MPI_COMM_WORLD);
 
 	/* Check the number of pool service replicas. */
-	if (arg->pool.svc.rl_nr < 3) {
+	if (arg->pool.svc->rl_nr < 3) {
 		if (arg->myrank == 0)
 			print_message(">= 3 pool service replicas needed; ");
 		skip = true;
@@ -65,7 +66,7 @@ mdr_stop_pool_svc(void **argv)
 	/* Connect to the pool. */
 	if (arg->myrank == 0) {
 		print_message("connecting to pool\n");
-		rc = daos_pool_connect(uuid, arg->group, &arg->pool.svc,
+		rc = daos_pool_connect(uuid, arg->group, arg->pool.svc,
 				       DAOS_PC_RW, &poh, NULL /* info */,
 				       NULL /* ev */);
 	}
@@ -115,7 +116,8 @@ destroy:
 		if (skip)
 			print_message("skipping\n");
 		print_message("destroying pool\n");
-		rc = daos_pool_destroy(uuid, arg->group, 1, NULL);
+		rc = dmg_pool_destroy(dmg_config_file,
+				      uuid, arg->group, 1);
 		assert_int_equal(rc, 0);
 	}
 	if (skip)
@@ -134,12 +136,13 @@ mdr_stop_cont_svc(void **argv)
 	int			rc;
 
 	print_message("creating pool\n");
-	rc = daos_pool_create(0731, geteuid(), getegid(), arg->group, NULL,
-			      "pmem", 128*1024*1024, 0, NULL, &arg->pool.svc,
-			      pool_uuid, NULL);
+	rc = dmg_pool_create(dmg_config_file,
+			     geteuid(), getegid(), arg->group,
+			     NULL, 128 * 1024 * 1024, 0,
+			     NULL, arg->pool.svc, pool_uuid);
 	assert_int_equal(rc, 0);
 
-	if (arg->pool.svc.rl_nr < 3) {
+	if (arg->pool.svc->rl_nr < 3) {
 		if (arg->myrank == 0)
 			print_message(">= 3 pool service replicas needed; ");
 		skip = true;
@@ -147,7 +150,7 @@ mdr_stop_cont_svc(void **argv)
 	}
 
 	print_message("connecting to pool\n");
-	rc = daos_pool_connect(pool_uuid, arg->group, &arg->pool.svc,
+	rc = daos_pool_connect(pool_uuid, arg->group, arg->pool.svc,
 			       DAOS_PC_RW, &poh, NULL, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("creating container\n");
@@ -178,7 +181,8 @@ destroy:
 		if (skip)
 			print_message("skipping\n");
 		print_message("destroying pool\n");
-		rc = daos_pool_destroy(pool_uuid, arg->group, 1, NULL);
+		rc = dmg_pool_destroy(dmg_config_file,
+				      pool_uuid, arg->group, 1);
 		assert_int_equal(rc, 0);
 	}
 	if (skip)

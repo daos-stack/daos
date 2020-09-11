@@ -235,7 +235,8 @@ void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
 int  daos_sgl_init(d_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
-int daos_sgl_copy_ptr(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
+		       int src_nr);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 			    int src_nr);
 int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
@@ -639,6 +640,10 @@ enum {
 #define DAOS_DTX_LOST_RPC_REQUEST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x33)
 #define DAOS_DTX_LOST_RPC_REPLY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x34)
 #define DAOS_DTX_LONG_TIME_RESEND	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x35)
+#define DAOS_DTX_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x36)
+#define DAOS_DTX_NO_READ_TS		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x37)
+#define DAOS_DTX_SPEC_EPOCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x38)
+#define DAOS_DTX_STALE_PM		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x39)
 
 #define DAOS_VC_DIFF_REC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x40)
 #define DAOS_VC_DIFF_DKEY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x41)

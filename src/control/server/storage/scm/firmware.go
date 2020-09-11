@@ -25,14 +25,20 @@
 package scm
 
 import (
-	"os"
-
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+const (
+	// FirmwareQueryMethod is the method name used when forwarding the request
+	// to query SCM firmware.
+	FirmwareQueryMethod = "ScmFirmwareQuery"
+	// FirmwareUpdateMethod is the method name used when forwarding the request
+	// to update SCM firmware.
+	FirmwareUpdateMethod = "ScmFirmwareUpdate"
 )
 
 type (
@@ -168,11 +174,11 @@ func NewFirmwareForwarder(log logging.Logger) *FirmwareForwarder {
 
 // checkSupport verifies that the firmware support binary is installed.
 func (f *FirmwareForwarder) checkSupport() error {
-	if _, err := common.FindBinary(f.Forwarder.GetBinaryName()); os.IsNotExist(err) {
-		return errors.Errorf("SCM firmware operations are not supported on this system")
+	if f.Forwarder.CanForward() {
+		return nil
 	}
 
-	return nil
+	return errors.Errorf("SCM firmware operations are not supported on this system")
 }
 
 // Query forwards an SCM firmware query request.
@@ -183,7 +189,7 @@ func (f *FirmwareForwarder) Query(req FirmwareQueryRequest) (*FirmwareQueryRespo
 	req.Forwarded = true
 
 	res := new(FirmwareQueryResponse)
-	if err := f.SendReq("ScmFirmwareQuery", req, res); err != nil {
+	if err := f.SendReq(FirmwareQueryMethod, req, res); err != nil {
 		return nil, err
 	}
 
@@ -198,7 +204,7 @@ func (f *FirmwareForwarder) Update(req FirmwareUpdateRequest) (*FirmwareUpdateRe
 	req.Forwarded = true
 
 	res := new(FirmwareUpdateResponse)
-	if err := f.SendReq("ScmFirmwareUpdate", req, res); err != nil {
+	if err := f.SendReq(FirmwareUpdateMethod, req, res); err != nil {
 		return nil, err
 	}
 

@@ -10,6 +10,7 @@ import yaml
 import json
 import signal
 import stat
+import argparse
 import subprocess
 import tempfile
 import pickle
@@ -52,6 +53,24 @@ class NLT_Conf():
 
     def __getitem__(self, key):
         return self.bc[key]
+
+class BoolRatchet():
+    """Used for saving test results"""
+
+    # Any call to fail() of add_result with a True value will result
+    # in errors being True.
+
+    def __init__(self):
+        self.errors = False
+
+    def fail(self):
+        """Mark as failure"""
+        self.errors = True
+
+    def add_result(self, result):
+        """Save result, keep record of failure"""
+        if result:
+            self.fail()
 
 class WarningsFactory():
     """Class to parse warnings, and save to JSON output file
@@ -254,9 +273,6 @@ class DaosServer():
 
         self._agent_dir = tempfile.TemporaryDirectory(prefix='dnt_agent_')
         self.agent_dir = self._agent_dir.name
-
-        if not os.path.exists(self.agent_dir):
-            os.mkdir(self.agent_dir)
 
         self._yaml_file = None
         self._io_server_dir = None
@@ -480,6 +496,8 @@ class ValgrindHelper():
                                   os.path.join('utils',
                                                'memcheck-daos-client.supp'))])
 
+        cmd.append('--error-exitcode=42')
+
         cmd.extend(['--xml=yes',
                     '--xml-file={}'.format(self._xml_file)])
         return cmd
@@ -593,8 +611,10 @@ class DFuse():
 
     def stop(self):
         """Stop a previously started dfuse instance"""
+
+        fatal_errors = False
         if not self._sp:
-            return
+            return fatal_errors
 
         print('Stopping fuse')
         ret = umount(self.dir)
@@ -605,14 +625,18 @@ class DFuse():
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
+            if ret != 0:
+                fatal_errors = True
         except subprocess.TimeoutExpired:
             self._sp.send_signal(signal.SIGTERM)
+            fatal_errors = True
         self._sp = None
         log_test(self.conf, self.log_file)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
         self.valgrind.convert_xml()
+        return fatal_errors
 
     def wait_for_exit(self):
         """Wait for dfuse to exit"""
@@ -760,6 +784,11 @@ def run_tests(dfuse):
     path = dfuse.dir
 
     fname = os.path.join(path, 'test_file3')
+
+    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',
+                         'of={}'.format(os.path.join(path, 'dd_file'))])
+    print(rc)
+    assert rc.returncode == 0
     ofd = open(fname, 'w')
     ofd.write('hello')
     print(os.fstat(ofd.fileno()))
@@ -772,9 +801,9 @@ def run_tests(dfuse):
     assert_file_size(ofd, 1024*1024)
     ofd.truncate(0)
     ofd.seek(0)
-    ofd.write('world\n')
+    ofd.write('simple file contents\n')
     ofd.flush()
-    assert_file_size(ofd, 6)
+    assert_file_size(ofd, 21)
     print(os.fstat(ofd.fileno()))
     ofd.close()
     il_cmd(dfuse, ['cat', fname])
@@ -804,7 +833,6 @@ def setup_log_test(conf):
     logparse_dir = os.path.join(file_self,
                                 '../src/cart/test/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
-    print(crt_mod_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
 
@@ -914,11 +942,12 @@ def run_duns_overlay_test(server, conf):
     # This should work now if the container was correctly found
     create_and_read_via_il(dfuse, uns_dir)
 
-    dfuse.stop()
+    return dfuse.stop()
 
 def run_dfuse(server, conf):
     """Run several dfuse instances"""
 
+    fatal_errors = BoolRatchet()
     daos = import_daos(server, conf)
 
     pools = get_pool_list()
@@ -946,7 +975,7 @@ def run_dfuse(server, conf):
         cdir = os.path.join(dfuse.dir, pool, container)
         os.mkdir(cdir)
         #create_and_read_via_il(dfuse, cdir)
-    dfuse.stop()
+    fatal_errors.add_result(dfuse.stop())
 
     uns_container = container
 
@@ -962,7 +991,7 @@ def run_dfuse(server, conf):
     cdir = os.path.join(dfuse.dir, container)
     create_and_read_via_il(dfuse, cdir)
 
-    dfuse.stop()
+    fatal_errors.add_result(dfuse.stop())
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container)
     pre_stat = os.stat(dfuse.dir)
@@ -975,7 +1004,7 @@ def run_dfuse(server, conf):
 
     run_tests(dfuse)
 
-    dfuse.stop()
+    fatal_errors.add_result(dfuse.stop())
 
     dfuse = DFuse(server, conf, pool=pools[0], container=container2)
     dfuse.start('uns-0')
@@ -1001,7 +1030,7 @@ def run_dfuse(server, conf):
     os.mkdir(child_path)
     run_container_query(conf, child_path)
 
-    dfuse.stop()
+    fatal_errors.add_result(dfuse.stop())
 
     print('Trying UNS')
     dfuse = DFuse(server, conf)
@@ -1038,7 +1067,7 @@ def run_dfuse(server, conf):
     print(uns_stat)
     assert uns_stat.st_ino == direct_stat.st_ino
 
-    dfuse.stop()
+    fatal_errors.add_result(dfuse.stop())
     print('Trying UNS with previous cont')
     dfuse = DFuse(server, conf)
     dfuse.start('uns-3')
@@ -1052,9 +1081,13 @@ def run_dfuse(server, conf):
     print(direct_stat)
     print(uns_stat)
     assert uns_stat.st_ino == direct_stat.st_ino
-    dfuse.stop()
+    fatal_errors.add_result(dfuse.stop())
 
-    print('Reached the end, no errors')
+    if fatal_errors.errors:
+        print('Errors from dfuse')
+    else:
+        print('Reached the end, no errors')
+    return fatal_errors.errors
 
 def run_il_test(server, conf):
     """Run a basic interception library test"""
@@ -1275,9 +1308,14 @@ def test_alloc_fail(conf):
 def main():
     """Main entry point"""
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output-file', default='nlt-errors.json')
+    parser.add_argument('mode', nargs='?')
+    args = parser.parse_args()
+
     conf = load_conf()
 
-    wf = WarningsFactory('nlt-errors.json')
+    wf = WarningsFactory(args.output_file)
 
     conf.set_wf(wf)
     setup_log_test(conf)
@@ -1285,30 +1323,30 @@ def main():
     server = DaosServer(conf)
     server.start()
 
-    fatal_errors = False
+    fatal_errors = BoolRatchet()
 
-    if len(sys.argv) == 2 and sys.argv[1] == 'launch':
+    if args.mode == 'launch':
         run_in_fg(server, conf)
-    elif len(sys.argv) == 2 and sys.argv[1] == 'il':
-        run_il_test(server, conf)
-    elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
+    elif args.mode == 'il':
+        fatal_errors.add_result(run_il_test(server, conf))
+    elif args.mode == 'kv':
         test_pydaos_kv(server, conf)
-    elif len(sys.argv) == 2 and sys.argv[1] == 'overlay':
-        run_duns_overlay_test(server, conf)
-    elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
+    elif args.mode == 'overlay':
+        fatal_errors = run_duns_overlay_test(server, conf)
+    elif args.mode == 'fi':
         fatal_errors = test_alloc_fail(conf)
-    elif len(sys.argv) == 2 and sys.argv[1] == 'all':
-        run_il_test(server, conf)
-        run_dfuse(server, conf)
-        run_duns_overlay_test(server, conf)
+    elif args.mode == 'all':
+        fatal_errors.add_result(run_il_test(server, conf))
+        fatal_errors.add_result(run_dfuse(server, conf))
+        fatal_errors.add_result(run_duns_overlay_test(server, conf))
         test_pydaos_kv(server, conf)
-        fatal_errors = test_alloc_fail(conf)
+        fatal_errors.add_result(test_alloc_fail(conf))
     else:
-        run_il_test(server, conf)
-        run_dfuse(server, conf)
+        fatal_errors.add_result(run_il_test(server, conf))
+        fatal_errors.add_result(run_dfuse(server, conf))
 
     if server.stop() != 0:
-        fatal_errors = True
+        fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do list-containers, then
@@ -1324,8 +1362,9 @@ def main():
             fatal_errors = True
 
     wf.close()
-    if fatal_errors:
+    if fatal_errors.errors:
         print("Significant errors encountered")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
