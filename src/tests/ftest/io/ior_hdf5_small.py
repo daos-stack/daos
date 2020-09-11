@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2019 Intel Corporation.
+(C) Copyright 2018-2020 Intel Corporation.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ from ior_test_base import IorTestBase
 class IorHdf5Small(IorTestBase):
     # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
-    """Test class Description: Runs IOR/HDF5 on 1 server with basic parameters.
+    """Test class Description: Runs IOR/HDF5 on 4 servers with basic parameters.
 
     :avocado: recursive
     """
