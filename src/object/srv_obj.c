@@ -968,10 +968,17 @@ obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 	tgt_idx = oid->id_shard - start_shard;
 	for (i = 0; i < nr; i++) {
 		iod = &iods[i];
-		if (iod->iod_type != DAOS_IOD_SINGLE || (flags & ORF_EC) == 0)
+		if (iod->iod_type != DAOS_IOD_SINGLE)
 			continue;
+
+		/* Set iod_recx to NULL, since for EC object, the iod_recx
+		 * will be reused.
+		 */
+		iod->iod_recxs = NULL;
+		if ((flags & ORF_EC) == 0)
+			continue;
+
 		/* for singv EC */
-		D_ASSERT(iod->iod_recxs == NULL);
 		if (iod->iod_size == DAOS_REC_ANY) /* punch */
 			continue;
 		if (oca == NULL) {
