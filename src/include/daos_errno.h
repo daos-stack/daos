@@ -65,7 +65,7 @@ extern "C" {
 	       No space on storage target)				\
 	/** already did sth */						\
 	ACTION(DER_ALREADY,		(DER_ERR_GURT_BASE + 8),	\
-	       Already did sth)						\
+	       Operation already performed)				\
 	/** NO memory */						\
 	ACTION(DER_NOMEM,		(DER_ERR_GURT_BASE + 9),	\
 	       Out of memory)						\
@@ -113,7 +113,7 @@ extern "C" {
 	       PMIx layer error)					\
 	/** IV callback - cannot handle locally */			\
 	ACTION(DER_IVCB_FORWARD,	(DER_ERR_GURT_BASE + 24),	\
-	       IV callback - cannot handle locally)			\
+	       Incast variable)						\
 	/** miscellaneous error */					\
 	ACTION(DER_MISC,		(DER_ERR_GURT_BASE + 25),	\
 	       Miscellaneous error)					\
@@ -125,7 +125,7 @@ extern "C" {
 	       Not a directory)						\
 	/** corpc failed */						\
 	ACTION(DER_CORPC_INCOMPLETE,	(DER_ERR_GURT_BASE + 28),	\
-	       Corpc failed)						\
+	       Collective RPC failed)					\
 	/** no rank is subscribed to RAS */				\
 	ACTION(DER_NO_RAS_RANK,		(DER_ERR_GURT_BASE + 29),	\
 	       No rank is subscribed to RAS)				\
@@ -182,7 +182,7 @@ extern "C" {
 	       Target create error)					\
 	/** Epoch is read-only */					\
 	ACTION(DER_EP_RO,		(DER_ERR_DAOS_BASE + 10),	\
-	       Epoch is read - only)					\
+	       Epoch is read only)					\
 	/** Epoch is too old, all data have been recycled */		\
 	ACTION(DER_EP_OLD,		(DER_ERR_DAOS_BASE + 11),	\
 	       Epoch is too old. All data have been recycled)		\
@@ -194,7 +194,7 @@ extern "C" {
 	       Record is too large)					\
 	/** IO buffers can't match object extents */			\
 	ACTION(DER_IO_INVAL,		(DER_ERR_DAOS_BASE + 14),	\
-	       Input / output buffers cannot match object extents)	\
+	       Input / output buffers do not match object extents)	\
 	/** Event queue is busy */					\
 	ACTION(DER_EQ_BUSY,		(DER_ERR_DAOS_BASE + 15),	\
 	       Event queue is busy)					\
@@ -316,7 +316,7 @@ void d_errno_deregister_range(int start);
  * \return		The error description string, or an "Unknown
  *			error nnn" message if the error number is unknown.
  */
-const char *d_strerror(int errnum);
+const char *d_errdesc(int errnum);
 
 /** @}
  */

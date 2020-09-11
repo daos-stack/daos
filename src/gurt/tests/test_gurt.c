@@ -227,25 +227,25 @@ void test_d_errstr(void **state)
 #endif
 }
 
-void test_d_strerror(void **state)
+void test_d_errdesc(void **state)
 {
 	const char	*value;
 
-	value = d_strerror(-DER_INVAL);
+	value = d_errdesc(-DER_INVAL);
 	assert_string_equal(value, "Invalid parameters");
-	value = d_strerror(DER_INVAL);
+	value = d_errdesc(DER_INVAL);
 	assert_string_equal(value, "Invalid parameters");
-	value = d_strerror(5000000);
+	value = d_errdesc(5000000);
 	assert_string_equal(value, "Unknown error 5000000");
-	value = d_strerror(3);
+	value = d_errdesc(3);
 	assert_string_equal(value, "No such process");
-	value = d_strerror(-3);
+	value = d_errdesc(-3);
 	assert_string_equal(value, "No such process");
-	value = d_strerror(0);
+	value = d_errdesc(0);
 	assert_string_equal(value, "Success");
-	value = d_strerror(DER_SUCCESS);
+	value = d_errdesc(DER_SUCCESS);
 	assert_string_equal(value, "Success");
-	value = d_strerror(-DER_NOTDIR);
+	value = d_errdesc(-DER_NOTDIR);
 	assert_string_equal(value, "Not a directory");
 }
 
@@ -2005,7 +2005,7 @@ main(int argc, char **argv)
 	const struct CMUnitTest	tests[] = {
 		cmocka_unit_test(test_time),
 		cmocka_unit_test(test_d_errstr),
-		cmocka_unit_test(test_d_strerror),
+		cmocka_unit_test(test_d_errdesc),
 		cmocka_unit_test(test_gurt_list),
 		cmocka_unit_test(test_gurt_hlist),
 		cmocka_unit_test(test_gurt_circular_list),

@@ -144,7 +144,7 @@ d_errno_deregister_range(int start)
 }
 
 const char *
-d_strerror(int errnum)
+d_errdesc(int errnum)
 {
 	struct d_error_reg *entry;
 
