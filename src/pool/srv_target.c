@@ -533,6 +533,7 @@ retry:
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
+	memset(buf, 0, STACK_HDL_BUF_SIZE);
 	d_iov_set(&iov, buf, STACK_HDL_BUF_SIZE);
 	rc = ds_pool_iv_conn_hdl_fetch(pool, NULL, &iov);
 	if (rc) {
