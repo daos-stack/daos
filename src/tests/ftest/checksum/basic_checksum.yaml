@@ -18,6 +18,7 @@ pool:
         scm_size: 3000000000
     createsvc:
         svcn: 1
+    control_method: dmg
 container: !mux
    properties:
        enable_checksum: True
