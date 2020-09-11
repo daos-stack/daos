@@ -165,9 +165,21 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             expect)
         self.verify_cont_rw_property("read", expect)
 
+        #Verify container permission A acl-write after set container
+        #  to a different owner.
+        if cont_permission == "w":
+            permission_type = "acl"
+            expect = "deny"
+            self.log.info("(6.4)Verify container_acl write after changed "
+                          "ownership: expect: %s", expect)
+            self.verify_cont_rw_acl("write", expect,
+                                    secTestBase.acl_entry(
+                                        user_type, self.current_user,
+                                        cont_permission))
+
         #(7)Verify container permission d, delete
         self.log.info("(7)==>Verify cont-delete on container and pool"
-            "with/without d permission.")
+            " with/without d permission.")
         permission_type = "delete"
         cont_permission = "rwaAtTod"
         pool_permission = "rctd"

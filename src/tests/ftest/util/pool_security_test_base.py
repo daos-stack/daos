@@ -317,7 +317,7 @@ class PoolSecurityTestBase(TestWithServers):
         Args:
             user_type (str): Conatiner user_type.
             user_name (str): Conatiner user_name.
-            perm_name (str): Conatiner permission type:
+            perm_type (str): Conatiner permission type:
                              (attribute, property, acl, or ownership)
             perm_action (str): Conatiner permission read/write action.
 
