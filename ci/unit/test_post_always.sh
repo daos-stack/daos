@@ -24,6 +24,8 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 : "${STAGE_NAME:="Unit Test"}"
 : "${WITH_VALGRIND:=""}"
 
+echo "$WITH_VALGRIND"
+
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
   "STAGE_NAME='$STAGE_NAME'         \
