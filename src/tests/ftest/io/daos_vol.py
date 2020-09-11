@@ -36,8 +36,6 @@ class DaosVol(VolTestBase):
         # Cancel h5_test_testhdf5 with MPICH
         mpi_type = self.params.get("mpi_type")
         testname = self.params.get("testname")
-        if mpi_type == "mpich" and testname == "h5_test_testhdf5":
-            self.cancelForTicket("DAOS-5469")
         if testname == "h5_partest_t_bigio":
             self.cancelForTicket("DAOS-5496")
         super(DaosVol, self).setUp()
