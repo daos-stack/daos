@@ -26,7 +26,7 @@ from command_utils import CommandFailure
 
 
 class DfuseContainerCheck(DfuseTestBase):
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base Dfuse Container check test class.
 
     :avocado: recursive

@@ -27,6 +27,7 @@ from fio_utils import FioCommand
 
 
 class FioBase(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base fio class.
 
     :avocado: recursive

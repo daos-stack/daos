@@ -29,6 +29,7 @@ from job_manager_utils import Mpirun, Orterun
 
 
 class MdtestBase(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base mdtest class.
 
     :avocado: recursive
@@ -83,6 +84,7 @@ class MdtestBase(DfuseTestBase):
             JobManager: the object for the mpi job manager command
 
         """
+        # pylint: disable=redefined-variable-type
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if manager == "MPICH":
             mpio_util = MpioUtils()

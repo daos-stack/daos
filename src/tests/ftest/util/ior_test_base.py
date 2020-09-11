@@ -39,6 +39,7 @@ from test_utils_container import TestContainer
 
 
 class IorTestBase(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base IOR test class.
 
     :avocado: recursive

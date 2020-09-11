@@ -30,6 +30,7 @@ from ClusterShell.NodeSet import NodeSet
 
 
 class RootContainerTest(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base Dfuse Container check test class.
 
     :avocado: recursive
