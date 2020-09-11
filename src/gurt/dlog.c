@@ -745,6 +745,44 @@ static int d_log_str2pri(const char *pstr, size_t len)
 }
 
 /*
+ * d_getenv_size: interpret a string as a size which can
+ * contain a unit symbol.
+ */
+static uint64_t
+d_getenv_size(char *env)
+{
+	char *end;
+	uint64_t size;
+
+	size = strtoull(env, &end, 0);
+
+	switch (*end) {
+	default:
+		break;
+	case 'k':
+		size *= 1000;
+		break;
+	case 'm':
+		size *= 1000 * 1000;
+		break;
+	case 'g':
+		size *= 1000 * 1000 * 1000;
+		break;
+	case 'K':
+		size *= 1024;
+		break;
+	case 'M':
+		size *= 1024 * 1024;
+		break;
+	case 'G':
+		size *= 1024 * 1024 * 1024;
+		break;
+	}
+
+	return size;
+}
+
+/*
  * d_log_open: open a clog (uses malloc, inits global state).  you
  * can only have one clog open at a time, but you can use multiple
  * facilities.
@@ -771,7 +809,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 
 	env = getenv(D_LOG_SIZE_ENV);
 	if (env != NULL) {
-		log_size = strtoull(env, NULL, 0);
+		log_size = d_getenv_size(env);
 		if (log_size < LOG_SIZE_MIN)
 			log_size = LOG_SIZE_MIN;
 	}
