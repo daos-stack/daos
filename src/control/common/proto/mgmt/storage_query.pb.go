@@ -67,7 +67,7 @@ func (m *BioHealthReq) GetTgtId() string {
 	return ""
 }
 
-// BioHealthResp mirrors bio_dev_state structure.
+// BioHealthResp mirrors nvme_health_stats structure.
 type BioHealthResp struct {
 	Model     string `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
 	Serial    string `protobuf:"bytes,2,opt,name=serial,proto3" json:"serial,omitempty"`

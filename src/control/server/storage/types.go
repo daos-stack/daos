@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package storage
 
 import (
@@ -98,30 +99,30 @@ type (
 	}
 
 	// NvmeControllerHealth represents a set of health statistics for a NVMe device
-	// and mirrors C.struct_bio_dev_state.
+	// and mirrors C.struct_nvme_health_stats.
 	NvmeControllerHealth struct {
-		Model           string `json:"bds_model"`
-		Serial          string `json:"bds_serial"`
-		Timestamp       uint64 `json:"bds_timestamp"`
-		ErrorCount      uint64 `json:"bds_error_count"`
-		TempWarnTime    uint32 `json:"bds_warn_temp_time"`
-		TempCritTime    uint32 `json:"bds_crit_temp_time"`
-		CtrlBusyTime    uint64 `json:"bds_ctrl_busy_time"`
-		PowerCycles     uint64 `json:"bds_power_cycles"`
-		PowerOnHours    uint64 `json:"bds_power_on_hours"`
-		UnsafeShutdowns uint64 `json:"bds_unsafe_shutdowns"`
-		MediaErrors     uint64 `json:"bds_media_errors"`
-		ErrorLogEntries uint64 `json:"bds_error_log_entries"`
-		ReadErrors      uint32 `json:"bds_bio_read_errs"`
-		WriteErrors     uint32 `json:"bds_bio_write_errs"`
-		UnmapErrors     uint32 `json:"bds_bio_unmap_errs"`
-		ChecksumErrors  uint32 `json:"bds_checksum_errs"`
-		Temperature     uint32 `json:"bds_temperature"`
-		TempWarn        bool   `json:"bds_temp_warning"`
-		AvailSpareWarn  bool   `json:"bds_avail_spare_warning"`
-		ReliabilityWarn bool   `json:"bds_dev_reliability_warning"`
-		ReadOnlyWarn    bool   `json:"bds_read_only_warning"`
-		VolatileWarn    bool   `json:"bds_volatile_mem_warning"`
+		Model           string `json:"model"`
+		Serial          string `json:"serial"`
+		Timestamp       uint64 `json:"timestamp"`
+		ErrorCount      uint64 `json:"err_count"`
+		TempWarnTime    uint32 `json:"warn_temp_time"`
+		TempCritTime    uint32 `json:"crit_temp_time"`
+		CtrlBusyTime    uint64 `json:"ctrl_busy_time"`
+		PowerCycles     uint64 `json:"power_cycles"`
+		PowerOnHours    uint64 `json:"power_on_hours"`
+		UnsafeShutdowns uint64 `json:"unsafe_shutdowns"`
+		MediaErrors     uint64 `json:"media_errs"`
+		ErrorLogEntries uint64 `json:"err_log_entries"`
+		ReadErrors      uint32 `json:"bio_read_errs"`
+		WriteErrors     uint32 `json:"bio_write_errs"`
+		UnmapErrors     uint32 `json:"bio_unmap_errs"`
+		ChecksumErrors  uint32 `json:"checksum_errs"`
+		Temperature     uint32 `json:"temperature"`
+		TempWarn        bool   `json:"temp_warn"`
+		AvailSpareWarn  bool   `json:"avail_spare_warn"`
+		ReliabilityWarn bool   `json:"dev_reliability_warn"`
+		ReadOnlyWarn    bool   `json:"read_only_warn"`
+		VolatileWarn    bool   `json:"volatile_mem_warn"`
 	}
 
 	// NvmeNamespace represents an individual NVMe namespace on a device and

@@ -49,7 +49,7 @@ struct  _Mgmt__BioHealthReq
 
 
 /*
- * BioHealthResp mirrors bio_dev_state structure.
+ * BioHealthResp mirrors nvme_health_stats structure.
  */
 struct  _Mgmt__BioHealthResp
 {

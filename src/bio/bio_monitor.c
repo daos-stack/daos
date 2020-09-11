@@ -90,7 +90,7 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 
 /* Call internal method to get BIO device state from the device owner xstream */
 int
-bio_get_dev_state(struct nvme_health_stats *dev_state, struct bio_xs_context *xs)
+bio_get_dev_state(struct nvme_health_stats *state, struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
@@ -107,7 +107,7 @@ bio_get_dev_state(struct nvme_health_stats *dev_state, struct bio_xs_context *xs
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	*dev_state = dsm.devstate;
+	*state = dsm.devstate;
 
 	rc = ABT_eventual_free(&dsm.eventual);
 	if (rc != ABT_SUCCESS)

@@ -33,7 +33,7 @@ message BioHealthReq {
 	string tgt_id = 2;
 }
 
-// BioHealthResp mirrors bio_dev_state structure.
+// BioHealthResp mirrors nvme_health_stats structure.
 message BioHealthResp {
 	string model = 1;
 	string serial = 2;
