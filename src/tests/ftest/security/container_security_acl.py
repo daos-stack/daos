@@ -21,11 +21,10 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from cont_security_test_base import ContSecurityTestBase
-from security_test_base import generate_acl_file
-from pool_security_test_base import PoolSecurityTestBase
 import os
 import security_test_base as secTestBase
+from cont_security_test_base import ContSecurityTestBase
+from pool_security_test_base import PoolSecurityTestBase
 
 class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
@@ -63,13 +62,14 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         #(1)Setup
         self.log.info("(1)==>Setup container user acl test.")
-        base_acl_entries = ["",
+        base_acl_entries = [
+            "",
             secTestBase.acl_entry("user", self.current_user, ""),
             secTestBase.acl_entry("group", "GROUP", ""),
             secTestBase.acl_entry("group", self.current_group, ""),
             secTestBase.acl_entry("user", "EVERYONE", "")]
         user_type = self.params.get("user_type",
-                                   "/run/container_acl/*", "user")
+                                    "/run/container_acl/*", "user")
         cont_permission, expect_read, expect_write = self.params.get(
             "perm_expect", "/run/container_acl/permissions/*")
         test_user = self.params.get("new_user", "/run/container_acl/*")
@@ -85,7 +85,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
                 "acl_file_name", "/run/container_acl/*", "cont_test_acl.txt"))
 
         #(2)Create pool and container with acl
-        self.log.info("(2)==>Create a pool and a container with acl\n",
+        self.log.info("(2)==>Create a pool and a container with acl\n"
                       "   base_acl_entries= %s\n", base_acl_entries,
                       "   acl_file_name= %s\n", acl_file_name)
         self.pool_uuid, self.pool_svc = self.create_pool_with_dmg()
@@ -136,7 +136,6 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             "(5.1)Update container-acl %s, %s, permission_type: %s with %s",
             user_type, self.current_user, permission_type, cont_permission)
         expect = "pass"  #User who created the container has full acl access.
-        permission_acl = ""
         self.setup_container_acl_and_permission(
             user_type, self.current_user, permission_type, cont_permission)
         self.log.info("(5.2)Verify container_acl: write, expect: %s", expect)
@@ -159,7 +158,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         self.setup_container_acl_and_permission(
             user_type, self.current_user, permission_type, cont_permission)
         self.log.info("(6.2)Verify container_ownership: write, expect: %s",
-            expect)
+                      expect)
         self.verify_cont_set_owner(expect, test_user+"@", test_group+"@")
         self.log.info("(6.3)Verify container_ownership: read, expect: %s",
             expect)
@@ -179,7 +178,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         #(7)Verify container permission d, delete
         self.log.info("(7)==>Verify cont-delete on container and pool"
-            " with/without d permission.")
+                      " with/without d permission.")
         permission_type = "delete"
         cont_permission = "rwaAtTod"
         pool_permission = "rctd"

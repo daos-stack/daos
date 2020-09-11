@@ -273,7 +273,7 @@ class ContSecurityTestBase(TestWithServers):
 
 
     def set_container_property(
-        self, pool_uuid, pool_svc, container_uuid, prop, value):
+            self, pool_uuid, pool_svc, container_uuid, prop, value):
         """Write/Set container property.
 
         Args:
@@ -308,7 +308,7 @@ class ContSecurityTestBase(TestWithServers):
         return result
 
     def set_container_owner(
-        self, pool_uuid, pool_svc, container_uuid, user, group):
+            self, pool_uuid, pool_svc, container_uuid, user, group):
         """Set container owner.
 
         Args:
