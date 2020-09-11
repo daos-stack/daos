@@ -174,7 +174,7 @@ open_retry:
 		}
 
 		memset(&oid, 0, sizeof(oid));
-		oid.id_shard = shard;
+		oid.id_shard = obj_shard->do_shard;
 		oid.id_pub   = obj->cob_md.omd_id;
 		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
@@ -814,7 +814,7 @@ shard_open:
 		D_GOTO(out, rc);
 
 	shard_tgt->st_rank	= obj_shard->do_target_rank;
-	shard_tgt->st_shard	= shard,
+	shard_tgt->st_shard	= obj_shard->do_shard;
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 	obj_shard_close(obj_shard);
@@ -4190,6 +4190,13 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 			int leader;
 
 			leader = obj_grp_leader_get(obj, shard, map_ver);
+			if (leader < 0) {
+				D_ERROR(DF_OID" no leader: "DF_RC".\n",
+					DP_OID(obj->cob_md.omd_id),
+					DP_RC(leader));
+				D_GOTO(out_task, rc = leader);
+			}
+
 			p_shard = obj_get_shard(obj, leader);
 			if (p_shard->po_rebuilding ||
 			    p_shard->po_target == -1) {

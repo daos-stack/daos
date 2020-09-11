@@ -615,15 +615,16 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	 *      The one with the lowest f_seq will be elected as the leader
 	 *      to avoid leader switch.
 	 */
-	rdg_idx = shard_idx / replicas;
-	start = rdg_idx * replicas;
-	replica_idx = (oid.lo + rdg_idx) % replicas;
+	rdg_idx = shard_idx / grp_size;
+	start = rdg_idx * grp_size;
+	replica_idx = (oid.lo + rdg_idx) % grp_size;
 	preferred = start + replica_idx;
 
-	for (i = 0, off = preferred, pos = -1; i < replicas;
-	     i++, replica_idx = (replica_idx + 1) % replicas,
+	for (i = 0, off = preferred, pos = -1; i < grp_size;
+	     i++, replica_idx = (replica_idx + 1) % grp_size,
 	     off = start + replica_idx) {
 		shard = pl_get_shard(data, off);
+
 		/*
 		 * shard->po_shard != off is necessary because during
 		 * reintegration we may have an extended layout and we don't
