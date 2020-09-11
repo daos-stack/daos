@@ -29,7 +29,6 @@ import grp
 import re
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
 import agent_utils as agu
 import security_test_base as secTestBase
 
@@ -177,15 +176,15 @@ class PoolSecurityTestBase(TestWithServers):
         """
         if action.lower() == "write":
             result = self.set_container_attribute(self.pool_uuid,
-                                                         self.pool_svc,
-                                                         self.container_uuid,
-                                                         attribute,
-                                                         value)
+                                                  self.pool_svc,
+                                                  self.container_uuid,
+                                                  attribute,
+                                                  value)
         elif action.lower() == "read":
             result = self.get_container_attribute(self.pool_uuid,
-                                                         self.pool_svc,
-                                                         self.container_uuid,
-                                                         attribute)
+                                                  self.pool_svc,
+                                                  self.container_uuid,
+                                                  attribute)
         else:
             self.fail(
                 "##In verify_cont_rw_attribute, "
@@ -196,7 +195,7 @@ class PoolSecurityTestBase(TestWithServers):
         self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
 
     def verify_cont_rw_property(
-        self, action, expect, cont_property=None, value=None):
+            self, action, expect, cont_property=None, value=None):
         """verify container rw property.
 
         Args:
@@ -208,14 +207,14 @@ class PoolSecurityTestBase(TestWithServers):
         """
         if action.lower() == "write":
             result = self.set_container_property(self.pool_uuid,
-                                                        self.pool_svc,
-                                                        self.container_uuid,
-                                                        cont_property,
-                                                        value)
+                                                 self.pool_svc,
+                                                 self.container_uuid,
+                                                 cont_property,
+                                                 value)
         elif action.lower() == "read":
             result = self.get_container_property(self.pool_uuid,
-                                                        self.pool_svc,
-                                                        self.container_uuid)
+                                                 self.pool_svc,
+                                                 self.container_uuid)
         else:
             self.fail(
                 "##In verify_cont_rw_property, "
@@ -236,10 +235,10 @@ class PoolSecurityTestBase(TestWithServers):
         """
         action = "set"
         result = self.set_container_owner(self.pool_uuid,
-                                                 self.pool_svc,
-                                                 self.container_uuid,
-                                                 user,
-                                                 group)
+                                          self.pool_svc,
+                                          self.container_uuid,
+                                          user,
+                                          group)
         self.log.info(
             "  In verify_cont_set_owner %s.\n =daos_cmd.run() result:\n%s",
             action, result)
@@ -258,8 +257,8 @@ class PoolSecurityTestBase(TestWithServers):
             result = self.update_container_acl(entry)
         elif action.lower() == "read":
             result = self.get_container_acl_list(self.pool_uuid,
-                                                        self.pool_svc,
-                                                        self.container_uuid)
+                                                 self.pool_svc,
+                                                 self.container_uuid)
         else:
             self.fail(
                 "##In verify_cont_rw_acl, invalid action: {}".format(action))
@@ -290,8 +289,8 @@ class PoolSecurityTestBase(TestWithServers):
                     " =Test Passed on verify_cont_test_result Succeed.\n")
         elif DENY_ACCESS not in result:
             self.fail(
-                 "##Test Fail on verify_cont_test_result, expected Failure of "
-                 "-1001, but Passed.")
+                "##Test Fail on verify_cont_test_result, expected Failure of "
+                "-1001, but Passed.")
         else:
             self.log.info(
                 " =Test Passed on verify_cont_test_result expected error of "
@@ -317,11 +316,11 @@ class PoolSecurityTestBase(TestWithServers):
         """Setup container acl and permissions.
 
         Args:
-            user_type (str): Conatiner user_type.
-            user_name (str): Conatiner user_name.
-            perm_type (str): Conatiner permission type:
+            user_type (str): Container user_type.
+            user_name (str): Container user_name.
+            perm_type (str): Container permission type:
                              (attribute, property, acl, or ownership)
-            perm_action (str): Conatiner permission read/write action.
+            perm_action (str): Container permission read/write action.
 
         """
         permission = "none"

@@ -86,8 +86,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         #(2)Create pool and container with acl
         self.log.info("(2)==>Create a pool and a container with acl\n"
-                      "   base_acl_entries= %s\n", base_acl_entries,
-                      "   acl_file_name= %s\n", acl_file_name)
+                      "   base_acl_entries= %s\n", base_acl_entries)
         self.pool_uuid, self.pool_svc = self.create_pool_with_dmg()
         secTestBase.create_acl_file(acl_file_name, base_acl_entries)
         self.container_uuid = self.create_container_with_daos(
@@ -161,7 +160,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
                       expect)
         self.verify_cont_set_owner(expect, test_user+"@", test_group+"@")
         self.log.info("(6.3)Verify container_ownership: read, expect: %s",
-            expect)
+                      expect)
         self.verify_cont_rw_property("read", expect)
 
         #Verify container permission A acl-write after set container
@@ -180,23 +179,23 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         self.log.info("(7)==>Verify cont-delete on container and pool"
                       " with/without d permission.")
         permission_type = "delete"
-        cont_permission = "rwaAtTod"
-        pool_permission = "rctd"
+        c_permission = "rwaAtTod"
+        p_permission = "rctd"
         expect = "pass"
         if "r" not in cont_permission:  #remove d from cont_permission
-            cont_permission = "rwaAtTo"
+            c_permission = "rwaAtTo"
         if "w" not in cont_permission:  #remove d from pool_permission
-            pool_permission = "rct"
+            p_permission = "rct"
         if cont_permission == "":
             expect = "deny"
         self.update_container_acl(secTestBase.acl_entry(user_type,
                                                         self.current_user,
-                                                        cont_permission))
+                                                        c_permission))
         self.update_pool_acl_entry(self.pool_uuid,
                                    "update",
                                    secTestBase.acl_entry(user_type,
                                                          "OWNER",
-                                                         pool_permission))
+                                                         p_permission))
         self.verify_cont_delete(expect)
 
         #(8)Cleanup
