@@ -121,7 +121,9 @@ struct vos_ts_set {
 	/** Operation flags */
 	uint64_t		 ts_flags;
 	/** type of next entry */
-	uint64_t		 ts_etype;
+	uint32_t		 ts_etype;
+	/** true if inside a transaction */
+	bool			 ts_in_tx;
 	/** The Check/update flags for the set */
 	uint32_t		 ts_cflags;
 	/** Write level for the set */
@@ -191,6 +193,20 @@ ts_set_get_parent(struct vos_ts_set *ts_set)
 
 }
 
+/** Returns true of we are inside a transaction and the
+ *  timestamp set is valid.
+ *
+ * \param[in]	ts_set	The timestamp set
+ */
+static inline bool
+vos_ts_in_tx(const struct vos_ts_set *ts_set)
+{
+	if (ts_set == NULL || !ts_set->ts_in_tx)
+		return false;
+
+	return true;
+}
+
 /** Reset the index in the set so an entry can be replaced
  *
  * \param[in]	ts_set		The timestamp set
@@ -202,7 +218,7 @@ vos_ts_set_reset(struct vos_ts_set *ts_set, uint32_t type, uint32_t akey_nr)
 {
 	uint32_t	idx;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return;
 
 	D_ASSERT((type == VOS_TS_TYPE_AKEY) || (akey_nr == 0));
@@ -252,7 +268,7 @@ vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
 
 	*entryp = NULL;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return true;
 
 	if (reset)
@@ -290,7 +306,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 	uint32_t		 hash_idx;
 	uint32_t		 new_type = 0;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return NULL;
 
 	ts_table = vos_ts_table_get();
@@ -335,7 +351,7 @@ vos_ts_set_get_entry(struct vos_ts_set *ts_set)
 {
 	struct vos_ts_set_entry	*entry;
 
-	if (ts_set == NULL || ts_set->ts_init_count == 0)
+	if (!vos_ts_in_tx(ts_set) || ts_set->ts_init_count == 0)
 		return NULL;
 
 	entry = &ts_set->ts_entries[ts_set->ts_init_count - 1];
@@ -362,7 +378,7 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 	struct vos_ts_set_entry	 set_entry = {0};
 	uint32_t		 idx;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return NULL;
 
 	if (reset)
@@ -413,7 +429,7 @@ out:
 static inline void
 vos_ts_set_type(struct vos_ts_set *ts_set, uint32_t type)
 {
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return;
 
 	ts_set->ts_etype = type;
@@ -428,7 +444,7 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 	uint64_t		 hash = 0;
 	uint32_t		 expected_type;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return 0;
 
 	if (idx == NULL)
@@ -491,7 +507,7 @@ vos_ts_set_get_entry_type(struct vos_ts_set *ts_set, uint32_t type,
 
 	D_ASSERT(akey_idx == 0 || type == VOS_TS_TYPE_AKEY);
 
-	if (ts_set == NULL || idx >= ts_set->ts_init_count)
+	if (!vos_ts_in_tx(ts_set) || idx >= ts_set->ts_init_count)
 		return NULL;
 
 	entry = &ts_set->ts_entries[idx];
@@ -510,7 +526,7 @@ vos_ts_set_mark_entry(struct vos_ts_set *ts_set, uint32_t *idx)
 {
 	struct vos_ts_set_entry	*entry;
 
-	if (ts_set == NULL || ts_set->ts_init_count == 0)
+	if (!vos_ts_in_tx(ts_set) || *idx >= ts_set->ts_init_count)
 		return;
 
 	entry = &ts_set->ts_entries[ts_set->ts_init_count - 1];
@@ -592,8 +608,7 @@ vos_ts_copy(daos_epoch_t *dest_epc, struct dtx_id *dest_id,
 	    daos_epoch_t src_epc, const struct dtx_id *src_id)
 {
 	*dest_epc = src_epc;
-	uuid_copy(dest_id->dti_uuid, src_id->dti_uuid);
-	dest_id->dti_hlc = src_id->dti_hlc;
+	daos_dti_copy(dest_id, src_id);
 }
 
 /** Internal API to update low read timestamp and tx id */
@@ -638,7 +653,7 @@ vos_ts_set_check_conflict(struct vos_ts_set *ts_set, daos_epoch_t write_time)
 {
 	int			 i;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return false;
 
 	if ((ts_set->ts_cflags & VOS_TS_WRITE_MASK) == 0)
@@ -668,7 +683,7 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 	uint32_t		 low_mask = 0;
 	int			 i;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return;
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_READ_TS))

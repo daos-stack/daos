@@ -62,7 +62,7 @@ struct dc_array {
 struct md_params {
 	daos_key_t		dkey;
 	uint64_t		dkey_val;
-	char			akey_str;
+	char			akey_val;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iov;
@@ -82,7 +82,7 @@ struct io_params {
 	tse_task_t		*task;
 	struct io_params	*next;
 	bool			user_sgl_used;
-	char			akey_str;
+	char			akey_val;
 };
 
 static void
@@ -491,8 +491,8 @@ set_md_params(struct md_params *params)
 	params->sgl.sg_iovs	= &params->sg_iov;
 
 	/** set IOD */
-	params->akey_str = '0';
-	d_iov_set(&params->iod.iod_name, &params->akey_str, 1);
+	params->akey_val = '0';
+	d_iov_set(&params->iod.iod_name, &params->akey_val, 1);
 	params->iod.iod_nr	= 1;
 	params->iod.iod_size	= sizeof(params->md_vals);
 	params->iod.iod_recxs	= NULL;
@@ -1641,7 +1641,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		sgl	= &params->sgl;
 		dkey	= &params->dkey;
 
-		params->akey_str	= '0';
+		params->akey_val	= '0';
 		params->user_sgl_used	= false;
 		params->cell_size	= array->cell_size;
 		params->chunk_size	= array->chunk_size;
@@ -1650,7 +1650,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		/** Set integer dkey descriptor */
 		d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 		/** Set character akey descriptor - TODO: should be NULL*/
-		d_iov_set(&iod->iod_name, &params->akey_str, 1);
+		d_iov_set(&iod->iod_name, &params->akey_val, 1);
 		/** Initialize the rest of the IOD fields */
 		iod->iod_nr	= 0;
 		iod->iod_recxs	= NULL;
@@ -1946,7 +1946,7 @@ struct key_query_props {
 	daos_key_t		dkey;
 	uint64_t		dkey_val;
 	daos_key_t		akey;
-	char			akey_str;
+	char			akey_val;
 	daos_recx_t		recx;
 	daos_size_t		*size;
 	tse_task_t		*ptask;
@@ -2011,8 +2011,8 @@ dc_array_get_size(tse_task_t *task)
 
 	*args->size = 0;
 
-	kqp->akey_str	= '0';
-	d_iov_set(&kqp->akey, &kqp->akey_str, 1);
+	kqp->akey_val	= '0';
+	d_iov_set(&kqp->akey, &kqp->akey_val, 1);
 	kqp->dkey_val	= 0;
 	d_iov_set(&kqp->dkey, &kqp->dkey_val, sizeof(uint64_t));
 	kqp->ptask	= task;
@@ -2180,14 +2180,14 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	iod = &params->iod;
 	sgl = NULL;
-	params->akey_str = '0';
+	params->akey_val = '0';
 	params->user_sgl_used = false;
 	params->dkey_val = dkey_val;
 	dkey = &params->dkey;
 	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/* set descriptor for KV object */
-	d_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_val, 1);
 	iod->iod_nr = 1;
 	iod->iod_size = 0; /* 0 to punch */
 	iod->iod_type = DAOS_IOD_ARRAY;
@@ -2336,7 +2336,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	iod = &params->iod;
 	sgl = NULL;
-	params->akey_str = '0';
+	params->akey_val = '0';
 	params->user_sgl_used = false;
 	params->cell_size = cell_size;
 	params->dkey_val = dkey_val;
@@ -2345,7 +2345,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/* set descriptor for KV object */
-	d_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_val, 1);
 	iod->iod_nr = 1;
 	iod->iod_size = DAOS_REC_ANY;
 	iod->iod_type = DAOS_IOD_ARRAY;
@@ -2412,7 +2412,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	sgl = &params->sgl;
 	dkey = &params->dkey;
 
-	params->akey_str = '0';
+	params->akey_val = '0';
 	params->next = NULL;
 	params->user_sgl_used = false;
 	params->dkey_val = props->dkey_val;
@@ -2425,7 +2425,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	d_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
 
 	/* set descriptor for KV object */
-	d_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_val, 1);
 	iod->iod_nr = 1;
 	iod->iod_size = props->cell_size;
 	iod->iod_type = DAOS_IOD_ARRAY;
