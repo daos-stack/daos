@@ -206,7 +206,7 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def storage_format(self, reformat=False):
+    def storage_format(self, reformat=False, timeout=20):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -223,7 +223,11 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage format command fails.
 
         """
-        return self._get_result(("storage", "format"), reformat=reformat)
+	saved_timeout = self.timeout
+	self.timeout = timeout
+	result = self._get_result(("storage", "format"), reformat=reformat)
+	self.timeout = saved_timeout
+	return result
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
