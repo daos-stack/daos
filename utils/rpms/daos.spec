@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       32%{?relval}%{?dist}
+Release:       33%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -315,6 +315,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
 %{_libdir}/libvos_size.so
+%{_libdir}/libdts.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
 %dir  %{_libdir}/python2.7/site-packages/storage_estimator
 %{_libdir}/python2.7/site-packages/pydaos/*.py
@@ -369,7 +370,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
-%{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
@@ -384,6 +384,11 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Thu Sep 17 2020 Jonathan Martinez Montes <jonathan.martinez.montes@intel.com> 1.1.0-33
+- Remove obj_ctl from Tests RPM package
+- Add libdts.so shared library that is used by daos_perf, daos_racer and
+  the daos utility.
+
 * Mon Aug 17 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-32
 - Install completion script in /etc/bash_completion.d
 
