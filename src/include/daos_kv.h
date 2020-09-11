@@ -40,10 +40,10 @@ extern "C" {
 #define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT
 /* Conditional Op: Update key if it exists, fail otherwise */
 #define DAOS_COND_KEY_UPDATE	DAOS_COND_DKEY_UPDATE
-/* Conditional Op: Fetch key if it exists, fail otherwise */
-#define DAOS_COND_KEY_FETCH	DAOS_COND_DKEY_FETCH
-/* Conditional Op: Punch key if it exists, fail otherwise */
-#define DAOS_COND_KEY_PUNCH	DAOS_COND_DKEY_PUNCH
+/* Conditional Op: Get key if it exists, fail otherwise */
+#define DAOS_COND_KEY_GET	DAOS_COND_DKEY_FETCH
+/* Conditional Op: Remove key if it exists, fail otherwise */
+#define DAOS_COND_KEY_REMOVE	DAOS_COND_PUNCH
 
 /**
  * Insert or update a single object KV pair. The key specified will be mapped to
@@ -53,7 +53,7 @@ extern "C" {
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Update flags (currently ignored).
+ * \param[in]	flags	Update flags.
  * \param[in]	key	Key associated with the update operation.
  * \param[in]	size	Size of the buffer to be inserted as an atomic val.
  * \param[in]	buf	Pointer to user buffer of the atomic value.
@@ -78,7 +78,7 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Fetch flags (currently ignored).
+ * \param[in]	flags	Fetch flags.
  * \param[in]	key	key associated with the update operation.
  * \param[in,out]
  *		size	[in]: Size of the user buf. if the size is unknown, set
@@ -106,7 +106,7 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Remove flags (currently ignored).
+ * \param[in]	flags	Remove flags.
  * \param[in]	key	Key to be punched/removed.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
