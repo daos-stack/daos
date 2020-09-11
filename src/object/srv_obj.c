@@ -1696,9 +1696,7 @@ do_obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		if (opc == DAOS_OBJ_RPC_CPD)
 			D_GOTO(out, rc = -DER_TX_RESTART);
 
-		if (obj_is_modification_opc(opc))
-			D_GOTO(out, rc = -DER_STALE);
-		/* It is harmless if fetch with old pool map version. */
+		D_GOTO(out, rc = -DER_STALE);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
 		D_GOTO(out, rc = -DER_STALE);
 	}
