@@ -341,7 +341,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			}
 			break;
 		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
-			/** Accepting anything right now */
+			/** Chunk size is encoded on 32 bits */
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= (1ULL << 32)) {
 				D_ERROR("invalid chunk size "

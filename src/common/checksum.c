@@ -36,9 +36,6 @@
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 #define C_TRACE_ENABLED() D_LOG_ENABLED(DB_TRACE)
 
-/** ISA-L hash function table implemented in multihash_isal.c */
-extern struct hash_ft *isal_hash_algo_table[];
-
 /** File function signatures */
 static int
 checksum_sgl_cb(uint8_t *buf, size_t len, void *args);

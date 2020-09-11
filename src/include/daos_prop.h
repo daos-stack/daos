@@ -163,13 +163,13 @@ enum daos_cont_props {
 	 */
 	DAOS_PROP_CO_ACL,
 	/**
-	 * Determinte whether inline compression is enabled
+	 * Determine whether inline compression is enabled
 	 * Value: DAOS_PROP_CO_COMPRESS_OFF/LZ4/GZIP[1-9]
 	 * Default: DAOS_PROP_CO_COMPRESS_OFF
 	 */
 	DAOS_PROP_CO_COMPRESS,
 	/**
-	 * Determinte whether encryption is enabled
+	 * Determine whether encryption is enabled
 	 * Value:
 	 * DAOS_PROP_CO_ENCRYPT_OFF,
 	 * DAOS_PROP_CO_ENCRYPT_AES_XTS{128,256},
