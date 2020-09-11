@@ -94,5 +94,5 @@ int main(int argc, char **argv)
 	d_register_alt_assert(mock_assert);
 
 	return cmocka_run_group_tests_name("utest_swim", tests, init_tests,
-										fini_tests);
+		fini_tests);
 }
