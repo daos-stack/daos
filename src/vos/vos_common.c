@@ -157,6 +157,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 		if (rc && publish)
 			return rc;
 	}
+	dth->dth_rsrvd_cnt = 0;
 
 	for (i = 0; i < dth->dth_deferred_cnt; i++) {
 		scm = dth->dth_deferred[i];
@@ -166,6 +167,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 		if (rc && publish)
 			return rc;
 	}
+	dth->dth_deferred_cnt = 0;
 
 	/** Handle the deferred NVMe cancellations */
 	if (!publish)
