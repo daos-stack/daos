@@ -413,6 +413,7 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 
 	dth->dth_op_seq++;
 	dth->dth_dkey_hash = dkey_hash;
+	dth->dth_rsrvd_cnt = 0;
 
 	rc = daos_unit_oid_compare(dth->dth_leader_oid, *oid);
 	if (rc == 0) {
@@ -1042,10 +1043,13 @@ dtx_leader_exec_ops_ult(void *arg)
 	D_ASSERT(future != ABT_FUTURE_NULL);
 	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
 		struct dtx_sub_status *sub = &dlh->dlh_subs[i];
+		uint32_t my_rank;
 
 		sub->dss_result = 0;
 
-		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE) {
+		crt_group_rank(NULL, &my_rank);
+		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
+		    sub->dss_tgt.st_rank == my_rank) {
 			int ret;
 
 			ret = ABT_future_set(future, dlh);
@@ -1073,6 +1077,21 @@ dtx_leader_exec_ops_ult(void *arg)
 	}
 }
 
+static bool
+dth_local_op(struct dtx_leader_handle *dlh, int idx)
+{
+	d_rank_t my_rank;
+
+	if (idx == -1)
+		return true;
+
+	crt_group_rank(NULL, &my_rank);
+	if (dlh->dlh_subs[idx].dss_tgt.st_rank == my_rank)
+		return true;
+
+	return false;
+}
+
 /**
  * Execute the operations on all targets.
  */
@@ -1082,6 +1101,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 {
 	struct dtx_ult_arg	*ult_arg;
 	int			rc;
+	int			i;
 
 	if (dlh->dlh_sub_cnt == 0)
 		goto exec;
@@ -1119,6 +1139,10 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 
 exec:
 	/* Then execute the local operation */
+	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
+		if (dth_local_op(dlh, i))
+			rc = func(dlh, func_arg, i, NULL);
+	}
 	rc = func(dlh, func_arg, -1, NULL);
 out:
 	return rc;

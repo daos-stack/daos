@@ -533,6 +533,7 @@ retry:
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
+	memset(buf, 0, STACK_HDL_BUF_SIZE);
 	d_iov_set(&iov, buf, STACK_HDL_BUF_SIZE);
 	rc = ds_pool_iv_conn_hdl_fetch(pool, NULL, &iov);
 	if (rc) {
@@ -1118,6 +1119,7 @@ update_child_map(void *data)
 	ds_rebuild_pool_map_update(pool);
 	child->spc_map_version = pool->sp_map_version;
 	ds_pool_child_put(child);
+	D_DEBUG(DB_TRACE, "child %p version %d\n", child, child->spc_map_version);
 	return 0;
 }
 

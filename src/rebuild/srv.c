@@ -823,10 +823,17 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	rsi->rsi_tgts_num = tgts_failed->pti_number;
 	rsi->rsi_rebuild_op = rebuild_op;
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
+
+retry:
 	rc = dss_rpc_send(rpc);
 	rso = crt_reply_get(rpc);
 	if (rc == 0)
 		rc = rso->rso_status;
+	if (rc == -DER_BUSY) {
+		D_DEBUG(DB_REBUILD, "retry broadcast scan "DF_UUID"\n",
+			DP_UUID(pool->sp_uuid));
+		goto retry;
+	}
 
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;

@@ -174,7 +174,7 @@ open_retry:
 		}
 
 		memset(&oid, 0, sizeof(oid));
-		oid.id_shard = shard;
+		oid.id_shard = obj_shard->do_shard;
 		oid.id_pub   = obj->cob_md.omd_id;
 		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
@@ -814,7 +814,7 @@ shard_open:
 		D_GOTO(out, rc);
 
 	shard_tgt->st_rank	= obj_shard->do_target_rank;
-	shard_tgt->st_shard	= shard,
+	shard_tgt->st_shard	= obj_shard->do_shard,
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 	obj_shard_close(obj_shard);
@@ -4190,6 +4190,13 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 			int leader;
 
 			leader = obj_grp_leader_get(obj, shard, map_ver);
+			if (leader < 0) {
+				D_ERROR(DF_OID" no leader avaible: "DF_RC".\n",
+					DP_OID(obj->cob_md.omd_id),
+					DP_RC(leader));
+				D_GOTO(out_task, rc = leader);
+			}
+
 			p_shard = obj_get_shard(obj, leader);
 			if (p_shard->po_rebuilding ||
 			    p_shard->po_target == -1) {
@@ -4486,6 +4493,8 @@ shard_query_key_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->kqa_dkey_hash,
 				 sizeof(args->kqa_dkey_hash));
 	api_args = args->kqa_api_args;
+	args->kqa_auxi.obj_auxi->map_ver_reply =
+			args->kqa_auxi.obj_auxi->map_ver_req;
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, args->kqa_coh_uuid,
@@ -4602,8 +4611,8 @@ dc_obj_query_key(tse_task_t *api_task)
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = api_task;
 
-	D_DEBUG(DB_IO, "Object Key Query "DF_OID" start %u\n",
-		DP_OID(obj->cob_md.omd_id), shard_first);
+	D_DEBUG(DB_IO, "Object Key Query "DF_OID" start %u map_ver %d\n",
+		DP_OID(obj->cob_md.omd_id), shard_first, map_ver);
 
 	head = &obj_auxi->shard_task_head;
 

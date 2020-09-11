@@ -1425,7 +1425,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_map_buf, rc);
 	}
 
 	if (map != NULL)
@@ -1458,11 +1458,11 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_map_buf, rc);
 	}
 
 	if (!updated)
-		return -DER_ALREADY;
+		D_GOTO(out_map_buf, rc = -DER_ALREADY);
 
 	if (map != NULL)
 		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
@@ -1485,7 +1485,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
 			if (rc != 0)
-				return rc;
+				D_GOTO(out_map_buf, rc);
 		}
 	}
 	if (uuids_out)
@@ -2160,9 +2160,9 @@ pool_domain_print(struct pool_domain *domain, int dep)
 {
 	int		i;
 
-	pool_indent_print(dep);
-	D_PRINT("%s[%d] %d\n", pool_domain_name(domain),
-		domain->do_comp.co_id, domain->do_comp.co_ver);
+	D_PRINT("%*s%s[%d] %d %s\n", dep * 8, "", pool_domain_name(domain),
+		domain->do_comp.co_id, domain->do_comp.co_ver,
+		pool_comp_state2str(domain->do_comp.co_status));
 
 	D_ASSERT(domain->do_targets != NULL);
 
@@ -2178,9 +2178,10 @@ pool_domain_print(struct pool_domain *domain, int dep)
 		D_ASSERTF(comp->co_type == PO_COMP_TP_TARGET,
 			  "%s\n", pool_comp_type2str(comp->co_type));
 
-		pool_indent_print(dep + 1);
-		D_PRINT("%s[%d] %d\n", pool_comp_type2str(comp->co_type),
-				       comp->co_id, comp->co_ver);
+		D_PRINT("%*s%s[%d] %d %s\n", (dep + 1) * 8, "",
+			pool_comp_type2str(comp->co_type),
+			comp->co_id, comp->co_ver,
+			pool_comp_state2str(comp->co_status));
 	}
 }
 

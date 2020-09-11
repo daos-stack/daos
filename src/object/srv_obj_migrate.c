@@ -588,6 +588,9 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		mrone_recx_daos2_vos(mrone, oca);
 
 	for (i = 0, start = 0; i < mrone->mo_iod_num; i++) {
+		if (mrone->mo_iods[i].iod_type == DAOS_IOD_SINGLE)
+			mrone->mo_iods[i].iod_recxs = NULL;
+
 		if (mrone->mo_iods[i].iod_size > 0) {
 			iod_cnt++;
 			continue;
