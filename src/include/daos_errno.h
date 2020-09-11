@@ -113,7 +113,7 @@ extern "C" {
 	       PMIx layer error)					\
 	/** IV callback - cannot handle locally */			\
 	ACTION(DER_IVCB_FORWARD,	(DER_ERR_GURT_BASE + 24),	\
-	       Incast variable)						\
+	       Incast variable unavailable locally. Must forward)	\
 	/** miscellaneous error */					\
 	ACTION(DER_MISC,		(DER_ERR_GURT_BASE + 25),	\
 	       Miscellaneous error)					\
