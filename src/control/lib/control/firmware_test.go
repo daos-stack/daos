@@ -280,7 +280,6 @@ func getTestNVMeQueryResults(t *testing.T) ([]*ctlpb.NvmeFirmwareQueryResp, []*N
 			Device: *storage.MockNvmeController(1),
 		},
 		{
-
 			Device: *storage.MockNvmeController(2),
 		},
 	}
@@ -291,9 +290,6 @@ func getTestNVMeQueryResults(t *testing.T) ([]*ctlpb.NvmeFirmwareQueryResp, []*N
 		if err := pb.FromNative(&expRes.Device); err != nil {
 			t.Fatalf("Failed to create PB NvmeController from native: %s", err)
 		}
-		// model and serial will not be provided in ctlpb health stats
-		pb.Model = ""
-		pb.Serial = ""
 
 		pbRes := &ctlpb.NvmeFirmwareQueryResp{
 			Device: pb.AsProto(),

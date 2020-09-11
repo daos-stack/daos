@@ -55,9 +55,6 @@ func MockNvmeControllerHealth(varIdx ...int32) *NvmeControllerHealth {
 		tWarn = true
 	}
 	return &NvmeControllerHealth{
-		Model:           concat("model", idx),
-		Serial:          concat("serial", idx),
-		Timestamp:       uint64(idx),
 		ErrorCount:      uint64(idx),
 		TempWarnTime:    uint32(idx),
 		TempCritTime:    uint32(idx),

@@ -90,7 +90,6 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
-    Timestamp:%s
     Temperature:%dK(%.02fC)
     Temperature Warning Duration:%dm0s
     Temperature Critical Duration:%dm0s
@@ -114,7 +113,6 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
-    Timestamp:%s
     Temperature:%dK(%.02fC)
     Temperature Warning Duration:%dm0s
     Temperature Critical Duration:%dm0s
@@ -138,7 +136,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 
 `,
 				controllerA.PciAddr, controllerA.Model, controllerA.FwRev, controllerA.SocketID,
-				humanize.Bytes(controllerA.Capacity()), time.Unix(int64(controllerA.HealthStats.Timestamp), 0),
+				humanize.Bytes(controllerA.Capacity()),
 				controllerA.HealthStats.TempK(), controllerA.HealthStats.TempC(),
 				controllerA.HealthStats.TempWarnTime, controllerA.HealthStats.TempCritTime,
 				controllerA.HealthStats.CtrlBusyTime, controllerA.HealthStats.PowerCycles,
@@ -149,7 +147,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerA.HealthStats.ChecksumErrors, controllerA.HealthStats.ErrorLogEntries,
 
 				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
-				humanize.Bytes(controllerB.Capacity()), time.Unix(int64(controllerB.HealthStats.Timestamp), 0),
+				humanize.Bytes(controllerB.Capacity()),
 				controllerB.HealthStats.TempK(), controllerB.HealthStats.TempC(),
 				controllerB.HealthStats.TempWarnTime, controllerB.HealthStats.TempCritTime,
 				controllerB.HealthStats.CtrlBusyTime, controllerB.HealthStats.PowerCycles,
@@ -368,7 +366,6 @@ host1
   Devices
     UUID:00000000-0000-0000-0000-000000000000 Targets:[0 1 2] Rank:0 State:NORMAL
       Health Stats:
-        Timestamp:%s
         Temperature:%dK(%.02fC)
         Temperature Warning Duration:%dm0s
         Temperature Critical Duration:%dm0s
@@ -391,7 +388,6 @@ host1
         Volatile Memory Backup: WARNING
 
 `,
-				time.Unix(int64(mockController.HealthStats.Timestamp), 0),
 				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
 				mockController.HealthStats.TempWarnTime, mockController.HealthStats.TempCritTime,
 				mockController.HealthStats.CtrlBusyTime, mockController.HealthStats.PowerCycles,

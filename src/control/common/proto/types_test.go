@@ -40,9 +40,6 @@ func TestProto_ConvertNvmeControllerHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	expNative := storage.MockNvmeControllerHealth(1)
-	// model and serial will not be provided in ctlpb health stats
-	expNative.Model = ""
-	expNative.Serial = ""
 
 	if diff := cmp.Diff(expNative, native); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
