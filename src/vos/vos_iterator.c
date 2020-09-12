@@ -224,7 +224,8 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	default:
 		rlevel = 0;
 		/** There should not be any cases where a DTX is active outside
-		 * of the four listed above */
+		 *  of the four listed above
+		 */
 		D_ASSERT(!dtx_is_valid_handle(dth));
 		break;
 	}
