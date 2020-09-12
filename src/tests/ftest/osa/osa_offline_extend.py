@@ -48,7 +48,8 @@ class OSAOfflineExtend(TestWithServers):
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')[0]
         # Start an additional server.
-        self.extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
+        self.extra_servers = self.params.get("test_servers",
+                                             "/run/extra_servers/*")
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -127,7 +128,6 @@ class OSAOfflineExtend(TestWithServers):
         n = random.randint(1, 7)
         target_list.append(n)
         target_list.append(n+1)
-        t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Extend a rank (or server)
         # rank index starts from zero

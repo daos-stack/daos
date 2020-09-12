@@ -575,7 +575,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "extend"), pool=pool, rank=ranks,
+            ("pool", "extend"), pool=pool, ranks=ranks,
             scm_size=scm_size, nvme_size=nvme_size)
 
     def pool_drain(self, pool, rank, tgt_idx=None):
