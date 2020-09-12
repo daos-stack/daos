@@ -30,8 +30,7 @@ from command_utils import CommandFailure
 
 
 class BashCmd(DfuseTestBase):
-    # pylint: disable=too-few-public-methods
-    # pylint: disable=disable=too-many-ancestors
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base BashCmd test class.
 
     :avocado: recursive

@@ -29,7 +29,7 @@ from command_utils_base import EnvironmentVariables, CommandFailure
 
 
 class VolTestBase(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,disable=too-many-ancestors
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Runs HDF5 vol test suites.
 
     :avocado: recursive
