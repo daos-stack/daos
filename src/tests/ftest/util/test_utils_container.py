@@ -374,12 +374,8 @@ class TestContainer(TestDaosApiBase):
         """Create Snapshot using daos utility
 
         Args:
-            pool (str): pool uuid
-            cont (str):Cont uuid
-            snap_name (str, optional): Snapshot name
-            epoch (str, optional): Epoch ID
-            svc (str, optional): Pool svc
-            sys_name (str, optional): system name
+            snap_name (str, optional): Snapshot name. Defaults to None.
+            epoch (str, optional): Epoch ID. Defaults to None.
         """
         self.log.info("Creating Snapshot for Container: %s", self.uuid)
         if self.control_method.value == self.USE_DAOS and self.daos:
@@ -390,10 +386,10 @@ class TestContainer(TestDaosApiBase):
                 "snap_name" : snap_name,
                 "epoch" : epoch,
                 "svc" : ",".join(str(rank) for rank in self.pool.svc_ranks),
-                "sys_name": self.pool.name.value,
+                "sys_name": self.pool.name.value
             }
             self._log_method("daos.container_create_snap", kwargs)
-            output = self.daos.get_output("container_create_snap", **kwargs)[0]
+            data = self.daos.container_create_snap(**kwargs)
 
         elif self.control_method.value == self.USE_DAOS:
             self.log.error("Error: Undefined daos command")
@@ -403,19 +399,17 @@ class TestContainer(TestDaosApiBase):
                 "Error: Undefined control_method: %s",
                 self.control_method.value)
 
-        self.epoch = output.split()[1]
+        self.epoch = data["epoch"]
 
     @fail_on(DaosApiError)
-    def destroy_snap(self, snap_name=None, epoch=None):
+    def destroy_snap(self, snap_name=None, epc=None, epcrange=None):
         """Destroy Snapshot using daos utility
 
         Args:
-            pool (str): pool uuid
-            cont (str):Cont uuid
             snap_name (str, optional): Snapshot name
-            epoch (str, optional): Epoch ID
-            svc (str, optional): Pool svc
-            sys_name (str, optional): system name
+            epc (str, optional): Epoch ID that indicates the snapshot to be
+                destroyed. Defaults to None.
+            epcrange (str, optional): Epoch range in the format "<start>-<end>".
         """
         status = False
 
@@ -427,7 +421,8 @@ class TestContainer(TestDaosApiBase):
                 "pool" : self.pool.uuid,
                 "cont" : self.uuid,
                 "snap_name" : snap_name,
-                "epoch" : epoch,
+                "epc" : epc,
+                "epcrange": epcrange,
                 "svc" : ",".join(str(rank) for rank in self.pool.svc_ranks),
                 "sys_name": self.pool.name.value,
             }

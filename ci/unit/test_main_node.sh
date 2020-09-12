@@ -3,7 +3,7 @@
 # This is a script to be run by the unit/test_main.sh to run a test
 # on a CI node.
 
-set -x
+set -uex
 
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
 if grep /mnt/daos\  /proc/mounts; then
@@ -38,4 +38,7 @@ export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
 cd "$DAOS_BASE"
 IS_CI=true OLD_CI=false utils/run_test.sh
 mkdir -p vm_test
+
+if [ -z "$BULLSEYE" ]; then
 ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
+fi

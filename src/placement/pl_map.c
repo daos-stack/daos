@@ -349,7 +349,7 @@ pl_hop_key_hash(struct d_hash_table *htab, const void *key,
 		unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(uuid_t));
-	return d_hash_string_u32((const char *)key, ksize);
+	return *((const uint32_t *)key);
 }
 
 static bool
