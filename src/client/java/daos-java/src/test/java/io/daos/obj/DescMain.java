@@ -1,7 +1,5 @@
 package io.daos.obj;
 
-
-import io.daos.BufferAllocator;
 import io.netty.buffer.ByteBuf;
 
 import java.io.*;
@@ -10,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Main {
+public class DescMain {
 
   private static final String OUTPUT_PATH = "./output";
   private static final String FILE_NAME_DKEY = "dkeys.txt";
