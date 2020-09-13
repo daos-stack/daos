@@ -107,14 +107,15 @@ class OSAOfflineParallelTest(TestWithServers):
                 ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
 
     def dmg_thread(self, puuid, rank, target, action, results):
+        self.log.info("Action: {0}".format(action))
         if action == "exclude":
             self.dmg_command.pool_exclude(puuid, (rank + 1), target)
         elif action == "drain":
-            self.dmg_command.pool_drain(puuid, rank, target)
+            self.dmg_command.pool_drain(puuid, rank)
         elif action == "reintegrate":
             self.dmg_command.pool_reintegrate(puuid, (rank + 1), target)
         elif action == "extend":
-            self.dmg_command.pool_extend(puuid,(rank + 2))
+            self.dmg_command.pool_extend(puuid, (rank + 2))
         else:
             self.fail("Invalid action for dmg thread")
 
@@ -129,7 +130,6 @@ class OSAOfflineParallelTest(TestWithServers):
         pool = {}
         pool_uuid = []
         target_list = []
-        exclude_servers = len(self.hostlist_servers) - 1
 
         # Exclude target : random two targets (target idx : 0-7)
         n = random.randint(0, 6)
@@ -137,8 +137,8 @@ class OSAOfflineParallelTest(TestWithServers):
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
-        # Exclude rank : two ranks other than rank 0.
-        rank = random.randint(2, exclude_servers)
+        # Exclude rank 2.
+        rank = 2
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
@@ -199,8 +199,7 @@ class OSAOfflineParallelTest(TestWithServers):
         # Perform drain testing with 1 to 2 pools
         # Two pool testing blocked by DAOS-5333.
         # Fix range from 1,2 to 1,3
-        for pool_num in range(1, 2):
-            self.run_offline_parallel_test(pool_num)
+        self.run_offline_parallel_test(1)
         # Perform drain testing : inserting data in pool
         # Bug : DAOS-4946 blocks the following test case.
         # self.run_offline_parallel_test(1, True)
