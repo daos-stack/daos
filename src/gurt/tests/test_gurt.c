@@ -191,7 +191,6 @@ void test_d_errstr_v2(void **state)
 
 	value = d_errstr(DER_CUSTOM4);
 	assert_string_equal(value, "DER_UNKNOWN");
-
 }
 
 void test_d_errstr(void **state)
@@ -918,7 +917,6 @@ test_gurt_hash_traverse_count_cb(d_list_t *rlink, void *arg)
 	return 0;
 }
 
-
 static struct test_hash_entry **
 test_gurt_hash_alloc_items(int num_entries)
 {
@@ -1440,7 +1438,7 @@ _test_gurt_hash_threaded_same_operations(void *(*fn)(struct hash_thread_arg *),
 
 	/* Use barrier to make sure all threads start at the same time */
 	rc = pthread_barrier_init(&barrier, NULL,
-				TEST_GURT_HASH_NUM_THREADS + 1);
+				  TEST_GURT_HASH_NUM_THREADS + 1);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < TEST_GURT_HASH_NUM_THREADS; i++) {
@@ -1904,7 +1902,7 @@ test_gurt_atomic(void **state)
 
 	inc  = 0;
 	inc2 = 0;
-	dec  = NUM_THREADS*NUM_THREADS;
+	dec  = NUM_THREADS * NUM_THREADS;
 	mix  = 123456;
 
 	for (i = 0; i < NUM_THREADS; i++) {
@@ -1917,8 +1915,8 @@ test_gurt_atomic(void **state)
 		assert(rc == 0);
 	}
 
-	assert(inc  == NUM_THREADS*NUM_THREADS);
-	assert(inc2 == 2*NUM_THREADS*NUM_THREADS);
+	assert(inc  == NUM_THREADS * NUM_THREADS);
+	assert(inc2 == 2 * NUM_THREADS * NUM_THREADS);
 	assert(dec  == 0);
 	assert(mix  == 123456);
 }
@@ -2024,5 +2022,6 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests(tests, init_tests, fini_tests);
+	return cmocka_run_group_tests_name("test_gurt", tests, init_tests,
+		fini_tests);
 }
