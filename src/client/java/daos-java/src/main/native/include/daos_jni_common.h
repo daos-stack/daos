@@ -64,6 +64,17 @@ typedef struct {
     long data_buf_addr;
 } data_desc_t;
 
+typedef struct {
+    daos_key_t dkey;
+    uint16_t dkeyLen;
+    uint16_t akeyLen;
+    daos_iod_t *iods;
+    d_sg_list_t *sgls;
+    daos_recx_t *recxs;
+    d_iov_t *iovs;
+    long ret_buf_address;
+} data_desc_simple_t;
+
 static jint JNI_VERSION = JNI_VERSION_1_8;
 
 static const int READ_DIR_BATCH_SIZE = 10;

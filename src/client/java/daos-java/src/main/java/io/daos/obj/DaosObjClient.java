@@ -191,8 +191,8 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * handle of opened object
    * @param flags
    * Fetch flags (currently ignored)
-   * @param nbrOfDesc
-   * number of description in <code>descBuffer</code>
+   * @param nbrOfEntries
+   * number of entries in <code>descBuffer</code>
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and list of {@link IODataDesc} of akeys, types, offset, record
    * sizes, index in value buffer and how many records to fetch
@@ -203,8 +203,11 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @throws DaosIOException
    * {@link io.daos.DaosIOException}
    */
-  native void fetchObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress, long eqHandle,
+  native void fetchObject(long objectPtr, long flags, int nbrOfEntries, long descBufferAddress, long eqHandle,
                           int eventIdx) throws DaosIOException;
+
+  native void fetchObjectSimple(long objectPtr, long flags, int nbrOfEntries,
+                                long descBufferAddress) throws DaosIOException;
 
   /**
    * update object records of given dkey and akeys.
@@ -213,8 +216,8 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * handle of opened object
    * @param flags
    * update flags (currently ignored)
-   * @param nbrOfDesc
-   * number of description in <code>descBuffer</code>
+   * @param nbrOfEntries
+   * number of entries in <code>descBuffer</code>
    * @param descBufferAddress
    * address of direct byte buffer holds serialized dkey and serialized list of {@link IODataDesc} of akeys, types,
    * offset and record sizes, index in value buffer and how many records to update
@@ -225,8 +228,11 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * @throws DaosIOException
    * {@link io.daos.DaosIOException}
    */
-  native void updateObject(long objectPtr, long flags, int nbrOfDesc, long descBufferAddress, long eqHandle,
+  native void updateObject(long objectPtr, long flags, int nbrOfEntries, long descBufferAddress, long eqHandle,
                            int eventIdx) throws DaosIOException;
+
+  native void updateObjectSimple(long objectPtr, long flags, int nbrOfEntries,
+                                 long descBufferAddress, long eqHandle, int eventIdx) throws DaosIOException;
 
   /**
    * list dkeys of given object.
@@ -291,6 +297,8 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    * pointer of native IO desc
    */
   public static native void releaseDesc(long descPtr);
+
+  public static native void releaseDescSimple(long nativeDescPtr);
 
   protected long getContPtr() {
     return contPtr;

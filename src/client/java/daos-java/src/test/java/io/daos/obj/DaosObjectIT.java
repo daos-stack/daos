@@ -1099,6 +1099,232 @@ public class DaosObjectIT {
     }
   }
 
+  @Test
+  public void testReuseWriteSimpleDesc() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    try {
+      object.open();
+      IODataDescSimple desc = object.createSimpleDataDesc(5, 1, 3, 100,
+          true);
+      IODataDescSimple fetchDesc = object.createSimpleDataDesc(5, 1, 3, 100,
+          false);
+      try {
+        // initial
+        writeAndFetchWithDescSimpleReused(object, desc, fetchDesc, 1, 7);
+        // reuse same amount of entries
+        writeAndFetchWithDescSimpleReused(object, desc, fetchDesc, 2, 7);
+        // reuse same amount of entries with different length
+        writeAndFetchWithDescSimpleReused(object, desc, fetchDesc, 2, 9);
+        // reuse same amount of entries with different akey and length
+        writeAndFetchWithDescSimpleReused(object, desc, fetchDesc, 2, 9);
+        // reuse all of entries
+        writeAndFetchWithDescSimpleReused(object, desc, fetchDesc, 3, 7);
+        // reuse all of entries with different length
+        writeAndFetchWithDescSimpleReused(object, desc, fetchDesc, 3, 11);
+      } finally {
+        desc.release();
+        fetchDesc.release();
+      }
+    } finally {
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
+  }
+
+  private void writeAndFetchWithDescSimpleReused(DaosObject object, IODataDescSimple desc, IODataDescSimple fetchDesc,
+                                                 int nbrOfEntries, int valueLen) throws IOException {
+    desc.reuse();
+    fetchDesc.reuse();
+    // write
+    long l = generateLong(valueLen);
+    for (int i = 0; i < nbrOfEntries; i++) {
+      IODataDescSimple.SimpleEntry entry = desc.getEntry(i);
+      // buffer index
+      ByteBuf buf = entry.reuseBuffer();
+      buf.writeLong(l);
+      entry.setKeyForUpdate(String.valueOf(i), 0, buf);
+      IODataDescSimple.SimpleEntry fetchEntry = fetchDesc.getEntry(i);
+      fetchEntry.getDataBuffer().clear();
+      fetchEntry.setKeyForFetch(String.valueOf(i), 0, 8);
+    }
+    object.updateSimple(desc);
+    // fetch
+    object.fetchSimple(fetchDesc);
+    for (int i = 0; i < nbrOfEntries; i++) {
+      IODataDescSimple.SimpleEntry entry = fetchDesc.getEntry(i);
+      Assert.assertEquals(8, entry.getActualSize());
+      Assert.assertEquals(l, entry.getDataBuffer().readLong());
+    }
+  }
+
+  @Test
+  public void testDataDesc() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    int bufLen = 1000;
+//    String dkey = "dkey1";
+    String akey = "1000";
+    int akeyLen = 4;
+    int reduces = 3;
+    int maps = 3;
+    IODataDesc desc = object.createReusableDesc(5, akeyLen, 1, bufLen,
+        IODataDesc.IodType.ARRAY, 1, true);
+    IODataDesc fetchDesc = object.createReusableDesc(5, akeyLen, 2, bufLen,
+        IODataDesc.IodType.ARRAY, 1, false);
+    IODataDescSimple fetchDescSim = object.createSimpleDataDesc(3, akeyLen, 2, bufLen,
+        false);
+    try {
+      object.open();
+      byte[] data = generateDataArray(bufLen);
+      IODataDesc.Entry entry = desc.getEntry(0);
+      ByteBuf buf = entry.reuseBuffer();
+      buf.writeBytes(data);
+      // write
+      for (int i = 0; i < reduces; i++) {
+        for (int j = 0; j < maps; j++) {
+          desc.setDkey(padZero(i, 3));
+          buf = entry.reuseBuffer();
+          buf.writerIndex(buf.capacity());
+          entry.setKey(padZero(j, 4), 0, buf);
+          object.update(desc);
+        }
+      }
+      System.out.println("written");
+      // fetch
+      int idx = 0;
+      long start = System.nanoTime();
+//      IODataDescSimple.SimpleEntry fes = fetchDescSim.getEntry(0);
+      for (int i = 0; i < reduces; i++) {
+        fetchDescSim.setDkey(padZero(i, 3));
+        for (int j = 0; j < maps; j++) {
+          fetchDescSim.getEntry(idx++).setKeyForFetch(padZero(j, 4), 0, bufLen);
+          if (idx == 2) {
+            object.fetchSimple(fetchDescSim);
+            Assert.assertEquals(bufLen, fetchDescSim.getEntry(0).getActualSize());
+            Assert.assertEquals(bufLen, fetchDescSim.getEntry(1).getActualSize());
+            fetchDescSim.reuse();
+            idx = 0;
+          }
+        }
+        if (idx > 0) {
+          object.fetchSimple(fetchDescSim);
+          Assert.assertEquals(bufLen, fetchDescSim.getEntry(0).getActualSize());
+//          Assert.assertEquals(bufLen, fetchDescSim.getEntry(1).getActualSize());
+          fetchDescSim.reuse();
+          idx = 0;
+        }
+      }
+      System.out.println((System.nanoTime() - start)/1000000);
+//      start = System.nanoTime();
+//      IODataDesc.Entry fe = fetchDesc.getEntry(0);
+//      for (int i = 0; i < reduces; i++) {
+//        for (int j = 0; j < maps; j++) {
+//          fetchDesc.setDkey(padZero(i, 3));
+//          fe.setKey(padZero(j, 4), 0, bufLen);
+//          object.fetch(fetchDesc);
+//          Assert.assertEquals(bufLen, fe.getActualSize());
+//          fetchDesc.getDescBuffer().clear();
+//        }
+//      }
+//      System.out.println((System.nanoTime() - start)/1000000);
+    } finally {
+      desc.release();
+      fetchDesc.release();
+      fetchDescSim.release();
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
+  }
+
+  @Test
+  public void testDataDescSpeed() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    int bufLen = 8000;
+//    String dkey = "dkey1";
+    String akey = "1000";
+    int akeyLen = 4;
+    int reduces = 125;
+    int maps = 1000;
+    IODataDesc desc = object.createReusableDesc(5, akeyLen, 1, bufLen,
+        IODataDesc.IodType.ARRAY, 1, true);
+    IODataDesc fetchDesc = object.createReusableDesc(5, akeyLen, 1, bufLen,
+        IODataDesc.IodType.ARRAY, 1, false);
+    IODataDescSimple fetchDescSim = object.createSimpleDataDesc(3, akeyLen, 1, bufLen,
+        false);
+    try {
+      object.open();
+      byte[] data = generateDataArray(bufLen);
+      IODataDesc.Entry entry = desc.getEntry(0);
+      ByteBuf buf = entry.reuseBuffer();
+      buf.writeBytes(data);
+      // write
+      for (int i = 0; i < reduces; i++) {
+        for (int j = 0; j < maps; j++) {
+          desc.setDkey(padZero(i, 3));
+          buf = entry.reuseBuffer();
+          buf.writerIndex(buf.capacity());
+          entry.setKey(padZero(j, 4), 0, buf);
+          object.update(desc);
+        }
+      }
+      System.out.println("written");
+      // fetch
+      long start = System.nanoTime();
+//      IODataDescSimple.SimpleEntry fes = fetchDescSim.getEntry(0);
+//      for (int i = 0; i < reduces; i++) {
+//        fetchDescSim.setDkey(padZero(i, 3));
+//        for (int j = 0; j < maps; j++) {
+//          fes.setKeyForFetch(padZero(j, 4), 0, bufLen);
+//          object.fetchSimple(fetchDescSim);
+//          Assert.assertEquals(bufLen, fes.getActualSize());
+//          fetchDescSim.reuse();
+//        }
+//      }
+//      System.out.println((System.nanoTime() - start)/1000000);
+//      start = System.nanoTime();
+      IODataDesc.Entry fe = fetchDesc.getEntry(0);
+      for (int i = 0; i < reduces; i++) {
+        for (int j = 0; j < maps; j++) {
+          fetchDesc.setDkey(padZero(i, 3));
+          fe.setKey(padZero(j, 4), 0, bufLen);
+          object.fetch(fetchDesc);
+          Assert.assertEquals(bufLen, fe.getActualSize());
+          fetchDesc.getDescBuffer().clear();
+        }
+      }
+      System.out.println((System.nanoTime() - start)/1000000);
+    } finally {
+      desc.release();
+      fetchDesc.release();
+      fetchDescSim.release();
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
+  }
+
+  private static String padZero(int v, int len) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(v);
+    int gap = len - sb.length();
+    if (gap > 0) {
+      for (int i = 0; i < gap; i++) {
+        sb.append(0);
+      }
+    }
+    return sb.toString();
+  }
+
   @AfterClass
   public static void afterClass() throws IOException {
     if (client != null) {

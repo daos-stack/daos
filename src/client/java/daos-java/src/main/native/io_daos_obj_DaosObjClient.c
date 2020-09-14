@@ -362,6 +362,25 @@ JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_releaseDesc
     free(desc);
 }
 
+JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_releaseDescSimple
+        (JNIEnv *env, jclass clientClass, jlong descPtr)
+{
+    data_desc_simple_t *desc = *(data_desc_simple_t **)&descPtr;
+    if (desc->iods) {
+        free(desc->iods);
+    }
+    if (desc->sgls) {
+        free(desc->sgls);
+    }
+    if (desc->recxs) {
+        free(desc->recxs);
+    }
+    if (desc->iovs) {
+        free(desc->iovs);
+    }
+    free(desc);
+}
+
 static inline void decode(JNIEnv *env, jlong objectHandle, jint nbrOfAkeys,
         jlong descBufAddress, daos_handle_t *oh, daos_key_t *dkey,
         int *nbr_of_akeys_with_data, data_desc_t **ret_desc,
@@ -431,7 +450,8 @@ static inline void decode(JNIEnv *env, jlong objectHandle, jint nbrOfAkeys,
 
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_fetchObject(JNIEnv *env, jobject clientObject,
-        jlong objectHandle, jlong flags, jint nbrOfAkeys, jlong descBufAddress)
+        jlong objectHandle, jlong flags, jint nbrOfAkeys, jlong descBufAddress,
+        jlong eqHanle, jint eidx)
 {
     daos_handle_t oh;
     daos_key_t dkey;
@@ -484,7 +504,7 @@ cleanup:
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_updateObject(JNIEnv *env, jobject clientObject,
         jlong objectHandle, jlong flags, jint nbrOfAkeys, jlong descBufAddress,
-        jlong dataBufAddress)
+        jlong eqHandle, jint eidx)
 {
     daos_handle_t oh;
     daos_key_t dkey;
@@ -522,6 +542,214 @@ out:
             free(desc->iovs);
         }
         free(desc);
+    }
+}
+
+static inline char *decode_reused_simple(data_desc_simple_t *desc, char *desc_buffer,
+        int nbrOfAkeys, int actual_nbr_of_keys) {
+    uint16_t len;
+    uint32_t nbr_of_record;
+    uint32_t value;
+    uint64_t address;
+    daos_iod_t *iod;
+    int i;
+
+    for (i = 0; i < actual_nbr_of_keys; i++) {
+        // iod
+        // akey
+        iod = &desc->iods[i];
+        d_iov_set(&iod->iod_name, desc_buffer, desc->akeyLen);
+        desc_buffer += desc->akeyLen;
+        // offset
+        memcpy(&value, desc_buffer, 4);
+        desc->recxs[i].rx_idx = (uint64_t)value;
+        desc_buffer += 4;
+        // length
+        memcpy(&nbr_of_record, desc_buffer, 4);
+        desc->recxs[i].rx_nr = (uint64_t)nbr_of_record;
+        desc_buffer += 4;
+        // sgl
+        desc_buffer += 8;
+        desc->iovs[i].iov_len = desc->iovs[i].iov_buf_len = nbr_of_record;
+        desc->sgls[i].sg_nr_out = 0;
+    }
+    return desc_buffer;
+}
+
+static inline char *decode_initial_simple(data_desc_simple_t *desc, char *desc_buffer,
+        int nbrOfAkeys)
+{
+    desc->iods = (daos_iod_t *)calloc(nbrOfAkeys, sizeof(daos_iod_t));
+    desc->sgls = (d_sg_list_t *)calloc(nbrOfAkeys, sizeof(d_sg_list_t));
+    desc->recxs = (daos_recx_t *)calloc(nbrOfAkeys, sizeof(daos_recx_t));
+    desc->iovs = (d_iov_t *)calloc(nbrOfAkeys, sizeof(d_iov_t));
+    daos_iod_t *iod;
+    uint16_t len;
+    uint32_t value;
+    uint32_t nbr_of_record;
+    uint64_t address;
+    int i;
+
+    for (i = 0; i < nbrOfAkeys; i++) {
+        // iod
+        // akey
+        iod = &desc->iods[i];
+        d_iov_set(&iod->iod_name, desc_buffer, desc->akeyLen);
+        desc_buffer += desc->akeyLen;
+        iod->iod_type = DAOS_IOD_ARRAY;
+        iod->iod_size = 1;
+        iod->iod_nr = 1;
+        // offset
+        memcpy(&value, desc_buffer, 4);
+        desc->recxs[i].rx_idx = (uint64_t)value;
+        desc_buffer += 4;
+        // length
+        memcpy(&nbr_of_record, desc_buffer, 4);
+        desc->recxs[i].rx_nr = (uint64_t)nbr_of_record;
+        desc_buffer += 4;
+        iod->iod_recxs = &desc->recxs[i];
+        // sgl
+        memcpy(&address, desc_buffer, 8);
+        desc_buffer += 8;
+        d_iov_set(&desc->iovs[i], address, nbr_of_record);
+        desc->sgls[i].sg_iovs = &desc->iovs[i];
+        desc->sgls[i].sg_nr = 1;
+        desc->sgls[i].sg_nr_out = 0;
+    }
+    return desc_buffer;
+}
+
+static inline int decode_simple(JNIEnv *env, jlong objectHandle,
+        jint nbrOfAkeys, jlong descBufAddress, daos_handle_t *oh,
+        int *nbr_of_akeys_with_data, data_desc_simple_t **ret_desc)
+{
+    uint16_t len;
+    uint16_t maxDkeyLen;
+    uint32_t value;
+    uint64_t address = 0;
+    char *desc_buffer = (char *)descBufAddress;
+    data_desc_simple_t *desc;
+    int i;
+    int rc;
+
+    memcpy(oh, &objectHandle, sizeof(oh));
+    // address of data_desc_simple_t
+    memcpy(&address, desc_buffer, 8);
+    desc_buffer += 8;
+    if (address == 0) { // first time
+        desc = (data_desc_simple_t *)malloc(sizeof(data_desc_simple_t));
+        memcpy(&desc->dkeyLen, desc_buffer, 2);
+        desc_buffer += 2;
+        memcpy(&desc->akeyLen, desc_buffer, 2);
+        desc_buffer += 2;
+        // dkey
+        d_iov_set(&desc->dkey, desc_buffer, desc->dkeyLen);
+        desc_buffer += desc->dkeyLen;
+        // akeys with data
+        memcpy(&len, desc_buffer, 2);
+        *nbr_of_akeys_with_data = len;
+        desc_buffer += 2;
+        if (*nbr_of_akeys_with_data > nbrOfAkeys) {
+            char *tmp = "number of akeys %d in reused desc should be " \
+                        "no larger than initial number of akeys %d";
+            char *msg = (char *)malloc(strlen(tmp) + 20);
+
+            sprintf(msg, tmp, *nbr_of_akeys_with_data, nbrOfAkeys);
+            throw_exception_object(env, msg, 0);
+            return -1;
+        }
+        desc_buffer = decode_initial_simple(desc, desc_buffer, nbrOfAkeys);
+        desc->ret_buf_address = desc_buffer;
+        // put address to the start of desc buffer
+        memcpy((char *)descBufAddress, &desc, 8);
+    } else {
+        desc = *(data_desc_simple_t **)&address;
+        // skip dkey len and akey len
+        desc_buffer += 4;
+        // dkey
+        d_iov_set(&desc->dkey, desc_buffer, desc->dkeyLen);
+        desc_buffer += desc->dkeyLen;
+        // akeys with data
+        memcpy(&len, desc_buffer, 2);
+        *nbr_of_akeys_with_data = len;
+        desc_buffer += 2;
+        if (*nbr_of_akeys_with_data > nbrOfAkeys) {
+            char *tmp = "number of akeys %d in reused desc should be " \
+                        "no larger than initial number of akeys %d";
+            char *msg = (char *)malloc(strlen(tmp) + 20);
+
+            sprintf(msg, tmp, *nbr_of_akeys_with_data, nbrOfAkeys);
+            throw_exception_object(env, msg, 0);
+            return -2;
+        }
+        desc_buffer = decode_reused_simple(desc, desc_buffer, nbrOfAkeys, *nbr_of_akeys_with_data);
+    }
+    *ret_desc = desc;
+    return 0;
+}
+
+JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_updateObjectSimple(
+        JNIEnv *env, jobject clientObject, jlong objectHandle, jlong flags,
+        jint nbrOfAkeys, jlong descBufAddress, jlong eqHandle, jint eidx)
+{
+    daos_handle_t oh;
+    int nbr_of_akeys_with_data;
+    data_desc_simple_t *desc = NULL;
+    uint32_t value;
+    int rc;
+
+    rc = decode_simple(env, objectHandle, nbrOfAkeys, descBufAddress, &oh,
+            &nbr_of_akeys_with_data, &desc);
+    if (rc) {
+        char *msg = "Failed to decode simple desc";
+
+        throw_exception_const_msg_object(env, msg, rc);
+        return;
+    }
+    rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
+                         (unsigned int)nbr_of_akeys_with_data, desc->iods,
+                         desc->sgls, NULL);
+    if (rc) {
+        char *msg = "Failed to update DAOS object";
+
+        throw_exception_const_msg_object(env, msg, rc);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
+        JNIEnv *env, jobject clientObject, jlong objectHandle, jlong flags,
+        jint nbrOfAkeys, jlong descBufAddress)
+{
+    daos_handle_t oh;
+    int nbr_of_akeys_with_data;
+    data_desc_simple_t *desc = NULL;
+    uint32_t value;
+    char *desc_buffer;
+    int i;
+    int rc;
+
+    rc = decode_simple(env, objectHandle, nbrOfAkeys, descBufAddress, &oh,
+            &nbr_of_akeys_with_data, &desc);
+    if (rc) {
+        char *msg = "Failed to decode simple desc";
+
+        throw_exception_const_msg_object(env, msg, rc);
+        return;
+    }
+    rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &desc->dkey,
+                            (unsigned int)nbr_of_akeys_with_data, desc->iods,
+                            desc->sgls, NULL, NULL);
+    if (rc) {
+        char *msg = "Failed to fetch DAOS object";
+
+        throw_exception_const_msg_object(env, msg, rc);
+    }
+    // actual data size
+    desc_buffer = desc->ret_buf_address;
+    for (i = 0; i < nbr_of_akeys_with_data; i++) {
+        value = desc->sgls[i].sg_nr_out == 0 ? 0 : desc->sgls[i].sg_iovs->iov_len;
+        memcpy(desc_buffer, &value, 4);
+        desc_buffer += 4;
     }
 }
 

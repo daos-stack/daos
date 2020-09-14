@@ -73,10 +73,26 @@ JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_fetchObject
 
 /*
  * Class:     io_daos_obj_DaosObjClient
+ * Method:    fetchObjectSimple
+ * Signature: (JJIJ)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_fetchObjectSimple
+  (JNIEnv *, jobject, jlong, jlong, jint, jlong);
+
+/*
+ * Class:     io_daos_obj_DaosObjClient
  * Method:    updateObject
  * Signature: (JJIJJI)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_updateObject
+  (JNIEnv *, jobject, jlong, jlong, jint, jlong, jlong, jint);
+
+/*
+ * Class:     io_daos_obj_DaosObjClient
+ * Method:    updateObjectSimple
+ * Signature: (JJIJJI)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_updateObjectSimple
   (JNIEnv *, jobject, jlong, jlong, jint, jlong, jlong, jint);
 
 /*
@@ -109,6 +125,14 @@ JNIEXPORT jint JNICALL Java_io_daos_obj_DaosObjClient_getRecordSize
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_releaseDesc
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     io_daos_obj_DaosObjClient
+ * Method:    releaseDescSimple
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_releaseDescSimple
   (JNIEnv *, jclass, jlong);
 
 #ifdef __cplusplus

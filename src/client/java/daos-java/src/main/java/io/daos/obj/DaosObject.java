@@ -336,6 +336,25 @@ public class DaosObject {
     fetch(desc, -1, -1);
   }
 
+  public void fetchSimple(IODataDescSimple desc) throws DaosObjectException {
+    checkOpen();
+    desc.encode();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " fetch object with description: " + desc.toString(MAX_DEBUG_SIZE));
+    }
+    try {
+      client.fetchObjectSimple(objectPtr, 0, desc.getNbrOfEntries(),
+          desc.getDescBuffer().memoryAddress());
+      desc.parseResult();
+    } catch (DaosIOException e) {
+      DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
+          desc.toString(MAX_EXCEPTION_SIZE), e);
+      desc.setCause(de);
+      throw de;
+    }
+  }
+
   /**
    * update object with given <code>desc</code>.
    *
@@ -362,6 +381,25 @@ public class DaosObject {
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
         desc.toString(MAX_EXCEPTION_SIZE), e);
+      desc.setCause(de);
+      throw de;
+    }
+  }
+
+  public void updateSimple(IODataDescSimple desc) throws DaosObjectException {
+    checkOpen();
+    desc.encode();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
+    }
+    try {
+      client.updateObjectSimple(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
+          -1L, -1);
+      desc.succeed();
+    } catch (DaosIOException e) {
+      DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
+          desc.toString(MAX_EXCEPTION_SIZE), e);
       desc.setCause(de);
       throw de;
     }
@@ -565,39 +603,29 @@ public class DaosObject {
   /**
    * create reusable IODataDesc object.
    *
-   * @param maxDkeyLen
-   * maximum length of dkey can reuse this IODataDesc object
-   * @param maxAkeyLen
-   * maxium length of akey can reuse this IODataDesc object
+   * @param dkeyLen
+   * dkey length
+   * @param akeyLen
+   * length of akey can reuse this IODataDesc object
    * @param nbrOfEntries
    * number of akey entries available
    * @param entryBufLen
    * entry's buffer length
-   * @param iodType
-   * IOD type of all entries
-   * @param recordSize
    * record size of all entries
    * @param updateOrFetch
    * for update or fetch
    * @return IODataDesc instance
    */
+  public IODataDescSimple createSimpleDataDesc(int dkeyLen, int akeyLen, int nbrOfEntries, int entryBufLen,
+                                               boolean updateOrFetch) throws UnsupportedEncodingException {
+    return new IODataDescSimple(dkeyLen, akeyLen, nbrOfEntries, entryBufLen, updateOrFetch);
+  }
+
   public IODataDesc createReusableDesc(int maxDkeyLen, int maxAkeyLen, int nbrOfEntries, int entryBufLen,
-                                       IODataDesc.IodType iodType, int recordSize, boolean updateOrFetch) {
+                                      IODataDesc.IodType iodType, int recordSize, boolean updateOrFetch) {
     return new IODataDesc(maxDkeyLen, maxAkeyLen, nbrOfEntries, entryBufLen, iodType, recordSize, updateOrFetch);
   }
 
-  /**
-   * create reusable IODataDesc object with default values.
-   * maxDkeyLen: {@link IODataDesc#DEFAULT_LEN_REUSE_DKEY}
-   * maxAkeyLen: {@link IODataDesc#DEFAULT_LEN_REUSE_AKEY}
-   * nbrOfEntries: {@link IODataDesc#DEFAULT_NUMBER_OF_ENTRIES}
-   * entryBufLen: {@link IODataDesc#DEFAULT_LEN_REUSE_BUFFER}.
-   *
-   * @param iodType
-   * @param recordSize
-   * @param updateOrFetch
-   * @return
-   */
   public IODataDesc createReusableDesc(IODataDesc.IodType iodType, int recordSize, boolean updateOrFetch) {
     return new IODataDesc(iodType, recordSize, updateOrFetch);
   }
