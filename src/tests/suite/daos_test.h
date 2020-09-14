@@ -391,6 +391,13 @@ int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
+int get_server_config(char *host, char *server_config_file);
+int get_server_log_file(char *host, char *server_config_file,
+	char *log_file);
+int verify_server_log_mask(char *host, char *server_config_file,
+	char *log_mask);
+int verify_state_in_log(char *host, char *log_file, char *state);
+
 static inline void
 daos_test_print(int rank, char *message)
 {
