@@ -1320,7 +1320,8 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
-    parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
+    parser.add_argument('--memcheck', default='some',
+                        choices=['yes', 'no', 'some'])
     parser.add_argument('mode', nargs='?')
     args = parser.parse_args()
 
@@ -1344,9 +1345,9 @@ def main():
     elif args.mode == 'kv':
         test_pydaos_kv(server, conf)
     elif args.mode == 'overlay':
-        fatal_errors = run_duns_overlay_test(server, conf)
+        fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors = test_alloc_fail(conf)
+        fatal_errors.add_result(test_alloc_fail(conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
@@ -1363,7 +1364,7 @@ def main():
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do list-containers, then
     # exit again.
-    if len(sys.argv) == 2 and sys.argv[1] == 'all':
+    if args.mode == 'all':
         server = DaosServer(conf, valgrind=True)
         server.start()
         pools = get_pool_list()
@@ -1371,7 +1372,7 @@ def main():
             cmd = ['pool', 'list-containers', '--svc', '0', '--pool', pool]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop() != 0:
-            fatal_errors = True
+            fatal_errors.add_result(True)
 
     wf.close()
     if fatal_errors.errors:
