@@ -28,9 +28,7 @@
 
 from __future__ import print_function
 
-import os
 import sys
-import subprocess
 
 from avocado  import Test
 from avocado  import main

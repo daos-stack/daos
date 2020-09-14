@@ -2,6 +2,9 @@
 
 """Test code for dfuse"""
 
+# pylint: disable=too-many-lines
+# pylint: disable=too-few-public-methods
+
 import os
 import sys
 import time
@@ -103,6 +106,7 @@ class WarningsFactory():
         entry = {}
         entry['fileName'] = os.path.basename(self._file)
         entry['directory'] = os.path.dirname(self._file)
+        # pylint: disable=protected-access
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
@@ -201,6 +205,7 @@ class WarningsFactory():
             entry = {}
             entry['fileName'] = os.path.basename(self._file)
             entry['directory'] = os.path.dirname(self._file)
+            # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
             entry['message'] = 'Tests are still running'

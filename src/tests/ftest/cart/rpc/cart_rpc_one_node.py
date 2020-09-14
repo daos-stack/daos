@@ -31,6 +31,7 @@ from avocado       import main
 
 sys.path.append('./util')
 
+# pylint: disable=import-error
 from cart_utils import CartUtils
 
 class CartRpcOneNodeTest(Test):

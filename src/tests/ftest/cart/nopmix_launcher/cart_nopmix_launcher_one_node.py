@@ -27,9 +27,7 @@
 
 from __future__ import print_function
 
-import os
 import sys
-import subprocess
 
 from apricot import skipForTicket
 
@@ -38,6 +36,7 @@ from avocado       import main
 
 sys.path.append('./util')
 
+# pylint: disable=import-error
 from cart_utils import CartUtils
 
 class CartNoPmixLauncherOneNodeTest(Test):
@@ -69,7 +68,7 @@ class CartNoPmixLauncherOneNodeTest(Test):
         cli_ppn = self.params.get("test_clients_ppn", '/run/tests/*/')
         log_mask = self.params.get("D_LOG_MASK", "/run/defaultENV/")
         crt_phy_addr = self.params.get("CRT_PHY_ADDR_STR",
-                                          "/run/defaultENV/")
+                                       "/run/defaultENV/")
         ofi_interface = self.params.get("OFI_INTERFACE", "/run/defaultENV/")
 
         srv_cmd = self.utils.build_cmd(self, self.env, "test_servers")

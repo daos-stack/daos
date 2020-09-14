@@ -35,6 +35,7 @@ from avocado  import main
 
 sys.path.append('./util')
 
+# pylint: disable=import-error
 from cart_utils import CartUtils
 
 class CartSelfThreeNodeTest(Test):
@@ -65,6 +66,7 @@ class CartSelfThreeNodeTest(Test):
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+        # pylint disable=broad-except
         except Exception as e:
             self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
