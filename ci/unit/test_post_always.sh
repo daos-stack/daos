@@ -31,6 +31,6 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
 
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE
-if [[ ${STAGE_NAME} != *"memcheck"*  ]]; then
+if [[ "${STAGE_NAME}" != *"memcheck"*  ]]; then
     python utils/fix_cmocka_xml.py
 fi
