@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+import time
+
 from ior_test_base import IorTestBase
 from daos_utils import DaosCommand
 
@@ -140,7 +142,7 @@ class SnapshotAggregation(IorTestBase):
         # Delete the snapshot.
         daos.container_destroy_snap(
             pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont=self.container.uuid, epoch=snapshot)
+            cont=self.container.uuid, snap_name=snapshot)
 
         # Wait for aggregation to start and finish.
         self.detect_aggregation_complete()

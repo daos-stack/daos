@@ -70,17 +70,55 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         """
         self.log.info("==>   Verify dmg output against expected output:")
         dmg_info = self.get_pool_query_info(self.uuid)
-        exp_info = self.params.get("exp_vals", path="/run/*", default={})
+        
+        # Get the expected pool query values from the test yaml.  This should be
+        # as simple as:
+        #   exp_info = self.params.get("exp_vals", path="/run/*", default={})
+        # but this yields an empty dictionary (the default), so it needs to be
+        # defined manually:
+        exp_info = {
+            "uuid": self.uuid.upper(),
+            "ntarget": self.params.get("ntarget", path="/run/exp_vals/*"),
+            "disabled": self.params.get("disabled", path="/run/exp_vals/*"),
+            "leader": self.params.get("leader", path="/run/exp_vals/*"),
+            "version": self.params.get("version", path="/run/exp_vals/*"),
+            "target_count": self.params.get(
+                "target_count", path="/run/exp_vals/*"),
+            "scm": {
+                "total": self.params.get("total", path="/run/exp_vals/scm/*"),
+                "free": self.params.get("free", path="/run/exp_vals/scm/*"),
+                "free_min": self.params.get(
+                    "free_min", path="/run/exp_vals/scm/*"),
+                "free_max": self.params.get(
+                    "free_max", path="/run/exp_vals/scm/*"),
+                "free_mean": self.params.get(
+                    "free_mean", path="/run/exp_vals/scm/*"),
+            },
+            "nvme": {
+                "total": self.params.get("total", path="/run/exp_vals/nvme/*"),
+                "free": self.params.get("free", path="/run/exp_vals/nvme/*"),
+                "free_min": self.params.get(
+                    "free_min", path="/run/exp_vals/nvme/*"),
+                "free_max": self.params.get(
+                    "free_max", path="/run/exp_vals/nvme/*"),
+                "free_mean": self.params.get(
+                    "free_mean", path="/run/exp_vals/nvme/*"),
+            },
+            "rebuild": {
+                "state": self.params.get(
+                    "state", path="/run/exp_vals/rebuild/*"),
+                "objects": self.params.get(
+                    "objects", path="/run/exp_vals/rebuild/*"),
+                "records": self.params.get(
+                    "records", path="/run/exp_vals/rebuild/*"),
+            }
+        }
 
-        # Add the expected uuid value
-        exp_info["uuid"] = self.uuid.upper()
+        self.assertDictEqual(
+            dmg_info, exp_info,
+            "Found difference in dmg pool query output and the expected values")
 
-        if exp_info != dmg_info:
-            self.log.info("==>   Found difference in dmg output and expected.")
-            self.fail("dmg pool-query: \n{} \nexpected: \n{}".format(
-                dmg_info, exp_info))
-        else:
-            self.log.info("==>   Expect values found in dmg pool query output.")
+        self.log.info("All expect values found in dmg pool query output.")
 
     def test_pool_query_inputs(self):
         """

@@ -27,7 +27,7 @@ container:
   type: POSIX
 ior:
   flags: "-w -E -k"
-  api: DAOS
+  api: DFS
   block_size: 10G
   transfer_size: 1M
   repetitions: 1
