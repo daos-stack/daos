@@ -145,7 +145,7 @@ class Dfuse(DfuseCommand):
         check_mounted = NodeSet()
 
         # Detect which hosts have mount point directories defined
-        command = "ls -al {0}".format(self.mount_dir.value)
+        command = "test -d {0} -a ! -L {0}".format(self.mount_dir.value)
         retcodes = pcmd(nodes, command, expect_rc=None)
         for retcode, hosts in retcodes.items():
             for host in hosts:
