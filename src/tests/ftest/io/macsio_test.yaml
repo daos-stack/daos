@@ -9,7 +9,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 120
+timeout: 60
 server_config:
     name: daos_server
     servers:
@@ -34,6 +34,7 @@ macsio:
   part_size: 10M
   avg_num_parts: 2.5
   num_dumps: 2
+  macsio_timeout: 10
 mpi: !mux
   mpich:
     mpi_type: "mpich"

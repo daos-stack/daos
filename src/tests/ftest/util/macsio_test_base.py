@@ -46,6 +46,7 @@ class MacsioTestBase(TestWithServers):
         # Support using different job managers to launch the daos agent/servers
         mpi_type = self.params.get("mpi_type", default="mpich")
         self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
+        self.manager.timeout = self.params.get("macsio_timeout", default=10)
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):
