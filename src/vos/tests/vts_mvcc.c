@@ -302,6 +302,20 @@ fetch_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
+fetch_dne_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
+{
+	return fetch_with_flags(arg, txh, path, epoch, DAOS_COND_DKEY_FETCH);
+}
+
+static int
+fetch_ane_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
+{
+	return fetch_with_flags(arg, txh, path, epoch, DAOS_COND_AKEY_FETCH);
+}
+
+static int
 tx_update(daos_handle_t coh, struct tx_helper *txh, daos_unit_oid_t oid,
 	  daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
 	  unsigned int iod_nr, daos_iod_t *iod, d_sg_list_t *sgl)
@@ -505,13 +519,15 @@ static struct op operations[] = {
 	/* {name,	type,	rlevel,	wlevel,	rtype,	wtype,	func} */
 
 	/* Reads */
-	{"fetch",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
-	{"listc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"listo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"listd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"fetch",       T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
+	{"fetch_dne",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_dne_f},
+	{"fetch_ane",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_ane_f},
+	{"listc",       T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"listo",       T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"listd",   	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"queryc",  	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"queryo",  	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"queryd",  	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
 
 	/*
 	 * Readwrites
