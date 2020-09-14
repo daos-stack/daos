@@ -246,6 +246,8 @@ class DaosServerCommand(YamlCommand):
             #   scan     Scan SCM and NVMe storage attached to local server
             if self.sub_command.value == "prepare":
                 self.sub_command_class = self.PrepareSubCommand()
+            elif self.sub_command.value == "scan":
+                self.sub_command_class = self.ScanSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -283,6 +285,16 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
+
+        class ScanSubCommand(CommandWithParameters):
+            """Defines an object for the daos_server storage scan command."""
+
+            def __init__(self):
+                """Create a daos_server scan command object."""
+                super(
+                    DaosServerCommand.StorageSubCommand.ScanSubCommand,
+                    self).__init__(
+                        "/run/daos_server/storage/scan/*", "scan")
 
 
 class DaosServerManager(SubprocessManager):

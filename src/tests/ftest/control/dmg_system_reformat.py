@@ -27,6 +27,7 @@ from avocado import fail_on
 from apricot import TestWithServers
 from server_utils import ServerFailed
 from command_utils import CommandFailure
+from general_utils import human_to_bytes
 
 
 class DmgSystemReformatTest(TestWithServers):
@@ -39,27 +40,44 @@ class DmgSystemReformatTest(TestWithServers):
     :avocado: recursive
     """
 
+    def setUp(self):
+        """Set up for DmgSystemReformatTest test."""
+        super(DmgSystemReformatTest, self).setUp()
+
+        host = self.hostlist_servers[0]
+        scm_list = self.server_managers[-1].get_config_value("scm_list")
+        storage_info = self.get_dmg_command().storage_scan(verbose=True)
+        self.scm_cap = storage_info[host]["scm"][scm_list[-1]]["capacity"]
+
     @fail_on(CommandFailure)
-    def create_pool_at_full_capacity(self):
-        """Create a pool at full capacity.
+    def create_pool_at_capacity(self, percentage):
+        """Create a pool at specified capacity.
+
+        Args:
+            percentage (int): percent to use of total space available for pool.
+                i.e. 0.5 (50%) 0.25(25%)
 
         Raises:
             CommandFailure: raise exception if pool creation fails.
 
+        Returns:
+            TestPool: the created test pool object.
+
         """
-        host = self.hostlist_servers[0]
+        if percentage > 1 or percentage <= 0:
+            self.fail("The percent value provided cannot be used: {}".format(
+                percentage))
+        # Convert info from dmg's human readable to bytes
+        scm_size_bytes = human_to_bytes(self.scm_cap)
+        scm_size = percentage * scm_size_bytes
 
-        storage_info = self.get_dmg_command().storage_scan()
-        scm_capacity = storage_info[host]["scm"]["capacity"]
-        nvme_capacity = storage_info[host]["nvme"]["capacity"]
+        # Create pool object, update size value with unit and create.
+        self.log.info("Create pool at {:.0%} capacity.".format(percentage))
+        pool = self.get_pool(create=False, connect=False)
+        pool.scm_size.update(scm_size)
+        pool.create()
 
-        # Create pool object
-        self.add_pool(create=False, connect=False)
-
-        # update pool size to full capacity
-        self.pool.scm_size.update(scm_capacity)
-        self.pool.nvme_size.update(nvme_capacity)
-        self.pool.create()
+        return pool
 
     @fail_on(CommandFailure)
     @fail_on(ServerFailed)
@@ -71,19 +89,19 @@ class DmgSystemReformatTest(TestWithServers):
 
         :avocado: tags=all,small,pr,hw,control,sys_reformat,dmg
         """
-        self.create_pool_at_full_capacity()
+        self.create_pool_at_capacity(0.7)
 
-        self.log.info("Disable raising an exception to check for ENOSPACE \
+        self.log.info("Disable raising an exception to check for DER_NOSPACE \
                        error on pool create")
         self.get_dmg_command().exit_status_exception = False
 
-        # Try to create second pool and check that it fails with ENOSPACE
-        self.get_pool()
+        # Try to create second pool and check that it fails with DER_NOSPACE
+        self.create_pool_at_capacity(0.7)
         if self.get_dmg_command().result.exit_status != 0:
             self.log.info("Pool create failed: %s",
                           self.get_dmg_command().result.stderr)
-            if "ENOSPACE" not in self.get_dmg_command().result.stderr:
-                self.fail("Pool create did not fail do to ENOSPACE!")
+            if "DER_NOSPACE" not in self.get_dmg_command().result.stderr:
+                self.fail("Pool create did not fail do to DER_NOSPACE!")
 
         self.log.info("Re-enable raising exceptions for dmg.")
         self.get_dmg_command().exit_status_exception = True
@@ -113,9 +131,5 @@ class DmgSystemReformatTest(TestWithServers):
             self.fail("Detected pools in storage after refomat: {}".format(
                 self.get_dmg_command().result.stdout))
 
-        # Remove pools and containers since they were wiped from memory
-        self.pool = None
-        self.container = None
-        self.log.info("Create pool at full capacity again to verify storage \
-                       has cleared.")
-        self.create_pool_at_full_capacity()
+        # Create last pool now that memory has been wiped.
+        self.create_pool_at_capacity(0.7)

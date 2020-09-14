@@ -71,25 +71,6 @@ class ControlTestBase(TestWithServers):
         """Run the dmg command."""
         return self.dmg.get_output(method_name, regex_method, **kwargs)
 
-    def get_superblock_info(self, sp_file, sp_value):
-        """Get the superblock information for each host.
-
-        Args:
-            sp_file (str): scm mount path.
-            sp_value (str): superblock file value to extract.
-                i.e. version, uuid, system, rank, validrank, ms
-
-        Returns:
-            dict: a dictionary of data values for each NodeSet key
-
-        """
-        pattern = r"^{}:\s+([_a-z0-9-]+).*".format(sp_value)
-        cmd = r"cat {} | sed -En 's/{}/\1 /gp'".format(sp_file, pattern)
-        text = "superblock"
-        error = "Error obtaining superblock info: {}".format(sp_value)
-
-        return get_host_data(self.dmg.hostlist, cmd, text, error, 20)
-
     def get_device_info(self, rank=None, health=None):
         """Query storage device information.
 
