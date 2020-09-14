@@ -180,7 +180,7 @@ class CartIvOneNodeTest(Test):
 
                 # Try to induce "No JSON object could be decoded" error
                 #
-                # 1. 
+                # 1.
                 # with open(log_path, "a") as myfile:
                 # myfile.write("some-invalid-junk-appended-to-json")
                 #

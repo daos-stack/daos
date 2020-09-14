@@ -909,7 +909,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Create tar archives of orterun log dirs to prevent name collisions (e.g.,
     # we'll have many # hundreds of tests with output files named "stdout")
-    archive_files(destination, host_list, 
+    archive_files(destination, host_list,
       "{}/*_output.orterun_log".format(logs_dir), do_tar=True)
 
     # Plain files need not be tar'd, then can simply be scp'd to the archive
