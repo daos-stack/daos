@@ -31,7 +31,7 @@ def get_inc_id():
     """Return a unique character"""
     global instance_num
     instance_num += 1
-    return str(instance_num)
+    return '{:04d}'.format(instance_num)
 
 def umount(path):
     """Umount dfuse from a given path"""
@@ -46,10 +46,15 @@ class NLT_Conf():
         self.bc = bc
         self.agent_dir = None
         self.wf = None
+        self.args = None
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
         self.wf = wf
+
+    def set_args(self, args):
+        """Set command line args"""
+        self.args = args
 
     def __getitem__(self, key):
         return self.bc[key]
@@ -255,8 +260,10 @@ class DaosServer():
         self.valgrind = valgrind
         self._agent = None
         self.agent_dir = None
-        # Also specified in the yaml file.
-        self._log_file = '/tmp/dnt_server.log'
+        server_log_file = tempfile.NamedTemporaryFile(prefix='dnt_server_',
+                                                      suffix='.log',
+                                                      delete=False)
+        self._log_file = server_log_file.name
         self.__process_name = 'daos_io_server'
         self.__agent_sleep_time = 2
         self.__start_sleep_time = 0
@@ -293,14 +300,12 @@ class DaosServer():
         # the server log file with a temporary file so that multiple
         # server runs do not overwrite each other.
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
-        server_log_file = tempfile.NamedTemporaryFile(prefix='dnt_server_',
-                                                      suffix='.log',
-                                                      delete=False)
+
         control_log_file = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        delete=False)
         scyaml = yaml.load(scfd)
-        scyaml['servers'][0]['log_file'] = server_log_file.name
+        scyaml['servers'][0]['log_file'] = self._log_file
         scyaml['control_log_file'] = control_log_file.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
@@ -360,7 +365,7 @@ class DaosServer():
                                         '--insecure',
                                         '--debug',
                                         '--runtime_dir', self.agent_dir,
-                                        '--logfile', '/tmp/dnt_agent.log'],
+                                        '--logfile', agent_log_file.name],
                                        env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
         time.sleep(self.__agent_sleep_time)
@@ -558,6 +563,8 @@ class DFuse():
         my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
 
         self.valgrind = ValgrindHelper(v_hint)
+        if self.conf.args.memcheck == 'no':
+            self.valgrind.use_valgrind = False
         cmd = self.valgrind.get_cmd_prefix()
 
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
@@ -691,6 +698,9 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
     Enable logging, and valgrind for the command.
     """
     vh = ValgrindHelper()
+
+    if conf.args.memcheck == 'no':
+        valgrind = False
 
     if fi_file:
         # Turn off Valgrind for the fault injection testing unless it's
@@ -1308,8 +1318,9 @@ def test_alloc_fail(conf):
 def main():
     """Main entry point"""
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
+    parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
     parser.add_argument('mode', nargs='?')
     args = parser.parse_args()
 
@@ -1318,6 +1329,7 @@ def main():
     wf = WarningsFactory(args.output_file)
 
     conf.set_wf(wf)
+    conf.set_args(args)
     setup_log_test(conf)
 
     server = DaosServer(conf)
