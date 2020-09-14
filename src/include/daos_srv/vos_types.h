@@ -228,6 +228,14 @@ enum {
 	 * under the specified range. Intended for internal use only.
 	 */
 	VOS_OF_REMOVE		= (1 << 9),
+	/* only query iod_size */
+	VOS_FETCH_SIZE_ONLY		= (1 << 10),
+	/* query recx list */
+	VOS_FETCH_RECX_LIST		= (1 << 11),
+	/* only set read TS */
+	VOS_FETCH_SET_TS_ONLY		= (1 << 12),
+	/* check the target (obj/dkey/akey) existence */
+	VOS_FETCH_CHECK_EXISTENCE	= (1 << 13),
 };
 
 /** Mask for any conditionals passed to to the fetch */
