@@ -15,7 +15,7 @@ sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
 sudo cp "$DAOS_BASE/install/bin/daos_admin" /usr/bin/daos_admin
-#set +x
+set +x
 if [ -n "$BULLSEYE" ]; then
   pushd "$DAOS_BASE/bullseye"
     sudo ./install --quiet --key "${BULLSEYE}" \
@@ -46,14 +46,9 @@ mkdir -p vm_test
 
 # Remove DAOS_BASE from memcheck xml results
 set -x
-echo "debug in test_main_node.sh"
-ls
-ls test_results || true
-ls unit_test_memcheck_logs || true
 if [ "$WITH_VALGRIND" == 'memcheck' ]; then
     find test_results -maxdepth 1 -name '*.memcheck.xml' \
         -print0 | xargs -0 sed -i "s:$DAOS_BASE::g"
-    # experiment, copy all *.memcheck.xml results to current dir
     cp test_results/*.memcheck.xml .
 elif [ -z "$BULLSEYE" ]; then
     ./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all

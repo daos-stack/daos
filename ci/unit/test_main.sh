@@ -5,16 +5,6 @@
 set -ex
 
 # JENKINS-52781 tar function is breaking symlinks
-echo "debug in test_main.sh, beginning"
-ls
-ls test_results || true
-ls unit_test_memcheck_logs || true
-find . -name "*.memcheck.xml" || true
-
-echo "debug checking with git"
-git ls-files --other || true
-git ls-files --ignored --exclude-standard || true
-
 
 rm -rf unit_memcheck_vm_test unit_test_memcheck_logs unit-test*.memcheck.xml
 rm -rf unit_vm_test unit_test_logs
