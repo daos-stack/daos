@@ -217,7 +217,7 @@ type hwlocProtectedAccess struct {
 
 var hpa hwlocProtectedAccess
 
-func (hpa *hwlocProtectedAccess) hwloc_get_proc_cpubind_wrapper(topology C.hwloc_topology_t, pid C.hwloc_pid_t, cpuset C.hwloc_cpuset_t, flags C.int) C.int {
+func (hpa *hwlocProtectedAccess) GetProcCPUBind(topology C.hwloc_topology_t, pid C.hwloc_pid_t, cpuset C.hwloc_cpuset_t, flags C.int) C.int {
 	hpa.mutex.Lock()
 	defer hpa.mutex.Unlock()
 	status := C.hwloc_get_proc_cpubind(topology, pid, cpuset, flags)
@@ -614,7 +614,7 @@ func GetNUMASocketIDForPid(ctx context.Context, pid int32) (int, error) {
 	cpuset := C.hwloc_bitmap_alloc()
 	defer C.hwloc_bitmap_free(cpuset)
 
-	status := hpa.hwloc_get_proc_cpubind_wrapper(ndc.topology, C.int(pid), cpuset, 0)
+	status := hpa.GetProcCPUBind(ndc.topology, C.int(pid), cpuset, 0)
 	if status != 0 {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
