@@ -421,18 +421,12 @@ class DmgCommand(DmgCommandBase):
             # "status": 0
             output = json.loads(self.result.stdout)
             data["uuid"] = output["response"]["UUID"]
-            svc_list = output["response"]["Svcreps"]
-            svc_comma_separated = ""
-            for svc in svc_list:
-                if svc_comma_separated == "":
-                    svc_comma_separated = str(svc)
-                else:
-                    svc_comma_separated += ",{}".format(svc)
-            data["svc"] = svc_comma_separated
+            data["svc"] = ",".join([str(svc) for svc in output["response"]["Svcreps"]])
 
         else:
             match = re.findall(
-                r"UUID:\s+([A-Za-z0-9-]+),\s+Service replicas:\s+([A-Za-z0-9-]+)",
+                r"UUID:\s+([A-Za-z0-9-]+),\s+"
+                r"Service replicas:\s+([A-Za-z0-9-]+)",
                 self.result.stdout)
             if match:
                 data["uuid"] = match[0][0]
