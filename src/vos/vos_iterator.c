@@ -200,9 +200,10 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_DEBUG(DB_TRACE, "Preparing nested iterator of type %s\n",
 			dict->id_name);
 		/** Nested operations are only used internally so there
-		 * shouldn't be any active transaction involved.
+		 * shouldn't be any active transaction involved.  However,
+		 * the upper layer is still passing in a valid handle in
+		 * some cases.
 		 */
-		D_ASSERT(!dtx_is_valid_handle(dth));
 		rc = nested_prepare(type, dict, param, ih);
 
 		goto out;
@@ -224,7 +225,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	default:
 		rlevel = 0;
 		/** There should not be any cases where a DTX is active outside
-		 *  of the four listed above
+		 *  of the four listed above.
 		 */
 		D_ASSERT(!dtx_is_valid_handle(dth));
 		break;
