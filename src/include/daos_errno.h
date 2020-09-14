@@ -200,7 +200,7 @@ extern "C" {
 	       Event queue is busy)					\
 	/** Domain of cluster component can't match */			\
 	ACTION(DER_DOMAIN,		(DER_ERR_DAOS_BASE + 16),	\
-	       Domain of cluster component cannot match)		\
+	       Domain of cluster component do not match)		\
 	/** Service should shut down */					\
 	ACTION(DER_SHUTDOWN,		(DER_ERR_DAOS_BASE + 17),	\
 	       Service should shut down)				\
@@ -227,7 +227,7 @@ extern "C" {
 	       Record size error)					\
 	/** Used to indicate a transaction should restart */		\
 	ACTION(DER_TX_RESTART,		(DER_ERR_DAOS_BASE + 25),	\
-	       Used to indicate a transaction should restart)		\
+	       Transaction should restart)				\
 	/** Data lost or not recoverable */				\
 	ACTION(DER_DATA_LOSS,		(DER_ERR_DAOS_BASE + 26),	\
 	       Data lost or not recoverable)				\
