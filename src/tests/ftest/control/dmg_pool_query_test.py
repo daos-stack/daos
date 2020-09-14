@@ -70,7 +70,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         """
         self.log.info("==>   Verify dmg output against expected output:")
         dmg_info = self.get_pool_query_info(self.uuid)
-        
+
         # Get the expected pool query values from the test yaml.  This should be
         # as simple as:
         #   exp_info = self.params.get("exp_vals", path="/run/*", default={})
