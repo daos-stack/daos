@@ -118,6 +118,10 @@ String daos_repos(String distro) {
 
 String unit_packages() {
     Map stage_info = parseStageInfo()
+    boolean need_qb = quickbuild()
+    if (env.STAGE_NAME.contains('Bullseye')) {
+        need_qb = true
+    }
     if (stage_info['target'] == 'centos7') {
         String packages =  'gotestsum openmpi3 ' +
                            'hwloc-devel argobots ' +
@@ -129,7 +133,7 @@ String unit_packages() {
                            'pmix numactl-devel ' +
                            'libipmctl-devel ' +
                            'python36-tabulate '
-        if (quickbuild()) {
+        if (need_qb) {
             // TODO: these should be gotten from the Requires: of RPM
             packages += " spdk-tools mercury-2.0.0~rc1" +
                         " boost-devel libisa-l_crypto libfabric-debuginfo"
@@ -592,7 +596,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
+                                '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
@@ -1261,7 +1265,7 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
+                                '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
                                   env.QUICKBUILD_DEPS_EL7 + '"' +
