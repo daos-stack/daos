@@ -97,6 +97,12 @@ struct rdb {
 	ABT_thread		d_compactd;
 };
 
+/* thresholds of free space for a leader to avoid appending new log entries
+ * and follower to warn if the situation is really dire.
+ */
+#define RDB_NOAPPEND_FREE_SPACE (262144)
+#define RDB_CRITICAL_FREE_SPACE (16384)
+
 /* Current rank */
 #define DF_RANK "%u"
 static inline d_rank_t
@@ -453,5 +459,8 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 		" backward=%d\n", lc.cookie, index, oid, backward);
 	return rdb_vos_iterate(lc, index, oid, backward, cb, arg);
 }
+
+int
+rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
 
 #endif /* RDB_INTERNAL_H */
