@@ -34,7 +34,6 @@ import (
 
 // #cgo CFLAGS: -I${SRCDIR}/../../include
 // #include <daos/drpc_modules.h>
-// #include <daos/mgmt.h>
 import "C"
 
 const (
