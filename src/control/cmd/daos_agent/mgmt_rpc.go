@@ -107,7 +107,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 
 	version := pbReq.GetVersion()
 	if version != mod.version {
-		return nil, errors.Errorf("get attach info client/agent protocol mismatch: client version: %#x, agent version %#x", pbReq.Version, mod.version)
+		return nil, errors.Errorf("get attach info client/agent protocol mismatch: client version: %#x, agent version %#x", version, mod.version)
 	}
 
 	numaNode := mod.aiCache.defaultNumaNode

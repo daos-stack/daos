@@ -24,6 +24,8 @@
 #ifndef __DAOS_DRPC_MODULES_H__
 #define __DAOS_DRPC_MODULES_H__
 
+#define DRPC_PROTOCOL_VERSION 0x00000001
+
 /**
  * DAOS dRPC Modules
  *

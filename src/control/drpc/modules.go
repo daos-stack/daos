@@ -37,7 +37,11 @@ import (
 // #include <daos/mgmt.h>
 import "C"
 
-const moduleMethodOffset = 100
+const (
+	moduleMethodOffset = 100
+	// GetAttachInfo protocol version
+	ProtocolVersion = C.DRPC_PROTOCOL_VERSION
+)
 
 type ModuleID int32
 
@@ -84,8 +88,6 @@ const (
 	ModuleSrv ModuleID = C.DRPC_MODULE_SRV
 	// ModuleSecurity is the dRPC module for security tasks in DAOS server
 	ModuleSecurity ModuleID = C.DRPC_MODULE_SEC
-	// GetAttachInfo protocol version
-	ProtocolVersion = C.GET_ATTACH_INFO_PROTOCOL_VERSION
 )
 
 type Method interface {
