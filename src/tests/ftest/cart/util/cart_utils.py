@@ -45,9 +45,6 @@ import logging
 import cart_logparse
 import cart_logtest
 
-from avocado  import main
-from write_host_file import write_host_file
-
 class CartUtils():
     """CartUtils Class"""
 
@@ -58,7 +55,6 @@ class CartUtils():
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
-        self.cart_logs_dumped_already = False
 
     @staticmethod
     def write_host_file(hostlist, slots=1):

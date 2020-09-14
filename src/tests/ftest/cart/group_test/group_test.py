@@ -32,8 +32,6 @@ import os
 import sys
 import subprocess
 
-from apricot import skipForTicket
-
 from avocado  import Test
 from avocado  import main
 

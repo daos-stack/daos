@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 # pylint: disable=too-many-lines
+# pylint: disable=bad-continuation
+# pylint: disable=bad-indentation
 from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
