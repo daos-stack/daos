@@ -338,7 +338,7 @@ test_init(void)
 	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 	rc = crt_group_config_save(NULL, true);
 	D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n",
-		rc);
+		  rc);
 
 	/* register RPCs */
 	if (test_g.t_is_service) {
