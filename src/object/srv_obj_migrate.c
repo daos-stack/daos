@@ -1004,13 +1004,20 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 	data_size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
 
 	D_DEBUG(DB_TRACE, "data size is "DF_U64"\n", data_size);
+	D_PRINT("[RYON] %s:%d [%s()] > data_size: %lu\n", __FILE__, __LINE__, __FUNCTION__, data_size);
 	/* DAOS_REBUILD_TGT_NO_REBUILD are for testing purpose */
 	if ((data_size > 0 || data_size == (daos_size_t)(-1)) &&
 	    !DAOS_FAIL_CHECK(DAOS_REBUILD_NO_REBUILD)) {
-		if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
+		if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1)) {
 			rc = migrate_fetch_update_inline(mrone, oh, cont);
-		else
+			D_PRINT("[RYON] %s:%d [%s()] > \n", __FILE__, __LINE__, __FUNCTION__);
+
+		}
+		else {
 			rc = migrate_fetch_update_bulk(mrone, oh, cont);
+			D_PRINT("[RYON] %s:%d [%s()] > \n", __FILE__, __LINE__, __FUNCTION__);
+
+		}
 	}
 
 	tls->mpt_rec_count += mrone->mo_rec_num;

@@ -119,8 +119,12 @@ char *daos_key2str(daos_key_t *key);
 				daos_key2str(key)
 #endif
 
-#define DF_RECX			"["DF_U64"-"DF_U64"]"
-#define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
+#define DF_RECX			"["DF_U64"-"DF_U64", "DF_U64"]"
+#define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1), ((r).rx_nr)
+
+
+#define DF_IOV		"<%p,"DF_U64"/"DF_U64">"
+#define DP_IOV(iov)	(iov)->iov_buf, (iov)->iov_len, (iov)->iov_buf_len
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)

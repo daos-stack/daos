@@ -299,10 +299,6 @@ int rdb_path_iterate(const rdb_path_t *path, rdb_path_iterate_cb_t cb,
 int rdb_path_pop(rdb_path_t *path);
 
 /* rdb_util.c *****************************************************************/
-
-#define DF_IOV		"<%p,"DF_U64">"
-#define DP_IOV(iov)	(iov)->iov_buf, (iov)->iov_len
-
 extern const daos_size_t rdb_iov_max;
 size_t rdb_encode_iov(const d_iov_t *iov, void *buf);
 ssize_t rdb_decode_iov(const void *buf, size_t len, d_iov_t *iov);

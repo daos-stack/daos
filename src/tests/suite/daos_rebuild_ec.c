@@ -38,12 +38,12 @@
 
 #define MAX_SIZE		1048576 * 3
 #define DATA_SIZE		(1048576 * 2 + 512)
-#define PARTIAL_DATA_SIZE	1024	
+#define PARTIAL_DATA_SIZE	1024
 
 #define KEY_NR	5
 static void
 write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
-{		
+{
 	char		key[32];
 	daos_recx_t	recx;
 	int		i;
@@ -86,7 +86,7 @@ write_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
 	char	buffer[PARTIAL_DATA_SIZE];
 
 	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	write_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE); 
+	write_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
 }
 
 static void
@@ -95,7 +95,7 @@ verify_ec_partial(struct ioreq *req, int test_idx, daos_off_t off)
 	char	buffer[PARTIAL_DATA_SIZE];
 
 	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE); 
+	verify_ec(req, test_idx, buffer, off, PARTIAL_DATA_SIZE);
 }
 
 static void
@@ -104,7 +104,7 @@ write_ec_full(struct ioreq *req, int test_idx, daos_off_t off)
 	char	buffer[DATA_SIZE];
 
 	memset(buffer, 'b', DATA_SIZE);
-	write_ec(req, test_idx, buffer, off, DATA_SIZE); 
+	write_ec(req, test_idx, buffer, off, DATA_SIZE);
 }
 
 static void
@@ -113,7 +113,7 @@ verify_ec_full(struct ioreq *req, int test_idx, daos_off_t off)
 	char	buffer[DATA_SIZE];
 
 	memset(buffer, 'b', DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, DATA_SIZE); 
+	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
 }
 
 static void
@@ -137,7 +137,7 @@ verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off)
 
 	memset(buffer, 'b', DATA_SIZE);
 	memset(buffer, 'a', PARTIAL_DATA_SIZE);
-	verify_ec(req, test_idx, buffer, off, DATA_SIZE); 
+	verify_ec(req, test_idx, buffer, off, DATA_SIZE);
 }
 
 enum op_type {
@@ -164,7 +164,7 @@ rebuild_ec_internal(void **state, bool parity, int type)
 
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      KEY_NR, DP_OID(oid));
-
+D_PRINT("[RYON] %s:%d [%s()] > \n", __FILE__, __LINE__, __FUNCTION__);
 	if (type == PARTIAL_UPDATE)
 		write_ec_partial(&req, arg->index, 0);
 	else if (type == FULL_UPDATE)

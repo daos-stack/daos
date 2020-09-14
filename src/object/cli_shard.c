@@ -218,7 +218,15 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			continue;
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		rc = daos_csummer_verify_iod(csummer_copy, iod, &sgls[i],
+		daos_iod_t iod_copy = *iod;
+		d_sg_list_t sgl_copy = sgls[i];
+
+		iod_copy.iod_nr = 1;
+		iod_copy.iod_recxs += shard_idx;
+		sgl_copy.sg_iovs += shard_idx;
+		sgl_copy.sg_nr -= shard_idx;
+
+		rc = daos_csummer_verify_iod(csummer_copy, &iod_copy, &sgl_copy,
 					     iod_csum, singv_lo, shard_idx,
 					     map);
 		if (rc != 0) {
