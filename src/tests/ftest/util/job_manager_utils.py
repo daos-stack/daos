@@ -298,7 +298,6 @@ class Mpirun(JobManager):
         self.envlist = FormattedParameter("-envlist {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
-
         self.mpitype = mpitype
 
     def assign_hosts(self, hosts, path=None, slots=None):

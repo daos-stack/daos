@@ -207,10 +207,12 @@ struct evt_weight {
 struct evt_rect_df {
 	/** Epoch of update */
 	uint64_t	rd_epc;
-	/** Length of record */
-	uint64_t	rd_len:48;
+	/** Upper bits of record length */
+	uint32_t	rd_len_hi;
+	/** Lower bits of record length */
+	uint16_t	rd_len_lo;
 	/** Minor epoch of update */
-	uint64_t	rd_minor_epc:16;
+	uint16_t	rd_minor_epc;
 	/** Low offset */
 	uint64_t	rd_lo;
 };

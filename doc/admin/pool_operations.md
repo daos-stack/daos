@@ -125,6 +125,12 @@ This is reflected in the set of supported
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
 
+### Ownership
+
+Pool ownership conveys no special privileges for access control decisions. All
+desired privileges of the owner-user (`OWNER@`) and owner-group (`GROUP@`) must
+be explicitly defined by an administrator in the pool ACL.
+
 ### Creating a pool with a custom ACL
 
 To create a pool with a custom ACL:

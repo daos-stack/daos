@@ -221,6 +221,28 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
 }
 
 int
+daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[],
+		   daos_event_t *ev)
+{
+	daos_pool_del_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_DEL_ATTR);
+
+	rc = dc_task_create(dc_pool_del_attr, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->n		= n;
+	args->names	= names;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 {
 	daos_pool_stop_svc_t	*args;

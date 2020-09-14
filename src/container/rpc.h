@@ -73,6 +73,9 @@
 	X(CONT_ATTR_SET,						\
 		0, &CQF_cont_attr_set,					\
 		ds_cont_op_handler, NULL),				\
+	X(CONT_ATTR_DEL,						\
+		0, &CQF_cont_attr_del,					\
+		ds_cont_op_handler, NULL),				\
 	X(CONT_EPOCH_AGGREGATE,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
@@ -269,6 +272,16 @@ CRT_RPC_DECLARE(cont_attr_get, DAOS_ISEQ_CONT_ATTR_GET, DAOS_OSEQ_CONT_ATTR_GET)
 	((struct cont_op_out)	(caso_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_attr_set, DAOS_ISEQ_CONT_ATTR_SET, DAOS_OSEQ_CONT_ATTR_SET)
+
+#define DAOS_ISEQ_CONT_ATTR_DEL	/* input fields */		 \
+	((struct cont_op_in)	(cadi_op)		CRT_VAR) \
+	((uint64_t)		(cadi_count)		CRT_VAR) \
+	((crt_bulk_t)		(cadi_bulk)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_ATTR_DEL	/* output fields */		 \
+	((struct cont_op_out)	(cado_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_attr_del, DAOS_ISEQ_CONT_ATTR_DEL, DAOS_OSEQ_CONT_ATTR_DEL)
 
 #define DAOS_ISEQ_CONT_EPOCH_OP	/* input fields */		 \
 	((struct cont_op_in)	(cei_op)		CRT_VAR) \

@@ -63,6 +63,7 @@ int dc_cont_subscribe(tse_task_t *task);
 int dc_cont_list_attr(tse_task_t *task);
 int dc_cont_get_attr(tse_task_t *task);
 int dc_cont_set_attr(tse_task_t *task);
+int dc_cont_del_attr(tse_task_t *task);
 int dc_cont_alloc_oids(tse_task_t *task);
 int dc_cont_list_snap(tse_task_t *task);
 int dc_cont_create_snap(tse_task_t *task);
