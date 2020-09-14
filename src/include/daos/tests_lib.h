@@ -322,7 +322,7 @@ int dmg_pool_destroy(const char *dmg_config_file,
  *				number of disks will be returned in \a ndisks.
  */
 int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
-			device_list *devices);
+			    device_list *devices);
 
 /**
  * Set NVMe device to faulty. Which will trigger the rebuild and all the
@@ -336,6 +336,6 @@ int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
  * \param force	[IN]	Do not require confirmation
  */
 int dmg_storage_set_nvme_fault(const char *dmg_config_file,
-			char *host, const uuid_t uuid, int force);
+			       char *host, const uuid_t uuid, int force);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

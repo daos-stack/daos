@@ -1037,7 +1037,7 @@ get_server_config(char *host, char *server_config_file)
 	char	*pch;
 
 	snprintf(command, sizeof(command),
-		"ssh %s ps ux | grep daos_server | grep start", host);
+		 "ssh %s ps ux | grep daos_server | grep start", host);
 	FILE *fp = popen(command, "r");
 
 	if (fp == NULL)
@@ -1045,20 +1045,20 @@ get_server_config(char *host, char *server_config_file)
 
 	while ((read = getline(&line, &len, fp)) != -1) {
 		if (strstr(line, "--config") != NULL ||
-			strstr(line, "-o") != NULL)
+		    strstr(line, "-o") != NULL)
 			break;
 	}
 
 	pch = strtok(line, " ");
 	while (pch != NULL) {
 		if (strstr(pch, "yaml") != NULL &&
-			strstr(pch, "-o") != NULL) {
+		    strstr(pch, "-o") != NULL) {
 			strcpy(server_config_file, pch);
 			break;
 		}
 
 		if (strstr(pch, "yaml") != NULL &&
-			strstr(pch, "--config") != NULL) {
+		    strstr(pch, "--config") != NULL) {
 			strcpy(server_config_file, strchr(pch, '=') + 1);
 			break;
 		}
@@ -1072,14 +1072,14 @@ get_server_config(char *host, char *server_config_file)
 }
 
 int verify_server_log_mask(char *host, char *server_config_file,
-	char *log_mask){
+			   char *log_mask){
 	char	command[256];
 	size_t	len = 0;
 	size_t	read;
 	char	*line = NULL;
 
 	snprintf(command, sizeof(command),
-	"ssh %s cat %s", host, server_config_file);
+		 "ssh %s cat %s", host, server_config_file);
 
 	FILE *fp = popen(command, "r");
 
@@ -1090,7 +1090,7 @@ int verify_server_log_mask(char *host, char *server_config_file,
 		if (strstr(line, " log_mask") != NULL) {
 			if (strstr(line, log_mask) == NULL) {
 				print_message(
-					"Expexted log_mask = %s, Found %s\n ",
+					"Expected log_mask = %s, Found %s\n ",
 					log_mask, line);
 				return -DER_INVAL;
 			}
@@ -1103,7 +1103,7 @@ int verify_server_log_mask(char *host, char *server_config_file,
 }
 
 int get_server_log_file(char *host, char *server_config_file,
-	char *log_file)
+			char *log_file)
 {
 	char	command[256];
 	size_t	len = 0;
@@ -1111,7 +1111,7 @@ int get_server_log_file(char *host, char *server_config_file,
 	char	*line = NULL;
 
 	snprintf(command, sizeof(command),
-		"ssh %s cat %s", host, server_config_file);
+		 "ssh %s cat %s", host, server_config_file);
 
 	FILE *fp = popen(command, "r");
 
@@ -1120,7 +1120,7 @@ int get_server_log_file(char *host, char *server_config_file,
 
 	while ((read = getline(&line, &len, fp)) != -1) {
 		if (strstr(line, " log_file") != NULL)
-			strcat(log_file, strrchr(line, ':')+1);
+			strcat(log_file, strrchr(line, ':') + 1);
 	}
 
 	pclose(fp);
@@ -1145,16 +1145,16 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 	pch = strtok(tmp, "\n");
 	while (pch != NULL) {
 		length = strlen(pch);
-		if (pch[length-1] == '\n')
-			pch[length-1]  = '\0';
+		if (pch[length - 1] == '\n')
+			pch[length - 1]  = '\0';
 
 		snprintf(command, sizeof(command),
-			"ssh %s cat %s | grep \"%s\"", host, pch, state);
+			 "ssh %s cat %s | grep \"%s\"", host, pch, state);
 		fp = popen(command, "r");
 		while ((read = getline(&line, &len, fp)) != -1) {
 			if (strstr(line, state) != NULL) {
 				print_message("Found state %s in Log file %s\n",
-					state, pch);
+					      state, pch);
 				goto out;
 			}
 		}
@@ -1169,4 +1169,3 @@ out:
 	D_FREE(tmp);
 	return 0;
 }
-

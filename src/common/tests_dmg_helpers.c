@@ -579,7 +579,7 @@ out_json:
 
 static int
 parse_device_info(struct json_object *smd_dev, device_list *devices,
-	char *host, int dev_length, int *disks)
+		  char *host, int dev_length, int *disks)
 {
 	struct json_object	*tmp;
 	struct json_object	*dev = NULL;
@@ -593,7 +593,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		return -DER_INVAL;
 		}
 		uuid_parse(json_object_get_string(tmp),
-			devices[*disks].device_id);
+			   devices[*disks].device_id);
 
 		if (!json_object_object_get_ex(dev, "state", &tmp)) {
 			D_ERROR("unable to extract state from JSON\n");
@@ -614,7 +614,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 
 int
 dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
-	device_list *devices)
+			device_list *devices)
 {
 	struct json_object	*dmg_out = NULL;
 	struct json_object	*storage_map = NULL;
@@ -638,7 +638,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	}
 
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
-		&storage_map)) {
+				       &storage_map)) {
 		D_ERROR("unable to extract host_storage_map from JSON\n");
 		return -DER_INVAL;
 	}
@@ -661,7 +661,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 			json_object_object_get_ex(val1, "smd_info", &smd_info);
 			if (smd_info != NULL) {
 				if (!json_object_object_get_ex(smd_info,
-					"devices", &smd_dev)) {
+							       "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");
 					return -DER_INVAL;
 				}
@@ -675,7 +675,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 
 				if (devices != NULL) {
 					rc = parse_device_info(smd_dev, devices,
-						host, dev_length, disk);
+							       host, dev_length, disk);
 					if (rc != 0)
 						goto out_json;
 				}
@@ -693,7 +693,7 @@ out_json:
 
 int
 dmg_storage_set_nvme_fault(const char *dmg_config_file,
-	char *host, const uuid_t uuid, int force)
+			   char *host, const uuid_t uuid, int force)
 {
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
@@ -730,4 +730,3 @@ out_json:
 out:
 	return rc;
 }
-

@@ -155,7 +155,7 @@ nvme_recov_2(void **state)
 	assert_int_equal(rc, 0);
 	for (i = 0; i < ndisks; i++)
 		print_message("Rank=%d UUID=%s state=%s host=%s\n",
-			devices[i].rank, DP_UUID(devices[i].device_id),
+			      devices[i].rank, DP_UUID(devices[i].device_id),
 			devices[i].state, devices[i].host);
 
 	/*
@@ -169,18 +169,18 @@ nvme_recov_2(void **state)
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank == 1) {
 			rc = get_server_config(devices[i].host,
-				server_config_file);
+					       server_config_file);
 			assert_int_equal(rc, 0);
 			print_message("server_config_file = %s\n",
-				server_config_file);
+				      server_config_file);
 
 			get_server_log_file(devices[i].host,
-				server_config_file, log_file);
+					    server_config_file, log_file);
 			rc = verify_server_log_mask(devices[i].host,
-				server_config_file, "DEBUG");
+						    server_config_file, "DEBUG");
 			if (rc) {
 				print_message("Log Mask != DEBUG in %s.\n",
-					server_config_file);
+					      server_config_file);
 				skip();
 			}
 		}
@@ -201,7 +201,7 @@ nvme_recov_2(void **state)
 	/** Insert record **/
 	print_message("Insert single record with 100 extents\n");
 	insert_single_with_rxnr("dkey", "akey", 0, data_buf,
-		1, 100, DAOS_TX_NONE, &req);
+				1, 100, DAOS_TX_NONE, &req);
 
 	/**
 	*Set single device for rank1 to faulty.
@@ -213,7 +213,7 @@ nvme_recov_2(void **state)
 				DP_UUID(devices[i].device_id),
 				devices[i].host);
 			rc = dmg_storage_set_nvme_fault(dmg_config_file,
-				devices[i].host,
+							devices[i].host,
 				devices[i].device_id, 1);
 			assert_int_equal(rc, 0);
 			break;
@@ -233,7 +233,7 @@ nvme_recov_2(void **state)
 			assert_string_equal(devices[i].state, "\"FAULTY\"");
 
 			rc = verify_state_in_log(devices[i].host,
-				log_file, "TEARDOWN -> OUT");
+						 log_file, "TEARDOWN -> OUT");
 			if (rc != 0) {
 				print_message(
 					"TEARDOWN -> OUT not found in log %s\n",
@@ -242,7 +242,7 @@ nvme_recov_2(void **state)
 			}
 
 			rc = verify_state_in_log(devices[i].host,
-				log_file, "FAULTY -> TEARDOWN");
+						 log_file, "FAULTY -> TEARDOWN");
 			if (rc != 0) {
 				print_message(
 					"FAULTY -> TEARDOWN not found in %s\n",
@@ -257,7 +257,7 @@ nvme_recov_2(void **state)
 	/** Lookup all the records and verify the content **/
 	print_message("Lookup and Verify all the records:\n");
 	lookup_single_with_rxnr("dkey", "akey", 0, fetch_buf,
-		1, 100, DAOS_TX_NONE, &req);
+				1, 100, DAOS_TX_NONE, &req);
 	for (i = 0; i < 100; i++)
 		assert_memory_equal(&fetch_buf[i], "a", 1);
 
