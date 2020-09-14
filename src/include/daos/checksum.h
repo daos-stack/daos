@@ -108,7 +108,7 @@ struct daos_csummer {
  * @param srv_verify	whether server-side checksum verification is enabled
  * @param dedup		whether deduplication is enabled on the server
  * @param dedup_verify	whether to memcmp data on the server for deduplication
- * @param dedup_bytes	deduplication size threashold in bytes
+ * @param dedup_bytes	deduplication size threshold in bytes
  *
  * @return		0 for success, or an error code
  */

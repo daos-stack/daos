@@ -42,7 +42,7 @@ static inline uint64_t crt_hlc_localtime_get(void)
 	uint64_t	pt;
 	int		rc;
 
-	rc = clock_gettime(CLOCK_REALTIME_COARSE, &now);
+	rc = clock_gettime(CLOCK_REALTIME, &now);
 	pt = rc ? crt_hlc : (now.tv_sec * NSEC_PER_SEC + now.tv_nsec);
 
 	/**
