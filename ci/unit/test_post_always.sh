@@ -22,9 +22,6 @@ NODE="${NODELIST%%,*}"
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 : "${STAGE_NAME:="Unit Test"}"
-: "${WITH_VALGRIND:=""}"
-
-echo "$WITH_VALGRIND"
 
 # shellcheck disable=SC2029
 ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
@@ -34,6 +31,4 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
 
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE
-if [[ -z "${WITH_VALGRIND}" ]]; then
-    python utils/fix_cmocka_xml.py
-fi
+python utils/fix_cmocka_xml.py
