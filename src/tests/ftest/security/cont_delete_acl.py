@@ -63,7 +63,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,pr,security,container_acl,cont_delete_acl
         """
         # Get list of invalid ACL principal values
-        invalid_principals = self.get.params("invalid_principals", "/run/*")
+        invalid_principals = self.params.get("invalid_principals", "/run/*")
         daos_cmd = self.get_daos_command()
 
         # Check for failure on invalid inputs.
