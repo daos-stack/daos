@@ -87,6 +87,7 @@ struct dtx_req_rec {
 	d_rank_t			 drr_rank; /* The server ID */
 	uint32_t			 drr_tag; /* The VOS ID */
 	int				 drr_count; /* DTX count */
+	int				 drr_max; /* DTX max count */
 	int				 drr_result; /* The RPC result */
 	struct dtx_id			*drr_dti; /* The DTX array */
 };
@@ -327,6 +328,7 @@ dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	drr->drr_rank = dcrb->dcrb_rank;
 	drr->drr_tag = dcrb->dcrb_tag;
 	drr->drr_count = 1;
+	drr->drr_max = dcrb->dcrb_count;
 	drr->drr_dti[0] = *dcrb->dcrb_dti;
 	d_list_add_tail(&drr->drr_link, dcrb->dcrb_head);
 	++(*dcrb->dcrb_length);
@@ -363,10 +365,22 @@ dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		  d_iov_t *key, d_iov_t *val)
 {
 	struct dtx_req_rec		*drr;
+	struct dtx_id			*tmp;
 	struct dtx_cf_rec_bundle	*dcrb;
 
 	drr = (struct dtx_req_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	dcrb = (struct dtx_cf_rec_bundle *)val->iov_buf;
+	if (drr->drr_count == drr->drr_max) {
+		D_REALLOC_ARRAY(tmp, drr->drr_dti, drr->drr_max + 4);
+		if (tmp == NULL)
+			return -DER_NOMEM;
+
+		drr->drr_dti = tmp;
+		/* zero the remainder */
+		memset(&drr->drr_dti[drr->drr_count], 0,
+		       sizeof(drr->drr_dti[0]) * 4);
+		drr->drr_max = drr->drr_max + 4;
+	}
 	drr->drr_dti[drr->drr_count++] = *dcrb->dcrb_dti;
 
 	return 0;
