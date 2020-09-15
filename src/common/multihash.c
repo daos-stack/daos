@@ -36,6 +36,7 @@
 
 /** ISA-L hash function table implemented in multihash_isal.c */
 extern struct hash_ft *isal_hash_algo_table[];
+extern struct hash_ft *qat_hash_algo_table[];
 
 /** Container Property knowledge */
 enum DAOS_HASH_TYPE
@@ -86,14 +87,17 @@ daos_hashtype2contprop(enum DAOS_HASH_TYPE daos_hash_type)
  * and other accelerator support.
  */
 static struct hash_ft **algo_table = isal_hash_algo_table;
-
+static struct hash_ft **qat_algo_table = qat_hash_algo_table;
 struct hash_ft *
 daos_mhash_type2algo(enum DAOS_HASH_TYPE type)
 {
 	struct hash_ft *result = NULL;
 
 	if (type > HASH_TYPE_UNKNOWN && type < HASH_TYPE_END) {
-		result = algo_table[type - 1];
+		if (qat_algo_table[type-1] != NULL)
+			result = qat_algo_table[type - 1];
+		else
+			result = algo_table[type - 1];
 	}
 	if (result && result->cf_type == HASH_TYPE_UNKNOWN)
 		result->cf_type = type;

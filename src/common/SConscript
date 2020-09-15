@@ -22,14 +22,24 @@ def scons():
 
     prereqs.require(denv, 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt'])
+
+    # TODO: need add qat dependency
+    #denv.AppendUnique(CPPDEFINES =['-DHAVE_QAT'])
+    #denv.AppendUnique(LIBS=['qat_s'])
+    #denv.AppendUnique(CPPPATH=['/home/wli5/qat/quickassist/include/',
+    #    '/home/wli5/qat/quickassist/include/lac', 
+    #    '/home/wli5/qat/quickassist/include/dc',
+    #    '/home/wli5/qat/quickassist/lookaside/access_layer/include', 
+    #    '/home/wli5/qat/quickassist/utilities/libusdm_drv/'])
+    
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
                   'drpc.c', 'drpc.pb-c.c', 'proc.c',
                   'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
                   'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
-                  'multihash.c', 'multihash_isal.c', 'cipher.c',
-                  'cipher_isal.c']
+                  'multihash.c', 'multihash_isal.c', 'multihash_qat.c', 'cipher.c',
+                  'cipher_isal.c', 'qat.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib64/', common)
