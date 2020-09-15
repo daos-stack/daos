@@ -5,16 +5,13 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 120
+timeout: 100
 server_config:
   name: daos_server
-  servers:
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
 pool:
   control_method: dmg
   mode: 511
-  scm_size: 8G
+  scm_size: 2G
   name: daos_server
 container:
   control_method: daos

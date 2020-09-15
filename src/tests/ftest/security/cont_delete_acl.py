@@ -51,7 +51,6 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         for entry in cont_acl:
             self.principals_table[entry.split(":")[2]] = entry
 
-
     @fail_on(CommandFailure)
     def test_acl_delete_invalid_inputs(self):
         """
