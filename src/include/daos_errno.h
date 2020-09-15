@@ -280,7 +280,7 @@ D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
 
 /** Return a string associated with a registered gurt errno
  *
- * \param	rc[in]	The error code
+ * \param[in]	rc	The error code
  *
  * \return	String value for error code or DER_UNKNOWN
  */
@@ -288,14 +288,14 @@ const char *d_errstr(int rc);
 
 /** Register error codes with gurt.  Use D_REGISTER_RANGE.
  *
- * \param	start[in]	Start of error range.  Actual errors start at
+ * \param[in]	start		Start of error range. Actual errors start at
  *				\p start + 1
- * \param	end[in]		End of range.  All error codes should be less
+ * \param[in]	end		End of range. All error codes should be less
  *				than \p end
- * \param	error_strings[in]	Array of strings.   Must be one per
- *					code in the range
- * \param	strerror[in]		Array of strings.   Must be one per
- *					code in the range
+ * \param[in]	error_strings	Array of strings. Must be one per
+ *				code in the range
+ * \param[in]	strerror	Array of strings. Must be one per
+ *				code in the range
  *
  * \return	0 on success, otherwise error code
  */
@@ -305,7 +305,7 @@ int d_errno_register_range(int start, int end,
 
 /** De-register error codes with gurt.  Use D_DEREGISTER_RANGE.
  *
- * \param	start[in]	Start of error range
+ * \param[in]	start	Start of error range
  */
 void d_errno_deregister_range(int start);
 
@@ -324,6 +324,7 @@ const char *d_errdesc(int errnum);
 #ifndef DF_RC
 #define DF_RC "%s(%d)"
 #define DP_RC(rc) d_errstr(rc), rc
+#define DD_RC(rc) d_errdesc(rc), rc
 #endif /* DF_RC */
 
 #if defined(__cplusplus)
