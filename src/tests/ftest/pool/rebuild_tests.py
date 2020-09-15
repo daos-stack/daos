@@ -130,7 +130,7 @@ class RebuildTests(TestWithServers):
                 "Data verification error after rebuild")
         self.log.info("Test Passed")
 
-    @skipForTicket("DAOS-2922")
+    @skipForTicket("DAOS-5611")
     def test_simple_rebuild(self):
         """JIRA ID: DAOS-XXXX Rebuild-001.
 
@@ -144,7 +144,7 @@ class RebuildTests(TestWithServers):
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-2922")
+    @skipForTicket("DAOS-5611")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 
