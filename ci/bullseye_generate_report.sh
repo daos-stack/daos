@@ -19,7 +19,9 @@ if [ ! -e "$COVFILE" ]; then
 else
   ls -l "$COVFILE"
   echo "Excluding tests files"
-  covselect --remove "$WORKSPACE"/src/tests
+  pushd "$WORKSPACE"
+  covselect --add '!**/src/tests/'
+  popd
 fi
 
 java -jar bullshtml.jar test_coverage
