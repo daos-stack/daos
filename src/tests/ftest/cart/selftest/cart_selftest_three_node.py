@@ -22,8 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-# pylint disable=broad-except
-
 from __future__ import print_function
 
 import sys
@@ -66,7 +64,7 @@ class CartSelfThreeNodeTest(Test):
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
-        # pylint disable=broad-except
+        # pylint: disable=broad-except
         except Exception as e:
             self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
