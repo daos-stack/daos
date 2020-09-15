@@ -379,7 +379,16 @@ pool_create_and_destroy_retry(void **state)
 
 	if (arg->myrank != 0)
 		return;
-
+	/* Skipping this test because of issue DAOS-5506/2407.
+	 *
+	 * Before daos_test was switched to dmg, it couldn't retry pool destroy
+	 * operations, for another missing functionality that excludes killed
+	 * servers from the system. So killed servers still prevent pools
+	 * being destroyed in some cases. MGMT5 will have issue if it ran in
+	 * sequence.So Skipping this test until MS pool create/destroy crash
+	 * recovery mechanism handle for this test scenario.
+	 */
+	skip();
 	print_message("setting DAOS_POOL_CREATE_FAIL_CORPC ... ");
 	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE,
