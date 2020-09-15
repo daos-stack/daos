@@ -27,7 +27,6 @@ import os
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import create_acl_file
 from command_utils import CommandFailure
-from avocado.utils import process
 from avocado import fail_on
 
 
@@ -46,6 +45,32 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         self.prepare_pool()
         self.add_container(self.pool)
 
+    def error_handling(self, results, err_msg):
+        """Handle errors when test fails and when command unexpectedly passes.
+
+        Args:
+            results (CmdResult): object containing stdout, stderr and
+                exit status
+
+        Returns:
+            list: list of test erros encountered.
+        """
+        test_errs = []
+        if results.exit_status == 0:
+            test_errs.append("overwrite-acl passed unexpectedly: {}".format(
+                results.stdout))
+        elif results.exit_status == 1:
+            # REMOVE BELOW IF Once DAOS-5635 is resolved
+            if results.stdout and err_msg in results.stdout:
+                self.log.info("Found expected error %s", results.stdout)
+            # REMOVE ABOVE IF Once DAOS-5635 is resolved
+            elif results.stderr and err_msg in results.stderr:
+                self.log.info("Found expected error %s", results.stderr)
+            else:
+                self.fail("overwrite-acl seems to have failed with \
+                    unexpected error: {}".format(results))
+        return test_errs
+
     def test_acl_overwrite_invalid_inputs(self):
         """
         JIRA ID: DAOS-3708
@@ -59,25 +84,22 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         # Get list of invalid ACL principal values
         invalid_acl_filename = self.params.get("invalid_acl_filename", "/run/*")
 
-        # Check for failure on invalid inputs.
+        # Check for failure on invalid inputs
+        test_errs = []
         for acl_file in invalid_acl_filename:
-            try:
-                self.daos_cmd.container_overwrite_acl(
-                    self.pool.uuid,
-                    self.pool.svc_ranks[0],
-                    self.container.uuid,
-                    acl_file)
-            except process.CmdError as err:
-                if "No such file or directory" in err.result.stdout:
-                    self.log.info(
-                        "Found expected error %s with invalid acl-file %s",
-                        err.result.stdout,
-                        acl_file)
-                else:
-                    self.fail("overwrite-acl seems to have failed with \
-                        unexpected error: {}".format(err))
 
-        self.fail("container overwrite-acl command expected to fail.")
+            # Run overwrite command
+            self.daos_cmd.container_overwrite_acl(
+                self.pool.uuid,
+                self.pool.svc_ranks[0],
+                self.container.uuid,
+                acl_file)
+            test_errs.extend(self.error_handling(
+                self.daos_cmd.result, "No such file or directory"))
+
+        if test_errs:
+            self.fail("container overwrite-acl command expected to fail: \
+                {}".format(test_errs))
 
     def test_overwrite_invalid_acl_file(self):
         """
@@ -92,26 +114,23 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         acl_filename = "test_acl_file.txt"
         invalid_file_content = self.params.get(
             "invalid_acl_file_content", "/run/*")
+        path_to_file = os.path.join(self.tmp, acl_filename)
 
+        test_errs = []
         for content in invalid_file_content:
-            path_to_file = os.path.join(os.getcwd(), acl_filename)
             create_acl_file(path_to_file, content)
 
             # Run overwrite command
-            try:
-                self.daos_cmd.container_overwrite_acl(
-                    self.pool.uuid,
-                    self.pool.svc_ranks[0],
-                    self.container.uuid,
-                    path_to_file)
-            except process.CmdError as err:
-                if "-1003" in err.result.stdout:
-                    self.log.info(
-                        "Found expected error %s with invalid file content %s",
-                        err.result.stdout, content)
-                else:
-                    self.fail("overwrite-acl seems to have failed with \
-                        unexpected error: {}".format(err))
+            self.daos_cmd.container_overwrite_acl(
+                self.pool.uuid,
+                self.pool.svc_ranks[0],
+                self.container.uuid,
+                path_to_file)
+            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
+
+        if test_errs:
+            self.fail("container overwrite-acl command expected to fail: \
+                {}".format(test_errs))
 
     @fail_on(CommandFailure)
     def test_overwrite_valid_acl_file(self):
@@ -126,12 +145,11 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         acl_filename = "test_acl_file.txt"
         valid_file_content = self.params.get(
             "valid_acl_file", "/run/*")
-        path_to_file = os.path.join(os.getcwd(), acl_filename)
+        path_to_file = os.path.join(self.tmp, acl_filename)
 
+        # Run overwrite command, test will fail if command fails.
         for content in valid_file_content:
             create_acl_file(path_to_file, content)
-
-            # Run overwrite command, test will fail if command fails.
             self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
                 self.pool.svc_ranks[0],
@@ -150,7 +168,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         acl_filename = "test_acl_file.txt"
         valid_file_content = self.params.get(
             "valid_acl_file", "/run/*")
-        path_to_file = os.path.join(os.getcwd(), acl_filename)
+        path_to_file = os.path.join(self.tmp, acl_filename)
 
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(
@@ -161,20 +179,16 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         # Let's check that we can't run as root (or other user) and overwrite
         # entries if no permissions are set for that user.
+        test_errs = []
         for content in valid_file_content:
             create_acl_file(path_to_file, content)
-            try:
-                self.daos_cmd.container_overwrite_acl(
-                    self.pool.uuid,
-                    self.pool.svc_ranks[0],
-                    self.container.uuid,
-                    path_to_file)
-            except process.CmdError as err:
-                if "-1001" in err.result.stdout:
-                    self.log.info(
-                        "Found expected error %s with %s",
-                        err.result.stdout, path_to_file)
-                else:
-                    self.fail("overwrite-acl seems to have failed with \
-                        unexpected error: {}".format(err))
-        self.fail("container overwrite-acl command expected to fail.")
+            self.daos_cmd.container_overwrite_acl(
+                self.pool.uuid,
+                self.pool.svc_ranks[0],
+                self.container.uuid,
+                path_to_file)
+            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
+
+        if test_errs:
+            self.fail("container overwrite-acl command expected to fail: \
+                {}".format(test_errs))
