@@ -163,9 +163,9 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 }
 
 static void
-set_dkey(int i, char *path, daos_key_t *dkey)
+set_dkey(uint64_t i, char *path, daos_key_t *dkey)
 {
-	uint64_t key = i * 2;
+	uint64_t key = (i << 32) + path[L_D];
 
 	D_ASSERT(dkey->iov_buf_len >= sizeof(key));
 	*(uint64_t *)dkey->iov_buf = key;
@@ -173,9 +173,9 @@ set_dkey(int i, char *path, daos_key_t *dkey)
 }
 
 static void
-set_akey(int i, char *path, daos_key_t *akey)
+set_akey(uint64_t i, char *path, daos_key_t *akey)
 {
-	uint64_t key = (i * 2) + 1;
+	uint64_t key = (i << 32) + path[L_A];
 
 	D_ASSERT(akey->iov_buf_len >= sizeof(key));
 	*(uint64_t *)akey->iov_buf = key;
@@ -550,8 +550,8 @@ tx_list(vos_iter_param_t *param, vos_iter_type_t type, struct tx_helper *txh)
 }
 
 static int
-listo(struct io_test_args *arg, struct tx_helper *txh, char *path,
-      daos_epoch_t epoch)
+listo_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
 {
 	struct mvcc_arg		*mvcc_arg = arg->custom;
 	vos_iter_param_t	 param = {0};
@@ -567,8 +567,8 @@ listo(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-listd(struct io_test_args *arg, struct tx_helper *txh, char *path,
-      daos_epoch_t epoch)
+listd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
 {
 	struct mvcc_arg		*mvcc_arg = arg->custom;
 	vos_iter_param_t	 param = {0};
@@ -585,8 +585,8 @@ listd(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-lista(struct io_test_args *arg, struct tx_helper *txh, char *path,
-      daos_epoch_t epoch)
+lista_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
 {
 	struct mvcc_arg		*mvcc_arg = arg->custom;
 	vos_iter_param_t	 param = {0};
@@ -603,8 +603,8 @@ lista(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-listr(struct io_test_args *arg, struct tx_helper *txh, char *path,
-      daos_epoch_t epoch)
+listr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
 {
 	struct mvcc_arg		*mvcc_arg = arg->custom;
 	vos_iter_param_t	 param = {0};
@@ -632,10 +632,10 @@ static struct op operations[] = {
 	{"fetch",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
 	{"fetch_dne",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_dne_f},
 	{"fetch_ane",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_ane_f},
-	{"listo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listo},
-	{"listd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	listd},
-	{"lista",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	lista},
-	{"listr",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	listr},
+	{"listo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listo_f},
+	{"listd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	listd_f},
+	{"lista",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	lista_f},
+	{"listr",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	listr_f},
 	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
 	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
 	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
