@@ -39,6 +39,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
     def setUp(self):
         """Set up each test case."""
         super(DeleteContainerACLTest, self).setUp()
+        self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
 
@@ -51,7 +52,6 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         for entry in cont_acl:
             self.principals_table[entry.split(":")[2]] = entry
 
-    @fail_on(CommandFailure)
     def test_acl_delete_invalid_inputs(self):
         """
         JIRA ID: DAOS-3714
@@ -63,12 +63,11 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         """
         # Get list of invalid ACL principal values
         invalid_principals = self.params.get("invalid_principals", "/run/*")
-        daos_cmd = self.get_daos_command()
 
         # Check for failure on invalid inputs.
         for principal in invalid_principals:
             try:
-                daos_cmd.container_delete_acl(
+                self.daos_cmd.container_delete_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
                     self.container.uuid,
@@ -94,19 +93,17 @@ class DeleteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_delete_acl
         """
-        daos_cmd = self.get_daos_command()
         for principal in self.principals_table:
-            daos_cmd.container_delete_acl(
+            self.daos_cmd.container_delete_acl(
                 self.pool.uuid,
                 self.pool.svc_ranks[0],
                 self.container.uuid,
                 principal)
-            if self.principals_table[principal] in daos_cmd.result.stdout:
+            if self.principals_table[principal] in self.daos_cmd.result.stdout:
                 self.fail(
                     "Found acl that was to be deleted in output: {}".format(
-                        daos_cmd.result.stdout))
+                        self.daos_cmd.result.stdout))
 
-    @fail_on(CommandFailure)
     def test_no_user_permissions(self):
         """
         JIRA ID: DAOS-3714
@@ -121,15 +118,14 @@ class DeleteContainerACLTest(ContSecurityTestBase):
             self.pool.uuid, entry="A::EVERYONE@:rw")
 
         # The root user shouldn't have access to deleting container ACL entries
-        daos_cmd = self.get_daos_command()
-        daos_cmd.sudo = True
+        self.daos_cmd.sudo = True
 
         # Let's check that we can't run as root (or other user) and delete
         # entries if no permissions are set for that user.
 
         for principal in self.principals_table:
             try:
-                daos_cmd.container_delete_acl(
+                self.daos_cmd.container_delete_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
                     self.container.uuid,
