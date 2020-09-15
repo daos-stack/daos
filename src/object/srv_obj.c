@@ -3730,8 +3730,11 @@ ds_obj_dtx_leader_ult(void *arg)
 			   &dcsh->dcsh_epoch.oe_first,
 			   &dcsh->dcsh_epoch.oe_rpc_flags);
 	if (rc == PE_OK_LOCAL) {
-		dcsh->dcsh_epoch.oe_flags &= ~DTX_EPOCH_UNCERTAIN;
-		dcsh->dcsh_epoch.oe_rpc_flags &= ~ORF_EPOCH_UNCERTAIN;
+		/*
+		 * In this case, writes to local RDGs can use the chosen epoch
+		 * without any uncertainty. This optimization is left to future
+		 * work.
+		 */
 	}
 
 	if (oci->oci_flags & ORF_RESEND) {
