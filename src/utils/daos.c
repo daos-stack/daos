@@ -325,6 +325,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		entry->dpe_str = strdup(value);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
+
 		if (csum_type < 0) {
 			fprintf(stderr,
 				"currently supported checksum types are "
@@ -403,6 +404,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		entry->dpe_val = val;
 	} else if (!strcmp(name, "compress") || !strcmp(name, "compression")) {
 		int compression_type = daos_str2compresscontprop(value);
+
 		if (compression_type < 0) {
 			fprintf(stderr, "compression prop value can only be "
 				"'off/lz4/gzip/gzip[1-9]'\n");
@@ -413,6 +415,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 	} else if (!strcmp(name, "encrypt") ||
 		   !strcmp(name, "encryption")) {
 		int encryption_type = daos_str2encryptcontprop(value);
+
 		if (encryption_type < 0) {
 			fprintf(stderr, "encryption prop value can only be "
 				"'off/aes-xts[128,256]/aes-cbc[128,192,256]/"

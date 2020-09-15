@@ -152,7 +152,8 @@ daos_cont_prop2compress(daos_prop_t *props)
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_COMPRESS);
 
-	return prop == NULL ? DAOS_PROP_CO_COMPRESS_OFF : (uint32_t)prop->dpe_val;
+	return prop == NULL ? DAOS_PROP_CO_COMPRESS_OFF
+			    : (uint32_t)prop->dpe_val;
 }
 
 bool

@@ -276,7 +276,7 @@ struct sha256_ctx {
 };
 
 static int
-sha256_init(void ** daos_mhash_ctx)
+sha256_init(void **daos_mhash_ctx)
 {
 	struct sha256_ctx	*ctx;
 	int			 rc;
