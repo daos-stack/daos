@@ -32,6 +32,7 @@ basicConstraints = critical,CA:true,pathlen:1
 [ signing_policy ]
 organizationName	= supplied
 commonName		= supplied
+subjectAltName		= supplied
 
 [ signing_agent ]
 keyUsage = critical,digitalSignature,keyEncipherment

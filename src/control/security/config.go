@@ -42,7 +42,6 @@ const (
 	defaultAgentCert     = certDir + "agent.crt"
 	defaultAgentKey      = certDir + "agent.key"
 	defaultClientCertDir = certDir + "clients"
-	defaultServer        = "server"
 	defaultInsecure      = false
 )
 
@@ -61,7 +60,6 @@ func (tc *TransportConfig) String() string {
 // component. ServerName is only needed if the config is being used as a
 // transport credential for a gRPC tls client.
 type CertificateConfig struct {
-	ServerName      string           `yaml:"server_name,omitempty"`
 	ClientCertDir   string           `yaml:"client_cert_dir,omitempty"`
 	CARootPath      string           `yaml:"ca_cert"`
 	CertificatePath string           `yaml:"cert"`
@@ -76,7 +74,6 @@ func DefaultAgentTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
-			ServerName:      defaultServer,
 			ClientCertDir:   "",
 			CARootPath:      defaultCACert,
 			CertificatePath: defaultAgentCert,
@@ -96,7 +93,6 @@ func DefaultClientTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
-			ServerName:      defaultServer,
 			ClientCertDir:   "",
 			CARootPath:      defaultCACert,
 			CertificatePath: defaultClientCert,
@@ -113,7 +109,6 @@ func DefaultServerTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
-			ServerName:      defaultServer,
 			CARootPath:      defaultCACert,
 			ClientCertDir:   defaultClientCertDir,
 			CertificatePath: defaultServerCert,

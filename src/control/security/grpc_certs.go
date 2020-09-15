@@ -72,7 +72,6 @@ func GetClientTransportCredentials(cfg *TransportConfig) (credentials.TransportC
 	}
 
 	tlsConfig := tls.Config{
-		ServerName:               cfg.ServerName,
 		Certificates:             []tls.Certificate{*cfg.tlsKeypair},
 		RootCAs:                  cfg.caPool,
 		MinVersion:               tls.VersionTLS12,
@@ -110,10 +109,6 @@ func DialOptionForTransportConfig(cfg *TransportConfig) (grpc.DialOption, error)
 
 	if cfg.AllowInsecure {
 		return grpc.WithInsecure(), nil
-	}
-
-	if cfg.ServerName == "" {
-		return nil, errors.New("No ServerName set in TransportConfig")
 	}
 
 	creds, err := GetClientTransportCredentials(cfg)
