@@ -188,6 +188,27 @@ class DaosCommand(DaosCommandBase):
             ("container", "get-acl"), pool=pool, svc=svc, cont=cont,
             verbose=verbose, outfile=outfile)
 
+    def container_delete_acl(self, pool, svc, cont, principal):
+        """Delete an entry for a given principal in an existing container ACL.
+
+        Args:
+            pool (str): Pool UUID
+            svc (str): Service replicas
+            cont (str): Container for which to get the ACL.
+            principal (str): principal portion of the ACL.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container get-acl command fails.
+
+        """
+        return self._get_result(
+            ("container", "delete-acl"), pool=pool, svc=svc, cont=cont,
+            principal=principal)
+
     def pool_list_cont(self, pool, svc, sys_name=None):
         """List containers in the given pool.
 
