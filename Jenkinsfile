@@ -1114,6 +1114,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             expression { ! skip_stage('bullseye', true) }
+                            expression { ! skip_stage('func-test') }
                         }
                     }
                     agent {
