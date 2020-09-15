@@ -347,8 +347,8 @@ class Dfuse(DfuseCommand):
         state = self.check_mount_state(self.running_hosts)
         if state["unmounted"] or state["nodirectory"]:
             self.log.error(
-                "Error: dfuse not running on %s %s",
-                str(state["unmounted"]), str(state["nodirectory"]))
+                "Error: dfuse not running on %s",
+                str(state["unmounted"].union(state["nodirectory"])))
             status = False
             if fail_on_error:
                 raise CommandFailure("dfuse not running")
@@ -397,7 +397,7 @@ class Dfuse(DfuseCommand):
                 # Detect which hosts have fuseblk mounted devices and remove any
                 # hosts which no longer have the dfuse mount point mounted
                 state = self.check_mount_state(self.running_hosts)
-                for host in state["unmounted"] or host in state["nodirectory"]:
+                for host in state["unmounted"].union(state["nodirectory"]):
                     self.running_hosts.remove(host)
 
                 # Increment the loop counter
