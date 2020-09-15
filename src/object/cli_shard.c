@@ -155,7 +155,35 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 	return singv_los;
 }
 
-int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
+int
+dc_rw_cb_iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
+		      d_sg_list_t *cp_sgl, struct obj_shard_iod *siod,
+		      uint64_t off)
+{
+	struct daos_sgl_idx	sgl_idx = {0};
+	int			rc;
+
+	cp_iod->iod_recxs = &iod->iod_recxs[siod->siod_idx];
+	cp_iod->iod_nr = siod->siod_nr;
+
+	rc = daos_sgl_processor(sgl, false, &sgl_idx, off, NULL, NULL);
+	if (rc)
+		return rc;
+
+	if (sgl_idx.iov_idx >= sgl->sg_nr || sgl_idx.iov_offset != 0) {
+		D_ERROR("bad sgl/siod, iov_idx %d, iov_offset "DF_U64
+			", offset "DF_U64", tgt_idx %d\n", sgl_idx.iov_idx,
+			sgl_idx.iov_offset, off, siod->siod_tgt_idx);
+		return -DER_IO;
+	}
+	cp_sgl->sg_iovs = &sgl->sg_iovs[sgl_idx.iov_idx];
+	cp_sgl->sg_nr = sgl->sg_nr - sgl_idx.iov_idx;
+
+	return 0;
+}
+
+int
+dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
 	struct daos_csummer	*csummer;
 	struct daos_csummer	*csummer_copy = NULL;
@@ -166,6 +194,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	struct dcs_iod_csums	*iods_csums;
 	daos_iom_t		*maps;
 	struct dcs_layout	*singv_lo, *singv_los;
+	struct obj_io_desc	*oiods;
 	uint32_t		 shard_idx;
 	int			 i;
 	int			 rc = 0;
@@ -185,6 +214,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	orwo = crt_reply_get(rw_args->rpc);
 	sgls = rw_args->rwaa_sgls;
 	iods = orw->orw_iod_array.oia_iods;
+	oiods = rw_args->shard_args->oiods;
 	iods_csums = orwo->orw_iod_csums.ca_arrays;
 	maps = orwo->orw_maps.ca_arrays;
 
@@ -221,10 +251,18 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		daos_iod_t iod_copy = *iod;
 		d_sg_list_t sgl_copy = sgls[i];
 
-		iod_copy.iod_nr = 1;
-		iod_copy.iod_recxs += shard_idx;
-		sgl_copy.sg_iovs += shard_idx;
-		sgl_copy.sg_nr -= shard_idx;
+		if (iod->iod_type == DAOS_IOD_ARRAY && oiods != NULL) {
+			rc = dc_rw_cb_iod_sgl_copy(iod, &sgls[i], &iod_copy,
+					&sgl_copy, &oiods->oiod_siods[i],
+					rw_args->shard_args->offs[i]);
+			if (rc != 0) {
+				D_ERROR("dc_rw_cb_iod_sgl_copy failed (object: "
+					DF_OID"): "DF_RC"\n",
+					DP_OID(orw->orw_oid.id_pub),
+					DP_RC(rc));
+				break;
+			}
+		}
 
 		rc = daos_csummer_verify_iod(csummer_copy, &iod_copy, &sgl_copy,
 					     iod_csum, singv_lo, shard_idx,
