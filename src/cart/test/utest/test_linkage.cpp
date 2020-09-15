@@ -170,5 +170,5 @@ main(int argc, char **argv)
 
 	cout << "[==========] test linkage ...\n" ;
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("test_linkage", tests, NULL, NULL);
 }
