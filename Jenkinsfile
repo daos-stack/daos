@@ -1108,6 +1108,29 @@ pipeline {
                         }
                     }
                 }
+                stage('Functional on CentOS 7 Bullseye') {
+                    when {
+                        beforeAgent true
+                        allOf {
+			    expression { ! skip_stage('bullseye', true) }
+                            expression { ! skip_stage('func-test') }
+                            expression { ! skip_stage('func-test-vm') }
+                            expression { ! skip_stage('func-test-el7')}
+                        }
+                    }
+                    agent {
+                        label 'ci_vm9'
+                    }
+                    steps {
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                    }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    }
+                }
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
