@@ -907,10 +907,9 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		goto out;
 	}
 
-	tx->tx_status = TX_FAILED;
-
 	if (rc != -DER_TX_RESTART && !obj_retry_error(rc)) {
 		tx->tx_retry = 0;
+		tx->tx_status = TX_ABORTED;
 
 		goto out;
 	}
@@ -927,6 +926,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_ERROR("Failed to refresh the pool map: "
 				DF_RC", original error: "DF_RC"\n",
 				DP_RC(rc1), DP_RC(rc));
+			tx->tx_status = TX_ABORTED;
 			D_GOTO(out, rc = rc1);
 		}
 	}
@@ -934,6 +934,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	/* Need to restart the TX with newer epoch. */
 	if (rc == -DER_TX_RESTART || rc == -DER_STALE) {
 		tx->tx_set_resend = 1;
+		tx->tx_status = TX_FAILED;
 
 		if (pool_task != NULL) {
 			D_MUTEX_UNLOCK(&tx->tx_lock);
@@ -959,6 +960,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 				DF_RC", original error: "DF_RC"\n",
 				DP_RC(rc1), DP_RC(rc));
 			dc_task_decref(pool_task);
+			tx->tx_status = TX_ABORTED;
 
 			D_GOTO(out, rc = rc1);
 		}
@@ -968,6 +970,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_ERROR("Failed to re-init task (%p): "
 				DF_RC", original error: "DF_RC"\n",
 				task, DP_RC(rc1), DP_RC(rc));
+			tx->tx_status = TX_ABORTED;
 
 			D_GOTO(out, rc = rc1);
 		}
@@ -1722,8 +1725,10 @@ out:
 	if (req != NULL)
 		crt_req_decref(req);
 
-	if (rc != 0)
+	if (rc == -DER_TX_RESTART)
 		tx->tx_status = TX_FAILED;
+	else if (rc != 0)
+		tx->tx_status = TX_ABORTED;
 
 	D_MUTEX_UNLOCK(&tx->tx_lock);
 	/* -1 for dc_tx_commit() held */
@@ -1755,11 +1760,12 @@ dc_tx_commit(tse_task_t *task)
 	if (tx->tx_status == TX_COMMITTED)
 		D_GOTO(out_tx, rc = -DER_ALREADY);
 
-	if (tx->tx_status == TX_COMMITTING)
+	if (tx->tx_status == TX_COMMITTING &&
+	    !(tx->tx_retry && args->flags & DTF_RETRY_COMMIT))
 		D_GOTO(out_tx, rc = -DER_INPROGRESS);
 
 	if (tx->tx_status != TX_OPEN &&
-	    !(tx->tx_status == TX_FAILED &&
+	    !(tx->tx_status == TX_COMMITTING &&
 	      tx->tx_retry && args->flags & DTF_RETRY_COMMIT)) {
 		D_ERROR("Can't commit non-open state TX (%d)\n",
 			tx->tx_status);

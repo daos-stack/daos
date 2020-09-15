@@ -555,10 +555,6 @@ dtx_13(void **state)
 	rc = daos_tx_restart(th, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 
-	print_message("Restart the TX2 again, expect DER_NO_PERM\n");
-	rc = daos_tx_restart(th, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
-
 	print_message("Abort the TX2...\n");
 	MUST(daos_tx_abort(th, NULL));
 
