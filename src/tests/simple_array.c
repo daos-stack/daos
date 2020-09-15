@@ -62,8 +62,7 @@ daos_handle_t	eq;
 
 /** Pool information */
 uuid_t			 pool_uuid;	/* only used on rank 0 */
-d_rank_t		 svc[13];	/* only used on rank 0 */
-d_rank_list_t	 svcl;		/* only used on rank 0 */
+d_rank_list_t		 svcl;		/* only used on rank 0 */
 daos_handle_t		 poh;		/* shared pool handle */
 
 /** Container information */
@@ -141,9 +140,9 @@ pool_create(void)
 	 */
 
 	/** create pool over all the storage targets */
-	svcl.rl_nr	= 3;
-	ASSERT(ARRAY_SIZE(svc) >= svcl.rl_nr);
-	svcl.rl_ranks	= svc;
+	svcl.rl_nr = 3;
+	D_ALLOC_ARRAY(svcl.rl_ranks, svcl.rl_nr);
+	ASSERT(svcl.rl_ranks);
 	rc = dmg_pool_create(NULL /* config file */,
 			     geteuid() /* user owner */,
 			     getegid() /* group owner */,
@@ -165,6 +164,7 @@ pool_destroy(void)
 	/** destroy the pool created in pool_create */
 	rc = dmg_pool_destroy(NULL, pool_uuid, DSS_PSETID, 1 /* force */);
 	ASSERT(rc == 0, "pool destroy failed with %d", rc);
+	D_FREE(svcl.rl_ranks);
 }
 
 static inline void
