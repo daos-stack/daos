@@ -95,7 +95,7 @@ if [ -d "/mnt/daos" ]; then
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
-            VALGRIND_XML_PATH="test_results/unit-test-$(date +'%Y-%m-%d_%H_%M')-%p.memcheck.xml"
+            VALGRIND_XML_PATH="test_results/unit-test-%p.memcheck.xml"
             VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
                                    --error-limit=no \
                                    --suppressions=${VALGRIND_SUPP} \
