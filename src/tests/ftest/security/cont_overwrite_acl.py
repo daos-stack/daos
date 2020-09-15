@@ -22,7 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+import os
+
 from cont_security_test_base import ContSecurityTestBase
+from security_test_base import create_acl_file
 from command_utils import CommandFailure
 from avocado.utils import process
 from avocado import fail_on
@@ -39,19 +42,10 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
     def setUp(self):
         """Set up each test case."""
         super(OverwriteContainerACLTest, self).setUp()
+        self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
 
-        # Get list of ACL entries
-        cont_acl = self.get_container_acl_list(
-            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
-
-        # Get principals
-        self.principals_table = {}
-        for entry in cont_acl:
-            self.principals_table[entry.split(":")[2]] = entry
-
-    @fail_on(CommandFailure)
     def test_acl_overwrite_invalid_inputs(self):
         """
         JIRA ID: DAOS-3708
@@ -64,21 +58,20 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         """
         # Get list of invalid ACL principal values
         invalid_acl_filename = self.params.get("invalid_acl_filename", "/run/*")
-        daos_cmd = self.get_daos_command()
 
         # Check for failure on invalid inputs.
         for acl_file in invalid_acl_filename:
             try:
-                daos_cmd.container_overwrite_acl(
+                self.daos_cmd.container_overwrite_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
                     self.container.uuid,
                     acl_file)
             except process.CmdError as err:
-                if "No such file or directory" in err.result.stderr:
+                if "No such file or directory" in err.result.stdout:
                     self.log.info(
                         "Found expected error %s with invalid acl-file %s",
-                        err.result.stderr,
+                        err.result.stdout,
                         acl_file)
                 else:
                     self.fail("overwrite-acl seems to have failed with \
@@ -96,64 +89,92 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl
         """
+        acl_filename = "test_acl_file.txt"
+        invalid_file_content = self.params.get(
+            "invalid_acl_file_content", "/run/*")
 
+        for content in invalid_file_content:
+            path_to_file = os.path.join(os.getcwd(), acl_filename)
+            create_acl_file(path_to_file, content)
+
+            # Run overwrite command
+            try:
+                self.daos_cmd.container_overwrite_acl(
+                    self.pool.uuid,
+                    self.pool.svc_ranks[0],
+                    self.container.uuid,
+                    path_to_file)
+            except process.CmdError as err:
+                if "-1003" in err.result.stdout:
+                    self.log.info(
+                        "Found expected error %s with invalid file content %s",
+                        err.result.stdout, content)
+                else:
+                    self.fail("overwrite-acl seems to have failed with \
+                        unexpected error: {}".format(err))
 
     @fail_on(CommandFailure)
-    def test_delete_valid_acl(self):
+    def test_overwrite_valid_acl_file(self):
         """
         JIRA ID: DAOS-3708
 
-        Test Description: Test that container delete command successfully
-            removes principal in ACL.
+        Test Description: Test that container overwrite command performs as
+            expected with valid ACL file provided.
 
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl
         """
-        daos_cmd = self.get_daos_command()
-        for principal in self.principals_table:
-            daos_cmd.container_delete_acl(
+        acl_filename = "test_acl_file.txt"
+        valid_file_content = self.params.get(
+            "valid_acl_file", "/run/*")
+        path_to_file = os.path.join(os.getcwd(), acl_filename)
+
+        for content in valid_file_content:
+            create_acl_file(path_to_file, content)
+
+            # Run overwrite command, test will fail if command fails.
+            self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
                 self.pool.svc_ranks[0],
                 self.container.uuid,
-                principal)
-            if self.principals_table[principal] in daos_cmd.result.stdout:
-                self.fail(
-                    "Found acl that was to be deleted in output: {}".format(
-                        daos_cmd.result.stdout))
+                path_to_file)
 
-    @fail_on(CommandFailure)
     def test_no_user_permissions(self):
         """
         JIRA ID: DAOS-3708
 
-        Test Description: Test that container delete command successfully
-            removes principal in ACL.
+        Test Description: Test that container overwrite command fails with
+            no permission -1001 when user doesn't have the right permissions.
 
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl
         """
+        acl_filename = "test_acl_file.txt"
+        valid_file_content = self.params.get(
+            "valid_acl_file", "/run/*")
+        path_to_file = os.path.join(os.getcwd(), acl_filename)
+
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(
             self.pool.uuid, entry="A::EVERYONE@:rw")
 
         # The root user shouldn't have access to deleting container ACL entries
-        daos_cmd = self.get_daos_command()
-        daos_cmd.sudo = True
+        self.daos_cmd.sudo = True
 
-        # Let's check that we can't run as root (or other user) and delete
+        # Let's check that we can't run as root (or other user) and overwrite
         # entries if no permissions are set for that user.
-
-        for principal in self.principals_table:
+        for content in valid_file_content:
+            create_acl_file(path_to_file, content)
             try:
-                daos_cmd.container_delete_acl(
+                self.daos_cmd.container_overwrite_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
                     self.container.uuid,
-                    principal)
+                    path_to_file)
             except process.CmdError as err:
-                if "-1001" in err.result.stderr:
+                if "-1001" in err.result.stdout:
                     self.log.info(
-                        "Found expected error %s with invalid principal %s",
-                        err.result.stderr, principal)
+                        "Found expected error %s with %s",
+                        err.result.stdout, path_to_file)
                 else:
-                    self.fail("delete-acl seems to have failed with \
+                    self.fail("overwrite-acl seems to have failed with \
                         unexpected error: {}".format(err))
-        self.fail("container delete-acl command expected to fail.")
+        self.fail("container overwrite-acl command expected to fail.")
