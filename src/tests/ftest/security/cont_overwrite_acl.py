@@ -54,7 +54,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
     @fail_on(CommandFailure)
     def test_acl_overwrite_invalid_inputs(self):
         """
-        JIRA ID: DAOS-3714
+        JIRA ID: DAOS-3708
 
         Test Description: Test that container overwrite command performs as
             expected with invalid inputs in command line and within ACL file
@@ -63,32 +63,45 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl
         """
         # Get list of invalid ACL principal values
-        invalid_principals = self.params.get("invalid_acl_filename", "/run/*")
+        invalid_acl_filename = self.params.get("invalid_acl_filename", "/run/*")
         daos_cmd = self.get_daos_command()
 
         # Check for failure on invalid inputs.
-        for principal in invalid_principals:
+        for acl_file in invalid_acl_filename:
             try:
-                daos_cmd.container_delete_acl(
+                daos_cmd.container_overwrite_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
                     self.container.uuid,
-                    principal)
+                    acl_file)
             except process.CmdError as err:
-                if "-1003" in err.result.stderr:
+                if "No such file or directory" in err.result.stderr:
                     self.log.info(
-                        "Found expected error %s with invalid principal %s",
+                        "Found expected error %s with invalid acl-file %s",
                         err.result.stderr,
-                        principal)
+                        acl_file)
                 else:
-                    self.fail("delete-acl seems to have failed with \
+                    self.fail("overwrite-acl seems to have failed with \
                         unexpected error: {}".format(err))
-        self.fail("container delete-acl command expected to fail.")
+
+        self.fail("container overwrite-acl command expected to fail.")
+
+    def test_overwrite_invalid_acl_file(self):
+        """
+        JIRA ID: DAOS-3708
+
+        Test Description: Test that container overwrite command performs as
+            expected with invalid inputs in command line and within ACL file
+            provided.
+
+        :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl
+        """
+
 
     @fail_on(CommandFailure)
     def test_delete_valid_acl(self):
         """
-        JIRA ID: DAOS-3714
+        JIRA ID: DAOS-3708
 
         Test Description: Test that container delete command successfully
             removes principal in ACL.
@@ -110,7 +123,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
     @fail_on(CommandFailure)
     def test_no_user_permissions(self):
         """
-        JIRA ID: DAOS-3714
+        JIRA ID: DAOS-3708
 
         Test Description: Test that container delete command successfully
             removes principal in ACL.
