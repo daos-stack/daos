@@ -55,7 +55,7 @@ def get_version():
         return version_file.read().rstrip()
 
 DAOS_VERSION = get_version()
-API_VERSION = "0.9.0"
+API_VERSION = "1.2.0"
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
