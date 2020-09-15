@@ -680,13 +680,11 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 		daos_iod_t *iod = &iods[i];
 
 		result += sizeof(struct dcs_iod_csums);
-		if (!csum_iod_is_supported(iod))
-			continue;
 
 		if (!obj->dcs_skip_key_calc)
 			result += csum_size; /** akey csum */
 
-		if (akey_only)
+		if (akey_only || !csum_iod_is_supported(iod))
 			continue;
 
 		/** calc needed memory for the recx csums */
@@ -756,8 +754,7 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
 		uint64_t		 rec_chunksize;
 
-		if (!csum_iod_is_supported(iod))
-			continue;
+
 
 		/** setup akey csum  */
 		if (!obj->dcs_skip_key_calc) {
@@ -767,7 +764,7 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			       buf_len);
 		}
 
-		if (akey_only)
+		if (akey_only || !csum_iod_is_supported(iod))
 			continue;
 
 		rec_chunksize = daos_csummer_get_rec_chunksize(obj,
@@ -1158,9 +1155,6 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		daos_iod_t		*iod = &iods[i];
 		struct dcs_iod_csums	*csums = &iods_csums[i];
 
-		if (!csum_iod_is_supported(iod))
-			continue;
-
 		/** akey */
 		if (!obj->dcs_skip_key_calc) {
 			rc = calc_for_iov(obj, &iod->iod_name,
@@ -1169,10 +1163,9 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 				D_ERROR("calc_for_iov error: %d\n", rc);
 				goto error;
 			}
-
 		}
 
-		if (akey_only)
+		if (akey_only || !csum_iod_is_supported(iod))
 			continue;
 
 		/** data */
