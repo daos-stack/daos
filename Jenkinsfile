@@ -1113,9 +1113,6 @@ pipeline {
                         beforeAgent true
                         allOf {
                             expression { ! skip_stage('bullseye', true) }
-                            expression { ! skip_stage('func-test') }
-                            expression { ! skip_stage('func-test-vm') }
-                            expression { ! skip_stage('func-test-el7')}
                         }
                     }
                     agent {
