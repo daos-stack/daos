@@ -22,9 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+from cont_security_test_base import ContSecurityTestBase
 from command_utils import CommandFailure
-from server_utils import ServerFailed
-from apricot import TestWithServers
 from avocado.utils import process
 from avocado import fail_on
 
@@ -122,7 +121,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         self.get_dmg_command().pool_update_acl(
             self.pool.uuid, entry="A::EVERYONE@:rw")
 
-        # The root user should't have access to deleting container ACL entries.
+        # The root user shouldn't have access to deleting container ACL entries
         daos_cmd = self.get_daos_command()
         daos_cmd.sudo = True
 
