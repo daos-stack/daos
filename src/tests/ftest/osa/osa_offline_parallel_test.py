@@ -25,10 +25,12 @@ import time
 import random
 import ctypes
 import threading
+import os
 from avocado import fail_on
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
+from dmg_utils import DmgCommand
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 try:
@@ -54,7 +56,10 @@ class OSAOfflineParallelTest(TestWithServers):
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')[0]
-        self.out_queue = queue.Queue()
+        self.out_queue = []
+        for _ in range(0,4):
+            tmp = queue.Queue()
+            self.out_queue.append(tmp)
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -107,15 +112,17 @@ class OSAOfflineParallelTest(TestWithServers):
                 ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
 
     def dmg_thread(self, puuid, rank, target, action, results):
+        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         self.log.info("Action: {0}".format(action))
         if action == "exclude":
-            self.dmg_command.pool_exclude(puuid, (rank + 1), target)
+            dmg.pool_exclude(puuid, (rank + 1), target)
         elif action == "drain":
-            self.dmg_command.pool_drain(puuid, rank)
+            dmg.pool_drain(puuid, rank)
         elif action == "reintegrate":
-            self.dmg_command.pool_reintegrate(puuid, (rank + 1), target)
+            time.sleep(30)
+            dmg.pool_reintegrate(puuid, (rank + 1), target)
         elif action == "extend":
-            self.dmg_command.pool_extend(puuid, (rank + 2))
+            dmg.pool_extend(puuid, (rank + 2))
         else:
             self.fail("Invalid action for dmg thread")
 
@@ -164,24 +171,30 @@ class OSAOfflineParallelTest(TestWithServers):
             # Create the threads here
             threads = []
             osa_tasks = ["drain", "exclude", "reintegrate"]
+            i = 0
             for action in osa_tasks:
                 # Add a dmg thread
-                threads.append(threading.Thread(target=self.dmg_thread,
-                                                kwargs={"puuid":
-                                                        self.pool.uuid,
-                                                        "rank": rank,
-                                                        "target": t_string,
-                                                        "action": action,
-                                                        "results":
-                                                        self.out_queue}))
-            # Launch the dmg threads
-            for thrd in threads:
-                self.log.info("Thread : %s", thrd)
-                thrd.start()
+                process = threading.Thread(target=self.dmg_thread,
+                                           kwargs={"puuid":
+                                                   self.pool.uuid,
+                                                   "rank": rank,
+                                                   "target": t_string,
+                                                   "action": action,
+                                                   "results":
+                                                   self.out_queue[i]})
+                process.start()
+                threads.append(process)
+                i = i + 1
 
         # Wait to finish the threads
         for thrd in threads:
             thrd.join()
+            time.sleep(5)
+        
+        for i in range(0, 3):
+            for failure in self.out_queue[i]:
+                if CommandFailure in failure:
+                    self.fail("Test failed : {0}".format(failure))
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
