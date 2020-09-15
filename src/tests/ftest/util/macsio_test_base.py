@@ -46,7 +46,8 @@ class MacsioTestBase(TestWithServers):
         # Support using different job managers to launch the daos agent/servers
         mpi_type = self.params.get("mpi_type", default="mpich")
         self.manager = Mpirun(None, subprocess=False, mpitype=mpi_type)
-        self.manager.timeout = self.params.get("macsio_timeout", default=10)
+        self.manager.timeout = self.params.get(
+            self.get_test_name(), "/run/macsio_timeout/*", 90)
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):
@@ -66,7 +67,8 @@ class MacsioTestBase(TestWithServers):
 
         return macsio
 
-    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None, plugin=None):
+    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None, plugin=None,
+                   slots=None):
         """Run the macsio.
 
         Parameters for the macsio command are obtained from the test yaml file,
@@ -80,6 +82,8 @@ class MacsioTestBase(TestWithServers):
             pool_svcl (str): pool service replica
             cont_uuid (str, optional): container uuid. Defaults to None.
             plugin (str, optional): plugin path to use with DAOS VOL connector
+            slots (int, optional): slots per host to specify in the hostfile.
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -101,7 +105,7 @@ class MacsioTestBase(TestWithServers):
             env["HDF5_PLUGIN_PATH"] = "{}".format(plugin)
         self.manager.job = self.macsio
         self.manager.assign_hosts(
-            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+            self.hostlist_clients, self.workdir, slots)
         self.manager.assign_processes(len(self.hostlist_clients))
         self.manager.assign_environment(env)
 

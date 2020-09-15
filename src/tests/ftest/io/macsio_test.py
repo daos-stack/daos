@@ -65,7 +65,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         status = self.macsio.check_results(
             self.run_macsio(
                 self.pool.uuid, convert_list(self.pool.svc_ranks),
-                self.container.uuid),
+                self.container.uuid, slots=None),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")
@@ -104,7 +104,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         status = self.macsio.check_results(
             self.run_macsio(
                 self.pool.uuid, convert_list(self.pool.svc_ranks),
-                self.container.uuid, plugin_path),
+                self.container.uuid, plugin_path, slots=1),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")
