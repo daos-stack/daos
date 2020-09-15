@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@schan_fn_cov") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -1108,19 +1108,19 @@ pipeline {
                         }
                     }
                 }
+                // SCHAN15 - add fn vm coverage
                 stage('Functional on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
                             expression { ! skip_stage('bullseye', true) }
-                            expression { ! skip_stage('func-test') }
                         }
                     }
                     agent {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daos_repos(),
+                        fnCovTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
                     post {
@@ -1297,7 +1297,8 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish(
-                                   coverage_stashes: ['centos7-covc-unit-cov'],
+                                   // SCHAN15 - add stash from fnvm
+                                   coverage_stashes: ['centos7-covc-unit-cov','centos7-covc-fnvm-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
@@ -1308,9 +1309,10 @@ pipeline {
         } // stage ('Test Report')
     } // stages
     post {
-        always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
-        }
+        // SCHAN15 - comment this out for coverage
+        //always {
+        //    valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
+        //}
         unsuccessful {
             notifyBrokenBranch branches: target_branch
         }

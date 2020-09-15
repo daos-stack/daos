@@ -14,14 +14,11 @@ if [ -e "$WORKSPACE/test.cov_2" ]; then
   covmerge --no-banner --file "$COVFILE" "$WORKSPACE"/test.cov_*
 fi
 
+# SCHAN15 - fix conditional stmt here
 if [ ! -e "$COVFILE" ]; then
   echo "Coverage file $COVFILE is missing"
 else
   ls -l "$COVFILE"
-  echo "Excluding tests files"
-  pushd "$WORKSPACE"
-  covselect --add '!**/src/tests/'
-  popd
 fi
 
 java -jar bullshtml.jar test_coverage
