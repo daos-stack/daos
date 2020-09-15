@@ -2,13 +2,17 @@
 #
 ## Location of this configuration file is determined by first checking for the
 ## path specified through the -o option of the daos_server command line.
-## Otherwise, /etc/daos_server.conf is used.
+## Otherwise, /etc/daos/daos_server.conf is used.
 #
 #
 ## Name associated with the DAOS system.
 ## Immutable after reformat.
 #
-#name: daos
+## NOTE: Changing the name is not supported in DAOS 1.0, it must not be changed
+##       from the default "daos_server".
+#
+## default: daos_server
+#name: daos_server
 #
 #
 ## Access points

@@ -20,15 +20,13 @@ class CreateExample(ProcessBase):
 
     def run(self):
         self._info('Vos metadata overhead:')
-        meta_yaml = self._create_vos_meta()
-        self._create_file(self._args.meta, meta_yaml)
+        self._create_file(self._args.meta_out, self._meta_str)
         config_yaml = get_dfs_example()
         self._create_file(self._args.dfs_file_name, config_yaml)
 
 
 def create_dfs_example(args):
     print_daos_version()
-
     try:
         example = CreateExample(args)
         example.run()
@@ -53,7 +51,8 @@ class ProcessFS(ProcessBase):
         inode_akey = get_dfs_inode_akey()
         fse = FileSystemExplorer(args.path[0])
         fse.set_verbose(args.verbose)
-        fse.set_chunk_size(args.chunk_size)
+        fse.set_io_size(self.get_io_size())
+        fse.set_chunk_size(self.get_chunk_size())
         fse.set_dfs_inode(inode_akey)
         fse.explore()
         fse.print_stats()
@@ -127,7 +126,7 @@ example.add_argument(
     default='vos_dfs_sample.yaml')
 example.add_argument(
     '-m',
-    '--meta',
+    '--meta_out',
     type=str,
     help='Output file name of the Vos Metadata',
     default='vos_size.yaml')
@@ -159,11 +158,23 @@ explore.add_argument(
     action='store_true',
     help='Use average file size for estimation. (Faster)')
 explore.add_argument(
+    '-i',
+    '--io_size',
+    type=str,
+    help='I/O size.',
+    default='128KiB')
+explore.add_argument(
     '-c',
     '--chunk_size',
-    type=int,
-    help='Chunk size',
-    default=1048576)
+    type=str,
+    help='Chunk size. Must be multiple of I/O size',
+    default='1MiB')
+explore.add_argument(
+    '-s',
+    '--scm_cutoff',
+    type=str,
+    help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
+    default='')
 explore.add_argument(
     '-n',
     '--num_shards',
@@ -201,6 +212,18 @@ yaml_file.add_argument('config', metavar='CONFIG', type=str, nargs=1,
 yaml_file.add_argument('-a', '--alloc_overhead', type=int,
                        help='Vos alloc overhead', default=16)
 yaml_file.add_argument(
+    '-s',
+    '--scm_cutoff',
+    type=str,
+    help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
+    default='')
+yaml_file.add_argument(
+    '-n',
+    '--num_shards',
+    type=int,
+    help='Number of VOS Pools',
+    default=1000)
+yaml_file.add_argument(
     '-m',
     '--meta',
     metavar='META',
@@ -224,11 +247,23 @@ csv_file.add_argument(
     help='Average file name length',
     default=32)
 csv_file.add_argument(
+    '-i',
+    '--io_size',
+    type=str,
+    help='I/O size.',
+    default='128KiB')
+csv_file.add_argument(
     '--chunk_size',
     dest='chunk_size',
-    type=int,
-    help='Array chunk size.  Must be multiple of I/O size',
-    default=1048576)
+    type=str,
+    help='Array chunk size. Must be multiple of I/O size',
+    default='1MiB')
+csv_file.add_argument(
+    '-s',
+    '--scm_cutoff',
+    type=str,
+    help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
+    default='')
 csv_file.add_argument(
     '--num_shards',
     dest='num_shards',
