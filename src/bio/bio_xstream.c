@@ -197,7 +197,12 @@ traddr_to_vmd(char *dst, const char *src)
 		if (iteration != 0) {
 			strcat(vmd_addr, ".");
 			ptr = ptr + 3;
-			strncat(vmd_addr, ptr, 1);
+			/** Hack alert!  Reuse existing buffer to ensure new
+			 *  string is null terminated.
+			 */
+			addr_split[0] = ptr[0];
+			addr_split[1] = '\0';
+			strcat(vmd_addr, addr_split);
 			break;
 		}
 		strcat(vmd_addr, ":");
