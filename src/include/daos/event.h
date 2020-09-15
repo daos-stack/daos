@@ -53,6 +53,8 @@ enum daos_ev_flags {
 
 struct tse_task_t;
 
+typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
+
 /**
  * Finish event queue library.
  */
@@ -128,6 +130,10 @@ daos_event_destroy(struct daos_event *ev, bool force);
 
 int
 daos_event_destroy_children(struct daos_event *ev, bool force);
+
+int
+daos_event_register_comp_cb(struct daos_event *ev,
+			    daos_event_comp_cb_t cb, void *arg);
 
 
 /**
