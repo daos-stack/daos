@@ -202,7 +202,7 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos container get-acl command fails.
+            CommandFailure: if the daos container delete-acl command fails.
 
         """
         return self._get_result(
