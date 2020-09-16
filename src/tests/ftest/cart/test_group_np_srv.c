@@ -73,7 +73,7 @@ test_run(d_rank_t my_rank)
 	if (my_rank == 0) {
 		rc = crt_group_config_save(NULL, true);
 		D_ASSERTF(rc == 0,
-				"crt_group_config_save() failed. rc: %d\n", rc);
+			  "crt_group_config_save() failed. rc: %d\n", rc);
 		DBG_PRINT("Group config file saved\n");
 	}
 
