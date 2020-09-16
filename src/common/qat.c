@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,21 +20,23 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define D_LOGFAC	DD_FAC(csum)
+#define D_LOGFAC    DD_FAC(csum)
 
 #ifdef HAVE_QAT
+#include <daos/common.h>
 #include <gurt/types.h>
+
 #include <semaphore.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "cpa.h"
-#include "cpa_cy_im.h"
-#include "cpa_cy_sym.h"
-#include "icp_sal_user.h"
-#include "icp_sal_poll.h"
-#include "qae_mem.h"
+#include <cpa.h>
+#include <cpa_cy_im.h>
+#include <cpa_cy_sym.h>
+#include <icp_sal_user.h>
+#include <icp_sal_poll.h>
+#include <qae_mem.h>
 
 #define MAX_INSTANCES 32
 
@@ -76,7 +78,8 @@ typedef pthread_t sampleThread;
 static sampleThread gPollingThread;
 static volatile int gPollingCy = 0;
 
-static __inline CpaStatus Mem_OsMemAlloc(void **ppMemAddr, Cpa32U sizeBytes)
+static __inline CpaStatus 
+Mem_OsMemAlloc(void **ppMemAddr, Cpa32U sizeBytes)
 {
     *ppMemAddr = malloc(sizeBytes);
     if (NULL == *ppMemAddr)
@@ -86,7 +89,8 @@ static __inline CpaStatus Mem_OsMemAlloc(void **ppMemAddr, Cpa32U sizeBytes)
     return CPA_STATUS_SUCCESS;
 }
 
-static __inline CpaStatus Mem_Alloc_Contig(void **ppMemAddr,
+static __inline CpaStatus 
+Mem_Alloc_Contig(void **ppMemAddr,
                                            Cpa32U sizeBytes,
                                            Cpa32U alignment)
 {
@@ -98,7 +102,8 @@ static __inline CpaStatus Mem_Alloc_Contig(void **ppMemAddr,
     return CPA_STATUS_SUCCESS;
 }
 
-static __inline void Mem_OsMemFree(void **ppMemAddr)
+static __inline void 
+Mem_OsMemFree(void **ppMemAddr)
 {
     if (NULL != *ppMemAddr)
     {
@@ -107,7 +112,8 @@ static __inline void Mem_OsMemFree(void **ppMemAddr)
     }
 }
 
-static __inline void Mem_Free_Contig(void **ppMemAddr)
+static __inline void 
+Mem_Free_Contig(void **ppMemAddr)
 {
     if (NULL != *ppMemAddr)
     {
@@ -116,7 +122,8 @@ static __inline void Mem_Free_Contig(void **ppMemAddr)
     }
 }
 
-static __inline CpaStatus OS_SLEEP(Cpa32U ms)
+static __inline CpaStatus 
+OS_SLEEP(Cpa32U ms)
 {
     int ret = 0;
     struct timespec resTime, remTime;
@@ -138,18 +145,20 @@ static __inline CpaStatus OS_SLEEP(Cpa32U ms)
     }
 }
 
-static __inline CpaPhysicalAddr virtToPhys(void *virtAddr)
+static __inline CpaPhysicalAddr 
+virtToPhys(void *virtAddr)
 {
     return (CpaPhysicalAddr)qaeVirtToPhysNUMA(virtAddr);
 }
 
-static __inline CpaStatus threadCreate(sampleThread *thread,
-                                             void *funct,
-                                             void *args)
+static __inline CpaStatus 
+threadCreate(sampleThread *thread,
+            void *funct,
+            void *args)
 {
     if (pthread_create(thread, NULL, funct, args) != 0)
     {
-        printf("Failed create thread\n");
+        D_DEBUG(DB_TRACE, "Failed create thread\n");
         return CPA_STATUS_FAIL;
     }
     else
@@ -159,12 +168,14 @@ static __inline CpaStatus threadCreate(sampleThread *thread,
     }
 }
 
-static __inline void threadExit(void)
+static __inline void 
+threadExit(void)
 {
     pthread_exit(NULL);
 }
 
-static void getInstance(CpaInstanceHandle *pCyInstHandle)
+static void 
+getInstance(CpaInstanceHandle *pCyInstHandle)
 {
     CpaInstanceHandle cyInstHandles[MAX_INSTANCES];
     Cpa16U numInstances = 0;
@@ -174,9 +185,8 @@ static void getInstance(CpaInstanceHandle *pCyInstHandle)
     status = cpaCyGetNumInstances(&numInstances);
 
     if (numInstances >= MAX_INSTANCES)
-    {
         numInstances = MAX_INSTANCES;
-    }
+
     if ((status == CPA_STATUS_SUCCESS) && (numInstances > 0))
     {
         status = cpaCyGetInstances(numInstances, cyInstHandles);
@@ -185,12 +195,11 @@ static void getInstance(CpaInstanceHandle *pCyInstHandle)
     }
 
     if (0 == numInstances)
-    {
-        printf("No QAT instances found.\n");
-    }
+        D_DEBUG(DB_TRACE, "No QAT instances found.\n");
 }
 
-static void sal_polling(CpaInstanceHandle cyInstHandle)
+static void 
+sal_polling(CpaInstanceHandle cyInstHandle)
 {
     gPollingCy = 1;
     while (gPollingCy)
@@ -202,7 +211,8 @@ static void sal_polling(CpaInstanceHandle cyInstHandle)
     threadExit();
 }
 
-static void startPolling(CpaInstanceHandle cyInstHandle)
+static void 
+startPolling(CpaInstanceHandle cyInstHandle)
 {
     CpaInstanceInfo2 info2 = {0};
     CpaStatus status = CPA_STATUS_SUCCESS;
@@ -215,7 +225,8 @@ static void startPolling(CpaInstanceHandle cyInstHandle)
     }
 }
 
-static void stopPolling(void)
+static void 
+stopPolling(void)
 {
     gPollingCy = 0;
     OS_SLEEP(10);
@@ -224,7 +235,8 @@ static void stopPolling(void)
 /*
  * Callback function when operation is completed.
  */
-static void symCallback(void *pCallbackTag,
+static void 
+symCallback(void *pCallbackTag,
                         CpaStatus status,
                         const CpaCySymOp operationType,
                         void *pOpData,
@@ -238,9 +250,10 @@ static void symCallback(void *pCallbackTag,
     }
 }
 
-CpaStatus qat_hash_init(CpaInstanceHandle *cyInstHandle, 
+CpaStatus 
+qat_hash_init(CpaInstanceHandle *cyInstHandle, 
                         CpaCySymSessionCtx *sessionCtx,
-						CpaCySymHashAlgorithm hashAlg, 
+                        CpaCySymHashAlgorithm hashAlg, 
                         Cpa32U digestResultLenInBytes)
 {
     CpaStatus status = CPA_STATUS_SUCCESS;
@@ -250,14 +263,14 @@ CpaStatus qat_hash_init(CpaInstanceHandle *cyInstHandle,
     status = qaeMemInit();
     if (CPA_STATUS_SUCCESS != status)
     {
-        printf("Failed to initialize memory driver\n");
+        D_DEBUG(DB_TRACE, "Failed to initialize memory driver\n");
         return 0;
     }
 
     status = icp_sal_userStartMultiProcess("SSL", CPA_FALSE);
     if (CPA_STATUS_SUCCESS != status)
     {
-        printf("Failed to start user process SSL\n");
+        D_DEBUG(DB_TRACE, "Failed to start user process SSL\n");
         qaeMemDestroy();
         return 0;
     }
@@ -315,16 +328,16 @@ CpaStatus qat_hash_init(CpaInstanceHandle *cyInstHandle,
         status = cpaCySymInitSession(
             *cyInstHandle, symCallback, &sessionSetupData, *sessionCtx);
     }
-	printf("qat init status = %d\n", status);
     return status;
 }
 
-CpaStatus qat_hash_update(CpaInstanceHandle *cyInstHandle, 
+CpaStatus 
+qat_hash_update(CpaInstanceHandle *cyInstHandle, 
                                     CpaCySymSessionCtx *sessionCtx, 
                                     uint8_t *buf, 
                                     size_t bufLen, 
                                     uint8_t *csumBuf,
-									size_t csumLen,
+                                    size_t csumLen,
                                     bool packetTypePartial)
 {
     CpaStatus status = CPA_STATUS_SUCCESS;
@@ -408,7 +421,7 @@ CpaStatus qat_hash_update(CpaInstanceHandle *cyInstHandle,
 
         if (CPA_STATUS_SUCCESS != status)
         {
-            printf("cpaCySymPerformOp failed. (status = %d)\n", status);
+            D_DEBUG(DB_TRACE, "cpaCySymPerformOp failed. (status = %d)\n", status);
         }
 
         if (CPA_STATUS_SUCCESS == status)
@@ -416,7 +429,7 @@ CpaStatus qat_hash_update(CpaInstanceHandle *cyInstHandle,
             /** wait until the completion of the operation*/
             if (!COMPLETION_WAIT((&complete), TIMEOUT_MS))
             {
-                printf("timeout or interruption in cpaCySymPerformOp\n");
+                D_DEBUG(DB_TRACE, "timeout or interruption in cpaCySymPerformOp\n");
                 status = CPA_STATUS_FAIL;
             }
         } 
@@ -435,7 +448,8 @@ CpaStatus qat_hash_update(CpaInstanceHandle *cyInstHandle,
     return status;
 }
 
-CpaStatus qat_hash_finish(CpaInstanceHandle *cyInstHandle, 
+CpaStatus 
+qat_hash_finish(CpaInstanceHandle *cyInstHandle, 
                                     CpaCySymSessionCtx *sessionCtx, 
                                     uint8_t *csumBuf, size_t csumLen)
 {
@@ -496,7 +510,7 @@ CpaStatus qat_hash_finish(CpaInstanceHandle *cyInstHandle,
 
         if (CPA_STATUS_SUCCESS != status)
         {
-            printf("cpaCySymPerformOp failed. (status = %d)\n", status);
+            D_DEBUG(DB_TRACE, "cpaCySymPerformOp failed. (status = %d)\n", status);
         }
 
         if (CPA_STATUS_SUCCESS == status)
@@ -504,7 +518,7 @@ CpaStatus qat_hash_finish(CpaInstanceHandle *cyInstHandle,
             /** wait until the completion of the operation*/
             if (!COMPLETION_WAIT((&complete), TIMEOUT_MS))
             {
-                printf("timeout or interruption in cpaCySymPerformOp\n");
+                D_DEBUG(DB_TRACE, "timeout or interruption in cpaCySymPerformOp\n");
                 status = CPA_STATUS_FAIL;
             }
         }
@@ -520,7 +534,8 @@ CpaStatus qat_hash_finish(CpaInstanceHandle *cyInstHandle,
     return status;
 }
 
-CpaStatus qat_hash_destroy(CpaInstanceHandle *cyInstHandle, 
+CpaStatus 
+qat_hash_destroy(CpaInstanceHandle *cyInstHandle, 
                                     CpaCySymSessionCtx *sessionCtx)
 {
     /* Stop the polling thread */
