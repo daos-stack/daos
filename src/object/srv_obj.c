@@ -2185,7 +2185,7 @@ again:
 
 	rc = dtx_leader_begin(ioc.ioc_coc, &orw->orw_dti, &epoch, 1, version,
 			      &orw->orw_oid, dti_cos, dti_cos_cnt,
-			      tgts, tgt_cnt,
+			      tgts, tgt_cnt, tgt_cnt == 0 ? true : false,
 			      (orw->orw_flags & ORF_DTX_SYNC) ? true : false,
 			      mbs, &dlh);
 	if (rc != 0) {
@@ -2941,7 +2941,7 @@ again:
 
 	rc = dtx_leader_begin(ioc.ioc_coc, &opi->opi_dti, &epoch, 1, version,
 			      &opi->opi_oid, dti_cos, dti_cos_cnt,
-			      tgts, tgt_cnt,
+			      tgts, tgt_cnt, tgt_cnt == 0 ? true : false,
 			      (opi->opi_flags & ORF_DTX_SYNC) ? true : false,
 			      mbs, &dlh);
 	if (rc != 0) {
@@ -3805,8 +3805,11 @@ ds_obj_dtx_leader_ult(void *arg)
 			   &dcsh->dcsh_epoch.oe_first,
 			   &dcsh->dcsh_epoch.oe_rpc_flags);
 	if (rc == PE_OK_LOCAL) {
-		dcsh->dcsh_epoch.oe_flags &= ~DTX_EPOCH_UNCERTAIN;
-		dcsh->dcsh_epoch.oe_rpc_flags &= ~ORF_EPOCH_UNCERTAIN;
+		/*
+		 * In this case, writes to local RDGs can use the chosen epoch
+		 * without any uncertainty. This optimization is left to future
+		 * work.
+		 */
 	}
 
 	if (oci->oci_flags & ORF_RESEND) {
@@ -3873,7 +3876,9 @@ ds_obj_dtx_leader_ult(void *arg)
 	rc = dtx_leader_begin(dca->dca_ioc->ioc_coc, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
 			      oci->oci_map_ver, &dcsh->dcsh_leader_oid, NULL,
-			      0, tgts, tgt_cnt - 1, true, dcsh->dcsh_mbs, &dlh);
+			      0, tgts, tgt_cnt - 1,
+			      (tgt_cnt > 1 || dcde->dcde_write_cnt > 1) ?
+			      false : true, true, dcsh->dcsh_mbs, &dlh);
 	if (rc != 0)
 		goto out;
 
