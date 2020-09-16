@@ -314,8 +314,7 @@ out:
 static int
 auto_detect_faulty(struct bio_blobstore *bbs)
 {
-	if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
-	    bbs->bb_state != BIO_BS_STATE_SETUP)
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
 		return 0;
 	/*
 	 * TODO: Check the health data stored in @bbs, and mark the bbs as
