@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -336,7 +335,7 @@ public class DaosObject {
     fetch(desc, -1, -1);
   }
 
-  public void fetchSimple(IODataDescSimple desc) throws DaosObjectException {
+  public void fetchSimple(IOSimpleDataDesc desc) throws DaosObjectException {
     checkOpen();
     desc.encode();
 
@@ -386,7 +385,7 @@ public class DaosObject {
     }
   }
 
-  public void updateSimple(IODataDescSimple desc) throws DaosObjectException {
+  public void updateSimple(IOSimpleDataDesc desc) throws DaosObjectException {
     checkOpen();
     desc.encode();
 
@@ -603,10 +602,8 @@ public class DaosObject {
   /**
    * create reusable IODataDesc object.
    *
-   * @param dkeyLen
-   * dkey length
-   * @param akeyLen
-   * length of akey can reuse this IODataDesc object
+   * @param maxKeyStrLen
+   * max key string length
    * @param nbrOfEntries
    * number of akey entries available
    * @param entryBufLen
@@ -616,9 +613,9 @@ public class DaosObject {
    * for update or fetch
    * @return IODataDesc instance
    */
-  public IODataDescSimple createSimpleDataDesc(int dkeyLen, int akeyLen, int nbrOfEntries, int entryBufLen,
-                                               boolean updateOrFetch) throws UnsupportedEncodingException {
-    return new IODataDescSimple(dkeyLen, akeyLen, nbrOfEntries, entryBufLen, updateOrFetch);
+  public IOSimpleDataDesc createSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
+                                               boolean updateOrFetch) {
+    return new IOSimpleDataDesc(maxKeyStrLen, nbrOfEntries, entryBufLen, updateOrFetch);
   }
 
   public IODataDesc createReusableDesc(int maxDkeyLen, int maxAkeyLen, int nbrOfEntries, int entryBufLen,

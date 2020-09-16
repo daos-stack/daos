@@ -119,6 +119,58 @@ public class DaosUtilsTest {
   }
 
   @Test
+  public void testStringEncode() throws Exception {
+    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(100);
+    long start = System.nanoTime();
+    for (int i = 0; i < 125; i++) {
+      for (int j = 0; j < 1000; j++) {
+        buf.writeBytes((i + "000").getBytes("UTF-8"));
+        buf.writeBytes((j + "000").getBytes("UTF-8"));
+        buf.clear();
+      }
+    }
+    System.out.println((System.nanoTime() - start)/1000000);
+  }
+
+  @Test
+  public void testStringEncode2() throws Exception {
+    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(100);
+    long start = System.nanoTime();
+    for (int i = 0; i < 125; i++) {
+      for (int j = 0; j < 1000; j++) {
+        buf.clear();
+        writeToBuffer(i + "000", buf);
+        writeToBuffer(j + "000", buf);
+      }
+    }
+    System.out.println((System.nanoTime() - start)/1000000);
+    System.out.println(buf.writerIndex());
+  }
+
+  private void writeToBuffer(String s, ByteBuf buf) {
+    for (int i = 0; i < s.length(); i++) {
+      buf.writeShort(s.charAt(i));
+    }
+  }
+
+  @Test
+  public void testString() throws Exception {
+    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(100);
+    String s = "0实时热点1";
+    for (int i = 0; i < s.length(); i++) {
+      buf.writeShort(s.charAt(i));
+      System.out.println((int)(s.charAt(i)));
+    }
+    StringBuilder sb = new StringBuilder();
+    while (buf.readableBytes() > 0) {
+      char c = buf.readChar();
+      sb.append(c);
+      System.out.println((int)c);
+    }
+    System.out.println(sb.toString());
+  }
+
+  @Test
   public void testUuidLength() {
     String id = DaosUtils.randomUUID();
     Assert.assertEquals(16, id.length());

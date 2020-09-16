@@ -11,7 +11,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -1106,9 +1105,9 @@ public class DaosObjectIT {
     DaosObject object = client.getObject(id);
     try {
       object.open();
-      IODataDescSimple desc = object.createSimpleDataDesc(5, 1, 3, 100,
+      IOSimpleDataDesc desc = object.createSimpleDataDesc(5, 1, 100,
           true);
-      IODataDescSimple fetchDesc = object.createSimpleDataDesc(5, 1, 3, 100,
+      IOSimpleDataDesc fetchDesc = object.createSimpleDataDesc(5, 1, 100,
           false);
       try {
         // initial
@@ -1135,27 +1134,27 @@ public class DaosObjectIT {
     }
   }
 
-  private void writeAndFetchWithDescSimpleReused(DaosObject object, IODataDescSimple desc, IODataDescSimple fetchDesc,
+  private void writeAndFetchWithDescSimpleReused(DaosObject object, IOSimpleDataDesc desc, IOSimpleDataDesc fetchDesc,
                                                  int nbrOfEntries, int valueLen) throws IOException {
     desc.reuse();
     fetchDesc.reuse();
     // write
     long l = generateLong(valueLen);
     for (int i = 0; i < nbrOfEntries; i++) {
-      IODataDescSimple.SimpleEntry entry = desc.getEntry(i);
+      IOSimpleDataDesc.SimpleEntry entry = desc.getEntry(i);
       // buffer index
       ByteBuf buf = entry.reuseBuffer();
       buf.writeLong(l);
-      entry.setKeyForUpdate(String.valueOf(i), 0, buf);
-      IODataDescSimple.SimpleEntry fetchEntry = fetchDesc.getEntry(i);
+      entry.setEntryForUpdate(String.valueOf(i), 0, buf);
+      IOSimpleDataDesc.SimpleEntry fetchEntry = fetchDesc.getEntry(i);
       fetchEntry.getDataBuffer().clear();
-      fetchEntry.setKeyForFetch(String.valueOf(i), 0, 8);
+      fetchEntry.setEntryForFetch(String.valueOf(i), 0, 8);
     }
     object.updateSimple(desc);
     // fetch
     object.fetchSimple(fetchDesc);
     for (int i = 0; i < nbrOfEntries; i++) {
-      IODataDescSimple.SimpleEntry entry = fetchDesc.getEntry(i);
+      IOSimpleDataDesc.SimpleEntry entry = fetchDesc.getEntry(i);
       Assert.assertEquals(8, entry.getActualSize());
       Assert.assertEquals(l, entry.getDataBuffer().readLong());
     }
@@ -1176,7 +1175,7 @@ public class DaosObjectIT {
         IODataDesc.IodType.ARRAY, 1, true);
     IODataDesc fetchDesc = object.createReusableDesc(5, akeyLen, 2, bufLen,
         IODataDesc.IodType.ARRAY, 1, false);
-    IODataDescSimple fetchDescSim = object.createSimpleDataDesc(3, akeyLen, 2, bufLen,
+    IOSimpleDataDesc fetchDescSim = object.createSimpleDataDesc(4,  2, bufLen,
         false);
     try {
       object.open();
@@ -1202,7 +1201,7 @@ public class DaosObjectIT {
       for (int i = 0; i < reduces; i++) {
         fetchDescSim.setDkey(padZero(i, 3));
         for (int j = 0; j < maps; j++) {
-          fetchDescSim.getEntry(idx++).setKeyForFetch(padZero(j, 4), 0, bufLen);
+          fetchDescSim.getEntry(idx++).setEntryForFetch(padZero(j, 4), 0, bufLen);
           if (idx == 2) {
             object.fetchSimple(fetchDescSim);
             Assert.assertEquals(bufLen, fetchDescSim.getEntry(0).getActualSize());
@@ -1254,31 +1253,33 @@ public class DaosObjectIT {
     int akeyLen = 4;
     int reduces = 125;
     int maps = 1000;
-    IODataDesc desc = object.createReusableDesc(5, akeyLen, 1, bufLen,
-        IODataDesc.IodType.ARRAY, 1, true);
-    IODataDesc fetchDesc = object.createReusableDesc(5, akeyLen, 1, bufLen,
-        IODataDesc.IodType.ARRAY, 1, false);
-    IODataDescSimple fetchDescSim = object.createSimpleDataDesc(3, akeyLen, 1, bufLen,
+    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
+        true);
+//    IODataDesc fetchDesc = object.createReusableDesc(5, akeyLen, 1, bufLen,
+//        IODataDesc.IodType.ARRAY, 1, false);
+    IOSimpleDataDesc fetchDesc = object.createSimpleDataDesc(4, 1, bufLen,
         false);
     try {
       object.open();
       byte[] data = generateDataArray(bufLen);
-      IODataDesc.Entry entry = desc.getEntry(0);
+      IOSimpleDataDesc.SimpleEntry entry = desc.getEntry(0);
       ByteBuf buf = entry.reuseBuffer();
       buf.writeBytes(data);
       // write
+      long start = System.nanoTime();
       for (int i = 0; i < reduces; i++) {
+        desc.setDkey(String.valueOf(i));
         for (int j = 0; j < maps; j++) {
-          desc.setDkey(padZero(i, 3));
           buf = entry.reuseBuffer();
           buf.writerIndex(buf.capacity());
-          entry.setKey(padZero(j, 4), 0, buf);
-          object.update(desc);
+          entry.setEntryForUpdate(String.valueOf(j), 0, buf);
+          object.updateSimple(desc);
+          desc.reuse();
         }
       }
-      System.out.println("written");
+      System.out.println((System.nanoTime() - start) / 1000000);
       // fetch
-      long start = System.nanoTime();
+      start = System.nanoTime();
 //      IODataDescSimple.SimpleEntry fes = fetchDescSim.getEntry(0);
 //      for (int i = 0; i < reduces; i++) {
 //        fetchDescSim.setDkey(padZero(i, 3));
@@ -1291,21 +1292,21 @@ public class DaosObjectIT {
 //      }
 //      System.out.println((System.nanoTime() - start)/1000000);
 //      start = System.nanoTime();
-      IODataDesc.Entry fe = fetchDesc.getEntry(0);
+      IOSimpleDataDesc.SimpleEntry fe = fetchDesc.getEntry(0);
       for (int i = 0; i < reduces; i++) {
+        fetchDesc.setDkey(String.valueOf(i));
         for (int j = 0; j < maps; j++) {
-          fetchDesc.setDkey(padZero(i, 3));
-          fe.setKey(padZero(j, 4), 0, bufLen);
-          object.fetch(fetchDesc);
+          fe.setEntryForFetch(String.valueOf(j), 0, bufLen);
+          object.fetchSimple(fetchDesc);
           Assert.assertEquals(bufLen, fe.getActualSize());
-          fetchDesc.getDescBuffer().clear();
+          fetchDesc.reuse();
         }
       }
-      System.out.println((System.nanoTime() - start)/1000000);
+      System.out.println((System.nanoTime() - start) / 1000000);
     } finally {
       desc.release();
       fetchDesc.release();
-      fetchDescSim.release();
+//      fetchDescSim.release();
       if (object.isOpen()) {
         object.punch();
       }

@@ -66,8 +66,7 @@ typedef struct {
 
 typedef struct {
     daos_key_t dkey;
-    uint16_t dkeyLen;
-    uint16_t akeyLen;
+    uint16_t maxKeyLen;
     daos_iod_t *iods;
     d_sg_list_t *sgls;
     daos_recx_t *recxs;

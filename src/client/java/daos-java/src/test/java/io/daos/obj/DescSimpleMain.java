@@ -74,8 +74,8 @@ public class DescSimpleMain {
   private static void generateData(DaosObject object, long totalBytes, int maps, int reduces) throws IOException {
     int akeyValLen = (int)(totalBytes/maps/reduces);
 //    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(akeyValLen);
-    IODataDescSimple desc = object.createSimpleDataDesc(3, 4, 1,
-        akeyValLen, true);
+    IOSimpleDataDesc desc = object.createSimpleDataDesc(3, 1, akeyValLen,
+         true);
 
     populate(desc.getEntry(0).getDataBuffer());
     System.out.println("block size: " + akeyValLen);
@@ -84,10 +84,10 @@ public class DescSimpleMain {
       for (int i = 0; i < reduces; i++) {
         desc.setDkey(padZero(i, 3));
         for (int j = 0; j < maps; j++) {
-          IODataDescSimple.SimpleEntry entry = desc.getEntry(0);
+          IOSimpleDataDesc.SimpleEntry entry = desc.getEntry(0);
           ByteBuf buf = entry.reuseBuffer();
           buf.writerIndex(akeyValLen);
-          entry.setKeyForUpdate(padZero(j, 4), 0, buf);
+          entry.setEntryForUpdate(padZero(j, 4), 0, buf);
           object.updateSimple(desc);
           desc.reuse();
         }
@@ -135,14 +135,14 @@ public class DescSimpleMain {
     int nbrOfEntries = sizeLimit/akeyValLen;
     int idx = 0;
     long start = System.nanoTime();
-    IODataDescSimple desc = object.createSimpleDataDesc(3, 4, nbrOfEntries,
+    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, nbrOfEntries,
         akeyValLen, false);;
 //    IODataDesc.Entry entry = desc.getEntry(0);
     try {
       for (int i = offset; i < end; i++) {
         desc.setDkey(padZero(i, 3));
         for (int j = 0; j < maps; j++) {
-          desc.getEntry(idx++).setKeyForFetch(padZero(j, 4), 0, akeyValLen);
+          desc.getEntry(idx++).setEntryForFetch(padZero(j, 4), 0, akeyValLen);
           if (idx == nbrOfEntries) {
             // read
             object.fetchSimple(desc);

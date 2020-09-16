@@ -26,7 +26,6 @@ package io.daos.obj;
 import io.daos.BufferAllocator;
 import io.daos.Constants;
 import io.netty.buffer.ByteBuf;
-import org.apache.commons.lang.StringUtils;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -44,13 +43,13 @@ import java.io.UnsupportedEncodingException;
  *   See {@link SimpleEntry#release(boolean)}.
  * </p>
  */
-public class IODataDescSimple {
+public class IOSimpleDataDesc {
 
   private String dkey;
 
-  private byte[] dkeyBytes;
+  private boolean dkeyChanged;
 
-  private int akeyLen;
+  private int maxKenLen;
 
   private int dkeyLen;
 
@@ -64,34 +63,30 @@ public class IODataDescSimple {
 
   private int totalRequestSize;
 
-  private int nbrOfAkeysWithData;
+  private int nbrOfAkeysToRequest;
 
   private ByteBuf descBuffer;
 
   private Throwable cause;
 
-  private boolean encoded;
-
   private boolean resultParsed;
 
-  public static final int DEFAULT_LEN_REUSE_BUFFER = 2 * 1024 * 1024;
-
-  public static final int DEFAULT_NUMBER_OF_ENTRIES = 5;
-
-  protected IODataDescSimple(int dkeyLen, int akeyLen, int nbrOfEntries, int entryBufLen,
-                             boolean updateOrFetch) throws UnsupportedEncodingException {
-    this.dkeyLen = dkeyLen;
-    this.akeyLen = akeyLen;
-    checkLen(dkeyLen, "dkey");
-    checkLen(akeyLen, "akey");
+  protected IOSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
+                             boolean updateOrFetch) {
+    if (maxKeyStrLen > Short.MAX_VALUE/2 || maxKeyStrLen <= 0) {
+      throw new IllegalArgumentException("number of entries should be positive and no larger than " +
+          Short.MAX_VALUE/2 + ". " + maxKeyStrLen);
+    }
+    this.maxKenLen = maxKeyStrLen * 2; // 2 bytes per string character
     if (nbrOfEntries > Short.MAX_VALUE || nbrOfEntries < 0) {
       throw new IllegalArgumentException("number of entries should be positive and no larger than " + Short.MAX_VALUE +
           ". " + nbrOfEntries);
     }
     // 8 for storing native desc pointer
-    // 4 for storing dkey len and akey len
+    // 2 for storing maxKenLen
+    // 2 for dkey length
     // 2 for actual number of entries starting from first entry having data
-    totalRequestBufLen += (8 + 4 + dkeyLen + 2);
+    totalRequestBufLen += (8 + 2 + 2 + 2 + maxKenLen);
     this.akeyEntries = new SimpleEntry[nbrOfEntries];
     for (int i = 0; i < nbrOfEntries; i++) {
       SimpleEntry entry = updateOrFetch ? createReusableEntryForUpdate(entryBufLen) :
@@ -107,25 +102,14 @@ public class IODataDescSimple {
   }
 
   private void checkLen(int len, String keyType) {
-    if (len <= 0) {
-      throw new IllegalArgumentException(keyType + " length must be positive value, " + akeyLen);
-    }
-    if (len > Short.MAX_VALUE) {
+    if (len > maxKenLen) {
       throw new IllegalArgumentException(keyType + " length should not exceed "
-          + Short.MAX_VALUE + ". " + len);
+          + maxKenLen/2 + ". " + len/2);
     }
   }
 
   public String getDkey() {
     return dkey;
-  }
-
-  public int getDkeyLen() {
-    return dkeyLen;
-  }
-
-  public int getAkeyLen() {
-    return akeyLen;
   }
 
   public int getTotalRequestSize() {
@@ -180,15 +164,10 @@ public class IODataDescSimple {
   }
 
   public void setDkey(String dkey) throws UnsupportedEncodingException {
-    if (dkey.equals(this.dkey)) {
-      return;
-    }
     this.dkey = dkey;
-    this.dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
-    if (dkeyBytes.length != dkeyLen) {
-      throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should be "
-          + dkeyLen + ", dkey: " + dkey);
-    }
+    this.dkeyLen = dkey.length() * 2;
+    checkLen(dkeyLen, "dkey");
+    dkeyChanged = true;
   }
 
   /**
@@ -196,71 +175,73 @@ public class IODataDescSimple {
    * encode entries data to Data Buffer.
    */
   public void encode() {
-    if (descBuffer == null) {
-      encodeFirstTime();
+    if (descBuffer != null) {
+      encodeReused();
       return;
     }
-    encodeReused();
+    encodeFirstTime();
   }
 
   private void encodeFirstTime() {
-    if (!resultParsed) {
-      if (encoded) {
-        return;
-      }
-      if (dkey == null) {
-        throw new IllegalArgumentException("please set dkey first");
-      }
-      if (nbrOfAkeysWithData == 0) {
-        throw new IllegalArgumentException("at least one of entries should have been reused");
-      }
-      this.descBuffer = BufferAllocator.objBufWithNativeOrder(getDescBufferLen());
-      descBuffer.writeLong(0L);
-      descBuffer.writeShort(dkeyBytes.length);
-      descBuffer.writeShort(akeyLen);
-      descBuffer.writeBytes(dkeyBytes);
-      descBuffer.writeShort(nbrOfAkeysWithData);
-      for (SimpleEntry entry : akeyEntries) {
-        entry.encode(descBuffer, true);
-      }
-      encoded = true;
-      return;
+    if (nbrOfAkeysToRequest == 0) {
+      throw new IllegalArgumentException("at least one of entries should have data");
     }
-    throw new IllegalStateException("result is parsed. cannot encode again");
+    this.descBuffer = BufferAllocator.objBufWithNativeOrder(getDescBufferLen());
+    descBuffer.writeLong(0L);
+    descBuffer.writeShort(maxKenLen);
+    descBuffer.writeShort(dkeyLen);
+    writeKey(dkey);
+    descBuffer.writeShort(nbrOfAkeysToRequest);
+    for (SimpleEntry entry : akeyEntries) {
+      entry.encode(descBuffer, true);
+    }
+    if (nbrOfAkeysToRequest > akeyEntries.length) {
+      throw new IllegalStateException("number of akeys to request " + nbrOfAkeysToRequest + ", should not exceed " +
+          "total number of entries, " + akeyEntries.length);
+    }
+  }
+
+  private void writeKey(String dkey) {
+    int pos = descBuffer.writerIndex();
+    for (int i = 0; i < dkey.length(); i++) {
+      descBuffer.writeShort(dkey.charAt(i));
+    }
+    descBuffer.writerIndex(pos + maxKenLen);
   }
 
   public void reuse() {
     this.resultParsed = false;
-    this.encoded = false;
-    this.nbrOfAkeysWithData = 0;
+    this.nbrOfAkeysToRequest = 0;
     this.totalRequestSize = 0;
+    this.dkeyChanged = false;
+    for (SimpleEntry e : akeyEntries) {
+      e.reused = false;
+      e.akeyChanged = false;
+    }
   }
 
   private void encodeReused() {
-    if (resultParsed) {
-      throw new IllegalStateException("please set dkey to reuse this desc");
-    }
-    if (encoded) {
-      return;
-    }
-    if (nbrOfAkeysWithData == 0) {
-      throw new IllegalArgumentException("at least one of entries should have been reused");
-    }
     descBuffer.readerIndex(0);
-    descBuffer.writerIndex(8 + 4);
-    descBuffer.writeBytes(dkeyBytes);
-    long ptr = descBuffer.readLong();
-    if (!hasNativeDec(ptr)) {
-      throw new IllegalStateException("no native desc pointer found");
+    descBuffer.writerIndex(10);
+    if (dkeyChanged) {
+      descBuffer.writeShort(dkeyLen);
+      writeKey(dkey);
+    } else {
+      descBuffer.writerIndex(descBuffer.writerIndex() + 2 + maxKenLen);
     }
-    descBuffer.writeShort(nbrOfAkeysWithData);
+    descBuffer.writeShort(nbrOfAkeysToRequest);
+    int count = 0;
     for (SimpleEntry entry : akeyEntries) {
       if (!entry.isReused()) {
         break;
       }
       entry.encode(descBuffer, false);
+      count++;
     }
-    encoded = true;
+    if (nbrOfAkeysToRequest > count) {
+      throw new IllegalStateException("number of akeys to request " + nbrOfAkeysToRequest + ", should not exceed " +
+          "total reused entries, " + count);
+    }
   }
 
   /**
@@ -282,9 +263,6 @@ public class IODataDescSimple {
 
   protected void succeed() {
     resultParsed = true;
-    for (SimpleEntry entry : akeyEntries) {
-      entry.reused = false;
-    }
   }
 
   /**
@@ -295,7 +273,7 @@ public class IODataDescSimple {
       if (resultParsed) {
         return;
       }
-      int nbrOfReq = nbrOfAkeysWithData;
+      int nbrOfReq = nbrOfAkeysToRequest;
       int count = 0;
       // update actual size
       int idx = getRequestBufLen();
@@ -307,9 +285,9 @@ public class IODataDescSimple {
           ByteBuf dataBuffer = entry.dataBuffer;
           dataBuffer.writerIndex(dataBuffer.readerIndex() + entry.actualSize);
           idx += Constants.ENCODED_LENGTH_EXTENT;
+          continue;
         }
-        count++;
-        entry.reused = false;
+        break;
       }
       resultParsed = true;
       return;
@@ -325,10 +303,7 @@ public class IODataDescSimple {
    * @return ByteBuf
    */
   protected ByteBuf getDescBuffer() {
-    if (encoded) {
-      return descBuffer;
-    }
-    throw new IllegalStateException("not encoded yet");
+    return descBuffer;
   }
 
   public SimpleEntry[] getAkeyEntries() {
@@ -413,8 +388,9 @@ public class IODataDescSimple {
    * records of given key. Multiple entries should be created for non-consecutive records of given key.
    */
   public class SimpleEntry {
-    private String key;
-    private byte[] keyBytes;
+    private String akey;
+    private boolean akeyChanged;
+    private int akeyLen;
     private int offset;
     private boolean reused;
     private int dataSize;
@@ -444,7 +420,7 @@ public class IODataDescSimple {
       if (!updateOrFetch) {
         return actualSize;
       }
-      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      throw new UnsupportedOperationException("only support for fetch, akey: " + akey);
     }
 
     /**
@@ -457,7 +433,7 @@ public class IODataDescSimple {
         this.actualSize = actualSize;
         return;
       }
-      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      throw new UnsupportedOperationException("only support for fetch, akey: " + akey);
     }
 
     /**
@@ -470,7 +446,7 @@ public class IODataDescSimple {
       if (!updateOrFetch) {
         return dataBuffer;
       }
-      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      throw new UnsupportedOperationException("only support for fetch, akey: " + akey);
     }
 
     /**
@@ -479,8 +455,8 @@ public class IODataDescSimple {
      * @return length
      */
     public int getDescLen() {
-      // 16 = recx idx(4) + recx nr(4) + data buffer mem address(8)
-      return 16 + akeyLen;
+      // 18 = dkey len(2) + recx idx(4) + recx nr(4) + data buffer mem address(8)
+      return 18 + maxKenLen;
     }
 
     public boolean isReused() {
@@ -503,16 +479,17 @@ public class IODataDescSimple {
      * User should call {@link #reuseBuffer()} before calling this method.
      *
      * @param akey
+     *  null for reusing existing akey.
      * @param offset
      * @param buf
      * reused data buffer
      * @throws UnsupportedEncodingException
      */
-    public void setKeyForUpdate(String akey, int offset, ByteBuf buf) throws UnsupportedEncodingException {
+    public void setEntryForUpdate(String akey, int offset, ByteBuf buf) {
       if (buf.readerIndex() != 0) {
         throw new IllegalArgumentException("buffer's reader index should be 0. " + buf.readerIndex());
       }
-      setKey(akey, offset, buf, 0);
+      setEntry(akey, offset, buf, 0);
     }
 
     /**
@@ -521,26 +498,19 @@ public class IODataDescSimple {
      * this method.
      *
      * @param akey
+     * null for reusing existing akey.
      * @param offset
      * @param fetchDataSize
      * @throws UnsupportedEncodingException
      */
-    public void setKeyForFetch(String akey, int offset, int fetchDataSize) throws UnsupportedEncodingException {
+    public void setEntryForFetch(String akey, int offset, int fetchDataSize) {
       this.dataBuffer.clear();
-      setKey(akey, offset, this.dataBuffer, fetchDataSize);
+      setEntry(akey, offset, this.dataBuffer, fetchDataSize);
     }
 
-    private void setKey(String akey, int offset, ByteBuf buf, int fetchDataSize) throws UnsupportedEncodingException {
-      if (StringUtils.isBlank(akey)) {
-        throw new IllegalArgumentException("key is blank");
-      }
-      if (!akey.equals(this.key)) {
-        this.key = akey;
-        this.keyBytes = akey.getBytes(Constants.KEY_CHARSET);
-        if (keyBytes.length != akeyLen) {
-          throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET + " should be "
-              + akeyLen + ", akey: " + key);
-        }
+    private void setEntry(String akey, int offset, ByteBuf buf, int fetchDataSize) {
+      if (akey != null) {
+        setAkey(akey);
       }
       this.offset = offset;
       if (updateOrFetch) {
@@ -558,13 +528,20 @@ public class IODataDescSimple {
       if (buf != dataBuffer) {
         throw new IllegalArgumentException("buffer mismatch");
       }
-      nbrOfAkeysWithData++;
+      nbrOfAkeysToRequest++;
       totalRequestSize += dataSize;
       this.reused = true;
     }
 
-    public String getKey() {
-      return key;
+    private void setAkey(String akey) {
+      this.akey = akey;
+      this.akeyLen = akey.length() * 2;
+      checkLen(akeyLen, "akey");
+      this.akeyChanged = true;
+    }
+
+    public String getAkey() {
+      return akey;
     }
 
     /**
@@ -587,10 +564,12 @@ public class IODataDescSimple {
      * @param descBuffer
      */
     private void reuseEntry(ByteBuf descBuffer) {
-      if (!reused) {
-        throw new IllegalStateException("please set akey first");
+      if (akeyChanged) {
+        descBuffer.writeShort(akeyLen);
+        writeKey(akey);
+      } else {
+        descBuffer.writerIndex(descBuffer.writerIndex() + 2 + maxKenLen);
       }
-      descBuffer.writeBytes(keyBytes);
       descBuffer.writeInt(offset);
       descBuffer.writeInt(dataSize);
       // skip memory address
@@ -598,20 +577,11 @@ public class IODataDescSimple {
     }
 
     private void encodeEntryFirstTime(ByteBuf descBuffer) {
-      long memoryAddress = dataBuffer.memoryAddress();
-      byte[] bytes;
-      if (keyBytes != null) {
-        bytes = keyBytes;
-      } else { // in case of akey is not set when encode first time
-        if (dataSize > 0) {
-          throw new IllegalArgumentException("akey cannot be blank when it has data");
-        }
-        bytes = new byte[akeyLen];
-      }
-      descBuffer.writeBytes(bytes);
+      descBuffer.writeShort(akeyLen);
+      writeKey(akey);
       descBuffer.writeInt(offset);
       descBuffer.writeInt(dataSize);
-      descBuffer.writeLong(memoryAddress);
+      descBuffer.writeLong(dataBuffer.memoryAddress());
     }
 
     public void releaseBuffer() {
@@ -625,7 +595,7 @@ public class IODataDescSimple {
       if (!updateOrFetch) {
         return dataBuffer == null;
       }
-      throw new UnsupportedOperationException("only support for fetch, akey: " + key);
+      throw new UnsupportedOperationException("only support for fetch, akey: " + akey);
     }
 
     public int getRequestSize() {
@@ -658,7 +628,7 @@ public class IODataDescSimple {
     public String toString() {
       StringBuilder sb = new StringBuilder();
       sb.append(updateOrFetch ? "update " : "fetch ").append("entry: ");
-      sb.append(key).append('|')
+      sb.append(akey).append('|')
         .append(offset).append('|')
         .append(dataSize);
       return sb.toString();
