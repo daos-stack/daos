@@ -3263,6 +3263,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	}
 
 	if (obj->cob_time_fetch_leader != NULL &&
+	    obj_auxi->req_tgts.ort_shard_tgts != NULL &&
 	    ((!obj_is_modification_opc(obj_auxi->opc) &&
 	      task->dt_result == -DER_INPROGRESS) ||
 	     (obj_is_modification_opc(obj_auxi->opc) &&
