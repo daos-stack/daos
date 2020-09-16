@@ -315,8 +315,7 @@ static int
 auto_detect_faulty(struct bio_blobstore *bbs)
 {
 	if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
-	    bbs->bb_state != BIO_BS_STATE_REPLACED &&
-	    bbs->bb_state != BIO_BS_STATE_REINT)
+	    bbs->bb_state != BIO_BS_STATE_SETUP)
 		return 0;
 	/*
 	 * TODO: Check the health data stored in @bbs, and mark the bbs as
@@ -339,8 +338,10 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 	int			 rc;
 
 	D_ASSERT(dev_health != NULL);
+	if (dev_health->bdh_desc == NULL)
+		return;
+
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
-	D_ASSERT(dev_health->bdh_desc != NULL);
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	if (bdev == NULL) {
@@ -499,8 +500,7 @@ bio_fini_health_monitoring(struct bio_blobstore *bb)
  * all SPDK DMA-safe buffers for querying log entries.
  */
 int
-bio_init_health_monitoring(struct bio_blobstore *bb,
-			   struct spdk_bdev *bdev)
+bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 {
 	struct spdk_io_channel		*channel;
 	uint32_t			 hp_sz;
@@ -510,7 +510,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	int				 rc;
 
 	D_ASSERT(bb != NULL);
-	D_ASSERT(bdev != NULL);
+	D_ASSERT(bdev_name != NULL);
 
 	hp_sz = sizeof(struct spdk_nvme_health_information_page);
 	bb->bb_dev_health.bdh_health_buf = spdk_dma_zmalloc(hp_sz, 0, NULL);
@@ -520,27 +520,31 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
 	bb->bb_dev_health.bdh_ctrlr_buf = spdk_dma_zmalloc(cp_sz, 0, NULL);
 	if (bb->bb_dev_health.bdh_ctrlr_buf == NULL) {
-		spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto free_health_buf;
 	}
 
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
 	ep_buf_sz = ep_sz * NVME_MAX_ERROR_LOG_PAGES;
 	bb->bb_dev_health.bdh_error_buf = spdk_dma_zmalloc(ep_buf_sz, 0, NULL);
 	if (bb->bb_dev_health.bdh_error_buf == NULL) {
-		spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-		spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto free_ctrlr_buf;
 	}
 
+	bb->bb_dev_health.bdh_inflights = 0;
+	bb->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_PERIOD;
+
+	if (bb->bb_state == BIO_BS_STATE_OUT)
+		return 0;
 
 	 /* Writable descriptor required for device health monitoring */
-	rc = spdk_bdev_open(bdev, true, NULL, NULL,
-			    &bb->bb_dev_health.bdh_desc);
+	rc = spdk_bdev_open_ext(bdev_name, true, bio_bdev_event_cb, NULL,
+				&bb->bb_dev_health.bdh_desc);
 	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n",
-			spdk_bdev_get_name(bdev), rc);
-		return daos_errno2der(-rc);
+		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
+		rc = daos_errno2der(-rc);
+		goto free_error_buf;
 	}
 
 	/* Get and hold I/O channel for device health monitoring */
@@ -548,8 +552,17 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	D_ASSERT(channel != NULL);
 	bb->bb_dev_health.bdh_io_channel = channel;
 
-	bb->bb_dev_health.bdh_inflights = 0;
-	bb->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_PERIOD;
-
 	return 0;
+
+free_error_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_error_buf);
+	bb->bb_dev_health.bdh_error_buf = NULL;
+free_ctrlr_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
+	bb->bb_dev_health.bdh_ctrlr_buf = NULL;
+free_health_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
+	bb->bb_dev_health.bdh_health_buf = NULL;
+
+	return rc;
 }
