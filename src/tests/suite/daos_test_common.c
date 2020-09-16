@@ -1040,10 +1040,12 @@ get_server_config(char *host, char *server_config_file)
 		 "ssh %s ps ux | grep daos_server | grep start", host);
 	FILE *fp = popen(command, "r");
 
+	print_message("Command %s\n", command);
 	if (fp == NULL)
 		return -DER_INVAL;
 
 	while ((read = getline(&line, &len, fp)) != -1) {
+		print_message("line %s\n", line);
 		if (strstr(line, "--config") != NULL ||
 		    strstr(line, "-o") != NULL)
 			break;
@@ -1052,14 +1054,13 @@ get_server_config(char *host, char *server_config_file)
 	pch = strtok(line, " ");
 	while (pch != NULL) {
 		if (strstr(pch, "yaml") != NULL &&
-		    strstr(pch, "-o") != NULL) {
-			strcpy(server_config_file, pch);
+		    strstr(pch, "--config") != NULL) {
+			strcpy(server_config_file, strchr(pch, '=') + 1);
 			break;
 		}
 
-		if (strstr(pch, "yaml") != NULL &&
-		    strstr(pch, "--config") != NULL) {
-			strcpy(server_config_file, strchr(pch, '=') + 1);
+		if (strstr(pch, "yaml") != NULL) {
+			strcpy(server_config_file, pch);
 			break;
 		}
 		pch = strtok(NULL, " ");
