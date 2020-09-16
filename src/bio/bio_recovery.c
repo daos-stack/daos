@@ -174,8 +174,7 @@ bio_state_enum_to_str(enum bio_bs_state state)
 	case BIO_BS_STATE_FAULTY: return "FAULTY";
 	case BIO_BS_STATE_TEARDOWN: return "TEARDOWN";
 	case BIO_BS_STATE_OUT: return "OUT";
-	case BIO_BS_STATE_REPLACED: return "REPLACED";
-	case BIO_BS_STATE_REINT: return "REINT";
+	case BIO_BS_STATE_SETUP: return "SETUP";
 	}
 
 	return "Undefined state";
@@ -196,25 +195,25 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 
 	switch (new_state) {
 	case BIO_BS_STATE_NORMAL:
-		if (bbs->bb_state != BIO_BS_STATE_REINT)
+		if (bbs->bb_state != BIO_BS_STATE_SETUP)
 			rc = -DER_INVAL;
 		break;
 	case BIO_BS_STATE_FAULTY:
 		if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
-		    bbs->bb_state != BIO_BS_STATE_REPLACED &&
-		    bbs->bb_state != BIO_BS_STATE_REINT)
+		    bbs->bb_state != BIO_BS_STATE_SETUP)
 			rc = -DER_INVAL;
 		break;
 	case BIO_BS_STATE_TEARDOWN:
-		if (bbs->bb_state != BIO_BS_STATE_FAULTY)
+		if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
+		    bbs->bb_state != BIO_BS_STATE_FAULTY &&
+		    bbs->bb_state != BIO_BS_STATE_SETUP)
 			rc = -DER_INVAL;
 		break;
 	case BIO_BS_STATE_OUT:
 		if (bbs->bb_state != BIO_BS_STATE_TEARDOWN)
 			rc = -DER_INVAL;
 		break;
-	case BIO_BS_STATE_REPLACED:
-	case BIO_BS_STATE_REINT:
+	case BIO_BS_STATE_SETUP:
 		rc = -DER_NOSYS;
 		break;
 	default:
@@ -283,8 +282,7 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		if (rc == 0)
 			rc = bio_bs_state_set(bbs, BIO_BS_STATE_OUT);
 		break;
-	case BIO_BS_STATE_REPLACED:
-	case BIO_BS_STATE_REINT:
+	case BIO_BS_STATE_SETUP:
 		rc = -DER_NOSYS;
 		break;
 	default:
