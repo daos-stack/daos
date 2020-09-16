@@ -2,6 +2,22 @@
 
 set -eux
 
+# Check if this is a Bulleye stage
+USE_BULLSEYE=false
+case $STAGE_NAME in
+  *Bullseye**)
+  USE_BULLSEYE=true
+  ;;
+esac
+
+if $USE_BULLSEYE; then
+  rm -rf bullseye
+  mkdir -p bullseye
+  tar -C bullseye --strip-components=1 -xf bullseye.tar
+else
+  BULLSEYE=
+fi
+
 test_tag=$(git show -s --format=%B | \
            sed -ne "/^Test-tag$PRAGMA_SUFFIX:/s/^.*: *//p")
 if [ -z "$test_tag" ]; then
@@ -41,6 +57,8 @@ if $TEST_RPMS; then
       "TEST_TAG=\"$test_tag\"                        \
        TNODES=\"$tnodes\"                            \
        FTEST_ARG=\"$FTEST_ARG\"                      \
+       DAOS_BASE=\"$DAOS_BASE\"                      \
+       BULLSEYE=\"$BULLSEYE\"                        \
        $(cat ci/functional/test_main_node.sh)"
 else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"

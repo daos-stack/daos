@@ -1018,7 +1018,8 @@ pipeline {
                 stage('Unit Test Bullseye') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('bullseye', true) }
+                      // SCHAN15 - temp disable unit cov
+                      expression { ! skip_stage('bullseye', false) }
                     }
                     agent {
                         label 'ci_vm1'
@@ -1119,7 +1120,7 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daos_repos(),
+                        fnCovTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
                     post {
@@ -1296,7 +1297,7 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish(
-                                   coverage_stashes: ['centos7-covc-unit-cov'],
+                                   coverage_stashes: ['centos7-covc-fnvm-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
