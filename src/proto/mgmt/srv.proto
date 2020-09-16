@@ -62,7 +62,7 @@ message LeaderQueryResp {
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
 	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
-	uint32 version = 3;     // Client protocol version
+	uint32 version = 3;     // dRPC protocol version
 }
 
 message GetAttachInfoResp {
@@ -81,7 +81,6 @@ message GetAttachInfoResp {
 	uint32 CrtTimeout = 7;	// CaRT CRT_TIMEOUT
 	uint32 NetDevClass = 8; // ARP protocol hardware identifier of the
 				// IO server network interface
-	uint32 Version = 9;	// Server protocol version
 }
 
 message PrepShutdownReq {

@@ -206,6 +206,7 @@ type (
 		msRequest
 		System   string
 		AllRanks bool
+		Version  uint32
 	}
 
 	// PrimaryServiceRank provides a rank->uri mapping for a DAOS
@@ -225,7 +226,6 @@ type (
 		CrtCtxShareAddr uint32
 		CrtTimeout      uint32
 		NetDevClass     uint32
-		Version         uint32
 	}
 )
 
@@ -236,9 +236,9 @@ func (gair *GetAttachInfoResp) String() string {
 	}
 
 	// Condensed format for debugging...
-	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d, v=%#x psrs(%d)=%s",
+	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d psrs(%d)=%s",
 		gair.Provider, gair.Interface, gair.Domain,
-		gair.CrtCtxShareAddr, gair.CrtTimeout, gair.NetDevClass, gair.Version,
+		gair.CrtCtxShareAddr, gair.CrtTimeout, gair.NetDevClass,
 		len(psrs), strings.Join(psrs, ","),
 	)
 }
@@ -251,6 +251,7 @@ func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachIn
 		return mgmtpb.NewMgmtSvcClient(conn).GetAttachInfo(ctx, &mgmtpb.GetAttachInfoReq{
 			Sys:      req.System,
 			AllRanks: req.AllRanks,
+			Version:  req.Version,
 		})
 	})
 

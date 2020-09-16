@@ -164,6 +164,10 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
 
+	if req.Version != drpc.ProtocolVersion {
+		return nil, errors.Errorf("dRPC protocol mismatch")
+	}
+
 	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
@@ -183,7 +187,6 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
-	resp.Version = drpc.ProtocolVersion
 
 	return resp, nil
 }

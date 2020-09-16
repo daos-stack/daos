@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"math/rand"
 	"net"
 	"os"
 	"sync"
@@ -1004,21 +1005,33 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
 	for name, tc := range map[string]struct {
 		mgmtSvc          *mgmtSvc
 		clientNetworkCfg *ClientNetworkCfg
 		req              *mgmtpb.GetAttachInfoReq
 		expResp          *mgmtpb.GetAttachInfoResp
+		expErr           error
 	}{
 		"Server uses verbs + Infiniband": {
 			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
-			req:              &mgmtpb.GetAttachInfoReq{},
-			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband, Version: drpc.ProtocolVersion},
+			req:              &mgmtpb.GetAttachInfoReq{Version: drpc.ProtocolVersion},
+			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 		},
 		"Server uses sockets + Ethernet": {
 			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+			req:              &mgmtpb.GetAttachInfoReq{Version: drpc.ProtocolVersion},
+			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether},
+		},
+		"Request/Server dRPC protocol mismatch - client protocol version not set": {
+			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
 			req:              &mgmtpb.GetAttachInfoReq{},
-			expResp:          &mgmtpb.GetAttachInfoResp{Provider: "ofi+sockets", CrtCtxShareAddr: 0, CrtTimeout: 5, NetDevClass: netdetect.Ether, Version: drpc.ProtocolVersion},
+			expErr:           errors.Errorf("dRPC protocol mismatch"),
+		},
+		"Request/Server dRPC protocol mismatch - protocol version mismatch": {
+			clientNetworkCfg: &ClientNetworkCfg{Provider: "ofi+verbs", CrtCtxShareAddr: 1, CrtTimeout: 10, NetDevClass: netdetect.Infiniband},
+			req:              &mgmtpb.GetAttachInfoReq{Version: drpc.ProtocolVersion + 1 + uint32(rand.Intn(100))},
+			expErr:           errors.Errorf("dRPC protocol mismatch"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1039,12 +1052,18 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			srv.setDrpcClient(newMockDrpcClient(cfg))
 			tc.mgmtSvc = newMgmtSvc(harness, nil, tc.clientNetworkCfg)
 			gotResp, gotErr := tc.mgmtSvc.GetAttachInfo(context.TODO(), tc.req)
-			if gotErr != nil {
-				t.Fatalf("unexpected error: %+v\n", gotErr)
-			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			if gotErr != nil {
+				if tc.expErr == nil {
+					t.Fatalf("unexpected error: %+v\n", gotErr)
+				}
+			} else {
+				if tc.expErr != nil {
+					t.Fatalf("expected error: %+v\n", tc.expErr)
+				}
+				if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+					t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+				}
 			}
 		})
 	}

@@ -107,7 +107,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 
 	version := pbReq.GetVersion()
 	if version != mod.version {
-		return nil, errors.Errorf("get attach info client/agent protocol mismatch: client version: %#x, agent version %#x", version, mod.version)
+		return nil, errors.Errorf("dRPC client/agent protocol version mismatch: client version: %#x, agent version %#x", version, mod.version)
 	}
 
 	numaNode := mod.aiCache.defaultNumaNode
@@ -133,10 +133,6 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 
 	if resp.Provider == "" {
 		return nil, errors.New("GetAttachInfo response contained no provider.")
-	}
-
-	if resp.Version != mod.version {
-		return nil, errors.Errorf("get attach info protocol server/agent mismatch: server version: %#x, agent version %#x", resp.Version, mod.version)
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
