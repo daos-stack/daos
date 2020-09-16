@@ -421,7 +421,8 @@ class DmgCommand(DmgCommandBase):
             # "status": 0
             output = json.loads(self.result.stdout)
             data["uuid"] = output["response"]["UUID"]
-            data["svc"] = ",".join([str(svc) for svc in output["response"]["Svcreps"]])
+            data["svc"] = ",".join(
+                [str(svc) for svc in output["response"]["Svcreps"]])
 
         else:
             match = re.findall(
@@ -431,7 +432,7 @@ class DmgCommand(DmgCommandBase):
             if match:
                 data["uuid"] = match[0][0]
                 data["svc"] = match[0][1]
-        
+
         return data
 
     def pool_query(self, pool):

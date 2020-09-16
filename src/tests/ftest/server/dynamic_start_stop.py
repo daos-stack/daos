@@ -23,7 +23,6 @@
 """
 import json
 from apricot import TestWithServers
-from dmg_utils import DmgCommand
 
 
 class DynamicStartStop(TestWithServers):
@@ -83,7 +82,7 @@ class DynamicStartStop(TestWithServers):
         self.add_pool()
 
         extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
-        
+
         # Start 3 extra servers.
         self.start_additional_servers(additional_servers=extra_servers)
 
