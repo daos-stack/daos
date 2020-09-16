@@ -569,6 +569,7 @@ dfs_test_cond(void **state)
 		rc = dfs_release(file);
 		assert_int_equal(rc, 0);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	char newfilename[1024];
 
