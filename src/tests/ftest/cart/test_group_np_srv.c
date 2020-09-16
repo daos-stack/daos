@@ -70,7 +70,7 @@ test_run(d_rank_t my_rank)
 	}
 	DBG_PRINT("Contexts created %d\n", test_g.t_srv_ctx_num);
 
-	if (my_rank == 0) { 
+	if (my_rank == 0) {
 		rc = crt_group_config_save(NULL, true);
 		D_ASSERTF(rc == 0,
 				"crt_group_config_save() failed. rc: %d\n", rc);

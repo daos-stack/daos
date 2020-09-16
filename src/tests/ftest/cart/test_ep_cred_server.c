@@ -49,7 +49,7 @@ test_run(d_rank_t my_rank)
 	rc = crt_proto_register(&my_proto_fmt_0);
 	D_ASSERT(rc == 0);
 
-	if (my_rank == 0) { 
+	if (my_rank == 0) {
 		rc = crt_group_config_save(NULL, true);
 		D_ASSERTF(rc == 0,
 				"crt_group_config_save() failed. rc: %d\n", rc);
@@ -63,7 +63,7 @@ test_run(d_rank_t my_rank)
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 
-	if (my_rank == 0) { 
+	if (my_rank == 0) {
 		rc = crt_group_config_remove(NULL);
 		D_ASSERTF(rc == 0,
 				"crt_group_config_remove() failed. rc: %d\n", rc);
