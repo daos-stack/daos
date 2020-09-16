@@ -27,6 +27,7 @@
 #define CRT_USE_GURT_FAC
 
 #include "crt_internal.h"
+#include "swim/swim_internal.h"
 
 #define CRT_OPC_SWIM_PROTO	0xFE000000U
 #define CRT_OPC_SWIM_VERSION	0
@@ -99,12 +100,16 @@ static struct crt_proto_format crt_swim_proto_fmt = {
 
 static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 {
+	struct crt_rpc_priv	*rpc_priv = NULL;
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct swim_context	*ctx = csm->csm_ctx;
 	struct crt_rpc_swim_in	*rpc_swim_input = crt_req_get(rpc_req);
 	struct crt_rpc_swim_wack_out *rpc_swim_output = crt_reply_get(rpc_req);
 	swim_id_t		 self_id = swim_self_get(ctx);
+	uint64_t		 max_delay = swim_ping_timeout_get() / 2;
+	uint64_t		 delay;
+	uint64_t		 hlc = crt_hlc_get();
 	int			 rc = -ENOTCONN;
 
 	D_ASSERT(crt_is_service());
@@ -113,6 +118,41 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		"incoming opc %#x with %zu updates %lu <= %lu\n",
 		rpc_req->cr_opc, rpc_swim_input->upds.ca_count,
 		self_id, rpc_swim_input->src);
+
+	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
+	delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc) / NSEC_PER_MSEC;
+	csm->csm_msg_count++;
+
+	if (csm->csm_hlc) {
+		csm->csm_avg_delay = (csm->csm_avg_delay + delay) / 2;
+
+		D_TRACE_DEBUG(DB_TRACE, rpc_req,
+			      "%lu. delay: %lu ms, avg: %lu ms, max: %lu ms\n",
+			      csm->csm_msg_count, delay, csm->csm_avg_delay,
+			      max_delay);
+
+		if (delay > max_delay) {
+			swim_net_glitch_update(ctx, delay);
+			if (csm->csm_avg_delay > max_delay) {
+				delay = swim_ping_timeout_get() + max_delay;
+				swim_ping_timeout_set(delay);
+				D_ERROR("%lu: increase ping timeout to "
+					"%lu ms\n", ctx->sc_self, delay);
+
+				/* according protocol period requirement */
+				delay *= 3;
+				if (delay > swim_period_get()) {
+					swim_period_set(delay);
+					/* according protocol requirement */
+					delay *= 3;
+					swim_suspect_timeout_set(delay);
+				}
+			}
+		}
+	} else {
+		csm->csm_avg_delay = delay;
+	}
+	csm->csm_hlc = hlc;
 
 	if (self_id != SWIM_ID_INVALID) {
 		rc = swim_parse_message(ctx, rpc_swim_input->src,
