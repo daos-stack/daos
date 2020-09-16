@@ -1299,7 +1299,7 @@ pipeline {
                         // while the code coverage feature is being implemented.
                         cloverReportPublish(
                                    // SCHAN15 - add stash from fnvm
-                                   coverage_stashes: ['centos7-covc-unit-cov','centos7-covc-fnvm-cov'],
+                                   coverage_stashes: ['centos7-covc-unit-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
