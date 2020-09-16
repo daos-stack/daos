@@ -60,6 +60,10 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 	}
 
+	if (oid) {
+		DFUSE_TRA_DEBUG(fs_handle, "Inode %ld is " DF_OID,
+				dfir->ir_ino, DP_OID(*oid));
+	}
 	*_ino = dfir->ir_ino;
 out:
 	return rc;
