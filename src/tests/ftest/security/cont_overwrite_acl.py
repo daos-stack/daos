@@ -45,6 +45,10 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         self.prepare_pool()
         self.add_container(self.pool)
 
+        # List of ACL entries
+        self.cont_acl = self.get_container_acl_list(
+            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+
     def error_handling(self, results, err_msg):
         """Handle errors when test fails and when command unexpectedly passes.
 
@@ -84,6 +88,9 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         # Get list of invalid ACL principal values
         invalid_acl_filename = self.params.get("invalid_acl_filename", "/run/*")
 
+        # Disable raising an exception if the daos command fails
+        self.daos_cmd.exit_status_exception = False
+
         # Check for failure on invalid inputs
         test_errs = []
         for acl_file in invalid_acl_filename:
@@ -97,9 +104,16 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             test_errs.extend(self.error_handling(
                 self.daos_cmd.result, "No such file or directory"))
 
+            # Check that the acl was unchanged.
+            post_test_acls = self.get_container_acl_list(
+                self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+            if not self.compare_acl_lists(self.cont_acl, post_test_acls):
+                self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
+                    self.cont_acl, post_test_acls))
+
         if test_errs:
             self.fail("container overwrite-acl command expected to fail: \
-                {}".format(test_errs))
+                {}".format("\n".join(test_errs)))
 
     def test_overwrite_invalid_acl_file(self):
         """
@@ -116,6 +130,9 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             "invalid_acl_file_content", "/run/*")
         path_to_file = os.path.join(self.tmp, acl_filename)
 
+        # Disable raising an exception if the daos command fails
+        self.daos_cmd.exit_status_exception = False
+
         test_errs = []
         for content in invalid_file_content:
             create_acl_file(path_to_file, content)
@@ -128,9 +145,16 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
                 path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
 
+            # Check that the acl was unchanged.
+            post_test_acls = self.get_container_acl_list(
+                self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+            if not self.compare_acl_lists(self.cont_acl, post_test_acls):
+                self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
+                    self.cont_acl, post_test_acls))
+
         if test_errs:
             self.fail("container overwrite-acl command expected to fail: \
-                {}".format(test_errs))
+                {}".format("\n".join(test_errs)))
 
     @fail_on(CommandFailure)
     def test_overwrite_valid_acl_file(self):
@@ -143,18 +167,27 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl
         """
         acl_filename = "test_acl_file.txt"
-        valid_file_content = self.params.get(
-            "valid_acl_file", "/run/*")
+        valid_file_acl = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, acl_filename)
 
+        # Disable raising an exception if the daos command fails
+        self.daos_cmd.exit_status_exception = False
+
         # Run overwrite command, test will fail if command fails.
-        for content in valid_file_content:
+        for content in valid_file_acl:
             create_acl_file(path_to_file, content)
             self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
                 self.pool.svc_ranks[0],
                 self.container.uuid,
                 path_to_file)
+
+            # Check that the acl was change to expected values.
+            post_test_acls = self.get_container_acl_list(
+                self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+            if not self.compare_acl_lists(content, post_test_acls):
+                self.fail("Previous ACL:\n{} Post command ACL:{}".format(
+                    content, post_test_acls))
 
     def test_no_user_permissions(self):
         """
@@ -166,8 +199,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl
         """
         acl_filename = "test_acl_file.txt"
-        valid_file_content = self.params.get(
-            "valid_acl_file", "/run/*")
+        valid_file_content = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, acl_filename)
 
         # Let's give access to the pool to the root user
@@ -176,6 +208,9 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         # The root user shouldn't have access to deleting container ACL entries
         self.daos_cmd.sudo = True
+
+        # Disable raising an exception if the daos command fails
+        self.daos_cmd.exit_status_exception = False
 
         # Let's check that we can't run as root (or other user) and overwrite
         # entries if no permissions are set for that user.
@@ -189,6 +224,13 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
                 path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
 
+            # Check that the acl was unchanged.
+            post_test_acls = self.get_container_acl_list(
+                self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+            if not self.compare_acl_lists(self.cont_acl, post_test_acls):
+                self.fail("Previous ACL:\n{} Post command ACL:{}".format(
+                    self.cont_acl, post_test_acls))
+
         if test_errs:
             self.fail("container overwrite-acl command expected to fail: \
-                {}".format(test_errs))
+                {}".format("\n".join(test_errs)))

@@ -195,7 +195,7 @@ class DaosCommand(DaosCommandBase):
             pool (str): Pool UUID
             svc (str): Service replicas
             cont (str): Container for which to get the ACL.
-            acl_file (str, optional): input file containing ACL
+            acl_file (str): input file containing ACL
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
