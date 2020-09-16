@@ -36,35 +36,35 @@
 #include "obj_ec.h"
 #include "obj_internal.h"
 
-/* Pool/container info. */
+/* Pool/container info. Shared handle UUIDs, and service list are initialized
+ * in system Xstream.
+ */
 struct ec_agg_pool_info {
-	uuid_t		 api_pool_uuid;		/* open pool, check leader */
-	uuid_t		 api_poh_uuid;		/* pool handle uuid */
-	uuid_t		 api_cont_uuid;		/* container uuid */
-	uuid_t		 api_coh_uuid;		/* container handle uuid */
+	uuid_t		 api_pool_uuid;		/* open pool, check leader    */
+	uuid_t		 api_poh_uuid;		/* pool handle uuid           */
+	uuid_t		 api_cont_uuid;		/* container uuid             */
+	uuid_t		 api_coh_uuid;		/* container handle uuid      */
 	daos_handle_t	 api_cont_hdl;		/* container handle, returned by
 						 * container open
 						 */
-	uint32_t	 api_pool_version;	/* pool vers, for check leader*/
-	d_rank_list_t	*api_svc_list;		/* service list */
-	struct ds_pool	*api_pool;		/* Used for IV fetch */
-	/* Shared handle UUIDs, and service list
-	 * are initialized in system Xstream.
-	 */
-	ABT_eventual	 api_eventual;		/* eventual for sys offload */
+	uint32_t	 api_pool_version;	/* pool ver, for check leader */
+	d_rank_list_t	*api_svc_list;		/* service list               */
+	struct ds_pool	*api_pool;		/* Used for IV fetch          */
+	ABT_eventual	 api_eventual;		/* eventual for sys offload   */
 };
 
 /* Parameters used to drive iterate all.
  */
 struct ec_agg_param {
-	d_sg_list_t		 ap_sgl;	 /* mem alloc-ed for I/O */
-	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info */
+	d_sg_list_t		 ap_sgl;	 /* mem alloc-ed for I/O    */
+	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info          */
 	struct ec_agg_entry	*ap_agg_entry;	 /* entry used for each OID */
-	daos_prop_t		*ap_prop;
-	daos_handle_t		 ap_cont_handle; /* VOS container handle */
+	daos_prop_t		*ap_prop;        /* property for cont open  */
+	daos_handle_t		 ap_cont_handle; /* VOS container handle    */
 };
 
-/* Parity extent for the stripe undergoing aggregation.
+/* Local parity extent for the stripe undergoing aggregation. Stores the
+ * information returned by the iterator.
  */
 struct ec_agg_par_extent {
 	daos_recx_t	ape_recx;	/* recx for the parity extent */
@@ -75,40 +75,40 @@ struct ec_agg_par_extent {
  */
 struct ec_agg_stripe {
 	daos_off_t	as_stripenum;   /* ordinal of stripe, offset/(k*len) */
-	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe */
-	d_list_t	as_dextents;    /* list of stripe's data  extents */
-	daos_off_t	as_stripe_fill; /* amount of stripe covered by data */
-	unsigned int	as_extent_cnt;  /* number of replica extents */
-	unsigned int	as_offset;     /* start offset in stripe */
+	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe          */
+	d_list_t	as_dextents;    /* list of stripe's data  extents    */
+	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
+	unsigned int	as_extent_cnt;  /* number of replica extents         */
+	unsigned int	as_offset;      /* start offset in stripe            */
 };
 
 /* Aggregation state for an object. (may need to restructure if
  * list of these is built from committed DTX table)
  */
 struct ec_agg_entry {
-	d_list_t		 ae_link;	 /* List (of entries) link */
-	daos_unit_oid_t		 ae_oid;	 /* OID of iteration entry */
-	struct daos_oclass_attr	*ae_oca;	 /* Object class of object */
-	struct obj_ec_codec	*ae_codec;	 /* Encode/decode for oclass */
-	struct ec_agg_pool_info *ae_pool_info;
-	d_sg_list_t		*ae_sgl;	 /* Mem for entry processing */
-	daos_handle_t		 ae_cont_hdl;    /* Container handle	    */
-	daos_handle_t		 ae_chdl;	 /* Vos container handle */
-	daos_handle_t		 ae_thdl;	 /* Iterator handle */
-	daos_epoch_range_t	 ae_epr;	 /* hi/lo extent threshold */
-	daos_key_t		 ae_dkey;	 /* Current dkey */
-	daos_key_t		 ae_akey;	 /* Current akey */
-	daos_size_t		 ae_rsize;	 /* Record size of cur array */
+	d_list_t		 ae_link;	 /* List (of entries) link    */
+	daos_unit_oid_t		 ae_oid;	 /* OID of iteration entry    */
+	struct daos_oclass_attr	*ae_oca;	 /* Object class of object    */
+	struct obj_ec_codec	*ae_codec;	 /* Encode/decode for oclass  */
+	struct ec_agg_pool_info *ae_pool_info;   /* Pool/container info       */
+	d_sg_list_t		*ae_sgl;	 /* Mem for entry processing  */
+	daos_handle_t		 ae_cont_hdl;    /* Container handle	      */
+	daos_handle_t		 ae_chdl;	 /* Vos container handle      */
+	daos_handle_t		 ae_thdl;	 /* Iterator handle           */
+	daos_epoch_range_t	 ae_epr;	 /* hi/lo extent threshold    */
+	daos_key_t		 ae_dkey;	 /* Current dkey              */
+	daos_key_t		 ae_akey;	 /* Current akey              */
+	daos_size_t		 ae_rsize;	 /* Record size of cur array  */
 	struct ec_agg_stripe	 ae_cur_stripe;  /* Struct for current stripe */
-	struct ec_agg_par_extent ae_par_extent;	 /* Parity extent */
+	struct ec_agg_par_extent ae_par_extent;	 /* Parity extent             */
 	daos_handle_t		 ae_obj_hdl;	 /* Object handle for cur obj */
-	d_rank_t		 ae_peer_rank;	 /* Rank of peer parity tgt */
+	d_rank_t		 ae_peer_rank;	 /* Rank of peer parity tgt   */
 };
 
 /* Struct used to drive offloaded stripe update.
  */
 struct ec_agg_stripe_ud {
-	struct ec_agg_entry	*asu_agg_entry;
+	struct ec_agg_entry	*asu_agg_entry; /*                           */
 	uint8_t			*asu_bit_map;
 	unsigned int		 asu_cell_cnt;
 	bool			 asu_recalc;
@@ -596,7 +596,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 		      unsigned int cell_cnt, bool is_recalc)
 {
 	daos_iod_t		 iod = { 0 };
-	daos_epoch_t		*epoch;
+	daos_epoch_t		*epoch;		/* epoch used for data fetch */
 	daos_recx_t		*recxs = NULL;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
@@ -723,6 +723,9 @@ out:
 	return rc;
 }
 
+/* Fetch parity cell for the stripe from the peer parity node.
+ */
+
 static int
 agg_fetch_remote_parity(struct ec_agg_entry *entry)
 {
@@ -736,6 +739,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	unsigned int	pshard  = entry->ae_oid.id_shard - 1;
 	int		rc = 0;
 
+	/* Only called when p > 1. Code supports only 1 <= p <= 2 for now. */
 	D_ASSERT(p == 2);
 	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len)
 							| PARITY_INDICATOR;
@@ -759,7 +763,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	return rc;
 }
 
-/* Performs an incremental update of the parity for the stripe.
+/* Performs an incremental update of the existing parity for the stripe.
  */
 static int
 agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
@@ -807,6 +811,9 @@ out:
 	return rc;
 }
 
+/* Recalculates new parity for partial stripe updates. Used when replica
+ * fill the majority of the cells.
+ */
 static void
 agg_recalc_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 		  unsigned cell_cnt)
