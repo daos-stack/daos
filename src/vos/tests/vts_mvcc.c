@@ -156,31 +156,30 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	 */
 	oid->id_pub.hi = 0;
 	oid->id_pub.lo = (i << 8) + path[L_O];
-	daos_obj_generate_id(&oid->id_pub, 0, 0, 0);
+	daos_obj_generate_id(&oid->id_pub,
+			     DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64, 0, 0);
 	oid->id_shard = 0;
 	oid->id_pad_32 = 0;
 }
 
 static void
-set_dkey(int i, char *path, daos_key_t *dkey)
+set_dkey(uint64_t i, char *path, daos_key_t *dkey)
 {
-	int rc;
+	uint64_t key = (i << 32) + path[L_D];
 
-	rc = snprintf(dkey->iov_buf, dkey->iov_buf_len, "%d-dkey-%c", i,
-		      path[L_D]);
-	D_ASSERT(rc < dkey->iov_buf_len);
-	dkey->iov_len = strlen(dkey->iov_buf) + 1;
+	D_ASSERT(dkey->iov_buf_len >= sizeof(key));
+	*(uint64_t *)dkey->iov_buf = key;
+	dkey->iov_len = sizeof(key);
 }
 
 static void
-set_akey(int i, char *path, daos_key_t *akey)
+set_akey(uint64_t i, char *path, daos_key_t *akey)
 {
-	int rc;
+	uint64_t key = (i << 32) + path[L_A];
 
-	rc = snprintf(akey->iov_buf, akey->iov_buf_len, "%d-akey-%c", i,
-		      path[L_A]);
-	D_ASSERT(rc < akey->iov_buf_len);
-	akey->iov_len = strlen(akey->iov_buf) + 1;
+	D_ASSERT(akey->iov_buf_len >= sizeof(key));
+	*(uint64_t *)akey->iov_buf = key;
+	akey->iov_len = sizeof(key);
 }
 
 static void
@@ -272,9 +271,10 @@ fetch_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	char		 akey_buf[64];
 	daos_key_t	 akey = {akey_buf, sizeof(akey_buf), 0};
 	daos_iod_t	 iod;
-	char		 value_buf[64];
+	char		 value_buf[64] = {0};
 	d_iov_t		 value = {value_buf, sizeof(value_buf), 0};
 	d_sg_list_t	 sgl;
+	daos_recx_t	 recx;
 
 	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
@@ -282,9 +282,12 @@ fetch_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 	memset(&iod, 0, sizeof(iod));
 	iod.iod_name = akey;
-	iod.iod_type = DAOS_IOD_SINGLE;
-	iod.iod_size = value.iov_len;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
 	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	recx.rx_idx = 0;
+	recx.rx_nr = sizeof(value_buf);
 
 	memset(&sgl, 0, sizeof(sgl));
 	sgl.sg_nr = 1;
@@ -348,6 +351,7 @@ update_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	char		 value_buf[64];
 	d_iov_t		 value = {value_buf, sizeof(value_buf), 0};
 	d_sg_list_t	 sgl;
+	daos_recx_t	 recx;
 
 	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
@@ -356,9 +360,12 @@ update_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 	memset(&iod, 0, sizeof(iod));
 	iod.iod_name = akey;
-	iod.iod_type = DAOS_IOD_SINGLE;
-	iod.iod_size = value.iov_len;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
 	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	recx.rx_idx = 0;
+	recx.rx_nr = value.iov_len;
 
 	memset(&sgl, 0, sizeof(sgl));
 	sgl.sg_nr = 1;
@@ -488,10 +495,10 @@ puncha_with_flags(struct io_test_args *arg, struct tx_helper *txh, char *path,
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	daos_unit_oid_t	 oid;
-	char		 dkey_buf[64];
-	daos_key_t	 dkey = {dkey_buf, sizeof(dkey_buf), 0};
-	char		 akey_buf[64];
-	daos_key_t	 akey = {akey_buf, sizeof(akey_buf), 0};
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
 	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
@@ -515,19 +522,123 @@ puncha_ane_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	return puncha_with_flags(arg, txh, path, epoch, VOS_OF_COND_PUNCH);
 }
 
+static int
+simple_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	  vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	/** At some point perhaps we want to verify something sane but for
+	 *  now this is just a noop
+	 */
+	return 0;
+}
+
+static int
+tx_list(vos_iter_param_t *param, vos_iter_type_t type, struct tx_helper *txh)
+{
+	struct dtx_handle	*dth;
+	struct vos_iter_anchors	 anchors = {0};
+	int			 rc;
+
+	dth = start_tx(param->ip_hdl, param->ip_oid, param->ip_epr.epr_hi, txh);
+
+	rc = vos_iterate(param, type, false, &anchors, simple_cb, NULL, NULL,
+			 dth);
+
+	stop_tx(param->ip_hdl, txh, rc == 0, false);
+
+	return rc;
+}
+
+static int
+listo_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
+{
+	struct mvcc_arg		*mvcc_arg = arg->custom;
+	vos_iter_param_t	 param = {0};
+
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_epr.epr_hi = epoch;
+	/** We may need to figure out how to initialize the dtx without an oid
+	 *  but for now, just use the one we have
+	 */
+	set_oid(mvcc_arg->i, path, &param.ip_oid);
+
+	return tx_list(&param, VOS_ITER_OBJ, txh);
+}
+
+static int
+listd_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
+{
+	struct mvcc_arg		*mvcc_arg = arg->custom;
+	vos_iter_param_t	 param = {0};
+	uint64_t		 dkey_val;
+	daos_key_t		 dkey = {&dkey_val, sizeof(dkey_val), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_epr.epr_hi = epoch;
+
+	set_oid(mvcc_arg->i, path, &param.ip_oid);
+
+	return tx_list(&param, VOS_ITER_DKEY, txh);
+}
+
+static int
+lista_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
+{
+	struct mvcc_arg		*mvcc_arg = arg->custom;
+	vos_iter_param_t	 param = {0};
+	uint64_t		 dkey_val;
+	daos_key_t		 dkey = {&dkey_val, sizeof(dkey_val), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_epr.epr_hi = epoch;
+	param.ip_dkey = dkey;
+	set_oid(mvcc_arg->i, path, &param.ip_oid);
+
+	return tx_list(&param, VOS_ITER_AKEY, txh);
+}
+
+static int
+listr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	daos_epoch_t epoch)
+{
+	struct mvcc_arg		*mvcc_arg = arg->custom;
+	vos_iter_param_t	 param = {0};
+	uint64_t		 dkey_val;
+	daos_key_t		 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t		 akey_val;
+	daos_key_t		 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+	set_akey(mvcc_arg->i, path, &akey);
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_epr.epr_hi = epoch;
+	param.ip_dkey = dkey;
+	param.ip_akey = akey;
+	set_oid(mvcc_arg->i, path, &param.ip_oid);
+
+	return tx_list(&param, VOS_ITER_RECX, txh);
+}
+
+
 static struct op operations[] = {
 	/* {name,	type,	rlevel,	wlevel,	rtype,	wtype,	func} */
 
 	/* Reads */
-	{"fetch",       T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
+	{"fetch",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	fetch_f},
 	{"fetch_dne",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_dne_f},
 	{"fetch_ane",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	fetch_ane_f},
-	{"listc",       T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"listo",       T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"listd",   	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryc",  	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryo",  	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryd",  	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"listo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	listo_f},
+	{"listd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	listd_f},
+	{"lista",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	lista_f},
+	{"listr",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	listr_f},
+	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
 
 	/*
 	 * Readwrites

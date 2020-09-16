@@ -456,13 +456,13 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "get-acl"), pool=pool)
 
-    def pool_update_acl(self, pool, acl_file, entry):
+    def pool_update_acl(self, pool, acl_file=None, entry=None):
         """Update the acl for a given pool.
 
         Args:
             pool (str): Pool for which to update the ACL.
-            acl_file (str): ACL file to update
-            entry (str): entry to be updated
+            acl_file (str, optional): ACL file to update
+            entry (str, optional): entry to be updated
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other

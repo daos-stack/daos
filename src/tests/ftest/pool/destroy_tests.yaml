@@ -15,6 +15,7 @@ pool:
   mode: 146
   name: daos_server
   scm_size: 1073741824
+  control_method: dmg
 container:
   object_qty: 1
   record_qty: 1
