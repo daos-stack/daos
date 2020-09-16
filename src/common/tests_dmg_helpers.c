@@ -660,8 +660,8 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 
 			json_object_object_get_ex(val1, "smd_info", &smd_info);
 			if (smd_info != NULL) {
-				if (!json_object_object_get_ex(smd_info,
-							       "devices", &smd_dev)) {
+				if (!json_object_object_get_ex(
+					smd_info, "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");
 					return -DER_INVAL;
 				}
@@ -675,7 +675,8 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 
 				if (devices != NULL) {
 					rc = parse_device_info(smd_dev, devices,
-							       host, dev_length, disk);
+							       host, dev_length,
+							       disk);
 					if (rc != 0)
 						goto out_json;
 				}

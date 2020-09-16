@@ -177,7 +177,8 @@ nvme_recov_2(void **state)
 			get_server_log_file(devices[i].host,
 					    server_config_file, log_file);
 			rc = verify_server_log_mask(devices[i].host,
-						    server_config_file, "DEBUG");
+						    server_config_file,
+						    "DEBUG");
 			if (rc) {
 				print_message("Log Mask != DEBUG in %s.\n",
 					      server_config_file);
@@ -242,7 +243,8 @@ nvme_recov_2(void **state)
 			}
 
 			rc = verify_state_in_log(devices[i].host,
-						 log_file, "FAULTY -> TEARDOWN");
+						 log_file,
+						 "FAULTY -> TEARDOWN");
 			if (rc != 0) {
 				print_message(
 					"FAULTY -> TEARDOWN not found in %s\n",
