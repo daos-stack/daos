@@ -661,14 +661,14 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("system", "start"))
 
-    def system_stop(self, ranks=None, force=False):
+    def system_stop(self, force=False, ranks=None):
         """Stop the system.
 
         Args:
-            ranks (str, optional): comman separated ranks to stop. Defaults to
-                None.
             force (bool, optional): whether to force the stop. Defaults to
                 False.
+            ranks (str, optional): comma separated ranks to stop. Defaults to
+                None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -678,7 +678,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system stop command fails.
 
         """
-        return self._get_result(("system", "stop"), ranks=ranks, force=force)
+        return self._get_result(("system", "stop"), force=force, ranks=ranks)
 
 
 def check_system_query_status(stdout_str):
