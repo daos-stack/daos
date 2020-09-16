@@ -59,7 +59,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
                 exit status
 
         Returns:
-            list: list of test erros encountered.
+            list: list of test errors encountered.
         """
         test_errs = []
         if results.exit_status == 0:
