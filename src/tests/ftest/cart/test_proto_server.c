@@ -76,7 +76,7 @@ test_run(d_rank_t my_rank)
 	if (my_rank == 0) {
 		rc = crt_group_config_remove(NULL);
 		D_ASSERTF(rc == 0,
-				"crt_group_config_remove() failed. rc: %d\n", rc);
+			  "crt_group_config_remove() failed. rc: %d\n", rc);
 	}
 
 	rc = crt_finalize();
