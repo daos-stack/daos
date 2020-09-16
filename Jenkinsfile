@@ -1112,7 +1112,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { ! skip_stage('bullseye', true) 
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
