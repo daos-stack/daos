@@ -24,7 +24,6 @@
 
 from cont_security_test_base import ContSecurityTestBase
 from command_utils import CommandFailure
-from avocado.utils import process
 from avocado import fail_on
 
 
@@ -52,6 +51,32 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         for entry in cont_acl:
             self.principals_table[entry.split(":")[2]] = entry
 
+    def error_handling(self, results, err_msg):
+        """Handle errors when test fails and when command unexpectedly passes.
+
+        Args:
+            results (CmdResult): object containing stdout, stderr and
+                exit status
+
+        Returns:
+            list: list of test erros encountered.
+        """
+        test_errs = []
+        if results.exit_status == 0:
+            test_errs.append("overwrite-acl passed unexpectedly: {}".format(
+                results.stdout))
+        elif results.exit_status == 1:
+            # REMOVE BELOW IF Once DAOS-5635 is resolved
+            if results.stdout and err_msg in results.stdout:
+                self.log.info("Found expected error %s", results.stdout)
+            # REMOVE ABOVE IF Once DAOS-5635 is resolved
+            elif results.stderr and err_msg in results.stderr:
+                self.log.info("Found expected error %s", results.stderr)
+            else:
+                self.fail("overwrite-acl seems to have failed with \
+                    unexpected error: {}".format(results))
+        return test_errs
+
     def test_acl_delete_invalid_inputs(self):
         """
         JIRA ID: DAOS-3714
@@ -75,27 +100,10 @@ class DeleteContainerACLTest(ContSecurityTestBase):
                 self.pool.svc_ranks[0],
                 self.container.uuid,
                 principal)
-            results = self.daos_cmd.result
-            if results.exit_status == 0:
-                test_errs.append("delete-acl passed: {}".format(principal))
-            elif results.exit_status == 1:
-                # REMOVE BELOW IF Once DAOS-5635 is resolved
-                if results.stdout and "-1003" in results.stdout:
-                    self.log.info(
-                        "Found expected error %s with invalid principal %s",
-                        results.stdout,
-                        principal)
-                # REMOVE ABOVE IF Once DAOS-5635 is resolved
-                elif results.stderr and "-1003" in results.stderr:
-                    self.log.info(
-                        "Found expected error %s with invalid principal %s",
-                        results.stderr,
-                        principal)
-                else:
-                    self.fail("delete-acl seems to have failed with \
-                        unexpected error: {}".format(results))
+            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
         if test_errs:
-            self.fail("container delete-acl command expected to fail.")
+            self.fail("container delete-acl command expected to fail: \
+                {}".format("\n".join(test_errs)))
 
     @fail_on(CommandFailure)
     def test_delete_valid_acl(self):
@@ -134,6 +142,9 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         # The root user shouldn't have access to deleting container ACL entries
         self.daos_cmd.sudo = True
 
+        # Disable raising an exception if the daos command fails
+        self.daos_cmd.exit_status_exception = False
+
         # Let's check that we can't run as root (or other user) and delete
         # entries if no permissions are set for that user.
         test_errs = []
@@ -143,25 +154,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
                 self.pool.svc_ranks[0],
                 self.container.uuid,
                 principal)
-            results = self.daos_cmd.result
-            if results.exit_status == 0:
-                test_errs.append(
-                    "Passed for user with no perms: {}".format(principal))
-            elif results.exit_status == 1:
-                # REMOVE BELOW IF Once DAOS-5635 is resolved
-                if results.stdout and "-1001" in results.stdout:
-                    self.log.info(
-                        "Found expected error %s with principal %s",
-                        results.stdout,
-                        principal)
-                # REMOVE ABOVE IF Once DAOS-5635 is resolved
-                elif results.stderr and "-1001" in results.stderr:
-                    self.log.info(
-                        "Found expected error %s with principal %s",
-                        results.stderr,
-                        principal)
-                else:
-                    self.fail("delete-acl seems to have failed with unexpected \
-                        error for user with no permissions: {}".format(results))
+            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
         if test_errs:
-            self.fail("container delete-acl command expected to fail.")
+            self.fail("container delete-acl command expected to fail: \
+                {}".format("\n".join(test_errs)))
