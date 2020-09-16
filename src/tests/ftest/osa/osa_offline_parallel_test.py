@@ -57,7 +57,7 @@ class OSAOfflineParallelTest(TestWithServers):
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')[0]
         self.out_queue = []
-        for _ in range(0,4):
+        for _ in range(0, 4):
             tmp = queue.Queue()
             self.out_queue.append(tmp)
 
@@ -112,19 +112,31 @@ class OSAOfflineParallelTest(TestWithServers):
                 ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
 
     def dmg_thread(self, puuid, rank, target, action, results):
+        """Generate different dmg command related to OSA.
+            Args:
+            puuid (int) : Pool UUID
+            rank (int)  : Daos Server Rank
+            target (list) : Target list
+            action (string) : String to identify OSA action
+                              like drain, reintegration, extend
+            results (queue) : dmg command output queue.
+        """
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         self.log.info("Action: {0}".format(action))
-        if action == "exclude":
-            dmg.pool_exclude(puuid, (rank + 1), target)
-        elif action == "drain":
-            dmg.pool_drain(puuid, rank)
-        elif action == "reintegrate":
-            time.sleep(30)
-            dmg.pool_reintegrate(puuid, (rank + 1), target)
-        elif action == "extend":
-            dmg.pool_extend(puuid, (rank + 2))
-        else:
-            self.fail("Invalid action for dmg thread")
+        try:
+            if action == "exclude":
+                dmg.pool_exclude(puuid, (rank + 1), target)
+            elif action == "drain":
+                dmg.pool_drain(puuid, rank)
+            elif action == "reintegrate":
+                time.sleep(30)
+                dmg.pool_reintegrate(puuid, (rank + 1), target)
+            else:
+                self.fail("Invalid action for dmg thread")
+        except CommandFailure as _error:
+            results.put("FAIL")
+            # elif action == "extend":
+            #    dmg.pool_extend(puuid, (rank + 2))
 
     def run_offline_parallel_test(self, num_pool, data=False):
         """Run the offline reintegration without data.
@@ -190,7 +202,7 @@ class OSAOfflineParallelTest(TestWithServers):
         for thrd in threads:
             thrd.join()
             time.sleep(5)
-        
+
         for i in range(0, 3):
             for failure in self.out_queue[i]:
                 if CommandFailure in failure:
