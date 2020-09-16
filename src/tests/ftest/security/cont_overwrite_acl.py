@@ -54,7 +54,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         Args:
             results (CmdResult): object containing stdout, stderr and
-                exit status
+                exit status.
+            err_msg (str): error message string to look for in stderr.
 
         Returns:
             list: list of test errors encountered.
@@ -74,6 +75,25 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
                 self.fail("overwrite-acl seems to have failed with \
                     unexpected error: {}".format(results))
         return test_errs
+
+    def acl_file_diff(self, prev_acl, flag=True):
+        """Helper function to compare current content of acl-file.
+
+        If provided  prev_acl file information is different from current acl
+        file information test will fail if flag=True. If flag=False, test will
+        fail in the case that the acl contents are found to have no difference.
+
+        Args:
+            prev_acl (list): list of acl entries within acl-file.
+                Defaults to True.
+            flag (bool): if True, test will fail when acl-file contents are
+                different, else test will fail when acl-file contents are same.
+        """
+        current_acl = self.get_container_acl_list(
+            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+        if self.compare_acl_lists(prev_acl, current_acl) != flag:
+            self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
+                prev_acl, current_acl))
 
     def test_acl_overwrite_invalid_inputs(self):
         """
@@ -104,12 +124,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             test_errs.extend(self.error_handling(
                 self.daos_cmd.result, "No such file or directory"))
 
-            # Check that the acl was unchanged.
-            post_test_acls = self.get_container_acl_list(
-                self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
-            if not self.compare_acl_lists(self.cont_acl, post_test_acls):
-                self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
-                    self.cont_acl, post_test_acls))
+            # Check that the acl file was unchanged
+            self.acl_file_diff(self.cont_acl)
 
         if test_errs:
             self.fail("container overwrite-acl command expected to fail: \
@@ -145,12 +161,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
                 path_to_file)
             test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
 
-            # Check that the acl was unchanged.
-            post_test_acls = self.get_container_acl_list(
-                self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
-            if not self.compare_acl_lists(self.cont_acl, post_test_acls):
-                self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
-                    self.cont_acl, post_test_acls))
+            # Check that the acl file was unchanged
+            self.acl_file_diff(self.cont_acl)
 
         if test_errs:
             self.fail("container overwrite-acl command expected to fail: \
@@ -182,12 +194,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
                 self.container.uuid,
                 path_to_file)
 
-            # Check that the acl was change to expected values.
-            post_test_acls = self.get_container_acl_list(
-                self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
-            if not self.compare_acl_lists(content, post_test_acls):
-                self.fail("Previous ACL:\n{} Post command ACL:{}".format(
-                    content, post_test_acls))
+            # Check that the acl file was unchanged
+            self.acl_file_diff(content)
 
     def test_no_user_permissions(self):
         """

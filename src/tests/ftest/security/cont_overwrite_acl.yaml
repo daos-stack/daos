@@ -29,5 +29,5 @@ invalid_acl_file_content:
   - ["A::OWNER:dtTaAo", "A:G:GROUP:dtTaAo"]
 
 valid_acl_file:
-  - [""]
+  - []
   - ["A::OWNER@:dtTaAo", "A:G:my_great_test@:rw", "A::person@:r"]
