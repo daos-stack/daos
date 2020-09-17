@@ -1,15 +1,19 @@
 #!/usr/bin/python
 """
   (C) Copyright 2020 Intel Corporation.
+
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at
+
      http://www.apache.org/licenses/LICENSE-2.0
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
+
   GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
   The Government's rights to use, modify, reproduce, release, perform, display,
   or disclose this software are subject to the terms of the Apache License as
@@ -22,6 +26,8 @@ import os
 
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import create_acl_file
+from command_utils import CommandFailure
+from avocado import fail_on
 
 
 class UpdateContainerACLTest(ContSecurityTestBase):
@@ -47,7 +53,8 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         Args:
             results (CmdResult): object containing stdout, stderr and
-                exit status
+                exit status.
+            err_msg (str): error message string to look for in stderr.
 
         Returns:
             list: list of test errors encountered.
@@ -171,6 +178,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             self.fail("container update-acl command expected to fail: \
                 {}".format("\n".join(test_errs)))
 
+    @fail_on(CommandFailure)
     def test_update_acl_file(self):
         """
         JIRA ID: DAOS-3711
@@ -198,7 +206,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         self.acl_file_diff(self.cont_acl + ace_to_add)
 
         # Let's add a file with existing principals and verify overridden values
-        ace_to_add_2 = ["A:G:my_great_test@:rwcd", "A::my_new_principal@:rw"]
+        ace_to_add_2 = ["A:G:my_great_test@:rwd", "A::my_new_principal@:rw"]
         create_acl_file(path_to_file, ace_to_add_2)
 
         # Run update command
@@ -212,7 +220,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         self.acl_file_diff(self.cont_acl + ace_to_add_2)
 
         # Lastly, let's add a file that contains only new principals
-        ace_to_add_3 = ["A:G:new_new_principal@:rwd", "A::last_one@:rwT"]
+        ace_to_add_3 = ["A:G:new_new_principal@:rwd", "A::last_one@:rw"]
         create_acl_file(path_to_file, ace_to_add_3)
 
         # Run update command
