@@ -202,7 +202,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         # Verify that the entry added did not affect any other entry
         self.acl_file_diff(self.cont_acl + ace_to_add)
 
-        # Let's add a file with existing principals and verify overriden values
+        # Let's add a file with existing principals and verify overridden values
         ace_to_add_2 = ["A:G:my_great_test@:rwcd", "A::my_new_principal@:rw"]
         create_acl_file(path_to_file, ace_to_add_2)
 
