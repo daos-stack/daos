@@ -280,7 +280,6 @@ func getTestNVMeQueryResults(t *testing.T) ([]*ctlpb.NvmeFirmwareQueryResp, []*N
 			Device: *storage.MockNvmeController(1),
 		},
 		{
-
 			Device: *storage.MockNvmeController(2),
 		},
 	}

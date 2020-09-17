@@ -3551,7 +3551,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
-	if (!cont_props.dcp_csum_enabled && cont_props.dcp_dedup) {
+	if (!cont_props.dcp_csum_enabled && cont_props.dcp_dedup_enabled) {
 		uint32_t	dedup_th = cont_props.dcp_dedup_size;
 		int		i;
 		bool		candidate = false;
