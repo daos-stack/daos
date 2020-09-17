@@ -151,11 +151,6 @@ func (svc *mgmtSvc) requestGroupUpdate(ctx context.Context) {
 }
 
 func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return err
-	}
-
 	gm, err := svc.sysdb.GroupMap()
 	if err != nil {
 		return err
@@ -178,7 +173,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	}
 
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
-	dResp, err := mi.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
+	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
 		return err

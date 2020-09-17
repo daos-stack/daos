@@ -178,7 +178,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			}
 			tc.mgmtSvc.log = log
 
-			if _, err := tc.mgmtSvc.harness.GetMSLeaderInstance(); err == nil {
+			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
 				if tc.setupMockDrpc == nil {
 					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
 						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
@@ -265,7 +265,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			}
 			tc.mgmtSvc.log = log
 
-			if _, err := tc.mgmtSvc.harness.GetMSLeaderInstance(); err == nil {
+			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
 				if tc.setupMockDrpc == nil {
 					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
 						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
@@ -349,7 +349,7 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 			}
 			tc.mgmtSvc.log = log
 
-			if _, err := tc.mgmtSvc.harness.GetMSLeaderInstance(); err == nil {
+			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
 				if tc.setupMockDrpc == nil {
 					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
 						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
@@ -434,7 +434,7 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 			}
 			tc.mgmtSvc.log = log
 
-			if _, err := tc.mgmtSvc.harness.GetMSLeaderInstance(); err == nil {
+			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
 				if tc.setupMockDrpc == nil {
 					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
 						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
@@ -921,7 +921,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			}
 			tc.mgmtSvc.log = log
 
-			if _, err := tc.mgmtSvc.harness.GetMSLeaderInstance(); err == nil {
+			if _, err := tc.mgmtSvc.harness.getMSLeaderInstance(); err == nil {
 				if tc.setupMockDrpc == nil {
 					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
 						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
@@ -961,7 +961,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 		return r
 	}
 	lastCall := func(svc *mgmtSvc) *drpc.Call {
-		mi, _ := svc.harness.GetMSLeaderInstance()
+		mi, _ := svc.harness.getMSLeaderInstance()
 		if mi == nil || mi._drpcClient == nil {
 			return nil
 		}

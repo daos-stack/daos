@@ -131,7 +131,7 @@ const (
 			}
 			h.started.SetTrue()
 
-			_, err := h.GetMSLeaderInstance()
+			_, err := h.getMSLeaderInstance()
 			CmpErr(t, tc.expError, err)
 		})
 	}
