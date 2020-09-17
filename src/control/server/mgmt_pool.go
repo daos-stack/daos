@@ -232,11 +232,16 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
+	// FIXME: There are some potential races here. We may want
+	// to somehow do all of this under a lock, to prevent multiple
+	// gRPC callers from modifying the same pool concurrently.
+
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if err != nil {
 		return nil, err
 	}
 
+	lastState := ps.State
 	if ps.State == system.PoolServiceStateDestroying {
 		return nil, drpc.DaosAlready
 	}
@@ -252,16 +257,28 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	if err := svc.sysdb.RemovePoolService(uuid); err != nil {
-		return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
-	}
-
 	resp := &mgmtpb.PoolDestroyResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", *resp)
+
+	switch drpc.DaosStatus(resp.Status) {
+	case drpc.DaosSuccess:
+		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
+			return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
+		}
+	// TODO: Identify errors that should leave the pool in a "Destroying"
+	// state and enumerate them here.
+	default:
+		// Revert the pool back to the previous state if the destroy failed
+		// and the pool should not remain in the "Destroying" state.
+		ps.State = lastState
+		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+			return nil, err
+		}
+	}
 
 	return resp, nil
 }
