@@ -1,0 +1,34 @@
+hosts:
+    test_servers:
+        - server-A
+    test_clients:
+        - server-B
+timeout: 240
+server_config:
+    name: daos_server
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 1G
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+    copy_subsets:
+        uns_dir: /tmp/daos_uns
+mdtest:
+    client_processes:
+        np: 1
+    copy_subsets:
+        flags_write:
+            - "-C"
+        flags_read:
+            - "-E -X"
+    api: "DFS"
+    dfs_destroy: False
+    read_bytes: 1024
+    write_bytes: 1024
+    depth: 1
+    items: 1
+datamover:
+    processes: 1
