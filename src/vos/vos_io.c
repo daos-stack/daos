@@ -2033,7 +2033,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch);
 
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
-                        flags, NULL, dedup, dedup_th, dth, &ioc);
+			    flags, NULL, dedup, dedup_th, dth, &ioc);
 	if (rc != 0)
 		return rc;
 

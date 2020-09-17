@@ -1187,7 +1187,8 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	obj_iod_idx_vos2parity(iod_nr, iods);
 	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods,
-                cond_flags | VOS_FETCH_RECX_LIST, NULL, &ioh, NULL);
+			     cond_flags | VOS_FETCH_RECX_LIST, NULL, &ioh,
+			     NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
@@ -1392,8 +1393,9 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
-		        orw->orw_epoch, dkey, orw->orw_nr, iods,
-			cond_flags | fetch_flags, shadows, &ioh, dth);
+				     orw->orw_epoch, dkey, orw->orw_nr, iods,
+				     cond_flags | fetch_flags, shadows, &ioh,
+				     dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
