@@ -356,6 +356,8 @@ typedef struct {
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
+			/** record size for the whole global single record */
+			daos_size_t		ie_gsize;
 			/** record extent */
 			daos_recx_t		ie_recx;
 			/* original in-tree extent */
