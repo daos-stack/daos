@@ -231,10 +231,10 @@ func (c *ControlService) setScanResp(cs storage.NvmeControllers, inErr error, re
 	// trim unwanted fields so responses can be coalesced from hash map
 	for _, c := range cs {
 		if !req.Health {
-			c.HealthStats = nil
+			c.HealthStats = new(storage.NvmeControllerHealth)
 		}
 		if !req.Meta {
-			c.SmdDevices = nil
+			c.SmdDevices = make([]*storage.SmdDevice, 0)
 		}
 	}
 
