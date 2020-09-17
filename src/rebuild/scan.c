@@ -389,6 +389,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		bool still_needed;
 		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
 
+		D_ASSERT(mytarget >= 0);
+
 		/*
 		 * Compute placement for the object, then check if the layout
 		 * still includes the current rank. If not, the object can be
@@ -402,8 +404,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 						      layout, myrank, mytarget);
 		if (!still_needed) {
 			D_DEBUG(DB_REBUILD, "deleting object "DF_UOID
-				" which is no longer reachable on this rank",
-				DP_UOID(oid));
+				" which is not reachable on rank %u tgt %u",
+				DP_UOID(oid), myrank, mytarget);
 			/*
 			 * It's possible this object might still be being
 			 * accessed elsewhere - retry until until it is possible
