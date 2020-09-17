@@ -214,18 +214,22 @@ class IorTestBase(DfuseTestBase):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
-                plugin_path=None, fail_on_warning=None):
+                plugin_path=None, fail_on_warning=False, pool=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
-            intercept (str): path to interception library.
+            intercept (str, optional): path to interception library.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
-            fail_on_warning (bool): Controls whether the test should
-                fail if a 'WARNING' is found.
+            fail_on_warning (bool, optional): Controls whether the test
+                should fail if a 'WARNING' is found. Default is False.
+            pool (TestPool, optional): The pool for which to display space.
+                Default is self.pool.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
@@ -239,9 +243,12 @@ class IorTestBase(DfuseTestBase):
         manager.assign_processes(processes)
         manager.assign_environment(env)
 
+        if not pool:
+            pool = self.pool
+
         try:
             if display_space:
-                self.pool.display_pool_daos_space()
+                pool.display_pool_daos_space()
             out = manager.run()
 
             if self.subprocess:
@@ -261,10 +268,10 @@ class IorTestBase(DfuseTestBase):
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:
-                self.pool.display_pool_daos_space()
-                if self.pool.dmg:
+                pool.display_pool_daos_space()
+                if pool.dmg:
                     # Display the per-target free space
-                    self.pool.set_query_data()
+                    pool.set_query_data()
 
     def stop_ior(self):
         """Stop IOR process.
