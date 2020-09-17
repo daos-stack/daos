@@ -636,8 +636,8 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
  * \param fetch_flags [IN]
- *			VOS fetch flags, VOS_FETCH_SIZE_ONLY or
- *			VOS_FETCH_RECX_LIST.
+ *			VOS fetch flags, VOS_OF_FETCH_SIZE_ONLY or
+ *			VOS_OF_FETCH_RECX_LIST.
  * \param shadows [IN]	Optional shadow recx/epoch lists, one for each iod.
  *			data of extents covered by these should not be returned
  *			by fetch function. Only used for EC obj degraded fetch.

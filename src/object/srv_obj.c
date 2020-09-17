@@ -1187,7 +1187,7 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	obj_iod_idx_vos2parity(iod_nr, iods);
 	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods,
-			     cond_flags | VOS_FETCH_RECX_LIST, NULL, &ioh,
+			     cond_flags | VOS_OF_FETCH_RECX_LIST, NULL, &ioh,
 			     NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
@@ -1374,9 +1374,9 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
 			if (orw->orw_flags & DRF_CHECK_EXISTENCE)
-				fetch_flags = VOS_FETCH_CHECK_EXISTENCE;
+				fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
 			else
-				fetch_flags = VOS_FETCH_SIZE_ONLY;
+				fetch_flags = VOS_OF_FETCH_SIZE_ONLY;
 		}
 
 		ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
@@ -3209,7 +3209,7 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 				     dcsh->dcsh_epoch.oe_value,
 				     &dcsr->dcsr_dkey, dcsr->dcsr_nr,
 				     dcsr->dcsr_read.dcr_iods,
-				     VOS_FETCH_SET_TS_ONLY, NULL, &ioh, dth);
+				     VOS_OF_FETCH_SET_TS_ONLY, NULL, &ioh, dth);
 		if (rc == 0)
 			rc = vos_fetch_end(ioh, 0);
 		else if (rc == -DER_NONEXIST)

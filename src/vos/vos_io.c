@@ -89,7 +89,7 @@ struct vos_io_context {
 	struct daos_recx_ep_list *ic_shadows;
 	/**
 	 * Output recx/epoch lists, one for each iod. To save the recx list when
-	 * vos_fetch_begin() with VOS_FETCH_RECX_LIST flag. User can get it by
+	 * vos_fetch_begin() with VOS_OF_FETCH_RECX_LIST flag. User can get it by
 	 * vos_ioh2recx_list() and should free it by daos_recx_ep_list_free().
 	 */
 	struct daos_recx_ep_list *ic_recx_lists;
@@ -470,7 +470,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	if (iod_nr == 0 &&
 	    !(vos_flags &
-	      (VOS_FETCH_SET_TS_ONLY | VOS_FETCH_CHECK_EXISTENCE))) {
+	      (VOS_OF_FETCH_SET_TS_ONLY | VOS_OF_FETCH_CHECK_EXISTENCE))) {
 		D_ERROR("Invalid iod_nr (0).\n");
 		rc = -DER_IO_INVAL;
 		goto error;
@@ -488,13 +488,13 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_cont = vos_hdl2cont(coh);
 	vos_cont_addref(ioc->ic_cont);
 	ioc->ic_update = !read_only;
-	ioc->ic_size_fetch = ((vos_flags & VOS_FETCH_SIZE_ONLY) != 0);
-	ioc->ic_save_recx = ((vos_flags & VOS_FETCH_RECX_LIST) != 0);
+	ioc->ic_size_fetch = ((vos_flags & VOS_OF_FETCH_SIZE_ONLY) != 0);
+	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
 	ioc->ic_dedup = dedup;
 	ioc->ic_dedup_th = dedup_th;
-	ioc->ic_read_ts_only = ((vos_flags & VOS_FETCH_SET_TS_ONLY) != 0);
+	ioc->ic_read_ts_only = ((vos_flags & VOS_OF_FETCH_SET_TS_ONLY) != 0);
 	ioc->ic_check_existence =
-		((vos_flags & VOS_FETCH_CHECK_EXISTENCE) != 0);
+		((vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE) != 0);
 	ioc->ic_remove =
 		((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
@@ -2311,7 +2311,7 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 {
 	daos_handle_t	ioh;
 	bool		size_fetch = (sgls == NULL);
-	uint32_t	fetch_flags = size_fetch ? VOS_FETCH_SIZE_ONLY : 0;
+	uint32_t	fetch_flags = size_fetch ? VOS_OF_FETCH_SIZE_ONLY : 0;
 	uint32_t	vos_flags = flags | fetch_flags;
 	int		rc;
 
