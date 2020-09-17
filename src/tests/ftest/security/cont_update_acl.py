@@ -22,9 +22,6 @@ import os
 
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import create_acl_file
-from command_utils import CommandFailure
-from avocado.utils import process
-from avocado import fail_on
 
 
 class UpdateContainerACLTest(ContSecurityTestBase):
@@ -36,6 +33,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
     def setUp(self):
         """Set up each test case."""
         super(UpdateContainerACLTest, self).setUp()
+        self.acl_filename = "test_acl_file.txt"
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
@@ -43,6 +41,11 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         # List of ACL entries
         self.cont_acl = self.get_container_acl_list(
             self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+
+        # Get principals
+        self.principals_table = {}
+        for entry in self.cont_acl:
+            self.principals_table[entry.split(":")[2]] = entry
 
     def error_handling(self, results, err_msg):
         """Handle errors when test fails and when command unexpectedly passes.
@@ -57,7 +60,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         """
         test_errs = []
         if results.exit_status == 0:
-            test_errs.append("overwrite-acl passed unexpectedly: {}".format(
+            test_errs.append("update-acl passed unexpectedly: {}".format(
                 results.stdout))
         elif results.exit_status == 1:
             # REMOVE BELOW IF Once DAOS-5635 is resolved
@@ -67,7 +70,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             elif results.stderr and err_msg in results.stderr:
                 self.log.info("Found expected error %s", results.stderr)
             else:
-                self.fail("overwrite-acl seems to have failed with \
+                self.fail("update-acl seems to have failed with \
                     unexpected error: {}".format(results))
         return test_errs
 
@@ -139,6 +142,40 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             self.fail("container update-acl command expected to fail: \
                 {}".format("\n".join(test_errs)))
 
+    def test_update_invalid_acl(self):
+        """JIRA ID: DAOS-3711
+
+        Test Description: Test that container update command performs as
+            expected with invalid values within ACL file.
+
+        :avocado: tags=all,pr,security,container_acl,cont_update_invalid_acl
+        """
+        invalid_file_content = self.params.get(
+            "invalid_acl_file_content ", "/run/*")
+        path_to_file = os.path.join(self.tmp, self.acl_filename)
+
+        # Disable raising an exception if the daos command fails
+        self.daos_cmd.exit_status_exception = False
+
+        test_errs = []
+        for content in invalid_file_content:
+            create_acl_file(path_to_file, content)
+
+            # Run update command
+            self.daos_cmd.container_update_acl(
+                self.pool.uuid,
+                self.pool.svc_ranks[0],
+                self.container.uuid,
+                path_to_file)
+            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
+
+            # Check that the acl file was unchanged
+            self.acl_file_diff(self.cont_acl)
+
+        if test_errs:
+            self.fail("container update-acl command expected to fail: \
+                {}".format("\n".join(test_errs)))
+
     def test_update_acl_file(self):
         """
         JIRA ID: DAOS-3711
@@ -149,8 +186,49 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_update_acl
         """
+        path_to_file = os.path.join(self.tmp, self.acl_filename)
 
+        # Create acl file to use for update
+        ace_to_add = ["A:G:my_great_test@:rw", "A::my_new_principal@:rwTao"]
+        create_acl_file(path_to_file, self.cont_acl + ace_to_add)
 
+        # Run update command
+        self.daos_cmd.container_update_acl(
+            self.pool.uuid,
+            self.pool.svc_ranks[0],
+            self.container.uuid,
+            path_to_file)
+
+        # Verify that the entry added did not affect any other entry
+        self.acl_file_diff(self.cont_acl + ace_to_add)
+
+        # Let's add a file with existing principals and verify overriden values
+        ace_to_add_2 = ["A:G:my_great_test@:rwcd", "A::my_new_principal@:rw"]
+        create_acl_file(path_to_file, ace_to_add_2)
+
+        # Run update command
+        self.daos_cmd.container_update_acl(
+            self.pool.uuid,
+            self.pool.svc_ranks[0],
+            self.container.uuid,
+            path_to_file)
+
+        # Verify that the ACL file is now composed of the updated ACEs
+        self.acl_file_diff(self.cont_acl + ace_to_add_2)
+
+        # Lastly, let's add a file that contains only new principals
+        ace_to_add_3 = ["A:G:new_new_principal@:rwd", "A::last_one@:rwT"]
+        create_acl_file(path_to_file, ace_to_add_3)
+
+        # Run update command
+        self.daos_cmd.container_update_acl(
+            self.pool.uuid,
+            self.pool.svc_ranks[0],
+            self.container.uuid,
+            path_to_file)
+
+        # Verify that the ACL file is now composed of the updated ACEs
+        self.acl_file_diff(self.cont_acl + ace_to_add_2 + ace_to_add_3)
 
     def test_no_user_permissions(self):
         """
@@ -161,15 +239,14 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_update_acl_noperms
         """
-        acl_filename = "test_acl_file.txt"
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
-        path_to_file = os.path.join(self.tmp, acl_filename)
+        path_to_file = os.path.join(self.tmp, self.acl_filename)
 
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(
             self.pool.uuid, entry="A::EVERYONE@:rw")
 
-        # The root user shouldn't have access to deleting container ACL entries
+        # The root user shouldn't have access to updating container ACL entries
         self.daos_cmd.sudo = True
 
         # Disable raising an exception if the daos command fails
