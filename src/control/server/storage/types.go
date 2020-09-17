@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package storage
 
 import (
@@ -61,6 +62,7 @@ type (
 		SocketID        uint32
 		PhysicalID      uint32
 		Capacity        uint64
+		UID             string
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
@@ -85,32 +87,53 @@ type (
 
 	ScmMountPoints []*ScmMountPoint
 
-	// NvmeDeviceHealth represents a set of health statistics for a NVMe device.
-	NvmeDeviceHealth struct {
-		Temp            uint32
-		TempWarnTime    uint32
-		TempCritTime    uint32
-		CtrlBusyTime    uint64
-		PowerCycles     uint64
-		PowerOnHours    uint64
-		UnsafeShutdowns uint64
-		MediaErrors     uint64
-		ErrorLogEntries uint64
-		TempWarn        bool
-		AvailSpareWarn  bool
-		ReliabilityWarn bool
-		ReadOnlyWarn    bool
-		VolatileWarn    bool
+	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
+	ScmFirmwareUpdateStatus uint32
+
+	// ScmFirmwareInfo describes the firmware information of an SCM module.
+	ScmFirmwareInfo struct {
+		ActiveVersion     string
+		StagedVersion     string
+		ImageMaxSizeBytes uint32
+		UpdateStatus      ScmFirmwareUpdateStatus
 	}
 
-	// NvmeNamespace represents an individual NVMe namespace on a device.
+	// NvmeControllerHealth represents a set of health statistics for a NVMe device
+	// and mirrors C.struct_nvme_health_stats.
+	NvmeControllerHealth struct {
+		Model           string `json:"model"`
+		Serial          string `json:"serial"`
+		Timestamp       uint64 `json:"timestamp"`
+		ErrorCount      uint64 `json:"err_count"`
+		TempWarnTime    uint32 `json:"warn_temp_time"`
+		TempCritTime    uint32 `json:"crit_temp_time"`
+		CtrlBusyTime    uint64 `json:"ctrl_busy_time"`
+		PowerCycles     uint64 `json:"power_cycles"`
+		PowerOnHours    uint64 `json:"power_on_hours"`
+		UnsafeShutdowns uint64 `json:"unsafe_shutdowns"`
+		MediaErrors     uint64 `json:"media_errs"`
+		ErrorLogEntries uint64 `json:"err_log_entries"`
+		ReadErrors      uint32 `json:"bio_read_errs"`
+		WriteErrors     uint32 `json:"bio_write_errs"`
+		UnmapErrors     uint32 `json:"bio_unmap_errs"`
+		ChecksumErrors  uint32 `json:"checksum_errs"`
+		Temperature     uint32 `json:"temperature"`
+		TempWarn        bool   `json:"temp_warn"`
+		AvailSpareWarn  bool   `json:"avail_spare_warn"`
+		ReliabilityWarn bool   `json:"dev_reliability_warn"`
+		ReadOnlyWarn    bool   `json:"read_only_warn"`
+		VolatileWarn    bool   `json:"volatile_mem_warn"`
+	}
+
+	// NvmeNamespace represents an individual NVMe namespace on a device and
+	// mirrors C.struct_ns_t.
 	NvmeNamespace struct {
 		ID   uint32
 		Size uint64
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
-	// and namespace information.
+	// and namespace information and mirrors C.struct_ns_t.
 	NvmeController struct {
 		Info        string
 		Model       string
@@ -118,7 +141,7 @@ type (
 		PciAddr     string
 		FwRev       string
 		SocketID    int32
-		HealthStats *NvmeDeviceHealth `hash:"ignore"`
+		HealthStats *NvmeControllerHealth `hash:"ignore"`
 		Namespaces  []*NvmeNamespace
 	}
 
@@ -126,10 +149,46 @@ type (
 	NvmeControllers []*NvmeController
 )
 
+const (
+	// ScmUpdateStatusUnknown indicates that the firmware update status is unknown.
+	ScmUpdateStatusUnknown ScmFirmwareUpdateStatus = iota
+	// ScmUpdateStatusStaged indicates that a new firmware version has been staged.
+	ScmUpdateStatusStaged
+	// ScmUpdateStatusSuccess indicates that the firmware update was successfully applied.
+	ScmUpdateStatusSuccess
+	// ScmUpdateStatusFailed indicates that the firmware update failed.
+	ScmUpdateStatusFailed
+)
+
+// String translates the update status to a string
+func (s ScmFirmwareUpdateStatus) String() string {
+	switch s {
+	case ScmUpdateStatusStaged:
+		return "Staged"
+	case ScmUpdateStatusSuccess:
+		return "Success"
+	case ScmUpdateStatusFailed:
+		return "Failed"
+	}
+	return "Unknown"
+}
+
+func (ndh *NvmeControllerHealth) TempK() uint32 {
+	return uint32(ndh.Temperature)
+}
+
+func (ndh *NvmeControllerHealth) TempC() float32 {
+	return float32(ndh.Temperature) - 273.15
+}
+
+func (ndh *NvmeControllerHealth) TempF() float32 {
+	return ndh.TempC()*(9/5) + 32
+}
+
 func (sm *ScmModule) String() string {
 	// capacity given in IEC standard units.
-	return fmt.Sprintf("PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", sm.PhysicalID, humanize.IBytes(sm.Capacity),
+	return fmt.Sprintf("UID:%s PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
+		"chan:%d pos:%d)", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
 		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition)
 }
 

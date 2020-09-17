@@ -36,7 +36,7 @@ from pydaos.raw import DaosPool, DaosContainer, DaosApiError, IOV
 class GlobalHandle(TestWithServers):
     """
     This class contains tests to verify the ability to share container
-    handles amoung processes.
+    handles among processes.
     :avocado: recursive
     """
 

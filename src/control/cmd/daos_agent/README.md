@@ -69,14 +69,45 @@ Client communications are sent over the high-speed fabric to data plane servers.
 Initially the client has no knowledge of the URIs of these server ranks.
 The Primary Service Ranks (PSRs) are servers that the client may query
 to get the URI for a particular rank in the cluster. Once the PSRs are known to
-the client library, client communications over CaRT will automatically query a
-PSR to direct RPCs to the correct rank.
+the client library and an appropriate network device has been selected, client
+communications over CaRT are initialized and will automatically query a PSR to
+direct RPCs to the correct rank.
 
-To get the PSRs, the client process must send a Get Attach Info request to the
-agent. The agent forwards this request to an access point's Control Plane
-Server via the management network. The Control Plane Server forwards the request
-again to a local data plane instance, which looks up the PSRs and returns the
-information back up the chain to the client caller.
+To get the PSRs and the network configuration, the client process must send a
+Get Attach Info request to the agent. The first time the agent process receives
+the request, it initializes a cache of Get Attach Info responses.  To populate
+the cache, the agent forwards this request to an access point's Control Plane
+Server via the management network. The Control Plane Server forwards the
+request again to a local data plane instance, which looks up the PSRs and
+returns the information back to the agent. The agent then performs a local
+fabric scan to determine which network devices are available that support the
+fabric provider in use by daos_server. It determines the NUMA affinity for each
+matching network device found. The agent stores a fully encoded response into
+the cache that encapsulates the PSRs and the network configuration per NUMA
+node.  Multiple network devices per NUMA node are supported. Each device and
+NUMA node combination has its own entry in the cache.
+
+At this point, the Get Attach Info cache is initialized.  For this request and
+all subsequent requests, the agent will examine the client PID associated with
+the request to determine its NUMA binding, if available.  The agent then
+indexes into the cache to retrieve a cached response with a network device that
+matches the client's NUMA affinity and returns that back to the client, without
+communicating further up the stack.  If the client NUMA affinity cannot be
+determined, or if no available network devices share that same affinity, a
+default response is chosen from the known network devices.  If there are no
+network devices, a response encoded with the loopback device is chosen instead.
+
+If there are multiple network devices available that share the same NUMA
+affinity, the cache will contain an entry for each.  The agent uses a
+round-robin selection algorithm to choose the responses within the same NUMA
+node.
+
+The Get Attach Info payload contains the network configuration parameters which
+include the OFI_INTERFACE, OFI_DOMAIN, CRT_TIMEOUT, provider, and
+CRT_CTX_SHARE_ADDR.  The OFI_INTERFACE, OFI_DOMAIN and CRT_TIMEOUT may be
+overridden by setting any of these environment variables in the client
+environment prior to launch.  The daos client library will initialize CaRT with
+the values provided by the Get Attach Info request unless overridden.
 
 The client requires this information in order to send any RPCs.
 

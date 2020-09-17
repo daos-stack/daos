@@ -1,6 +1,6 @@
 # Blob I/O
 
-The Blob I/O (BIO) module was implemented for issuing I/O over NVMe SSDs. The DAOS service has two tiers of storage: Storage Class Memory (SCM) for byte-granular application data and metadata, and NVMe for bulk application data. Similar to how PMDK is currently used to faciliate access to SCM, the Storage Performance Development Kit (SPDK) is used to provide seamless and efficient
+The Blob I/O (BIO) module was implemented for issuing I/O over NVMe SSDs. The DAOS service has two tiers of storage: Storage Class Memory (SCM) for byte-granular application data and metadata, and NVMe for bulk application data. Similar to how PMDK is currently used to facilitate access to SCM, the Storage Performance Development Kit (SPDK) is used to provide seamless and efficient
 access to NVMe SSDs. The current DAOS storage model involves three DAOS server xstreams per core, along with one main DAOS server xstream per core mapped to an NVMe SSD device. DAOS storage allocations can occur on either SCM by using a PMDK pmemobj pool, or on NVMe, using an SPDK blob. All local server metadata will be stored in a per-server pmemobj pool on SCM and will include all current and relevant NVMe device, pool, and xstream mapping information.
 
 This document contains the following sections:
@@ -77,7 +77,7 @@ In-memory (DRAM) data maintained by the Device Owner Xstream consisting of the f
 
  Useful Admin Commands to Query Device Health Data:
   - <a href="#81">dmg storage query blobstore-health</a> [used to query in-memory blobstore health data]
-  - <a href="#82">dmg storage query nvme-health</a> [used to query raw SPDK SSD health stats]
+  - <a href="#82">dmg storage scan --nvme-health</a> [used to query raw SPDK SSD health stats]
 
 <a id="9"></a>
 ## Device Monitoring
@@ -121,9 +121,9 @@ The current NVMe monitoring period for event polling is set at 60 seconds.
 <a id="12"></a>
 ## Useful Admin DMG Commands:
 <a id="82"></a>
-- Query NVMe SSD Health Stats: **$dmg storage query nvme-health**
+- Query NVMe SSD Health Stats: **$dmg storage scan --nvme-health**
 ```
-$dmg storage query nvme-health -l=boro-11:10001
+$dmg storage scan --nvme-health -l=boro-11:10001
 boro-11:10001: connected
 boro-11:10001
         NVMe controllers and namespaces detail with health statistics:

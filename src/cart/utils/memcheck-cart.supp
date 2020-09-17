@@ -12,13 +12,9 @@
    fun:calloc
    fun:_dlerror_run
    fun:dlopen@@GLIBC_2.2.5
-   fun:fi_ini
    ...
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-   fun:NA_Initialize_opt
-   fun:crt_hg_init
-   fun:crt_init_opt
+   fun:crt_hg_ctx_init
+   ...
 }
 {
    FI leak 1
@@ -29,11 +25,8 @@
    fun:fi_ibv_init_info
    fun:fi_ibv_getinfo
    ...
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-   fun:NA_Initialize_opt
-   fun:crt_hg_init
-   fun:crt_init_opt
+   fun:crt_hg_ctx_init
+   ...
 }
 {
    FI leak 2
@@ -45,11 +38,8 @@
    fun:fi_verbs_ini
    fun:fi_ini
    ...
-   fun:na_ofi_getinfo
-   fun:na_ofi_check_protocol
-   fun:NA_Initialize_opt
-   fun:crt_hg_init
-   fun:crt_init_opt
+   fun:crt_hg_ctx_init
+   ...
 }
 {
    FI leak 3
@@ -87,9 +77,9 @@
    fun:fi_getinfo@@FABRIC_1.2
    fun:na_ofi_getinfo
    fun:na_ofi_check_protocol
-   fun:NA_Initialize_opt
-   fun:crt_hg_init
-   fun:crt_init_opt
+   ...
+   fun:crt_hg_ctx_init
+   ...
 }
 {
     CRYPTO leaks malloc
@@ -158,7 +148,16 @@
    fun:fi_mr_reg
    fun:na_ofi_domain_open
    fun:na_ofi_initialize
-   fun:NA_Initialize_opt
-   fun:crt_hg_init
-   fun:crt_init_opt
+   ...
+   fun:crt_hg_ctx_init
+   ...
+}
+{
+   dl open leaks
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:_dl_init
+   ...
 }

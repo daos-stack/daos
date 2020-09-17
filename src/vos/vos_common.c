@@ -34,7 +34,9 @@
 #include <vos_internal.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
+#include <daos_srv/vos.h>
 
+struct bio_xs_context	*vsa_xsctxt_inst;
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static bool vsa_nvme_init;
@@ -121,6 +123,137 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 	return rc;
 }
 
+static int
+vos_tx_publish(struct dtx_handle *dth, bool publish)
+{
+	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
+	struct dtx_rsrvd_uint	*dru;
+	struct vos_rsrvd_scm	*scm;
+	int			 rc;
+	int			 i;
+
+	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
+		dru = &dth->dth_rsrvds[i];
+		rc = vos_publish_scm(cont, dru->dru_scm, publish);
+		D_FREE(dru->dru_scm);
+
+		/* FIXME: Currently, vos_publish_blocks() will release
+		 *	  reserved information in 'dru_nvme_list' from
+		 *	  DRAM. So if vos_publish_blocks() failed, the
+		 *	  reserve information in DRAM for those former
+		 *	  published ones cannot be rollback. That will
+		 *	  cause space leaking before in-memory reserve
+		 *	  information synced with persistent allocation
+		 *	  heap until the server restart.
+		 *
+		 *	  It is not fatal, will be handled later.
+		 */
+		if (rc && publish)
+			return rc;
+
+		/** Function checks if list is empty */
+		rc = vos_publish_blocks(cont, &dru->dru_nvme,
+					publish, VOS_IOS_GENERIC);
+		if (rc && publish)
+			return rc;
+	}
+
+	for (i = 0; i < dth->dth_deferred_cnt; i++) {
+		scm = dth->dth_deferred[i];
+		rc = vos_publish_scm(cont, scm, publish);
+		D_FREE(dth->dth_deferred[i]);
+
+		if (rc && publish)
+			return rc;
+	}
+
+	/** Handle the deferred NVMe cancellations */
+	if (!publish)
+		vos_publish_blocks(cont, &dth->dth_deferred_nvme,
+				   false, VOS_IOS_GENERIC);
+
+	return 0;
+}
+
+int
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
+{
+	int	rc;
+
+	if (!dtx_is_valid_handle(dth))
+		return umem_tx_begin(umm, vos_txd_get());
+
+	if (dth->dth_local_tx_started)
+		return 0;
+
+	rc = umem_tx_begin(umm, vos_txd_get());
+	if (rc == 0)
+		dth->dth_local_tx_started = 1;
+
+	return rc;
+}
+
+int
+vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
+	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, bool started,
+	   int err)
+{
+	struct dtx_handle	*dth = dth_in;
+	struct dtx_rsrvd_uint	*dru;
+	struct dtx_handle	 tmp = {0};
+	int			 rc = err;
+
+	if (!dtx_is_valid_handle(dth)) {
+		/** Created a dummy dth handle for publishing extents */
+		dth = &tmp;
+		tmp.dth_modification_cnt = dth->dth_op_seq = 1;
+		tmp.dth_local_tx_started = started ? 1 : 0;
+		tmp.dth_rsrvds = &dth->dth_rsrvd_inline;
+		tmp.dth_coh = vos_cont2hdl(cont);
+		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
+	}
+
+	if (rsrvd_scmp != NULL) {
+		D_ASSERT(nvme_exts != NULL);
+		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
+		dru->dru_scm = *rsrvd_scmp;
+		*rsrvd_scmp = NULL;
+
+		D_INIT_LIST_HEAD(&dru->dru_nvme);
+		d_list_splice_init(nvme_exts, &dru->dru_nvme);
+	}
+
+	if (!dth->dth_local_tx_started)
+		goto cancel;
+
+	/* Not the last modification. */
+	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq)
+		return 0;
+
+	dth->dth_local_tx_started = 0;
+
+	if (dtx_is_valid_handle(dth_in) && err == 0)
+		err = vos_dtx_prepared(dth);
+
+	if (err == 0)
+		rc = vos_tx_publish(dth, true);
+
+	rc = umem_tx_end(vos_cont2umm(cont), rc);
+
+cancel:
+	if (rc != 0) {
+		/* The transaction aborted or failed to commit. */
+		vos_tx_publish(dth, false);
+		if (dtx_is_valid_handle(dth_in))
+			vos_dtx_cleanup_internal(dth);
+	}
+
+	if (err != 0)
+		return err;
+
+	return rc;
+}
+
 /**
  * VOS in-memory structure creation.
  * Handle-hash:
@@ -158,11 +291,11 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
-		D_ERROR("Error in createing object cache\n");
+		D_ERROR("Error in creating object cache\n");
 		return rc;
 	}
 
-	rc = d_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
+	rc = d_uhash_create(D_HASH_FT_NOLOCK, VOS_POOL_HHASH_BITS,
 			    &imem_inst->vis_pool_hhash);
 	if (rc) {
 		D_ERROR("Error in creating POOL ref hash: "DF_RC"\n",
@@ -170,8 +303,8 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		goto failed;
 	}
 
-	rc = d_uhash_create(D_HASH_FT_EPHEMERAL, VOS_CONT_HHASH_BITS,
-			    &imem_inst->vis_cont_hhash);
+	rc = d_uhash_create(D_HASH_FT_NOLOCK | D_HASH_FT_EPHEMERAL,
+			    VOS_CONT_HHASH_BITS, &imem_inst->vis_cont_hhash);
 	if (rc) {
 		D_ERROR("Error in creating CONT ref hash: "DF_RC"\n",
 			DP_RC(rc));
@@ -228,7 +361,6 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls = data;
 
-	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
 	vos_ts_table_free(&tls->vtl_ts_table);
@@ -265,12 +397,6 @@ vos_mod_init(void)
 		return rc;
 	}
 
-	rc = vos_dtx_cos_register();
-	if (rc != 0) {
-		D_ERROR("DTX CoS btree initialization error\n");
-		return rc;
-	}
-
 	/**
 	 * Registering the class for OI btree
 	 * and KV btree
@@ -282,8 +408,10 @@ vos_mod_init(void)
 	}
 
 	rc = obj_tree_register();
-	if (rc)
+	if (rc) {
 		D_ERROR("Failed to register vos trees\n");
+		return rc;
+	}
 
 	rc = vos_ilog_init();
 	if (rc)

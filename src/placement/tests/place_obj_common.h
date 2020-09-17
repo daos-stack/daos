@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,9 @@
 #include <daos.h>
 
 void
+print_layout(struct pl_obj_layout *layout);
+
+void
 plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 		struct pl_map *pl_map, bool print_layout);
 
@@ -38,21 +41,46 @@ plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size,
 		int num_allowed_failures);
 
 void
-reint_check(struct pl_obj_layout *layout, struct pl_obj_layout *temp_layout,
-		uint32_t *spare_tgt_ranks, uint32_t *shard_ids, int num_reint,
-		uint32_t curr_fail_tgt);
+plt_obj_rebuild_layout_check(struct pl_obj_layout *layout,
+		struct pl_obj_layout *org_layout, uint32_t pool_size,
+		int *down_tgts, int num_down, int num_spares_left,
+		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
+		uint32_t *shard_ids);
+
+void
+plt_obj_drain_layout_check(struct pl_obj_layout *layout,
+		struct pl_obj_layout *org_layout, uint32_t pool_size,
+		int *draining_tgts, int num_draining, int num_spares,
+		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
+		uint32_t *shard_ids);
+
+void
+plt_obj_add_layout_check(struct pl_obj_layout *layout,
+			 struct pl_obj_layout *org_layout, uint32_t pool_size,
+		uint32_t num_spares_returned, uint32_t *spare_tgt_ranks,
+		uint32_t *shard_ids);
+
+void
+plt_obj_reint_layout_check(struct pl_obj_layout *layout,
+			   struct pl_obj_layout *org_layout, uint32_t pool_size,
+			   int *reint_tgts, int num_reint, int num_spares,
+			   uint32_t num_spares_returned,
+			   uint32_t *spare_tgt_ranks, uint32_t *shard_ids);
 
 void
 plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
 		uint32_t pool_size);
 
 bool
-pt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2,
-		uint32_t dom_nr);
+plt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2);
 
 void
 plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
 		struct pool_map *po_map, bool pl_debug_msg);
+
+void
+plt_drain_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
+		bool pl_debug_msg);
 
 void
 plt_fail_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
@@ -98,4 +126,12 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 int
 getObjectClasses(daos_oclass_id_t **oclass_id_pp);
 
+int
+extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
+		     uuid_t target_uuids[], d_rank_list_t *rank_list,
+		uint32_t ndomains, int32_t *domains, bool *updated_p,
+		uint32_t *map_version_p, uint32_t dss_tgt_nr);
+
+bool
+is_max_class_obj(daos_oclass_id_t cid);
 #endif /*   PL_MAP_COMMON_H   */

@@ -627,7 +627,7 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_R3S_SPEC_RANK = 21
     DAOS_OC_EC_K2P1_L32K = 22
     DAOS_OC_EC_K2P2_L32K = 23
-    DAOS_OC_EC_K8P2_L1M = 24
+    DAOS_OC_EC_K4P2_L32K = 24
 
 
 # pylint: disable=no-member
@@ -1524,7 +1524,7 @@ class DaosContainer(object):
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
-                params = [self.poh, self.uuid, None, None, event]
+                params = [self.poh, self.uuid, None, event]
             else:
                 params = [self.poh, self.uuid, ctypes.byref(self.cont_prop),
                           None, event]
@@ -1837,7 +1837,7 @@ class DaosContainer(object):
                       txn=daos_cref.DAOS_TX_NONE):
         """Read an array value from the specified object.
 
-        rec_count --number of records (array indicies) to read
+        rec_count --number of records (array indices) to read
         rec_size --each value in the array must be this size
 
         """
@@ -2104,7 +2104,7 @@ class DaosContainer(object):
         return:
             None
         raise:
-            DaosApiError raised incase of API return code is nonzero
+            DaosApiError raised in case of API return code is nonzero
         """
         self.coh = coh
         func = self.context.get_function('cont-aggregate')

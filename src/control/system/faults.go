@@ -29,11 +29,11 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
-func FaultMemberExists(m *Member) *fault.Fault {
+func FaultMemberExists(r Rank) *fault.Fault {
 	return systemFault(
 		code.SystemMemberExists,
-		fmt.Sprintf("system member with rank %d already exists (%v)", m.Rank, m),
-		"update system member instead of adding",
+		fmt.Sprintf("system member with rank %d already exists", r),
+		"",
 	)
 }
 

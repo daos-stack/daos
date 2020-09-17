@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ nvme_recov_1(void **state)
 
 	/*
 	 * FIXME: Due to lack of infrastructures for checking each target
-	 *	  status, let's just wait for an arbitray time and hope the
+	 *	  status, let's just wait for an arbitrary time and hope the
 	 *	  faulty reaction & rebuild is triggered.
 	 */
 	print_message("Waiting for faulty reaction being triggered...\n");

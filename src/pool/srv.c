@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,11 +99,6 @@ cleanup(void)
 {
 	return ds_pool_stop_all();
 }
-
-static struct crt_corpc_ops ds_pool_tgt_connect_co_ops = {
-	.co_aggregate	= ds_pool_tgt_connect_aggregator,
-	.co_pre_forward	= NULL,
-};
 
 static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 	.co_aggregate	= ds_pool_tgt_disconnect_aggregator,

@@ -181,8 +181,14 @@ const (
 	MethodPoolCreate mgmtMethod = C.DRPC_METHOD_MGMT_POOL_CREATE
 	// MethodPoolDestroy is a ModuleMgmt method
 	MethodPoolDestroy mgmtMethod = C.DRPC_METHOD_MGMT_POOL_DESTROY
+	// MethodPoolEvict is a ModuleMgmt method
+	MethodPoolEvict mgmtMethod = C.DRPC_METHOD_MGMT_POOL_EVICT
 	// MethodPoolExclude is a ModuleMgmt method
 	MethodPoolExclude mgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
+	// MethodPoolDrain is a ModuleMgmt method
+	MethodPoolDrain mgmtMethod = C.DRPC_METHOD_MGMT_DRAIN
+	// MethodPoolExtend is a ModuleMgmt method
+	MethodPoolExtend mgmtMethod = C.DRPC_METHOD_MGMT_EXTEND
 	// MethodPoolReintegrate is a ModuleMgmt method
 	MethodPoolReintegrate mgmtMethod = C.DRPC_METHOD_MGMT_REINTEGRATE
 	// MethodBioHealth is a ModuleMgmt method

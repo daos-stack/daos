@@ -6,7 +6,8 @@ def scons():
     Import('denv')
 
     # rdbt server
-    librdbt = daos_build.library(denv, 'rdbt', ['rdb_test.c', 'rpc.c'])
+    librdbt = daos_build.library(denv, 'rdbt', ['rdb_test.c', 'rpc.c'],
+                                 install_off='../..')
     denv.Install('$PREFIX/lib64/daos_srv', librdbt)
 
     # rdbt client

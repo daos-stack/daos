@@ -125,7 +125,7 @@ class BashCmd(TestWithServers):
             for different container and pool sizes and perform basic bash
             commands.
         Use cases:
-            Folloing list of bash commands have been incorporated
+            Following list of bash commands have been incorporated
             as part of this test: mkdir, touch, ls, chmod, rm, dd, stat,
             cp, cmp, mv, rmdir.
               Create a directory.

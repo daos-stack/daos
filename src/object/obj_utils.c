@@ -232,7 +232,7 @@ obj_utils_init(void)
 	}
 	return 0;
 failed:
-	D_ERROR("Failed to initailze DAOS object utilities\n");
+	D_ERROR("Failed to initialize DAOS object utilities\n");
 	return rc;
 }
 

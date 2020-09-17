@@ -222,6 +222,7 @@ struct rdb_tx {
 	void	       *dt_entry;	/* raft entry buffer */
 	size_t		dt_entry_cap;	/* buffer capacity */
 	size_t		dt_entry_len;	/* data length */
+	size_t		dt_num_ops;	/* number of individual operations */
 };
 
 /** Nil term */

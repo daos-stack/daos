@@ -97,6 +97,11 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
+		if len(cmdArgs) > 0 {
+			// don't support positional arguments, extra cmdArgs are unexpected
+			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
+		}
+
 		if !opts.AllowProxy {
 			common.ScrubProxyVariables()
 		}
@@ -127,7 +132,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
-			log.Debugf("DAOS config loaded from %s", cfgCmd.configPath())
+			log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
 
 			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
 				if err := ovrCmd.setCLIOverrides(); err != nil {

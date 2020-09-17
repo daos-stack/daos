@@ -94,7 +94,7 @@ class SCMConfigTest(TestWithServers):
             self.fail(
                 "Error retrieving the container data:\n{0}".format(error))
 
-        # Compare the writen data and read data
+        # Compare the written data and read data
         msg = "Written and read data not equal"
         self.assertEqual(data_w, data_r.value, msg)
 

@@ -73,11 +73,13 @@ extern const char *server_group;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
+extern const char *dmg_config_file;
 
 /** Checksum Type & info*/
 extern unsigned int dt_csum_type;
 extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
+extern int  dt_obj_class;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -98,12 +100,12 @@ struct test_pool {
 	/* Updated if some ranks are killed during degraged or rebuild
 	 * test, so we know whether some tests is allowed to be run.
 	 */
-	d_rank_list_t		alive_svc;
+	d_rank_list_t		*alive_svc;
 	/* Used for all pool related operation, since client will
 	 * use this rank list to find out the real leader, so it
 	 * can not be changed.
 	 */
-	d_rank_list_t		svc;
+	d_rank_list_t		*svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
 	bool			destroyed;
@@ -126,7 +128,8 @@ typedef struct {
 	bool			multi_rank;
 	int			myrank;
 	int			rank_size;
-	const char	       *group;
+	const char		*group;
+	const char		*dmg_config;
 	struct test_pool	pool;
 	uuid_t			co_uuid;
 	unsigned int		uid;
@@ -150,6 +153,8 @@ typedef struct {
 	int			srv_disabled_ntgts;
 	int			index;
 	daos_epoch_t		hce;
+	int			obj_class;
+
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
@@ -291,14 +296,21 @@ int run_daos_md_replication_test(int rank, int size);
 int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
-int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
+int run_daos_base_tx_test(int rank, int size, int *tests, int test_size);
+int run_daos_dist_tx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
+int run_daos_dedup_test(int rank, int size, int *sub_tests,
+			   int sub_tests_size);
+unsigned int daos_checksum_test_arg2type(char *optarg);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
+				    int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
@@ -318,14 +330,26 @@ int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
 void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-			 const d_rank_list_t *svc, d_rank_t rank, int tgt);
+			 const char *dmg_config, const d_rank_list_t *svc,
+			 d_rank_t rank, int tgt);
 void daos_add_target(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank, int tgt);
-
+		     const char *dmg_config, const d_rank_list_t *svc,
+		     d_rank_t rank, int tgt);
+void daos_drain_target(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank, int tgt);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const d_rank_list_t *svc, d_rank_t rank);
+			 const char *dmg_config, const d_rank_list_t *svc,
+			 d_rank_t rank);
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
-		     const d_rank_list_t *svc, d_rank_t rank);
+		     const char *dmg_config, const d_rank_list_t *svc,
+		     d_rank_t rank);
+
+d_rank_t
+get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, bool parity);
+
+d_rank_t
+get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,
@@ -338,13 +362,30 @@ void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 			 bool discard);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-				int failed_tgt);
+				int failed_tgt, bool kill);
+void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
+void rebuild_pools_ranks(test_arg_t **args, int args_cnt,
+		d_rank_t *failed_ranks, int ranks_nr, bool kill);
 
 void reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-				int failed_tgt);
+		int failed_tgt);
+void reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank);
+void reintegrate_pools_ranks(test_arg_t **args, int args_cnt,
+		d_rank_t *failed_ranks,  int ranks_nr);
 
+void drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+				int failed_tgt, bool kill);
+void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
+void drain_pools_ranks(test_arg_t **args, int args_cnt,
+		d_rank_t *failed_ranks, int ranks_nr, bool kill);
+
+int rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
+		struct test_pool *pool);
 void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 			   int *failed_tgts, int nr);
+int rebuild_pool_disconnect_internal(void *data);
+int rebuild_pool_connect_internal(void *data);
+
 
 int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);

@@ -294,7 +294,7 @@ if __name__ == "__main__":
         # Shut down the DAOS server when we are finished.
         try:
             if not p or p.poll() is not None:
-                # If the server is dead, somthing went very wrong
+                # If the server is dead, something went very wrong
                 print("The server is unexpectedly absent.")
                 print("FAIL")
                 rc = 1

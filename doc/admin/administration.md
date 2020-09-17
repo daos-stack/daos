@@ -9,66 +9,81 @@ control plane and will be documented in a future revision.
 
 Useful admin dmg commands to query NVMe SSD health:
 
-- Query Per-Server Metadata (SMD): `dmg storage query smd`
+- Query Per-Server Metadata: `dmg storage query (list-devices|list-pools)`
 
-Queries persistently stored device and pool metadata tables. The device table
-maps device UUID to attached VOS target IDs. The pool table maps VOS target IDs
-to attached SPDK blob IDs.
+Queries persistently stored device and pool metadata tables. The device table maps
+the internal device UUID to attached VOS target IDs. The rank number of the server
+where the device is located is also listed, along with the current persistent
+device state (NORMAL|FAULTY).
+The pool table maps the DAOS pool UUID to attached VOS target IDs, and will list
+all of the server ranks that the pool is distributed on. With the additional
+--verbose flag, the mapping of SPDK blob IDs to VOS target IDs is also displayed.
 ```bash
-$ dmg -l boro-11 storage query smd --devices --pools
-boro-11:10001: connected
-SMD Device List:
-boro-11:10001:
-        Device:
-                UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
-                VOS Target IDs: 0 1 2 3
-SMD Pool List:
-boro-11:10001:
-        Pool:
-                UUID: 01b41f76-a783-462f-bbd2-eb27c2f7e326
-                VOS Target IDs: 0 1 3 2
-                SPDK Blobs: 4294967404 4294967405 4294967407 4294967406
+$ dmg -l boro-11,boro-13 storage query list-devices
+-------
+boro-11
+-------
+  Devices
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 1 2 3] Rank:0 State:NORMAL
+    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[0 1 2 3] Rank:1 State:FAULTY
+```
+```bash
+$ dmg -l boro-11,boro-13 storage query list-pools
+-------
+boro-11
+-------
+  Pools
+    UUID:08d6839b-c71a-4af6-901c-28e141b2b429
+      Rank:0 Targets:[0 1 2 3]
+      Rank:1 Targets:[0 1 2 3]
+
+$ dmg -l boro-11,boro-13 storage query list-pools --verbose
+-------
+boro-11
+-------
+  Pools
+    UUID:08d6839b-c71a-4af6-901c-28e141b2b429
+      Rank:0 Targets:[0 1 2 3] Blobs:[4294967404 4294967405 4294967407 4294967406]
+      Rank:1 Targets:[0 1 2 3] Blobs:[4294967410 4294967411 4294967413 4294967412]
+
 ```
 
-- Query Blobstore Health Data: `dmg storage query blobstore-health`
+- Query Storage Device Health Data: `dmg storage query (device-health|target-health)`
 
-Queries in-memory health data for the SPDK blobstore (i.e, NVMe SSD). This
-includes a subset of the SPDK device health stats, as well as I/O error and
-checksum counters.
+Queries device health data, including NVMe SSD health stats and in-memory I/O error
+and checksum error counters. The server rank and device state are also listed.
+The device health data can either be queried by device UUID (device-health) or by
+VOS target ID along with server rank (target-health). The same device health info
+is displayed with both command options.
 ```bash
-$ dmg -l boro-11 storage query blobstore-health
-  --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 -l=boro-11:10001
-boro-11:10001: connected
-Blobstore Health Data:
-boro-11:10001:
-        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
-        Read errors: 0
-        Write errors: 0
-        Unmap errors: 0
-        Checksum errors: 0
-        Device Health:
-                Error log entries: 0
-                Media errors: 0
-                Temperature: 289
-                Temperature: OK
-                Available Spare: OK
-                Device Reliability: OK
-                Read Only: OK
-                Volatile Memory Backup: OK
-```
-
-- Query Persistent Device State: `dmg storage query device-state`
-
-Queries the current persistently stored device state of the specified NVMe SSD
-(either NORMAL or FAULTY).
-```bash
-$ dmg storage query device-state --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
--l=boro-11:10001
-boro-11:10001: connected
-Device State Info:
-boro-11:10001:
-        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
-        State: NORMAL
+$ dmg -l boro-11 storage query device-health
+  --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+or
+$ dmg -l boro-11 storage query target-health
+  --rank=0 --tgtid=0
+-------
+boro-11
+-------
+  Devices
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 1 2 3] Rank:0 State:NORMAL
+      Health Stats:
+        Temperature:289K(15C)
+        Controller Busy Time:0s
+        Power Cycles:0
+        Power On Duration:0s
+        Unsafe Shutdowns:0
+        Media Errors:0
+        Read Errors:0
+        Write Errors:0
+        Unmap Errors:0
+        Checksum Errors:0
+        Error Log Entries:0
+      Critical Warnings:
+        Temperature: OK
+        Available Spare: OK
+        Device Reliability: OK
+        Read Only: OK
+        Volatile Memory Backup: OK
 ```
 
 - Manually Set Device State to FAULTY: `dmg storage set nvme-faulty`
@@ -78,47 +93,96 @@ which will trigger faulty device reaction (all targets on the SSD will be
 rebuilt and the SSD will remain in an OUT state until reintegration is
 supported).
 ```bash
-$ dmg storage set nvme-faulty --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
--l=boro-11:10001
-boro-11:10001: connected
-Device State Info:
-boro-11:10001:
-        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
-        State: FAULTY
+$ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-------
+boro-11
+-------
+  Devices
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0] Rank:1 State:FAULTY
 ```
 
 ## System Operations
 
-### Full Shutdown and Restart
+The DAOS Control Server acting as the access point records details of DAOS I/O
+Server instances that join the DAOS system. Once an I/O Server has joined the
+DAOS system, it is identified by a unique system "rank". Multiple ranks can
+reside on the same host machine, accessible via the same network address.
 
-A DAOS system can be restarted after a controlled shutdown providing
-no configurations changes have been made after the initial format.
+A DAOS system can be shutdown and restarted to perform maintenance and/or
+reboot hosts. Pool data and state will be maintained providing no changes are
+made to the rank's metadata stored on persistent memory.
 
-The DAOS Control Server instance acting as access point records DAOS
-I/O Server instances that join the system in a "membership".
+Storage reformat can also be performed after system shutdown. Pools will be
+removed and storage wiped.
 
-When up and running, the entire system (all I/O Server instances)
-can be shut down with the command:
-`dmg -l <access_point_addr> system stop`, after which DAOS Control
-Servers will continue to operate and listen on the management network.
+System commands will be handled by the DAOS Server listening at the access point
+address specified as the first entry in the DMG config file "hostlist" parameter.
+See
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+for details.
 
-To start the system again (with no configuration changes) after a
-controlled shutdown, run the command
-`dmg -l <access_point_addr> system start`, DAOS I/O Servers
-managed by DAOS Control Servers will be started.
-
-To query the system membership, run the command
-`dmg -l <access_point_addr> system query`, this lists details
-(rank/uuid/control address/state) of DAOS I/O Servers in the
-system membership.
+The "access point" address should be the same as that specified in the server
+config file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+specified when starting `daos_server` instances.
 
 !!! warning
-    Controlled start/stop has some known limitations.
-    "start" restarts all configured instances on all harnesses that can
-    be located in the system membership, regardless of member state.
-    Moreover, supplying the list of ranks to "start" and "stop" is not yet supported
+    Controlled start/stop/reformat have some known limitations.
+    Whilst individual system instances can be stopped, if a subset is restarted,
+    existing pools will not be automatically integrated with restarted instances.
 
-### Fresh Start
+### Query
+
+The system membership can be queried using the command:
+
+`$ dmg system query [--verbose] [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `--verbose` flag gives more information on each rank
+
+Output table will provide system rank mappings to host address and instance
+UUID, in addition to rank state.
+
+### Shutdown
+
+When up and running, the entire system can be shutdown with the command:
+
+`$ dmg system stop [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS Control Servers will continue to operate and listen on the management
+network.
+
+### Start
+
+To start the system after a controlled shutdown run the command:
+
+`$ dmg system start [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS I/O Servers will be started.
+
+### Reformat
+
+To reformat the system after a controlled shutdown run the command:
+
+`$ dmg storage format --system [--ranks <rankset>]`
+
+- `--system` flag indicates that the format operation should be performed on
+  provided set of system ranks or all ranks if `--ranks` is omitted.
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS I/O Servers will be started and all DAOS pools will have been removed.
+
+### Manual Fresh Start
 
 To reset the DAOS metadata across all hosts, the system must be reformatted.
 First, ensure all `daos_server` processes on all hosts have been

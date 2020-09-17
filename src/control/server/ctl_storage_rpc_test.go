@@ -62,7 +62,7 @@ func (m *mockStorageFormatServer) Send(resp *StorageFormatResp) error {
 	return nil
 }
 
-// return config reference with customised storage config behaviour and params
+// return config reference with customised storage config behavior and params
 func newMockStorageConfig(
 	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	scmMount string, scmClass storage.ScmClass, scmDevs []string, scmSize int,
@@ -93,7 +93,11 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 	}{
 		"successful scan with bdev and scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{storage.MockNvmeController()},
+				ScanRes: &bdev.ScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(),
+					},
+				},
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
@@ -112,7 +116,11 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 		},
 		"successful scan no scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{storage.MockNvmeController()},
+				ScanRes: &bdev.ScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(),
+					},
+				},
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
@@ -125,27 +133,6 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				Scm: &ScanScmResp{
 					Modules: proto.ScmModules{proto.MockScmModule()},
 					State:   new(ResponseState),
-				},
-			},
-		},
-		"spdk init failure": {
-			bmbc: &bdev.MockBackendConfig{
-				InitErr: errors.New("spdk init failed"),
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
-			},
-			expResp: StorageScanResp{
-				Nvme: &ScanNvmeResp{
-					State: &ResponseState{
-						Error:  "spdk init failed",
-						Status: ResponseStatus_CTL_ERR_NVME,
-					},
-				},
-				Scm: &ScanScmResp{
-					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
-					State:      new(ResponseState),
 				},
 			},
 		},
@@ -172,7 +159,9 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 		},
 		"scm module discovery failure": {
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{storage.MockNvmeController()},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{storage.MockNvmeController()},
+				},
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverErr: errors.New("scm discover failed"),
@@ -350,7 +339,7 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeResp{
 					State: &ResponseState{
 						Status: ResponseStatus_CTL_ERR_NVME,
-						Error:  "SPDK prepare: nvme prep error",
+						Error:  "nvme prep error",
 					},
 				},
 				Scm: &PrepareScmResp{
@@ -410,6 +399,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		bClass           storage.BdevClass
 		bDevs            [][]string
 		bmbc             *bdev.MockBackendConfig
+		awaitTimeout     time.Duration
 		expAwaitExit     bool
 		expAwaitErr      error
 		expResp          *StorageFormatResp
@@ -452,7 +442,16 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bClass:  storage.BdevClassNvme,
 			bDevs:   [][]string{[]string{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -476,7 +475,16 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bClass:  storage.BdevClassNvme,
 			bDevs:   [][]string{[]string{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -493,7 +501,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"io instances already running": {
+		"io instances already running": { // await should exit immediately
 			instancesStarted: true,
 			scmMounted:       true,
 			sMounts:          []string{"/mnt/daos"},
@@ -502,9 +510,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bClass:           storage.BdevClassNvme,
 			bDevs:            [][]string{[]string{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0},
+				},
 			},
-			expAwaitErr: errors.New("can't wait for storage: instance 0 already started"),
+			expAwaitExit: true,
+			expAwaitErr:  errors.New("can't wait for storage: instance 0 already started"),
+			awaitTimeout: time.Second,
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
 					{
@@ -538,7 +550,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bClass:     storage.BdevClassNvme,
 			bDevs:      [][]string{[]string{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -571,7 +585,16 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bClass:     storage.BdevClassNvme,
 			bDevs:      [][]string{[]string{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -596,7 +619,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bClass:     storage.BdevClassNvme,
 			bDevs:      [][]string{[]string{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -629,7 +654,16 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bClass:     storage.BdevClassNvme,
 			bDevs:      [][]string{[]string{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -657,9 +691,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bClass:           storage.BdevClassNvme,
 			bDevs:            [][]string{[]string{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0},
+				},
 			},
 			expAwaitExit: true,
+			awaitTimeout: time.Second,
 			expResp: &StorageFormatResp{
 				Mrets: []*ScmMountResult{
 					{
@@ -679,7 +716,16 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				[]string{mockNvmeController1.PciAddr},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: storage.NvmeControllers{mockNvmeController0, mockNvmeController1},
+				ScanRes: &bdev.ScanResponse{
+					storage.NvmeControllers{mockNvmeController0, mockNvmeController1},
+				},
+				FormatRes: &bdev.FormatResponse{
+					DeviceResponses: bdev.DeviceFormatResponses{
+						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
 			},
 			expResp: &StorageFormatResp{
 				Crets: []*NvmeControllerResult{
@@ -688,7 +734,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						State:   new(ResponseState),
 					},
 					{
-						Pciaddr: mockNvmeController1.PciAddr,
+						// this should be id 1 but mock
+						// backend spits same output for
+						// both IO server instances
+						Pciaddr: mockNvmeController0.PciAddr,
 						State:   new(ResponseState),
 					},
 				},
@@ -814,8 +863,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, config.Servers[i])
 			}
 
-			parent := context.Background()
-			ctx, cancel := context.WithTimeout(parent, testMediumTimeout)
+			ctx, cancel := context.WithCancel(context.Background())
+			if tc.awaitTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, tc.awaitTimeout)
+			}
 			defer cancel()
 
 			awaitCh := make(chan error)
@@ -828,8 +879,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			}
 
 			awaitingFormat := make(chan struct{})
+			t.Log("waiting for awaiting format state")
 			go func(ctxIn context.Context) {
-				t.Log("waiting for awaiting format state")
 				for {
 					ready := true
 					for _, srv := range instances {
@@ -855,15 +906,16 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			case err := <-awaitCh:
 				inflight--
 				common.CmpErr(t, tc.expAwaitErr, err)
-				if tc.expAwaitErr == nil && !tc.expAwaitExit {
-					t.Fatalf("unexpected return from awaitStorageReady() %v", err)
+				if !tc.expAwaitExit {
+					t.Fatal("unexpected exit from awaitStorageReady()")
 				}
 			case <-ctx.Done():
-				if ctx.Err() != context.DeadlineExceeded {
+				common.CmpErr(t, tc.expAwaitErr, ctx.Err())
+				if tc.expAwaitErr == nil {
 					t.Fatal(ctx.Err())
 				}
 				if !tc.scmMounted || inflight > 0 {
-					t.Fatal("unexpected behaviour of awaitStorageReady")
+					t.Fatal("unexpected behavior of awaitStorageReady")
 				}
 			}
 

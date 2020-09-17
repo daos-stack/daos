@@ -48,7 +48,7 @@ static int
 __is_magic_valid(int input)
 {
 	if (input != PY_SHIM_MAGIC_NUMBER) {
-		D_ERROR("MAGIC number doesnt match, expected %d got %d\n",
+		D_ERROR("MAGIC number does not match, expected %d got %d\n",
 			PY_SHIM_MAGIC_NUMBER, input);
 		return 0;
 	}
