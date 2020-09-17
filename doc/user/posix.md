@@ -1,6 +1,6 @@
 # POSIX Namespace
 
-A regular POSIX namespace can be encapsulated into a DAOS container.  This
+A regular POSIX namespace can be encapsulated into a DAOS container. This
 capability is provided by the libdfs library that implements the file and
 directory abstractions over the native libdaos library. The POSIX emulation can
 be exposed to applications or I/O frameworks either directly (e.g., for
@@ -17,21 +17,25 @@ DFS stands for DAOS File System and is a library that allows a DAOS container to
 be accessed as a hierarchical POSIX namespace. It supports files, directories,
 and symbolic links, but not hard links. Access permissions are inherited from
 the parent pool and not implemented on a per-file or per-directory basis.
-setuid() and setgid() programs, as well as supplementary groups, are currently not
-supported.
+`setuid()` and `setgid()` programs, as well as supplementary groups, 
+are currently not supported.
 
-While libdfs can be tested from a single instance (i.e., single process or client
-node if used through DFuse), special care is required when the same POSIX
-container is mounted concurrently by multiple processes. Concurrent DFS mounts
-are not recommended. Support for concurrency control is under development and
-will be documented here once ready.
+It is possible to use `libdfs` in a parallel application from multiple nodes.
+When the same POSIX container is mounted concurrently by multiple
+processes, a few limitations exist in DAOS v1.0. In particular:
+
+* Unlinking a file in one process while another process has the same file
+  open: This may or may not cause an I/O error on the open file.
+* The atomicity of rename operations is not guaranteed.
+
+These corner cases will be addressed in a future DAOS release. 
 
 ## DFuse
 
 DFuse provides File System access to DAOS through the standard libc/kernel/VFS
-POSIX infrastructure.  This allows existing applications to use DAOS without
+POSIX infrastructure. This allows existing applications to use DAOS without
 modification and provides a path to upgrade those applications to native DAOS
-support.  Additionally, DFuse provides an Interception Library to transparently
+support. Additionally, DFuse provides an Interception Library to transparently
 allow POSIX clients to talk directly to DAOS servers providing OS-Bypass for
 I/O without modifying or recompiling of the application.
 
@@ -43,7 +47,7 @@ vice versa.
 The dfuse daemon runs a single instance per node to provide a user POSIX access
 to DAOS, and it should be run with the credentials of the user and typically will
 be started and stopped on each compute node as part of the prolog and epilog
-scripts of any resource manager or scheduler in use.  One DFuse daemon per node
+scripts of any resource manager or scheduler in use. One DFuse daemon per node
 can process requests for multiple clients.
 
 A single DFuse instance can provide access to multiple pools and containers
@@ -53,14 +57,14 @@ concurrently, or can be limited to a single pool, or a single container.
 
 DFuse is limited to a single user. Access to the filesystem from other users,
 including root will not be honored, and as a consequence of this, the chown
-and chgrp calls are not supported.  Hard links and special device files, except
+and chgrp calls are not supported. Hard links and special device files, except
 symbolic links, are not supported, nor are any ACLs.
 
 DFuse can run in the foreground, keeping the terminal window open, or it can
 daemonize to run like a system daemon, however, to do this and still be
 able to access DAOS it needs to daemonize before calling daos_init() which in
 turns means it cannot report some kinds of startup errors either on
-stdout/stderr or via its return code.  When initially starting with DFuse it
+stdout/stderr or via its return code. When initially starting with DFuse it
 is recommended to run in foreground mode (`--foreground`) to better observe
 any failures.
 
@@ -98,7 +102,7 @@ Additionally, there are several optional command-line options:
 
 When DFuse starts, it will register a single mount with the kernel at the
 location specified by the `--mountpoint` option, and this mount will be
-visible in /proc/mounts, and possibly the output of df.  The contents of
+visible in /proc/mounts, and possibly the output of df. The contents of
 multiple pools/containers will be accessible via this single kernel
 mountpoint.
 
@@ -141,7 +145,7 @@ $ daos container create --svc <svc> --type POSIX --pool <pool uuid> --path <path
 The pool uuid should already exist, and the path should specify a location
 somewhere within a DFuse mount point that resolves to a POSIX container.
 Once a link is created it can be accessed through the new path, and following
-the link is virtually transparent.  No container uuid is required. if one is
+the link is virtually transparent. No container uuid is required. if one is
 not supplied, it will be created.
 
 To destroy a container again, the following command should be used.
@@ -168,20 +172,20 @@ $ daos container info --svc --path <path to entry point>
 DFuse in normal mode simply provides a communication path between the kernel and
 DAOS. However, this can come with a performance impact, and to help alleviate this
 it is possible to turn on caching, both within dfuse itself and by allowing the
-kernel to cache certain data.  Where and when data is cached there is no attempt
+kernel to cache certain data. Where and when data is cached there is no attempt
 made to invalidate the caches based on changes to DAOS, other than simple timeouts.
 
 Enabling this option will turn on the following features:
 
-* Kernel caching of dentries.
+* Kernel caching of dentries
 * Kernel caching of negative dentries
 * Kernel caching of inodes (file sizes, permissions etc)
 * Kernel caching of file contents
-* Readahead in dfuse and inserting data into kernel cache.
+* Readahead in dfuse and inserting data into kernel cache
 * MMAP write optimization
 
 To turn on caching use the `--enable-caching` command-line option for dfuse. This
-will enable the feature for all accessed containers.  When this option is used,
+will enable the feature for all accessed containers. When this option is used,
 the containers accessed should only be accessed from one node, so it may
 be necessary to create a container per node in this model.
 
@@ -194,7 +198,7 @@ $ fusermount3 -u /tmp/daos
 ```
 
 When this is done, the local DFuse daemon should shut down the mount point,
-disconnect from the DAOS servers, and exit.  You can also verify that the
+disconnect from the DAOS servers, and exit. You can also verify that the
 mount point is no longer listed in the /proc/mounts file
 
 ### Interception Library
@@ -202,7 +206,7 @@ mount point is no longer listed in the /proc/mounts file
 An interception library called libioil is available to work with DDuse. This
 library works in conjunction with DFuse and allows the interception of POSIX I/O
 calls and issue the I/O operations directly from the application context through
-libdaos without any application changes.  This provides kernel-bypass for I/O data
+libdaos without any application changes. This provides kernel-bypass for I/O data
 leading to improved performance.
 To use this set the LD_PRELOAD to point to the shared library in the DAOS install
 directory:
