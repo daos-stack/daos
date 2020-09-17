@@ -1,4 +1,4 @@
-.TH dmg 1 "25 August 2020"
+.TH dmg 1 "28 August 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -400,11 +400,6 @@ Pool UUID (all pools if blank)
 .TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Show more detail about pools
-.SS storage query nvme-health
-Query the health of a NVMe device
-
-\fBAliases\fP: n
-
 .SS storage query target-health
 Query the target health
 
@@ -430,6 +425,9 @@ Scan SCM and NVMe storage attached to remote servers.
 .TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 List SCM & NVMe device details
+.TP
+\fB\fB\-n\fR, \fB\-\-nvme-health\fR\fP
+Display NVMe device health statistics
 .SS storage set
 Manually set the device state.
 
