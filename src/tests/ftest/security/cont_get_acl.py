@@ -46,7 +46,7 @@ class GetContainerACLTest(ContSecurityTestBase):
         self.add_container(self.pool)
 
         # Get list of ACL entries
-        cont_acl = self.get_container_acl_list(
+        self.cont_acl = self.get_container_acl_list(
             self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
 
     def error_handling(self, results, err_msg):
@@ -55,6 +55,7 @@ class GetContainerACLTest(ContSecurityTestBase):
         Args:
             results (CmdResult): object containing stdout, stderr and
                 exit status
+            err_msg (str): error message string to look for in stderr.
 
         Returns:
             list: list of test errors encountered.
@@ -75,6 +76,25 @@ class GetContainerACLTest(ContSecurityTestBase):
                     unexpected error: {}".format(results))
         return test_errs
 
+    def acl_file_diff(self, prev_acl, flag=True):
+        """Helper function to compare current content of acl-file.
+
+        If provided  prev_acl file information is different from current acl
+        file information test will fail if flag=True. If flag=False, test will
+        fail in the case that the acl contents are found to have no difference.
+
+        Args:
+            prev_acl (list): list of acl entries within acl-file.
+                Defaults to True.
+            flag (bool): if True, test will fail when acl-file contents are
+                different, else test will fail when acl-file contents are same.
+        """
+        current_acl = self.get_container_acl_list(
+            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+        if self.compare_acl_lists(prev_acl, current_acl) != flag:
+            self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
+                prev_acl, current_acl))
+
     def read_acl_file(self, filename):
         """Read contents of given acl file.
 
@@ -83,12 +103,19 @@ class GetContainerACLTest(ContSecurityTestBase):
 
         Returns:
             list: list containing ACL entries
+
         """
         f = open(filename, 'r')
-        acl_content = f.readlines()
+        content = f.readlines()
         f.close()
 
-        return acl_content
+        # Parse
+        acl = []
+        for entry in content:
+            if not entry.startswith("#"):
+                acl.append(entry.strip())
+
+        return acl
 
     @fail_on(CommandFailure)
     def test_acl_get_valid(self):
@@ -116,58 +143,43 @@ class GetContainerACLTest(ContSecurityTestBase):
                     verbose=verbose,
                     outfile=outfile)
 
+                file_acl = self.read_acl_file(path_to_file)
 
-
-    @fail_on(CommandFailure)
-    def test_delete_valid_acl(self):
-        """
-        JIRA ID: DAOS-3714
-
-        Test Description: Test that container delete command successfully
-            removes principal in ACL.
-
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl
-        """
-        for principal in self.principals_table:
-            self.daos_cmd.container_delete_acl(
-                self.pool.uuid,
-                self.pool.svc_ranks[0],
-                self.container.uuid,
-                principal)
-            if self.principals_table[principal] in self.daos_cmd.result.stdout:
-                self.fail(
-                    "Found acl that was to be deleted in output: {}".format(
-                        self.daos_cmd.result.stdout))
+                # Verify consistency of acl obtained through the file
+                self.acl_file_diff(file_acl)
 
     def test_no_user_permissions(self):
         """
-        JIRA ID: DAOS-3714
+        JIRA ID: DAOS-3705
 
-        Test Description: Test that container delete command doesn't
-            remove principal in ACL without permission.
+        Test Description: Test that container get-acl command doesn't
+            get ACL information without permission.
 
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl
+        :avocado: tags=all,pr,security,container_acl,cont_get_acl
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(
             self.pool.uuid, entry="A::EVERYONE@:rw")
 
-        # The root user shouldn't have access to deleting container ACL entries
+        # The root user shouldn't have access to getting container ACL entries
         self.daos_cmd.sudo = True
 
         # Disable raising an exception if the daos command fails
         self.daos_cmd.exit_status_exception = False
 
-        # Let's check that we can't run as root (or other user) and delete
-        # entries if no permissions are set for that user.
+        # Let's check that we can't run as root (or other user) and get
+        # acl information if no permissions are set for that user.
         test_errs = []
-        for principal in self.principals_table:
-            self.daos_cmd.container_delete_acl(
-                self.pool.uuid,
-                self.pool.svc_ranks[0],
-                self.container.uuid,
-                principal)
-            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
+        for verbose in [True, False]:
+            for outfile in self.params.get("out_filename", "/run/*"):
+                self.daos_cmd.container_get_acl(
+                    self.pool.uuid,
+                    self.pool.svc_ranks[0],
+                    self.container.uuid,
+                    verbose=verbose,
+                    outfile=outfile)
+                test_errs.extend(
+                    self.error_handling(self.daos_cmd.result, "-1001"))
         if test_errs:
-            self.fail("container delete-acl command expected to fail: \
+            self.fail("container get-acl command expected to fail: \
                 {}".format("\n".join(test_errs)))
