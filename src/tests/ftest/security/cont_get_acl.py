@@ -49,11 +49,6 @@ class GetContainerACLTest(ContSecurityTestBase):
         cont_acl = self.get_container_acl_list(
             self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
 
-        # Get principals
-        self.principals_table = {}
-        for entry in cont_acl:
-            self.principals_table[entry.split(":")[2]] = entry
-
     def error_handling(self, results, err_msg):
         """Handle errors when test fails and when command unexpectedly passes.
 
@@ -120,12 +115,8 @@ class GetContainerACLTest(ContSecurityTestBase):
                     self.container.uuid,
                     verbose=verbose,
                     outfile=outfile)
-                test_errs.extend(
-                    self.error_handling(self.daos_cmd.result, "-1003"))
 
-        if test_errs:
-            self.fail("container delete-acl command expected to fail: \
-                {}".format("\n".join(test_errs)))
+
 
     @fail_on(CommandFailure)
     def test_delete_valid_acl(self):
