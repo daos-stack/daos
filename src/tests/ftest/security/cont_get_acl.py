@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+import os
+
 from cont_security_test_base import ContSecurityTestBase
 from command_utils import CommandFailure
 from avocado import fail_on
@@ -38,6 +40,7 @@ class GetContainerACLTest(ContSecurityTestBase):
     def setUp(self):
         """Set up each test case."""
         super(GetContainerACLTest, self).setUp()
+        self.acl_filename = "test_acl_file.txt"
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
@@ -77,7 +80,23 @@ class GetContainerACLTest(ContSecurityTestBase):
                     unexpected error: {}".format(results))
         return test_errs
 
-    def test_acl_get_invalid_inputs(self):
+    def read_acl_file(self, filename):
+        """Read contents of given acl file.
+
+        Args:
+            filename: name of file to be read for acl information
+
+        Returns:
+            list: list containing ACL entries
+        """
+        f = open(filename, 'r')
+        acl_content = f.readlines()
+        f.close()
+
+        return acl_content
+
+    @fail_on(CommandFailure)
+    def test_acl_get_valid(self):
         """
         JIRA ID: DAOS-3705
 
@@ -86,16 +105,15 @@ class GetContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_get_acl_inputs
         """
-        # Get list of invalid ACL principal values
-        invalid_filename = self.params.get("invalid_out_filename", "/run/*")
+        # Get list of outfile filenames to put contents of ACL in
+        out_filenames = self.params.get("out_filename", "/run/*")
+        path_to_file = os.path.join(self.tmp, self.acl_filename)
 
         # Disable raising an exception if the daos command fails
         self.daos_cmd.exit_status_exception = False
 
-        # Check for failure on invalid inputs.
-        test_errs = []
         for verbose in [True, False]:
-            for outfile in invalid_filename:
+            for outfile in out_filenames:
                 self.daos_cmd.container_get_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
