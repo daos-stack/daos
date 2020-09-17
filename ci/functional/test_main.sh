@@ -61,6 +61,8 @@ if $TEST_RPMS; then
        TNODES=\"$tnodes\"                            \
        FTEST_ARG=\"$FTEST_ARG\"                      \
        DAOS_BASE=\"$DAOS_BASE\"                      \
+       HOSTNAME=\"$HOSTNAME\"                        \
+       HOSTPWD=\"$PWD\"                      \
        BULLSEYE=\"$BULLSEYE\"                        \
        $(cat ci/functional/test_main_node.sh)"
 else
