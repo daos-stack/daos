@@ -40,11 +40,11 @@ type (
 	// SmdDevice contains DAOS storage device information, including
 	// health details if requested.
 	SmdDevice struct {
-		UUID      string                    `json:"uuid"`
-		TargetIDs []int32                   `hash:"set" json:"tgt_ids"`
-		State     string                    `json:"state"`
-		Rank      system.Rank               `json:"rank"`
-		Health    *storage.NvmeDeviceHealth `json:"health"`
+		UUID      string                        `json:"uuid"`
+		TargetIDs []int32                       `hash:"set" json:"tgt_ids"`
+		State     string                        `json:"state"`
+		Rank      system.Rank                   `json:"rank"`
+		Health    *storage.NvmeControllerHealth `json:"health"`
 	}
 
 	// SmdPool contains the per-server components of a DAOS pool.

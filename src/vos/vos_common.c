@@ -124,18 +124,18 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 }
 
 static int
-vos_tx_publish(struct dtx_handle *dth, int err)
+vos_tx_publish(struct dtx_handle *dth, bool publish)
 {
 	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
 	struct dtx_rsrvd_uint	*dru;
+	struct vos_rsrvd_scm	*scm;
 	int			 rc;
 	int			 i;
 
-again:
-	for (i = 0, rc = 0;
-	     i < dth->dth_rsrvd_cnt && (rc == 0 || err != 0); i++) {
+	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
 		dru = &dth->dth_rsrvds[i];
-		rc = vos_publish_scm(cont, dru->dru_scm, err == 0);
+		rc = vos_publish_scm(cont, dru->dru_scm, publish);
+		D_FREE(dru->dru_scm);
 
 		/* FIXME: Currently, vos_publish_blocks() will release
 		 *	  reserved information in 'dru_nvme_list' from
@@ -148,20 +148,31 @@ again:
 		 *
 		 *	  It is not fatal, will be handled later.
 		 */
-		if (rc == 0 || err != 0)
-			rc = vos_publish_blocks(cont, &dru->dru_nvme,
-						err == 0, VOS_IOS_GENERIC);
-		if (err != 0)
-			D_FREE(dru->dru_scm);
+		if (rc && publish)
+			return rc;
+
+		/** Function checks if list is empty */
+		rc = vos_publish_blocks(cont, &dru->dru_nvme,
+					publish, VOS_IOS_GENERIC);
+		if (rc && publish)
+			return rc;
 	}
 
-	/* Some publish failed, cancel all. */
-	if (err == 0 && rc != 0) {
-		err = rc;
-		goto again;
+	for (i = 0; i < dth->dth_deferred_cnt; i++) {
+		scm = dth->dth_deferred[i];
+		rc = vos_publish_scm(cont, scm, publish);
+		D_FREE(dth->dth_deferred[i]);
+
+		if (rc && publish)
+			return rc;
 	}
 
-	return err;
+	/** Handle the deferred NVMe cancellations */
+	if (!publish)
+		vos_publish_blocks(cont, &dth->dth_deferred_nvme,
+				   false, VOS_IOS_GENERIC);
+
+	return 0;
 }
 
 int
@@ -183,13 +194,37 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 }
 
 int
-vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err)
+vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
+	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, bool started,
+	   int err)
 {
-	if (!dtx_is_valid_handle(dth))
-		return umem_tx_end(umm, err);
+	struct dtx_handle	*dth = dth_in;
+	struct dtx_rsrvd_uint	*dru;
+	struct dtx_handle	 tmp = {0};
+	int			 rc = err;
+
+	if (!dtx_is_valid_handle(dth)) {
+		/** Created a dummy dth handle for publishing extents */
+		dth = &tmp;
+		tmp.dth_modification_cnt = dth->dth_op_seq = 1;
+		tmp.dth_local_tx_started = started ? 1 : 0;
+		tmp.dth_rsrvds = &dth->dth_rsrvd_inline;
+		tmp.dth_coh = vos_cont2hdl(cont);
+		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
+	}
+
+	if (rsrvd_scmp != NULL) {
+		D_ASSERT(nvme_exts != NULL);
+		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
+		dru->dru_scm = *rsrvd_scmp;
+		*rsrvd_scmp = NULL;
+
+		D_INIT_LIST_HEAD(&dru->dru_nvme);
+		d_list_splice_init(nvme_exts, &dru->dru_nvme);
+	}
 
 	if (!dth->dth_local_tx_started)
-		return err;
+		goto cancel;
 
 	/* Not the last modification. */
 	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq)
@@ -197,32 +232,26 @@ vos_tx_end(struct dtx_handle *dth, struct umem_instance *umm, int err)
 
 	dth->dth_local_tx_started = 0;
 
-	if (err == 0)
+	if (dtx_is_valid_handle(dth_in) && err == 0)
 		err = vos_dtx_prepared(dth);
 
-	err = vos_tx_publish(dth, err);
-	if (err != 0) {
-		vos_dtx_cleanup(dth);
+	if (err == 0)
+		rc = vos_tx_publish(dth, true);
 
-		return umem_tx_abort(umm, err);
+	rc = umem_tx_end(vos_cont2umm(cont), rc);
+
+cancel:
+	if (rc != 0) {
+		/* The transaction aborted or failed to commit. */
+		vos_tx_publish(dth, false);
+		if (dtx_is_valid_handle(dth_in))
+			vos_dtx_cleanup_internal(dth);
 	}
 
-	err = umem_tx_commit(umm);
-	if (err == 0) {
-		int	i;
+	if (err != 0)
+		return err;
 
-		for (i = 0; i < dth->dth_modification_cnt; i++) {
-			struct dtx_rsrvd_uint	*dru = &dth->dth_rsrvds[i];
-
-			D_FREE(dru->dru_scm);
-		}
-	} else {
-		/* Aborted case. */
-		vos_tx_publish(dth, -DER_CANCELED);
-		vos_dtx_cleanup(dth);
-	}
-
-	return err;
+	return rc;
 }
 
 /**

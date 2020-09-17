@@ -734,9 +734,10 @@ ts_test_init(void **state)
 	struct vos_ts_table	*ts_table;
 	struct ts_test_arg	*ts_arg;
 	int			 rc;
-	uuid_t			 uuid;
+	struct dtx_id		 xid = {0};
 
-	uuid_clear(uuid);
+	uuid_clear(xid.dti_uuid);
+	xid.dti_hlc = 1;
 
 	D_ALLOC_PTR(ts_arg);
 	if (ts_arg == NULL)
@@ -751,7 +752,7 @@ ts_test_init(void **state)
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++)
 		ts_arg->ta_counts[i] = ts_table->tt_type_info[i].ti_count;
 
-	rc = vos_ts_set_allocate(&ts_arg->ta_ts_set, 0, 1, &uuid);
+	rc = vos_ts_set_allocate(&ts_arg->ta_ts_set, 0, 0, 1, &xid);
 	if (rc != 0) {
 		D_FREE(ts_arg);
 		return rc;

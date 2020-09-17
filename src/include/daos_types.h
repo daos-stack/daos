@@ -71,11 +71,13 @@ typedef enum {
 } daos_anchor_type_t;
 
 /** Iteration Anchor */
-#define DAOS_ANCHOR_BUF_MAX	120
+#define DAOS_ANCHOR_BUF_MAX	104
 typedef struct {
 	uint16_t	da_type; /** daos_anchor_type_t */
 	uint16_t	da_shard;
 	uint32_t	da_flags; /** see enum daos_anchor_flags */
+	/* record the offset for each shards for EC object */
+	uint64_t	da_sub_anchors;
 	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 

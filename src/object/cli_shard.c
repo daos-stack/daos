@@ -158,6 +158,7 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
 	struct daos_csummer	*csummer;
+	struct daos_csummer	*csummer_copy = NULL;
 	d_sg_list_t		*sgls;
 	struct obj_rw_in	*orw;
 	struct obj_rw_out	*orwo;
@@ -172,6 +173,13 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	csummer = dc_cont_hdl2csummer(rw_args->dobj->do_co_hdl);
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		return 0;
+
+	/** Used to do actual checksum calculations. This prevents conflicts
+	 * between tasks
+	 */
+	csummer_copy = daos_csummer_copy(csummer);
+	if (csummer_copy == NULL)
+		return -DER_NOMEM;
 
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
@@ -210,7 +218,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			continue;
 
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i],
+		rc = daos_csummer_verify_iod(csummer_copy, iod, &sgls[i],
 					     iod_csum, singv_lo, shard_idx,
 					     map);
 		if (rc != 0) {
@@ -231,6 +239,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			break;
 		}
 	}
+	daos_csummer_destroy(&csummer_copy);
 
 	return rc;
 }
@@ -326,10 +335,21 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		} else {
-			D_ERROR("rpc %p opc %d to rank %d tag %d failed: "
-				DF_RC"\n", rw_args->rpc, opc,
-				rw_args->rpc->cr_ep.ep_rank,
-				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			/*
+			 * don't log errors in-case of possible conditionals or
+			 * rec2big errors which can be expected.
+			 */
+			if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
+			    rc == -DER_EXIST)
+				D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
+					" failed: "DF_RC"\n", rw_args->rpc, opc,
+					rw_args->rpc->cr_ep.ep_rank,
+					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			else
+				D_ERROR("rpc %p opc %d to rank %d tag %d"
+					" failed: "DF_RC"\n", rw_args->rpc, opc,
+					rw_args->rpc->cr_ep.ep_rank,
+					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 			if (rc == -DER_REC2BIG && opc == DAOS_OBJ_RPC_FETCH) {
 				/* update the sizes in iods */
 				iods = orw->orw_iod_array.oia_iods;
@@ -346,6 +366,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		struct obj_reasb_req	*reasb_req =
 						rw_args->shard_args->reasb_req;
 		bool			 is_ec_obj;
+
+		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE)
+			goto out;
 
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
 			/** Should have 1 map per iod */
@@ -383,7 +406,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		/* update the sizes in iods */
 		for (i = 0; i < orw->orw_nr; i++) {
-			iods[i].iod_size = sizes[i];
+			if (!is_ec_obj || reasb_req->orr_fail == NULL ||
+			    iods[i].iod_size == 0)
+				iods[i].iod_size = sizes[i];
 			if (is_ec_obj && reasb_req->orr_recov &&
 			    reasb_req->orr_fail->efi_uiods[i].iod_size == 0) {
 				reasb_req->orr_fail->efi_uiods[i].iod_size =
@@ -548,10 +573,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out_pool, rc = (int)tgt_ep.ep_rank);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
-	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" %d %s rank:%d tag:%d eph "
-		DF_U64"\n", req, opc, DP_UOID(shard->do_id), (int)dkey->iov_len,
-		(char *)dkey->iov_buf, tgt_ep.ep_rank, tgt_ep.ep_tag,
-		auxi->epoch.oe_value);
+	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" "DF_KEY" rank:%d tag:%d eph "
+		DF_U64"\n", req, opc, DP_UOID(shard->do_id), DP_KEY(dkey),
+		tgt_ep.ep_rank, tgt_ep.ep_tag, auxi->epoch.oe_value);
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
@@ -599,10 +623,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					 0 : nr;
 	orw->orw_iod_array.oia_offs = args->offs;
 
-	D_DEBUG(DB_IO, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
+	D_DEBUG(DB_IO, "opc %d "DF_UOID" "DF_KEY" rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
-		(int)dkey->iov_len, (char *)dkey->iov_buf, tgt_ep.ep_rank,
-		tgt_ep.ep_tag, auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
+		DP_KEY(dkey), tgt_ep.ep_rank, tgt_ep.ep_tag,
+		auxi->epoch.oe_value, DP_DTI(&orw->orw_dti));
 
 	if (args->bulks != NULL) {
 		orw->orw_sgls.ca_count = 0;
@@ -612,8 +636,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		if (fw_shard_tgts != NULL)
 			orw->orw_flags |= ORF_BULK_BIND;
 	} else {
-		if (args->reasb_req && args->reasb_req->orr_size_fetch) {
-			/* NULL bulk and NULL sgl for size_fetch */
+		if ((args->reasb_req && args->reasb_req->orr_size_fetch) ||
+		    auxi->flags & DRF_CHECK_EXISTENCE) {
+			/* NULL bulk/sgl for size_fetch or check existence */
 			orw->orw_sgls.ca_count = 0;
 			orw->orw_sgls.ca_arrays = NULL;
 		} else {
@@ -893,10 +918,15 @@ csum_enum_verify(const struct obj_enum_args *enum_args,
 		daos_key_desc_t		*kd = &enum_args->eaa_kds[i];
 		void			*buf;
 		d_iov_t			 enum_type_val;
-		d_iov_t			 iov = sgl.sg_iovs[sgl_idx.iov_idx];
+		d_iov_t			 iov;
 
+		if (sgl_idx.iov_offset + kd->kd_key_len >
+		    sgl.sg_iovs[sgl_idx.iov_idx].iov_len) {
+			sgl_idx.iov_idx++;
+			sgl_idx.iov_offset = 0;
+		}
+		iov = sgl.sg_iovs[sgl_idx.iov_idx];
 		buf = iov.iov_buf + sgl_idx.iov_offset;
-
 		switch (kd->kd_val_type) {
 		case OBJ_ITER_RECX: {
 			struct obj_enum_rec *rec = buf;
@@ -1115,8 +1145,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 {
 	struct shard_list_args *args = shard_args;
 	daos_obj_list_t	       *obj_args = args->la_api_args;
-	daos_key_desc_t	       *kds = obj_args->kds;
-	d_sg_list_t	       *sgl = obj_args->sgl;
+	daos_key_desc_t	       *kds = args->la_kds;
+	d_sg_list_t	       *sgl = args->la_sgl;
 	crt_endpoint_t		tgt_ep;
 	struct dc_pool	       *pool = NULL;
 	crt_rpc_t	       *req;
@@ -1180,19 +1210,19 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_flags |= ORF_ENUM_WITHOUT_EPR;
 	}
 
-	oei->oei_nr		= *obj_args->nr;
+	oei->oei_nr		= args->la_nr;
 	oei->oei_rec_type	= obj_args->type;
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
 	uuid_copy(oei->oei_co_uuid, cont_uuid);
 	daos_dti_copy(&oei->oei_dti, &args->la_dti);
 
-	if (obj_args->anchor != NULL)
-		enum_anchor_copy(&oei->oei_anchor, obj_args->anchor);
-	if (obj_args->dkey_anchor != NULL)
-		enum_anchor_copy(&oei->oei_dkey_anchor, obj_args->dkey_anchor);
-	if (obj_args->akey_anchor != NULL)
-		enum_anchor_copy(&oei->oei_akey_anchor, obj_args->akey_anchor);
+	if (args->la_anchor != NULL)
+		enum_anchor_copy(&oei->oei_anchor, args->la_anchor);
+	if (args->la_dkey_anchor != NULL)
+		enum_anchor_copy(&oei->oei_dkey_anchor, args->la_dkey_anchor);
+	if (args->la_akey_anchor != NULL)
+		enum_anchor_copy(&oei->oei_akey_anchor, args->la_akey_anchor);
 
 	if (sgl != NULL) {
 		oei->oei_sgl = *sgl;
@@ -1207,11 +1237,11 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		}
 	}
 
-	if (*obj_args->nr > KDS_BULK_LIMIT) {
+	if (args->la_nr > KDS_BULK_LIMIT) {
 		d_sg_list_t	tmp_sgl = { 0 };
 		d_iov_t		tmp_iov = { 0 };
 
-		tmp_iov.iov_buf_len = sizeof(*kds) * (*obj_args->nr);
+		tmp_iov.iov_buf_len = sizeof(*kds) * args->la_nr;
 		tmp_iov.iov_buf = kds;
 		tmp_sgl.sg_nr_out = 1;
 		tmp_sgl.sg_nr = 1;
@@ -1227,17 +1257,17 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	crt_req_addref(req);
 	enum_args.rpc = req;
 	enum_args.hdlp = (daos_handle_t *)pool;
-	enum_args.eaa_nr = obj_args->nr;
+	enum_args.eaa_nr = &args->la_nr;
 	enum_args.eaa_kds = kds;
-	enum_args.eaa_anchor = obj_args->anchor;
-	enum_args.eaa_dkey_anchor = obj_args->dkey_anchor;
-	enum_args.eaa_akey_anchor = obj_args->akey_anchor;
+	enum_args.eaa_anchor = args->la_anchor;
+	enum_args.eaa_dkey_anchor = args->la_dkey_anchor;
+	enum_args.eaa_akey_anchor = args->la_akey_anchor;
 	enum_args.eaa_obj = obj_shard;
 	enum_args.eaa_size = obj_args->size;
 	enum_args.eaa_sgl = sgl;
 	enum_args.csum = obj_args->csum;
 	enum_args.eaa_map_ver = &args->la_auxi.map_ver;
-	enum_args.eaa_recxs = obj_args->recxs;
+	enum_args.eaa_recxs = args->la_recxs;
 	enum_args.epoch = &args->la_auxi.epoch;
 	enum_args.th = &args->la_api_args->th;
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,

@@ -30,6 +30,7 @@
 #include <spdk/env.h>
 #include <spdk/nvme.h>
 #include <spdk/vmd.h>
+#include <spdk/string.h>
 #include <spdk/thread.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -63,10 +64,21 @@ unsigned int bio_chk_cnt_max;
 /* Per-xstream initial DMA buffer size (in chunk count) */
 static unsigned int bio_chk_cnt_init;
 
+/*
+ * 'Init' xstream is the first started VOS xstream, it calls
+ * spdk_bdev_initialize() on server start to initialize SPDK bdev and scan all
+ * the available devices, and the SPDK hotplug poller is registered then.
+ *
+ * Given the SPDK bdev remove callback is called on 'init' xstream, 'init'
+ * xstream is the one responsible for initiating BIO hot plug/remove event,
+ * and managing the list of 'bio_bdev'.
+ */
 struct bio_bdev {
 	d_list_t		 bb_link;
 	uuid_t			 bb_uuid;
-	struct spdk_bdev	*bb_bdev;
+	char			*bb_name;
+	/* Prevent the SPDK bdev being freed by device hot remove */
+	struct spdk_bdev_desc	*bb_desc;
 	struct bio_blobstore	*bb_blobstore;
 	/* count of target(VOS xstream) per device */
 	int			 bb_tgt_cnt;
@@ -197,7 +209,12 @@ traddr_to_vmd(char *dst, const char *src)
 		if (iteration != 0) {
 			strcat(vmd_addr, ".");
 			ptr = ptr + 3;
-			strncat(vmd_addr, ptr, 1);
+			/** Hack alert!  Reuse existing buffer to ensure new
+			 *  string is null terminated.
+			 */
+			addr_split[0] = ptr[0];
+			addr_split[1] = '\0';
+			strcat(vmd_addr, addr_split);
 			break;
 		}
 		strcat(vmd_addr, ":");
@@ -364,7 +381,8 @@ bio_spdk_env_init(void)
 	rc = spdk_thread_lib_init(NULL, 0);
 	if (rc != 0) {
 		rc = -DER_INVAL;
-		D_ERROR("Failed to init SPDK thread lib, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to init SPDK thread lib, %s (%d)\n",
+			spdk_strerror(rc), rc);
 		spdk_env_fini();
 		return rc;
 	}
@@ -614,20 +632,32 @@ get_bdev_type(struct spdk_bdev *bdev)
 }
 
 static struct spdk_blob_store *
-load_blobstore(struct bio_xs_context *ctxt, struct spdk_bdev *bdev,
-	       uuid_t *bs_uuid, bool create)
+load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
+	       bool create)
 {
-	struct spdk_bs_dev *bs_dev;
-	struct spdk_bs_opts bs_opts;
-	struct common_cp_arg cp_arg;
+	struct spdk_bdev_desc	*desc = NULL;
+	struct spdk_bs_dev	*bs_dev;
+	struct spdk_bs_opts	 bs_opts;
+	struct common_cp_arg	 cp_arg;
+	int			 rc;
+
+	rc = spdk_bdev_open_ext(bdev_name, true, bio_bdev_event_cb, NULL,
+				&desc);
+	if (rc != 0) {
+		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
+		return NULL;
+	}
 
 	/*
-	 * bs_dev will be freed during spdk_bs_unload(), or in the
-	 * internal error handling code of spdk_bs_init/load().
+	 * bdev will be closed and bs_dev will be freed during
+	 * spdk_bs_unload(), or in the internal error handling code of
+	 * spdk_bs_init/load().
 	 */
-	bs_dev = spdk_bdev_create_bs_dev(bdev, NULL, NULL);
+	D_ASSERT(desc != NULL);
+	bs_dev = spdk_bdev_create_bs_dev_from_desc(desc);
 	if (bs_dev == NULL) {
 		D_ERROR("failed to create bs_dev\n");
+		spdk_bdev_close(desc);
 		return NULL;
 	}
 
@@ -676,6 +706,70 @@ unload_blobstore(struct bio_xs_context *ctxt, struct spdk_blob_store *bs)
 	return cp_arg.cca_rc;
 }
 
+static void
+free_bio_blobstore(struct bio_blobstore *bb)
+{
+	D_ASSERT(bb->bb_bs == NULL);
+	D_ASSERT(bb->bb_ref == 0);
+
+	ABT_cond_free(&bb->bb_barrier);
+	ABT_mutex_free(&bb->bb_mutex);
+	D_FREE(bb->bb_xs_ctxts);
+
+	D_FREE(bb);
+}
+
+static void
+destroy_bio_bdev(struct bio_bdev *d_bdev)
+{
+	D_ASSERT(d_list_empty(&d_bdev->bb_link));
+
+	if (d_bdev->bb_desc != NULL) {
+		spdk_bdev_close(d_bdev->bb_desc);
+		d_bdev->bb_desc = NULL;
+	}
+
+	if (d_bdev->bb_blobstore != NULL) {
+		free_bio_blobstore(d_bdev->bb_blobstore);
+		d_bdev->bb_blobstore = NULL;
+	}
+
+	if (d_bdev->bb_name != NULL)
+		D_FREE(d_bdev->bb_name);
+
+	D_FREE(d_bdev);
+}
+
+static struct bio_bdev *
+lookup_dev_by_id(uuid_t dev_id)
+{
+	struct bio_bdev	*d_bdev;
+
+	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
+		if (uuid_compare(d_bdev->bb_uuid, dev_id) == 0)
+			return d_bdev;
+	}
+	return NULL;
+}
+
+void
+bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
+		  void *event_ctx)
+{
+	if (event_ctx == NULL)
+		return;
+
+	/* TODO: Process hot remove event */
+}
+
+/*
+ * Create bio_bdev from SPDK bdev. It checks if the bdev has existing
+ * blobstore, if it doesn't have, it'll create one automatically.
+ *
+ * This function is only called by 'Init' xstream on server start or
+ * a device is hot plugged, so it has to do self poll since the poll
+ * xstream for this device hasn't been established yet.
+ */
 static int
 create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 {
@@ -692,14 +786,38 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 		D_ERROR("failed to allocate bio_bdev\n");
 		return -DER_NOMEM;
 	}
-	D_INIT_LIST_HEAD(&d_bdev->bb_link);
 
+	D_INIT_LIST_HEAD(&d_bdev->bb_link);
+	D_STRNDUP(d_bdev->bb_name, spdk_bdev_get_name(bdev),
+		  strlen(spdk_bdev_get_name(bdev)));
+	if (d_bdev->bb_name == NULL) {
+		D_ERROR("Failed to allocate bdev name for %s\n",
+			spdk_bdev_get_name(bdev));
+		rc = -DER_NOMEM;
+		goto error;
+	}
+
+	/*
+	 * Hold the SPDK bdev by an open descriptor, otherwise, the bdev
+	 * could be deconstructed by SPDK on device hot remove.
+	 */
+	rc = spdk_bdev_open_ext(d_bdev->bb_name, true, bio_bdev_event_cb,
+				d_bdev, &d_bdev->bb_desc);
+	if (rc != 0) {
+		D_ERROR("Failed to hold bdev %s, %d\n", d_bdev->bb_name, rc);
+		rc = daos_errno2der(-rc);
+		goto error;
+	}
+
+	D_ASSERT(d_bdev->bb_desc != NULL);
 	/* Try to load blobstore without specifying 'bstype' first */
-	bs = load_blobstore(ctxt, bdev, NULL, false);
+	bs = load_blobstore(ctxt, d_bdev->bb_name, NULL, false);
 	if (bs == NULL) {
+		D_DEBUG(DB_MGMT, "Creating bs for %s\n", d_bdev->bb_name);
+
 		/* Create blobstore if it wasn't created before */
 		uuid_generate(bs_uuid);
-		bs = load_blobstore(ctxt, bdev, &bs_uuid, true);
+		bs = load_blobstore(ctxt, d_bdev->bb_name, &bs_uuid, true);
 		if (bs == NULL) {
 			D_ERROR("Failed to create blobstore on dev: "
 				""DF_UUID"\n", DP_UUID(bs_uuid));
@@ -722,6 +840,20 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 		goto error;
 	}
 
+	/* Verify if the blobstore was created by DAOS */
+	if (uuid_is_null(bs_uuid)) {
+		D_ERROR("The bdev has old blobstore not created by DAOS!\n");
+		rc = -DER_INVAL;
+		goto error;
+	}
+
+	/* Verify if any duplicated device ID */
+	if (lookup_dev_by_id(bs_uuid) != NULL) {
+		D_ERROR("Dup device "DF_UUID" detected!\n", DP_UUID(bs_uuid));
+		rc = -DER_EXIST;
+		goto error;
+	}
+
 	/* Find the initial target count per device */
 	rc = smd_dev_get_by_id(bs_uuid, &dev_info);
 	if (rc == 0) {
@@ -739,14 +871,13 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	D_DEBUG(DB_MGMT, "Initial target count for "DF_UUID" set at %d\n",
 		DP_UUID(bs_uuid), d_bdev->bb_tgt_cnt);
 
-	d_bdev->bb_bdev = bdev;
 	uuid_copy(d_bdev->bb_uuid, bs_uuid);
 	d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 
 	return 0;
 
 error:
-	D_FREE(d_bdev);
+	destroy_bio_bdev(d_bdev);
 	return rc;
 }
 
@@ -771,19 +902,6 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			break;
 	}
 	return rc;
-}
-
-static void
-free_bio_blobstore(struct bio_blobstore *bb)
-{
-	D_ASSERT(bb->bb_bs == NULL);
-	D_ASSERT(bb->bb_ref == 0);
-
-	ABT_cond_free(&bb->bb_barrier);
-	ABT_mutex_free(&bb->bb_mutex);
-	D_FREE(bb->bb_xs_ctxts);
-
-	D_FREE(bb);
 }
 
 static void
@@ -838,11 +956,7 @@ fini_bio_bdevs(struct bio_xs_context *ctxt)
 
 	d_list_for_each_entry_safe(d_bdev, tmp, &nvme_glb.bd_bdevs, bb_link) {
 		d_list_del_init(&d_bdev->bb_link);
-
-		if (d_bdev->bb_blobstore != NULL)
-			free_bio_blobstore(d_bdev->bb_blobstore);
-
-		D_FREE(d_bdev);
+		destroy_bio_bdev(d_bdev);
 	}
 }
 
@@ -957,10 +1071,11 @@ static int
 init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 {
 	struct bio_bdev		*d_bdev;
+	struct bio_blobstore	*bbs;
 	struct spdk_blob_store	*bs;
-	struct smd_dev_info	*dev_info;
+	struct smd_dev_info	*dev_info = NULL;
+	bool			 assigned = false;
 	int			 rc;
-	bool			 found = false;
 
 	D_ASSERT(ctxt->bxc_desc == NULL);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
@@ -976,18 +1091,14 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	 * Lookup device mapped to @tgt_id in the per-server metadata,
 	 * if found, create blobstore on the mapped device.
 	 */
+retry:
 	rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
-	if (rc == -DER_NONEXIST) {
+	if (rc == -DER_NONEXIST && !assigned) {
 		rc = assign_device(tgt_id);
 		if (rc)
 			return rc;
-
-		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
-		if (rc) {
-			D_ERROR("Failed to get dev mapped to tgt %d. "DF_RC"\n",
-				tgt_id, DP_RC(rc));
-			return rc;
-		}
+		assigned = true;
+		goto retry;
 	} else if (rc) {
 		D_ERROR("Failed to get dev for tgt %d. "DF_RC"\n", tgt_id,
 			DP_RC(rc));
@@ -997,87 +1108,113 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	D_DEBUG(DB_MGMT, "Get dev "DF_UUID" mapped to tgt %d.\n",
 		DP_UUID(dev_info->sdi_id), tgt_id);
 
-	/* Iterate through device list to find matching dev */
-	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
-		if (uuid_compare(d_bdev->bb_uuid, dev_info->sdi_id) == 0) {
-			found = true;
-			break;
-		}
+	/*
+	 * Two cases leading to the inconsistency between SMD information and
+	 * in-memory bio_bdev list:
+	 * 1. The SMD data is stale (server started with new SSD/Target
+	 *    configuration but old SMD data are not erased) or corrupted.
+	 * 2. The device is not plugged.
+	 *
+	 * We can't differentiate these two cases for now, so let's just abort
+	 * starting and ask admin to plug the device or fix the SMD manually.
+	 */
+	d_bdev = lookup_dev_by_id(dev_info->sdi_id);
+	if (d_bdev == NULL) {
+		D_ERROR("Device "DF_UUID" for target %d isn't plugged or the "
+			"SMD table is stale/corrupted.\n",
+			DP_UUID(dev_info->sdi_id), tgt_id);
+		rc = -DER_NONEXIST;
+		goto out;
 	}
 
-	smd_free_dev_info(dev_info);
-	if (!found) {
-		/* TODO
-		 * Mapping in per-server metadata and device list
-		 * is inconsistent, either device currently mapped to
-		 * the target is not present in the device list or
-		 * the mapping in SMD is invalid. Call per-server
-		 * metadata management tool to rectify.
-		 */
-		D_ERROR("Device list & device mapping is inconsistent\n");
-		return -DER_NONEXIST;
-	}
-
-	D_ASSERT(d_bdev->bb_bdev != NULL);
-	/* generic read only descriptor (currently used for IO stats) */
-	rc = spdk_bdev_open(d_bdev->bb_bdev, false, NULL, NULL,
-			    &ctxt->bxc_desc);
-	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n",
-			spdk_bdev_get_name(d_bdev->bb_bdev), rc);
-		return daos_errno2der(-rc);
-	}
-
+	D_ASSERT(d_bdev->bb_name != NULL);
 	/*
 	 * If no bbs (BIO blobstore) is attached to the device, attach one and
 	 * set current xstream as bbs owner.
 	 */
 	if (d_bdev->bb_blobstore == NULL) {
 		d_bdev->bb_blobstore = alloc_bio_blobstore(ctxt);
-		if (d_bdev->bb_blobstore == NULL)
-			return -DER_NOMEM;
+		if (d_bdev->bb_blobstore == NULL) {
+			rc = -DER_NOMEM;
+			goto out;
+		}
 	}
 
 	/* Hold bbs refcount for current xstream */
 	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore, ctxt);
-	if (ctxt->bxc_blobstore == NULL)
-		return -DER_NOMEM;
+	if (ctxt->bxc_blobstore == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	bbs = ctxt->bxc_blobstore;
 
 	/*
 	 * bbs owner xstream is responsible to initialize monitoring context
 	 * and open SPDK blobstore.
 	 */
-	if (is_bbs_owner(ctxt, ctxt->bxc_blobstore)) {
-		rc = bio_init_health_monitoring(ctxt->bxc_blobstore,
-						d_bdev->bb_bdev);
-		if (rc != 0) {
-			D_ERROR("BIO health monitoring not allocated\n");
-			return rc;
+	if (is_bbs_owner(ctxt, bbs)) {
+		/* Initialize BS state according to SMD state */
+		if (dev_info->sdi_state == SMD_DEV_NORMAL) {
+			bbs->bb_state = BIO_BS_STATE_NORMAL;
+		} else if (dev_info->sdi_state == SMD_DEV_FAULTY) {
+			bbs->bb_state = BIO_BS_STATE_OUT;
+		} else {
+			D_ERROR("Invalid SMD state:%d\n", dev_info->sdi_state);
+			rc = -DER_INVAL;
+			goto out;
 		}
 
-		/* Load blobstore with bstype specified for sanity check */
-		bs = load_blobstore(ctxt, d_bdev->bb_bdev, &d_bdev->bb_uuid,
-				    false);
-		if (bs == NULL)
-			return -DER_INVAL;
+		/* Initialize health monitor */
+		rc = bio_init_health_monitoring(bbs, d_bdev->bb_name);
+		if (rc != 0) {
+			D_ERROR("BIO health monitor init failed. "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
 
-		ctxt->bxc_blobstore->bb_bs = bs;
+		if (bbs->bb_state == BIO_BS_STATE_OUT)
+			goto out;
+
+		/* Load blobstore with bstype specified for sanity check */
+		bs = load_blobstore(ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
+				    false);
+		if (bs == NULL) {
+			rc = -DER_INVAL;
+			goto out;
+		}
+		bbs->bb_bs = bs;
 
 		D_DEBUG(DB_MGMT, "Loaded bs, tgt_id:%d, xs:%p dev:%s\n",
-			tgt_id, ctxt, spdk_bdev_get_name(d_bdev->bb_bdev));
+			tgt_id, ctxt, d_bdev->bb_name);
 
 	}
 
+	if (bbs->bb_state == BIO_BS_STATE_OUT)
+		goto out;
+
 	/* Open IO channel for current xstream */
-	bs = ctxt->bxc_blobstore->bb_bs;
+	bs = bbs->bb_bs;
 	D_ASSERT(bs != NULL);
 	ctxt->bxc_io_channel = spdk_bs_alloc_io_channel(bs);
 	if (ctxt->bxc_io_channel == NULL) {
 		D_ERROR("Failed to create io channel\n");
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto out;
 	}
 
-	return 0;
+	/* generic read only descriptor (currently used for IO stats) */
+	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
+				NULL, &ctxt->bxc_desc);
+	if (rc != 0) {
+		D_ERROR("Failed to open bdev %s, %d\n", d_bdev->bb_name, rc);
+		rc = daos_errno2der(-rc);
+		goto out;
+	}
+
+out:
+	D_ASSERT(dev_info != NULL);
+	smd_free_dev_info(dev_info);
+	return rc;
 }
 
 /*

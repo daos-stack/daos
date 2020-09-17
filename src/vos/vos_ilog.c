@@ -38,7 +38,7 @@ vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(umm, coh, tx_id, epoch, intent,
+	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent,
 					DTX_RT_ILOG);
 	if (rc < 0)
 		return rc;
@@ -417,7 +417,8 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	int			 rc;
 	uint16_t		 minor_epc = VOS_MINOR_EPC_MAX;
 
-	if (ts_set == NULL || (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
+	if (ts_set == NULL ||
+	    (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
 		if (leaf)
 			goto punch_log;
 		return 0;
@@ -546,42 +547,19 @@ vos_ilog_init(void)
 	return 0;
 }
 
-bool
-vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog)
-{
-	struct vos_ts_entry	*entry;
-	uint32_t		*idx;
-
-	if (ts_set == NULL)
-		return true;
-
-	idx = ilog_ts_idx_get(ilog);
-
-	return vos_ts_lookup(ts_set, idx, false, &entry);
-}
-
 int
-vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
-		  void *record, daos_size_t rec_size)
+vos_ilog_ts_add(struct vos_ts_set *ts_set, struct ilog_df *ilog,
+		const void *record, daos_size_t rec_size)
 {
-	struct vos_ts_entry	*entry;
-	uint32_t		*idx;
-	uint64_t		 hash;
+	uint32_t	*idx = NULL;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return 0;
 
-	hash = vos_hash_get(record, rec_size);
-	if (ilog) {
+	if (ilog != NULL)
 		idx = ilog_ts_idx_get(ilog);
-		entry = vos_ts_alloc(ts_set, idx, hash);
-		if (entry == NULL)
-			return -DER_NO_PERM;
-	} else {
-		vos_ts_get_negative(ts_set, hash, false);
-	}
 
-	return 0;
+	return vos_ts_set_add(ts_set, idx, record, rec_size);
 }
 
 void

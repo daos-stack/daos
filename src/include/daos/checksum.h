@@ -28,45 +28,15 @@
 #include <daos_obj.h>
 #include <daos_prop.h>
 
+#include <daos/multihash.h>
+
 #define	CSUM_NO_CHUNK -1
-
-/**
- * -----------------------------------------------------------
- * Container Property Knowledge
- * -----------------------------------------------------------
- */
-
-/** Convert a string into a property value for csum property */
-int
-daos_str2csumcontprop(const char *value);
-
-/** Convert a string into a property value for csum property */
-int
-daos_str2csumcontprop(const char *value);
 
 /**
  * -----------------------------------------------------------
  * DAOS Checksummer
  * -----------------------------------------------------------
  */
-/** Type of checksums DAOS supports. Primarily used for looking up the
- * appropriate algorithm functions to be used for the csummer
- */
-enum DAOS_CSUM_TYPE {
-	CSUM_TYPE_UNKNOWN = 0,
-
-	CSUM_TYPE_ISAL_CRC16_T10DIF = 1,
-	CSUM_TYPE_ISAL_CRC32_ISCSI = 2,
-	CSUM_TYPE_ISAL_CRC64_REFL = 3,
-	CSUM_TYPE_ISAL_SHA1 = 4,
-	CSUM_TYPE_ISAL_SHA256 = 5,
-	CSUM_TYPE_ISAL_SHA512 = 6,
-
-	CSUM_TYPE_END = 7,
-};
-
-
-
 
 struct dcs_csum_info {
 	/** buffer to store the checksums */
@@ -104,20 +74,16 @@ struct dcs_layout {
 	uint32_t	cs_even_dist:1;
 };
 
-/** Lookup the appropriate CSUM_TYPE given daos container property */
-enum DAOS_CSUM_TYPE daos_contprop2csumtype(int contprop_csum_val);
-
-struct csum_ft;
 struct daos_csummer {
 	/** Size of csum_buf. */
 	uint32_t	 dcs_csum_buf_size;
 	/** Cached configuration for chunk size*/
 	uint32_t	 dcs_chunk_size;
 	/** Pointer to the function table to be used for calculating csums */
-	struct csum_ft	*dcs_algo;
+	struct hash_ft	*dcs_algo;
 	/** Pointer to function table specific contexts */
 	void		*dcs_ctx;
-	/** Points to the buffer where the  calculated csum is to be written */
+	/** Points to the buffer where the calculated csum is to be written */
 	uint8_t		*dcs_csum_buf;
 	/** Whether or not to verify on the server on an update */
 	bool		 dcs_srv_verify;
@@ -126,30 +92,6 @@ struct daos_csummer {
 	bool		 dcs_skip_key_verify;
 	bool		 dcs_skip_data_verify;
 };
-
-struct csum_ft {
-	int		(*cf_init)(struct daos_csummer *obj);
-	void		(*cf_destroy)(struct daos_csummer *obj);
-	int		(*cf_finish)(struct daos_csummer *obj);
-	int		(*cf_update)(struct daos_csummer *obj,
-				     uint8_t *buf, size_t buf_len);
-	int		(*cf_reset)(struct daos_csummer *obj);
-	void		(*cf_get)(struct daos_csummer *obj);
-	uint16_t	(*cf_get_size)(struct daos_csummer *obj);
-	bool		(*cf_compare)(struct daos_csummer *obj,
-				      uint8_t *buf1, uint8_t *buf2,
-				      size_t buf_len);
-
-	/** Len in bytes. Ft can either statically set csum_len or provide
-	 *  a get_len function
-	 */
-	uint16_t	 cf_csum_len;
-	char		*cf_name;
-	uint16_t	 cf_type;
-};
-
-struct csum_ft *
-daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
 
 /**
  * -----------------------------------------------------------------------------
@@ -166,16 +108,16 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
  * @param srv_verify	whether server-side checksum verification is enabled
  * @param dedup		whether deduplication is enabled on the server
  * @param dedup_verify	whether to memcmp data on the server for deduplication
- * @param dedup_bytes	deduplication size threashold in bytes
+ * @param dedup_bytes	deduplication size threshold in bytes
  *
  * @return		0 for success, or an error code
  */
 int
-daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
+daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 		  size_t chunk_bytes, bool srv_verify);
 
 /**
- * Initialize the daos_csummer with a known DAOS_CSUM_TYPE
+ * Initialize the daos_csummer with a known DAOS_HASH_TYPE
  *
  * @param obj		daos_csummer to be initialized. Memory will be allocated
  *			for it.
@@ -189,7 +131,7 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
  * @return		0 for success, or an error code
  */
 int
-daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
+daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_HASH_TYPE type,
 			    size_t chunk_bytes, bool srv_verify);
 
 /**
@@ -202,6 +144,15 @@ daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
  */
 int
 daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props);
+
+/**
+ * Initialize a daos_csummer as a copy of an existing daos_csummer
+ * @param obj		daos_csummer to be copied.
+ *
+ * @return		Allocated daos_csummer, or NULL if not enough memory.
+ */
+struct daos_csummer *
+daos_csummer_copy(const struct daos_csummer *obj);
 
 /** Destroy the daos_csummer */
 void
@@ -632,4 +583,3 @@ void
 dcf_corrupt(d_sg_list_t *data, uint32_t nr);
 
 #endif /** __DAOS_CHECKSUM_H */
-

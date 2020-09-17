@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       31%{?relval}%{?dist}
+Release:       32%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,7 +34,7 @@ BuildRequires: json-c-devel
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 %endif
-BuildRequires: libpmem-devel, libpmemobj-devel
+BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
 %if (0%{?suse_version} >= 1500)
 BuildRequires: libprotobuf-c-devel
@@ -217,6 +217,7 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
+mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
@@ -256,6 +257,8 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
+%dir %{_sysconfdir}/bash_completion.d
+%{_sysconfdir}/bash_completion.d/daos.bash
 %{_libdir}/libdaos_common.so
 # TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
@@ -271,7 +274,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
-%attr(0664,root,root) %{conf_dir}/daos_server.yml
+%attr(0644,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
@@ -381,6 +384,9 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Mon Aug 17 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-32
+- Install completion script in /etc/bash_completion.d
+
 * Wed Aug 05 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-31
 - Change fuse requirement to fuse3
 - Use Lmod for MPI module loading

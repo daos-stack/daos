@@ -111,8 +111,8 @@
 		0, &CQF_obj_migrate,					\
 		ds_obj_migrate_handler, NULL),				\
 	X(DAOS_OBJ_RPC_CPD,						\
-		0, NULL /* TBD */,					\
-		NULL /* TBD */, NULL)
+		0, &CQF_obj_cpd,					\
+		ds_obj_cpd_handler, NULL)
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 
@@ -154,21 +154,10 @@ enum obj_rpc_flags {
 	DRF_CPD_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
 	DRF_CPD_BULK		= (1 << 10),
-};
-
-struct obj_iod_array {
-	/* number of iods (oia_iods) */
-	uint32_t		 oia_iod_nr;
-	/* number obj iods (oia_oiods) */
-	uint32_t		 oia_oiod_nr;
-	daos_iod_t		*oia_iods;
-	struct dcs_iod_csums	*oia_iod_csums;
-	struct obj_io_desc	*oia_oiods;
-	/* byte offset array for target, need this info after RPC dispatched
-	 * to specific target server as there is no oiod info already.
-	 * one for each iod, NULL for replica.
-	 */
-	uint64_t		*oia_offs;
+	/* Contain EC split req, only used on CPD leader locally. */
+	DRF_HAS_EC_SPLIT	= (1 << 11),
+	/* Checking the existence of the object/key. */
+	DRF_CHECK_EXISTENCE	= (1 << 12),
 };
 
 /* common for update/fetch */
@@ -358,14 +347,14 @@ struct daos_cpd_sub_head {
 
 struct daos_cpd_ec_tgts {
 	uint32_t			 dcet_shard_idx;
-	uint32_t			 dcet_tgt_idx;
+	uint32_t			 dcet_tgt_id;
 };
 
 struct daos_cpd_update {
 	struct dcs_csum_info		*dcu_dkey_csum;
-	/* ID array for the DAOS targets that takes part in EC object update. */
-	struct obj_iod_array		*dcu_iod_array;
 	struct daos_cpd_ec_tgts		*dcu_ec_tgts;
+	/* ID array for the DAOS targets that takes part in EC object update. */
+	struct obj_iod_array		 dcu_iod_array;
 	/* Used for split EC update request. */
 	uint32_t			 dcu_start_shard;
 	/* see obj_rpc_flags. */
@@ -374,6 +363,8 @@ struct daos_cpd_update {
 		d_sg_list_t		*dcu_sgls;
 		crt_bulk_t		*dcu_bulks;
 	};
+	/* Pointer to EC split req, only used on server, not pack on-wrie. */
+	struct obj_ec_split_req		*dcu_ec_split_req;
 };
 
 struct daos_cpd_punch {
@@ -402,7 +393,11 @@ struct daos_cpd_sub_req {
 		/* Used by CPD PRC and server side logic. */
 		daos_unit_oid_t		 dcsr_oid;
 		/* Used by client side cache. */
-		void			*dcsr_obj;
+		struct {
+			void		*dcsr_obj;
+			void		*dcsr_reasb;
+			d_sg_list_t	*dcsr_sgls;
+		};
 	};
 	daos_key_t			 dcsr_dkey;
 	uint64_t			 dcsr_dkey_hash;
@@ -535,15 +530,6 @@ obj_is_modification_opc(uint32_t opc)
 }
 
 static inline bool
-obj_is_tgt_modification_opc(uint32_t opc)
-{
-	return opc == DAOS_OBJ_RPC_TGT_UPDATE ||
-	       opc == DAOS_OBJ_RPC_TGT_PUNCH ||
-	       opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
-	       opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
-}
-
-static inline bool
 obj_rpc_is_update(crt_rpc_t *rpc)
 {
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
@@ -573,4 +559,12 @@ obj_rpc_is_migrate(crt_rpc_t *rpc)
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_MIGRATE;
 }
 
+static inline bool
+obj_is_enum_opc(uint32_t opc)
+{
+	return (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_AKEY_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_RECX_RPC_ENUMERATE);
+}
 #endif /* __DAOS_OBJ_RPC_H__ */

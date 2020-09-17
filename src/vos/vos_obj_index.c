@@ -206,7 +206,6 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_t			 val_iov;
 	int			 rc;
 	int			 tmprc;
-	bool			 found = false;
 
 	*obj_p = NULL;
 	d_iov_set(&key_iov, &oid, sizeof(oid));
@@ -220,16 +219,12 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 		D_ASSERT(daos_unit_obj_id_equal(obj->vo_id, oid));
 		*obj_p = obj;
 		ilog = &obj->vo_ilog;
-
-		found = vos_ilog_ts_lookup(ts_set, ilog);
-		if (found)
-			goto out;
 	}
 
-	tmprc = vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+	tmprc = vos_ilog_ts_add(ts_set, ilog, &oid, sizeof(oid));
 
 	D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
-out:
+
 	return rc;
 }
 
@@ -312,7 +307,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 
-	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
+	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;
 
 	VOS_TX_LOG_FAIL(rc, "Failed to update incarnation log entry: "DF_RC"\n",
@@ -449,7 +444,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 
 static int
 oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
-	   struct vos_iterator **iter_pp)
+	     struct vos_iterator **iter_pp, struct vos_ts_set *ts_set)
 {
 	struct vos_oi_iter	*oiter = NULL;
 	struct vos_container	*cont = NULL;
@@ -468,6 +463,9 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
+
+	rc = vos_ts_set_add(ts_set, cont->vc_ts_idx, NULL, 0);
+	D_ASSERT(rc == 0);
 
 	vos_ilog_fetch_init(&oiter->oit_ilog_info);
 	oiter->oit_iter.it_type = type;

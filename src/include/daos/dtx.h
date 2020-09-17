@@ -137,7 +137,7 @@ void daos_dti_gen_unique(struct dtx_id *dti);
 void daos_dti_gen(struct dtx_id *dti, bool zero);
 
 static inline void
-daos_dti_copy(struct dtx_id *des, struct dtx_id *src)
+daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
 {
 	if (src != NULL)
 		*des = *src;
@@ -178,6 +178,10 @@ enum daos_dtx_alb {
 	ALB_AVAILABLE_CLEAN	= 1,
 	/* available but with dirty modification or garbage */
 	ALB_AVAILABLE_DIRTY	= 2,
+};
+
+enum daos_tx_flags {
+	DTF_RETRY_COMMIT	= 1, /* TX commit will be retry. */
 };
 
 /** Epoch context of a DTX */

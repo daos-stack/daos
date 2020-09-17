@@ -591,28 +591,97 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	return svt_rec_alloc_common(tins, rec, skey, rbund);
 }
 
+/** Find the nvme extent in reserved list and move it to deferred cancel list */
+static void
+cancel_nvme_exts(bio_addr_t *addr, struct dtx_handle *dth)
+{
+	struct vea_resrvd_ext	*ext;
+	struct dtx_rsrvd_uint	*dru;
+	int			 i;
+	uint64_t		 blk_off;
+
+	if (addr->ba_type != DAOS_MEDIA_NVME)
+		return;
+
+	blk_off = vos_byte2blkoff(addr->ba_off);
+
+	/** Find the allocation and move it to the deferred list */
+	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
+		dru = &dth->dth_rsrvds[i];
+
+		d_list_for_each_entry(ext, &dru->dru_nvme, vre_link) {
+			if (ext->vre_blk_off == blk_off) {
+				d_list_del(&ext->vre_link);
+				d_list_add_tail(&ext->vre_link,
+						&dth->dth_deferred_nvme);
+				return;
+			}
+		}
+	}
+
+	D_ASSERT(0);
+}
+
 static int
-svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
+		      bool overwrite)
 {
 	daos_epoch_t		*epc = (daos_epoch_t *)&rec->rec_hkey[0];
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	bio_addr_t		*addr = &irec->ir_ex_addr;
+	struct dtx_handle	*dth = NULL;
+	struct vos_rsrvd_scm	*rsrvd_scm;
+	struct pobj_action	*act;
+	int			 i;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
+	if (overwrite) {
+		dth = vos_dth_get();
+		if (dth == NULL)
+			return -DER_NO_PERM; /* Not allowed */
+	}
+
 	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
 				  irec->ir_dtx, *epc, rec->rec_off);
 
-	/* SCM value is stored together with vos_irec_df */
-	if (addr->ba_type == DAOS_MEDIA_NVME) {
-		struct vos_pool *pool = tins->ti_priv;
+	if (!overwrite) {
+		/** TODO: handle NVME */
+		/* SCM value is stored together with vos_irec_df */
+		if (addr->ba_type == DAOS_MEDIA_NVME) {
+			struct vos_pool *pool = tins->ti_priv;
 
-		D_ASSERT(pool != NULL);
-		vos_bio_addr_free(pool, addr, irec->ir_size);
+			D_ASSERT(pool != NULL);
+			vos_bio_addr_free(pool, addr, irec->ir_size);
+		}
+
+		return umem_free(&tins->ti_umm, rec->rec_off);
 	}
 
-	return umem_free(&tins->ti_umm, rec->rec_off);
+	/** There can't be more cancellations than updates in this
+	 *  modification so just use the current one
+	 */
+	D_ASSERT(dth->dth_op_seq > 0);
+	D_ASSERT(dth->dth_op_seq <= dth->dth_deferred_cnt);
+	i = dth->dth_op_seq - 1;
+	rsrvd_scm = dth->dth_deferred[i];
+	D_ASSERT(rsrvd_scm != NULL);
+	D_ASSERT(rsrvd_scm->rs_actv_at < rsrvd_scm->rs_actv_cnt);
+
+	act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
+	umem_defer_free(&tins->ti_umm, rec->rec_off, act);
+	rsrvd_scm->rs_actv_at++;
+
+	cancel_nvme_exts(addr, dth);
+
+	return 0;
+}
+
+static int
+svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+{
+	return svt_rec_free_internal(tins, rec, false);
 }
 
 static int
@@ -650,7 +719,7 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	D_DEBUG(DB_IO, "Overwrite epoch "DF_X64".%d\n", skey->sk_epoch,
 		skey->sk_minor_epc);
 
-	rc = svt_rec_free(tins, rec, NULL);
+	rc = svt_rec_free_internal(tins, rec, true);
 	if (rc != 0)
 		return rc;
 
@@ -665,9 +734,8 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df	*svt;
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  svt->ir_dtx, *epc, intent,
-					  DTX_RT_SVT);
+	return vos_dtx_check_availability(tins->ti_coh, svt->ir_dtx, *epc,
+					  intent, DTX_RT_SVT);
 }
 
 static umem_off_t
@@ -742,7 +810,7 @@ evt_dop_log_status(struct umem_instance *umm, daos_epoch_t epoch,
 
 	coh.cookie = (unsigned long)args;
 	D_ASSERT(coh.cookie != 0);
-	return vos_dtx_check_availability(umm, coh, desc->dc_dtx,
+	return vos_dtx_check_availability(coh, desc->dc_dtx,
 					  epoch, intent, DTX_RT_EVT);
 }
 
@@ -898,7 +966,6 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
-	bool			 found;
 	int			 rc;
 	int			 tmprc;
 
@@ -936,15 +1003,12 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	case 0:
 		krec = rbund.rb_krec;
 		ilog = &krec->kr_ilog;
-		found = vos_ilog_ts_lookup(ts_set, ilog);
-		if (found)
-			break;
 		/** fall through to cache re-cache entry */
 	case -DER_NONEXIST:
 		/** Key hash already be calculated by dbtree_fetch so no need
 		 *  to pass in the key here.
 		 */
-		tmprc = vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		tmprc = vos_ilog_ts_add(ts_set, ilog, NULL, 0);
 		if (tmprc != 0) {
 			rc = tmprc;
 			D_ASSERT(tmprc == -DER_NO_PERM);
@@ -1008,13 +1072,13 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
 	       struct vos_ilog_info *info)
 {
-	struct vos_rec_bundle	*rbund;
+	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 	struct vos_krec_df	*krec;
 	struct ilog_df		*ilog = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
-	bool			 found = false;
 	bool			 mark = false;
 	int			 rc;
+	int			 lrc;
 
 	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
 			  val_iov);
@@ -1024,11 +1088,13 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			rbund = iov2rec_bundle(val_iov);
 			krec = rbund->rb_krec;
 			ilog = &krec->kr_ilog;
-			found = vos_ilog_ts_lookup(ts_set, ilog);
 		}
 
-		if (!found)
-			vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		lrc = vos_ilog_ts_add(ts_set, ilog, NULL, 0);
+		if (lrc != 0) {
+			rc = lrc;
+			goto done;
+		}
 
 		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
 			rc = -DER_NONEXIST;
@@ -1050,15 +1116,16 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	/** Punch always adds a log entry */
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
+	ilog = &krec->kr_ilog;
 
 	if (mark)
 		vos_ilog_ts_mark(ts_set, ilog);
 
-	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, parent,
+	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, parent,
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 
-	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
+	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
