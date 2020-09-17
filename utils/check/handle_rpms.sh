@@ -40,8 +40,8 @@ fi
 
 sudo yum -y remove cart cart-debuginfo cart-devel cart-tests \
                    daos daos-client daos-debuginfo daos-devel daos-server \
-                   daos-tests CUnit dpdk fio fuse fuse-lib hwloc \
-                   libabt0 libcmocka libfabric libfabric-devel libisa-l \
+                   daos-tests daos-tests-external CUnit dpdk fio fuse fuse-lib \
+                   hwloc libabt0 libcmocka libfabric libfabric-devel libisa-l \
                    libisa-l_crypto libopa1 libpmem libpmemblk mercury ndctl\
                    ompi openmpi3 openpa-devel \
                    pexpect protobuf-c pmix \

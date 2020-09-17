@@ -16,11 +16,11 @@ srun:
 srun_params:
     reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
-# 2 hour test
-timeout: 2H15M
+# 48 hour test
+timeout: 48H15M
 setup:
-    start_servers: False
-    start_agents: False
+    start_servers: True
+    start_agents: True
 server_config:
     name: daos_server
     provider: ofi+sockets
@@ -38,27 +38,21 @@ server_config:
         scm_list: [/dev/pmem0]
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
-    transport_config:
-      allow_insecure: True
-agent_config:
-    transport_config:
-      allow_insecure: True
-dmg:
-    transport_config:
-      allow_insecure: True
+        env_vars:
+            - FI_UNIVERSE_SIZE=2048
 # pool_params - attributes of the pools to create; Currently only create one
 pool_ior:
     mode: 146
     name: daos_server
-    scm_size: 40000000000
-    nvme_size: 100000000000
+    scm_size: 200000000000
+    nvme_size: 300000000000
     svcn: 1
     control_method: dmg
 pool_fio:
     mode: 146
     name: daos_server
-    scm_size: 40000000000
-    nvme_size: 100000000000
+    scm_size: 100000000000
+    nvme_size: 200000000000
     svcn: 1
     control_method: dmg
 pool_reserved:
@@ -69,6 +63,7 @@ pool_reserved:
     control_method: dmg
 container:
     type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 container_reserved:
     akey_size: 5
@@ -78,6 +73,9 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: API
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -93,11 +91,13 @@ container_reserved:
 soak_stress:
     name: soak_stress
     # stress test timeout in hours
-    test_timeout: 2
+    test_timeout: 48
     # maximum timeout for a single job in test in minutes
-    job_timeout: 20
+    job_timeout: 30
     nodesperjob:
         - -1
+        - 2
+        - 4
     # used for performance benchmarks
     taskspernode:
         - 1
@@ -158,4 +158,5 @@ fio_stress:
         - 'randrw'
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
+  disable_direct_io: True
 

@@ -44,21 +44,18 @@ except ImportError:
     import Queue as queue
 
 
-class OSAOnlineReintegration(TestWithServers):
+class OSAOnlineDrain(TestWithServers):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
-    daos_server Online reintegration test cases.
+    daos_server Online Drain test cases.
 
     :avocado: recursive
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineReintegration, self).setUp()
+        super(OSAOnlineDrain, self).setUp()
         self.dmg_command = self.get_dmg_command()
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')
-        self.record_length = self.params.get("length", '/run/record/*')
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence",
@@ -74,7 +71,8 @@ class OSAOnlineReintegration(TestWithServers):
     @fail_on(CommandFailure)
     def get_pool_leader(self):
         """Get the pool leader
-           Returns : int (pool_leader)
+           Returns :
+            int : pool leader value
         """
         out = []
         kwargs = {"pool": self.pool.uuid}
@@ -84,7 +82,8 @@ class OSAOnlineReintegration(TestWithServers):
     @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version
-           Returns : int (pool_version_value)
+           Returns :
+            int : pool version value
         """
         out = []
         kwargs = {"pool": self.pool.uuid}
@@ -96,20 +95,16 @@ class OSAOnlineReintegration(TestWithServers):
         Args:
             pool (object): pool handle
             oclass (str): IOR object class
-            api (str): IOR api
+            API (str): IOR API
             test (list): IOR test sequence
             flags (str): IOR flags
             results (queue): queue for returning thread results
-
-        Returns:
-            None
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test : Mpich not installed on :"
-                      " {}".format(self.hostfile_clients[0]))
+            self.fail("Exiting Test: Mpich not installed")
         self.pool = pool
         # Define the arguments for the ior_runner_thread method
         ior_cmd = IorCommand()
@@ -128,10 +123,8 @@ class OSAOnlineReintegration(TestWithServers):
 
         # Define the job manager for the IOR command
         manager = Mpirun(ior_cmd, mpitype="mpich")
-        manager.job.dfs_cont.update(container_info
-                                     ["{}{}{}".format(oclass,
-                                                      api,
-                                                      test[2])])
+        key = "".join([oclass, api, str(test[2])])
+        manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(manager))
         manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         manager.assign_processes(processes)
@@ -143,19 +136,17 @@ class OSAOnlineReintegration(TestWithServers):
         except CommandFailure as _error:
             results.put("FAIL")
 
-    def run_online_reintegration_test(self, num_pool):
-        """Run the Online reintegration without data.
+    def run_online_drain_test(self, num_pool):
+        """Run the Online drain without data.
             Args:
-            num_pool (int) : total pools to create for testing purposes.
-            data (bool) : whether pool has no data or to create
-                          some data in pool. Defaults to False.
+             int : total pools to create for testing purposes.
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
         pool = {}
         pool_uuid = []
         target_list = []
-        exclude_servers = len(self.hostlist_servers) - 1
+        drain_servers = len(self.hostlist_servers) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
         n = random.randint(0, 6)
@@ -163,8 +154,8 @@ class OSAOnlineReintegration(TestWithServers):
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
-        # Exclude one rank : other than rank 0.
-        rank = random.randint(1, exclude_servers)
+        # Drain one of the ranks (or server)
+        rank = random.randint(1, drain_servers)
 
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context,
@@ -178,14 +169,14 @@ class OSAOnlineReintegration(TestWithServers):
             pool[val].create()
             pool_uuid.append(pool[val].uuid)
 
-        # Exclude and reintegrate the pool_uuid, rank and targets
+        # Drain the pool_uuid, rank and targets
         for val in range(0, num_pool):
             for oclass, api, test, flags in product(self.ior_dfs_oclass,
                                                     self.ior_apis,
                                                     self.ior_test_sequence,
                                                     self.ior_flags):
                 threads = []
-                for _ in range(0, num_jobs):
+                for thrd in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
                                                     kwargs={"pool": pool[val],
@@ -204,39 +195,22 @@ class OSAOnlineReintegration(TestWithServers):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                   rank, t_string)
+            output = self.dmg_command.pool_drain(self.pool.uuid,
+                                                 rank, t_string)
             self.log.info(output)
 
             fail_count = 0
             while fail_count <= 20:
-                pver_exclude = self.get_pool_version()
+                pver_drain = self.get_pool_version()
                 time.sleep(10)
                 fail_count += 1
-                if pver_exclude > (pver_begin + len(target_list)):
+                if pver_drain > pver_begin + 1:
                     break
 
-            self.log.info("Pool Version after exclude %s", pver_exclude)
+            self.log.info("Pool Version after drain %s", pver_drain)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_exclude > (pver_begin + len(target_list)),
-                            "Pool Version Error:  After exclude")
-            output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank,
-                                                       t_string)
-            self.log.info(output)
-
-            fail_count = 0
-            while fail_count <= 20:
-                pver_reint = self.get_pool_version()
-                time.sleep(10)
-                fail_count += 1
-                if pver_reint > (pver_exclude + 1):
-                    break
-
-            self.log.info("Pool Version after reintegrate %d", pver_reint)
-            # Check pool version incremented after pool reintegrate
-            self.assertTrue(pver_reint > (pver_exclude + 1),
-                            "Pool Version Error:  After reintegrate")
+            self.assertTrue(pver_drain > pver_begin,
+                            "Pool Version Error:  After drain")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
@@ -247,12 +221,12 @@ class OSAOnlineReintegration(TestWithServers):
             self.pool.display_pool_daos_space(display_string)
             pool[val].destroy()
 
-    def test_osa_online_reintegration(self):
-        """Test ID: DAOS-5075
-        Test Description: Validate Online Reintegration
+    def test_osa_online_drain(self):
+        """Test ID: DAOS-4750
+        Test Description: Validate Online drain
 
-        :avocado: tags=all,pr,hw,large,osa,online_reintegration
+        :avocado: tags=all,pr,hw,large,osa,osa_drain,online_drain
         """
-        # Perform reintegration testing with 1 to 2 pools
+        # Perform drain testing with 1 to 2 pools
         for pool_num in range(1, 3):
-            self.run_online_reintegration_test(pool_num)
+            self.run_online_drain_test(pool_num)

@@ -16,8 +16,8 @@ srun:
 srun_params:
     reservation:
 # This timeout must be longer than the test_timeout param (+15minutes)
-# 24 Min test
-timeout: 30M
+# 1 hour test
+timeout: 1H15M
 setup:
     start_servers: True
     start_agents: True
@@ -38,23 +38,8 @@ server_config:
         scm_list: [/dev/pmem0]
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
-    transport_config:
-      allow_insecure: True
-agent_config:
-    transport_config:
-      allow_insecure: True
-dmg:
-    transport_config:
-      allow_insecure: True
 # pool_params - attributes of the pools to create; Currently only create one
 pool_ior:
-    mode: 146
-    name: daos_server
-    scm_size: 40000000000
-    nvme_size: 100000000000
-    svcn: 1
-    control_method: dmg
-pool_fio:
     mode: 146
     name: daos_server
     scm_size: 40000000000
@@ -69,6 +54,7 @@ pool_reserved:
     control_method: dmg
 container:
     type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 container_reserved:
     akey_size: 5
@@ -78,6 +64,9 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: API
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -90,28 +79,30 @@ container_reserved:
 #               poollist:            defines pools to create for jobs
 #               joblist:             defines workload per slurm scripts
 #               harasserlist:        defines the harassers to run in test
-# smoke test_params
-smoke:
-    name: soak_smoke
-    # smoke test timeout in hours
-    test_timeout: 0.4
+soak_harassers:
+    name: soak_harassers
+    # harasser test timeout in hours
+    test_timeout: 1
+    harasser_timeout: 120
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
     nodesperjob:
         - -1
+    # used for performance benchmarks
     taskspernode:
-        - 1
+        - 16
     poollist:
         - pool_ior
-        - pool_fio
     joblist:
-        - ior_smoke
-        - fio_smoke
+        - ior_harasser
+    harasserlist:
+        - snapshot
+        #- rebuild
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
 # sequential
-ior_smoke:
+ior_harasser:
     api:
         - DFS
         - MPIIO
@@ -127,28 +118,18 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
-fio_smoke:
-  names:
-      - global
-      - test
-  global:
-    directory: "/tmp/daos_dfuse"
-    ioengine: 'libaio'
-    thread: 1
-    group_reporting: 1
-    direct: 1
-    verify: 'crc64'
-    iodepth: 16
-  test:
-    numjobs: 1
-  soak:
-    blocksize:
-        - '1M'
+rebuild:
+    rebuild_timeout: 30
+    ranks_to_kill:
+        - 2
+    svcl: 1
+    dfs_oclass:
+        - "RP_2GX"
+dmg_create_destroy:
     size:
-        - '1G'
-    rw:
-        - 'rw'
-        - 'randrw'
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"
-
+      - 8M
+      - 16M
+      - 64M
+      - 512M
+      - 1G
+      - 30G

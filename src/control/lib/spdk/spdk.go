@@ -61,7 +61,7 @@ func Rc2err(label string, rc C.int) error {
 	return fmt.Errorf("%s: %d", label, rc)
 }
 
-// EnvOptions describe parameters to be used when initializing a process'
+// EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
 	MemSize      int      // size in MiB to be allocated to SPDK proc

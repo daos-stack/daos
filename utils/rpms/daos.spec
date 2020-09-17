@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       32%{?relval}%{?dist}
+Release:       33%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -152,11 +152,21 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
-Requires: fio
 Requires: mpich
 Requires: openmpi3
-Requires: hwloc
 Requires: ndctl
+Requires: hwloc
+%if (0%{?suse_version} >= 1315)
+Requires: libpsm_infinipath1
+%endif
+
+%description tests
+This is the package needed to run the DAOS test suite
+
+%package tests-external
+Summary: The DAOS test suite for external test suites
+Requires: %{name}-tests = %{version}-%{release}
+Requires: fio
 Requires: ior-hpc-cart-4-daos-0
 Requires: romio-tests-cart-4-daos-0
 Requires: testmpio-cart-4-daos-0
@@ -167,13 +177,10 @@ Requires: hdf5-vol-daos-mpich2-tests-daos-0
 Requires: hdf5-vol-daos-openmpi3-tests-daos-0
 Requires: MACSio-mpich2-daos-0
 Requires: MACSio-openmpi3-daos-0
-%if (0%{?suse_version} >= 1315)
-Requires: libpsm_infinipath1
-%endif
 
-
-%description tests
-This is the package needed to run the DAOS test suite
+%description tests-external
+This is the package needed to run the DAOS test suite that utilize external
+test suites.
 
 %package devel
 # Leap 15 doesn't seem to be creating dependencies as richly as EL7
@@ -375,6 +382,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
+%exclude %{_prefix}/lib/daos/TESTING/ftest/external
 %{_prefix}/lib/cart/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
@@ -392,12 +400,19 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
 
+%files tests-external
+%{_prefix}/lib/daos/TESTING/ftest/external
+
 %files devel
 %{_includedir}/*
 %{_libdir}/libdaos.so
 %{_libdir}/*.a
 
 %changelog
+* Thu Sep 17 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.0-33
+- Added daos-tests-external package for functional tests utilizing external
+  test utilities
+
 * Mon Aug 17 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-32
 - Install completion script in /etc/bash_completion.d
 

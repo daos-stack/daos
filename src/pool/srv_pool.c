@@ -4528,8 +4528,9 @@ ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
 	struct pool_evict_in	*in;
 	struct pool_evict_out	*out;
 
-	D_DEBUG(DB_MGMT, DF_UUID": Destroy pool, inspect/evict handles\n",
-		DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT,
+		DF_UUID": Destroy pool (force: %d), inspect/evict handles\n",
+		DP_UUID(pool_uuid), force);
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
@@ -4707,6 +4708,47 @@ out:
 	out->po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pasi_op.pi_uuid), rpc, DP_RC(rc));
+	crt_reply_send(rpc);
+}
+
+void
+ds_pool_attr_del_handler(crt_rpc_t *rpc)
+{
+	struct pool_attr_del_in  *in = crt_req_get(rpc);
+	struct pool_op_out	 *out = crt_reply_get(rpc);
+	struct pool_svc		 *svc;
+	struct rdb_tx		  tx;
+	int			  rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+		DP_UUID(in->padi_op.pi_uuid), rpc, DP_UUID(in->padi_op.pi_hdl));
+
+	rc = pool_svc_lookup_leader(in->padi_op.pi_uuid, &svc, &out->po_hint);
+	if (rc != 0)
+		goto out;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out_svc;
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+	rc = ds_rsvc_del_attr(&svc->ps_rsvc, &tx, &svc->ps_user,
+			      in->padi_bulk, rpc, in->padi_count);
+	if (rc != 0)
+		goto out_lock;
+
+	rc = rdb_tx_commit(&tx);
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->padi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
