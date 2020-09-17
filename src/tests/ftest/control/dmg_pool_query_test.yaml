@@ -58,7 +58,7 @@ exp_vals:
     free_max: "4.0 GB"
     free_mean: "4.0 GB"
   rebuild:
-    state: "idle"
+    status: "idle"
     objects: "0"
     records: "0"
 

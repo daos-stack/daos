@@ -105,8 +105,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "free_mean", path="/run/exp_vals/nvme/*"),
             },
             "rebuild": {
-                "state": self.params.get(
-                    "state", path="/run/exp_vals/rebuild/*"),
+                "status": self.params.get(
+                    "status", path="/run/exp_vals/rebuild/*"),
                 "objects": self.params.get(
                     "objects", path="/run/exp_vals/rebuild/*"),
                 "records": self.params.get(

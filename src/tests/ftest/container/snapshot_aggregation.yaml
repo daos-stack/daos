@@ -31,6 +31,6 @@ ior:
   block_size: 10G
   transfer_size: 1M
   repetitions: 1
-  test_file: "daos:File10G"
+  test_file: "/test_file"
   daos_oclass: SX
   signature: 123

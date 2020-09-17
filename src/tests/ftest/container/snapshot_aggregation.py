@@ -41,21 +41,19 @@ class SnapshotAggregation(IorTestBase):
         """Initialize a SnapshotAggregation object."""
         super(SnapshotAggregation, self).__init__(*args, **kwargs)
         self.dmg = None
-        self.free_space = {"SCM": [], "NVMe": []}
+        self.free_space = {"scm": [], "nvme": []}
 
     def update_free_space(self):
         """Append the free space list with the current pool capacities."""
         data = self.dmg.pool_query(self.pool.uuid)
         self.pool.get_info()
 
-        self.free_space["SCM"].append({
-            "dmg": data["scm"]["free"],
-            "api": self.pool.info.pi_space.ps_space.s_free[0]
-        })
-        self.free_space["NVMe"].append({
-            "dmg": data["nvme"]["free"],
-            "api": self.pool.info.pi_space.ps_space.s_free[1]
-        })
+        for index, name in enumerate(("scm", "nvme")):
+            data = {
+                "dmg": data[name]["free"],
+                "api": int(self.pool.info.pi_space.ps_space.s_free[index])
+            }
+            self.free_space[name].append(data)
 
     def detect_aggregation_complete(self):
         """Detect that aggregation has started and completed."""
@@ -86,7 +84,7 @@ class SnapshotAggregation(IorTestBase):
         self.update_free_space()
         self.log.info(
             "Pool free space before writes:\n  SCM:  %s\n  NVMe: %s",
-            self.free_space["SCM"][-1], self.free_space["NVMe"][-1])
+            self.free_space["scm"][-1], self.free_space["nvme"][-1])
 
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
@@ -100,14 +98,14 @@ class SnapshotAggregation(IorTestBase):
         self.update_free_space()
         self.log.info(
             "Pool free space after first write:\n  SCM:  %s\n  NVMe: %s",
-            self.free_space["SCM"][-1], self.free_space["NVMe"][-1])
+            self.free_space["scm"][-1], self.free_space["nvme"][-1])
         self.assertLess(
-            self.free_space["SCM"][1]["api"],
-            self.free_space["SCM"][0]["api"],
+            self.free_space["scm"][1]["api"],
+            self.free_space["scm"][0]["api"],
             "SCM free pool space was not reduced by the initial write")
         self.assertLess(
-            self.free_space["NVMe"][1]["api"],
-            self.free_space["NVMe"][0]["api"],
+            self.free_space["nvme"][1]["api"],
+            self.free_space["nvme"][0]["api"],
             "SCM free pool space was not reduced by the initial write")
 
         # Create a snapshot of the container once the IOR job completes.
@@ -129,14 +127,14 @@ class SnapshotAggregation(IorTestBase):
         self.update_free_space()
         self.log.info(
             "Pool free space after second write:\n  SCM:  %s\n  NVMe: %s",
-            self.free_space["SCM"][-1], self.free_space["NVMe"][-1])
+            self.free_space["scm"][-1], self.free_space["nvme"][-1])
         self.assertLess(
-            self.free_space["SCM"][2]["api"],
-            self.free_space["SCM"][1]["api"],
+            self.free_space["scm"][2]["api"],
+            self.free_space["scm"][1]["api"],
             "SCM free pool space was not reduced by the overwrite")
         self.assertLess(
-            self.free_space["NVMe"][2]["api"],
-            self.free_space["NVMe"][1]["api"],
+            self.free_space["nvme"][2]["api"],
+            self.free_space["nvme"][1]["api"],
             "SCM free pool space was not reduced by the overwrite")
 
         # Delete the snapshot.
@@ -151,12 +149,12 @@ class SnapshotAggregation(IorTestBase):
         self.update_free_space()
         self.log.info(
             "Pool free space after deleting snapshot:\n  SCM:  %s\n  NVMe: %s",
-            self.free_space["SCM"][-1], self.free_space["NVMe"][-1])
+            self.free_space["scm"][-1], self.free_space["nvme"][-1])
         self.assertEqual(
-            self.free_space["SCM"][3]["api"],
-            self.free_space["SCM"][1]["api"],
+            self.free_space["scm"][3]["api"],
+            self.free_space["scm"][1]["api"],
             "SCM free pool space was not restored by the aggregation")
         self.assertEqual(
-            self.free_space["NVMe"][3]["api"],
-            self.free_space["NVMe"][1]["api"],
+            self.free_space["nvme"][3]["api"],
+            self.free_space["nvme"][1]["api"],
             "SCM free pool space was not restored by the aggregation")

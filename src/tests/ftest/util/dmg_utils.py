@@ -453,7 +453,7 @@ class DmgCommand(DmgCommandBase):
         #           "free_mean": <P>
         #       },
         #       "rebuild": {
-        #           "state": <Q>,
+        #           "status": <Q>,
         #           "objects": <R>,
         #           "records": <S>
         #       }
