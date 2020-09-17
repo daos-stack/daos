@@ -18,6 +18,8 @@ else
   BULLSEYE=
 fi
 
+source ./.build_vars.sh
+
 test_tag=$(git show -s --format=%B | \
            sed -ne "/^Test-tag$PRAGMA_SUFFIX:/s/^.*: *//p")
 if [ -z "$test_tag" ]; then
