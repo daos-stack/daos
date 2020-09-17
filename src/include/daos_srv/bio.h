@@ -31,6 +31,7 @@
 
 #include <daos/mem.h>
 #include <daos/common.h>
+#include <daos_srv/control.h>
 #include <abt.h>
 
 typedef struct {
@@ -81,7 +82,6 @@ struct bio_desc;
 struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
-struct bio_blobstore;
 
 /**
  * Header for SPDK blob per VOS pool
@@ -94,28 +94,6 @@ struct bio_blob_hdr {
 	uint64_t	bbh_blob_id;
 	uuid_t		bbh_blobstore;
 	uuid_t		bbh_pool;
-};
-
-/*
- * Current device health state (health statistics). Periodically updated in
- * bio_bs_monitor(). Used to determine faulty device status.
- */
-struct bio_dev_state {
-	uint64_t	 bds_timestamp;
-	uint64_t	 bds_media_errors[2]; /* supports 128-bit values */
-	uint64_t	 bds_error_count; /* error log page */
-	/* I/O error counters */
-	uint32_t	 bds_bio_read_errs;
-	uint32_t	 bds_bio_write_errs;
-	uint32_t	 bds_bio_unmap_errs;
-	uint32_t	 bds_checksum_errs;
-	uint16_t	 bds_temperature; /* in Kelvin */
-	/* Critical warnings */
-	uint8_t		 bds_temp_warning	: 1;
-	uint8_t		 bds_avail_spare_warning	: 1;
-	uint8_t		 bds_dev_reliabilty_warning : 1;
-	uint8_t		 bds_read_only_warning	: 1;
-	uint8_t		 bds_volatile_mem_warning: 1; /*volatile memory backup*/
 };
 
 static inline void
@@ -602,7 +580,7 @@ bio_yield(void)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_get_dev_state(struct bio_dev_state *dev_state,
+int bio_get_dev_state(struct nvme_health_stats *dev_state,
 		      struct bio_xs_context *xs);
 
 /*

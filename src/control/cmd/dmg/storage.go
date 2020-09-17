@@ -30,6 +30,7 @@ import (
 	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -124,7 +125,8 @@ type storageScanCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
+	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
+	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
 }
 
 // Execute is run when storageScanCmd activates.
@@ -132,11 +134,17 @@ type storageScanCmd struct {
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
 	ctx := context.Background()
-	req := &control.StorageScanReq{}
+	req := &control.StorageScanReq{ConfigDevicesOnly: cmd.NvmeHealth}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
+		if cmd.Verbose {
+			cmd.log.Debug("--verbose flag ignored if --json specified")
+		}
+		if cmd.NvmeHealth {
+			cmd.log.Debug("--health flag ignored if --json specified")
+		}
 		return cmd.outputJSON(resp, err)
 	}
 
@@ -148,6 +156,17 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
 		return err
+	}
+	if cmd.NvmeHealth {
+		if cmd.Verbose {
+			cmd.log.Debug("--verbose flag ignored if --health specified")
+		}
+		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
+			return err
+		}
+		cmd.log.Info(bld.String())
+
+		return resp.Errors()
 	}
 	if err := control.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err

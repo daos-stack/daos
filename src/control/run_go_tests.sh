@@ -58,6 +58,12 @@ function setup_environment()
 	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_ISAL_PREFIX+ -I${SL_ISAL_PREFIX}/include}"
+
+	src_include="$(dirname "$build_source")/src/include"
+	if [ -d "$src_include" ]; then
+		echo "including path \"${src_include}\" in CGO_CFLAGS"
+		CGO_CFLAGS+=" -I${src_include}"
+	fi
 }
 
 function check_formatting()
