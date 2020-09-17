@@ -25,9 +25,6 @@
 package bdev
 
 import (
-	"sort"
-	"strings"
-
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -108,12 +105,9 @@ func (p *Provider) QueryFirmware(req FirmwareQueryRequest) (*FirmwareQueryRespon
 		return nil, err
 	}
 
-	results := make([]DeviceFirmwareQueryResult, 0, len(controllers))
-	for _, dev := range controllers {
-		res := DeviceFirmwareQueryResult{
-			Device: *dev,
-		}
-		results = append(results, res)
+	results := make([]DeviceFirmwareQueryResult, len(controllers))
+	for i, dev := range controllers {
+		results[i].Device = *dev
 	}
 	resp := &FirmwareQueryResponse{
 		Results: results,
@@ -127,7 +121,11 @@ func (p *Provider) getRequestedControllers(requestedPCIAddrs []string, modelID s
 	if err != nil {
 		return nil, err
 	}
-	return filterControllers(controllers, modelID, fwRev), nil
+	filtered := filterControllers(controllers, modelID, fwRev)
+	if !ignoreMissing && len(filtered) == 0 {
+		return nil, FaultNoFilterMatch
+	}
+	return filtered, nil
 }
 
 func (p *Provider) getRequestedControllersByAddr(requestedPCIAddrs []string, ignoreMissing bool) (storage.NvmeControllers, error) {
@@ -136,15 +134,20 @@ func (p *Provider) getRequestedControllersByAddr(requestedPCIAddrs []string, ign
 		return nil, err
 	}
 
+	if !ignoreMissing && len(resp.Controllers) == 0 {
+		return nil, errors.New("no NVMe device controllers")
+	}
+
 	if len(requestedPCIAddrs) == 0 {
 		return resp.Controllers, nil
 	}
 
-	uniquePCIAddrs := common.DedupeStringSlice(requestedPCIAddrs)
-	sort.Strings(uniquePCIAddrs)
+	if common.StringSliceHasDuplicates(requestedPCIAddrs) {
+		return nil, FaultDuplicateDevices
+	}
 
-	result := make(storage.NvmeControllers, 0, len(uniquePCIAddrs))
-	for _, addr := range uniquePCIAddrs {
+	result := make(storage.NvmeControllers, 0, len(requestedPCIAddrs))
+	for _, addr := range requestedPCIAddrs {
 		dev, err := getDeviceController(addr, resp.Controllers)
 		if err != nil {
 			if ignoreMissing {
@@ -171,16 +174,12 @@ func getDeviceController(pciAddr string, controllers storage.NvmeControllers) (*
 func filterControllers(controllers storage.NvmeControllers, modelID, fwRev string) storage.NvmeControllers {
 	selected := make(storage.NvmeControllers, 0, len(controllers))
 	for _, ctrlr := range controllers {
-		if filterMatches(modelID, ctrlr.Model) &&
-			filterMatches(fwRev, ctrlr.FwRev) {
+		if common.FilterStringMatches(modelID, ctrlr.Model) &&
+			common.FilterStringMatches(fwRev, ctrlr.FwRev) {
 			selected = append(selected, ctrlr)
 		}
 	}
 	return selected
-}
-
-func filterMatches(filterStr, actualStr string) bool {
-	return filterStr == "" || strings.ToUpper(actualStr) == strings.ToUpper(filterStr)
 }
 
 // UpdateFirmware updates the NVMe device controller firmware.
@@ -203,17 +202,14 @@ func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateRes
 	}
 
 	resp := &FirmwareUpdateResponse{
-		Results: make([]DeviceFirmwareUpdateResult, 0, len(controllers)),
+		Results: make([]DeviceFirmwareUpdateResult, len(controllers)),
 	}
-	for _, con := range controllers {
+	for i, con := range controllers {
 		err = p.backend.UpdateFirmware(con.PciAddr, req.FirmwarePath, defaultFirmwareSlot)
-		result := DeviceFirmwareUpdateResult{
-			Device: *con,
-		}
+		resp.Results[i].Device = *con
 		if err != nil {
-			result.Error = err.Error()
+			resp.Results[i].Error = err.Error()
 		}
-		resp.Results = append(resp.Results, result)
 	}
 
 	return resp, nil

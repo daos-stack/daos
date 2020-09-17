@@ -150,7 +150,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				},
 			},
 		},
-		"ignore duplicates": {
+		"request duplicate devices": {
 			input: FirmwareQueryRequest{
 				DeviceUIDs: []string{"Device1", "Device3", "Device1"},
 			},
@@ -158,18 +158,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				DiscoverRes:          defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
-			expRes: &FirmwareQueryResponse{
-				Results: []ModuleFirmware{
-					{
-						Module: *defaultModules[0],
-						Info:   fwInfo,
-					},
-					{
-						Module: *defaultModules[2],
-						Info:   fwInfo,
-					},
-				},
-			},
+			expErr: FaultDuplicateDevices,
 		},
 		"filter by FW rev": {
 			input: FirmwareQueryRequest{
@@ -374,6 +363,16 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			},
 			expErr: errors.New("no module found with UID \"NotReal\""),
 		},
+		"request duplicate devices": {
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				DeviceUIDs:   []string{"Device3", "Device3"},
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes: defaultModules,
+			},
+			expErr: FaultDuplicateDevices,
+		},
 		"filter by FW rev": {
 			input: FirmwareUpdateRequest{
 				FirmwarePath: testPath,
@@ -415,7 +414,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			backendCfg: &MockBackendConfig{
 				DiscoverRes: defaultModules,
 			},
-			expErr: errors.New("no SCM modules"),
+			expErr: FaultNoFilterMatch,
 		},
 		"filter is case insensitive": {
 			input: FirmwareUpdateRequest{
@@ -444,7 +443,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			backendCfg: &MockBackendConfig{
 				DiscoverRes: defaultModules,
 			},
-			expErr: errors.New("no SCM modules"),
+			expErr: FaultNoFilterMatch,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

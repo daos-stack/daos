@@ -27,7 +27,6 @@ package scm
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/pkg/errors"
 
@@ -116,18 +115,15 @@ func (p *Provider) QueryFirmware(req FirmwareQueryRequest) (*FirmwareQueryRespon
 	modules = filterModules(modules, req.FirmwareRev, req.ModelID)
 
 	resp := &FirmwareQueryResponse{
-		Results: make([]ModuleFirmware, 0, len(modules)),
+		Results: make([]ModuleFirmware, len(modules)),
 	}
-	for _, mod := range modules {
+	for i, mod := range modules {
 		fwInfo, err := p.backend.GetFirmwareStatus(mod.UID)
-		result := ModuleFirmware{
-			Module: *mod,
-			Info:   fwInfo,
-		}
+		resp.Results[i].Module = *mod
+		resp.Results[i].Info = fwInfo
 		if err != nil {
-			result.Error = err.Error()
+			resp.Results[i].Error = err.Error()
 		}
-		resp.Results = append(resp.Results, result)
 	}
 
 	return resp, nil
@@ -139,15 +135,21 @@ func (p *Provider) getRequestedModules(requestedUIDs []string, ignoreMissing boo
 		return nil, err
 	}
 
+	if !ignoreMissing && len(modules) == 0 {
+		return nil, errors.New("no SCM modules")
+	}
+
 	if len(requestedUIDs) == 0 {
 		return modules, nil
 	}
 
-	uniqueUIDs := common.DedupeStringSlice(requestedUIDs)
-	sort.Strings(uniqueUIDs)
+	if common.StringSliceHasDuplicates(requestedUIDs) {
+		return nil, FaultDuplicateDevices
+	}
+	sort.Strings(requestedUIDs)
 
 	result := make(storage.ScmModules, 0, len(modules))
-	for _, uid := range uniqueUIDs {
+	for _, uid := range requestedUIDs {
 		mod, err := getModule(uid, modules)
 		if err != nil {
 			if ignoreMissing {
@@ -174,16 +176,12 @@ func getModule(uid string, modules storage.ScmModules) (*storage.ScmModule, erro
 func filterModules(modules storage.ScmModules, fwRev string, modelID string) storage.ScmModules {
 	filtered := make(storage.ScmModules, 0, len(modules))
 	for _, mod := range modules {
-		if filterMatches(fwRev, mod.FirmwareRevision) &&
-			filterMatches(modelID, mod.PartNumber) {
+		if common.FilterStringMatches(fwRev, mod.FirmwareRevision) &&
+			common.FilterStringMatches(modelID, mod.PartNumber) {
 			filtered = append(filtered, mod)
 		}
 	}
 	return filtered
-}
-
-func filterMatches(filterStr, actualStr string) bool {
-	return filterStr == "" || strings.ToUpper(actualStr) == strings.ToUpper(filterStr)
 }
 
 // UpdateFirmware updates the SCM device firmware.
@@ -203,21 +201,18 @@ func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateRes
 	modules = filterModules(modules, req.FirmwareRev, req.ModelID)
 
 	if len(modules) == 0 {
-		return nil, errors.New("no SCM modules")
+		return nil, FaultNoFilterMatch
 	}
 
 	resp := &FirmwareUpdateResponse{
-		Results: make([]ModuleFirmwareUpdateResult, 0, len(modules)),
+		Results: make([]ModuleFirmwareUpdateResult, len(modules)),
 	}
-	for _, mod := range modules {
+	for i, mod := range modules {
 		err = p.backend.UpdateFirmware(mod.UID, req.FirmwarePath)
-		result := ModuleFirmwareUpdateResult{
-			Module: *mod,
-		}
+		resp.Results[i].Module = *mod
 		if err != nil {
-			result.Error = err.Error()
+			resp.Results[i].Error = err.Error()
 		}
-		resp.Results = append(resp.Results, result)
 	}
 
 	return resp, nil

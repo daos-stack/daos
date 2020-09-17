@@ -115,13 +115,7 @@ func TestBdevProvider_QueryFirmware(t *testing.T) {
 			backendCfg: &MockBackendConfig{
 				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &FirmwareQueryResponse{
-				Results: []DeviceFirmwareQueryResult{
-					{
-						Device: *defaultDevs[0],
-					},
-				},
-			},
+			expErr: FaultDuplicateDevices,
 		},
 		"filter by model ID": {
 			input: FirmwareQueryRequest{
@@ -327,13 +321,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 			backendCfg: &MockBackendConfig{
 				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &FirmwareUpdateResponse{
-				Results: []DeviceFirmwareUpdateResult{
-					{
-						Device: *defaultDevs[0],
-					},
-				},
-			},
+			expErr: FaultDuplicateDevices,
 		},
 		"filter by model ID": {
 			input: FirmwareUpdateRequest{
@@ -376,7 +364,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 			backendCfg: &MockBackendConfig{
 				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expErr: errors.New("no NVMe device controllers"),
+			expErr: FaultNoFilterMatch,
 		},
 		"must match all requested filters": {
 			input: FirmwareUpdateRequest{
@@ -387,7 +375,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 			backendCfg: &MockBackendConfig{
 				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expErr: errors.New("no NVMe device controllers"),
+			expErr: FaultNoFilterMatch,
 		},
 		"case insensitive filters": {
 			input: FirmwareUpdateRequest{
@@ -416,7 +404,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 			backendCfg: &MockBackendConfig{
 				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expErr: errors.New("no NVMe device controllers"),
+			expErr: FaultNoFilterMatch,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
