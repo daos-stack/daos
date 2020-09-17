@@ -30,6 +30,7 @@
 #include <spdk/env.h>
 #include <spdk/nvme.h>
 #include <spdk/vmd.h>
+#include <spdk/string.h>
 #include <spdk/thread.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -380,7 +381,8 @@ bio_spdk_env_init(void)
 	rc = spdk_thread_lib_init(NULL, 0);
 	if (rc != 0) {
 		rc = -DER_INVAL;
-		D_ERROR("Failed to init SPDK thread lib, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to init SPDK thread lib, %s (%d)\n",
+			spdk_strerror(rc), rc);
 		spdk_env_fini();
 		return rc;
 	}

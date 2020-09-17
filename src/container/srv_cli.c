@@ -82,12 +82,12 @@ dsc_cont_csummer_init(struct daos_csummer **csummer,
 	pool = ds_pool_lookup(pool_uuid);
 	if (pool == NULL)
 		return -DER_NONEXIST;
-	rc = ds_get_csum_cont_props(&cont_props, pool->sp_iv_ns, cont_uuid);
+	rc = ds_get_cont_props(&cont_props, pool->sp_iv_ns, cont_uuid);
 
 	if (rc == 0 &&
 	    daos_cont_csum_prop_is_enabled(cont_props.dcp_csum_type))
 		rc = daos_csummer_init_with_type(csummer,
-			 daos_contprop2csumtype(cont_props.dcp_csum_type),
+			 daos_contprop2hashtype(cont_props.dcp_csum_type),
 			 cont_props.dcp_chunksize,
 			 cont_props.dcp_srv_verify);
 

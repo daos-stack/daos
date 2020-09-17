@@ -557,7 +557,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				gotDrpcCalls := dc.(*mockDrpcClient).Calls
 				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
-					name+": unexpected dRPCs for instance "+string(srv.Index()))
+					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, srv.Index()))
 
 				gotGrpcCalls := mockMSClients[int(srv.Index())].Calls
 				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], gotGrpcCalls); diff != "" {
