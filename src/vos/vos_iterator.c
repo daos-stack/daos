@@ -167,10 +167,11 @@ int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		 daos_handle_t *ih, struct dtx_handle *dth)
 {
-	struct dtx_handle	*saved = vos_dth_get();
 	struct vos_iter_dict	*dict;
 	struct vos_iterator	*iter;
+	struct vos_ts_set	*ts_set = NULL;
 	int			 rc;
+	int			 rlevel;
 
 	if (ih == NULL) {
 		D_ERROR("Argument 'ih' is invalid to vos_iter_param\n");
@@ -195,19 +196,50 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		return -DER_NOSYS;
 	}
 
-	vos_dth_set(dth);
-
 	if (!daos_handle_is_inval(param->ip_ih)) {
 		D_DEBUG(DB_TRACE, "Preparing nested iterator of type %s\n",
 			dict->id_name);
+		/** Nested operations are only used internally so there
+		 * shouldn't be any active transaction involved.  However,
+		 * the upper layer is still passing in a valid handle in
+		 * some cases.
+		 */
 		rc = nested_prepare(type, dict, param, ih);
 
 		goto out;
 	}
 
+	switch (type) {
+	case VOS_ITER_OBJ:
+		rlevel = VOS_TS_READ_CONT;
+		break;
+	case VOS_ITER_DKEY:
+		rlevel = VOS_TS_READ_OBJ;
+		break;
+	case VOS_ITER_AKEY:
+		rlevel = VOS_TS_READ_DKEY;
+		break;
+	case VOS_ITER_RECX:
+		rlevel = VOS_TS_READ_AKEY;
+		break;
+	default:
+		rlevel = 0;
+		/** There should not be any cases where a DTX is active outside
+		 *  of the four listed above.
+		 */
+		D_ASSERT(!dtx_is_valid_handle(dth));
+		break;
+	}
+	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */,
+				 dtx_is_valid_handle(dth) ?
+				 &dth->dth_xid : NULL);
+	if (rc != 0)
+		goto out;
+
+
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
 		dict->id_name);
-	rc = dict->id_ops->iop_prepare(type, param, &iter);
+	rc = dict->id_ops->iop_prepare(type, param, &iter, ts_set);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "No %s to iterate: "DF_RC"\n",
@@ -226,11 +258,14 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	iter->it_ref_cnt	= 1;
 	iter->it_parent		= NULL;
 	iter->it_from_parent	= 0;
+	iter->it_ts_set		= ts_set;
 
 	*ih = vos_iter2hdl(iter);
-
 out:
-	vos_dth_set(saved);
+	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth))
+		vos_ts_set_update(ts_set, dth->dth_epoch);
+	if (rc != 0)
+		vos_ts_set_free(ts_set);
 	return rc;
 }
 
@@ -245,8 +280,21 @@ iter_decref(struct vos_iterator *iter)
 	if (iter->it_ref_cnt)
 		return 0;
 
+	vos_ts_set_free(iter->it_ts_set);
 	D_ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_finish(iter);
+}
+
+void
+vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time)
+{
+	struct vos_iterator	*iter;
+
+	if (daos_handle_is_inval(ih))
+		return;
+
+	iter = vos_hdl2iter(ih);
+	vos_ts_set_update(iter->it_ts_set, read_time);
 }
 
 int
@@ -545,8 +593,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
-	struct dtx_handle	*saved = vos_dth_get();
 	vos_iter_entry_t	iter_ent = {0};
+	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
 	unsigned int		acts = 0;
 	bool			skipped;
@@ -558,8 +606,6 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	anchor = type2anchor(type, anchors);
 
-	vos_dth_set(dth);
-
 	rc = vos_iter_prepare(type, param, &ih, dth);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
@@ -570,11 +616,9 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 				""DF_RC"\n", type, DP_RC(rc));
 		}
 
-		vos_dth_set(saved);
-
 		return rc;
 	}
-
+	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	if (!daos_anchor_is_zero(anchor))
 		probe_anchor = anchor;
@@ -680,10 +724,12 @@ probe:
 		rc = 0;
 	}
 out:
+	if (rc >= 0)
+		vos_iter_ts_set_update(ih, read_time);
+
 	VOS_TX_LOG_FAIL(rc, "abort iteration type:%d, "DF_RC"\n", type,
 			DP_RC(rc));
 
 	vos_iter_finish(ih);
-	vos_dth_set(saved);
 	return rc;
 }
