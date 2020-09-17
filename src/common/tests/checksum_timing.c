@@ -34,11 +34,6 @@
 #include <daos/checksum.h>
 #include <gurt/common.h>
 
-#ifdef MCHECKSUM_SUPPORT
-#include <mchecksum.h>
-#include <mchecksum_error.h>
-#endif
-
 static bool verbose;
 
 static int
@@ -128,7 +123,7 @@ print_csum(uint8_t *csum_buf, uint32_t csum_buf_len)
 }
 
 static int
-run_timings(struct csum_ft *fts[], const int types_count, const size_t *sizes,
+run_timings(struct hash_ft *fts[], const int types_count, const size_t *sizes,
 	    const int sizes_count, uint32_t iterations)
 {
 	int	size_idx;
@@ -152,7 +147,7 @@ run_timings(struct csum_ft *fts[], const int types_count, const size_t *sizes,
 		printf("Data Length: %s\n", hr_str);
 
 		for (type_idx = 0; type_idx < types_count; type_idx++) {
-			struct csum_ft		*ft = fts[type_idx];
+			struct hash_ft		*ft = fts[type_idx];
 			struct daos_csummer	*csummer;
 			struct csum_timing_args	 args;
 			size_t			 csum_size;
@@ -200,120 +195,108 @@ run_timings(struct csum_ft *fts[], const int types_count, const size_t *sizes,
 	return 0;
 }
 
-/** ----------------------------------------------------------------------- */
-/** MCHECKSUM CRC64 */
-#ifdef MCHECKSUM_SUPPORT
-
 static int
-m_csum64_init(struct daos_csummer *obj)
+murmur64_init(void **daos_mhash_ctx)
 {
-	mchecksum_object_t checksum = NULL;
-	int rc = mchecksum_init("crc64", &checksum);
+	D_ALLOC(*daos_mhash_ctx, sizeof(uint64_t));
+	if (*daos_mhash_ctx == NULL)
+		return -DER_NOMEM;
 
-	if (rc == MCHECKSUM_SUCCESS)
-		rc = 0;
-
-	obj->dcs_ctx = checksum;
-	return rc;
+	return 0;
 }
 
 static int
-m_csum64_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
+murmur64_reset(void *daos_mhash_ctx)
 {
-	int rc;
-	mchecksum_object_t checksum = obj->dcs_ctx;
-
-	rc = mchecksum_update(checksum, buf, buf_len);
-
-	/** returns non-negative on success or negative on failure */
-	if (rc > 0)
-		rc = 0;
-
-	return rc;
+	memset(daos_mhash_ctx, 0, sizeof(uint64_t));
+	return 0;
 }
 
 static void
-m_csum64_get(struct daos_csummer *obj)
+murmur64_destroy(void *daos_mhash_ctx)
 {
-	mchecksum_object_t checksum = obj->dcs_ctx;
-
-	uint32_t *crc32 = (uint32_t *) obj->dcs_csum_buf;
-
-	mchecksum_get(checksum, crc32, obj->dcs_csum_buf_size,
-		      MCHECKSUM_FINALIZE);
-}
-
-static uint16_t
-m_csum64_get_size(struct daos_csummer *obj)
-{
-	mchecksum_object_t checksum = obj->dcs_ctx;
-
-	return mchecksum_get_size(checksum);
-}
-
-void
-m_csum64_destroy(struct daos_csummer *obj)
-{
-	mchecksum_object_t checksum = obj->dcs_ctx;
-
-	mchecksum_destroy(checksum);
+	D_FREE(daos_mhash_ctx);
 }
 
 static int
-m_csum64_finish(struct daos_csummer *obj)
+murmur64_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
-	mchecksum_object_t checksum = obj->dcs_ctx;
-	uint64_t *crc64 = (uint64_t *) obj->dcs_csum_buf;
-	int rc = mchecksum_get(checksum, crc64, obj->dcs_csum_buf_size,
-			       MCHECKSUM_FINALIZE);
+	uint64_t *val = (uint64_t *)daos_mhash_ctx;
 
-	if (rc == MCHECKSUM_SUCCESS)
-		rc = 0;
-	return rc;
+	*((uint64_t *)buf) = *val;
+
+	return 0;
 }
 
-struct csum_ft m_csum64_algo = {
-		.cf_update = m_csum64_update,
-		.cf_get = m_csum64_get,
-		.cf_init = m_csum64_init,
-		.cf_destroy = m_csum64_destroy,
-		.cf_finish = m_csum64_finish,
-		.cf_get_size = m_csum64_get_size,
-		.name = "mcrc64"
-	};
-#endif
-
 static int
-murmur64_update(struct daos_csummer *obj,
-		uint8_t *buf, size_t buf_len)
+murmur64_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
-
-	uint64_t *value = (uint64_t *)obj->dcs_csum_buf;
+	uint64_t *value = (uint64_t *)daos_mhash_ctx;
 
 	*value = d_hash_murmur64(buf, buf_len, *value);
 	return 0;
 }
 
-struct csum_ft murmur64_algo = {
-	.cf_update = murmur64_update,
-	.cf_csum_len = sizeof(uint64_t),
-	.cf_name = "murm64"
+struct hash_ft murmur64_algo = {
+	.cf_init	= murmur64_init,
+	.cf_reset	= murmur64_reset,
+	.cf_destroy	= murmur64_destroy,
+	.cf_finish	= murmur64_finish,
+	.cf_update	= murmur64_update,
+	.cf_hash_len	= sizeof(uint64_t),
+	.cf_name	= "murm64"
 };
 
 static int
-string32_update(struct daos_csummer *obj,
-		uint8_t *buf, size_t buf_len)
+string32_init(void **daos_mhash_ctx)
 {
-	uint32_t *value = (uint32_t *)obj->dcs_csum_buf;
+	D_ALLOC(*daos_mhash_ctx, sizeof(uint64_t));
+	if (*daos_mhash_ctx == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+static int
+string32_reset(void *daos_mhash_ctx)
+{
+	memset(daos_mhash_ctx, 0, sizeof(uint64_t));
+	return 0;
+}
+
+static void
+string32_destroy(void *daos_mhash_ctx)
+{
+	D_FREE(daos_mhash_ctx);
+}
+
+static int
+string32_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
+{
+	uint64_t *val = (uint64_t *)daos_mhash_ctx;
+
+	*((uint64_t *)buf) = *val;
+
+	return 0;
+}
+
+static int
+string32_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
+{
+	uint32_t *value = (uint32_t *)daos_mhash_ctx;
 
 	*value = d_hash_string_u32((char *)buf, buf_len);
 	return 0;
 }
 
-struct csum_ft string32_algo = {
-	.cf_update = string32_update,
-	.cf_csum_len = sizeof(uint32_t),
-	.cf_name = "str32"
+struct hash_ft string32_algo = {
+	.cf_init	= string32_init,
+	.cf_reset	= string32_reset,
+	.cf_destroy	= string32_destroy,
+	.cf_finish	= string32_finish,
+	.cf_update	= string32_update,
+	.cf_hash_len	= sizeof(uint32_t),
+	.cf_name	= "str32"
 };
 
 /** ----------------------------------------------------------------------- */
@@ -367,26 +350,22 @@ show_help(int argc, char *argv[])
 #define	csum_str_match(str, csum_str) \
 	(strncmp((str), (csum_str), sizeof((csum_str))) == 0)
 
-struct csum_ft *
+struct hash_ft *
 strarg2ft(char *str)
 {
 	if (csum_str_match(str, "crc16"))
-		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC16_T10DIF);
+		return daos_mhash_type2algo(HASH_TYPE_CRC16);
 	if (csum_str_match(str, "crc32"))
-		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC32_ISCSI);
+		return daos_mhash_type2algo(HASH_TYPE_CRC32);
 	if (csum_str_match(str, "crc64"))
-		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC64_REFL);
+		return daos_mhash_type2algo(HASH_TYPE_CRC64);
 	if (csum_str_match(str, "sha1"))
-		return daos_csum_type2algo(CSUM_TYPE_ISAL_SHA1);
+		return daos_mhash_type2algo(HASH_TYPE_SHA1);
 	if (csum_str_match(str, "sha256"))
-		return daos_csum_type2algo(CSUM_TYPE_ISAL_SHA256);
+		return daos_mhash_type2algo(HASH_TYPE_SHA256);
 	if (csum_str_match(str, "sha512"))
-		return daos_csum_type2algo(CSUM_TYPE_ISAL_SHA512);
+		return daos_mhash_type2algo(HASH_TYPE_SHA512);
 
-#ifdef MCHECKSUM_SUPPORT
-	if (csum_str_match(str, "mcrc64"))
-		return &m_csum64_algo;
-#endif
 	return NULL;
 }
 
@@ -402,7 +381,7 @@ main(int argc, char *argv[])
 	const int		 MAX_SIZES = 256;
 	int			 type_count = 0;
 	int			 sizes_count = 0;
-	struct csum_ft		*csum_fts[MAX_TYPES];
+	struct hash_ft		*csum_fts[MAX_TYPES];
 	size_t			 sizes[MAX_SIZES];
 	int			 opt;
 	int			 rc = 0;
@@ -416,7 +395,7 @@ main(int argc, char *argv[])
 		switch (opt) {
 		case 'c':
 		{
-			struct csum_ft *ft = strarg2ft(optarg);
+			struct hash_ft *ft = strarg2ft(optarg);
 
 			if (ft == NULL)
 				printf("'%s' not a valid csum type\n",
@@ -446,13 +425,10 @@ main(int argc, char *argv[])
 
 	if (type_count == 0) {
 		/** Setup all types */
-		enum DAOS_CSUM_TYPE type = CSUM_TYPE_UNKNOWN + 1;
+		enum DAOS_HASH_TYPE type = HASH_TYPE_UNKNOWN + 1;
 
-		for (; type < CSUM_TYPE_END; type++)
-			csum_fts[type_count++] = daos_csum_type2algo(type);
-#ifdef MCHECKSUM_SUPPORT
-		csum_fts[type_count++] = &m_csum64_algo;
-#endif
+		for (; type < HASH_TYPE_END; type++)
+			csum_fts[type_count++] = daos_mhash_type2algo(type);
 		csum_fts[type_count++] = &murmur64_algo;
 		csum_fts[type_count++] = &string32_algo;
 	}
