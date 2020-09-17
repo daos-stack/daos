@@ -434,10 +434,10 @@ section of the server configuration file for best performance.
 Note that other storage query commands are also available,
 `dmg storage --help` for listings.
 
-SSD health state can be verified via `dmg storage query nvme-health`:
+SSD health state can be verified via `dmg storage scan --nvme-health`:
 
 ```bash
-$ dmg -l wolf-71 storage query nvme-health
+$ dmg -l wolf-71 storage scan --nvme-health
 wolf-71:10001: connected
 wolf-71:10001
         NVMe controllers and namespaces detail with health statistics:
