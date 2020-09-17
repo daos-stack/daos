@@ -1019,7 +1019,8 @@ pipeline {
                     when {
                       beforeAgent true
                       // SCHAN15 - temp disable unit cov
-                      expression { ! skip_stage('bullseye', false) }
+                      expression { ! skip_stage('run_test') }
+                      expression { ! skip_stage('bullseye', true) }
                     }
                     agent {
                         label 'ci_vm1'

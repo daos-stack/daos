@@ -51,6 +51,7 @@ mkdir "Functional/"
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
+DAOS_BASE=${SL_PREFIX%/install*}
 if $TEST_RPMS; then
     # shellcheck disable=SC2029
     ssh -i ci_key -l jenkins "${first_node}" \
