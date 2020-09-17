@@ -121,7 +121,7 @@ func (p *Provider) getRequestedControllers(requestedPCIAddrs []string, modelID s
 	if err != nil {
 		return nil, err
 	}
-	filtered := filterControllers(controllers, modelID, fwRev)
+	filtered := filterControllersByModelFirmware(controllers, modelID, fwRev)
 	if !ignoreMissing && len(filtered) == 0 {
 		return nil, FaultNoFilterMatch
 	}
@@ -171,7 +171,7 @@ func getDeviceController(pciAddr string, controllers storage.NvmeControllers) (*
 	return nil, FaultPCIAddrNotFound(pciAddr)
 }
 
-func filterControllers(controllers storage.NvmeControllers, modelID, fwRev string) storage.NvmeControllers {
+func filterControllersByModelFirmware(controllers storage.NvmeControllers, modelID, fwRev string) storage.NvmeControllers {
 	selected := make(storage.NvmeControllers, 0, len(controllers))
 	for _, ctrlr := range controllers {
 		if common.FilterStringMatches(modelID, ctrlr.Model) &&
