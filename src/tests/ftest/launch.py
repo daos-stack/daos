@@ -980,7 +980,7 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "copied=()",
         "for file in $({} {})".format(ls_cmd, source_files),
         "do ls -sh $file",
-        "/lib/cart/TESTING/util/cart_logtest.py $file",
+        "/lib/daos/TESTING/ftest/cart/util/cart_logtest.py $file",
     ]
 
     # If we have a directory, tar it before scp-ing it.
