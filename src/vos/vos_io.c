@@ -89,8 +89,8 @@ struct vos_io_context {
 	struct daos_recx_ep_list *ic_shadows;
 	/**
 	 * Output recx/epoch lists, one for each iod. To save the recx list when
-	 * vos_fetch_begin() with VOS_OF_FETCH_RECX_LIST flag. User can get it by
-	 * vos_ioh2recx_list() and should free it by daos_recx_ep_list_free().
+	 * vos_fetch_begin() with VOS_OF_FETCH_RECX_LIST flag. User can get it
+	 * by vos_ioh2recx_list() and shall free it by daos_recx_ep_list_free().
 	 */
 	struct daos_recx_ep_list *ic_recx_lists;
 };
