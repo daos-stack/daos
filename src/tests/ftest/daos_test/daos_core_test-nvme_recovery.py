@@ -24,14 +24,14 @@
 
 from daos_core_base import DaosCoreBase
 
-class DaosCoreTestRebuild(DaosCoreBase):
+class DaosCoreTestNvme(DaosCoreBase):
     # pylint: disable=too-many-ancestors
-    """Run just the daos_test rebuild tests.
+    """Run just the daos_test NVMe Recovery tests.
 
     :avocado: recursive
     """
 
-    def test_rebuild(self):
+    def test_nvme(self):
         """Jira ID: DAOS-3846.
 
         Test Description:
