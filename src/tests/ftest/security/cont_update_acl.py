@@ -42,11 +42,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         self.cont_acl = self.get_container_acl_list(
             self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
 
-        # Get principals
-        self.principals_table = {}
-        for entry in self.cont_acl:
-            self.principals_table[entry.split(":")[2]] = entry
-
     def error_handling(self, results, err_msg):
         """Handle errors when test fails and when command unexpectedly passes.
 
@@ -151,7 +146,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,pr,security,container_acl,cont_update_invalid_acl
         """
         invalid_file_content = self.params.get(
-            "invalid_acl_file_content ", "/run/*")
+            "invalid_acl_file_content", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)
 
         # Disable raising an exception if the daos command fails
@@ -197,7 +192,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             self.pool.uuid,
             self.pool.svc_ranks[0],
             self.container.uuid,
-            path_to_file)
+            acl_file=path_to_file)
 
         # Verify that the entry added did not affect any other entry
         self.acl_file_diff(self.cont_acl + ace_to_add)
@@ -211,7 +206,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             self.pool.uuid,
             self.pool.svc_ranks[0],
             self.container.uuid,
-            path_to_file)
+            acl_file=path_to_file)
 
         # Verify that the ACL file is now composed of the updated ACEs
         self.acl_file_diff(self.cont_acl + ace_to_add_2)
@@ -225,7 +220,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             self.pool.uuid,
             self.pool.svc_ranks[0],
             self.container.uuid,
-            path_to_file)
+            acl_file=path_to_file)
 
         # Verify that the ACL file is now composed of the updated ACEs
         self.acl_file_diff(self.cont_acl + ace_to_add_2 + ace_to_add_3)
