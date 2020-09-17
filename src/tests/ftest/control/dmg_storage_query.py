@@ -34,7 +34,7 @@ class DmgStorageQuery(ControlTestBase):
     """Test Class Description:
 
     Test to verify dmg storage health query commands and device state commands.
-    Including: storage query, storage blobstore-health, storage nvme-health,
+    Including: storage query, storage blobstore-health,
     storage query device-state.
 
     :avocado: recursive
@@ -144,13 +144,6 @@ class DmgStorageQuery(ControlTestBase):
 
         self.log.info("Found health info: %s", str(health_info))
 
-        # Get the health info from yaml
-        e_health_info = self.params.get("health_info", "/run/*")
-
-        # Check that we have expected number of devices
-        msg = "Found wrong number of devices in health info"
-        self.assertEqual(len(e_health_info), len(health_info), msg)
-
         # Verify temperature, convert from Kelvins to Celsius
         temp_err = []
         for info in health_info:
@@ -159,15 +152,6 @@ class DmgStorageQuery(ControlTestBase):
                 temp_err.append("{}".format(cels_temp))
         if temp_err:
             self.fail("Bad temperature on SSDs: {}".format(",".join(temp_err)))
-
-        # Compare the rest of the values in health info
-        err = []
-        for dmg_info, exp_info in zip(health_info, e_health_info):
-            if dmg_info[1:] != exp_info:
-                err.append("dmg info :{} != expected info:{}".format(
-                    dmg_info[1:], exp_info))
-        if err:
-            self.fail("Health info not as expected: {}".format(err))
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_state(self):
