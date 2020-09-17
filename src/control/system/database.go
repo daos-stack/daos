@@ -184,6 +184,12 @@ func (db *Database) checkLeader() error {
 	return nil
 }
 
+// IsLeader returns a boolean indicating whether or not this
+// system thinks that is a) a replica and b) the current leader.
+func (db *Database) IsLeader() bool {
+	return db.checkLeader() == nil
+}
+
 // OnLeaderGained registers callbacks to be run when this instance
 // gains the leadership role.
 func (db *Database) OnLeaderGained(fn onLeaderGainedFn) {

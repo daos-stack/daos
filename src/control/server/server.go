@@ -246,6 +246,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 
 		srv.OnReady(func(ctx context.Context) error {
+			if !mgmtSvc.sysdb.IsLeader() {
+				return nil
+			}
+
 			mgmtSvc.requestGroupUpdate(ctx)
 			return nil
 		})

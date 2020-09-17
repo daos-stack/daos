@@ -115,13 +115,23 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 }
 
 // CallDrpc calls the supplied dRPC method on a managed I/O server instance.
-func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
-	mi, err := h.getMSLeaderInstance()
-	if err != nil {
-		return nil, err
+func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
+	if !h.isStarted() {
+		return nil, FaultHarnessNotStarted
 	}
 
-	return mi.CallDrpc(ctx, method, body)
+	// Iterate through the managed instances, looking for
+	// the first one that can successfully service the request.
+	// If none succeed, the last error will be returned.
+	for _, i := range h.Instances() {
+		h.log.Debugf("calling %s on rank %s", method, i.getSuperblock().Rank)
+		resp, err = i.CallDrpc(ctx, method, body)
+		if err != dRPCNotReady || err == nil {
+			break
+		}
+	}
+
+	return
 }
 
 // getMSLeaderInstance returns a managed IO Server instance to be used as a
