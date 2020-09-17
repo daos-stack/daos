@@ -754,6 +754,7 @@ def run():
                         action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
+    print('DEBUG log: line 756, args.file = ', args.file)
     log_iter = cart_logparse.LogIter(args.file)
     test_iter = LogTest(log_iter)
     if args.dfuse:

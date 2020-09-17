@@ -200,6 +200,8 @@ def set_test_environment(args):
     os.environ["D_LOG_FILE"] = os.path.join(
         os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
 
+    print('DEBUG log: line 202, os.environ["DAOS_TEST_LOG_DIR"] = ', os.environ["DAOS_TEST_LOG_DIR"])
+
     # Ensure the daos log files directory exists on each possible test node
     test_hosts = NodeSet(socket.gethostname().split(".")[0])
     test_hosts.update(args.test_clients)
@@ -878,6 +880,7 @@ def clean_logs(test_yaml, args):
     """
     # Remove any log files from the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+    print('DEBUG log: line 880, logs_dir = ', logs_dir )
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log"))
     print("Cleaning logs on {}".format(host_list))
@@ -905,6 +908,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+    print('DEBUG log: line 908, logs_dir = ', logs_dir )
 
     # Caution: the glob expression "_output.log" must match the
     #   --output-filename specified in # cart_utils.py:get_env()
