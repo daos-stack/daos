@@ -501,7 +501,7 @@ agg_update_vos(struct ec_agg_entry *entry)
 			    &entry->ae_dkey, 1, &iod, NULL,
 			    &sgl);
 	if (rc)
-		D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
+		D_PRINT("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -526,6 +526,12 @@ agg_process_stripe(struct ec_agg_entry *entry)
 						entry->ae_oca->u.ec.e_len);
 	iter_param.ip_recx.rx_nr	= entry->ae_oca->u.ec.e_len;
 
+	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: %lu\n",
+		entry->ae_cur_stripe.as_stripenum,
+		iter_param.ip_recx.rx_idx);
+	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
+		entry->ae_cur_stripe.as_stripenum,
+		iter_param.ip_recx.rx_idx);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	if (rc != 0)
@@ -542,7 +548,9 @@ agg_process_stripe(struct ec_agg_entry *entry)
 				 && agg_stripe_is_filled(entry, false)) ||
 					agg_stripe_is_filled(entry, true)) {
 		/* Replicas constitute a full stripe. */
+		D_PRINT("Encoding local parity\n");
 		rc = agg_encode_local_parity(entry);
+		D_PRINT("Encoding local parity returned %d\n", rc);
 		goto out;
 	}
 	if (entry->ae_par_extent.ape_epoch == ~(0ULL)) {
@@ -616,6 +624,10 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
 	D_DEBUG(DB_TRACE, "adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
+		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
+		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
+		agg_entry->ae_oid.id_shard);
+	D_PRINT("adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		agg_entry->ae_oid.id_shard);
@@ -813,6 +825,7 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	struct ec_agg_param	 agg_param = { 0 };
 	int			 rc = 0;
 
+	D_PRINT("Aggregate all\n");
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= 0ULL;
 	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
