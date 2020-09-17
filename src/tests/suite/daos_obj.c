@@ -39,22 +39,30 @@ int dts_obj_replica_cnt	= 2;
 int dts_ec_obj_class	= OC_EC_2P2G1;
 int dts_ec_grp_size	= 4;
 
-void
-ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
-	   daos_iod_type_t iod_type, test_arg_t *arg)
+static void
+io_req_event_init(struct ioreq *req, test_arg_t *arg)
 {
-	int rc;
-	int i;
-	bool ev_flag;
-
-	memset(req, 0, sizeof(*req));
-
-	req->iod_type = iod_type;
-	req->arg = arg;
 	if (arg->async) {
+		int rc;
+
 		rc = daos_event_init(&req->ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
+}
+
+static void
+ioreq_init_with_oh(struct ioreq *req, daos_handle_t oh,
+		   daos_iod_type_t iod_type, test_arg_t *arg)
+{
+	int i;
+
+	memset(req, 0, sizeof(*req));
+	req->oh = oh;
+	req->obj_close = false;
+
+	req->iod_type = iod_type;
+	req->arg = arg;
+	io_req_event_init(req, arg);
 
 	arg->expect_result = 0;
 	daos_fail_num_set(arg->fail_num);
@@ -85,12 +93,24 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		req->iod[i].iod_nr = IOREQ_IOD_NR;
 		req->iod[i].iod_type = iod_type;
 	}
+}
+
+void
+ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
+	   daos_iod_type_t iod_type, test_arg_t *arg)
+{
+	int rc;
+	bool ev_flag;
+
+	ioreq_init_with_oh(req, DAOS_HDL_INVAL, iod_type, arg);
+
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
 	rc = daos_obj_open(coh, oid, 0, &req->oh,
 			   req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
+	req->obj_close = true;
 
 	if (arg->async) {
 		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
@@ -105,8 +125,10 @@ ioreq_fini(struct ioreq *req)
 {
 	int rc;
 
-	rc = daos_obj_close(req->oh, NULL);
-	assert_int_equal(rc, 0);
+	if (req->obj_close) {
+		rc = daos_obj_close(req->oh, NULL);
+		assert_int_equal(rc, 0);
+	}
 
 	req->arg->fail_loc = 0;
 	req->arg->fail_value = 0;
@@ -1248,6 +1270,65 @@ io_simple(void **state)
 	io_simple_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_SINGLE,
 			   "io_simple_nvme_single dkey",
 			   "io_simple_nvme_single akey");
+}
+
+/** Verify async multiple dkeys update */
+static void
+mutli_dkey_io(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct ioreq		*req, *reqs = NULL;
+	daos_obj_id_t		 oid;
+	const char		 dkey[32];
+	char			 akey[5] = "akey";
+	char			*akeys = akey;
+	char			*rec_data = "dkey_akey_rec";
+	char			*rec = rec_data;
+	daos_size_t		 rec_size = strlen(rec);
+	int			 rec_nr = 1;
+	uint64_t		 offset = 0;
+	int			 retry_times = 1000;
+	daos_handle_t		 oh;
+	int			 i, dkey_nr = 256;
+	int			 rc;
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	D_ALLOC_ARRAY(reqs, dkey_nr);
+	assert_non_null(reqs);
+
+	//oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	oid = dts_oid_gen(OC_RP_2GX, 0, arg->myrank);
+
+retry_io:
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < dkey_nr; i++) {
+		req = &reqs[i];
+		ioreq_init_with_oh(req, oh, DAOS_IOD_ARRAY, arg);
+		memset((void *)dkey, 0, 32);
+		snprintf((char *)dkey, 32, "multi_dkey_%d", i);
+
+		insert_nowait(dkey, 1, (const char **)&akeys, &rec_size,
+			      &rec_nr, &offset, (void **)&rec, DAOS_TX_NONE,
+			      req, 0);
+	}
+
+	for (i = 0; i < dkey_nr; i++) {
+		req = &reqs[i];
+		insert_wait(req);
+		ioreq_fini(req);
+	}
+
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	if (retry_times-- > 0)
+		goto retry_io;
+
+	D_FREE(reqs);
 }
 
 int
@@ -4059,10 +4140,12 @@ io_invalid(void **state)
 }
 
 static const struct CMUnitTest io_tests[] = {
-	{ "IO1: simple update/fetch/verify",
+	{ "IO0: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
-	{ "IO2: simple update/fetch/verify (async)",
+	{ "IO1: simple update/fetch/verify (async)",
 	  io_simple, async_enable, test_case_teardown},
+	{ "IO2: asynchronous update multiple dkeys",
+	  mutli_dkey_io, async_enable, test_case_teardown},
 	{ "IO3: i/o with variable rec size",
 	  io_var_rec_size, async_disable, test_case_teardown},
 	{ "IO4: i/o with variable rec size(async)",

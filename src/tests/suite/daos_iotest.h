@@ -62,6 +62,7 @@ struct ioreq {
 	daos_iod_type_t		iod_type;
 	uint64_t		fail_loc;
 	int			result;
+	bool			obj_close;
 };
 
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
