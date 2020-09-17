@@ -155,7 +155,9 @@ class PoolSecurityTestBase(TestWithServers):
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s, Succeed.\n", action)
-        elif err_code not in result.stderr:
+        # Remove "and err_code not in result.stdout" on the next statement elif
+        # after DAOS-5365 resolved.
+        elif err_code not in result.stderr and err_code not in result.stdout:
             self.fail(
                 "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
                 "but Passed.".format(action, expect))
