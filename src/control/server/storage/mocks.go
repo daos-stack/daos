@@ -48,17 +48,32 @@ func getRandIdx(n ...int32) int32 {
 	return rand.Int31()
 }
 
-func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
+func MockNvmeControllerHealth(varIdx ...int32) *NvmeControllerHealth {
 	idx := common.GetIndex(varIdx...)
 	tWarn := false
 	if idx > 0 {
 		tWarn = true
 	}
-	return &NvmeDeviceHealth{
-		Temperature:  uint32(getRandIdx(280)),
-		PowerCycles:  uint64(getRandIdx()),
-		PowerOnHours: uint64(getRandIdx()),
-		TempWarn:     tWarn,
+	return &NvmeControllerHealth{
+		ErrorCount:      uint64(idx),
+		TempWarnTime:    uint32(idx),
+		TempCritTime:    uint32(idx),
+		CtrlBusyTime:    uint64(idx),
+		PowerCycles:     uint64(idx),
+		PowerOnHours:    uint64(idx),
+		UnsafeShutdowns: uint64(idx),
+		MediaErrors:     uint64(idx),
+		ErrorLogEntries: uint64(idx),
+		ReadErrors:      uint32(idx),
+		WriteErrors:     uint32(idx),
+		UnmapErrors:     uint32(idx),
+		ChecksumErrors:  uint32(idx),
+		Temperature:     uint32(idx),
+		TempWarn:        tWarn,
+		AvailSpareWarn:  tWarn,
+		ReliabilityWarn: tWarn,
+		ReadOnlyWarn:    tWarn,
+		VolatileWarn:    tWarn,
 	}
 }
 
@@ -79,7 +94,7 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 		PciAddr:     concat("0000:80:00", idx, "."),
 		FwRev:       concat("fwRev", idx),
 		SocketID:    idx,
-		HealthStats: MockNvmeDeviceHealth(idx),
+		HealthStats: MockNvmeControllerHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
 	}
 }
