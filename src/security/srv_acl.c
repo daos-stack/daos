@@ -801,7 +801,7 @@ ds_sec_get_rebuild_cont_capabilities(void)
 	 * Internally generated rebuild container handles can read data or write
 	 * data.
 	 */
-	return CONT_CAPA_READ_DATA|CONT_CAPA_WRITE_DATA;
+	return CONT_CAPA_READ_DATA | CONT_CAPA_WRITE_DATA;
 }
 
 uint64_t
