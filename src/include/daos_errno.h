@@ -324,7 +324,8 @@ const char *d_errdesc(int errnum);
 #ifndef DF_RC
 #define DF_RC "%s(%d)"
 #define DP_RC(rc) d_errstr(rc), rc
-#define DD_RC(rc) d_errdesc(rc), rc
+#define DF_RCV DF_RC ": '%s'"
+#define DP_RCV(rc) DP_RC(rc), d_errdesc(rc)
 #endif /* DF_RC */
 
 #if defined(__cplusplus)
