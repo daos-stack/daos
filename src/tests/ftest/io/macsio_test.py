@@ -36,7 +36,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
     def setUp(self):
         """Set up each test case."""
         # Cancel any test using MPICH w/ MACSio due to DAOS-5265
-        mpi_type = self.params.get("mpi_type")
+        mpi_type = self.params.get("job_manager_mpi_type")
         if mpi_type == "mpich":
             self.cancelForTicket("DAOS-5265")
         super(MacsioTest, self).setUp()
@@ -97,7 +97,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         # VOL needs to run from a file system that supports xattr.  Currently
         # nfs does not have this attribute so it was recommended to create and
         # use a dfuse dir and run vol tests from there.
-        self.manager.working_dir.value = self.dfuse.mount_dir.value
+        self.job_manager.working_dir.value = self.dfuse.mount_dir.value
 
         # Run macsio
         self.log.info("Running MACSio with DAOS VOL connector")
