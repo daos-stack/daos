@@ -75,7 +75,7 @@ class DmgSystemReformatTest(TestWithServers):
         scm_size = percentage * scm_size_bytes
 
         # Create pool object, update size value with unit and create.
-        self.log.info("Create pool at %s percent capacity.", percentage * 100))
+        self.log.info("Create pool at %s percent capacity.", percentage * 100)
         pool = self.get_pool(create=False, connect=False)
         pool.scm_size.update(scm_size)
         pool.create()
