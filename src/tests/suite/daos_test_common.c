@@ -1037,7 +1037,7 @@ get_server_config(char *host, char *server_config_file)
 	char	*pch;
 
 	snprintf(command, sizeof(command),
-		 "ssh %s ps ux | grep daos_server | grep start", host);
+		 "ssh %s ps ux -A | grep daos_server | grep start", host);
 	FILE *fp = popen(command, "r");
 
 	print_message("Command %s\n", command);
