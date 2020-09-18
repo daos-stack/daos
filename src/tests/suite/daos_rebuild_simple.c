@@ -475,7 +475,7 @@ rebuild_snap_punch_empty(void **state)
 
 	punch_obj(DAOS_TX_NONE, &req);
 
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
 	for (i = 0; i < OBJ_REPLICAS; i++) {
