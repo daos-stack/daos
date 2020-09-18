@@ -24,13 +24,6 @@
 package proto
 
 import (
-	"bytes"
-	"fmt"
-	"sort"
-	"time"
-
-	"github.com/dustin/go-humanize"
-
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -38,18 +31,18 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-type NvmeDeviceHealth ctlpb.NvmeController_Health
+type NvmeControllerHealth ctlpb.NvmeController_Health
 
-func (pb *NvmeDeviceHealth) FromNative(native *storage.NvmeDeviceHealth) error {
+func (pb *NvmeControllerHealth) FromNative(native *storage.NvmeControllerHealth) error {
 	return convert.Types(native, pb)
 }
 
-func (pb *NvmeDeviceHealth) ToNative() (*storage.NvmeDeviceHealth, error) {
-	native := new(storage.NvmeDeviceHealth)
+func (pb *NvmeControllerHealth) ToNative() (*storage.NvmeControllerHealth, error) {
+	native := new(storage.NvmeControllerHealth)
 	return native, convert.Types(pb, native)
 }
 
-func (pb *NvmeDeviceHealth) AsProto() *ctlpb.NvmeController_Health {
+func (pb *NvmeControllerHealth) AsProto() *ctlpb.NvmeController_Health {
 	return (*ctlpb.NvmeController_Health)(pb)
 }
 
@@ -87,85 +80,6 @@ func (pb *NvmeController) AsProto() *ctlpb.NvmeController {
 	return (*ctlpb.NvmeController)(pb)
 }
 
-func (nc *NvmeController) Capacity() (tb uint64) {
-	for _, n := range nc.Namespaces {
-		tb += n.Size
-	}
-	return
-}
-
-// HealthDetail provides custom string representation for Controller including
-// health statistics.
-//
-// Append to buffer referenced by input parameter.
-func (nc *NvmeController) HealthDetail(buf *bytes.Buffer) {
-	stat := (*ctlpb.NvmeController)(nc).GetHealthstats()
-
-	if stat == nil {
-		fmt.Fprintf(buf, "\t\tHealth Stats Unavailable\n")
-		return
-	}
-
-	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temperature, stat.Temperature-273)
-
-	if stat.TempWarnTime > 0 {
-		fmt.Fprintf(buf, "\t\t\t\tTemperature Warning Duration:%s\n",
-			time.Duration(stat.TempWarnTime)*time.Minute)
-	}
-	if stat.TempCritTime > 0 {
-		fmt.Fprintf(buf, "\t\t\t\tTemperature Critical Duration:%s\n",
-			time.Duration(stat.TempCritTime)*time.Minute)
-	}
-
-	fmt.Fprintf(buf, "\t\t\tController Busy Time:%s\n", time.Duration(stat.CtrlBusyTime)*time.Minute)
-	fmt.Fprintf(buf, "\t\t\tPower Cycles:%d\n", uint64(stat.PowerCycles))
-	fmt.Fprintf(buf, "\t\t\tPower On Duration:%s\n", time.Duration(stat.PowerOnHours)*time.Hour)
-	fmt.Fprintf(buf, "\t\t\tUnsafe Shutdowns:%d\n", uint64(stat.UnsafeShutdowns))
-	fmt.Fprintf(buf, "\t\t\tMedia Errors:%d\n", uint64(stat.MediaErrors))
-	fmt.Fprintf(buf, "\t\t\tError Log Entries:%d\n", uint64(stat.ErrorCount))
-
-	fmt.Fprintf(buf, "\t\t\tCritical Warnings:\n")
-	fmt.Fprintf(buf, "\t\t\t\tTemperature: ")
-	if stat.TempWarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-	fmt.Fprintf(buf, "\t\t\t\tAvailable Spare: ")
-	if stat.SpareWarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-	fmt.Fprintf(buf, "\t\t\t\tDevice Reliability: ")
-	if stat.DeviceReliabilityWarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-	fmt.Fprintf(buf, "\t\t\t\tRead Only: ")
-	if stat.ReadonlyWarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-	fmt.Fprintf(buf, "\t\t\t\tVolatile Memory Backup: ")
-	if stat.VolatileMemoryWarn {
-		fmt.Fprintf(buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(buf, "OK\n")
-	}
-}
-
-// CtrlrDetail provides custom string representation for Controller.
-//
-// Append to buffer referenced by input parameter.
-func (nc *NvmeController) CtrlrDetail(buf *bytes.Buffer) {
-	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		nc.Pciaddr, nc.Model, nc.Fwrev, nc.Socketid,
-		humanize.Bytes(nc.Capacity()))
-}
-
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
@@ -177,55 +91,6 @@ func (pb *NvmeControllers) FromNative(native storage.NvmeControllers) error {
 func (pb *NvmeControllers) ToNative() (storage.NvmeControllers, error) {
 	native := make(storage.NvmeControllers, 0, len(*pb))
 	return native, convert.Types(pb, &native)
-}
-
-func (ncs NvmeControllers) String() string {
-	buf := bytes.NewBufferString("NVMe controllers and namespaces:\n")
-
-	if len(ncs) == 0 {
-		fmt.Fprint(buf, "\t\tnone\n")
-		return buf.String()
-	}
-
-	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
-
-	for _, c := range ncs {
-		(*NvmeController)(c).CtrlrDetail(buf)
-	}
-
-	return buf.String()
-}
-
-// StringHealthStats returns full string representation including NVMe health
-// statistics as well as controller and namespace details.
-func (ncs NvmeControllers) StringHealthStats() string {
-	buf := bytes.NewBufferString(
-		"NVMe controllers and namespaces detail with health statistics:\n")
-
-	if len(ncs) == 0 {
-		fmt.Fprint(buf, "\t\tnone\n")
-		return buf.String()
-	}
-
-	for _, c := range ncs {
-		(*NvmeController)(c).CtrlrDetail(buf)
-		(*NvmeController)(c).HealthDetail(buf)
-	}
-
-	return buf.String()
-}
-
-func (ncs NvmeControllers) Capacity() (tb uint64) {
-	for _, c := range ncs {
-		tb += (*NvmeController)(c).Capacity()
-	}
-	return
-}
-
-// Summary reports accumulated storage space and the number of controllers.
-func (ncs NvmeControllers) Summary() string {
-	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ncs.Capacity()),
-		len(ncs), common.Pluralise("controller", len(ncs)))
 }
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
@@ -295,16 +160,6 @@ func (pb *ScmNamespaces) FromNative(native storage.ScmNamespaces) error {
 func (pb *ScmNamespaces) ToNative() (storage.ScmNamespaces, error) {
 	native := make(storage.ScmNamespaces, 0, len(*pb))
 	return native, convert.Types(pb, &native)
-}
-
-func (sns ScmNamespaces) String() string {
-	var buf bytes.Buffer
-
-	for _, sn := range sns {
-		fmt.Fprintf(&buf, "\t%s\n", sn)
-	}
-
-	return buf.String()
 }
 
 // ScmMounts are protobuf representations of mounted SCM namespaces identified
