@@ -732,7 +732,8 @@ is_excluded(bool empty, struct op *r, char *rp, daos_epoch_t re, struct op *w,
 static int
 conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 			struct op *r, char *rp, daos_epoch_t re,
-			struct op *w, char *wp, daos_epoch_t we, bool same_tx)
+			struct op *w, char *wp, daos_epoch_t we, bool same_tx,
+			int *skipped)
 {
 	struct mvcc_arg		*mvcc_arg = arg->custom;
 	struct tx_helper	*rtx;
@@ -744,8 +745,10 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	int			 nfailed = 0;
 	int			 rc;
 
-	if (is_excluded(empty, r, rp, re, w, wp, we, same_tx))
+	if (is_excluded(empty, r, rp, re, w, wp, we, same_tx)) {
+		(*skipped)++;
 		goto out;
+	}
 
 	/*
 	 * Figure out the expected read result, perform read, and verify the
@@ -869,9 +872,7 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
 	int		 j = 0;
 	int		 k;
 	int		 nfailed = 0;
-	bool		 is_skipped;
 
-	*cases = *skipped = 0;
 	/* T_R operations do not leave read epoch records at the moment. */
 	if (is_r(r) && r->o_func == NULL)
 		return nfailed;
@@ -889,7 +890,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -899,7 +902,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -909,7 +914,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
 		we = mvcc_arg->epoch;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   true /* same_tx */);
+						   true /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -919,7 +926,9 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
 		we = mvcc_arg->epoch + 10;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
 						   re, w, wp, we,
-						   false /* same_tx */);
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
 		j++;
 		mvcc_arg->i++;
 		mvcc_arg->epoch += 100;
@@ -940,8 +949,6 @@ conflicting_rw(void **state)
 	int			 nfailed = 0;
 	int			 nskipped = 0;
 	int			 ntot = 0;
-	int			 cases;
-	int			 skipped;
 
 	/* For each read or readwrite... */
 	for_each_op(r) {
@@ -953,10 +960,8 @@ conflicting_rw(void **state)
 			if (!(is_rw(w) || is_w(w)))
 				continue;
 
-			nfailed += conflicting_rw_exec(arg, i, r, w, &cases,
-						       &skipped);
-			nskipped += skipped;
-			ntot += cases;
+			nfailed += conflicting_rw_exec(arg, i, r, w, &ntot,
+						       &nskipped);
 			assert_true(!mvcc_arg->fail_fast || nfailed == 0);
 			i++;
 		}
