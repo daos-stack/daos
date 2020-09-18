@@ -232,14 +232,14 @@ class DaosCommand(DaosCommandBase):
 
     def container_update_acl(self, pool, svc, cont, entry=None, acl_file=None):
         """Add or update the ACL entries for a given container.
-        
+
         Args:
             pool (str): Pool UUID
             svc (str): Service replicas
-            cont (str): Container for which to get the ACL.    
+            cont (str): Container for which to get the ACL.
             entry (bool, optional): Add or modify a single ACL entry
             acl_file (str, optional): Input file containing ACL
-        
+
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
                 information.
@@ -251,7 +251,7 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("container", "update-acl"), pool=pool, svc=svc, cont=cont,
             entry=entry, acl_file=acl_file)
-              
+
     def pool_list_cont(self, pool, svc, sys_name=None):
         """List containers in the given pool.
 
