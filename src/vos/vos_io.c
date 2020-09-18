@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1524,7 +1524,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	bool size_fetch = (sgls == NULL);
 	int rc;
 
-	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods, size_fetch,
+	rc = vos_fetch_begin(coh, xyz, oid, epoch, dkey, iod_nr, iods, size_fetch,
 			     &ioh);
 	if (rc) {
 		if (rc == -DER_INPROGRESS)
