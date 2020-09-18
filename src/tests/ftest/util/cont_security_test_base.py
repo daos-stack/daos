@@ -171,7 +171,6 @@ class ContSecurityTestBase(TestWithServers):
 
     def compare_acl_lists(self, get_acl_list, expected_list):
         """Compares two permission lists
-
         Args:
             get_acl_list (str list): list of permissions obtained by get-acl
             expected_list (str list): list of expected permissions
@@ -182,14 +181,15 @@ class ContSecurityTestBase(TestWithServers):
         self.log.info("    ===> get-acl ACL:  %s", get_acl_list)
         self.log.info("    ===> Expected ACL: %s", expected_list)
 
-        if len(get_acl_list) == len(expected_list):
-            for element in get_acl_list:
-                if element in expected_list:
-                    continue
-                else:
-                    return False
-            return True
-        return False
+        exp_list = expected_list[:]
+        if len(get_acl_list) != len(exp_list):
+            return False
+        for acl in get_acl_list:
+            if acl in exp_list:
+                exp_list.remove(acl)
+            else:
+                return False
+        return True
 
     def cleanup(self, types):
         """Removes all temporal acl files created during the test.

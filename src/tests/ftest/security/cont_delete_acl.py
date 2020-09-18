@@ -58,7 +58,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command performs as
             expected with invalid inputs.
 
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl
+        :avocado: tags=all,pr,security,container_acl,cont_delete_acl_inputs
         """
         # Get list of invalid ACL principal values
         invalid_principals = self.params.get("invalid_principals", "/run/*")
@@ -107,7 +107,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command doesn't
             remove principal in ACL without permission.
 
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl
+        :avocado: tags=all,pr,security,container_acl,cont_delete_acl_noperms
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(
