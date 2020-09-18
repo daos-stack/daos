@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-# pylint: disable=import-error
 # pylint: disable=broad-except
 # pylint: disable=bad-indentation
 # pylint: disable=bad-whitespace

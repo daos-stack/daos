@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-# pylint: disable=import-error
 # pylint: bad-continuation
 
 from __future__ import print_function
@@ -36,7 +35,6 @@ from avocado       import main
 
 sys.path.append('./util')
 
-# pylint: disable=import-error
 from cart_utils import CartUtils
 
 class CartNoPmixLauncherOneNodeTest(Test):
