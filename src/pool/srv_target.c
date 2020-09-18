@@ -533,6 +533,7 @@ retry:
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
+	memset(buf, 0, STACK_HDL_BUF_SIZE);
 	d_iov_set(&iov, buf, STACK_HDL_BUF_SIZE);
 	rc = ds_pool_iv_conn_hdl_fetch(pool, NULL, &iov);
 	if (rc) {
@@ -540,7 +541,6 @@ retry:
 			char		*new_buf;
 			uint64_t	new_size = iov.iov_len;
 
-			D_ASSERT(new_size > STACK_HDL_BUF_SIZE);
 			D_ALLOC(new_buf, new_size);
 			if (new_buf == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
