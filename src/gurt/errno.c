@@ -77,6 +77,8 @@ D_FOREACH_ERR_RANGE(D_DEFINE_COMP_ERRSTR)
 
 #define D_ABS(value) ((value) > 0 ? (value) : (-value))
 
+#define D_ERR_BUF_SIZE 32
+
 static __attribute__((constructor)) void
 d_err_init(void)
 {
@@ -90,6 +92,9 @@ const char *d_errstr(int rc)
 	if (rc == 0)
 		return "DER_SUCCESS";
 
+	if (rc > 0)
+		goto out;
+
 	rc = D_ABS(rc);
 
 	d_list_for_each_entry(entry, &g_error_reg_list, er_link) {
@@ -98,6 +103,7 @@ const char *d_errstr(int rc)
 		return entry->er_strings[rc - entry->er_base - 1];
 	}
 
+out:
 	return "DER_UNKNOWN";
 }
 
@@ -147,9 +153,15 @@ const char *
 d_errdesc(int errnum)
 {
 	struct d_error_reg *entry;
+	static char buf[D_ERR_BUF_SIZE];
 
-	if (errnum == 0)
+	if (errnum == DER_SUCCESS)
 		return "Success";
+
+	snprintf(buf, D_ERR_BUF_SIZE, "Unknown error code %d", errnum);
+
+	if (errnum > 0)
+		goto out;
 
 	errnum = D_ABS(errnum);
 
@@ -159,5 +171,9 @@ d_errdesc(int errnum)
 		return entry->er_strerror[errnum - entry->er_base - 1];
 	}
 
-	return strerror(errnum);
+	if (errnum == DER_UNKNOWN)
+		return "Unknown error";
+
+out:
+	return buf;
 }

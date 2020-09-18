@@ -126,7 +126,7 @@ test_time(void **state)
 
 #define D_CHECK_ERR_IN_RANGE(name, value, errstr)		\
 	do {							\
-		const char	*str = d_errstr(name);		\
+		const char	*str = d_errstr(-name);		\
 		assert_string_not_equal(str, "DER_UNKNOWN");	\
 	} while (0);
 
@@ -162,34 +162,34 @@ void test_d_errstr_v2(void **state)
 	rc = D_REGISTER_RANGE(CUSTOM2);
 	assert_int_equal(rc, 0);
 
-	value = d_errstr(DER_CUSTOM1);
+	value = d_errstr(-DER_CUSTOM1);
 	assert_string_equal(value, "DER_CUSTOM1");
 
-	value = d_errstr(DER_CUSTOM2);
+	value = d_errstr(-DER_CUSTOM2);
 	assert_string_equal(value, "DER_CUSTOM2");
 
-	value = d_errstr(DER_CUSTOM3);
+	value = d_errstr(-DER_CUSTOM3);
 	assert_string_equal(value, "DER_CUSTOM3");
 
-	value = d_errstr(DER_CUSTOM4);
+	value = d_errstr(-DER_CUSTOM4);
 	assert_string_equal(value, "DER_CUSTOM4");
 
 	D_DEREGISTER_RANGE(CUSTOM1);
 	D_DEREGISTER_RANGE(CUSTOM2);
 
 	/* CUSTOM1 and CUSTOM2 overlap with DAOS codes */
-	value = d_errstr(DER_CUSTOM1);
+	value = d_errstr(-DER_CUSTOM1);
 	assert_string_not_equal(value, "DER_CUSTOM1");
 	assert_string_not_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM2);
+	value = d_errstr(-DER_CUSTOM2);
 	assert_string_not_equal(value, "DER_CUSTOM2");
 	assert_string_not_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM3);
+	value = d_errstr(-DER_CUSTOM3);
 	assert_string_equal(value, "DER_UNKNOWN");
 
-	value = d_errstr(DER_CUSTOM4);
+	value = d_errstr(-DER_CUSTOM4);
 	assert_string_equal(value, "DER_UNKNOWN");
 }
 
@@ -202,7 +202,7 @@ void test_d_errstr(void **state)
 	value = d_errstr(-DER_INVAL);
 	assert_string_equal(value, "DER_INVAL");
 	value = d_errstr(DER_INVAL);
-	assert_string_equal(value, "DER_INVAL");
+	assert_string_equal(value, "DER_UNKNOWN");
 	value = d_errstr(5000000);
 	assert_string_equal(value, "DER_UNKNOWN");
 	value = d_errstr(3);
@@ -233,19 +233,27 @@ void test_d_errdesc(void **state)
 	value = d_errdesc(-DER_INVAL);
 	assert_string_equal(value, "Invalid parameters");
 	value = d_errdesc(DER_INVAL);
-	assert_string_equal(value, "Invalid parameters");
+	assert_string_equal(value, "Unknown error code 1003");
 	value = d_errdesc(5000000);
-	assert_string_equal(value, "Unknown error 5000000");
+	assert_string_equal(value, "Unknown error code 5000000");
 	value = d_errdesc(3);
-	assert_string_equal(value, "No such process");
+	assert_string_equal(value, "Unknown error code 3");
 	value = d_errdesc(-3);
-	assert_string_equal(value, "No such process");
+	assert_string_equal(value, "Unknown error code -3");
 	value = d_errdesc(0);
 	assert_string_equal(value, "Success");
 	value = d_errdesc(DER_SUCCESS);
 	assert_string_equal(value, "Success");
 	value = d_errdesc(-DER_NOTDIR);
 	assert_string_equal(value, "Not a directory");
+	value = d_errdesc(-2028);
+	assert_string_equal(value, "TX is not committed");
+	value = d_errdesc(-2029);
+	assert_string_equal(value, "Unknown error code -2029");
+	value = d_errdesc(-DER_UNKNOWN);
+	assert_string_equal(value, "Unknown error");
+	value = d_errdesc(-501001);
+	assert_string_equal(value, "Unknown error code -501001");
 }
 
 static int
