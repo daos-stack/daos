@@ -240,6 +240,7 @@ class DaosServerCommand(YamlCommand):
                 "/run/daos_server/storage/*", "storage")
 
         def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
             """Get the daos_server storage sub command object."""
             # Available sub-commands:
             #   prepare  Prepare SCM and NVMe storage attached to remote servers
