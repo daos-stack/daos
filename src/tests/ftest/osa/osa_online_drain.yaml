@@ -32,7 +32,7 @@ ior:
     no_parallel_job: 5
     clientslots:
       slots: 2
-    test_file: daos:testFile
+    test_file: /testFile
     repetitions: 1
     dfs_destroy: False
     iorflags:
@@ -41,7 +41,7 @@ ior:
       ior_api:
         - DFS
       obj_class:
-        - "RP_2GX"
+        - "RP_2G1"
     ior_test_sequence:
     #   - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
     #    The values are set to be in the multiples of 10.

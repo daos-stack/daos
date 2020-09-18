@@ -355,10 +355,7 @@ class DaosServerYamlParameters(YamlParameters):
                 default_env_vars.extend([
                     "FI_SOCKETS_MAX_CONN_RETRY=5",
                     "FI_SOCKETS_CONN_TIMEOUT=2000",
-                    "CRT_SWIM_RPC_TIMEOUT=10",
-                    "SWIM_PING_TIMEOUT=10000",
-                    "SWIM_PROTOCOL_PERIOD_LEN=30000",
-                    "SWIM_SUSPECT_TIMEOUT=90000",
+                    "CRT_SWIM_RPC_TIMEOUT=10"
                 ])
             self.env_vars = BasicParameter(None, default_env_vars)
 

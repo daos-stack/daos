@@ -377,22 +377,25 @@ rebuild_destroy_pool_cb(void *data)
 	rebuild_pool_disconnect_internal(data);
 
 	if (arg->myrank == 0) {
-		rc = daos_pool_destroy(arg->pool.pool_uuid, NULL, true, NULL);
-		if (rc)
+		/* Disable fail_loc and start rebuild */
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				     0, 0, NULL);
+		rc = dmg_pool_destroy(dmg_config_file, arg->pool.pool_uuid,
+				      NULL, true);
+		if (rc) {
 			print_message("failed to destroy pool"DF_UUIDF" %d\n",
 				      DP_UUID(arg->pool.pool_uuid), rc);
+			goto out;
+		}
 	}
 
 	arg->pool.destroyed = true;
 	print_message("pool destroyed "DF_UUIDF"\n",
 		      DP_UUID(arg->pool.pool_uuid));
-	/* Disable fail_loc and start rebuild */
-	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     0, 0, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
+out:
 	return rc;
 }
 
@@ -1115,9 +1118,13 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	print_message("sleep 10 seconds to wait scan to be finished \n");
 	sleep(10);
 
-	/* Then kill rank 1 */
-	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 arg->pool.alive_svc, shard->os_ranks[1]);
+	/* Then kill rank on shard1 */
+	/* NB: we can not kill rank 0, otherwise the following set_params
+	 * will fail and also pool destroy will not work.
+	 */
+	if (shard->os_ranks[1] != 0)
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+				 arg->pool.alive_svc, shard->os_ranks[1]);
 
 	/* Continue rebuild */
 	daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);

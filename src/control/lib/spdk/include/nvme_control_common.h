@@ -26,26 +26,29 @@
 
 #include <stdbool.h>
 
+#define BUFLEN 1024
+
 /**
  * \brief NVMECONTROL return codes
  */
-enum NvmeControlStatusCode {
-	NVMEC_SUCCESS			= 0,
-	NVMEC_ERR_CHK_SIZE		= 1,
-	NVMEC_ERR_GET_PCI_DEV		= 2,
-	NVMEC_ERR_PCI_ADDR_FMT		= 3,
-	NVMEC_ERR_PCI_ADDR_PARSE	= 4,
-	NVMEC_ERR_CTRLR_NOT_FOUND	= 5,
-	NVMEC_ERR_NS_NOT_FOUND		= 6,
-	NVMEC_ERR_NOT_SUPPORTED		= 7,
-	NVMEC_ERR_BAD_LBA		= 8,
-	NVMEC_ERR_ALLOC_IO_QPAIR	= 9,
-	NVMEC_ERR_NS_ID_UNEXPECTED	= 10,
-	NVMEC_ERR_NS_WRITE_FAIL		= 11,
-	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 12,
-	NVMEC_ERR_NULL_NS		= 13,
-	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 14,
-	NVMEC_ERR_NO_VMD_CTRLRS		= 15,
+enum nvme_control_status_code {
+	NVMEC_SUCCESS			= 0x0,
+	NVMEC_ERR_CHK_SIZE		= 0x1,
+	NVMEC_ERR_GET_PCI_DEV		= 0x2,
+	NVMEC_ERR_PCI_ADDR_FMT		= 0x3,
+	NVMEC_ERR_PCI_ADDR_PARSE	= 0x4,
+	NVMEC_ERR_CTRLR_NOT_FOUND	= 0x5,
+	NVMEC_ERR_NS_NOT_FOUND		= 0x6,
+	NVMEC_ERR_NOT_SUPPORTED		= 0x7,
+	NVMEC_ERR_BAD_LBA		= 0x8,
+	NVMEC_ERR_ALLOC_IO_QPAIR	= 0x9,
+	NVMEC_ERR_NS_ID_UNEXPECTED	= 0xA,
+	NVMEC_ERR_NS_WRITE_FAIL		= 0xB,
+	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 0xC,
+	NVMEC_ERR_NULL_NS		= 0xD,
+	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 0xE,
+	NVMEC_ERR_NO_VMD_CTRLRS		= 0xF,
+	NVMEC_ERR_WRITE_TRUNC		= 0x10,
 	NVMEC_LAST_STATUS_VALUE
 };
 
@@ -53,15 +56,15 @@ enum NvmeControlStatusCode {
  * \brief NVMe controller details
  */
 struct ctrlr_t {
-	char		     model[1024];
-	char		     serial[1024];
-	char		     pci_addr[1024];
-	char		     fw_rev[1024];
-	char		     pci_type[1024];
-	int		     socket_id;
-	struct ns_t	    *nss;
-	struct dev_health_t *dev_health;
-	struct ctrlr_t	    *next;
+	char				 model[BUFLEN];
+	char				 serial[BUFLEN];
+	char				 pci_addr[BUFLEN];
+	char				 fw_rev[BUFLEN];
+	char				 pci_type[BUFLEN];
+	int				 socket_id;
+	struct ns_t			*nss;
+	struct nvme_health_stats	*stats;
+	struct ctrlr_t			*next;
 };
 
 /**
@@ -73,58 +76,59 @@ struct ns_t {
 	struct ns_t    *next;
 };
 
-/*
- * \brief Raw SPDK device health statistics.
+/**
+ * \brief Result struct for namespace wipe operation containing return code,
+ * namespace id, parent controller pci address, info message and link to next
+ * list element.
  */
-struct dev_health_t {
-	uint16_t	 temperature; /* in Kelvin */
-	uint32_t	 warn_temp_time;
-	uint32_t	 crit_temp_time;
-	uint64_t	 ctrl_busy_time;
-	uint64_t	 power_cycles;
-	uint64_t	 power_on_hours;
-	uint64_t	 unsafe_shutdowns;
-	uint64_t	 media_errors;
-	uint64_t	 error_log_entries;
-	/* Critical warnings */
-	bool		 temp_warning;
-	bool		 avail_spare_warning;
-	bool		 dev_reliabilty_warning;
-	bool		 read_only_warning;
-	bool		 volatile_mem_warning;
+struct wipe_res_t {
+	char			 ctrlr_pci_addr[BUFLEN];
+	uint32_t		 ns_id;
+	int			 rc;
+	char			 info[BUFLEN];
+	struct wipe_res_t	*next;
 };
 
 /**
- * \brief Return containing return code, controllers, namespaces and error
- * message
+ * \brief Return containing return code, controllers, namespaces, wwipe
+ * results and info message
  */
 struct ret_t {
-	int		rc;
-	struct ctrlr_t *ctrlrs;
-	char		err[1024];
+	struct ctrlr_t		*ctrlrs;
+	struct wipe_res_t	*wipe_results;
+	int			 rc;
+	char			 info[BUFLEN];
 };
 
 struct ctrlr_entry {
 	struct spdk_nvme_ctrlr	*ctrlr;
 	struct spdk_pci_addr	 pci_addr;
 	struct ns_entry		*nss;
-	struct dev_health_entry	*dev_health;
+	struct health_entry	*health;
 	int			 socket_id;
 	struct ctrlr_entry	*next;
 };
 
 struct ns_entry {
 	struct spdk_nvme_ns	*ns;
+	struct spdk_nvme_qpair	*qpair;
 	struct ns_entry		*next;
 };
 
-struct dev_health_entry {
-	struct spdk_nvme_health_information_page health_page;
+struct health_entry {
+	struct spdk_nvme_health_information_page page;
 	struct spdk_nvme_error_information_entry error_page[256];
 	int					 inflight;
 };
 
 extern struct ctrlr_entry	*g_controllers;
+
+bool
+probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
+	 struct spdk_nvme_ctrlr_opts *opts);
+
+void
+register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns);
 
 /**
  * Attach call back function to report a device that has been
@@ -142,21 +146,29 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  struct spdk_nvme_ctrlr *ctrlr,
 	  const struct spdk_nvme_ctrlr_opts *opts);
 
-/*
- * Initialize the ret_t struct by allocating memory and setting attributes
+/**
+ * Initialize the wipe_res_t struct by allocating memory and setting references
  * to NULL.
  *
- * \param rc initial rc value to set in returned ret_t.
+ * \return a pointer to a wipe result struct (wipe_res_t).
+ **/
+struct wipe_res_t *
+init_wipe_res(void);
+
+/**
+ * Initialize the ret_t struct by allocating memory and setting references
+ * to NULL.
  *
  * \return a pointer to a return struct (ret_t).
  **/
 struct ret_t *
-init_ret(int rc);
+init_ret(void);
 
-/*
+/**
  * Free memory allocated in linked lists attached to the ret_t struct.
  *
- * \param ret a pointer to a return struct (ret_t).
+ * \param ret A pointer to a return struct (ret_t) which itself needs to be
+ *            freed explicitly after calling clean_ret.
  **/
 void
 clean_ret(struct ret_t *ret);
@@ -181,17 +193,17 @@ typedef int
 	  spdk_nvme_attach_cb, spdk_nvme_remove_cb);
 
 typedef int
-(*health_getter)(struct spdk_nvme_ctrlr *, struct dev_health_entry *);
+(*health_getter)(struct spdk_nvme_ctrlr *, struct health_entry *);
 
 struct ret_t *
-_discover(prober, bool, health_getter, bool);
+_discover(prober, bool, health_getter);
 
 /**
  * Provide ability to pass function pointers to _collect for mocking
  * in unit tests.
  */
 typedef int
-(*data_copier)(struct ctrlr_t *, struct ctrlr_entry *);
+(*data_copier)(struct ctrlr_t *, const struct spdk_nvme_ctrlr_data *);
 
 typedef struct spdk_pci_device *
 (*pci_getter)(struct spdk_nvme_ctrlr *);

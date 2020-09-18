@@ -24,19 +24,20 @@
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
 from command_utils import ExecutableCommand
-from general_utils import pcmd
+from general_utils import pcmd, get_log_file
 
 
 class DaosRacerCommand(ExecutableCommand):
     """Defines a object representing a daos_racer command."""
 
-    def __init__(self, path, host, dmg_config=None):
+    def __init__(self, path, host, dmg=None):
         """Create a daos_racer command object.
 
         Args:
             path (str): path of the daos_racer command
             host (str): host on which to run the daos_racer command
-            dmg_config (str): path to dmg config file
+            dmg (DmgCommand): a DmgCommand object used to obtain the
+                configuration file and certificate
         """
         super(DaosRacerCommand, self).__init__(
             "/run/daos_racer/*", "daos_racer", path)
@@ -45,8 +46,9 @@ class DaosRacerCommand(ExecutableCommand):
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
 
-        if dmg_config:
-            self.dmg_config = FormattedParameter("-n {}", dmg_config)
+        if dmg:
+            self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
+            dmg.copy_certificates(get_log_file("daosCA/certs"), [self.host])
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the

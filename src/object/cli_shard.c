@@ -335,10 +335,21 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		} else {
-			D_ERROR("rpc %p opc %d to rank %d tag %d failed: "
-				DF_RC"\n", rw_args->rpc, opc,
-				rw_args->rpc->cr_ep.ep_rank,
-				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			/*
+			 * don't log errors in-case of possible conditionals or
+			 * rec2big errors which can be expected.
+			 */
+			if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
+			    rc == -DER_EXIST)
+				D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
+					" failed: "DF_RC"\n", rw_args->rpc, opc,
+					rw_args->rpc->cr_ep.ep_rank,
+					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			else
+				D_ERROR("rpc %p opc %d to rank %d tag %d"
+					" failed: "DF_RC"\n", rw_args->rpc, opc,
+					rw_args->rpc->cr_ep.ep_rank,
+					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 			if (rc == -DER_REC2BIG && opc == DAOS_OBJ_RPC_FETCH) {
 				/* update the sizes in iods */
 				iods = orw->orw_iod_array.oia_iods;
@@ -355,6 +366,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		struct obj_reasb_req	*reasb_req =
 						rw_args->shard_args->reasb_req;
 		bool			 is_ec_obj;
+
+		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE)
+			goto out;
 
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
 			/** Should have 1 map per iod */
@@ -392,7 +406,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 		/* update the sizes in iods */
 		for (i = 0; i < orw->orw_nr; i++) {
-			iods[i].iod_size = sizes[i];
+			if (!is_ec_obj || reasb_req->orr_fail == NULL ||
+			    iods[i].iod_size == 0)
+				iods[i].iod_size = sizes[i];
 			if (is_ec_obj && reasb_req->orr_recov &&
 			    reasb_req->orr_fail->efi_uiods[i].iod_size == 0) {
 				reasb_req->orr_fail->efi_uiods[i].iod_size =
@@ -620,8 +636,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		if (fw_shard_tgts != NULL)
 			orw->orw_flags |= ORF_BULK_BIND;
 	} else {
-		if (args->reasb_req && args->reasb_req->orr_size_fetch) {
-			/* NULL bulk and NULL sgl for size_fetch */
+		if ((args->reasb_req && args->reasb_req->orr_size_fetch) ||
+		    auxi->flags & DRF_CHECK_EXISTENCE) {
+			/* NULL bulk/sgl for size_fetch or check existence */
 			orw->orw_sgls.ca_count = 0;
 			orw->orw_sgls.ca_arrays = NULL;
 		} else {

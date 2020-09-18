@@ -31,6 +31,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -46,30 +47,67 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 	pbResp := new(ctlpb.FirmwareQueryResp)
 
 	if pbReq.QueryScm {
-		queryResp, err := svc.scm.QueryFirmware(scm.FirmwareQueryRequest{})
+		scmResults, err := svc.querySCMFirmware()
 		if err != nil {
 			return nil, err
 		}
+		pbResp.ScmResults = scmResults
+	}
 
-		pbResp.ScmResults = make([]*ctlpb.ScmFirmwareQueryResp, 0, len(queryResp.Results))
-		for _, res := range queryResp.Results {
-			pbResult := &ctlpb.ScmFirmwareQueryResp{}
-			if err := convert.Types(res.Module, &pbResult.Module); err != nil {
-				return nil, errors.Wrap(err, "unable to convert module")
-			}
-			if res.Info != nil {
-				pbResult.ActiveVersion = res.Info.ActiveVersion
-				pbResult.StagedVersion = res.Info.StagedVersion
-				pbResult.ImageMaxSizeBytes = res.Info.ImageMaxSizeBytes
-				pbResult.UpdateStatus = uint32(res.Info.UpdateStatus)
-			}
-			pbResult.Error = res.Error
-			pbResp.ScmResults = append(pbResp.ScmResults, pbResult)
+	if pbReq.QueryNvme {
+		nvmeResults, err := svc.queryNVMeFirmware()
+		if err != nil {
+			return nil, err
 		}
+		pbResp.NvmeResults = nvmeResults
 	}
 
 	svc.log.Debug("responding to FirmwareQuery RPC")
 	return pbResp, nil
+}
+
+func (svc *ControlService) querySCMFirmware() ([]*ctlpb.ScmFirmwareQueryResp, error) {
+	queryResp, err := svc.scm.QueryFirmware(scm.FirmwareQueryRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	scmResults := make([]*ctlpb.ScmFirmwareQueryResp, 0, len(queryResp.Results))
+	for _, res := range queryResp.Results {
+		pbResult := &ctlpb.ScmFirmwareQueryResp{}
+		if err := convert.Types(res.Module, &pbResult.Module); err != nil {
+			return nil, errors.Wrap(err, "unable to convert SCM module")
+		}
+		if res.Info != nil {
+			pbResult.ActiveVersion = res.Info.ActiveVersion
+			pbResult.StagedVersion = res.Info.StagedVersion
+			pbResult.ImageMaxSizeBytes = res.Info.ImageMaxSizeBytes
+			pbResult.UpdateStatus = uint32(res.Info.UpdateStatus)
+		}
+		pbResult.Error = res.Error
+		scmResults = append(scmResults, pbResult)
+	}
+
+	return scmResults, nil
+}
+
+func (svc *ControlService) queryNVMeFirmware() ([]*ctlpb.NvmeFirmwareQueryResp, error) {
+	scanResp, err := svc.NvmeScan(bdev.ScanRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	nvmeResults := make([]*ctlpb.NvmeFirmwareQueryResp, 0, len(scanResp.Controllers))
+	for _, ctrlr := range scanResp.Controllers {
+		pbResult := &ctlpb.NvmeFirmwareQueryResp{}
+		if err := convert.Types(ctrlr, &pbResult.Device); err != nil {
+			return nil, errors.Wrap(err, "unable to convert NVMe controller")
+		}
+
+		nvmeResults = append(nvmeResults, pbResult)
+	}
+
+	return nvmeResults, nil
 }
 
 // FirmwareUpdate implements the method defined for the control service if
@@ -91,17 +129,18 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 	}
 
 	pbResp := new(ctlpb.FirmwareUpdateResp)
-
+	var err error
 	switch pbReq.Type {
 	case ctlpb.FirmwareUpdateReq_SCM:
-		err := svc.updateSCM(pbReq, pbResp)
-		if err != nil {
-			return nil, err
-		}
+		err = svc.updateSCM(pbReq, pbResp)
 	case ctlpb.FirmwareUpdateReq_NVMe:
-		return nil, errors.New("NVMe device update not implemented")
+		err = svc.updateNVMe(pbReq, pbResp)
 	default:
-		return nil, errors.New("unrecognized device type")
+		err = errors.New("unrecognized device type")
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	svc.log.Debug("responding to FirmwareUpdate RPC")
@@ -124,6 +163,25 @@ func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctl
 		}
 		pbRes.Error = res.Error
 		pbResp.ScmResults = append(pbResp.ScmResults, pbRes)
+	}
+	return nil
+}
+
+func (svc *ControlService) updateNVMe(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
+	updateResp, err := svc.bdev.UpdateFirmware(bdev.FirmwareUpdateRequest{
+		FirmwarePath: pbReq.FirmwarePath,
+	})
+	if err != nil {
+		return err
+	}
+
+	pbResp.NvmeResults = make([]*ctlpb.NvmeFirmwareUpdateResp, 0, len(updateResp.Results))
+	for _, res := range updateResp.Results {
+		pbRes := &ctlpb.NvmeFirmwareUpdateResp{
+			PciAddr: res.Device.PciAddr,
+			Error:   res.Error,
+		}
+		pbResp.NvmeResults = append(pbResp.NvmeResults, pbRes)
 	}
 	return nil
 }

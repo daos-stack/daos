@@ -25,12 +25,14 @@
 package pretty
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize/english"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -41,7 +43,13 @@ import (
 const (
 	scmUpdateSuccess = "Success - The new firmware was staged. A power cycle is required to apply."
 	scmNotFound      = "No SCM devices detected"
-	errorPrefix      = "Error"
+	scmDevTitle      = "Device:PhyID:Socket:Ctrl:Chan:Pos"
+	scmSectionHeader = "SCM Device Firmware"
+
+	nvmeUpdateSuccess = "Success - The NVMe device controller firmware was updated."
+	nvmeNotFound      = "No NVMe device controllers detected"
+	nvmeDevTitle      = "Device Addr"
+	nvmeSectionHeader = "NVMe Device Firmware"
 )
 
 // hostDeviceSet represents a collection of hosts and devices on those hosts.
@@ -108,6 +116,7 @@ func (m hostDeviceResultMap) Keys() []string {
 	return keys
 }
 
+// hostDeviceError is an error associated with a specific host and device ID
 type hostDeviceError struct {
 	Host  string
 	Error error
@@ -117,16 +126,29 @@ type hostDeviceError struct {
 // PrintSCMFirmwareQueryMap formats the firmware query results in a condensed format.
 func PrintSCMFirmwareQueryMap(fwMap control.HostSCMQueryMap, out io.Writer,
 	opts ...control.PrintConfigOption) error {
-	successes, errors, err := condenseSCMQueryMap(fwMap)
+	if fwMap == nil {
+		return nil
+	}
+
+	successes, errs, err := condenseSCMQueryMap(fwMap)
 	if err != nil {
 		return err
 	}
 
-	if err = printDeviceErrorTable(errors, out, opts...); err != nil {
+	printDeviceTypeHeader(out, scmSectionHeader)
+
+	iw := txtfmt.NewIndentWriter(out)
+	if err = printDeviceErrorTable(errs, scmDevTitle, iw, opts...); err != nil {
 		return err
 	}
 
-	return printCondensedQuerySuccesses(successes, out, opts...)
+	return printCondensedResults(successes, iw, opts,
+		func(result string, set *hostDeviceSet, _ []control.PrintConfigOption, w io.Writer) {
+			fmt.Fprintf(w, "Firmware status for %s:\n", english.Plural(len(set.Devices), "device", "devices"))
+
+			iw := txtfmt.NewIndentWriter(w)
+			fmt.Fprintln(iw, result)
+		})
 }
 
 func condenseSCMQueryMap(fwMap control.HostSCMQueryMap) (hostDeviceResultMap, []hostDeviceError, error) {
@@ -143,35 +165,46 @@ func condenseSCMQueryMap(fwMap control.HostSCMQueryMap) (hostDeviceResultMap, []
 		}
 
 		for _, devRes := range results {
+			devID := getShortSCMString(devRes.Module)
 			if devRes.Error == nil {
-				var b strings.Builder
-				printSCMFirmwareInfo(devRes.Info, &b)
-				err := successes.AddHostDevice(b.String(), host, devRes.Module.String())
+				err := successes.AddHostDevice(getSCMFirmwareInfoString(devRes.Info),
+					host, devID)
 				if err != nil {
 					return nil, nil, err
 				}
-			} else {
-				errors = append(errors, hostDeviceError{
-					Host:  host,
-					DevID: getShortSCMString(devRes.Module),
-					Error: devRes.Error,
-				})
+				continue
 			}
+
+			errors = append(errors, hostDeviceError{
+				Host:  host,
+				DevID: devID,
+				Error: devRes.Error,
+			})
 		}
 	}
 	return successes, errors, nil
 }
 
-func printSCMFirmwareInfo(info *storage.ScmFirmwareInfo, out io.Writer) {
+func getSCMFirmwareInfoString(info *storage.ScmFirmwareInfo) string {
 	if info == nil {
-		fmt.Fprint(out, "Error: No information available")
-		return
+		return getErrorString(errors.New("No information available"))
 	}
 
-	fmt.Fprintf(out, "Active Version: %s\n", getPrintVersion(info.ActiveVersion))
-	fmt.Fprintf(out, "Staged Version: %s\n", getPrintVersion(info.StagedVersion))
-	fmt.Fprintf(out, "Maximum Firmware Image Size: %s\n", humanize.IBytes(uint64(info.ImageMaxSizeBytes)))
-	fmt.Fprintf(out, "Last Update Status: %s", info.UpdateStatus)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Active Version: %s\n", getPrintVersion(info.ActiveVersion))
+	fmt.Fprintf(&b, "Staged Version: %s\n", getPrintVersion(info.StagedVersion))
+	fmt.Fprintf(&b, "Maximum Firmware Image Size: %s\n", humanize.IBytes(uint64(info.ImageMaxSizeBytes)))
+	fmt.Fprintf(&b, "Last Update Status: %s", info.UpdateStatus)
+	return b.String()
+}
+
+func printDeviceTypeHeader(out io.Writer, header string) {
+	lineBreak := strings.Repeat("=", len(header))
+	fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, header, lineBreak)
+}
+
+func getErrorString(err error) string {
+	return fmt.Sprintf("Error: %s", err.Error())
 }
 
 func getPrintVersion(version string) string {
@@ -181,7 +214,8 @@ func getPrintVersion(version string) string {
 	return version
 }
 
-func printCondensedQuerySuccesses(condensed hostDeviceResultMap, out io.Writer, opts ...control.PrintConfigOption) error {
+func printCondensedResults(condensed hostDeviceResultMap, out io.Writer, opts []control.PrintConfigOption,
+	printResult func(string, *hostDeviceSet, []control.PrintConfigOption, io.Writer)) error {
 	w := txtfmt.NewErrWriter(out)
 	for _, result := range condensed.Keys() {
 		set, ok := condensed[result]
@@ -198,10 +232,7 @@ func printCondensedQuerySuccesses(condensed hostDeviceResultMap, out io.Writer, 
 			continue
 		}
 
-		fmt.Fprintf(iw, "Firmware status for %d devices:\n", len(set.Devices))
-
-		iw2 := txtfmt.NewIndentWriter(iw)
-		fmt.Fprintln(iw2, result)
+		printResult(result, set, opts, iw)
 	}
 
 	return w.Err
@@ -212,7 +243,7 @@ func printHostHeader(hosts string, out io.Writer) {
 	fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 }
 
-func printDeviceErrorTable(errorResults []hostDeviceError, out io.Writer, opts ...control.PrintConfigOption) error {
+func printDeviceErrorTable(errorResults []hostDeviceError, devTitle string, out io.Writer, opts ...control.PrintConfigOption) error {
 	if len(errorResults) == 0 {
 		return nil
 	}
@@ -220,7 +251,6 @@ func printDeviceErrorTable(errorResults []hostDeviceError, out io.Writer, opts .
 	w := txtfmt.NewErrWriter(out)
 
 	hostTitle := "Host"
-	devTitle := "Device:PhyID:Socket:Ctrl:Chan:Pos"
 	errTitle := "Error"
 	formatter := txtfmt.NewTableFormatter(hostTitle, devTitle, errTitle)
 	var table []txtfmt.TableRow
@@ -250,8 +280,23 @@ func getShortSCMString(module storage.ScmModule) string {
 // PrintSCMFirmwareQueryMapVerbose formats the firmware query results in a detailed format.
 func PrintSCMFirmwareQueryMapVerbose(fwMap control.HostSCMQueryMap, out io.Writer,
 	opts ...control.PrintConfigOption) error {
+	if fwMap == nil {
+		return nil
+	}
+
 	w := txtfmt.NewErrWriter(out)
 
+	printDeviceTypeHeader(w, scmSectionHeader)
+
+	iw := txtfmt.NewIndentWriter(w)
+	if err := printSCMFirmwareQueryMapByHost(fwMap, iw); err != nil {
+		return err
+	}
+
+	return w.Err
+}
+
+func printSCMFirmwareQueryMapByHost(fwMap control.HostSCMQueryMap, out io.Writer) error {
 	for _, host := range fwMap.Keys() {
 		printHostHeader(host, out)
 
@@ -263,39 +308,40 @@ func PrintSCMFirmwareQueryMapVerbose(fwMap control.HostSCMQueryMap, out io.Write
 		}
 
 		for _, res := range fwResults {
-			err := printScmModule(&res.Module, iw)
-			if err != nil {
+			if err := printScmModule(&res.Module, iw); err != nil {
 				return err
 			}
 
 			iw2 := txtfmt.NewIndentWriter(iw)
 
 			if res.Error != nil {
-				fmt.Fprintf(iw2, "Error: %s\n", res.Error.Error())
+				fmt.Fprintf(iw2, "%s\n", getErrorString(res.Error))
 				continue
 			}
 
-			printSCMFirmwareInfo(res.Info, iw2)
-			fmt.Fprintf(iw2, "\n")
+			fmt.Fprintf(iw2, "%s\n", getSCMFirmwareInfoString(res.Info))
 		}
 	}
-
-	return w.Err
+	return nil
 }
 
 // PrintSCMFirmwareUpdateMap prints the update results in a condensed format.
 func PrintSCMFirmwareUpdateMap(fwMap control.HostSCMUpdateMap, out io.Writer,
 	opts ...control.PrintConfigOption) error {
-	successes, errors, err := condenseSCMUpdateMap(fwMap)
+	successes, errs, err := condenseSCMUpdateMap(fwMap)
 	if err != nil {
 		return err
 	}
 
-	if err = printDeviceErrorTable(errors, out, opts...); err != nil {
+	if err = printDeviceErrorTable(errs, scmDevTitle, out, opts...); err != nil {
 		return err
 	}
 
-	return printCondensedUpdateMap(successes, out, opts...)
+	return printCondensedResults(successes, out, opts,
+		func(result string, set *hostDeviceSet, _ []control.PrintConfigOption, w io.Writer) {
+			fmt.Fprintf(w, "Firmware staged on %s. A power cycle is required to apply the update.\n",
+				english.Plural(len(set.Devices), "device", "devices"))
+		})
 }
 
 func condenseSCMUpdateMap(fwMap control.HostSCMUpdateMap) (hostDeviceResultMap, []hostDeviceError, error) {
@@ -312,45 +358,22 @@ func condenseSCMUpdateMap(fwMap control.HostSCMUpdateMap) (hostDeviceResultMap, 
 		}
 
 		for _, devRes := range results {
+			devID := getShortSCMString(devRes.Module)
 			if devRes.Error == nil {
-				err := successes.AddHostDevice(scmUpdateSuccess, host, devRes.Module.String())
+				err := successes.AddHostDevice(scmUpdateSuccess, host, devID)
 				if err != nil {
 					return nil, nil, err
 				}
-			} else {
-				errors = append(errors, hostDeviceError{
-					Host:  host,
-					DevID: getShortSCMString(devRes.Module),
-					Error: devRes.Error,
-				})
+				continue
 			}
-
+			errors = append(errors, hostDeviceError{
+				Host:  host,
+				DevID: devID,
+				Error: devRes.Error,
+			})
 		}
 	}
 	return successes, errors, nil
-}
-
-func printCondensedUpdateMap(condensed hostDeviceResultMap, out io.Writer, opts ...control.PrintConfigOption) error {
-	w := txtfmt.NewErrWriter(out)
-	for _, result := range condensed.Keys() {
-		set, ok := condensed[result]
-		if !ok {
-			continue
-		}
-		hosts := control.GetPrintHosts(set.Hosts.RangedString(), opts...)
-		printHostHeader(hosts, out)
-
-		iw := txtfmt.NewIndentWriter(out)
-
-		if len(set.Devices) == 0 {
-			fmt.Fprintln(iw, result)
-			continue
-		}
-
-		fmt.Fprintf(iw, "Firmware staged on %d devices. A power cycle is required to apply the update.\n", len(set.Devices))
-	}
-
-	return w.Err
 }
 
 // PrintSCMFirmwareUpdateMapVerbose formats the firmware update results in a
@@ -370,15 +393,14 @@ func PrintSCMFirmwareUpdateMapVerbose(fwMap control.HostSCMUpdateMap, out io.Wri
 		}
 
 		for _, res := range fwResults {
-			err := printScmModule(&res.Module, iw)
-			if err != nil {
+			if err := printScmModule(&res.Module, iw); err != nil {
 				return err
 			}
 
 			iw2 := txtfmt.NewIndentWriter(iw)
 
 			if res.Error != nil {
-				fmt.Fprintf(iw2, "%s: %s\n", errorPrefix, res.Error.Error())
+				fmt.Fprintf(iw2, "%s\n", getErrorString(res.Error))
 				continue
 			}
 
@@ -386,5 +408,178 @@ func PrintSCMFirmwareUpdateMapVerbose(fwMap control.HostSCMUpdateMap, out io.Wri
 		}
 	}
 
+	return w.Err
+}
+
+// PrintNVMeFirmwareQueryMap formats the NVMe device firmware query results in a
+// concise format.
+func PrintNVMeFirmwareQueryMap(fwMap control.HostNVMeQueryMap, out io.Writer,
+	opts ...control.PrintConfigOption) error {
+	if fwMap == nil {
+		return nil
+	}
+
+	successes, errs, err := condenseNVMeQueryMap(fwMap)
+	if err != nil {
+		return err
+	}
+
+	printDeviceTypeHeader(out, nvmeSectionHeader)
+
+	iw := txtfmt.NewIndentWriter(out)
+	if err = printDeviceErrorTable(errs, nvmeDevTitle, iw, opts...); err != nil {
+		return err
+	}
+
+	return printCondensedResults(successes, iw, opts,
+		func(result string, set *hostDeviceSet, _ []control.PrintConfigOption, w io.Writer) {
+			fmt.Fprintf(w, "Firmware status for %s:\n", english.Plural(len(set.Devices), "device", "devices"))
+
+			iw := txtfmt.NewIndentWriter(w)
+			fmt.Fprintf(iw, "%s\n", result)
+		})
+}
+
+func condenseNVMeQueryMap(fwMap control.HostNVMeQueryMap) (hostDeviceResultMap, []hostDeviceError, error) {
+	successes := make(hostDeviceResultMap)
+	errors := make([]hostDeviceError, 0)
+	for _, host := range fwMap.Keys() {
+		results := fwMap[host]
+		if len(results) == 0 {
+			if err := successes.AddHost(nvmeNotFound, host); err != nil {
+				return nil, nil, err
+			}
+			continue
+		}
+
+		for _, devRes := range results {
+			if err := successes.AddHostDevice(getNVMeFirmwareQueryStr(devRes), host, devRes.Device.PciAddr); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	return successes, errors, nil
+}
+
+func getNVMeFirmwareQueryStr(result *control.NVMeQueryResult) string {
+	return fmt.Sprintf("Revision: %s", result.Device.FwRev)
+}
+
+// PrintNVMeFirmwareQueryMapVerbose formats the NVMe device firmware query
+// results in a verbose format.
+func PrintNVMeFirmwareQueryMapVerbose(fwMap control.HostNVMeQueryMap, out io.Writer,
+	opts ...control.PrintConfigOption) error {
+	if fwMap == nil {
+		return nil
+	}
+
+	w := txtfmt.NewErrWriter(out)
+
+	printDeviceTypeHeader(w, nvmeSectionHeader)
+
+	iw := txtfmt.NewIndentWriter(w)
+	printNVMeFirmwareQueryMapByHost(fwMap, iw)
+	return w.Err
+}
+
+func printNVMeFirmwareQueryMapByHost(fwMap control.HostNVMeQueryMap, w io.Writer) {
+	for _, host := range fwMap.Keys() {
+		printHostHeader(host, w)
+
+		iw := txtfmt.NewIndentWriter(w)
+		fwResults := fwMap[host]
+		if len(fwResults) == 0 {
+			fmt.Fprintln(iw, nvmeNotFound)
+			continue
+		}
+
+		for _, res := range fwResults {
+			fmt.Fprintf(iw, "Device PCI Address: %s\n", res.Device.PciAddr)
+
+			iw2 := txtfmt.NewIndentWriter(iw)
+			fmt.Fprintf(iw2, "%s\n", getNVMeFirmwareQueryStr(res))
+		}
+	}
+}
+
+// PrintNVMeFirmwareUpdateMap formats the NVMe device firmware update results in
+// a concise format.
+func PrintNVMeFirmwareUpdateMap(fwMap control.HostNVMeUpdateMap, out io.Writer,
+	opts ...control.PrintConfigOption) error {
+	successes, errs, err := condenseNVMeUpdateMap(fwMap)
+	if err != nil {
+		return err
+	}
+
+	if err = printDeviceErrorTable(errs, nvmeDevTitle, out, opts...); err != nil {
+		return err
+	}
+
+	return printCondensedResults(successes, out, opts,
+		func(result string, set *hostDeviceSet, _ []control.PrintConfigOption, w io.Writer) {
+			fmt.Fprintf(w, "Firmware updated on %s.\n",
+				english.Plural(len(set.Devices), "NVMe device controller", "NVMe device controllers"))
+		})
+}
+
+func condenseNVMeUpdateMap(fwMap control.HostNVMeUpdateMap) (hostDeviceResultMap, []hostDeviceError, error) {
+	successes := make(hostDeviceResultMap)
+	errors := make([]hostDeviceError, 0)
+	for _, host := range fwMap.Keys() {
+		results := fwMap[host]
+		if len(results) == 0 {
+			if err := successes.AddHost(nvmeNotFound, host); err != nil {
+				return nil, nil, err
+			}
+			continue
+		}
+
+		for _, devRes := range results {
+			if devRes.Error == nil {
+				err := successes.AddHostDevice(nvmeUpdateSuccess, host, devRes.DevicePCIAddr)
+				if err != nil {
+					return nil, nil, err
+				}
+			} else {
+				errors = append(errors, hostDeviceError{
+					Host:  host,
+					DevID: devRes.DevicePCIAddr,
+					Error: devRes.Error,
+				})
+			}
+
+		}
+	}
+	return successes, errors, nil
+}
+
+// PrintNVMeFirmwareUpdateMapVerbose prints a verbose listing of firmware update results.
+func PrintNVMeFirmwareUpdateMapVerbose(fwMap control.HostNVMeUpdateMap, out io.Writer,
+	opts ...control.PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
+	for _, host := range fwMap.Keys() {
+		printHostHeader(host, w)
+
+		iw := txtfmt.NewIndentWriter(w)
+		fwResults := fwMap[host]
+		if len(fwResults) == 0 {
+			fmt.Fprintln(iw, nvmeNotFound)
+			continue
+		}
+
+		for _, res := range fwResults {
+			fmt.Fprintf(iw, "Device PCI Address: %s\n", res.DevicePCIAddr)
+
+			iw2 := txtfmt.NewIndentWriter(iw)
+
+			if res.Error != nil {
+				fmt.Fprintf(iw2, "%s\n", getErrorString(res.Error))
+				continue
+			}
+
+			fmt.Fprintf(iw2, "%s\n", nvmeUpdateSuccess)
+		}
+	}
 	return w.Err
 }

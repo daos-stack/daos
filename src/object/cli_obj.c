@@ -129,7 +129,7 @@ D_CASSERT(sizeof(struct obj_auxi_args) + sizeof(struct daos_task_args) <=
 /**
  * Open an object shard (shard object), cache the open handle.
  */
-static int
+int
 obj_shard_open(struct dc_object *obj, unsigned int shard, unsigned int map_ver,
 	       struct dc_obj_shard **shard_ptr)
 {
@@ -194,8 +194,6 @@ unlock:
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 	return rc;
 }
-
-#define obj_shard_close(shard)	dc_obj_shard_close(shard)
 
 static void
 obj_layout_free(struct dc_object *obj)
@@ -387,7 +385,7 @@ obj_layout_refresh(struct dc_object *obj)
 	return rc;
 }
 
-static int
+int
 obj_get_replicas(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oc_attr;
@@ -493,7 +491,7 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver)
  */
 #define		OBJ_FETCH_LEADER_INTERVAL	2
 
-static int
+int
 obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 {
 	int		grp_size;
@@ -584,11 +582,10 @@ obj_shard2tgtid(struct dc_object *obj, uint32_t shard, uint32_t map_ver,
  * iod, iod_type/iod_size assign as input iod, iod_kcsum/iod_nr/iod_recx/
  * iod_csums/iod_eprs array will set as 0/NULL.
  */
-static int
-obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
+int
+obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
 		   uint32_t iod_nr, struct daos_oclass_attr *oca)
 {
-	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
 	daos_size_t			 size_iod, size_sgl, size_oiod;
 	daos_size_t			 size_recx, size_tgt_nr, size_singv;
 	daos_size_t			 size_sorter, size_array, buf_size;
@@ -652,14 +649,13 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	return 0;
 }
 
-static void
-obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
+void
+obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 {
-	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
 	daos_iod_t			*iod;
 	int				 i;
 
-	for (i = 0; i < obj_auxi->iod_nr; i++) {
+	for (i = 0; i < iod_nr; i++) {
 		iod = reasb_req->orr_iods + i;
 		if (iod == NULL)
 			return;
@@ -703,7 +699,8 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 
 	if (!obj_auxi->req_reasbed) {
 		obj_auxi->is_ec_obj = 1;
-		rc = obj_reasb_req_init(obj_auxi, args->iods, args->nr, oca);
+		rc = obj_reasb_req_init(&obj_auxi->reasb_req, args->iods,
+					args->nr, oca);
 		if (rc) {
 			D_ERROR(DF_OID" obj_reasb_req_init failed %d.\n",
 				DP_OID(oid), rc);
@@ -711,8 +708,8 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		}
 	}
 
-	rc = obj_ec_req_reasb(args, oid, oca, reasb_req,
-			      obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
+	rc = obj_ec_req_reasb(args->iods, args->sgls, oid, oca, reasb_req,
+			      args->nr, obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
 	if (rc == 0) {
 		obj_auxi->flags |= ORF_DTX_SYNC;
 		obj_auxi->flags |= ORF_EC;
@@ -726,7 +723,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	} else {
 		D_ERROR(DF_OID" obj_ec_req_reasb failed %d.\n",
 			DP_OID(oid), rc);
-		obj_reasb_req_fini(obj_auxi);
+		obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 	}
 
 	return rc;
@@ -1002,7 +999,7 @@ obj_pool_query_cb(tse_task_t *task, void *data)
 	return 0;
 }
 
-static int
+int
 obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 		    tse_task_t **taskp)
 {
@@ -1433,10 +1430,10 @@ out:
 }
 
 /* prepare the bulk handle(s) for obj request */
-static int
+int
 obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 	      crt_bulk_perm_t bulk_perm, tse_task_t *task,
-	      struct obj_auxi_args *obj_auxi)
+	      crt_bulk_t **p_bulks)
 {
 	crt_bulk_t	*bulks;
 	int		 i = 0;
@@ -1458,17 +1455,14 @@ obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 			if (!bulk_bind)
 				continue;
 			rc = crt_bulk_bind(bulks[i], daos_task2ctx(task));
-			if (rc != 0) {
-				D_ERROR("crt_bulk_bind failed, rc: "DF_RC"\n",
-					DP_RC(rc));
+			if (rc != 0)
 				D_GOTO(out, rc);
-			}
 		}
 	}
 
 out:
 	if (rc == 0) {
-		obj_auxi->bulks = bulks;
+		*p_bulks = bulks;
 	} else {
 		int j;
 
@@ -1476,6 +1470,10 @@ out:
 			crt_bulk_free(bulks[j]);
 
 		D_FREE(bulks);
+
+		D_ERROR("%s obj_bulk_prep failed "DF_RC".\n",
+			bulk_perm == CRT_BULK_RO ? "update" : "fetch",
+			DP_RC(rc));
 	}
 	return rc;
 }
@@ -1518,7 +1516,7 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	if (sgls_size >= OBJ_BULK_LIMIT || obj_auxi->reasb_req.orr_tgt_nr > 1) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
-				   obj_auxi);
+				   &obj_auxi->bulks);
 	}
 	obj_auxi->reasb_req.orr_size_fetched = 0;
 
@@ -1748,7 +1746,7 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 /* check if the obj request is valid */
 static int
 obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
-	      uint32_t *pm_ver, struct dc_object **p_obj)
+	      uint32_t *pm_ver, struct dc_object **p_obj, bool check_existence)
 {
 	uint32_t		map_ver = *pm_ver;
 	struct obj_auxi_args	*obj_auxi;
@@ -1767,7 +1765,8 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
 		    size_fetch) {
 			if (f_args->dkey == NULL ||
-			    f_args->dkey->iov_buf == NULL || f_args->nr == 0) {
+			    f_args->dkey->iov_buf == NULL ||
+			    (f_args->nr == 0 && !check_existence)) {
 				D_ERROR("Invalid fetch parameter.\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
@@ -2064,6 +2063,8 @@ shard_task_abort(tse_task_t *task, void *arg)
 	int	rc = *((int *)arg);
 
 	tse_task_complete(task, rc);
+	tse_task_list_del(task);
+	tse_task_decref(task);
 	return 0;
 }
 
@@ -2312,8 +2313,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		require_shard_task = true;
 
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
-	if (obj_auxi->io_retry && obj_auxi->args_initialized &&
-	    !obj_auxi->new_shard_tasks) {
+	if (obj_auxi->io_retry) {
 		switch (obj_auxi->opc) {
 		case DAOS_OBJ_RPC_FETCH:
 		case DAOS_OBJ_RPC_UPDATE:
@@ -2336,7 +2336,11 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		default:
 			break;
 		}
+	}
 
+	/* for retried obj IO, reuse the previous shard tasks and resched it */
+	if (obj_auxi->io_retry && obj_auxi->args_initialized &&
+	    !obj_auxi->new_shard_tasks) {
 		/* We mark the RPC as RESEND although @io_retry does not
 		 * guarantee that the RPC has ever been sent. It may cause
 		 * some overhead on server side, but no correctness issues.
@@ -2461,14 +2465,15 @@ task_sched:
 	return 0;
 
 out_task:
-	if (d_list_empty(task_list)) {
-		tse_task_complete(obj_task, rc);
-	} else {
+	if (!d_list_empty(task_list)) {
 		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
 			DP_RC(rc));
 
 		tse_task_list_traverse(task_list, shard_task_abort, &rc);
 	}
+
+	tse_task_complete(obj_task, rc);
+
 	return rc;
 }
 
@@ -2542,7 +2547,7 @@ merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size)
 	new->recx.rx_idx = offset;
 	new->recx.rx_nr = size;
 	D_INIT_LIST_HEAD(&new->recx_list);
-	d_list_add_tail(&new->recx_list, prev);
+	d_list_add(&new->recx_list, prev);
 	return 0;
 }
 
@@ -2550,45 +2555,47 @@ int
 merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
 {
 	struct obj_auxi_list_recx	*recx;
+	struct obj_auxi_list_recx	*new_recx = NULL;
 	struct obj_auxi_list_recx	*tmp;
 	struct obj_auxi_list_recx	*prev = NULL;
 	bool				inserted = false;
+	daos_off_t			end = offset + size;
 	int				rc = 0;
 
 	d_list_for_each_entry_safe(recx, tmp, head, recx_list) {
-		if (offset + size < recx->recx.rx_idx) {
-			rc = merge_recx_insert(prev == NULL ?
-					       head : &prev->recx_list,
-					       offset, size);
-			inserted = true;
-			break;
-		}
+		daos_off_t recx_start = recx->recx.rx_idx;
+		daos_off_t recx_end = recx->recx.rx_idx + recx->recx.rx_nr;
 
-		if (offset + size == recx->recx.rx_idx) {
-			recx->recx.rx_idx = offset;
-			recx->recx.rx_nr += size;
-			inserted = true;
-			break;
-		}
-
-		if (recx->recx.rx_idx + recx->recx.rx_nr == offset) {
-			recx->recx.rx_nr += size;
-			/* Try to merge with the next */
-			if (recx->recx_list.next != head) {
-				struct obj_auxi_list_recx *next;
-
-				next = d_list_entry(recx->recx_list.next,
-						    struct obj_auxi_list_recx,
-						    recx_list);
-				if (recx->recx.rx_idx + recx->recx.rx_nr ==
-				    next->recx.rx_idx) {
-					recx->recx.rx_nr += next->recx.rx_nr;
-					d_list_del(&next->recx_list);
-					D_FREE_PTR(next);
-				}
+		D_DEBUG(DB_TRACE, "current "DF_U64"/"DF_U64"\n", recx_start, recx_end);
+		if (end < recx_start) {
+			if (!inserted) {
+				rc = merge_recx_insert(prev == NULL ?
+						       head : &prev->recx_list,
+						       offset, size);
+				inserted = true;
 			}
-			inserted = true;
 			break;
+		}
+
+		/* merge with current recx, and try to merge with next recxs */
+		if (max(recx_start, offset) <= min(recx_end, end)) {
+			if (new_recx == NULL)
+				new_recx = recx;
+
+			new_recx->recx.rx_idx = min(recx_start, offset);
+			new_recx->recx.rx_nr = max(recx_end, end) -
+					       new_recx->recx.rx_idx;
+			D_DEBUG(DB_TRACE, "new "DF_U64"/"DF_U64"\n",
+				new_recx->recx.rx_idx, new_recx->recx.rx_nr);
+			offset = new_recx->recx.rx_idx;
+			end = offset + new_recx->recx.rx_nr;
+			D_DEBUG(DB_TRACE, "offset "DF_U64"/"DF_U64"\n", offset, end);
+			inserted = true;
+			if (recx != new_recx) {
+				d_list_del(&recx->recx_list);
+				D_FREE_PTR(recx);
+			}
+
 		}
 		prev = recx;
 	}
@@ -3252,7 +3259,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (rc != 0 || obj_auxi->result) {
 		if (task->dt_result == 0)
 			task->dt_result = rc ? rc : obj_auxi->result;
-		D_ERROR("obj complete callback failure %d\n", task->dt_result);
+		D_DEBUG(DB_IO, "obj complete callback: %d\n", task->dt_result);
 	}
 
 	if (obj->cob_time_fetch_leader != NULL &&
@@ -3342,8 +3349,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 			}
 			break;
 		case DAOS_OBJ_RPC_UPDATE:
-			if (daos_handle_is_valid(obj_auxi->th))
-				dc_tx_non_cpd_cb(obj_auxi->th, task->dt_result);
+			D_ASSERT(!daos_handle_is_valid(obj_auxi->th));
+
 			obj_rw_csum_destroy(obj, obj_auxi);
 			break;
 		case DAOS_OBJ_RPC_FETCH: {
@@ -3354,9 +3361,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 			 */
 			obj_rw_csum_destroy(obj, obj_auxi);
 
-			if (args->extra_flags & DIOF_CHECK_EXISTENCE)
-				dc_tx_check_existence_cb(args->extra_arg, task);
-			else if (daos_handle_is_valid(obj_auxi->th) &&
+			if (daos_handle_is_valid(obj_auxi->th) &&
+			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
 				 (task->dt_result == 0 ||
 				  task->dt_result == -DER_NONEXIST))
 				/* Cache transactional read if exist or not. */
@@ -3367,8 +3373,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_RPC_PUNCH:
 		case DAOS_OBJ_RPC_PUNCH_DKEYS:
 		case DAOS_OBJ_RPC_PUNCH_AKEYS:
-			if (daos_handle_is_valid(obj_auxi->th))
-				dc_tx_non_cpd_cb(obj_auxi->th, task->dt_result);
+			D_ASSERT(!daos_handle_is_valid(obj_auxi->th));
 			break;
 		case DAOS_OBJ_RPC_QUERY_KEY:
 		case DAOS_OBJ_RECX_RPC_ENUMERATE:
@@ -3416,7 +3421,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 				obj_ec_recov_data(&obj_auxi->reasb_req,
 					obj->cob_md.omd_id, args->nr);
 
-				obj_reasb_req_fini(obj_auxi);
+				obj_reasb_req_fini(&obj_auxi->reasb_req,
+						   obj_auxi->iod_nr);
 				memset(obj_auxi, 0, sizeof(*obj_auxi));
 			} else if (!obj_auxi->ec_in_recov || new_tgt_fail) {
 				task->dt_result = 0;
@@ -3433,7 +3439,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 			}
 
 			obj_bulk_fini(obj_auxi);
-			obj_reasb_req_fini(obj_auxi);
+			obj_reasb_req_fini(&obj_auxi->reasb_req,
+					   obj_auxi->iod_nr);
 			/* zero it as user might reuse/resched the task, for
 			 * example the usage in dac_array_set_size().
 			 */
@@ -3542,7 +3549,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
-	if (!cont_props.dcp_csum_enabled && cont_props.dcp_dedup) {
+	if (!cont_props.dcp_csum_enabled && cont_props.dcp_dedup_enabled) {
 		uint32_t	dedup_th = cont_props.dcp_dedup_size;
 		int		i;
 		bool		candidate = false;
@@ -3736,7 +3743,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	uint8_t                  csum_bitmap = 0;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_FETCH, &epoch, &map_ver,
-			   &obj);
+		&obj, args->extra_flags & DIOF_CHECK_EXISTENCE ? true : false);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -3755,11 +3762,15 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;
 
-	rc = obj_rw_req_reassemb(obj, args, &epoch, obj_auxi);
-	if (rc) {
-		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
-			DP_OID(obj->cob_md.omd_id), rc);
-		goto out_task;
+	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
+		obj_auxi->flags |= DRF_CHECK_EXISTENCE;
+	} else {
+		rc = obj_rw_req_reassemb(obj, args, &epoch, obj_auxi);
+		if (rc != 0) {
+			D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
+				DP_OID(obj->cob_md.omd_id), rc);
+			goto out_task;
+		}
 	}
 
 	dkey_hash = obj_dkey2hash(args->dkey);
@@ -3833,11 +3844,8 @@ dc_obj_fetch_task(tse_task_t *task)
 
 	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,
 			      false, false, task, obj_auxi);
-	if (rc != 0) {
-		D_ERROR("fetch "DF_OID", obj_rw_bulk_prep failed "DF_RC".\n",
-			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+	if (rc != 0)
 		goto out_task;
-	}
 
 	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, &epoch,
 			    shard_rw_prep, dc_obj_shard_rw, task);
@@ -3848,7 +3856,7 @@ out_task:
 	return rc;
 }
 
-int
+static int
 dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	      daos_obj_update_t *args)
 {
@@ -3858,7 +3866,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	int			 rc;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_UPDATE, epoch, &map_ver,
-			   &obj);
+			   &obj, false);
 	if (rc != 0)
 		goto out_task; /* invalid parameter */
 
@@ -3899,11 +3907,8 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr, true,
 			      obj_auxi->req_tgts.ort_srv_disp, task, obj_auxi);
-	if (rc != 0) {
-		D_ERROR("update "DF_OID", bulk_prep failed "DF_RC".\n",
-			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+	if (rc != 0)
 		goto out_task;
-	}
 
 	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
 			    shard_rw_prep, dc_obj_shard_rw, task);
@@ -3933,7 +3938,7 @@ dc_obj_update_task(tse_task_t *task)
 comp:
 	if (rc <= 0)
 		tse_task_complete(task, rc);
-	return rc;
+	return rc > 0 ? 0 : rc;
 }
 
 static void
@@ -4146,7 +4151,7 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	int			 shard = -1;
 	int			 rc;
 
-	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, &obj);
+	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, &obj, false);
 	if (rc)
 		goto out_task;
 
@@ -4336,7 +4341,7 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
-int
+static int
 dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	     enum obj_rpc_opc opc, daos_obj_punch_t *api_args)
 {
@@ -4382,7 +4387,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	unsigned int		 map_ver = 0;
 	int			 rc;
 
-	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, NULL);
+	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, NULL, false);
 	if (rc != 0)
 		goto comp; /* invalid parameters */
 
@@ -4397,7 +4402,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 comp:
 	if (rc <= 0)
 		tse_task_complete(task, rc);
-	return rc;
+	return rc > 0 ? 0 : rc;
 }
 
 int
@@ -4547,7 +4552,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		  "Task Argument OPC does not match DC OPC\n");
 
 	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch,
-			   &map_ver, &obj);
+			   &map_ver, &obj, false);
 	if (rc)
 		D_GOTO(out_task, rc);
 
@@ -4696,14 +4701,14 @@ task_sched:
 	return rc;
 
 out_task:
-	if (head == NULL || d_list_empty(head)) {/* nothing has been started */
-		tse_task_complete(api_task, rc);
-	} else {
+	if (head != NULL && !d_list_empty(head)) {
 		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n",
 			DP_RC(rc));
 
 		tse_task_list_traverse(head, shard_task_abort, &rc);
 	}
+
+	tse_task_complete(api_task, rc);
 
 	return rc;
 }
@@ -4741,7 +4746,7 @@ dc_obj_sync(tse_task_t *task)
 		  "Task Argument OPC does not match DC OPC\n");
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_SYNC, &epoch,
-			   &map_ver, &obj);
+			   &map_ver, &obj, false);
 	if (rc)
 		D_GOTO(out_task, rc);
 

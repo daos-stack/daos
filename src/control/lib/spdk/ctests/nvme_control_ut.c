@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019 Intel Corporation.
+* (C) Copyright 2019-2020 Intel Corporation.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -47,13 +47,13 @@ static struct ret_t	*test_ret;
  */
 
 static int
-mock_get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
-			 struct dev_health_entry *entry)
+mock_get_health_logs(struct spdk_nvme_ctrlr *ctrlr,
+		     struct health_entry *health)
 {
-	struct spdk_nvme_health_information_page health_page;
+	struct spdk_nvme_health_information_page hp;
 
-	memset(&health_page, 0, sizeof(health_page));
-	entry->health_page = health_page;
+	memset(&hp, 0, sizeof(hp));
+	health->page = hp;
 
 	(void)ctrlr;
 	return 0;
@@ -94,10 +94,11 @@ mock_spdk_nvme_probe_fail(const struct spdk_nvme_transport_id *trid,
 }
 
 static int
-mock_copy_ctrlr_data(struct ctrlr_t *cdst, struct ctrlr_entry *csrc)
+mock_copy_ctrlr_data(struct ctrlr_t *ctrlr,
+		     const struct spdk_nvme_ctrlr_data *cdata)
 {
-	(void)cdst;
-	(void)csrc;
+	(void)ctrlr;
+	(void)cdata;
 	return 0;
 }
 
@@ -173,7 +174,7 @@ test_discover_null_controllers(void **state)
 	(void)state; /*unused*/
 
 	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			     &mock_get_dev_health_logs, false);
+			     &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -187,11 +188,11 @@ test_discover_set_controllers(void **state)
 	g_controllers = malloc(sizeof(struct ctrlr_entry));
 	g_controllers->ctrlr = NULL;
 	g_controllers->nss = NULL;
-	g_controllers->dev_health = NULL;
+	g_controllers->health = NULL;
 	g_controllers->next = NULL;
 
 	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			     &mock_get_dev_health_logs, false);
+			     &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -205,11 +206,11 @@ test_discover_probe_fail(void **state)
 	g_controllers = malloc(sizeof(struct ctrlr_entry));
 	g_controllers->ctrlr = NULL;
 	g_controllers->nss = NULL;
-	g_controllers->dev_health = NULL;
+	g_controllers->health = NULL;
 	g_controllers->next = NULL;
 
 	test_ret = _discover(&mock_spdk_nvme_probe_fail, false,
-			     &mock_get_dev_health_logs, false);
+			     &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, -1);
 
 	assert_null(test_ret->ctrlrs);
@@ -222,7 +223,7 @@ test_collect(void **state)
 
 	attach_mock_controllers();
 
-	test_ret = init_ret(0);
+	test_ret = init_ret();
 
 	assert_null(test_ret->ctrlrs);
 	_collect(test_ret, &mock_copy_ctrlr_data,
@@ -230,7 +231,7 @@ test_collect(void **state)
 		 &mock_spdk_pci_device_get_socket_id);
 
 	if (test_ret->rc != 0)
-		fprintf(stderr, "collect err: %s\n", test_ret->err);
+		fprintf(stderr, "collect err: %s\n", test_ret->info);
 	assert_int_equal(test_ret->rc, 0);
 	assert_non_null(test_ret->ctrlrs);
 	assert_string_equal(test_ret->ctrlrs->pci_addr, "0000:01:00.0");
