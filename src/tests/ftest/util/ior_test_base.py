@@ -126,7 +126,8 @@ class IorTestBase(TestWithServers):
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
-                          create_cont=True, stop_dfuse=True, plugin_path=None):
+                          create_cont=True, stop_dfuse=True, plugin_path=None,
+                          timeout=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -147,6 +148,7 @@ class IorTestBase(TestWithServers):
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
+            timeout (int, optional): command timeout. Defaults to None.
 
         Returns:
             CmdResult: result of the ior command execution
@@ -168,8 +170,9 @@ class IorTestBase(TestWithServers):
             test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
-
-        out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
+        job_manager = self.get_ior_job_manager_command()
+        job_manager.timeout = timeout
+        out = self.run_ior(job_manager, self.processes,
                            intercept, plugin_path=plugin_path)
 
         if stop_dfuse and self.dfuse:
