@@ -58,7 +58,6 @@ class ContSecurityTestBase(TestWithServers):
         self.pool_svc = None
         self.container_uuid = None
 
-
     def setUp(self):
         """Set up each test case."""
         super(ContSecurityTestBase, self).setUp()
@@ -88,7 +87,6 @@ class ContSecurityTestBase(TestWithServers):
         pool_svc = self.pool.svc_ranks[0]
 
         return pool_uuid, pool_svc
-
 
     def create_container_with_daos(self, pool, acl_type=None):
         """Create a container with the daos tool
@@ -129,7 +127,6 @@ class ContSecurityTestBase(TestWithServers):
             container_uuid = None
 
         return container_uuid
-
 
     def get_container_acl_list(self, pool_uuid, pool_svc, container_uuid,
                                verbose=False, outfile=None):
@@ -173,10 +170,8 @@ class ContSecurityTestBase(TestWithServers):
                     cont_permission_list.append(line)
         return cont_permission_list
 
-
     def compare_acl_lists(self, get_acl_list, expected_list):
         """Compares two permission lists
-
         Args:
             get_acl_list (str list): list of permissions obtained by get-acl
             expected_list (str list): list of expected permissions
@@ -187,15 +182,15 @@ class ContSecurityTestBase(TestWithServers):
         self.log.info("    ===> get-acl ACL:  %s", get_acl_list)
         self.log.info("    ===> Expected ACL: %s", expected_list)
 
-        if len(get_acl_list) == len(expected_list):
-            for element in get_acl_list:
-                if element in expected_list:
-                    continue
-                else:
-                    return False
-            return True
-        return False
-
+        exp_list = expected_list[:]
+        if len(get_acl_list) != len(exp_list):
+            return False
+        for acl in get_acl_list:
+            if acl in exp_list:
+                exp_list.remove(acl)
+            else:
+                return False
+        return True
 
     def cleanup(self, types):
         """Removes all temporal acl files created during the test.
