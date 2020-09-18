@@ -23,6 +23,8 @@
 """
 from __future__ import print_function
 
+import os
+
 from avocado import fail_on
 from apricot import TestWithServers
 from server_utils import ServerFailed
@@ -46,8 +48,9 @@ class DmgSystemReformatTest(TestWithServers):
 
         host = self.hostlist_servers[0]
         scm_list = self.server_managers[-1].get_config_value("scm_list")
+        pmem_ns = os.path.split(scm_list[-1])
         storage_info = self.get_dmg_command().storage_scan(verbose=True)
-        self.scm_cap = storage_info[host]["scm"][scm_list[-1]]["capacity"]
+        self.scm_cap = storage_info[host]["scm"][pmem_ns]["capacity"]
 
     @fail_on(CommandFailure)
     def create_pool_at_capacity(self, percentage):
@@ -65,8 +68,8 @@ class DmgSystemReformatTest(TestWithServers):
 
         """
         if percentage > 1 or percentage <= 0:
-            self.fail("The percent value provided cannot be used: {}".format(
-                percentage))
+            self.fail("The percent value provided cannot be used: %s percent",
+                      percentage)
         # Convert info from dmg's human readable to bytes
         scm_size_bytes = human_to_bytes(self.scm_cap)
         scm_size = percentage * scm_size_bytes
