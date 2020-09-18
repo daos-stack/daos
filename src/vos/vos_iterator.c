@@ -587,10 +587,11 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  */
-int
-vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
+static int
+vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
+		     bool recursive, struct vos_iter_anchors *anchors,
+		     vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg,
+		     struct dtx_handle *dth)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
 	vos_iter_entry_t	iter_ent = {0};
@@ -740,7 +741,7 @@ out:
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 		const daos_epoch_range_t *epr, vos_iter_cb_t cb,
-		void *arg)
+		void *arg, struct dtx_handle *dth)
 {
 	vos_iter_param_t	 param = {0};
 	struct vos_iter_anchors	 anchors = {0};
@@ -756,7 +757,7 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 
 
 	return vos_iterate_internal(&param, type, false, &anchors, cb, NULL,
-				    arg);
+				    arg, dth);
 }
 
 /**
@@ -766,10 +767,10 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
-	    vos_iter_cb_t post_cb, void *arg)
+	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
 {
 	D_ASSERT((param->ip_flags & VOS_IT_KEY_TREE) == 0);
 
 	return vos_iterate_internal(param, type, recursive, anchors, pre_cb,
-				    post_cb, arg);
+				    post_cb, arg, dth);
 }

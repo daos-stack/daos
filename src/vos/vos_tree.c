@@ -1076,7 +1076,6 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	struct vos_krec_df	*krec;
 	struct ilog_df		*ilog = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
-	bool			 found = false;
 	bool			 mark = false;
 	int			 rc;
 	int			 lrc;

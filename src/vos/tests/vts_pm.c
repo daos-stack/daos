@@ -1259,7 +1259,7 @@ cond_test(void **state)
 	/** Check the value before, should be empty */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 4, true, "a", "b",
 		      0, 0, sgl, "xxxx", 'x');
-	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++);
+	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, 0);
 	/** Non conditional fetch should not see data anymore */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "a", "b",
 		      0, 0, sgl, "xxxx", 'x');
@@ -1849,16 +1849,16 @@ replay_punch_test(void **state)
 		cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
 			       "b", 0, 0, sgl, "foo");
 		/** Now fetch after the punch */
-		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
-			      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxx", 'x');
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, false, "a",
+			      "b", 0, 0, sgl, "xxx", 'x');
 		/** Now fetch before the punch */
-		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
-			      "b", VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo", 'x');
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, false,
+			      "a", "b", 0, 0, sgl, "foo", 'x');
 		if (i == 1) {
 			/** Check the new I/O */
 			cond_fetch_op(state, arg->ctx.tc_co_hdl, oid,
-				      epoch + 40, "a", "b",
-				      VOS_OF_USE_TIMESTAMPS, 0, sgl, "bar",
+				      epoch + 40, false, "a", "b",
+				      0, 0, sgl, "bar",
 				      'x');
 		}
 
@@ -1875,17 +1875,15 @@ replay_punch_test(void **state)
 		cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
 			       "b", 0, 0, sgl, "foo");
 		/** Now fetch after the punch */
-		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
-			      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxx", 'x');
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, false, "a",
+			      "b", 0, 0, sgl, "xxx", 'x');
 		/** Now fetch before the punch */
-		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
-			      "b", VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo", 'x');
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, false,
+			      "a", "b", 0, 0, sgl, "foo", 'x');
 		if (i == 1) {
 			/** Check the new I/O */
 			cond_fetch_op(state, arg->ctx.tc_co_hdl, oid,
-				      epoch + 40, "a", "b",
-				      VOS_OF_USE_TIMESTAMPS, 0, sgl, "bar",
-				      'x');
+				      epoch + 40, false, "a", "b", 0, 0, sgl, "bar", 'x');
 		}
 
 		oid = gen_oid(0);
@@ -1895,22 +1893,21 @@ replay_punch_test(void **state)
 				       epoch + 5, "a", "b", 0, 0, sgl, "bar");
 		}
 		/** replay punch akey */
-		cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
-				   "b", VOS_OF_REPLAY_PC, 0);
+		cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++,
+				   "a", "b", VOS_OF_REPLAY_PC, 0);
 		/** Update before the punch */
-		cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
-			       "b", 0, 0, sgl, "foo");
+		cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2,
+			       "a", "b", 0, 0, sgl, "foo");
 		/** Now fetch after the punch */
-		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
-			      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxx", 'x');
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch, false, "a",
+			      "b", 0, 0, sgl, "xxx", 'x');
 		/** Now fetch before the punch */
-		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, "a",
-			      "b", VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo", 'x');
+		cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 2, false,
+			      "a", "b", 0, 0, sgl, "foo", 'x');
 		if (i == 1) {
 			/** Check the new I/O */
 			cond_fetch_op(state, arg->ctx.tc_co_hdl, oid,
-				      epoch + 40, "a", "b",
-				      VOS_OF_USE_TIMESTAMPS, 0, sgl, "bar",
+				      epoch + 40, false, "a", "b", 0, 0, sgl, "bar",
 				      'x');
 		}
 	}

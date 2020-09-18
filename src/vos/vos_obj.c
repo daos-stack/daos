@@ -60,7 +60,8 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	bool	empty = true;
 	int	rc;
 
-	rc = vos_iterate_key(obj, toh, type, epr, empty_tree_check, &empty);
+	rc = vos_iterate_key(obj, toh, type, epr, empty_tree_check, &empty,
+			     vos_dth_get());
 
 
 	if (rc < 0)
@@ -318,7 +319,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
 
-			if (!read_conflict && rc > 0) {
+			if (rc > 0) {
 				/** Punch the object too */
 				punch_obj = true;
 				rc = 0;

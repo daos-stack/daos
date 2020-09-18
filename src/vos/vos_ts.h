@@ -367,30 +367,6 @@ vos_ts_set_get_entry(struct vos_ts_set *ts_set)
 	return entry->se_entry;
 }
 
-/** Get the specified entry in the set
- *
- * \param	ts_set[in]	The timestamp set
- * \param	type[in]	The type of entry
- * \param	akey_idx[in]	0 or index of the akey
- *
- * \return Returns the last entry added to the set or NULL
- */
-static inline struct vos_ts_entry *
-vos_ts_set_get_entry_type(struct vos_ts_set *ts_set, uint32_t type,
-			  int akey_idx)
-{
-	struct vos_ts_set_entry	*entry;
-	uint32_t		 idx = (type / VOS_TS_PER_LEVEL) + akey_idx;
-
-	D_ASSERT(akey_idx == 0 || type == VOS_TS_TYPE_AKEY);
-
-	if (ts_set == NULL || idx >= ts_set->ts_init_count)
-		return NULL;
-
-	entry = &ts_set->ts_entries[idx];
-	return entry->se_entry;
-}
-
 /** When a subtree doesn't exist, we need a negative entry.  The entry in this
  *  case is identified by a hash.  This looks up the negative entry and
  *  allocates it if necessary.  Resets te_create_idx to NULL.
