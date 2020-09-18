@@ -212,7 +212,7 @@ A "Checksummer" is used to create checksums from a scatter gather list. The
  crc32, crc64, and sha1. All of the function tables to support these
  algorithms are in [src/common/checksum.c](checksum.c).
  These function tables
- are not made public, but there is a helper function (daos_csum_type2algo) that
+ are not made public, but there is a helper function (daos_mhash_type2algo) that
  will return the appropriate function table given a DAOS_CSUM_TYPE. There is
  another helper function (daos_contprop2csumtype) that will convert a container
  property value to the appropriate DAOS_CSUM_TYPE. The double "lookups" from

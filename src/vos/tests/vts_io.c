@@ -511,7 +511,7 @@ io_test_add_csums(daos_iod_t *iod, d_sg_list_t *sgl,
 		  struct daos_csummer **p_csummer,
 		  struct dcs_iod_csums **p_iod_csums)
 {
-	enum DAOS_CSUM_TYPE	 type = CSUM_TYPE_ISAL_CRC64_REFL;
+	enum DAOS_HASH_TYPE	 type = HASH_TYPE_CRC64;
 	size_t			 chunk_size = 1 << 12;
 	int			 rc = 0;
 

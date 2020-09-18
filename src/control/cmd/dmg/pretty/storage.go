@@ -27,86 +27,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
-
-	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
-
-func printNvmeController(nvme *storage.NvmeController, out io.Writer, opts ...control.PrintConfigOption) error {
-	_, err := fmt.Fprintf(out, "PCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		nvme.PciAddr, nvme.Model, nvme.FwRev, nvme.SocketID, humanize.Bytes(nvme.Capacity()))
-	return err
-}
-
-func printNvmeHealth(stat *storage.NvmeDeviceHealth, out io.Writer, opts ...control.PrintConfigOption) error {
-	if stat == nil {
-		fmt.Fprintln(out, "Health Stats Unavailable")
-		return nil
-	}
-
-	fmt.Fprintln(out, "Health Stats:")
-
-	iw := txtfmt.NewIndentWriter(out)
-	fmt.Fprintf(iw, "Temperature:%dK(%.02fC)\n", stat.TempK(), stat.TempC())
-
-	if stat.TempWarnTime > 0 {
-		fmt.Fprintf(iw, "Temperature Warning Duration:%s\n",
-			time.Duration(stat.TempWarnTime)*time.Minute)
-	}
-	if stat.TempCritTime > 0 {
-		fmt.Fprintf(iw, "Temperature Critical Duration:%s\n",
-			time.Duration(stat.TempCritTime)*time.Minute)
-	}
-
-	fmt.Fprintf(iw, "Controller Busy Time:%s\n", time.Duration(stat.CtrlBusyTime)*time.Minute)
-	fmt.Fprintf(iw, "Power Cycles:%d\n", uint64(stat.PowerCycles))
-	fmt.Fprintf(iw, "Power On Duration:%s\n", time.Duration(stat.PowerOnHours)*time.Hour)
-	fmt.Fprintf(iw, "Unsafe Shutdowns:%d\n", uint64(stat.UnsafeShutdowns))
-	fmt.Fprintf(iw, "Media Errors:%d\n", uint64(stat.MediaErrors))
-	fmt.Fprintf(iw, "Read Errors:%d\n", uint64(stat.ReadErrors))
-	fmt.Fprintf(iw, "Write Errors:%d\n", uint64(stat.WriteErrors))
-	fmt.Fprintf(iw, "Unmap Errors:%d\n", uint64(stat.UnmapErrors))
-	fmt.Fprintf(iw, "Checksum Errors:%d\n", uint64(stat.ChecksumErrors))
-	fmt.Fprintf(iw, "Error Log Entries:%d\n", uint64(stat.ErrorLogEntries))
-
-	fmt.Fprintf(out, "Critical Warnings:\n")
-	fmt.Fprintf(iw, "Temperature: ")
-	if stat.TempWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-	fmt.Fprintf(iw, "Available Spare: ")
-	if stat.AvailSpareWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-	fmt.Fprintf(iw, "Device Reliability: ")
-	if stat.ReliabilityWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-	fmt.Fprintf(iw, "Read Only: ")
-	if stat.ReadOnlyWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-	fmt.Fprintf(iw, "Volatile Memory Backup: ")
-	if stat.VolatileWarn {
-		fmt.Fprintf(iw, "WARNING\n")
-	} else {
-		fmt.Fprintf(iw, "OK\n")
-	}
-
-	return nil
-}
 
 // PrintNvmeHealthMap generates a human-readable representation of the supplied
 // HostStorageMap, with a focus on presenting the NVMe Device Health information.
@@ -125,11 +50,11 @@ func PrintNvmeHealthMap(hsm control.HostStorageMap, out io.Writer, opts ...contr
 		}
 
 		for _, controller := range hss.HostStorage.NvmeDevices {
-			if err := printNvmeController(controller, out, opts...); err != nil {
+			if err := control.PrintNvmeControllerSummary(controller, out, opts...); err != nil {
 				return err
 			}
 			iw := txtfmt.NewIndentWriter(out)
-			if err := printNvmeHealth(controller.HealthStats, iw, opts...); err != nil {
+			if err := control.PrintNvmeControllerHealth(controller.HealthStats, iw, opts...); err != nil {
 				return err
 			}
 			fmt.Fprintln(out)
@@ -183,7 +108,7 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 					}
 					if device.Health != nil {
 						iw2 := txtfmt.NewIndentWriter(iw1)
-						if err := printNvmeHealth(device.Health, iw2, opts...); err != nil {
+						if err := control.PrintNvmeControllerHealth(device.Health, iw2, opts...); err != nil {
 							return err
 						}
 						fmt.Fprintln(out)
