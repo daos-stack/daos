@@ -504,11 +504,8 @@ shell(int argc, char *argv[])
 {
 	int	rc;
 
-	if (argc < 3) {
-		fprintf(stderr, "%s %s daos|vos [pmem_file]\n", argv[0],
-			argv[1]);
+	if (argc < 3)
 		goto out_usage;
-	}
 
 	uuid_generate(ctl_ctx.tsc_pool_uuid);
 	uuid_generate(ctl_ctx.tsc_cont_uuid);
@@ -534,7 +531,7 @@ shell(int argc, char *argv[])
 		ctl_ctx.tsc_svc.rl_nr = 1;
 
 	} else {
-		fprintf(stderr, "Unknown test mode %s\n", argv[1]);
+		fprintf(stderr, "Unknown test mode %s\n", argv[2]);
 		goto out_usage;
 	}
 
@@ -554,6 +551,6 @@ shell(int argc, char *argv[])
 	return rc;
 
  out_usage:
-	fprintf(stderr, "%s daos|vos\n", argv[0]);
+	fprintf(stderr, "%s daos|vos [pmem_file]\n", argv[0]);
 	return -DER_INVAL;
 }
