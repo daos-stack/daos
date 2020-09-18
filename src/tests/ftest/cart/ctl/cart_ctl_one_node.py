@@ -22,8 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-# pylint: disable=broad-except
-
 from __future__ import print_function
 
 import sys
@@ -35,6 +33,8 @@ from avocado       import main
 
 sys.path.append('./util')
 
+# Can't all this import before setting sys.path
+# pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
 class CartCtlOneNodeTest(Test):
@@ -65,6 +65,7 @@ class CartCtlOneNodeTest(Test):
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+        # pylint: disable=broad-except
         except Exception as e:
             self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")

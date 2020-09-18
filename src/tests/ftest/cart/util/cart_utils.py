@@ -23,13 +23,6 @@
 '''
 from __future__ import print_function
 # pylint: disable=broad-except
-# pylint: disable=bad-continuation
-# pylint: disable=unused-variable
-# pylint: disable=redefined-outer
-# pylint: disable=unused-argument
-# pylint: disable=bad-indentation
-# pylint: disable=line-too-long
-# pylint: disable=bad-continuation
 
 import time
 from distutils.spawn import find_executable
@@ -66,7 +59,7 @@ class CartUtils():
         # cwd(), it must be some place writable)
         hostfile_path_dir = os.environ['HOME']
         if 'DAOS_TEST_SHARED_DIR' in os.environ:
-          hostfile_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
+            hostfile_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
 
         path = hostfile_path_dir + '/hostfile'
 
@@ -140,7 +133,6 @@ class CartUtils():
         """ return basic env setting in yaml """
         env_CCSA = cartobj.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = cartobj.params.get("name", "/run/tests/*/")
-        host_cfg = cartobj.params.get("config", "/run/hosts/*/")
 
         if env_CCSA is not None:
             log_dir = "{}-{}".format(test_name, env_CCSA)
@@ -150,11 +142,12 @@ class CartUtils():
             log_dir = "{}".format(test_name)
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
-        log_file = os.path.join(log_path, test_name + "_" + env_CCSA + "_cart.log")
+        log_file = os.path.join(log_path, log_dir,
+                                test_name + "_" + env_CCSA + "_cart.log")
 
         log_mask = cartobj.params.get("D_LOG_MASK", "/run/defaultENV/")
         self.provider = cartobj.params.get("CRT_PHY_ADDR_STR",
-                                          "/run/defaultENV/")
+                                           "/run/defaultENV/")
         ofi_interface = cartobj.params.get("OFI_INTERFACE", "/run/defaultENV/")
         ofi_domain = cartobj.params.get("OFI_DOMAIN", "/run/defaultENV/")
         ofi_share_addr = cartobj.params.get("CRT_CTX_SHARE_ADDR",
@@ -162,7 +155,7 @@ class CartUtils():
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        env = " --output-filename {!s}".format(os.path.join(log_path, test_name + "_" + env_CCSA + "_output.orterun_log"))
+        env = " --output-filename {!s}".format(os.path.join(log_path, log_dir, test_name + "_" + env_CCSA + "_output.orterun_log"))
         env += " -x D_LOG_FILE={!s}".format(log_file)
         env += " -x D_LOG_FILE_APPEND_PID=1"
 
@@ -225,7 +218,8 @@ class CartUtils():
         self.init_mpi("openmpi")
 
         orterun_bin = find_executable("orterun",
-          os.environ["PATH"] + ":/usr/lib64/openmpi3/bin:/usr/lib64/mpi/gcc/openmpi3/bin")
+                        os.environ["PATH"] +
+                        ":/usr/lib64/openmpi3/bin:/usr/lib64/mpi/gcc/openmpi3/bin")
 
         if orterun_bin is None:
             orterun_bin = "orterun_not_installed"
@@ -343,8 +337,8 @@ class CartUtils():
         try:
             with open(os.devnull, 'w') as devnull:
                 subprocess.check_call(['sh', '-l', '-c', 'module -V'],
-                  stdout=devnull,
-                  stderr=devnull)
+                                      stdout=devnull,
+                                      stderr=devnull)
         except subprocess.CalledProcessError:
             # older version of module return -1
             return self.init_mpi_old(load[0])

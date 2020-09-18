@@ -22,9 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-# pylint: disable=bad-continuation
-# pylint: disable=line-too-long
-
 from __future__ import print_function
 
 import sys
@@ -35,6 +32,8 @@ from avocado       import main
 
 sys.path.append('./util')
 
+# Can't all this import before setting sys.path
+# pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
 class CartNoPmixOneNodeTest(Test):
@@ -52,7 +51,7 @@ class CartNoPmixOneNodeTest(Test):
         ofi_interface = self.params.get("OFI_INTERFACE", '/run/defaultENV/')
         ofi_ctx_num = self.params.get("CRT_CTX_NUM", '/run/defaultENV/')
         ofi_share_addr = self.params.get("CRT_CTX_SHARE_ADDR",
-                                               '/run/defaultENV/')
+                                         '/run/defaultENV/')
 
         self.pass_env = {"CRT_PHY_ADDR_STR": crt_phy_addr,
                          "OFI_INTERFACE": ofi_interface,
@@ -79,7 +78,8 @@ class CartNoPmixOneNodeTest(Test):
 
         rc = self.utils.wait_process(p, 10)
         if rc != 0:
-            self.utils.print("Error waiting for process. returning {}".format(rc))
+            self.utils.print("Error waiting for process.")
+            self.utils.print("returning {}".format(rc))
             self.fail("Test failed.\n")
 
         self.utils.print("Finished waiting for {}".format(p))

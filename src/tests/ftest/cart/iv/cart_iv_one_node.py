@@ -22,10 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-# pylint: disable=bad-whitespace
-# pylint: disable=broad-except
-# pylint: disable=bad-indentation
-
 from __future__ import print_function
 
 import sys
@@ -37,14 +33,15 @@ import struct
 import codecs
 import subprocess
 import shlex
+import traceback
 
 from avocado       import Test
 from avocado       import main
 
-import traceback
-
 sys.path.append('./util')
 
+# Can't all this import before setting sys.path
+# pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
 def _check_value(expected_value, received_value):
@@ -78,14 +75,18 @@ def _check_value(expected_value, received_value):
 
     return True
 
-# pylint: disable=missing-function-docstring
 def _check_key(key_rank, key_idx, received_key_hex):
-    """
-        Checks that the received key is the same as the sent key
-        key_rank and key_idx are 32-bit integers
-        received_key_hex is hex(key_rank|key_idx)
-    """
+    """Checks that the received key is the same as the sent key.
 
+    Args:
+        key_rank (int): 32-bit integer
+        key_idx (int): 32-bit integer
+        received_key_hex (int): hex(key_rank|key_idx)
+
+    Returns:
+        bool: is the received key is the same as the sent key
+
+    """
 
     if len(received_key_hex) != 16:
         return False
@@ -154,9 +155,9 @@ class CartIvOneNodeTest(Test):
                 # Create a temporary file for iv_client to write the results to
                 log_path_dir = os.environ['HOME']
                 if os.environ['DAOS_TEST_SHARED_DIR']:
-                  log_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
+                    log_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
 
-                log_fd, log_path = tempfile.mkstemp(dir = log_path_dir)
+                log_fd, log_path = tempfile.mkstemp(dir=log_path_dir)
 
 
                 # try writing to an unwritable spot
@@ -256,6 +257,7 @@ class CartIvOneNodeTest(Test):
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+        # pylint: disable=broad-except
         except Exception as e:
             self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
@@ -312,6 +314,7 @@ class CartIvOneNodeTest(Test):
             self.utils.print("\nClient cmd : %s\n" % clicmd)
             try:
                 subprocess.call(shlex.split(clicmd))
+            # pylint: disable=broad-except
             except Exception as e:
                 failed = True
                 self.utils.print("Exception in launching client : {}".format(e))
@@ -323,6 +326,7 @@ class CartIvOneNodeTest(Test):
         self.utils.print("\nClient cmd : %s\n" % clicmd)
         try:
             subprocess.call(shlex.split(clicmd))
+        # pylint: disable=broad-except
         except Exception as e:
             failed = True
             self.utils.print("Exception in launching client : {}".format(e))

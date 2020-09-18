@@ -22,9 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-# pylint: disable=bad-continuation
-# pylint: disable=unused-variable
-
 from __future__ import print_function
 
 import sys
@@ -34,6 +31,8 @@ from avocado  import main
 
 sys.path.append('./util')
 
+# Can't all this import before setting sys.path
+# pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
 class GroupTest(Test):
@@ -58,11 +57,6 @@ class GroupTest(Test):
 
         :avocado: tags=all,cart,pr,group_test,one_node
         """
-
-        log_mask = self.params.get("D_LOG_MASK", "/run/defaultENV/")
-        crt_phy_addr = self.params.get("CRT_PHY_ADDR_STR",
-                                          "/run/defaultENV/")
-        ofi_interface = self.params.get("OFI_INTERFACE", "/run/defaultENV/")
 
         srv_cmd = self.utils.build_cmd(self, self.env, "test_servers")
 

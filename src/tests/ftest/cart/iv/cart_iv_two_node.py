@@ -22,10 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 
-# pylint: disable=broad-except
-# pylint: disable=bad-indentation
-# pylint: disable=bad-whitespace
-
 from __future__ import print_function
 
 import sys
@@ -45,6 +41,8 @@ from avocado  import main
 
 sys.path.append('./util')
 
+# Can't all this import before setting sys.path
+# pylint: disable=wrong-import-position
 from cart_utils import CartUtils
 
 def _check_value(expected_value, received_value):
@@ -152,9 +150,9 @@ class CartIvTwoNodeTest(Test):
                 # Create a temporary file for iv_client to write the results to
                 log_path_dir = os.environ['HOME']
                 if os.environ['DAOS_TEST_SHARED_DIR']:
-                  log_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
+                    log_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
 
-                log_fd, log_path = tempfile.mkstemp(dir = log_path_dir)
+                log_fd, log_path = tempfile.mkstemp(dir=log_path_dir)
 
                 command = " {!s} -o '{!s}' -r '{!s}' -k '{!s}:{!s}' -l '{!s}'" \
                     .format(command, operation, rank, key_rank, key_idx,
@@ -236,6 +234,7 @@ class CartIvTwoNodeTest(Test):
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+        # pylint: disable=broad-except
         except Exception as e:
             self.utils.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
@@ -289,6 +288,7 @@ class CartIvTwoNodeTest(Test):
             self.utils.print("\nClient cmd : %s\n" % clicmd)
             try:
                 subprocess.call(shlex.split(clicmd))
+            # pylint: disable=broad-except
             except Exception as e:
                 failed = True
                 self.utils.print("Exception in launching client : {}".format(e))
@@ -300,6 +300,7 @@ class CartIvTwoNodeTest(Test):
         self.utils.print("\nClient cmd : %s\n" % clicmd)
         try:
             subprocess.call(shlex.split(clicmd))
+        # pylint: disable=broad-except
         except Exception as e:
             failed = True
             self.utils.print("Exception in launching client : {}".format(e))
