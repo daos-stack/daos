@@ -963,9 +963,9 @@ run_daos_fs_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
-					 dfs_tests, dfs_setup,
-					 dfs_teardown);
+	rc = run_daos_sub_tests("DAOS FileSystem (DFS) tests", dfs_tests,
+				ARRAY_SIZE(dfs_tests), sub_tests,
+				sub_tests_size, dfs_setup, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
