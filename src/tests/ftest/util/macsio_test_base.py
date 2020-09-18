@@ -40,7 +40,6 @@ class MacsioTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(MacsioTestBase, self).setUp()
-
         self.macsio = self.get_macsio_command()
 
     def get_macsio_command(self):
@@ -80,6 +79,13 @@ class MacsioTestBase(TestWithServers):
                 information.
 
         """
+        # Update the MACSio pool and container info before gathering manager
+        # environment information to ensure they are included.
+        self.macsio.daos_pool = pool_uuid
+        self.macsio.daos_svcl = pool_svcl
+        self.macsio.daos_cont = cont_uuid
+
+        # Setup the job manager to run the macsio command
         env = self.macsio.get_environment(
             self.server_managers[0], self.client_log)
         if plugin:
@@ -88,9 +94,6 @@ class MacsioTestBase(TestWithServers):
             env["HDF5_PLUGIN_PATH"] = "{}".format(plugin)
 
         # Setup the job manager (mpirun) to run the macsio command
-        self.macsio.daos_pool = pool_uuid
-        self.macsio.daos_svcl = pool_svcl
-        self.macsio.daos_cont = cont_uuid
         self.job_manager.job = self.macsio
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.job_manager.assign_processes(len(self.hostlist_clients))
