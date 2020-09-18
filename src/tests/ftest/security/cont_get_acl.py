@@ -61,7 +61,7 @@ class GetContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,pr,security,container_acl,cont_get_acl_inputs
         """
         # Get list of outfile filenames to put contents of ACL in
-        out_filenames = self.params.get("out_filename", "/run/*")
+        out_filenames = self.params.get("valid_out_filename", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)
 
         # Disable raising an exception if the daos command fails
@@ -104,7 +104,7 @@ class GetContainerACLTest(ContSecurityTestBase):
         # acl information if no permissions are set for that user.
         test_errs = []
         for verbose in [True, False]:
-            for outfile in self.params.get("out_filename", "/run/*"):
+            for outfile in self.params.get("valid_out_filename", "/run/*"):
                 self.daos_cmd.container_get_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
