@@ -190,8 +190,13 @@ func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyRea
 		r = *superblock.Rank
 	}
 
-	//if !superblock.ValidRank || !superblock.MS {
 	if !superblock.ValidRank {
+		// FIXME DAOS-5656: retain dependency on rank 0
+		if superblock.BootstrapMS {
+			r = system.Rank(0)
+			srv.log.Debugf("marking instance %d as rank 0", srv.Index())
+		}
+
 		resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
 			Uuid:  superblock.UUID,
 			Rank:  r.Uint32(),

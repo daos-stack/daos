@@ -110,17 +110,6 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 	// number of targets, not number requested when starting
 	srv.setTargetCount(int(ready.GetNtgts()))
 
-	// FIXME: Eventually we want to get rid of the mgmt svc in the data plane,
-	// but for now let's just start it up so that we don't have to change so
-	// much code to test this idea out. The db in the control plane should
-	// be authoritative, and we'll just replace the contents of the data plane's
-	// DB.
-	if srv.isMSReplica() {
-		if err := srv.startMgmtSvc(); err != nil {
-			return errors.Wrap(err, "failed to start management service")
-		}
-	}
-
 	if err := srv.loadModules(); err != nil {
 		return errors.Wrap(err, "failed to load I/O server modules")
 	}

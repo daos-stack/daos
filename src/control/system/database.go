@@ -262,6 +262,9 @@ func (db *Database) Start(ctx context.Context, ctrlAddr *net.TCPAddr) error {
 		if future := db.raft.BootstrapCluster(bsc); future.Error() != nil {
 			return errors.Wrapf(err, "failed to bootstrap raft instance on %s", rc.LocalID)
 		}
+
+		// FIXME DAOS-5656: retain dependency on rank 0
+		db.data.NextRank++
 	}
 
 	go func(parent context.Context) {
@@ -326,6 +329,10 @@ func (db *Database) ReplicaRanks() (*GroupMap, error) {
 	// should we return all ready ranks per replica, for resiliency?
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
+		// FIXME DAOS-5656: retain dependency on rank 0
+		if !srv.Rank.Equals(0) {
+			continue
+		}
 		repAddr, _, err := db.checkReplica(srv.Addr)
 		if err != nil || repAddr == nil ||
 			!(srv.state == MemberStateJoined || srv.state == MemberStateReady) {

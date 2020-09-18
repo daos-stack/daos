@@ -339,6 +339,7 @@ func (m *Membership) Count() (int, error) {
 }
 
 type JoinRequest struct {
+	Rank           Rank
 	UUID           uuid.UUID
 	ControlAddr    *net.TCPAddr
 	FabricURI      string
@@ -378,7 +379,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	newMember := &Member{
-		Rank:           NilRank,
+		Rank:           req.Rank,
 		UUID:           req.UUID,
 		Addr:           req.ControlAddr,
 		FabricURI:      req.FabricURI,

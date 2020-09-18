@@ -216,6 +216,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	}
 
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
+		Rank:           system.Rank(req.Rank),
 		UUID:           uuid,
 		ControlAddr:    replyAddr,
 		FabricURI:      req.GetUri(),
