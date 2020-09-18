@@ -283,6 +283,10 @@ class DaosServer():
 
         self._yaml_file = None
         self._io_server_dir = None
+        self._size = os.statvfs('/mnt/daos')
+        capacity = self._size.f_blocks * self._size.f_bsize
+        mb = int(capacity / (1024*1024))
+        self.mb = mb
 
     def __del__(self):
         if self.running:
@@ -436,6 +440,14 @@ class DaosServer():
         self.running = False
         return ret
 
+    def run_dmg(self, cmd):
+        """Run the specified dmg command"""
+
+        exe_cmd = [os.path.join(self.conf['PREFIX'], 'bin', 'dmg')]
+        exe_cmd.extend(cmd)
+
+        return subprocess.run(exe_cmd)
+
 def il_cmd(dfuse, cmd):
     """Run a command under the interception library"""
     my_env = get_base_env()
@@ -446,6 +458,7 @@ def il_cmd(dfuse, cmd):
     my_env['D_LOG_FILE'] = log_file.name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
+    my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     ret = subprocess.run(cmd, env=my_env)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
@@ -769,24 +782,16 @@ def show_cont(conf, pool):
     assert rc.returncode == 0
     return rc.stdout.strip()
 
-def make_pool(daos, conf):
+def make_pool(daos):
     """Create a DAOS pool"""
 
-    time.sleep(2)
+    size = int(daos.mb / 4)
 
-    daos_raw = __import__('pydaos.raw')
+    rc = daos.run_dmg(['pool', 'create', '--scm-size', '{}M'.format(size), '--insecure'])
 
-    context = daos.raw.DaosContext(os.path.join(conf['PREFIX'], 'lib64'))
+    print(rc)
+    assert rc.returncode==0
 
-    pool_con = daos.raw.DaosPool(context)
-
-    try:
-        pool_con.create(511, os.geteuid(), os.getegid(),
-                        1024*1014*128, b'daos_server')
-    except daos_raw.raw.daos_api.DaosApiError:
-        time.sleep(10)
-        pool_con.create(511, os.geteuid(), os.getegid(),
-                        1024*1014*128, b'daos_server')
     return get_pool_list()
 
 def run_tests(dfuse):
@@ -919,11 +924,10 @@ def run_duns_overlay_test(server, conf):
     Fuse should use the pool/container IDs from the entry point,
     and expose the container.
     """
-    daos = import_daos(server, conf)
 
     pools = get_pool_list()
     while len(pools) < 1:
-        pools = make_pool(daos, conf)
+        pools = make_pool(server)
 
     parent_dir = tempfile.TemporaryDirectory(prefix='dnt_uns_')
 
@@ -958,11 +962,10 @@ def run_dfuse(server, conf):
     """Run several dfuse instances"""
 
     fatal_errors = BoolRatchet()
-    daos = import_daos(server, conf)
 
     pools = get_pool_list()
     while len(pools) < 1:
-        pools = make_pool(daos, conf)
+        pools = make_pool(server)
 
     dfuse = DFuse(server, conf)
     try:
@@ -1101,14 +1104,13 @@ def run_dfuse(server, conf):
 
 def run_il_test(server, conf):
     """Run a basic interception library test"""
-    daos = import_daos(server, conf)
 
     pools = get_pool_list()
 
     # TODO: This doesn't work with two pools, partly related to
     # DAOS-5109 but there may be other issues.
     while len(pools) < 1:
-        pools = make_pool(daos, conf)
+        pools = make_pool(server)
 
     print('pools are ', ','.join(pools))
 
@@ -1166,12 +1168,11 @@ def run_in_fg(server, conf):
 
     Block until ctrl-c is pressed.
     """
-    daos = import_daos(server, conf)
 
     pools = get_pool_list()
 
     while len(pools) < 1:
-        pools = make_pool(daos, conf)
+        pools = make_pool(server)
 
     dfuse = DFuse(server, conf, pool=pools[0])
     dfuse.start()
@@ -1199,7 +1200,7 @@ def test_pydaos_kv(server, conf):
     pools = get_pool_list()
 
     while len(pools) < 1:
-        pools = make_pool(daos, conf)
+        pools = make_pool(server)
 
     pool = pools[0]
 
