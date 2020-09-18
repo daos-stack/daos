@@ -680,9 +680,9 @@ def get_pool_list():
 
 def assert_file_size(ofd, size):
     """Verify the file size is as expected"""
-    stat = os.fstat(ofd.fileno())
-    print('Checking file size is {} {}'.format(size, stat.st_size))
-    assert stat.st_size == size
+    my_stat = os.fstat(ofd.fileno())
+    print('Checking file size is {} {}'.format(size, my_stat.st_size))
+    assert my_stat.st_size == size
 
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
@@ -787,10 +787,14 @@ def make_pool(daos):
 
     size = int(daos.mb / 4)
 
-    rc = daos.run_dmg(['pool', 'create', '--scm-size', '{}M'.format(size), '--insecure'])
+    rc = daos.run_dmg(['pool',
+                       'create',
+                       '--scm-size',
+                       '{}M'.format(size),
+                       '--insecure'])
 
     print(rc)
-    assert rc.returncode==0
+    assert rc.returncode == 0
 
     return get_pool_list()
 
