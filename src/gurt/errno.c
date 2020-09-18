@@ -158,6 +158,9 @@ d_errdesc(int errnum)
 	if (errnum == DER_SUCCESS)
 		return "Success";
 
+	if (errnum == -DER_UNKNOWN)
+		return "Unknown error";
+
 	snprintf(buf, D_ERR_BUF_SIZE, "Unknown error code %d", errnum);
 
 	if (errnum > 0)
@@ -170,9 +173,6 @@ d_errdesc(int errnum)
 			continue;
 		return entry->er_strerror[errnum - entry->er_base - 1];
 	}
-
-	if (errnum == DER_UNKNOWN)
-		return "Unknown error";
 
 out:
 	return buf;
