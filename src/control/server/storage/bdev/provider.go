@@ -24,7 +24,6 @@
 package bdev
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -162,10 +161,7 @@ func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
 		return &ScanResponse{Controllers: resp.Controllers}
 	}
 
-	fmt.Printf("filter: %v", pciFilter)
-
 	for _, c := range resp.Controllers {
-		fmt.Printf("filter: %v", pciFilter)
 		if !common.Includes(pciFilter, c.PciAddr) {
 			continue
 		}
@@ -175,7 +171,10 @@ func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
 	return &ScanResponse{Controllers: out}
 }
 
-// Scan attempts to perform a scan to discover NVMe components in the system.
+// Scan attempts to perform a scan to discover NVMe components in the
+// system. Results will be cached at the provider and updated if
+// "Rescan" is set in the request. Returned results will be filtered
+// by request "DeviceList" and empty filter implies allowing all.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.shouldForward(req) {
 		req.DisableVMD = p.IsVMDDisabled()
@@ -204,8 +203,8 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	return p.backend.Scan(req)
 }
 
-// Prepare attempts to perform all actions necessary to make NVMe components available for
-// use by DAOS.
+// Prepare attempts to perform all actions necessary to make NVMe
+// components available for use by DAOS.
 func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	if p.shouldForward(req) {
 		resp, err := p.fwd.Prepare(req)
@@ -231,7 +230,8 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	return p.backend.Prepare(req)
 }
 
-// Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).
+// Format attempts to initialize NVMe devices for use by DAOS.
+// Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	if len(req.DeviceList) == 0 {
 		return nil, errors.New("empty DeviceList in FormatRequest")

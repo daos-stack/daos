@@ -150,6 +150,7 @@ func checkModelSerial(m string, s string) (ms, empty string, ok bool) {
 	return
 }
 
+// mapCtrlrsByModelSerial maps controllers to model+serial key.
 func mapCtrlrsByModelSerial(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
 	ctrlrMap := make(map[string]*storage.NvmeController) // ctrlr model+serial key
 
@@ -171,6 +172,11 @@ func mapCtrlrsByModelSerial(ctrlrs storage.NvmeControllers) (map[string]*storage
 	return ctrlrMap, nil
 }
 
+// scanInstanceBdevs retrieves up-to-date NVMe controller info including
+// health statistics and stored server meta-data. If I/O servers are running
+// then query is issued over dRPC as go-spdk bindings cannot be used to access
+// controller claimed by another process. Only update info for controllers
+// assigned to I/O servers.
 func (c *ControlService) scanInstanceBdevs(ctx context.Context) (storage.NvmeControllers, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
@@ -217,7 +223,9 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (storage.NvmeCon
 	return ctrlrs, nil
 }
 
-func (c *ControlService) setScanResp(cs storage.NvmeControllers, inErr error, req *ctlpb.ScanNvmeReq, resp *ctlpb.ScanNvmeResp) error {
+// setBdevScanResp populates protobuf NVMe scan response with controller info
+// including health statistics or metadata if requested.
+func (c *ControlService) setBdevScanResp(cs storage.NvmeControllers, inErr error, req *ctlpb.ScanNvmeReq, resp *ctlpb.ScanNvmeResp) error {
 	state := newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", "Scan NVMe Storage")
 
 	if inErr != nil {
@@ -248,18 +256,20 @@ func (c *ControlService) setScanResp(cs storage.NvmeControllers, inErr error, re
 	return nil
 }
 
+// scanBdevs updates transient details if health statistics or server metadata
+// is requested otherwise just retrieves cached static controller details.
 func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq, resp *ctlpb.ScanNvmeResp) error {
 	if req.Health || req.Meta {
 		// filter results based on config file bdev_list contents
 		ctrlrs, err := c.scanInstanceBdevs(ctx)
 
-		return c.setScanResp(ctrlrs, err, req, resp)
+		return c.setBdevScanResp(ctrlrs, err, req, resp)
 	}
 
 	// return cached results for all bdevs
 	bsr, scanErr := c.NvmeScan(bdev.ScanRequest{})
 
-	return c.setScanResp(bsr.Controllers, errors.Wrap(scanErr, "NvmeScan()"), req, resp)
+	return c.setBdevScanResp(bsr.Controllers, errors.Wrap(scanErr, "NvmeScan()"), req, resp)
 }
 
 func (c *ControlService) scanInstanceScm(ctx context.Context) (storage.ScmNamespaces, storage.ScmModules, error) {
