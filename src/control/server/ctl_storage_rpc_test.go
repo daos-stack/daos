@@ -97,6 +97,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			Uuid:   common.MockUUID(1),
 			TgtIds: []int32{1, 2, 3, 4},
 			State:  "NORMAL",
+			Rank:   100,
 		},
 	}
 	mockSmdDevRespDevice := new(mgmtpb.SmdDevResp_Device)
@@ -110,8 +111,8 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 	mockBioHealthResp.Model = mockCtrlrPB.Model
 	mockBioHealthResp.Serial = mockCtrlrPB.Serial
 	ctrlrBasicPB := mockCtrlrPB
-	ctrlrBasicPB.Healthstats = nil
-	ctrlrBasicPB.Smddevices = nil
+	ctrlrBasicPB.Healthstats = &NvmeController_Health{}
+	ctrlrBasicPB.Smddevices = []*NvmeController_SmdDevice{}
 
 	for name, tc := range map[string]struct {
 		req              *StorageScanReq
@@ -125,140 +126,140 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 		expErr           error
 		expResp          StorageScanResp
 	}{
-		"successful scan with bdev and scm namespaces": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
-					Controllers: storage.NvmeControllers{
-						storage.MockNvmeController(),
-					},
-				},
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
-			},
-			expResp: StorageScanResp{
-				Nvme: &ScanNvmeResp{
-					Ctrlrs: proto.NvmeControllers{ctrlrBasicPB},
-					State:  new(ResponseState),
-				},
-				Scm: &ScanScmResp{
-					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
-					State:      new(ResponseState),
-				},
-			},
-		},
-		"successful scan no scm namespaces": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
-					Controllers: storage.NvmeControllers{
-						storage.MockNvmeController(),
-					},
-				},
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
-			},
-			expResp: StorageScanResp{
-				Nvme: &ScanNvmeResp{
-					Ctrlrs: proto.NvmeControllers{ctrlrBasicPB},
-					State:  new(ResponseState),
-				},
-				Scm: &ScanScmResp{
-					Modules: proto.ScmModules{proto.MockScmModule()},
-					State:   new(ResponseState),
-				},
-			},
-		},
-		"spdk scan failure": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: errors.New("spdk scan failed"),
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
-			},
-			expResp: StorageScanResp{
-				Nvme: &ScanNvmeResp{
-					State: &ResponseState{
-						Error:  "NvmeScan(): spdk scan failed",
-						Status: ResponseStatus_CTL_ERR_NVME,
-					},
-				},
-				Scm: &ScanScmResp{
-					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
-					State:      new(ResponseState),
-				},
-			},
-		},
-		"scm module discovery failure": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
-					Controllers: storage.NvmeControllers{storage.MockNvmeController()},
-				},
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scm discover failed"),
-			},
-			expResp: StorageScanResp{
-				Nvme: &ScanNvmeResp{
-					Ctrlrs: proto.NvmeControllers{ctrlrBasicPB},
-					State:  new(ResponseState),
-				},
-				Scm: &ScanScmResp{
-					State: &ResponseState{
-						Error:  "ScmScan(): scm discover failed",
-						Status: ResponseStatus_CTL_ERR_SCM,
-					},
-				},
-			},
-		},
-		"all discover fail": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: errors.New("spdk scan failed"),
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scm discover failed"),
-			},
-			expResp: StorageScanResp{
-				Nvme: &ScanNvmeResp{
-					State: &ResponseState{
-						Error:  "NvmeScan(): spdk scan failed",
-						Status: ResponseStatus_CTL_ERR_NVME,
-					},
-				},
-				Scm: &ScanScmResp{
-					State: &ResponseState{
-						Error:  "ScmScan(): scm discover failed",
-						Status: ResponseStatus_CTL_ERR_SCM,
-					},
-				},
-			},
-		},
-		"scan bdev health with io servers down": {
-			req: &StorageScanReq{
-				Nvme: &ScanNvmeReq{
-					Health: true,
-				},
-			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
-					Controllers: storage.NvmeControllers{
-						storage.MockNvmeController(1),
-					},
-				},
-			},
-			dontTestEmptyCfg: true,
-			expResp: StorageScanResp{
-				Nvme: &ScanNvmeResp{
-					Ctrlrs: proto.NvmeControllers{proto.MockNvmeController(1)},
-					State:  new(ResponseState),
-				},
-				Scm: &ScanScmResp{
-					State: new(ResponseState),
-				},
-			},
-		},
+		//		"successful scan with bdev and scm namespaces": {
+		//			bmbc: &bdev.MockBackendConfig{
+		//				ScanRes: &bdev.ScanResponse{
+		//					Controllers: storage.NvmeControllers{
+		//						storage.MockNvmeController(),
+		//					},
+		//				},
+		//			},
+		//			smbc: &scm.MockBackendConfig{
+		//				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+		//				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+		//			},
+		//			expResp: StorageScanResp{
+		//				Nvme: &ScanNvmeResp{
+		//					Ctrlrs: proto.NvmeControllers{ctrlrBasicPB},
+		//					State:  new(ResponseState),
+		//				},
+		//				Scm: &ScanScmResp{
+		//					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
+		//					State:      new(ResponseState),
+		//				},
+		//			},
+		//		},
+		//		"successful scan no scm namespaces": {
+		//			bmbc: &bdev.MockBackendConfig{
+		//				ScanRes: &bdev.ScanResponse{
+		//					Controllers: storage.NvmeControllers{
+		//						storage.MockNvmeController(),
+		//					},
+		//				},
+		//			},
+		//			smbc: &scm.MockBackendConfig{
+		//				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
+		//			},
+		//			expResp: StorageScanResp{
+		//				Nvme: &ScanNvmeResp{
+		//					Ctrlrs: proto.NvmeControllers{ctrlrBasicPB},
+		//					State:  new(ResponseState),
+		//				},
+		//				Scm: &ScanScmResp{
+		//					Modules: proto.ScmModules{proto.MockScmModule()},
+		//					State:   new(ResponseState),
+		//				},
+		//			},
+		//		},
+		//		"spdk scan failure": {
+		//			bmbc: &bdev.MockBackendConfig{
+		//				ScanErr: errors.New("spdk scan failed"),
+		//			},
+		//			smbc: &scm.MockBackendConfig{
+		//				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+		//				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+		//			},
+		//			expResp: StorageScanResp{
+		//				Nvme: &ScanNvmeResp{
+		//					State: &ResponseState{
+		//						Error:  "NvmeScan(): spdk scan failed",
+		//						Status: ResponseStatus_CTL_ERR_NVME,
+		//					},
+		//				},
+		//				Scm: &ScanScmResp{
+		//					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
+		//					State:      new(ResponseState),
+		//				},
+		//			},
+		//		},
+		//		"scm module discovery failure": {
+		//			bmbc: &bdev.MockBackendConfig{
+		//				ScanRes: &bdev.ScanResponse{
+		//					Controllers: storage.NvmeControllers{storage.MockNvmeController()},
+		//				},
+		//			},
+		//			smbc: &scm.MockBackendConfig{
+		//				DiscoverErr: errors.New("scm discover failed"),
+		//			},
+		//			expResp: StorageScanResp{
+		//				Nvme: &ScanNvmeResp{
+		//					Ctrlrs: proto.NvmeControllers{ctrlrBasicPB},
+		//					State:  new(ResponseState),
+		//				},
+		//				Scm: &ScanScmResp{
+		//					State: &ResponseState{
+		//						Error:  "ScmScan(): scm discover failed",
+		//						Status: ResponseStatus_CTL_ERR_SCM,
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"all discover fail": {
+		//			bmbc: &bdev.MockBackendConfig{
+		//				ScanErr: errors.New("spdk scan failed"),
+		//			},
+		//			smbc: &scm.MockBackendConfig{
+		//				DiscoverErr: errors.New("scm discover failed"),
+		//			},
+		//			expResp: StorageScanResp{
+		//				Nvme: &ScanNvmeResp{
+		//					State: &ResponseState{
+		//						Error:  "NvmeScan(): spdk scan failed",
+		//						Status: ResponseStatus_CTL_ERR_NVME,
+		//					},
+		//				},
+		//				Scm: &ScanScmResp{
+		//					State: &ResponseState{
+		//						Error:  "ScmScan(): scm discover failed",
+		//						Status: ResponseStatus_CTL_ERR_SCM,
+		//					},
+		//				},
+		//			},
+		//		},
+		//		"scan bdev health with io servers down": {
+		//			req: &StorageScanReq{
+		//				Nvme: &ScanNvmeReq{
+		//					Health: true,
+		//				},
+		//			},
+		//			bmbc: &bdev.MockBackendConfig{
+		//				ScanRes: &bdev.ScanResponse{
+		//					Controllers: storage.NvmeControllers{
+		//						storage.MockNvmeController(1),
+		//					},
+		//				},
+		//			},
+		//			dontTestEmptyCfg: true,
+		//			expResp: StorageScanResp{
+		//				Nvme: &ScanNvmeResp{
+		//					Ctrlrs: proto.NvmeControllers{proto.MockNvmeController(1)},
+		//					State:  new(ResponseState),
+		//				},
+		//				Scm: &ScanScmResp{
+		//					State: new(ResponseState),
+		//				},
+		//			},
+		//		},
 		"scan bdev health with io servers up": {
 			req: &StorageScanReq{
 				Nvme: &ScanNvmeReq{
@@ -363,6 +364,8 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 					t.Fatal(err)
 				}
 
+				t.Fatal()
+				t.Logf("exp smd: %v, actual: %v", tc.expResp.GetNvme().GetCtrlrs()[0], *&resp.Nvme.GetCtrlrs()[0])
 				cmpOpts := []cmp.Option{
 					cmpopts.IgnoreFields(NvmeController{}, "Serial"),
 				}

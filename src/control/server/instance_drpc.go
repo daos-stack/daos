@@ -200,11 +200,11 @@ func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.Smd
 }
 
 // updateInUseBdevs updates-in-place the input list of controllers with
-// new NVMe health stats and SMD metadata details.
+// new NVMe health stats and SMD metadata info.
 //
 // First map input controllers to their concatenated model+serial keys then
-// retrieve metadata and health details for each SMD device (blobstore) on
-// "this" IO server instance and update details in input controller list.
+// retrieve metadata and health stats for each SMD device (blobstore) on
+// "this" IO server instance and update info in input controller list.
 func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
 	smdDevs, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
 	if err != nil {
@@ -247,9 +247,15 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 
 		smdDev := new(storage.SmdDevice)
 		if err := convert.Types(dev, smdDev); err != nil {
-			return errors.Wrapf(err, "converting smd details for controller %s %s",
+			return errors.Wrapf(err, "converting smd info for controller %s %s",
 				modelSerial, ctrlr.PciAddr)
 		}
+		srvRank, err := srv.GetRank()
+		if err != nil {
+			return errors.Wrapf(err, "adding rank to smd info for controller %s %s",
+				modelSerial, ctrlr.PciAddr)
+		}
+		smdDev.Rank = srvRank
 
 		ctrlr.SmdDevices = append(ctrlr.SmdDevices, smdDev)
 	}

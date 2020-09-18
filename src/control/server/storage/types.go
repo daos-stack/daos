@@ -138,11 +138,13 @@ type (
 	// SmdDevice contains DAOS storage device information, including
 	// health details if requested.
 	SmdDevice struct {
-		UUID      string                `json:"uuid"`
-		TargetIDs []int32               `hash:"set" json:"tgt_ids"`
-		State     string                `json:"state"`
-		Rank      system.Rank           `json:"rank"`
-		Health    *NvmeControllerHealth `json:"health"`
+		UUID      string      `json:"uuid"`
+		TargetIDs []int32     `hash:"set" json:"tgt_ids"`
+		State     string      `json:"state"`
+		Rank      system.Rank `json:"rank"`
+		// TODO: included only for compatibility with storage_query smd
+		//       commands and should be removed when possible
+		Health *NvmeControllerHealth `json:"health"`
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
@@ -187,14 +189,17 @@ func (s ScmFirmwareUpdateStatus) String() string {
 	return "Unknown"
 }
 
+// TempK returns controller temperature in degrees Kelvin.
 func (ndh *NvmeControllerHealth) TempK() uint32 {
 	return uint32(ndh.Temperature)
 }
 
+// TempC returns controller temperature in degrees Celsius.
 func (ndh *NvmeControllerHealth) TempC() float32 {
 	return float32(ndh.Temperature) - 273.15
 }
 
+// TempF returns controller temperature in degrees Fahrenheit.
 func (ndh *NvmeControllerHealth) TempF() float32 {
 	return ndh.TempC()*(9/5) + 32
 }
@@ -276,6 +281,7 @@ func (sns ScmNamespaces) Summary() string {
 		common.Pluralise("namespace", len(sns)))
 }
 
+// Capacity returns the cumulative total bytes of all namespace sizes.
 func (nc *NvmeController) Capacity() (tb uint64) {
 	for _, n := range nc.Namespaces {
 		tb += n.Size
@@ -283,6 +289,7 @@ func (nc *NvmeController) Capacity() (tb uint64) {
 	return
 }
 
+// Capacity returns the cumulative total bytes of all controller capacities.
 func (ncs NvmeControllers) Capacity() (tb uint64) {
 	for _, c := range ncs {
 		tb += (*NvmeController)(c).Capacity()
