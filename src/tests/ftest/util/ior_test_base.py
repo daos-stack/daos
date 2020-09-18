@@ -28,15 +28,15 @@ import time
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
+from general_utils import pcmd
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 from dfuse_utils import Dfuse
-import write_host_file
 
 
 class IorTestBase(TestWithServers):
@@ -44,6 +44,9 @@ class IorTestBase(TestWithServers):
 
     :avocado: recursive
     """
+
+    IOR_WRITE_PATTERN = "Commencing write performance test"
+    IOR_READ_PATTERN = "Commencing read performance test"
 
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
@@ -54,6 +57,7 @@ class IorTestBase(TestWithServers):
         self.dfuse = None
         self.container = None
         self.lock = None
+        self.mpirun = None
 
     def setUp(self):
         """Set up each test case."""
@@ -66,14 +70,8 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
 
-        # Until DAOS-3320 is resolved run IOR for POSIX
-        # with single client node
-        if self.ior_cmd.api.value == "POSIX":
-            self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
         # lock is needed for run_multiple_ior method.
         self.lock = threading.Lock()
 
@@ -128,7 +126,8 @@ class IorTestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          test_file="daos:testFile"):
+                          test_file="daos:testFile", create_pool=True,
+                          create_cont=True, stop_dfuse=True):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -141,63 +140,90 @@ class IorTestBase(TestWithServers):
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
                 "daos:testFile". Is ignored when using POSIX through DFUSE.
+            create_pool (bool, optional): If it is true, create pool and
+                container else just run the ior. Defaults to True.
+            create_cont (bool, optional): Create new container. Default is True
+            stop_dfuse (bool, optional): Stop dfuse after ior command is
+                finished. Default is True.
 
         Returns:
             CmdResult: result of the ior command execution
 
         """
-        self.update_ior_cmd_with_pool()
+        if create_pool:
+            self.update_ior_cmd_with_pool(create_cont)
+
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
-            # Uncomment below two lines once DAOS-3355 is resolved
-            if self.ior_cmd.transfer_size.value == "256B":
-                return "Skipping the case for transfer_size=256B"
-            self._start_dfuse()
+            if not self.dfuse:
+                self._start_dfuse()
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
+        elif self.ior_cmd.api.value == "DFS":
+            test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
 
-        out = self.run_ior(self.get_job_manager_command(), self.processes,
+        out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
                            intercept)
 
-        if self.dfuse:
+        if stop_dfuse and self.dfuse:
             self.dfuse.stop()
             self.dfuse = None
         return out
 
-    def update_ior_cmd_with_pool(self):
+    def update_ior_cmd_with_pool(self, create_cont=True):
         """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
-        # Always create a container
+        # Create a container, if needed.
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
-        self.pool.connect()
-        self.create_cont()
+        if create_cont:
+            self.pool.connect()
+            self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
-    def get_job_manager_command(self):
+    def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
 
         Returns:
             str: the path for the mpi job manager command
 
         """
-        # Initialize MpioUtils if IOR is running in MPIIO or DAOS mode
-        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX"]:
+        # Initialize MpioUtils if IOR is running in MPIIO or DFS mode
+        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
         else:
             self.fail("Unsupported IOR API")
 
-        return Mpirun(self.ior_cmd, mpitype="mpich")
+        if self.subprocess:
+            self.mpirun = Mpirun(self.ior_cmd, True, mpitype="mpich")
+        else:
+            self.mpirun = Mpirun(self.ior_cmd, mpitype="mpich")
 
-    def run_ior(self, manager, processes, intercept=None):
+        return self.mpirun
+
+    def check_subprocess_status(self, operation="write"):
+        """Check subprocess status """
+        if operation == "write":
+            self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
+        elif operation == "read":
+            self.ior_cmd.pattern = self.IOR_READ_PATTERN
+        else:
+            self.fail("Exiting Test: Inappropriate operation type \
+                      for subprocess status check")
+
+        if not self.ior_cmd.check_ior_subprocess_status(
+                self.mpirun.process, self.ior_cmd):
+            self.fail("Exiting Test: Subprocess not running")
+
+    def run_ior(self, manager, processes, intercept=None, display_space=True):
         """Run the IOR command.
 
         Args:
@@ -208,16 +234,45 @@ class IorTestBase(TestWithServers):
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.setup_command(env, self.hostfile_clients, processes)
+        manager.assign_hosts(
+            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_processes(processes)
+        manager.assign_environment(env)
+
         try:
-            self.pool.display_pool_daos_space()
+            if display_space:
+                self.pool.display_pool_daos_space()
             out = manager.run()
+
+            if not self.subprocess:
+                for line in out.stdout.splitlines():
+                    if 'WARNING' in line:
+                        self.fail("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
+            if not self.subprocess and display_space:
+                self.pool.display_pool_daos_space()
+
+    def stop_ior(self):
+        """Stop IOR process.
+        Args:
+            manager (str): mpi job manager command
+        """
+        self.log.info(
+            "<IOR> Stopping in-progress IOR command: %s", self.mpirun.__str__())
+
+        try:
+            out = self.mpirun.stop()
+            return out
+        except CommandFailure as error:
+            self.log.error("IOR stop Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
+        finally:
             self.pool.display_pool_daos_space()
+
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -261,26 +316,24 @@ class IorTestBase(TestWithServers):
         """Create a new thread for ior run.
 
         Args:
-            clients (lst): Number of clients the ior would run against.
+            clients (list): hosts on which to run ior
             job_num (int): Assigned job number
             results (dict): A dictionary object to store the ior metrics
             intercept (path): Path to interception library
         """
-        hostfile = write_host_file.write_host_file(
-            clients, self.workdir, self.hostfile_clients_slots)
         job = threading.Thread(target=self.run_multiple_ior, args=[
-            hostfile, len(clients), results, job_num, intercept])
+            clients, results, job_num, intercept])
         return job
 
-    def run_multiple_ior(self, hostfile, num_clients,
-                         results, job_num, intercept=None):
-        # pylint: disable=too-many-arguments
+    def run_multiple_ior(self, clients, results, job_num, intercept=None):
         """Run the IOR command.
 
         Args:
-            manager (str): mpi job manager command
-            processes (int): number of host processes
-            intercept (str): path to interception library.
+            clients (list): hosts on which to run ior
+            results (dict): A dictionary object to store the ior metrics
+            job_num (int): Assigned job number
+            intercept (str, optional): path to interception library. Defaults to
+                None.
         """
         self.lock.acquire(True)
         tsize = self.ior_cmd.transfer_size.value
@@ -289,12 +342,14 @@ class IorTestBase(TestWithServers):
         if intercept:
             testfile += "intercept"
         self.ior_cmd.test_file.update(testfile)
-        manager = self.get_job_manager_command()
-        procs = (self.processes // len(self.hostlist_clients)) * num_clients
+        manager = self.get_ior_job_manager_command()
+        procs = (self.processes // len(self.hostlist_clients)) * len(clients)
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.setup_command(env, hostfile, procs)
+        manager.assign_hosts(clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_processes(procs)
+        manager.assign_environment(env)
         self.lock.release()
         try:
             self.pool.display_pool_daos_space()
@@ -337,3 +392,38 @@ class IorTestBase(TestWithServers):
             self.fail(
                 "Pool Free Size did not match: actual={}, expected={}".format(
                     actual_pool_size, expected_pool_size))
+
+    def execute_cmd(self, cmd, fail_on_err=True, display_output=True):
+        """Execute cmd using general_utils.pcmd
+
+          Args:
+            cmd (str): String command to be executed
+            fail_on_err (bool): Boolean for whether to fail the test if command
+                                execution returns non zero return code.
+            display_output (bool): Boolean for whether to display output.
+
+          Returns:
+            dict: a dictionary of return codes keys and accompanying NodeSet
+                  values indicating which hosts yielded the return code.
+        """
+        try:
+            # execute bash cmds
+            ret = pcmd(
+                self.hostlist_clients, cmd, verbose=display_output, timeout=300)
+            if 0 not in ret:
+                error_hosts = NodeSet(
+                    ",".join(
+                        [str(node_set) for code, node_set in
+                         ret.items() if code != 0]))
+                if fail_on_err:
+                    raise CommandFailure(
+                        "Error running '{}' on the following "
+                        "hosts: {}".format(cmd, error_hosts))
+
+         # report error if any command fails
+        except CommandFailure as error:
+            self.log.error("DfuseSparseFile Test Failed: %s",
+                           str(error))
+            self.fail("Test was expected to pass but "
+                      "it failed.\n")
+        return ret

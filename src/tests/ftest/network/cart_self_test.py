@@ -29,6 +29,7 @@ from command_utils_base import \
     EnvironmentVariables, FormattedParameter, CommandFailure
 from command_utils import ExecutableCommand
 from job_manager_utils import Orterun
+from general_utils import get_log_file
 
 
 class SelfTest(ExecutableCommand):
@@ -40,12 +41,8 @@ class SelfTest(ExecutableCommand):
         Uses Avocado's utils.process module to run self_test with parameters.
 
         Args:
-            namespace (str): yaml namespace (path to parameters)
-            command (str): string of the command to be executed.
             path (str, optional): path to location of command binary file.
                 Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
-                subprocess. Defaults to False.
         """
         super(SelfTest, self).__init__("/run/self_test/*", "self_test", path)
 
@@ -54,6 +51,7 @@ class SelfTest(ExecutableCommand):
         self.message_sizes = FormattedParameter("--message-sizes {0}")
         self.max_inflight_rpcs = FormattedParameter("--max-inflight-rpcs {0}")
         self.repetitions = FormattedParameter("--repetitions {0}")
+        self.attach_info = FormattedParameter("--path {0}")
 
 
 class CartSelfTest(TestWithServers):
@@ -74,6 +72,7 @@ class CartSelfTest(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(CartSelfTest, self).setUp()
+        share_addr = self.params.get("share_addr", "/run/test_params/*")
 
         # Configure the daos server
         config_file = self.get_config_file(self.server_group, "server")
@@ -84,15 +83,12 @@ class CartSelfTest(TestWithServers):
             self.hostlist_servers,
             self.hostfile_servers_slots,
             self.hostlist_servers)
-
-        # Configure the daos server to use a uri file - if supported by the
-        # daos_server job manager
-        if hasattr(self.server_managers[0].manager, "report_uri"):
-            self.uri_file = os.path.join(self.tmp, "uri.txt")
-            self.server_managers[0].manager.report_uri.value = self.uri_file
+        self.assertTrue(
+            self.server_managers[-1].set_config_value(
+                "crt_ctx_share_addr", share_addr),
+            "Error updating daos_server 'crt_ctx_share_addr' config setting")
 
         # Setup additional environment variables for the server orterun command
-        share_addr = self.params.get("share_addr", "/run/test/*")
         self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
         self.cart_env["CRT_PHY_ADDR_STR"] = \
@@ -104,21 +100,27 @@ class CartSelfTest(TestWithServers):
         # Start the daos server
         self.start_server_managers()
 
+        # Generate a uri file using daos_agent dump-attachinfo
+        attachinfo_file = "{}.attach_info_tmp".format(self.server_group)
+        self.uri_file = get_log_file(attachinfo_file)
+        agent_cmd = self.agent_managers[0].manager.job
+        agent_cmd.dump_attachinfo(self.uri_file)
+
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
 
-        :avocado: tags=all,smoke,unittest,tiny,cartselftest
+        :avocado: tags=all,pr,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
-        orterun = Orterun(SelfTest(self.cart_bin))
-        orterun.ompi_server.update(
-            "file:{}".format(self.uri_file), "orterun/ompi_server")
+        orterun = Orterun(SelfTest(self.bin))
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 
         # Get the self_test command line parameters
         orterun.job.get_params(self)
-        orterun.job.group_name.value = self.server_group
+        orterun.job.group_name.update(self.server_group, "group_name")
+        orterun.job.attach_info.update(
+            os.path.dirname(self.uri_file), "attach_info")
 
         # Setup the environment variables for the self_test orterun command
         orterun.assign_environment(self.cart_env)

@@ -36,14 +36,6 @@ class IorInterceptDfuseMix(IorTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        super(IorInterceptDfuseMix, self).setUp()
-        # Following line can be removed once the constraint
-        # in IorTestBase is removed. # DAOS-3320
-        self.hostlist_clients = self.params.get(
-            "test_clients", "/run/hosts/*")
-
     def test_ior_intercept_dfuse_mix(self):
         """Jira ID: DAOS-3500.
 

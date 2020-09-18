@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package hostlist
 
 import (
@@ -192,7 +193,7 @@ func parseRanges(input, rangeOp string) (ranges []*hostRange, err error) {
 	return
 }
 
-func parseBracketedHostList(input, rangeSep, rangeOp string) (*HostList, error) {
+func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) (*HostList, error) {
 	hl := &HostList{}
 
 	if len(input) == 0 {
@@ -207,8 +208,10 @@ func parseBracketedHostList(input, rangeSep, rangeOp string) (*HostList, error) 
 
 		var leftIndex, rightIndex int
 		if leftIndex = strings.IndexRune(tok, '['); leftIndex == -1 {
-			if err := hl.PushHost(tok); err != nil {
-				return nil, err
+			if !nameOptional {
+				if err := hl.PushHost(tok); err != nil {
+					return nil, err
+				}
 			}
 			continue
 		}
@@ -227,7 +230,7 @@ func parseBracketedHostList(input, rangeSep, rangeOp string) (*HostList, error) 
 		}
 
 		prefix := tok[:leftIndex]
-		if len(prefix) == 0 {
+		if len(prefix) == 0 && !nameOptional {
 			return nil, fmt.Errorf("invalid range: %q", tok)
 		}
 		var suffix string
@@ -249,7 +252,8 @@ func parseBracketedHostList(input, rangeSep, rangeOp string) (*HostList, error) 
 
 // Create creates a new HostList from the supplied string representation.
 func Create(stringHosts string) (*HostList, error) {
-	return parseBracketedHostList(stringHosts, outerRangeSeparators, rangeOperator)
+	return parseBracketedHostList(stringHosts, outerRangeSeparators,
+		rangeOperator, false)
 }
 
 // String returns a ranged string representation of the HostList.
@@ -485,7 +489,7 @@ func (hl *HostList) getNthHostRange(n int) (int, *hostRange, int, error) {
 	return -1, nil, 0, errors.New("unknown error")
 }
 
-// Nth returns the string represenation of the n-th host in
+// Nth returns the string representation of the n-th host in
 // the HostList. Returns an error if the index is invalid.
 func (hl *HostList) Nth(n int) (string, error) {
 	hl.RLock()

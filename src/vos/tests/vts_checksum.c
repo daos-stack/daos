@@ -107,7 +107,7 @@ void
 csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 {
 	struct dcs_csum_info	*csum_infos;
-	struct dcs_iod_csums	 iod_csums;
+	struct dcs_iod_csums	 iod_csums = {0};
 	daos_iod_t		 iod = {0};
 	daos_recx_t		 recx[MAX_RECX];
 	d_sg_list_t		 sgl;
@@ -146,6 +146,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 
 	D_ALLOC_ARRAY(csum_infos, update_recx_nr);
 	iod_csums.ic_data = csum_infos;
+	iod_csums.ic_nr = update_recx_nr;
 
 	for (i = 0; i < update_recx_nr; i++) {
 		uint64_t csum_buf_len;
@@ -189,7 +190,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	 * how the server object layer already interfaces with VOS)
 	 */
 	vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
-			false, &ioh);
+			0, NULL, &ioh, NULL);
 
 	biod = vos_ioh2desc(ioh);
 	bsgl = bio_iod_sgl(biod, 0);
@@ -686,7 +687,7 @@ test_evt_entry_csum_update(void **state)
 	actual = expected;
 
 	/** Don't update unnecessarily */
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len, actual.cs_buf_len);
 	assert_ptr_equal(expected.cs_csum, actual.cs_csum);
@@ -694,7 +695,7 @@ test_evt_entry_csum_update(void **state)
 	/** Will still need the first checksum to verify the first chunk */
 	actual = expected;
 	sel.ex_lo = 3;
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len, actual.cs_buf_len);
 	assert_ptr_equal(expected.cs_csum, actual.cs_csum);
@@ -705,7 +706,7 @@ test_evt_entry_csum_update(void **state)
 	 */
 	actual = expected;
 	sel.ex_lo = 4;
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr - 1, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len - expected.cs_len,
 		actual.cs_buf_len);
@@ -716,7 +717,7 @@ test_evt_entry_csum_update(void **state)
 	 */
 	actual = expected;
 	sel.ex_lo = 7;
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr - 1, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len - expected.cs_len,
 		actual.cs_buf_len);
@@ -728,7 +729,7 @@ test_evt_entry_csum_update(void **state)
 	actual = expected;
 	sel.ex_lo = 8;
 	sel.ex_hi = 16;
-	evt_entry_csum_update(&ext, &sel, &actual);
+	evt_entry_csum_update(&ext, &sel, &actual, 1);
 	assert_int_equal(expected.cs_nr - 2, actual.cs_nr);
 	assert_int_equal(expected.cs_buf_len - expected.cs_len * 2,
 		actual.cs_buf_len);
@@ -771,16 +772,24 @@ static const struct CMUnitTest evt_checksums_tests[] = {
 	EVT("03: Test the alignment of entries", test_evt_entry_csum_update),
 };
 
-int run_csum_extent_tests(void)
+int run_csum_extent_tests(const char *cfg)
 {
 	int rc = 0;
+	char	test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name,
+		"Storage and retrieval of checksums for Array Type %s", cfg);
 
 	rc = cmocka_run_group_tests_name(
-		"Storage and retrieval of checksums for Array Type",
+		test_name,
 		update_fetch_checksums_for_array_types, setup_io, teardown_io);
 
+	dts_create_config(test_name,
+		"evtreen helper functions for alignment, counting, etc for csum  %s",
+		cfg);
+
 	rc += cmocka_run_group_tests_name(
-		"evtree helper functions for alignment, counting, etc for csum",
+		test_name,
 		evt_checksums_tests, setup_io, teardown_io);
 
 	return rc;

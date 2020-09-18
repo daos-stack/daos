@@ -29,6 +29,8 @@ from util.agent_utils_params import \
     DaosAgentYamlParameters, DaosAgentTransportCredentials
 from util.server_utils_params import \
     DaosServerYamlParameters, DaosServerTransportCredentials
+from util.dmg_utils_params import \
+    DmgYamlParameters, DmgTransportCredentials
 
 
 def generate_agent_config(args):
@@ -43,6 +45,8 @@ def generate_agent_config(args):
     """
     common_cfg = CommonConfig(args.group_name, DaosAgentTransportCredentials())
     config = DaosAgentYamlParameters(args.agent_file, common_cfg)
+    # Update the configuration file access points
+    config.other_params.access_points.value = args.node_list.split(",")
     return create_config(args, config)
 
 
@@ -58,6 +62,25 @@ def generate_server_config(args):
     """
     common_cfg = CommonConfig(args.group_name, DaosServerTransportCredentials())
     config = DaosServerYamlParameters(args.server_file, common_cfg)
+    # Update the configuration file access points
+    config.other_params.access_points.value = args.node_list.split(",")
+    return create_config(args, config)
+
+
+def generate_dmg_config(args):
+    """Generate a dmg configuration file.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        bool: status of creating the dmg configuration file
+
+    """
+    config = DmgYamlParameters(
+        args.dmg_file, args.group_name, DmgTransportCredentials())
+    # Update the configuration file hostlist
+    config.hostlist.value = args.node_list.split(",")
     return create_config(args, config)
 
 
@@ -73,8 +96,6 @@ def create_config(args, config):
         bool: status of creating the configuration file
 
     """
-    # Update the configuration file access points
-    config.other_params.access_points.value = args.node_list.split(",")
     if args.port:
         config.other_params.port.value = args.port
 
@@ -127,6 +148,12 @@ def main():
         default=None,
         help="name and path of the daos_agent configuration file to create")
     parser.add_argument(
+        "-d", "--dmg_file",
+        action="store",
+        type=str,
+        default=None,
+        help="name and path of the dmg configuration file to create")
+    parser.add_argument(
         "-g", "--group_name",
         action="store",
         type=str,
@@ -161,12 +188,20 @@ def main():
         if not generate_agent_config(args):
             status += 1
 
-    # Create a daos_agent configuration file if a filename was provided
+    # Create a daos_server configuration file if a filename was provided
     if args.server_file:
         log.info(
             "Generating the daos_server configuration file: %s",
             args.server_file)
         if not generate_server_config(args):
+            status += 1
+
+    # Create a dmg configuration file if a filename was provided
+    if args.dmg_file:
+        log.info(
+            "Generating the dmg configuration file: %s",
+            args.dmg_file)
+        if not generate_dmg_config(args):
             status += 1
 
     exit(status)

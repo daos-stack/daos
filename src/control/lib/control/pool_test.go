@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -98,6 +99,138 @@ func TestControl_PoolDestroy(t *testing.T) {
 	}
 }
 
+func TestControl_PoolDrain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolDrainReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"invalid UUID": {
+			req: &PoolDrainReq{
+				UUID:      "bad",
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			expErr: errors.New("invalid UUID"),
+		},
+		"success": {
+			req: &PoolDrainReq{
+				UUID:      MockUUID,
+				Rank:      2,
+				Targetidx: []uint32{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolDrainResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolDrain(ctx, mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
+func TestControl_PoolEvict(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolEvictReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolEvictReq{
+				UUID: MockUUID,
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolEvictReq{
+				UUID: MockUUID,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"invalid UUID": {
+			req: &PoolEvictReq{
+				UUID: "bad",
+			},
+			expErr: errors.New("invalid UUID"),
+		},
+		"success": {
+			req: &PoolEvictReq{
+				UUID: MockUUID,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolEvictResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolEvict(ctx, mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
 func TestControl_PoolCreate(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -119,16 +252,8 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"invalid UUID": {
-			req: &PoolCreateReq{
-				UUID: "bad",
-			},
-			expErr: errors.New("invalid UUID"),
-		},
 		"success": {
-			req: &PoolCreateReq{
-				UUID: MockUUID,
-			},
+			req: &PoolCreateReq{},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
@@ -137,7 +262,6 @@ func TestControl_PoolCreate(t *testing.T) {
 				),
 			},
 			expResp: &PoolCreateResp{
-				UUID:    MockUUID,
 				SvcReps: []uint32{0, 1, 2},
 			},
 		},
@@ -160,7 +284,8 @@ func TestControl_PoolCreate(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpt := cmpopts.IgnoreFields(PoolCreateResp{}, "UUID")
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpt); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -223,28 +348,30 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID:            MockUUID,
-				TotalTargets:    42,
-				ActiveTargets:   16,
-				DisabledTargets: 17,
-				Rebuild: &PoolRebuildStatus{
-					State:   PoolRebuildStateBusy,
-					Objects: 1,
-					Records: 2,
-				},
-				Scm: &StorageUsageStats{
-					Total: 123456,
-					Free:  0,
-					Min:   1,
-					Max:   2,
-					Mean:  3,
-				},
-				Nvme: &StorageUsageStats{
-					Total: 123456,
-					Free:  0,
-					Min:   1,
-					Max:   2,
-					Mean:  3,
+				UUID: MockUUID,
+				PoolInfo: PoolInfo{
+					TotalTargets:    42,
+					ActiveTargets:   16,
+					DisabledTargets: 17,
+					Rebuild: &PoolRebuildStatus{
+						State:   PoolRebuildStateBusy,
+						Objects: 1,
+						Records: 2,
+					},
+					Scm: &StorageUsageStats{
+						Total: 123456,
+						Free:  0,
+						Min:   1,
+						Max:   2,
+						Mean:  3,
+					},
+					Nvme: &StorageUsageStats{
+						Total: 123456,
+						Free:  0,
+						Min:   1,
+						Max:   2,
+						Mean:  3,
+					},
 				},
 			},
 		},

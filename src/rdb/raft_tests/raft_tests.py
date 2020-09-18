@@ -26,6 +26,7 @@ this number as the return code.
 import subprocess
 import sys
 import os
+import json
 
 # Get rid of complaints about parens for print statements and short var names
 #pylint: disable=C0103
@@ -42,15 +43,22 @@ def number_of_failures():
     """
     failures = 0
     successes = 0
-    if not os.path.isfile(os.path.join("build", DIR, "src", "tests_main")):
+    json_file = ".build_vars.json"
+    path = os.path.join("build", DIR, "src")
+    if os.path.exists(json_file):
+        ofh = open(json_file, "r")
+        conf = json.load(ofh)
+        ofh.close()
+        path = os.path.join(conf["BUILD_DIR"], DIR, "src")
+    if not os.path.exists(path):
         try:
-            res = subprocess.check_output(['make', '-C', DIR, 'tests'])
+            res = subprocess.check_output(['/usr/bin/make', '-C', DIR, 'tests'])
         except Exception as e:
             print("Building Raft Tests failed due to\n{}".format(e))
             return TEST_NOT_RUN
     else:
-        os.chdir(os.path.join("build", DIR, "src"))
-        res = subprocess.check_output("./tests_main", shell=True).decode()
+        os.chdir(path)
+        res = subprocess.check_output(["./tests_main"]).decode()
 
     for line in res.split('\n'):
         if line.startswith("not ok"):

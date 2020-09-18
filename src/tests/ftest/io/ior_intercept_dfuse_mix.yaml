@@ -10,6 +10,7 @@ timeout: 2400
 server_config:
     name: daos_server
     servers:
+        log_mask: INFO
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
@@ -21,13 +22,16 @@ pool:
     nvme_size: 500000000000
     svcn: 1
     control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 ior:
     client_processes:
       np: 32
     test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
-    daos_destroy: False
+    dfs_destroy: False
     iorflags:
         ssf:
           flags: "-k -D 300 -v -w -r"
@@ -36,6 +40,6 @@ ior:
           block_size: '8G'
           write_x: 1
           read_x: 1
-          daos_oclass: "SX"
+          dfs_oclass: "SX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,10 +30,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <sys/ioctl.h>
 #include <errno.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <daos.h>
 #include <daos/common.h>
+#include <daos/checksum.h>
+#include <daos/compression.h>
+#include <daos/cipher.h>
 #include <daos/rpc.h>
 #include <daos/debug.h>
 #include <daos/object.h>
@@ -42,6 +50,7 @@
 #include "daos_api.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
+#include "dfuse_ioctl.h"
 
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
@@ -111,6 +120,8 @@ pool_op_parse(const char *str)
 		return POOL_GET_ATTR;
 	else if (strcmp(str, "set-attr") == 0)
 		return POOL_SET_ATTR;
+	else if (strcmp(str, "del-attr") == 0)
+		return POOL_DEL_ATTR;
 	else if (strcmp(str, "list-attrs") == 0)
 		return POOL_LIST_ATTRS;
 	return -1;
@@ -313,24 +324,16 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
 		entry->dpe_str = strdup(value);
 	} else if (!strcmp(name, "cksum")) {
-		if (!strcmp(value, "off"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_OFF;
-		else if (!strcmp(value, "crc16"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC16;
-		else if (!strcmp(value, "crc32"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC32;
-		else if (!strcmp(value, "crc64"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC64;
-		else if (!strcmp(value, "sha1")) {
-			/* entry->dpe_val = DAOS_PROP_CO_CSUM_SHA1; */
-			fprintf(stderr, "'sha1' isn't supported yet, please use one of the CRC option\n");
-			return -DER_INVAL;
-		} else {
-			/* fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64], sha1'\n"); */
-			fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64]'\n");
+		int csum_type = daos_str2csumcontprop(value);
+
+		if (csum_type < 0) {
+			fprintf(stderr,
+				"currently supported checksum types are "
+				"'off, crc[16,32,64], sha[1,256,512]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
+		entry->dpe_val = csum_type;
 	} else if (!strcmp(name, "cksum_size")) {
 		char *endp;
 		long val;
@@ -341,10 +344,12 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		 */
 		val = strtoull(value, &endp, 0);
 		if (*endp != '\0') {
-			fprintf(stderr, "invalid digits in %s\n", value);
+			fprintf(stderr, "cksum_size value has invalid digits (%s)\n",
+				value);
 			return -DER_INVAL;
 		} else if (val == ULLONG_MAX) {
-			fprintf(stderr, "too big value %s\n", value);
+			fprintf(stderr, "cksum_size value is too big (%s)\n",
+				value);
 			return -DER_INVAL;
 		}
 
@@ -360,6 +365,65 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	} else if (!strcmp(name, "dedup")) {
+		if (!strcmp(value, "off"))
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_OFF;
+		else if (!strcmp(value, "memcmp"))
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_MEMCMP;
+		else if (!strcmp(value, "hash"))
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_HASH;
+		else {
+			fprintf(stderr, "dedup prop value can only be 'off/memcmp/hash'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_DEDUP;
+	} else if (!strcmp(name, "dedup_th") ||
+		   !strcmp(name, "dedup_threshold")) {
+		char *endp;
+		long val;
+
+		/* use base 0 to interpret 0/octal or 0x/hex prefixes
+		 * no need to check empty value, this is done in
+		 * daos_parse_properties()
+		 */
+		val = strtoull(value, &endp, 0);
+		if (*endp != '\0') {
+			fprintf(stderr, "dedup_th value has invalid digits (%s)\n",
+				value);
+			return -DER_INVAL;
+		} else if (val == ULLONG_MAX) {
+			fprintf(stderr, "dedup_th value is too big (%s)\n",
+				value);
+			return -DER_INVAL;
+		} else if (val < 4096) {
+			fprintf(stderr, "dedup_th value is too small (%s)\n",
+				value);
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+		entry->dpe_val = val;
+	} else if (!strcmp(name, "compress") || !strcmp(name, "compression")) {
+		int compression_type = daos_str2compresscontprop(value);
+
+		if (compression_type < 0) {
+			fprintf(stderr, "compression prop value can only be "
+				"'off/lz4/gzip/gzip[1-9]'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_COMPRESS;
+		entry->dpe_val = compression_type;
+	} else if (!strcmp(name, "encrypt") ||
+		   !strcmp(name, "encryption")) {
+		int encryption_type = daos_str2encryptcontprop(value);
+
+		if (encryption_type < 0) {
+			fprintf(stderr, "encryption prop value can only be "
+				"'off/aes-xts[128,256]/aes-cbc[128,192,256]/"
+				"aes-gcm[128,256]'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_ENCRYPT;
+		entry->dpe_val = encryption_type;
 	} else if (!strcmp(name, "rf")) {
 		if (!strcmp(value, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -377,7 +441,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 		}
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	} else {
-		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/rf\n");
+		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;
 	}
 
@@ -452,6 +516,11 @@ daos_parse_properties(char *props_string, daos_prop_t *props)
 enum {
 	DAOS_PROPERTIES_OPTION = 1,
 };
+
+/* resource and command arguments (ie "container create" for example) can be
+ * skipped for options evaluation
+ */
+#define SKIP_RES_AND_CMD_ARGS 2
 
 static int
 common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
@@ -529,14 +598,18 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	}
 	D_STRNDUP(cmdname, argv[2], strlen(argv[2]));
 	if (cmdname == NULL)
-		return RC_NO_HELP;
+		D_GOTO(out_free, rc = RC_NO_HELP);
 
-	/* Parse command options. Use goto on any errors here
-	 * since some options may result in resource allocation.
+	/* Parse remaining command-line options (skip resource and command).
+	 * Use goto on any errors here since some options may result in
+	 * resource allocation.
 	 */
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc - SKIP_RES_AND_CMD_ARGS,
+				 &argv[SKIP_RES_AND_CMD_ARGS], "", options,
+				 NULL)) != -1) {
 		switch (rc) {
 		case 'G':
+			D_FREE(ap->sysname);
 			D_STRNDUP(ap->sysname, optarg, strlen(optarg));
 			if (ap->sysname == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
@@ -704,6 +777,13 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		}
 	}
 
+	/* unexpected extra arguments not allowed */
+	if (optind < argc - SKIP_RES_AND_CMD_ARGS) {
+		fprintf(stderr, "unexpected extra argument : '%s'\n",
+			argv[optind + SKIP_RES_AND_CMD_ARGS]);
+		D_GOTO(out_free, rc = RC_NO_HELP);
+	}
+
 	cmd_args_print(ap);
 
 	/* Check for any unimplemented commands, print help */
@@ -716,9 +796,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	if (ap->c_op != -1 &&
 	    (ap->c_op == CONT_LIST_OBJS ||
-	     ap->c_op == CONT_STAT ||
-	     ap->c_op == CONT_DEL_ATTR ||
-	     ap->c_op == CONT_ROLLBACK)) {
+	     ap->c_op == CONT_STAT)) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
@@ -735,6 +813,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	/* Verify pool svc provided */
 	ARGS_VERIFY_MDSRV(ap, out_free, rc = RC_PRINT_HELP);
 
+	D_FREE(cmdname);
 	return 0;
 
 out_free:
@@ -809,12 +888,41 @@ pool_op_hdlr(struct cmd_args_s *ap)
 	case POOL_LIST_ATTRS:
 		rc = pool_list_attrs_hdlr(ap);
 		break;
+	case POOL_DEL_ATTR:
+		rc = pool_del_attr_hdlr(ap);
+		break;
 	default:
 		break;
 	}
 
 out:
 	return rc;
+}
+
+static int
+call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (fd < 0)
+		return ENOENT;
+
+	errno = 0;
+	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
+	if (rc != 0) {
+		int err = errno;
+
+		close(fd);
+		return err;
+	}
+	close(fd);
+
+	if (reply->fir_version != DFUSE_IOCTL_VERSION)
+		return EIO;
+
+	return 0;
 }
 
 static int
@@ -834,19 +942,37 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
+		struct dfuse_il_reply il_reply = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed */
+		/* Resolve pool, container UUIDs from path if needed
+		 *
+		 * Firtly check for a unified namespace entry point, then if
+		 * that isn't detected then check for dfuse backing the
+		 * path, and print pool/container/oid for the path.
+		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
-			fprintf(stderr, "could not resolve pool, container "
-					"by path: %s\n", ap->path);
-			D_GOTO(out, rc);
+
+			rc = call_dfuse_ioctl(ap->path, &il_reply);
+			if (rc != 0) {
+				fprintf(stderr, "could not resolve pool, "
+					"container by path: %d %s %s\n",
+					rc, strerror(rc), ap->path);
+
+				D_GOTO(out, rc);
+			}
+
+			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
+			uuid_copy(ap->p_uuid, il_reply.fir_pool);
+			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+			ap->oid = il_reply.fir_oid;
+		} else {
+			ap->type = dattr.da_type;
+			uuid_copy(ap->p_uuid, dattr.da_puuid);
+			uuid_copy(ap->c_uuid, dattr.da_cuuid);
 		}
-		ap->type = dattr.da_type;
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
@@ -916,7 +1042,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_list_attrs_hdlr(ap);
 		break;
 	case CONT_DEL_ATTR:
-		/* rc = cont_del_attr_hdlr(ap); */
+		rc = cont_del_attr_hdlr(ap);
 		break;
 	case CONT_GET_ATTR:
 		rc = cont_get_attr_hdlr(ap);
@@ -928,13 +1054,13 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_create_snap_hdlr(ap);
 		break;
 	case CONT_LIST_SNAPS:
-		rc = cont_list_snaps_hdlr(ap);
+		rc = cont_list_snaps_hdlr(ap, NULL, NULL);
 		break;
 	case CONT_DESTROY_SNAP:
 		rc = cont_destroy_snap_hdlr(ap);
 		break;
 	case CONT_ROLLBACK:
-		/* rc = cont_rollback_hdlr(ap); */
+		rc = cont_rollback_hdlr(ap);
 		break;
 	case CONT_GET_ACL:
 		rc = cont_get_acl_hdlr(ap);
@@ -1147,7 +1273,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	  query            query a pool\n"
 		"	  stat             get pool statistics\n"
 		"	  list-attrs       list pool user-defined attributes\n"
-		"	  get-attr         get pool user-defined attribute\n");
+		"	  get-attr         get pool user-defined attribute\n"
+		"	  set-attr         set pool user-defined attribute\n"
+		"	  del-attr         del pool user-defined attribute\n");
 
 		fprintf(stream,
 		"pool options:\n"
@@ -1155,7 +1283,8 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		"	--sys-name=STR     DAOS system name context for servers (\"%s\")\n"
 		"	--sys=STR\n"
 		"	--svc=RANKS        pool service replicas like 1,2,3\n"
-		"	--attr=NAME        pool attribute name to get\n",
+		"	--attr=NAME        pool attribute name to get, set, del\n"
+		"	--value=VALUESTR   pool attribute name to set\n",
 			default_sysname);
 
 	} else if (strcmp(argv[2], "container") == 0 ||
@@ -1181,11 +1310,19 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 			"	--properties=<name>:<value>[,<name>:<value>,...]\n"
 			"			   supported prop names are label, cksum,\n"
-			"				cksum_size, srv_cksum, rf\n"
+			"				cksum_size, srv_cksum, dedup\n"
+			"				dedup_th, compression, encryption\n"
 			"			   label value can be any string\n"
-			"			   cksum supported values are off, crc[16,32,64], sha1\n"
-			"			   cksum_size can be any size\n"
+			"			   cksum supported values are off, crc[16,32,64],\n"
+			"						      sha[1,256,512]\n"
+			"			   cksum_size can be any size < 4GiB\n"
 			"			   srv_cksum values can be on, off\n"
+			"			   dedup (preview) values can be off, memcmp or hash\n"
+			"			   dedup_th (preview) can be any size between 4KiB and 64KiB\n"
+			"			   compression (preview) values can be lz4, gzip, gzip[1-9]\n"
+			"			   encrypton (preview) values can be aes-xts[128,256],\n"
+			"							     aes-cbc[128,192,256],\n"
+			"							     aes-gcm[128,256]\n"
 			"			   rf supported values are [0-4]\n"
 			"	--acl-file=PATH    input file containing ACL\n"
 			"	--user=ID          user who will own the container.\n"
@@ -1214,7 +1351,7 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"container options (snapshot and rollback-related):\n"
 			"	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 			"	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-			"	--eprange=B-E      container epoch range (destroy-snap)\n");
+			"	--epcrange=B-E     container epoch range (destroy-snap)\n");
 			ALL_BUT_CONT_CREATE_OPTS_HELP();
 		} else if (strcmp(argv[3], "set-prop") == 0) {
 			fprintf(stream,
@@ -1338,6 +1475,10 @@ main(int argc, char *argv[])
 
 	/* Clean up dargs.mdsrv allocated in common_op_parse_hdlr() */
 	d_rank_list_free(dargs.mdsrv);
+
+	D_FREE(dargs.mdsrv_str);
+	D_FREE(dargs.sysname);
+	D_FREE(dargs.path);
 
 	daos_fini();
 

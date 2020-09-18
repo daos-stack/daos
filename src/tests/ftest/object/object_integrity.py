@@ -193,6 +193,8 @@ class ObjectDataValidation(TestWithServers):
             self.log.info(str(excep))
             self.fail("##(6.2)Failed on abort_tx.")
 
+        self.container.close_tx(new_transaction2)
+
     @avocado.fail_on(DaosApiError)
     def test_single_object_validation(self):
         """

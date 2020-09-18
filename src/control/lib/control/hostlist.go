@@ -80,7 +80,7 @@ func ParseHostList(in []string, defaultPort int) (out []string, err error) {
 //     to the entire hostlist set in the configuration.
 //
 // Will always return at least 1 host, or an error.
-func getRequestHosts(cfg *ClientConfig, req targetChooser) (hosts []string, err error) {
+func getRequestHosts(cfg *Config, req targetChooser) (hosts []string, err error) {
 	hosts = req.getHostList()
 	if len(hosts) == 0 {
 		if len(cfg.HostList) == 0 {

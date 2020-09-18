@@ -4,18 +4,18 @@ This section will be expanded in a future revision.
 
 ## Network Performance
 
-Similar to the Lustre Network stack, the DAOS CART layer can validate and
-benchmark network communications in the same context as an application and using
-the same networks/tuning options as regular DAOS.
+The DAOS CART layer can validate and benchmark network communications in the
+same context as an application and using the same networks/tuning options as
+regular DAOS.
 
 The CART self_test can run against the DAOS servers in a production environment
 in a non-destructive manner. CART self_test supports different message sizes,
 bulk transfers, multiple targets, and the following test scenarios:
 
--   **Selftest client to servers** where self_test issues RPCs directly
+-   **Selftest client to servers** - where self_test issues RPCs directly
     to a list of servers
 
--   **Cross-servers** where self_test sends instructions to the different
+-   **Cross-servers** - where self_test sends instructions to the different
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
@@ -32,7 +32,7 @@ $ cd install/TESTING
 
 **Prepare srvhostfile and clihostfile**
 
--   srvhostfile contains list of nodes from which servers will launch
+-   srvhostfile contains a list of nodes from which servers will launch
 
 -   clihostfile contains node from which self_test will launch
 
@@ -82,21 +82,98 @@ $ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfil
 
 ## Benchmarking DAOS
 
-DAOS can be benchmarked with both IOR and mdtest through the following
-backends:
+DAOS can be benchmarked using several widely used IO benchmarks like IOR,
+mdtest, and FIO. There are several backends that can be used with those
+benchmarks.
 
--   native MPI-IO plugin combined with the ROMIO DAOS ADIO driver
+IOR (https://github.com/hpc/ior) with the following backends:
 
--   native HDF5 plugin combined with the HDF5 DAOS connector (under
-    development)
+-   POSIX, MPIIO & HDF5 drivers over dfuse and the interception library.
 
--   native POSIX plugin over dfuse and interception library (under
-    development)
+-   MPI-IO plugin with the ROMIO DAOS ADIO driver to bypass POSIX and dfuse. The
+    MPIIO driver is available in the upstream MPICH repository.
 
--   a custom DFS plugin integrating mdtest & IOR directly with libfs
+-   HDF5 plugin with the HDF5 DAOS connector (under development). This maps the
+    HDF5 data model directly to the DAOS model bypassing POSIX.
+
+-   A custom DFS (DAOS File System) plugin, integrating IOR directly with libfs
     without requiring FUSE or an interception library
 
--   a custom DAOS plugin integrating IOR directly with the native DAOS
+-   A custom DAOS plugin, integrating IOR directly with the native DAOS
     array API.
 
-Moreover, a fio DAOS engine is also available.
+mdtest is released in the same repository as IOR. The corresponding backends that are
+listed above support mdtest, except for the MPI-IO and HDF5 backends that were
+only designed to support IOR.
+
+FIO can also be used to benchmark DAOS performance using dfuse and the
+interception library with all the POSIX based engines like sync and libaio. We
+do, however, provide a native DFS engine for FIO similar to what we do for
+IOR. That engine is available on GitHub: https://github.com/daos-stack/dfio
+
+Finally, DAOS provides a tool called daos_perf which allows benchmarking to the
+DAOS object API directly or to the internal VOS API, which bypasses the client
+and network stack and reports performance accessing the storage directly using
+VOS.
+
+## Client Performance Tuning
+
+For best performance, a DAOS client should specifically bind itself to a NUMA
+node instead of leaving core allocation and memory binding to chance.  This
+allows the DAOS Agent to detect the client's NUMA affinity from its PID and
+automatically assign a network interface with a matching NUMA node.  The network
+interface provided in the GetAttachInfo response is used to initialize CaRT.
+
+To override the automatically assigned interface, the client should set the
+environment variable ```OFI_INTERFACE``` to match the desired network
+interface.
+
+The DAOS Agent scans the client machine on the first GetAttachInfo request to
+determine the set of network interfaces available that support the DAOS Server's
+OFI provider.  This request occurs as part of the initialization sequence in the
+```libdaos daos_init()``` performed by each client.
+
+Upon receipt, the Agent populates a cache of responses indexed by NUMA affinity.
+Provided a client application has bound itself to a specific NUMA node and that
+NUMA node has a network device associated with it, the DAOS Agent will provide a
+GetAttachInfo response with a network interface corresponding to the client's
+NUMA node.
+
+When more than one appropriate network interface exists per NUMA node, the agent
+uses a round-robin resource allocation scheme to load balance the responses for
+that NUMA node.
+
+If a client is bound to a NUMA node that has no matching network interface, then
+a default NUMA node is used for the purpose of selecting a response.  Provided
+that the DAOS Agent can detect any valid network device on any NUMA node, the
+default response will contain a valid network interface for the client.  When a
+default response is provided, a message in the Agent's log is emitted:
+
+```
+No network devices bound to client NUMA node X.  Using response from NUMA Y
+```
+
+To improve performance, it is worth figuring out if the client bound itself to
+the wrong NUMA node, or if expected network devices for that NUMA node are
+missing from the Agent's fabric scan.
+
+In some situations, the Agent may detect no network devices and the response
+cache will be empty.  In such a situation, the GetAttachInfo response will
+contain no interface assignment and the following info message will be found in
+the Agent's log:
+
+```
+No network devices detected in fabric scan; default AttachInfo response may be incorrect
+```
+
+In either situation, the admin may execute the command
+```'daos_agent net-scan'``` with appropriate debug flags to gain more insight
+into the configuration problem.
+
+**Disabling the GetAttachInfo cache:**
+
+The default configuration enables the Agent GetAttachInfo cache.  If it is
+desired, the cache may be disabled prior to DAOS Agent startup by setting the
+Agent's environment variable ```DAOS_AGENT_DISABLE_CACHE=true```.  The cache is
+loaded only at Agent startup.  If the network configuration changes while the
+Agent is running, it must be restarted to gain visibility to these changes.

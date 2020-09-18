@@ -1,7 +1,9 @@
 # Software Installation
 
 DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
-on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 18.04 distributions.
+on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 20.04 distributions.
+
+The majority of testing has been performed on Centos 7.7 and SLES 15, with Centos being used in the majority of the test cycles.
 
 ## Software Dependencies
 
@@ -24,6 +26,7 @@ Moreover, the DAOS stack leverages the following open source projects:
     performance through fio-spdk plugin.
 
 -   [*ISA-L*](https://github.com/01org/isa-l) for checksum and erasure code
+-   [*ISA-L_Crypto*](https://github.com/01org/isa-l_crypto) for checksum
     computation.
 
 -   [*Argobots*](https://github.com/pmodels/argobots) for thread management.
@@ -39,9 +42,30 @@ dependencies automatically.
 
 ## Distribution Packages
 
-DAOS RPM and deb packaging is under development and will be available for DAOS
-v1.0. Integration with the [Spack](https://spack.io/) package manager is also
+DAOS RPM packaging is currently available, and DEB packaging is under development and will be available in a future DAOS release. Integration with the [Spack](https://spack.io/) package manager is also
 under consideration.
+
+### Installing DAOS from RPMs
+
+DAOS RPMs are available from the Intel&copy; Registration Center.
+Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.com/forms/?productid=3412) link will take you to the registration center, where you will create an account. After creating an account, the following files can be downloaded:
+
+- daos_debug.tar - _debuginfo_ packages
+- daos_packages.tar - client and server main packages
+- daos_source.tar - source RPMs
+
+**Recommended steps after download:**
+
+	sudo tar -C / -xf daos_packages.tar 
+	sudo cp /opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
+	rm /opt/intel/daos_rpms/packages/libabt*
+	(cd /opt/intel/daos_rpms/packages/ && createrepo .)
+	sudo yum install epel-release
+	sudo yum install daos-server
+	sudo yum install daos-client
+
+**Note:** *Only daos-client OR daos-server needs to be specified on the yum command line.*
+
 
 ## DAOS from Scratch
 
@@ -63,11 +87,11 @@ maintained in the Docker files:
 
 -    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L76)
 -    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L42)
--    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.18.04#L21-L39)
+-    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.20.04#L21-L39)
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
+Check the [utils/docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
 directory for different Linux distribution versions.
 
 Some DAOS tests use MPI.   The DAOS build process
@@ -157,7 +181,7 @@ $ curl -L https://raw.githubusercontent.com/daos-stack/daos/master/utils/docker/
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
-Dockerfile.ubuntu.18.04 and the appropriate version of interest.
+Dockerfile.ubuntu.20.04 and the appropriate version of interest.
 
 Once the image created, one can start a container that will eventually run
 the DAOS service:

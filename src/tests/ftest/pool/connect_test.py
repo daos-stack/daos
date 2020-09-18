@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,37 +23,33 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 
-from avocado.utils import process
 from apricot import TestWithServers
 
 import check_for_pool
 
+
 # pylint: disable=fixme, broad-except
 class ConnectTest(TestWithServers):
-    """
-    Tests DAOS pool creation, calling it repeatedly one after another
+    """Tests DAOS pool creation, calling it repeatedly one after another.
 
     :avocado: recursive
     """
 
     def test_connect(self):
-        """
-        Test connecting to a pool.
+        """Test connecting to a pool.
 
         :avocado: tags=all,pool,smoke,pr,small,poolconnect
         """
-
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
         expected_for_param = []
 
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
-        expected_for_param.append(setidlist[1])
+        set_id_list = self.params.get("setname", '/run/tests/setnames/*')
+        set_id = set_id_list[0]
+        expected_for_param.append(set_id_list[1])
 
         # if any parameter results in failure then the test should FAIL
         expected_result = 'PASS'
@@ -61,46 +57,40 @@ class ConnectTest(TestWithServers):
             if result == 'FAIL':
                 expected_result = 'FAIL'
                 break
+
+        host1 = self.hostlist_servers[0]
+        host2 = self.hostlist_servers[1]
+
+        dmg = self.get_dmg_command()
+        scm_size = self.params.get("scm_size", "/run/pool*")
+
         try:
-            uid = os.geteuid()
-            gid = os.getegid()
+            data = dmg.pool_create(scm_size=scm_size, group=set_id)
+            if dmg.result.exit_status != 0:
+                self.fail("    Unable to parse the Pool's UUID and SVC.")
 
-            # TODO make these params in the yaml
-            daosctl = self.basepath + '/install/bin/daosctl'
+            print("uuid is {0}\n".format(data["uuid"]))
 
-            host1 = self.hostlist_servers[0]
-            host2 = self.hostlist_servers[1]
-
-            create_cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(daosctl, "0731", uid, gid, setid))
-            uuid_str = """{0}""".format(process.system_output(create_cmd))
-            print("uuid is {0}\n".format(uuid_str))
-
-            exists = check_for_pool.check_for_pool(host1, uuid_str)
+            exists = check_for_pool.check_for_pool(host1, data["uuid"])
             if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".
-                          format(uuid_str, host1))
-            exists = check_for_pool.check_for_pool(host2, uuid_str)
+                self.fail(
+                    "Pool {0} not found on host {1}.\n".format(
+                        data["uuid"], host1))
+            exists = check_for_pool.check_for_pool(host2, data["uuid"])
             if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".
-                          format(uuid_str, host2))
+                self.fail(
+                    "Pool {0} not found on host {1}.\n".format(
+                        data["uuid"], host2))
 
-            connect_cmd = ('{0} connect-pool -i {1} '
-                           '-s {2} -r -l 0,1'.format(daosctl,
-                                                     uuid_str, setid))
-            process.system(connect_cmd)
-
+            result = dmg.pool_query(data["uuid"])
+            if result.exit_status != 0:
+                self.fail("Could not connect to Pool {}\n".format(data["uuid"]))
 
             if expected_result == 'FAIL':
                 self.fail("Expected to fail but passed.\n")
 
-        except Exception as excep:
-            print(excep)
+        except Exception as error:
+            print(error)
             print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Expecting to pass but test has failed.\n")

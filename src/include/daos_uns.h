@@ -74,7 +74,7 @@ struct duns_attr_t {
  *		attrp	Struct containing the attributes. The uuid of the
  *			container created is returned in da_cuuid.
  *
- * \return		0 on Success. Negative on Failure.
+ * \return		0 on Success. errno code on failure.
  */
 int
 duns_create_path(daos_handle_t poh, const char *path,
@@ -88,7 +88,7 @@ duns_create_path(daos_handle_t poh, const char *path,
  * \param[in]	path	Valid path in an existing namespace.
  * \param[out]	attr	Struct containing the xattrs on the path.
  *
- * \return		0 on Success. Negative on Failure.
+ * \return		0 on Success. errno code on failure.
  */
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr);
@@ -99,7 +99,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr);
  * \param[in]	poh	Pool handle
  * \param[in]	path	Valid path in an existing namespace.
  *
- * \return		0 on Success. Negative on Failure.
+ * \return		0 on Success. errno code on failure.
  */
 int
 duns_destroy_path(daos_handle_t poh, const char *path);
@@ -111,7 +111,7 @@ duns_destroy_path(daos_handle_t poh, const char *path);
  * \param[in]	len	Length of input string
  * \param[out]	attr	Struct containing the xattrs on the path.
  *
- * \return		0 on Success. Negative on Failure.
+ * \return		0 on Success. errno code on failure.
  */
 int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);

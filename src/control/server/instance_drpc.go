@@ -24,11 +24,15 @@
 package server
 
 import (
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -67,11 +71,89 @@ func (srv *IOServerInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) (*drpc.Response, error) {
+func (srv *IOServerInstance) CallDrpc(method drpc.Method, body proto.Message) (*drpc.Response, error) {
 	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return makeDrpcCall(dc, module, method, body)
+	return makeDrpcCall(dc, method, body)
+}
+
+// drespToMemberResult converts drpc.Response to system.MemberResult.
+//
+// MemberResult is populated with rank, state and error dependent on processing
+// dRPC response. Target state param is populated on success, Errored otherwise.
+func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
+	if err != nil {
+		return system.NewMemberResult(rank,
+			errors.WithMessagef(err, "rank %s dRPC failed", &rank),
+			system.MemberStateErrored)
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return system.NewMemberResult(rank,
+			errors.WithMessagef(err, "rank %s dRPC unmarshal failed", &rank),
+			system.MemberStateErrored)
+	}
+	if resp.GetStatus() != 0 {
+		return system.NewMemberResult(rank,
+			errors.Errorf("rank %s: %s", &rank, drpc.DaosStatus(resp.GetStatus()).Error()),
+			system.MemberStateErrored)
+	}
+
+	return system.NewMemberResult(rank, nil, tState)
+}
+
+// TryDrpc attempts dRPC request to given rank managed by instance and return
+// success or error from call result or timeout encapsulated in result.
+func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
+	rank, err := srv.GetRank()
+	if err != nil {
+		return nil // no rank to return result for
+	}
+
+	localState := srv.LocalState()
+	if localState != system.MemberStateReady {
+		// member not ready for dRPC comms, annotate result with last
+		// error as Msg field if found to be stopped
+		result := &system.MemberResult{Rank: rank, State: localState}
+		if localState == system.MemberStateStopped && srv._lastErr != nil {
+			result.Msg = srv._lastErr.Error()
+		}
+		return result
+	}
+
+	// system member state that should be set on dRPC success
+	targetState := system.MemberStateUnknown
+	switch method {
+	case drpc.MethodPrepShutdown:
+		targetState = system.MemberStateStopping
+	case drpc.MethodPingRank:
+		targetState = system.MemberStateReady
+	default:
+		return system.NewMemberResult(rank,
+			errors.Errorf("unsupported dRPC method (%s) for fanout", method),
+			system.MemberStateErrored)
+	}
+
+	resChan := make(chan *system.MemberResult)
+	go func() {
+		dresp, err := srv.CallDrpc(method, nil)
+		resChan <- drespToMemberResult(rank, dresp, err, targetState)
+	}()
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			return &system.MemberResult{
+				Rank: rank, Msg: ctx.Err().Error(),
+				State: system.MemberStateUnresponsive,
+			}
+		}
+		return nil // shutdown
+	case result := <-resChan:
+		return result
+	}
 }

@@ -22,7 +22,7 @@
  */
 #define D_LOGFAC	DD_FAC(client)
 
-#include <daos/container.h>
+#include <daos/object.h>
 #include <daos/task.h>
 #include "client_internal.h"
 #include "task_internal.h"
@@ -80,6 +80,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev)
 
 	args = dc_task_get_args(task);
 	args->th	= th;
+	args->flags	= 0;
 
 	return dc_task_schedule(task, true);
 }
@@ -139,6 +140,12 @@ daos_tx_restart(daos_handle_t th, daos_event_t *ev)
 	args->th	= th;
 
 	return dc_task_schedule(task, true);
+}
+
+int
+daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch)
+{
+	return dc_tx_hdl2epoch(th, epoch);
 }
 
 int

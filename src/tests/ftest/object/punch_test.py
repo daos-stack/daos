@@ -63,10 +63,13 @@ class PunchTest(TestWithServers):
             dkey = "this is the dkey"
             akey = "this is the akey"
             tx_handle = self.container.get_new_tx()
+            print("Created a new TX for punch dkey test")
 
             obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
+            print("Committing the TX for punch dkey test")
             self.container.commit_tx(tx_handle)
+            print("Committed the TX for punch dkey test")
 
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
@@ -87,6 +90,9 @@ class PunchTest(TestWithServers):
             pass
 
         try:
+            self.container.close_tx(tx_handle)
+            print("Closed TX for punch dkey test")
+
             # now punch this data
             obj.punch_dkeys(0, [dkey])
 
@@ -113,9 +119,12 @@ class PunchTest(TestWithServers):
                      ("this is akey 2", "this is data value 2"),
                      ("this is akey 3", "this is data value 3")]
             tx_handle = self.container.get_new_tx()
+            print("Created a new TX for punch akey test")
             obj = self.container.write_multi_akeys(dkey, data1, obj_cls=1,
                                                    txn=tx_handle)
+            print("Committing the TX for punch akey test")
             self.container.commit_tx(tx_handle)
+            print("Committed the TX for punch dkey test")
 
             # read back the 1st epoch's data and check 1 value just to make sure
             # everything is on the up and up
@@ -139,6 +148,9 @@ class PunchTest(TestWithServers):
             print(excep)
 
         try:
+            self.container.close_tx(tx_handle)
+            print("Closed TX for punch akey test")
+
             # now punch the object without a tx
             obj.punch_akeys(0, dkey, [data1[1][0]])
 
@@ -161,9 +173,12 @@ class PunchTest(TestWithServers):
             dkey = "this is the dkey"
             akey = "this is the akey"
             tx_handle = self.container.get_new_tx()
+            print("Created a new TX for punch obj test")
             obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
+            print("Committing the TX for punch obj test")
             self.container.commit_tx(tx_handle)
+            print("Committed the TX for punch obj test")
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
                                                   obj, txn=tx_handle)
@@ -172,7 +187,7 @@ class PunchTest(TestWithServers):
                 print("data I read back" + thedata2.value)
                 self.fail("Wrote data, read it back, didn't match\n")
 
-            # now punch the object, commited so not expecting it to work
+            # now punch the object, committed so not expecting it to work
             obj.punch(tx_handle)
 
             # expecting punch of commit data above to fail
@@ -183,6 +198,9 @@ class PunchTest(TestWithServers):
             print(excep)
 
         try:
+            self.container.close_tx(tx_handle)
+            print("Closed TX for punch obj test")
+
             obj.punch(0)
 
         # expecting it to work without a tx

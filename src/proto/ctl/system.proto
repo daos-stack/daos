@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@ message SystemMember {
 	string uuid = 2;
 	uint32 rank = 3;
 	uint32 state = 4;
+	// ancillary info e.g. error msg or reason for state change
+	string info = 5;
 }
 
 // RankResult is a generic result for a system operation on a rank.
@@ -44,6 +46,7 @@ message RankResult {
 	bool errored = 3;
 	string msg = 4;
 	uint32 state = 5;
+	string addr = 6;
 }
 
 // SystemStopReq supplies system shutdown parameters.
@@ -51,33 +54,56 @@ message SystemStopReq {
 	bool prep = 1; // indicates that the prep stage should be performed
 	bool kill = 2; // indicates that the kill stage should be performed
 	bool force = 3;
-	repeated uint32 ranks = 4; // system ranks to stop
+	string ranks = 5; // rankset to query
+	string hosts = 6; // hostset to query
 }
 
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.
 message SystemStopResp {
 	repeated RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
+}
+
+// SystemResetFormatReq supplies system reset format parameters.
+message SystemResetFormatReq {
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
+}
+
+// SystemResetFormatResp returns status of reset format attempt and results
+// of attempts to reset format of system members.
+message SystemResetFormatResp {
+	repeated RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
 }
 
 // SystemStartReq supplies system restart parameters.
 message SystemStartReq {
-	repeated uint32 ranks = 1; // system ranks to start
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
 }
 
 // SystemStartResp returns status of restart attempt and results
 // of attempts to start system members.
 message SystemStartResp {
 	repeated RankResult results = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
 }
 
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
-	repeated uint32 ranks = 1; // system ranks to query
+	string ranks = 2; // rankset to query
+	string hosts = 3; // hostset to query
 }
 
 // SystemQueryResp returns active system members.
 message SystemQueryResp {
 	repeated SystemMember members = 1;
+	string absentranks = 2; // rankset missing from membership
+	string absenthosts = 3; // hostset missing from membership
 }
 

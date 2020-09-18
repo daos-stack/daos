@@ -21,11 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
-import re
+import json
 
 from daos_core_base import DaosCoreBase
-from dmg_utils import DmgCommand
 from avocado.utils import process
 
 
@@ -37,55 +35,57 @@ class CSumErrorLog(DaosCoreBase):
     in the NVME device due to checksum fault injection.
     :avocado: recursive
     """
-    # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-instance-attributes,too-many-ancestors
     def setUp(self):
         super(CSumErrorLog, self).setUp()
-        self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        self.dmg.get_params(self)
-        self.dmg.hostlist.value = self.hostlist_servers[0]
-        self.dmg.set_sub_command("storage")
-        self.dmg.sub_command_class.set_sub_command("query")
+        self.dmg = self.get_dmg_command()
+        self.dmg.hostlist = self.hostlist_servers[0]
 
     def get_nvme_device_id(self):
-        self.dmg.sub_command_class.sub_command_class.set_sub_command("smd")
-        self.dmg.sub_command_class. \
-            sub_command_class.sub_command_class.devices.value = True
-        self.dmg.sub_command_class. \
-            sub_command_class.sub_command_class.pools.value = True
+        """method to get nvme device-id. """
+        self.dmg.json.value = True
         try:
-            result = self.dmg.run()
+            result = self.dmg.storage_query_list_devices()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
-        uid = None
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if re.search("^UUID:", line):
-                temp = line.split()
-                uid = temp[1]
-                break
-        return uid
+
+        data = json.loads(result.stdout)
+        resp = data['response']
+        if data['error'] or len(resp['host_errors']) > 0:
+            if data['error']:
+                self.fail("dmg command failed: {}".format(data['error']))
+            else:
+                self.fail("dmg command failed: {}".format(resp['host_errors']))
+        for v in resp['host_storage_map'].values():
+            if v['storage']['smd_info']['devices']:
+                return v['storage']['smd_info']['devices'][0]['uuid']
 
     def get_checksum_error_value(self, device_id=None):
+        """Get checksum error value from dmg storage_query_device_health.
+
+        Args:
+            device_id (str): Device UUID.
+        """
         if device_id is None:
             self.fail("No device id provided")
             return
-        self.dmg.sub_command_class. \
-            sub_command_class.set_sub_command("blobstore-health")
-        self.dmg.sub_command_class. \
-            sub_command_class. \
-            sub_command_class.devuuid.value = "{}".format(device_id)
+        self.dmg.json.value = True
         try:
-            result = self.dmg.run()
+            result = self.dmg.storage_query_device_health(device_id)
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
-        csum_count = None
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if re.search("^Checksum", line):
-                temp = line.split()
-                csum_count = int(temp[2])
-                break
-        return csum_count
+
+        data = json.loads(result.stdout)
+        resp = data['response']
+        if data['error'] or len(resp['host_errors']) > 0:
+            if data['error']:
+                self.fail("dmg command failed: {}".format(data['error']))
+            else:
+                self.fail("dmg command failed: {}".format(resp['host_errors']))
+        for v in resp['host_storage_map'].values():
+            if v['storage']['smd_info']['devices']:
+                dev = v['storage']['smd_info']['devices'][0]
+                return dev['health']['checksum_errs']
 
     def test_csum_error_logging(self):
         """

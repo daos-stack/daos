@@ -24,6 +24,7 @@
 from __future__ import print_function
 
 import os
+import stat
 import getpass
 
 from apricot import TestWithServers
@@ -50,7 +51,7 @@ class DaosAdminPrivTest(TestWithServers):
         """JIRA ID: DAOS-2895.
 
         Test Description:
-            Test daso_admin functionality to perform format privileged
+            Test daos_admin functionality to perform format privileged
             operations while daos_server is run as normal user.
 
         :avocado: tags=all,pr,hw,small,daos_admin,basic
@@ -58,9 +59,15 @@ class DaosAdminPrivTest(TestWithServers):
         # Verify that daos_admin has the correct permissions
         self.log.info("Checking daos_admin binary permissions")
         file_stats = os.stat("/usr/bin/daos_admin")
-        file_perms = oct(file_stats.st_mode)[-4:]
-        if file_perms != '4755':
-            self.fail("Incorrect daos_admin permissions: {}".format(file_perms))
+
+        # regular file, mode 4750
+        desired = (stat.S_IFREG|stat.S_ISUID|
+                   stat.S_IRWXU|stat.S_IRGRP|stat.S_IXGRP)
+        actual = file_stats.st_mode & ~stat.S_IRWXO # mask out Other
+                                                    # bits for non-RPM
+        if (actual ^ desired) > 0:
+            self.fail("Incorrect daos_admin permissions: {}".format(
+                oct(actual)))
 
         # Setup server as non-root
         self.log.info("Preparing to run daos_server as non-root user")

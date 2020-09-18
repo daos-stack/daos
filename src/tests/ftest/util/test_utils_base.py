@@ -24,7 +24,7 @@
 from logging import getLogger
 from time import sleep
 
-from command_utils import ObjectWithParameters, BasicParameter
+from command_utils_base import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
 
 
@@ -151,9 +151,9 @@ class TestDaosApiBase(ObjectWithParameters):
             check_list (list): a list of tuples containing the name of the
                 information attribute to check, the current value of the
                 attribute, and the expected value of the attribute. If the
-                expected value is specified as a string with a number preceeded
-                by '<', '<=', '>', or '>=' then this comparision will be used
-                instead of the defult '=='.
+                expected value is specified as a string with a number preceded
+                by '<', '<=', '>', or '>=' then this comparison will be used
+                instead of the default '=='.
 
         Returns:
             bool: True if at least one check has been specified and all the
@@ -162,10 +162,10 @@ class TestDaosApiBase(ObjectWithParameters):
         """
         check_status = len(check_list) > 0
         for check, actual, expect in check_list:
-            # Determine which comparision to utilize for this check
+            # Determine which comparison to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
-                comparisions = {
+                comparisons = {
                     "<": (lambda x, y: x < y, "is too large"),
                     ">": (lambda x, y: x > y, "is too small"),
                     "<=": (
@@ -173,9 +173,9 @@ class TestDaosApiBase(ObjectWithParameters):
                     ">=": (
                         lambda x, y: x >= y, "is too small or does not match"),
                 }
-                for key, val in comparisions.items():
-                    # If the expected value is preceeded by one of the known
-                    # comparision keys, use the comparision and remove the key
+                for key, val in comparisons.items():
+                    # If the expected value is preceded by one of the known
+                    # comparison keys, use the comparison and remove the key
                     # from the expected value
                     if expect[:len(key)] == key:
                         compare = (key, val[0], val[1])

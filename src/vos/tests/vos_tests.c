@@ -79,27 +79,51 @@ static int akey_feats[] = {
 static inline int
 run_all_tests(int keys, bool nest_iterators)
 {
-	int	failed = 0;
-	int	feats;
-	int	i;
-	int	j;
+	const char	*bypass = getenv("DAOS_IO_BYPASS");
+	const char	*it;
+	char		 cfg_desc_io[DTS_CFG_MAX];
+	int		 failed = 0;
+	int		 feats;
+	int		 i;
+	int		 j;
 
-	failed += run_pm_tests();
-	failed += run_pool_test();
-	failed += run_co_test();
+	if (!bypass) {
+		if (!nest_iterators) {
+			dts_create_config(cfg_desc_io, "keys=%d", keys);
+			failed += run_ts_tests(cfg_desc_io);
+			failed += run_mvcc_tests(cfg_desc_io);
+		}
+		bypass = "none";
+	}
+
+	dts_create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
+
+	if (nest_iterators == false) {
+		failed += run_pm_tests(cfg_desc_io);
+		failed += run_pool_test(cfg_desc_io);
+		failed += run_co_test(cfg_desc_io);
+		failed += run_discard_tests(cfg_desc_io);
+		failed += run_aggregate_tests(false, cfg_desc_io);
+		failed += run_gc_tests(cfg_desc_io);
+		failed += run_dtx_tests(cfg_desc_io);
+		failed += run_ilog_tests(cfg_desc_io);
+		failed += run_csum_extent_tests(cfg_desc_io);
+
+		it = "standalone";
+	} else {
+		it = "nested";
+	}
+	dts_create_config(cfg_desc_io, "keys=%d bypass=%s iterator=%s", keys,
+		      bypass, it);
+
 	for (i = 0; dkey_feats[i] >= 0; i++) {
 		for (j = 0; akey_feats[j] >= 0; j++) {
 			feats = dkey_feats[i] | akey_feats[j];
-			failed += run_io_test(feats, keys, nest_iterators);
+			failed += run_io_test(feats, keys, nest_iterators,
+					      cfg_desc_io);
 		}
 	}
-	failed += run_discard_tests();
-	failed += run_aggregate_tests(false);
-	failed += run_gc_tests();
-	failed += run_dtx_tests();
-	failed += run_ilog_tests();
-	failed += run_csum_extent_tests();
-	failed += run_mvcc_tests();
+
 	return failed;
 }
 
@@ -136,7 +160,7 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc) {
 		print_error("Error initializing debug system\n");
 		return rc;
@@ -187,11 +211,11 @@ main(int argc, char **argv)
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'p':
-			nr_failed += run_pool_test();
+			nr_failed += run_pool_test("");
 			test_run = true;
 			break;
 		case 'c':
-			nr_failed += run_co_test();
+			nr_failed += run_co_test("");
 			test_run = true;
 			break;
 		case 'n':
@@ -200,27 +224,29 @@ main(int argc, char **argv)
 		case 'i':
 			ofeats = strtol(optarg, NULL, 16);
 			nr_failed += run_io_test(ofeats, 0,
-						 nest_iterators);
+						 nest_iterators,
+						 "");
 			test_run = true;
 			break;
 		case 'a':
-			nr_failed += run_aggregate_tests(true);
+			nr_failed += run_aggregate_tests(true,
+							 "");
 			test_run = true;
 			break;
 		case 'd':
-			nr_failed += run_discard_tests();
+			nr_failed += run_discard_tests("");
 			test_run = true;
 			break;
 		case 'g':
-			nr_failed += run_gc_tests();
+			nr_failed += run_gc_tests("");
 			test_run = true;
 			break;
 		case 'X':
-			nr_failed += run_dtx_tests();
+			nr_failed += run_dtx_tests("");
 			test_run = true;
 			break;
 		case 'm':
-			nr_failed += run_pm_tests();
+			nr_failed += run_pm_tests("");
 			test_run = true;
 			break;
 		case 'A':
@@ -229,19 +255,19 @@ main(int argc, char **argv)
 			test_run = true;
 			break;
 		case 'l':
-			nr_failed += run_ilog_tests();
+			nr_failed += run_ilog_tests("");
 			test_run = true;
 			break;
 		case 'z':
-			nr_failed += run_csum_extent_tests();
+			nr_failed += run_csum_extent_tests("");
 			test_run = true;
 			break;
 		case 't':
-			nr_failed += run_ts_tests();
+			nr_failed += run_ts_tests("");
 			test_run = true;
 			break;
 		case 'C':
-			nr_failed += run_mvcc_tests();
+			nr_failed += run_mvcc_tests("");
 			test_run = true;
 			break;
 		case 'f':
@@ -252,7 +278,7 @@ main(int argc, char **argv)
 			print_usage();
 			goto exit_1;
 		default:
-			print_error("Unkown option\n");
+			print_error("Unknown option\n");
 			print_usage();
 			goto exit_1;
 		}

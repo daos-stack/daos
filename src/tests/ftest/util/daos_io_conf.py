@@ -23,20 +23,21 @@
 """
 import os
 import random
-from avocado.utils import process
 
 from apricot import TestWithServers
-from command_utils import ExecutableCommand, CommandFailure, FormattedParameter
-from command_utils import BasicParameter
+from command_utils_base import \
+    CommandFailure, BasicParameter, FormattedParameter
+from command_utils import ExecutableCommand
 from test_utils_pool import TestPool
-
+from job_manager_utils import Orterun
 
 class IoConfGen(ExecutableCommand):
     """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
 
     :avocado: recursive
     """
-    def __init__(self, path="", env=None):
+
+    def __init__(self, path="", filename="testfile", env=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -57,39 +58,24 @@ class IoConfGen(ExecutableCommand):
         self.dkeys = FormattedParameter("-d {}")
         self.record_size = FormattedParameter("-s {}")
         self.obj_class = FormattedParameter("-O {}")
-        self.filename = BasicParameter(None, "testfile")
+        self.filename = BasicParameter(None, filename)
 
     def run_conf(self):
         """Run the daos_run_io_conf command as a foreground process.
 
         Raises:
-            CommandFailure: if there is an error running the command
+            None
 
         """
         command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
                             self.filename.value])
-        kwargs = {
-            "cmd": command,
-            "timeout": self.timeout,
-            "verbose": self.verbose,
-            "allow_output_check": "combined",
-            "shell": True,
-            "env": self.env,
-            "sudo": self.sudo,
-        }
-        try:
-            # Block until the command is complete or times out
-            return process.run(**kwargs)
 
-        except process.CmdError as error:
-            # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(command, error)
-            self.log.error(msg)
-            raise CommandFailure(msg)
+        manager = Orterun(command)
+        # run daos_run_io_conf Command using Openmpi
+        manager.run()
 
 def gen_unaligned_io_conf(record_size, filename="testfile"):
-    """
-    Generate the data-set file based on record size.
+    """Generate the data-set file based on record size.
 
     Args:
         record_size(Number): Record Size to fill the data.
@@ -105,14 +91,10 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         "iod_size 1",
         "pool --query",
         "update --tx 0 --recx \"[0, {}]045\"".format(record_size),
-        "update --tx 1 --recx \"[{}, {}]123\""
-        .format(rand_ofs_start, rand_ofs_end),
-        "fetch  --tx 1 -v --recx \"[0, {}]045 [{}, {}]123 [{}, {}]045\""
-        .format(rand_ofs_start,
-                rand_ofs_start,
-                rand_ofs_end,
-                rand_ofs_end,
-                record_size),
+        "update --tx 1 --recx \"[{}, {}]123\"".format(
+            rand_ofs_start, rand_ofs_end),
+        "fetch  --tx 1 -v --recx \"[0, {0}]045 [{0}, {1}]123 [{1}, "
+        "{2}]045\"".format(rand_ofs_start, rand_ofs_end, record_size),
         "pool --query")
 
     try:
@@ -122,42 +104,48 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
     except Exception as error:
         raise error
 
+
 class IoConfTestBase(TestWithServers):
     """Base rebuild test class.
 
     :avocado: recursive
     """
+    def __init__(self, *args, **kwargs):
+        """Initialize a IoConfTestBase object."""
+        super(IoConfTestBase, self).__init__(*args, **kwargs)
+        self.testfile = None
 
     def setup_test_pool(self):
         """Define a TestPool object."""
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
+        avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
+        self.testfile = os.path.join(avocao_tmp_dir, 'testfile')
 
     def execute_io_conf_run_test(self):
-        """
-        Execute the rebuild test steps.
-        """
+        """Execute the rebuild test steps."""
         self.setup_test_pool()
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
-        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), self.testfile,
+                            env=pool_env)
         io_conf.get_params(self)
         io_conf.run()
-        #Run test file using daos_run_io_conf
+        # Run test file using daos_run_io_conf
         io_conf.run_conf()
 
     def unaligned_io(self):
-        """
-        Execute the unaligned IO test steps.
-        """
+        """Execute the unaligned IO test steps."""
         total_sizes = self.params.get("sizes", "/run/datasize/*")
-        #Setup the pool
+
+        # Setup the pool
         self.setup_test_pool()
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
-        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), self.testfile,
+                            env=pool_env)
         io_conf.get_params(self)
         for record_size in total_sizes:
             print("Start test for record size = {}".format(record_size))
-            #create unaligned test data set
-            gen_unaligned_io_conf(record_size)
-            #Run test file using daos_run_io_conf
+            # Create unaligned test data set
+            gen_unaligned_io_conf(record_size, self.testfile)
+            # Run test file using daos_run_io_conf
             io_conf.run_conf()

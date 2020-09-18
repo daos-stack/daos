@@ -45,6 +45,48 @@ static char *newborns_path;
 /** directory for destroyed pool */
 static char *zombies_path;
 
+/* ds_pooltgts*
+ * dpt_creates_ht tracks in-flight pool tgt creates
+ * tgt create inserts a record into creates_ht ; and during tgt allocation
+ * periodically checks if a tgt destroy is requested.
+ * tgt destroy checks if a record exists, modifies it to ask create to stop ;
+ * waits for create to remove the record (indicating create is done).
+ * In-memory, not persistent.
+ */
+struct ds_pooltgts {
+	ABT_mutex		dpt_mutex;
+	ABT_cond		dpt_cv;
+	struct d_hash_table	dpt_creates_ht;
+};
+
+
+struct ds_pooltgts_rec {
+	uuid_t		dptr_uuid;
+	bool		cancel_create;	/* ask create hdlr to stop prealloc */
+	d_list_t	dptr_hlink;	/* in hash table */
+};
+
+static struct ds_pooltgts	*pooltgts;
+
+static inline struct ds_pooltgts_rec *
+pooltgts_obj(d_list_t *rlink)
+{
+	return container_of(rlink, struct ds_pooltgts_rec, dptr_hlink);
+}
+
+static bool
+pooltgts_cmp_keys(struct d_hash_table *htable, d_list_t *rlink,
+		  const void *key, unsigned int ksize)
+{
+	struct ds_pooltgts_rec *ptrec = pooltgts_obj(rlink);
+
+	return uuid_compare(key, ptrec->dptr_uuid) == 0;
+}
+
+static d_hash_table_ops_t pooltgts_hops = {
+	.hop_key_cmp		= pooltgts_cmp_keys,
+};
+
 static inline int
 dir_fsync(const char *path)
 {
@@ -268,11 +310,11 @@ ds_mgmt_tgt_setup(void)
 	int	rc;
 
 	/** create the path string */
-	rc = asprintf(&newborns_path, "%s/NEWBORNS", dss_storage_path);
-	if (rc < 0)
+	D_ASPRINTF(newborns_path, "%s/NEWBORNS", dss_storage_path);
+	if (newborns_path == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
-	rc = asprintf(&zombies_path, "%s/ZOMBIES", dss_storage_path);
-	if (rc < 0)
+	D_ASPRINTF(zombies_path, "%s/ZOMBIES", dss_storage_path);
+	if (zombies_path == NULL)
 		D_GOTO(err_newborns, rc = -DER_NOMEM);
 
 	stored_mode = umask(0);
@@ -300,6 +342,35 @@ ds_mgmt_tgt_setup(void)
 		D_ERROR("failed to delete SPDK blobs for NEWBORNS pools: "
 			"%d, will try again\n", rc);
 
+	/* create lock/cv and hash table to track outstanding pool creates */
+	D_ALLOC_PTR(pooltgts);
+	if (pooltgts == NULL) {
+		D_ERROR("failed to allocate pooltgts struct\n");
+		D_GOTO(err_zombies, rc = -DER_NOMEM);
+	}
+
+	rc = ABT_mutex_create(&pooltgts->dpt_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create pooltgts mutex: %d\n", rc);
+		rc = dss_abterr2der(rc);
+		goto err_pooltgts;
+	}
+
+	rc = ABT_cond_create(&pooltgts->dpt_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create pooltgts cv: %d\n", rc);
+		rc = dss_abterr2der(rc);
+		goto err_mutex;
+	}
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 6 /* bits */,
+					 NULL /* priv */, &pooltgts_hops,
+					 &pooltgts->dpt_creates_ht);
+	if (rc) {
+		D_ERROR("failed to create hash table (creates) "DF_RC"\n",
+			DP_RC(rc));
+		goto err_cv;
+	}
+
 	rc = subtree_destroy(newborns_path);
 	if (rc)
 		/** only log error, will try again next time */
@@ -312,6 +383,12 @@ ds_mgmt_tgt_setup(void)
 			rc);
 	return 0;
 
+err_cv:
+	ABT_cond_free(&pooltgts->dpt_cv);
+err_mutex:
+	ABT_mutex_free(&pooltgts->dpt_mutex);
+err_pooltgts:
+	D_FREE(pooltgts);
 err_zombies:
 	D_FREE(zombies_path);
 err_newborns:
@@ -323,6 +400,15 @@ err:
 void
 ds_mgmt_tgt_cleanup(void)
 {
+	int rc;
+
+	rc = d_hash_table_destroy_inplace(&pooltgts->dpt_creates_ht, true);
+	if (rc) {
+		D_ERROR("failed to destroy table: dpt_creates_ht: "DF_RC"\n",
+			DP_RC(rc));
+	}
+	ABT_cond_free(&pooltgts->dpt_cv);
+	ABT_mutex_free(&pooltgts->dpt_mutex);
 	D_FREE(zombies_path);
 	D_FREE(newborns_path);
 }
@@ -472,17 +558,20 @@ tgt_vos_preallocate(void *arg)
 
 	D_FREE(path);
 
+	D_DEBUG(DB_MGMT, DF_UUID": thread exiting, vc_rc: "DF_RC"\n",
+		DP_UUID(vc->vc_uuid), DP_RC(vc->vc_rc));
 	return NULL;
 }
 
 static int
-tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
+tgt_vos_create(struct ds_pooltgts_rec *ptrec, uuid_t uuid,
+	       daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 {
 	daos_size_t		scm_size, nvme_size;
 	struct vos_create	vc = {0};
 	int			rc = 0;
 	pthread_t		thread;
-
+	bool			canceled_thread = false;
 
 	/**
 	 * Create one VOS file per execution stream
@@ -505,13 +594,40 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 	}
 
 	for (;;) {
-		rc = pthread_tryjoin_np(thread, NULL);
-		if (rc == 0)
+		void *res;
+
+		/* Cancel thread if tgt destroy occurs before done. */
+		if (!canceled_thread && ptrec->cancel_create) {
+			D_DEBUG(DB_MGMT, DF_UUID": received cancel request\n",
+				DP_UUID(uuid));
+			rc = pthread_cancel(thread);
+			if (rc) {
+				rc = daos_errno2der(rc);
+				D_ERROR("pthread_cancel failed: "DF_RC"\n",
+					DP_RC(rc));
+				break;
+			}
+			canceled_thread = true;
+		}
+
+		/* Try to join with thread - either canceled or normal exit. */
+		rc = pthread_tryjoin_np(thread, &res);
+		if (rc == 0) {
+			if (canceled_thread) {
+				D_ASSERT(res == PTHREAD_CANCELED);
+				D_DEBUG(DB_MGMT, DF_UUID": prealloc thread "
+					"canceled\n", DP_UUID(uuid));
+				rc = -DER_CANCELED;
+			} else {
+				D_DEBUG(DB_MGMT, DF_UUID": prealloc thread "
+					"finished\n", DP_UUID(uuid));
+				rc = vc.vc_rc;
+			}
 			break;
+		}
 		ABT_thread_yield();
 	}
 
-	rc = vc.vc_rc;
 	if (!rc) {
 		struct vos_pool_arg	vpa;
 
@@ -531,8 +647,8 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 static int tgt_destroy(uuid_t pool_uuid, char *path);
 
 static int
-tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
-	   daos_size_t nvme_size, char *path)
+tgt_create(struct ds_pooltgts_rec *ptrec, uuid_t pool_uuid, uuid_t tgt_uuid,
+	   daos_size_t scm_size, daos_size_t nvme_size, char *path)
 {
 	char	*newborn = NULL;
 	int	 rc;
@@ -551,7 +667,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 	}
 
 	/** create VOS files */
-	rc = tgt_vos_create(pool_uuid, scm_size, nvme_size);
+	rc = tgt_vos_create(ptrec, pool_uuid, scm_size, nvme_size);
 	if (rc)
 		D_GOTO(out_tree, rc);
 
@@ -660,13 +776,37 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	d_rank_t			*rank;
 	uuid_t				*tmp_tgt_uuid;
 	char				*path = NULL;
+	struct ds_pooltgts_rec		*ptrec = NULL;
 	int				 rc = 0;
 
 	/** incoming request buffer */
 	tc_in = crt_req_get(tc_req);
+	D_DEBUG(DB_MGMT, DF_UUID": processing rpc %p\n",
+		DP_UUID(tc_in->tc_pool_uuid), tc_req);
+
 	/** reply buffer */
 	tc_out = crt_reply_get(tc_req);
 	D_ASSERT(tc_in != NULL && tc_out != NULL);
+
+	/** insert record in dpt_creates_ht hash table (creates in progress) */
+	D_ALLOC_PTR(ptrec);
+	if (ptrec == NULL) {
+		D_ERROR("failed to alloc ptrec\n");
+		D_GOTO(out_reply, rc = -DER_NOMEM);
+	}
+	uuid_copy(ptrec->dptr_uuid, tc_in->tc_pool_uuid);
+	ptrec->cancel_create = false;
+	ABT_mutex_lock(pooltgts->dpt_mutex);
+	rc = d_hash_rec_insert(&pooltgts->dpt_creates_ht, ptrec->dptr_uuid,
+			       sizeof(uuid_t), &ptrec->dptr_hlink, true);
+	ABT_mutex_unlock(pooltgts->dpt_mutex);
+	if (rc) {
+		D_ERROR(DF_UUID": failed insert dpt_creates_ht: "DF_RC"\n",
+			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		goto out_rec;
+	}
+	D_DEBUG(DB_MGMT, DF_UUID": record inserted to dpt_creates_ht\n",
+		DP_UUID(ptrec->dptr_uuid));
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(tc_in->tc_pool_uuid, NULL, NULL, &path);
@@ -687,7 +827,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		rc = dir_fsync(path);
 	} else if (errno == ENOENT) {
 		/** target doesn't exist, create one */
-		rc = tgt_create(tc_in->tc_pool_uuid, tgt_uuid,
+		rc = tgt_create(ptrec, tc_in->tc_pool_uuid, tgt_uuid,
 				tc_in->tc_scm_size, tc_in->tc_nvme_size, path);
 	} else {
 		rc = daos_errno2der(errno);
@@ -721,6 +861,15 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 free:
 	D_FREE(path);
 out:
+	ABT_mutex_lock(pooltgts->dpt_mutex);
+	d_hash_rec_delete_at(&pooltgts->dpt_creates_ht, &ptrec->dptr_hlink);
+	ABT_cond_signal(pooltgts->dpt_cv);
+	ABT_mutex_unlock(pooltgts->dpt_mutex);
+	D_DEBUG(DB_MGMT, DF_UUID" record removed from dpt_creates_ht\n",
+		DP_UUID(ptrec->dptr_uuid));
+out_rec:
+	D_FREE(ptrec);
+out_reply:
 	tc_out->tc_rc = rc;
 	crt_reply_send(tc_req);
 }
@@ -775,13 +924,39 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	struct mgmt_tgt_destroy_in	*td_in;
 	struct mgmt_tgt_destroy_out	*td_out;
 	char				*path;
-	int				  rc;
+	int				 rc;
 
 	/** incoming request buffer */
 	td_in = crt_req_get(td_req);
+	D_DEBUG(DB_MGMT, DF_UUID": processing rpc %p\n",
+		DP_UUID(td_in->td_pool_uuid), td_req);
+
 	/** reply buffer */
 	td_out = crt_reply_get(td_req);
 	D_ASSERT(td_in != NULL && td_out != NULL);
+
+	/* If create in-flight, request it be canceled ; then wait */
+	ABT_mutex_lock(pooltgts->dpt_mutex);
+	do {
+		d_list_t		*rec = NULL;
+		struct ds_pooltgts_rec	*ptrec = NULL;
+		uint32_t		 nreqs = 0;
+
+		rec = d_hash_rec_find(&pooltgts->dpt_creates_ht,
+				      td_in->td_pool_uuid, sizeof(uuid_t));
+		if (!rec)
+			break;
+
+		ptrec = pooltgts_obj(rec);
+		nreqs++;
+		D_DEBUG(DB_MGMT, DF_UUID": busy creating tgts, ask to cancel "
+			"(request %u)\n", DP_UUID(td_in->td_pool_uuid), nreqs);
+		ptrec->cancel_create = true;
+		ABT_cond_wait(pooltgts->dpt_cv, pooltgts->dpt_mutex);
+	} while (1);
+	ABT_mutex_unlock(pooltgts->dpt_mutex);
+	D_DEBUG(DB_MGMT, DF_UUID": ready to destroy targets\n",
+		DP_UUID(td_in->td_pool_uuid));
 
 	ds_pool_stop(td_in->td_pool_uuid);
 
@@ -807,7 +982,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 			      &zombie);
 		if (rc)
 			D_GOTO(out, rc);
-		rc = dir_fsync(path);
+		rc = dir_fsync(zombie);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		D_FREE(zombie);

@@ -29,6 +29,7 @@ from dmg_utils import DmgCommand
 from apricot import TestWithServers
 from avocado.utils import process
 
+
 class DmgNvmeScanTest(TestWithServers):
     """Test Class Description:
     Simple test to verify the scan function of the dmg tool.
@@ -55,7 +56,7 @@ class DmgNvmeScanTest(TestWithServers):
         port = self.params.get("port", "/run/server_config/*")
         servers_with_ports = [
             "{}:{}".format(host, port) for host in self.hostlist_servers]
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
+        dmg.hostlist = servers_with_ports
 
         try:
             dmg.run()

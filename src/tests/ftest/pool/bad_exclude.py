@@ -33,7 +33,7 @@ from pydaos.raw import DaosApiError, RankList
 class BadExcludeTest(TestWithServers):
     """
     Tests target exclude calls passing NULL and otherwise inappropriate
-    parameters.  This can't be done with daosctl, need to use the python API.
+    parameters.  This use the python API.
 
     :avocado: recursive
     """

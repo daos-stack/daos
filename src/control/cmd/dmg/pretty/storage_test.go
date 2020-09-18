@@ -32,6 +32,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -89,43 +90,72 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
-    Temperature:%dK(%dC)
-    Controller Busy Time:0s
+    Temperature:%dK(%.02fC)
+    Temperature Warning Duration:%dm0s
+    Temperature Critical Duration:%dm0s
+    Controller Busy Time:%dm0s
     Power Cycles:%d
     Power On Duration:%s
-    Unsafe Shutdowns:0
-    Media Errors:0
-    Error Log Entries:0
+    Unsafe Shutdowns:%d
+    Error Count:%d
+    Media Errors:%d
+    Read Errors:%d
+    Write Errors:%d
+    Unmap Errors:%d
+    Checksum Errors:%d
+    Error Log Entries:%d
   Critical Warnings:
     Temperature: WARNING
-    Available Spare: OK
-    Device Reliability: OK
-    Read Only: OK
-    Volatile Memory Backup: OK
+    Available Spare: WARNING
+    Device Reliability: WARNING
+    Read Only: WARNING
+    Volatile Memory Backup: WARNING
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
-    Temperature:%dK(%dC)
-    Controller Busy Time:0s
+    Temperature:%dK(%.02fC)
+    Temperature Warning Duration:%dm0s
+    Temperature Critical Duration:%dm0s
+    Controller Busy Time:%dm0s
     Power Cycles:%d
     Power On Duration:%s
-    Unsafe Shutdowns:0
-    Media Errors:0
-    Error Log Entries:0
+    Unsafe Shutdowns:%d
+    Error Count:%d
+    Media Errors:%d
+    Read Errors:%d
+    Write Errors:%d
+    Unmap Errors:%d
+    Checksum Errors:%d
+    Error Log Entries:%d
   Critical Warnings:
     Temperature: WARNING
-    Available Spare: OK
-    Device Reliability: OK
-    Read Only: OK
-    Volatile Memory Backup: OK
+    Available Spare: WARNING
+    Device Reliability: WARNING
+    Read Only: WARNING
+    Volatile Memory Backup: WARNING
 
 `,
 				controllerA.PciAddr, controllerA.Model, controllerA.FwRev, controllerA.SocketID,
-				humanize.Bytes(controllerA.Capacity()), controllerA.HealthStats.Temp, controllerA.HealthStats.Temp-273,
-				controllerA.HealthStats.PowerCycles, time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
+				humanize.Bytes(controllerA.Capacity()),
+				controllerA.HealthStats.TempK(), controllerA.HealthStats.TempC(),
+				controllerA.HealthStats.TempWarnTime, controllerA.HealthStats.TempCritTime,
+				controllerA.HealthStats.CtrlBusyTime, controllerA.HealthStats.PowerCycles,
+				time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
+				controllerA.HealthStats.UnsafeShutdowns, controllerA.HealthStats.ErrorCount,
+				controllerA.HealthStats.MediaErrors, controllerA.HealthStats.ReadErrors,
+				controllerA.HealthStats.WriteErrors, controllerA.HealthStats.UnmapErrors,
+				controllerA.HealthStats.ChecksumErrors, controllerA.HealthStats.ErrorLogEntries,
+
 				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
-				humanize.Bytes(controllerB.Capacity()), controllerB.HealthStats.Temp, controllerB.HealthStats.Temp-273,
-				controllerB.HealthStats.PowerCycles, time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
+				humanize.Bytes(controllerB.Capacity()),
+				controllerB.HealthStats.TempK(), controllerB.HealthStats.TempC(),
+				controllerB.HealthStats.TempWarnTime, controllerB.HealthStats.TempCritTime,
+				controllerB.HealthStats.CtrlBusyTime, controllerB.HealthStats.PowerCycles,
+				time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
+				controllerB.HealthStats.UnsafeShutdowns, controllerB.HealthStats.ErrorCount,
+				controllerB.HealthStats.MediaErrors, controllerB.HealthStats.ReadErrors,
+				controllerB.HealthStats.WriteErrors, controllerB.HealthStats.UnmapErrors,
+				controllerB.HealthStats.ChecksumErrors, controllerB.HealthStats.ErrorLogEntries,
 			),
 		},
 	} {
@@ -136,7 +166,247 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintSmdInfoMap(t *testing.T) {
+	mockController := storage.MockNvmeController(1)
+
+	for name, tc := range map[string]struct {
+		req         *control.SmdQueryReq
+		hsm         control.HostStorageMap
+		opts        []control.PrintConfigOption
+		expPrintStr string
+	}{
+		"list-pools (standard)": {
+			req: &control.SmdQueryReq{
+				OmitDevices: true,
+			},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{
+							Pools: control.SmdPoolMap{
+								common.MockUUID(0): {
+									{
+										UUID:      common.MockUUID(0),
+										Rank:      0,
+										TargetIDs: []int32{0, 1, 2, 3},
+										Blobs:     []uint64{11, 12, 13, 14},
+									},
+									{
+										UUID:      common.MockUUID(0),
+										Rank:      1,
+										TargetIDs: []int32{0, 1, 2, 3},
+										Blobs:     []uint64{11, 12, 13, 14},
+									},
+								},
+							},
+						},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  Pools
+    UUID:00000000-0000-0000-0000-000000000000
+      Rank:0 Targets:[0 1 2 3]
+      Rank:1 Targets:[0 1 2 3]
+
+`,
+		},
+		"list-pools (verbose)": {
+			req: &control.SmdQueryReq{
+				OmitDevices: true,
+			},
+			opts: []control.PrintConfigOption{control.PrintWithVerboseOutput(true)},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{
+							Pools: control.SmdPoolMap{
+								common.MockUUID(0): {
+									{
+										UUID:      common.MockUUID(0),
+										Rank:      0,
+										TargetIDs: []int32{0, 1, 2, 3},
+										Blobs:     []uint64{11, 12, 13, 14},
+									},
+									{
+										UUID:      common.MockUUID(0),
+										Rank:      1,
+										TargetIDs: []int32{0, 1, 2, 3},
+										Blobs:     []uint64{11, 12, 13, 14},
+									},
+								},
+							},
+						},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  Pools
+    UUID:00000000-0000-0000-0000-000000000000
+      Rank:0 Targets:[0 1 2 3] Blobs:[11 12 13 14]
+      Rank:1 Targets:[0 1 2 3] Blobs:[11 12 13 14]
+
+`,
+		},
+
+		"list-pools (none found)": {
+			req: &control.SmdQueryReq{
+				OmitDevices: true,
+			},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  No pools found
+`,
+		},
+		"list-devices": {
+			req: &control.SmdQueryReq{
+				OmitPools: true,
+			},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{
+							Devices: []*control.SmdDevice{
+								{
+									UUID:      common.MockUUID(0),
+									TargetIDs: []int32{0, 1, 2},
+									Rank:      0,
+									State:     "NORMAL",
+								},
+								{
+									UUID:      common.MockUUID(1),
+									TargetIDs: []int32{0, 1, 2},
+									Rank:      1,
+									State:     "FAULTY",
+								},
+							},
+						},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  Devices
+    UUID:00000000-0000-0000-0000-000000000000 Targets:[0 1 2] Rank:0 State:NORMAL
+    UUID:11111111-1111-1111-1111-111111111111 Targets:[0 1 2] Rank:1 State:FAULTY
+`,
+		},
+		"list-devices (none found)": {
+			req: &control.SmdQueryReq{
+				OmitPools: true,
+			},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{},
+					},
+				},
+			),
+			expPrintStr: `
+-----
+host1
+-----
+  No devices found
+`,
+		},
+		"device-health": {
+			req: &control.SmdQueryReq{
+				OmitPools: true,
+			},
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						SmdInfo: &control.SmdInfo{
+							Devices: []*control.SmdDevice{
+								{
+									UUID:      common.MockUUID(0),
+									TargetIDs: []int32{0, 1, 2},
+									Rank:      0,
+									State:     "NORMAL",
+									Health:    mockController.HealthStats,
+								},
+							},
+						},
+					},
+				},
+			),
+			expPrintStr: fmt.Sprintf(`
+-----
+host1
+-----
+  Devices
+    UUID:00000000-0000-0000-0000-000000000000 Targets:[0 1 2] Rank:0 State:NORMAL
+      Health Stats:
+        Temperature:%dK(%.02fC)
+        Temperature Warning Duration:%dm0s
+        Temperature Critical Duration:%dm0s
+        Controller Busy Time:%dm0s
+        Power Cycles:%d
+        Power On Duration:%s
+        Unsafe Shutdowns:%d
+        Error Count:%d
+        Media Errors:%d
+        Read Errors:%d
+        Write Errors:%d
+        Unmap Errors:%d
+        Checksum Errors:%d
+        Error Log Entries:%d
+      Critical Warnings:
+        Temperature: WARNING
+        Available Spare: WARNING
+        Device Reliability: WARNING
+        Read Only: WARNING
+        Volatile Memory Backup: WARNING
+
+`,
+				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
+				mockController.HealthStats.TempWarnTime, mockController.HealthStats.TempCritTime,
+				mockController.HealthStats.CtrlBusyTime, mockController.HealthStats.PowerCycles,
+				time.Duration(mockController.HealthStats.PowerOnHours)*time.Hour,
+				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.ErrorCount,
+				mockController.HealthStats.MediaErrors, mockController.HealthStats.ReadErrors,
+				mockController.HealthStats.WriteErrors, mockController.HealthStats.UnmapErrors,
+				mockController.HealthStats.ChecksumErrors, mockController.HealthStats.ErrorLogEntries,
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintSmdInfoMap(tc.req, tc.hsm, &bld, tc.opts...); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

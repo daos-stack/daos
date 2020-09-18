@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,11 +22,12 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import getpass
+import socket
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd
+from general_utils import pcmd, get_log_file
 from dmg_utils import DmgCommand
 
 
@@ -39,6 +40,7 @@ class DaosServerCommand(YamlCommand):
 
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
+    REFORMAT_PATTERN = "Metadata format required"
 
     def __init__(self, path="", yaml_cfg=None, timeout=90):
         """Create a daos_server command object.
@@ -61,10 +63,10 @@ class DaosServerCommand(YamlCommand):
 
         # Command line parameters:
         # -d, --debug        Enable debug output
-        # -j, --json         Enable JSON output
+        # -J, --json-logging Enable JSON logging
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
-        self.json = FormattedParameter("--json", False)
+        self.json_logs = FormattedParameter("--json-logging", False)
         self.config = FormattedParameter("--config={}", default_yaml_file)
 
         # Additional daos_server command line parameters:
@@ -73,6 +75,10 @@ class DaosServerCommand(YamlCommand):
 
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
+
+        # Include the daos_io_server command launched by the daos_server
+        # command.
+        self._exe_names.append("daos_io_server")
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -121,10 +127,11 @@ class DaosServerCommand(YamlCommand):
         """
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
-            self.pattern_count = host_qty
+        elif mode == "reformat":
+            self.pattern = self.REFORMAT_PATTERN
         else:
             self.pattern = self.NORMAL_PATTERN
-            self.pattern_count = host_qty * len(self.yaml.server_params)
+        self.pattern_count = host_qty * len(self.yaml.server_params)
 
     @property
     def using_nvme(self):
@@ -152,20 +159,6 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
-
-        Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
-        """
-        return self.yaml.get_interface_envs(index)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
@@ -303,37 +296,36 @@ class DaosServerManager(SubprocessManager):
         "OFI_PORT": "fabric_iface_port",
     }
 
-    def __init__(self, server_command, manager="Orterun"):
+    def __init__(self, server_command, manager="Orterun", dmg_cfg=None):
         """Initialize a DaosServerManager object.
 
         Args:
             server_command (ServerCommand): server command object
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "OpenMpi"
+                Defaults to "OpenMpi".
+            dmg_cfg (DmgYamlParameters, optional): The dmg configuration
+                file parameters used to connect to this group of servers.
         """
         super(DaosServerManager, self).__init__(server_command, manager)
         self.manager.job.sub_command_override = "start"
-        self._exe_names.append("daos_io_server")
 
         # Dmg command to access this group of servers which will be configured
         # to access the doas_servers when they are started
-        self.dmg = DmgCommand(self.manager.job.command_path)
+        self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
-    def get_interface_envs(self, index=0):
-        """Get the environment variable names and values for the interfaces.
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Use the yaml file parameter values to assign the server command and
+        orterun command parameters.
 
         Args:
-            index (int, optional): server index from which to obtain the
-                environment variable values. Defaults to 0.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names
-                and their values extracted from the daos_server yaml
-                configuration file.
-
+            test (Test): avocado Test object
         """
-        return self.manager.job.get_interface_envs(index)
+        super(DaosServerManager, self).get_params(test)
+        # Get the values for the dmg parameters
+        self.dmg.get_params(test)
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.
@@ -349,12 +341,22 @@ class DaosServerManager(SubprocessManager):
         # Create the daos_server yaml file
         self.manager.job.create_yaml_file()
 
-        # Prepare dmg for running storage format on all server hosts
-        self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
-        self.dmg.insecure.update(
-            self.get_config_value("allow_insecure"), "dmg.insecure")
+        # Copy certificates
+        self.manager.job.copy_certificates(
+            get_log_file("daosCA/certs"), self._hosts)
+        local_host = socket.gethostname().split('.', 1)[0]
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), local_host.split())
 
-        # Kill any doas servers running on the hosts
+        # Prepare dmg for running storage format on all server hosts
+        self.dmg.hostlist = self._hosts
+        if not self.dmg.yaml:
+            # If using a dmg config file, transport security was
+            # already configured.
+            self.dmg.insecure.update(
+                self.get_config_value("allow_insecure"), "dmg.insecure")
+
+        # Kill any daos servers running on the hosts
         self.kill()
 
         # Clean up any files that exist on the hosts
@@ -473,10 +475,11 @@ class DaosServerManager(SubprocessManager):
                 dev_type = "dcpm"
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
-    def detect_format_ready(self):
+    def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format."""
+        f_type = "format" if not reformat else "reformat"
         self.log.info("<SERVER> Waiting for servers to be ready for format")
-        self.manager.job.update_pattern("format", len(self._hosts))
+        self.manager.job.update_pattern(f_type, len(self._hosts))
         try:
             self.manager.run()
         except CommandFailure as error:
@@ -493,8 +496,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
-        self.dmg.hostlist.update(
-            ",".join(self.get_config_value("access_points")), "dmg.hostlist")
+        self.dmg.hostlist = self.get_config_value("access_points")
 
     def reset_storage(self):
         """Reset the server storage.
@@ -552,7 +554,7 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info(
-            "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist.value)
+            "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         self.dmg.storage_format()
 
         # Wait for all the doas_io_servers to start

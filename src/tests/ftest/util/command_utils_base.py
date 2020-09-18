@@ -33,15 +33,25 @@ class CommandFailure(Exception):
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
 
-    def __init__(self, value, default=None):
+    def __init__(self, value, default=None, yaml_key=None):
         """Create a BasicParameter object.
 
+        Normal use includes assigning this object to an attribute name that
+        matches the test yaml file key used to assign its value.  If the
+        variable name will conflict with another class attribute, e.g. self.log,
+        then the `yaml_key` argument can be used to define the test yaml file
+        key independently of the attribute name.
+
         Args:
-            value (object): intial value for the parameter
+            value (object): initial value for the parameter
             default (object, optional): default value. Defaults to None.
+            yaml_key (str, optional): the yaml key name to use when finding the
+                value to assign from the test yaml file. Default is None which
+                will use the object's variable name as the yaml key.
         """
         self.value = value if value is not None else default
         self._default = default
+        self._yaml_key = yaml_key
         self.log = getLogger(__name__)
 
     def __str__(self):
@@ -61,6 +71,9 @@ class BasicParameter(object):
             test (Test): avocado Test object to use to read the yaml file
             path (str): yaml path where the name is to be found
         """
+        if self._yaml_key is not None:
+            # Use the yaml key name instead of the variable name
+            name = self._yaml_key
         if hasattr(test, "config") and test.config is not None:
             self.value = test.config.get(name, path, self._default)
         else:
@@ -73,7 +86,7 @@ class BasicParameter(object):
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
                 used to display the update. Defaults to None.
-            append (bool, optional): appemnd/extend/update the current list/dict
+            append (bool, optional): append/extend/update the current list/dict
                 with the provided value.  Defaults to False - override the
                 current value.
         """
@@ -102,51 +115,30 @@ class BasicParameter(object):
         self._default = value
 
 
-class NamedParameter(BasicParameter):
-    # pylint: disable=too-few-public-methods
-    """A class for test parameters whose values are read from a yaml file.
-
-    This is essentially a BasicParameter object whose yaml value is obtained
-    with a different name than the one assigned to the object.
-    """
-
-    def __init__(self, name, value, default=None):
-        """Create a NamedParameter  object.
-
-        Args:
-            name (str): yaml key name
-            value (object): intial value for the parameter
-            default (object): default value for the param
-        """
-        super(NamedParameter, self).__init__(value, default)
-        self._name = name
-
-    def get_yaml_value(self, name, test, path):
-        """Get the value for the parameter from the test case's yaml file.
-
-        Args:
-            name (str): name of the value in the yaml file - not used
-            test (Test): avocado Test object to use to read the yaml file
-            path (str): yaml path where the name is to be found
-        """
-        return super(NamedParameter, self).get_yaml_value(
-            self._name, test, path)
-
-
 class FormattedParameter(BasicParameter):
     # pylint: disable=too-few-public-methods
     """A class for test parameters whose values are read from a yaml file."""
 
-    def __init__(self, str_format, default=None):
+    def __init__(self, str_format, default=None, yaml_key=None):
         """Create a FormattedParameter  object.
+
+        Normal use includes assigning this object to an attribute name that
+        matches the test yaml file key used to assign its value.  If the
+        variable name will conflict with another class attribute, e.g. self.log,
+        then the `yaml_key` argument can be used to define the test yaml file
+        key independently of the attribute name.
 
         Args:
             str_format (str): format string used to convert the value into an
                 command line argument string
             default (object): default value for the param
+            yaml_key (str, optional): alternative yaml key name to use when
+                assigning the value from a yaml file. Default is None which
+                will use the object's variable name as the yaml key.
         """
         super(FormattedParameter, self).__init__(default, default)
         self._str_format = str_format
+        self._yaml_key = yaml_key
 
     def __str__(self):
         """Return a FormattedParameter object as a string.
@@ -171,6 +163,19 @@ class FormattedParameter(BasicParameter):
                 parameter = self._str_format.format(self.value)
 
         return parameter
+
+    def get_yaml_value(self, name, test, path):
+        """Get the value for the parameter from the test case's yaml file.
+
+        Args:
+            name (str): name of the value in the yaml file - not used
+            test (Test): avocado Test object to use to read the yaml file
+            path (str): yaml path where the name is to be found
+        """
+        if self._yaml_key is not None:
+            # Use the yaml key name instead of the variable name
+            name = self._yaml_key
+        return super(FormattedParameter, self).get_yaml_value(name, test, path)
 
 
 class LogParameter(FormattedParameter):
@@ -198,9 +203,13 @@ class LogParameter(FormattedParameter):
         initial log file value (just the log file name) to include the directory
         and name for the log file.
         """
-        if self.value is not None:
+        if isinstance(self.value, str):
             name = os.path.basename(self.value)
             self.value = os.path.join(self._directory, name)
+        elif self.value is not None:
+            self.log.info(
+                "Warning: '%s' not added to '%s' due to incompatible type: %s",
+                self._directory, self.value, type(self.value))
 
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
@@ -221,7 +230,7 @@ class LogParameter(FormattedParameter):
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
                 used to display the update. Defaults to None.
-            append (bool, optional): appemnd/extend/update the current list/dict
+            append (bool, optional): append/extend/update the current list/dict
                 with the provided value.  Defaults to False - override the
                 current value.
         """
@@ -289,7 +298,7 @@ class ObjectWithParameters(object):
 
 
 class CommandWithParameters(ObjectWithParameters):
-    """A class for command with paramaters."""
+    """A class for command with parameters."""
 
     def __init__(self, namespace, command, path=""):
         """Create a CommandWithParameters object.
@@ -332,7 +341,7 @@ class CommandWithParameters(ObjectWithParameters):
             if value != "":
                 params.append(value)
 
-        # Append the path to the command and preceed it with any other
+        # Append the path to the command and prepend it with any other
         # specified commands
         command_list = [] if self._pre_command is None else [self._pre_command]
         command_list.append(os.path.join(self._path, self._command))
@@ -467,7 +476,7 @@ class YamlParameters(ObjectWithParameters):
 class TransportCredentials(YamlParameters):
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, namespace, title):
+    def __init__(self, namespace, title, log_dir):
         """Initialize a TransportConfig object.
 
         Args:
@@ -476,25 +485,10 @@ class TransportCredentials(YamlParameters):
                 parameters when creating the yaml file. Defaults to None.
         """
         super(TransportCredentials, self).__init__(namespace, None, title)
-
-        # Transport credential parameters:
-        #   - allow_insecure: false|true
-        #       Specify 'false' to bypass loading certificates and use insecure
-        #       communications channnels
-        #
-        #   - ca_cert: <file>, e.g. ".daos/daosCA.crt"
-        #       Custom CA Root certificate for generated certs
-        #
-        #   - cert: <file>, e.g. ".daos/daos_agent.crt"
-        #       Agent certificate for use in TLS handshakes
-        #
-        #   - key: <file>, e.g. ".daos/daos_agent.key"
-        #       Key portion of Server Certificate
-        #
-        self.allow_insecure = BasicParameter(True, True)
-        self.ca_cert = BasicParameter(None)
-        self.cert = BasicParameter(None)
-        self.key = BasicParameter(None)
+        default_insecure = str(os.environ.get("DAOS_INSECURE_MODE", True))
+        default_insecure = default_insecure.lower() == "true"
+        self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
+        self.allow_insecure = BasicParameter(None, default_insecure)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -512,6 +506,29 @@ class TransportCredentials(YamlParameters):
             yaml_data["allow_insecure"] = self.allow_insecure.value
 
         return yaml_data
+
+    def get_certificate_data(self, name_list):
+        """Get certificate data by name_list.
+
+        Args:
+            name_list (list): list of certificate attribute names.
+
+        Returns:
+            data (dict): a dictionary of parameter directory name keys and
+                value.
+
+        """
+        data = {}
+        if not self.allow_insecure.value:
+            for name in name_list:
+                value = getattr(self, name).value
+                if isinstance(value, str):
+                    dir_name, file_name = os.path.split(value)
+                    if dir_name not in data:
+                        data[dir_name] = [file_name]
+                    else:
+                        data[dir_name].append(file_name)
+        return data
 
 
 class CommonConfig(YamlParameters):
@@ -534,7 +551,7 @@ class CommonConfig(YamlParameters):
         super(CommonConfig, self).__init__(
             "/run/common_config/*", None, None, transport)
 
-        # Common configuration paramters
+        # Common configuration parameters
         #   - name: <str>, e.g. "daos_server"
         #       Name associated with the DAOS system.
         #
@@ -544,7 +561,7 @@ class CommonConfig(YamlParameters):
         #       at port 10000 for local testing
         #
         #   - port: <int>, e.g. 10001
-        #       Default port number with whith to bind the daos_server. This
+        #       Default port number with with to bind the daos_server. This
         #       will also be used when connecting to access points if the list
         #       only contains host names.
         #
@@ -555,6 +572,15 @@ class CommonConfig(YamlParameters):
 
 class EnvironmentVariables(dict):
     """Dictionary of environment variable keys and values."""
+
+    def copy(self):
+        """Return a copy of this object.
+
+        Returns:
+            EnvironmentVariables: a copy of this object
+
+        """
+        return EnvironmentVariables(self)
 
     def get_list(self):
         """Get a list of environment variable assignments.
@@ -572,12 +598,15 @@ class EnvironmentVariables(dict):
         """Get the command to export all of the environment variables.
 
         Args:
-            separator (str, optional): export command separtor.
+            separator (str, optional): export command separator.
                 Defaults to ";".
 
         Returns:
             str: a string of export commands for each environment variable
 
         """
-        join_str = "{} export ".format(separator)
-        return "export {}{}".format(join_str.join(self.get_list()), separator)
+        export_list = ["export {}".format(export) for export in self.get_list()]
+        export_str = separator.join(export_list)
+        if export_str:
+            export_str = "".join([export_str, separator])
+        return export_str

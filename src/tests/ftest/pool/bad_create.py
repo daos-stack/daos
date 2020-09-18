@@ -34,8 +34,7 @@ class BadCreateTest(TestWithServers):
 
     Test Class Description:
         Tests pool create API by passing NULL and otherwise inappropriate
-        parameters.  This can't be done with daosctl, need to use the python
-        API.
+        parameters.  This use the python API.
 
     :avocado: recursive
     """

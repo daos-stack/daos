@@ -461,6 +461,44 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata);
 
 /**
+ * Provide a function for large directories to split an anchor to be able to
+ * execute a parallel readdir or iterate. This routine suggests the optimal
+ * number of anchors to use instead of just 1 and optionally returns all those
+ * anchors. The user would allocate the array of anchors after querying the
+ * number of anchors needed. Alternatively, user does not provide an array and
+ * can call dfs_obj_anchor_set() for every anchor to set.
+ *
+ * The user could suggest how many anchors to split the iteration over. This
+ * feature is not supported yet.
+ *
+ * \param[in]	obj	Dir object to split anchor for.
+ * \param[in/out]
+ *		nr	[in]: Number of anchors requested and allocated in
+ *			\a anchors. Pass 0 for DAOS to recommend split num.
+ *			[out]: Number of anchors recommended if 0 is passed in.
+ * \param[in]	anchors	Optional array of anchors that are split.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors);
+
+/**
+ * Set an anchor with an index based on split done with dfs_obj_anchor_split.
+ * The anchor passed will be re-intialized and set to start and finish iteration
+ * based on the specified index.
+ *
+ * \param[in]   obj     Dir object to split anchor for.
+ * \param[in]	index	Index of set this anchor for iteration.
+ * \param[in,out]
+ *		anchor	Hash anchor to set.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor);
+
+/**
  * Create a directory.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
@@ -571,7 +609,7 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
  * \param[in]	obj	Open object to query.
  * \param[in]	buf	user buffer to copy the symlink value in.
  * \param[in,out]
- *		size	[in]: Size of buffer pased in. [out]: Actual size of
+ *		size	[in]: Size of buffer passed in. [out]: Actual size of
  *			value.
  *
  * \return		0 on success, errno code on failure.

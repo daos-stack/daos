@@ -26,22 +26,23 @@ from importlib import import_module
 import re
 import time
 import signal
+import os
 
 from avocado.utils import process
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, FormattedParameter, \
-    EnvironmentVariables
-from general_utils import check_file_exists, stop_processes, get_log_file
+    CommandFailure, BasicParameter, ObjectWithParameters, \
+    CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
+from general_utils import check_file_exists, stop_processes, get_log_file, \
+    run_command, DaosTestError
 
 
 class ExecutableCommand(CommandWithParameters):
-    """A class for command with paramaters."""
+    """A class for command with parameters."""
 
     # A list of regular expressions for each class method that produces a
     # CmdResult object.  Used by the self.get_output() method to return specific
-    # values from the standard ouput yielded by the method.
+    # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
     def __init__(self, namespace, command, path="", subprocess=False):
@@ -72,6 +73,11 @@ class ExecutableCommand(CommandWithParameters):
         # method.
         self._env_names = []
 
+        # Define a list of executable names associated with the command. This
+        # list is used to generate the 'command_regex' property, which can be
+        # used to check on the progress or terminate the command.
+        self._exe_names = [self.command]
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -88,6 +94,19 @@ class ExecutableCommand(CommandWithParameters):
     def process(self):
         """Getter for process attribute of the ExecutableCommand class."""
         return self._process
+
+    @property
+    def command_regex(self):
+        """Get the regular expression to use to search for the command.
+
+        Typical use would include combining with pgrep to verify a subprocess
+        is running.
+
+        Returns:
+            str: regular expression to use to search for the command
+
+        """
+        return "'({})'".format("|".join(self._exe_names))
 
     def run(self):
         """Run the command.
@@ -109,24 +128,15 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         command = self.__str__()
-        kwargs = {
-            "cmd": command,
-            "timeout": self.timeout,
-            "verbose": self.verbose,
-            "ignore_status": not self.exit_status_exception,
-            "allow_output_check": "combined",
-            "shell": True,
-            "env": self.env,
-        }
         try:
             # Block until the command is complete or times out
-            return process.run(**kwargs)
+            return run_command(
+                command, self.timeout, self.verbose, self.exit_status_exception,
+                "combined", env=self.env)
 
-        except process.CmdError as error:
+        except DaosTestError as error:
             # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(command, error)
-            self.log.error(msg)
-            raise CommandFailure(msg)
+            raise CommandFailure(error)
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -141,14 +151,14 @@ class ExecutableCommand(CommandWithParameters):
                 "cmd": self.__str__(),
                 "verbose": self.verbose,
                 "allow_output_check": "combined",
-                "shell": True,
+                "shell": False,
                 "env": self.env,
                 "sudo": self.sudo,
             }
             self._process = process.SubProcess(**kwargs)
             self._process.start()
 
-            # Deterime if the command has launched correctly using its
+            # Determine if the command has launched correctly using its
             # check_subprocess_status() method.
             if not self.check_subprocess_status(self._process):
                 msg = "Command '{}' did not launch correctly".format(self)
@@ -183,33 +193,81 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if self._process is not None:
-            # Use a list to send signals to the process with one second delays:
-            #   Interupt + wait 3 seconds
-            #   Terminate + wait 2 seconds
-            #   Quit + wait 1 second
-            #   Kill
-            signal_list = [
-                signal.SIGINT, None, None, None,
-                signal.SIGTERM, None, None,
-                signal.SIGQUIT, None,
-                signal.SIGKILL]
+            # Send a SIGTERM to the stop the subprocess and if it is still
+            # running after 5 seconds send a SIGKILL and report an error
+            signal_list = [signal.SIGTERM, signal.SIGKILL]
 
             # Turn off verbosity to keep the logs clean as the server stops
             self._process.verbose = False
 
-            # Keep sending signals and or waiting while the process is alive
+            # Send signals while the process is still running
+            state = None
             while self._process.poll() is None and signal_list:
-                signal_type = signal_list.pop(0)
-                if signal_type is not None:
-                    self._process.send_signal(signal_type)
+                signal_to_send = signal_list.pop(0)
+                msg = "before sending signal {}".format(signal_to_send)
+                state = self.get_subprocess_state(msg)
+                self.log.info(
+                    "Sending signal %s to %s (state=%s)", str(signal_to_send),
+                    self._command, str(state))
+                self._process.send_signal(signal_to_send)
                 if signal_list:
-                    time.sleep(1)
+                    time.sleep(5)
+
             if not signal_list:
-                # Indicate an error if the process required a SIGKILL
-                raise CommandFailure("Error stopping '{}'".format(self))
+                if state and (len(state) > 1 or state[0] not in ("D", "Z")):
+                    # Indicate an error if the process required a SIGKILL and
+                    # either multiple processes were still found running or the
+                    # parent process was in any state except uninterruptible
+                    # sleep (D) or zombie (Z).
+                    raise CommandFailure("Error stopping '{}'".format(self))
+
+            self.log.info("%s stopped successfully", self.command)
             self._process = None
 
-    def get_output(self, method_name, **kwargs):
+    def wait(self):
+        """Wait for the sub process to complete.
+
+        Returns:
+            int: return code of process
+
+        """
+        retcode = 0
+        if self._process is not None:
+            try:
+                retcode = self._process.wait()
+            except OSError as error:
+                self.log.error("Error while waiting %s", error)
+                retcode = 255
+
+        return retcode
+
+    def get_subprocess_state(self, message=None):
+        """Display the state of the subprocess.
+
+        Args:
+            message (str, optional): additional text to include in output.
+                Defaults to None.
+
+        Returns:
+            list: a list of process states for the process found associated with
+                the subprocess pid.
+
+        """
+        state = None
+        if self._process is not None:
+            self.log.debug(
+                "%s processes still running%s:", self.command,
+                " {}".format(message) if message else "")
+            command = "/usr/bin/ps --forest -o pid,stat,time,cmd {}".format(
+                self._process.get_pid())
+            result = process.run(command, 10, True, True, "combined")
+
+            # Get the state of the process from the output
+            state = re.findall(
+                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
+        return state
+
+    def get_output(self, method_name, regex_method=None, **kwargs):
         """Get output from the command issued by the specified method.
 
         Issue the specified method and return a list of strings that result from
@@ -234,18 +292,46 @@ class ExecutableCommand(CommandWithParameters):
             raise CommandFailure(
                 "No '{}()' method defined for this class".format(method_name))
 
-        # Get the regex pattern to filter the CmdResult.stdout
-        if method_name not in self.METHOD_REGEX:
-            raise CommandFailure(
-                "No pattern regex defined for '{}()'".format(method_name))
-        pattern = self.METHOD_REGEX[method_name]
-
-        # Run the command and parse the output using the regex
+        # Run the command
         result = method(**kwargs)
         if not isinstance(result, process.CmdResult):
             raise CommandFailure(
                 "{}() did not return a CmdResult".format(method_name))
-        return re.findall(pattern, result.stdout)
+
+        # Parse the output and return
+        if not regex_method:
+            regex_method = method_name
+        return self.parse_output(result.stdout, regex_method)
+
+    def parse_output(self, stdout, regex_method):
+        """Parse output using findall() with supplied 'regex_method' as pattern.
+
+        Args:
+            stdout (str): output to parse
+            regex_method (str): name of the method regex to use
+
+        Raises:
+            CommandFailure: if there is an error finding the method's regex
+                pattern.
+
+        Returns:
+            list: a list of strings obtained from the method's output parsed
+                through its regex
+
+        """
+        if regex_method not in self.METHOD_REGEX:
+            raise CommandFailure(
+                "No pattern regex defined for '{}()'".format(regex_method))
+        return re.findall(self.METHOD_REGEX[regex_method], stdout)
+
+    def update_env_names(self, new_names):
+        """Update environment variable names to export for the command.
+
+        Args:
+            env_names (list): list of environment variable names to add to
+                existing self._env_names variable.
+        """
+        self._env_names.extend(new_names)
 
     def get_environment(self, manager, log_file=None):
         """Get the environment variables to export for the command.
@@ -259,7 +345,7 @@ class ExecutableCommand(CommandWithParameters):
 
         Returns:
             EnvironmentVariables: a dictionary of environment variable names and
-                values to export prior to running daos_racer
+                values to export.
 
         """
         env = EnvironmentVariables()
@@ -281,7 +367,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self._pre_command = env.get_export_str()
+        self.env = env.copy()
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -310,8 +396,8 @@ class CommandWithSubCommand(ExecutableCommand):
         #       <sub_command>:
         #           <sub_command>_sub_command: <sub_command_sub_command>
         #
-        self.sub_command = NamedParameter(
-            "{}_sub_command".format(self._command), None)
+        self.sub_command = BasicParameter(
+            None, yaml_key="{}_sub_command".format(self._command))
 
         # Define the class to represent the active sub-command and it's specific
         # parameters.  Multiple sub-commands may be available, but only one can
@@ -324,6 +410,17 @@ class CommandWithSubCommand(ExecutableCommand):
         # method (including a simple str object).
         #
         self.sub_command_class = None
+
+        # Define an attribute to store the CmdResult from the last run() call.
+        # A CmdResult object has the following properties:
+        #   command         - command string
+        #   exit_status     - exit_status of the command
+        #   stdout          - the stdout
+        #   stderr          - the stderr
+        #   duration        - command execution time
+        #   interrupted     - whether the command completed within timeout
+        #   pid             - command's pid
+        self.result = None
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
@@ -392,59 +489,64 @@ class CommandWithSubCommand(ExecutableCommand):
         self.sub_command.value = value
         self.get_sub_command_class()
 
+    def run(self):
+        """Run the command and assign the 'result' attribute.
 
-class DaosCommand(ExecutableCommand):
-    """A class for similar daos command line tools."""
-
-    def __init__(self, namespace, command, path=""):
-        """Create DaosCommand object.
-
-        Specific type of command object built so command str returns:
-            <command> <options> <request> <action/subcommand> <options>
-
-        Args:
-            namespace (str): yaml namespace (path to parameters)
-            command (str): string of the command to be executed.
-            path (str): path to location of daos command binary.
-        """
-        super(DaosCommand, self).__init__(namespace, command, path)
-        self.request = BasicParameter(None)
-        self.action = BasicParameter(None)
-        self.action_command = None
-
-    def get_action_command(self):
-        """Assign a command object for the specified request and action."""
-        self.action_command = None
-
-    def get_param_names(self):
-        """Get a sorted list of DaosCommand parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
-        return names
-
-    def get_params(self, test):
-        """Get values for all of the command params from the yaml file.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        super(DaosCommand, self).get_params(test)
-        self.get_action_command()
-        if isinstance(self.action_command, ObjectWithParameters):
-            self.action_command.get_params(test)
-
-    def get_str_param_names(self):
-        """Get a sorted list of the names of the command attributes.
+        Raises:
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
 
         Returns:
-            list: a list of class attribute names used to define parameters
-                for the command.
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
 
         """
-        names = self.get_param_names()
-        if self.action_command is not None:
-            names[-1] = "action_command"
-        return names
+        try:
+            self.result = super(CommandWithSubCommand, self).run()
+        except CommandFailure as error:
+            raise CommandFailure(
+                "<{}> command failed: {}".format(self.command, error))
+        return self.result
+
+    def _get_result(self, sub_command_list=None, **kwargs):
+        """Get the result from running the command with the defined arguments.
+
+        The optional sub_command_list and kwargs are used to define the command
+        that will be executed.  If they are excluded, the command will be run as
+        it currently defined.
+
+        Note: the returned CmdResult is also stored in the self.result
+        attribute as part of the self.run() call.
+
+        Args:
+            sub_command_list (list, optional): a list of sub commands used to
+                define the command to execute. Defaults to None, which will run
+                the command as it is currently defined.
+
+        Raises:
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
+
+        """
+        # Set the subcommands
+        this_command = self
+        if sub_command_list is not None:
+            for sub_command in sub_command_list:
+                this_command.set_sub_command(sub_command)
+                this_command = this_command.sub_command_class
+
+        # Set the sub-command arguments
+        for name, value in kwargs.items():
+            getattr(this_command, name).value = value
+
+        # Issue the command and store the command result
+        return self.run()
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -553,7 +655,7 @@ class SubProcessCommand(CommandWithSubCommand):
 class YamlCommand(SubProcessCommand):
     """Defines a sub-process command that utilizes a yaml configuration file.
 
-    Example commands: daos_agent, daos_server
+    Example commands: daos_agent, daos_server, dmg
     """
 
     def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=60):
@@ -569,7 +671,7 @@ class YamlCommand(SubProcessCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 60 seconds.
         """
-        super(YamlCommand, self).__init__(namespace, command, path)
+        super(YamlCommand, self).__init__(namespace, command, path, timeout)
 
         # Command configuration yaml file
         self.yaml = yaml_cfg
@@ -625,7 +727,63 @@ class YamlCommand(SubProcessCommand):
         value = None
         if isinstance(self.yaml, YamlParameters):
             value = self.yaml.get_value(name)
+
         return value
+
+    def run(self):
+        """Run the command and assign the 'result' attribute.
+
+        Ensure the yaml file is updated with the current attributes before
+        executing the command.
+
+        Raises:
+            CommandFailure: if there is an error running the command and the
+                CommandWithSubCommand.exit_status_exception attribute is set to
+                True.
+
+        Returns:
+            CmdResult: a CmdResult object containing the results of the command
+                execution.
+
+        """
+        if self.yaml:
+            self.create_yaml_file()
+        return super(YamlCommand, self).run()
+
+    def copy_certificates(self, source, hosts):
+        """Copy certificates files from the source to the destination hosts.
+
+        Args:
+            source (str): source of the certificate files.
+            hosts (list): list of the destination hosts.
+        """
+        yaml = self.yaml
+        while isinstance(yaml, YamlParameters):
+            if hasattr(yaml, "get_certificate_data"):
+                data = yaml.get_certificate_data(
+                    yaml.get_attribute_names(LogParameter))
+                for name in data:
+                    run_command(
+                        "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
+                            ",".join(hosts), name),
+                        verbose=False)
+                    for file_name in data[name]:
+                        src_file = os.path.join(source, file_name)
+                        dst_file = os.path.join(name, file_name)
+                        result = run_command(
+                            "clush -S -v -w {} --copy {} --dest {}".format(
+                                ",".join(hosts), src_file, dst_file),
+                            raise_exception=False, verbose=False)
+                        if result.exit_status != 0:
+                            self.log.info(
+                                "WARNING: failure copying '%s' to '%s' on %s",
+                                src_file, dst_file, hosts)
+
+                    # debug to list copy of cert files
+                    run_command(
+                        "clush -S -v -w {} /usr/bin/ls -la {}".format(
+                            ",".join(hosts), name))
+            yaml = yaml.other_params
 
 
 class SubprocessManager(object):
@@ -653,9 +811,6 @@ class SubprocessManager(object):
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []
-
-        # Define the list of executable names to terminate in the kill() method
-        self._exe_names = [self.manager.job.command]
 
     def __str__(self):
         """Get the complete manager command string.
@@ -699,7 +854,7 @@ class SubprocessManager(object):
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
-        Use the yaml file paramter values to assign the server command and
+        Use the yaml file parameter values to assign the server command and
         orterun command parameters.
 
         Args:
@@ -735,8 +890,17 @@ class SubprocessManager(object):
         self.manager.stop()
 
     def kill(self):
-        """Forcably terminate any sub process running on hosts."""
-        stop_processes(self._hosts, "'({})'".format("|".join(self._exe_names)))
+        """Forcibly terminate any sub process running on hosts."""
+        regex = self.manager.job.command_regex
+        result = stop_processes(self._hosts, regex)
+        if 0 in result and len(result) == 1:
+            print(
+                "No remote {} processes killed (none found), done.".format(
+                    regex))
+        else:
+            print(
+                "***At least one remote {} process needed to be killed! Please "
+                "investigate/report.***".format(regex))
 
     def verify_socket_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.

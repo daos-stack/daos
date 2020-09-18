@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2019 Intel Corporation.
+# (C) Copyright 2019-2020 Intel Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ GO_CONTROL_FILES = common/proto/mgmt/acl.pb.go\
 		   common/proto/ctl/system.pb.go\
 		   common/proto/ctl/control.pb.go\
  		   common/proto/ctl/network.pb.go\
+ 		   common/proto/ctl/firmware.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
@@ -68,11 +69,12 @@ endif
 
 $(PROTOC):
 	@echo "Please install the protobufs compiler"
-	@echo "Details: https://github.com/daos-stack/daos/blob/master/doc/development.md#protobuf-compiler"
+	@echo "Details: https://github.com/daos-stack/daos/blob/master/doc/dev/development.md#protobuf-compiler"
 	@false
 
 GOPATH ?= $(shell go env GOPATH)
-PROTOC_GEN_GO_TAG ?= v1.2.0
+PROTOC_GEN_GO_MOD_TAG = $(shell awk '/protobuf/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
+PROTOC_GEN_GO_TAG ?= $(PROTOC_GEN_GO_MOD_TAG)
 PROTOC_GEN_GO_IMP := github.com/golang/protobuf/protoc-gen-go
 PROTOC_GEN_GO := $(GOPATH)/bin/protoc-gen-go
 

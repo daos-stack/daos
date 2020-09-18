@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import java.nio.ByteBuffer;
 import io.daos.dfs.DaosFile;
 
 import org.apache.hadoop.fs.FileSystem;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

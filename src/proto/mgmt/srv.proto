@@ -61,6 +61,7 @@ message LeaderQueryResp {
 
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
+	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
 }
 
 message GetAttachInfoResp {
@@ -77,6 +78,8 @@ message GetAttachInfoResp {
 	string Domain = 5;	// CaRT OFI_DOMAIN for given OFI_INTERFACE
 	uint32 CrtCtxShareAddr = 6; // CaRT CRT_CTX_SHARE_ADDR
 	uint32 CrtTimeout = 7;	// CaRT CRT_TIMEOUT
+	uint32 NetDevClass = 8; // ARP protocol hardware identifier of the
+				// IO server network interface
 }
 
 message PrepShutdownReq {
@@ -111,4 +114,4 @@ message CreateMsReq {
 
 // SetUpReq is nil.
 
-// SetUpResp is idential to DaosResp.
+// SetUpResp is identical to DaosResp.

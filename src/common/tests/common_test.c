@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,12 +71,13 @@ bool show_help(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+	int	opt;
+	char	filter[1024];
+
 	if (show_help(argc, argv)) {
 		print_usage(argv[0]);
 		return 0;
 	}
-
-	int opt;
 
 	while ((opt = getopt_long(argc, argv, s_opts, l_opts, &idx)) !=
 	       -1) {
@@ -97,13 +98,11 @@ int main(int argc, char *argv[])
 
 		{
 			/** Add wildcards for easier filtering */
-			char filter[sizeof(optarg) + 2];
-
 			sprintf(filter, "*%s*", optarg);
 			cmocka_set_test_filter(filter);
 		}
 #else
-			D_PRINT("filter not enabled");
+			D_PRINT("filter not enabled. %s not applied", filter);
 #endif
 			break;
 		default:

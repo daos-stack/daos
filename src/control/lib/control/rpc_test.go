@@ -78,7 +78,7 @@ type ctxCancel struct {
 }
 
 func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
-	clientCfg := DefaultClientConfig()
+	clientCfg := DefaultConfig()
 	clientCfg.TransportConfig.AllowInsecure = true
 
 	for name, tc := range map[string]struct {
@@ -141,7 +141,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 			goRoutinesAtStart := runtime.NumGoroutine()
 
 			client := NewClient(
-				WithClientConfig(clientCfg),
+				WithConfig(clientCfg),
 				WithClientLogger(log),
 			)
 
@@ -187,7 +187,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 			cancel()
 			// Give things a little bit of time to settle down before checking for
 			// any lingering goroutines.
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(250 * time.Millisecond)
 			goRoutinesAtEnd := runtime.NumGoroutine()
 			if goRoutinesAtEnd != goRoutinesAtStart {
 				t.Errorf("expected final goroutine count to be %d, got %d\n", goRoutinesAtStart, goRoutinesAtEnd)
@@ -201,7 +201,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 }
 
 func TestControl_InvokeUnaryRPC(t *testing.T) {
-	clientCfg := DefaultClientConfig()
+	clientCfg := DefaultConfig()
 	clientCfg.TransportConfig.AllowInsecure = true
 
 	for name, tc := range map[string]struct {
@@ -266,7 +266,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			client := NewClient(
-				WithClientConfig(clientCfg),
+				WithConfig(clientCfg),
 				WithClientLogger(log),
 			)
 

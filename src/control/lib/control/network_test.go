@@ -32,7 +32,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -286,14 +286,78 @@ func TestControl_NetworkScan(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(x, y *hostlist.HostSet) bool {
-					return x.RangedString() == y.RangedString()
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_GetAttachInfo(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *GetAttachInfoReq
+		expResp *GetAttachInfoResp
+		expErr  error
+	}{
+		"local failure": {
+			req: &GetAttachInfoReq{},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &GetAttachInfoReq{},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("", nil, &mgmtpb.GetAttachInfoResp{
+					Psrs: []*mgmtpb.GetAttachInfoResp_Psr{
+						{
+							Rank: 42,
+							Uri:  "foo://bar",
+						},
+					},
+					Provider: "cow",
 				}),
+			},
+			req: &GetAttachInfoReq{},
+			expResp: &GetAttachInfoResp{
+				ServiceRanks: []*PrimaryServiceRank{
+					{
+						Rank: 42,
+						Uri:  "foo://bar",
+					},
+				},
+				Provider: "cow",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotResp, gotErr := GetAttachInfo(ctx, mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected AttachInfo (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

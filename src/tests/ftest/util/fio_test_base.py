@@ -29,7 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 from fio_utils import FioCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
 
@@ -57,7 +57,7 @@ class FioBase(TestWithServers):
         # Start the servers and agents
         super(FioBase, self).setUp()
 
-        # initialise daos_cmd
+        # initialize daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
 
         # Get the parameters for Fio
@@ -127,8 +127,14 @@ class FioBase(TestWithServers):
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 
-    def execute_fio(self):
-        """Runner method for Fio."""
+    def execute_fio(self, directory=None, stop_dfuse=True):
+        """Runner method for Fio.
+
+        Args:
+            directory (str): path for fio run dir
+            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this
+                               method.
+        """
         # Create a pool if one does not already exist
         if self.pool is None:
             self._create_pool()
@@ -139,15 +145,20 @@ class FioBase(TestWithServers):
             # Uncomment below two lines once DAOS-3355 is resolved
             # self.pool.connect()
             # self.create_cont()
-            self._start_dfuse()
-            self.fio_cmd.update(
-                "global", "directory", self.dfuse.mount_dir.value,
-                "fio --name=global --directory")
+            if directory:
+                self.fio_cmd.update(
+                    "global", "directory", directory,
+                    "fio --name=global --directory")
+            else:
+                self._start_dfuse()
+                self.fio_cmd.update(
+                    "global", "directory", self.dfuse.mount_dir.value,
+                    "fio --name=global --directory")
 
         # Run Fio
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
 
-        if self.dfuse:
+        if stop_dfuse and self.dfuse:
             self.dfuse.stop()
             self.dfuse = None

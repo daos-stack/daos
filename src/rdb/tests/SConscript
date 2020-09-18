@@ -6,12 +6,14 @@ def scons():
     Import('denv')
 
     # rdbt server
-    librdbt = daos_build.library(denv, 'rdbt', ['rdb_test.c', 'rpc.c'])
+    librdbt = daos_build.library(denv, 'rdbt', ['rdb_test.c', 'rpc.c'],
+                                 install_off='../..')
     denv.Install('$PREFIX/lib64/daos_srv', librdbt)
 
     # rdbt client
     rdbt = daos_build.program(denv, 'rdbt', ['rdbt.c', 'rpc.c'],
-                              LIBS=['cart', 'gurt', 'daos_common', 'uuid'])
+                              LIBS=['cart', 'gurt', 'daos_common', 'uuid',
+                                    'daos'])
     denv.Install('$PREFIX/bin', rdbt)
 
 if __name__ == "SCons.Script":

@@ -1,6 +1,10 @@
 #!/bin/bash
 
-if [ "$USE_VALGRIND" = "yes" ]; then
+if [ "$USE_VALGRIND" = "memcheck" ]; then
+    VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
+          --suppressions=${VALGRIND_SUPP} --xml=yes \
+          --xml-file=memcheck-results-%p.xml"
+elif [ "$USE_VALGRIND" = "pmemcheck" ]; then
     VCMD="valgrind --tool=pmemcheck "
 fi
 
@@ -10,7 +14,6 @@ DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
 
-cmd="$VCMD $EVT_CTL $* --start-test \"EVT030: testing sequence\" -C o:4"
 
 function word_set {
     ((flag = $1 % 2))
@@ -93,6 +96,9 @@ EOF
 )
 }
 
+# Sequence
+cmd="$VCMD $EVT_CTL --start-test \"evt tests $*\" $* -C o:4"
+
 i=0
 while [ $i -lt 20 ]; do
     ((base = i * 9))
@@ -154,6 +160,14 @@ EOF
 )
 
 cmd+=" -b -2 -D"
+cmd+=" -C o:5 -a 1-8@1.1:12345678 -a 0-1@1.2 -a 8-9@1.3 -a 5-6@1.4:ab"
+cmd+=" -l0-10@0-1 -f 0-10@1 -f 0-10@2 -l0-10@0-1:b -a 0-8589934592@2 -f 0-10@3"
+cmd+=" -a 1-3@3:aaa -f 0-10@4 -d 0-1@1.2 -f 0-10@4 -d 0-8589934592@2"
+cmd+=" -f 0-10@4 -a 0-562949953421312@5 -f 0-10@5 -b -2 -D"
+cmd+=" -C o:4 -a 0-1@1:ab -a 2-3@1:ab -a 4-5@1:ab -a 6-7@1:ab"
+cmd+=" -a 9223372036854775808-9223372036854775809@1:ab -b -2 -D"
+cmd+=" -C o:5 -a 0-1@1:ab -a 1-2@2:cd -a 3-4@3:bc -a 5-7@4:def -a 6-8@5:xyz"
+cmd+=" -a 1-2@6:aa -a 4-7@7:abcd -b -2 -r -0-5@8 -b -2 -r 0-5@3 -b -2 -D"
 echo "$cmd"
 eval "$cmd"
 result="${PIPESTATUS[0]}"
@@ -162,7 +176,8 @@ if (( result != 0 )); then
         exit "$result"
 fi
 
-cmd="$VCMD $EVT_CTL $* --start-test \"EVT031: internal tests\" -t"
+# Internal tests
+cmd="$VCMD $EVT_CTL --start-test \"evtree built-in tests $*\" $* -t"
 echo "$cmd"
 eval "$cmd"
 result="${PIPESTATUS[0]}"
@@ -171,7 +186,8 @@ if (( result != 0 )); then
         exit "$result"
 fi
 
-cmd="$VCMD $EVT_CTL $* --start-test \"EVT032: drain tests\" -C o:4"
+# Drain tests
+cmd="$VCMD $EVT_CTL --start-test \"evtree drain tests $*\" $* -C o:4"
 cmd+=" -e s:0,e:128,n:2379 -c"
 echo "$cmd"
 eval "$cmd"

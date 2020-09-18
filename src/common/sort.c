@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@
  *
  * It always returns zero if \a unique is false, which means array can
  * have multiple elements with the same key.
- * It returnes error if \a unique is true, and there are more than one
+ * It returns error if \a unique is true, and there are more than one
  * elements have the same key.
  */
 int
