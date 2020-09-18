@@ -254,7 +254,6 @@ def get_output(cmd, check=True):
 
     """
     print("Running {}".format(" ".join(cmd)))
-    print("Running in cwd(): {}".format(os.getcwd()))
 
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
