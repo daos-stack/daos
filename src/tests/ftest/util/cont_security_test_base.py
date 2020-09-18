@@ -217,8 +217,8 @@ class ContSecurityTestBase(TestWithServers):
         """
         test_errs = []
         if results.exit_status == 0:
-            test_errs.append("get-acl passed unexpectedly: {}".format(
-                results.stdout))
+            test_errs.append("{} passed unexpectedly: {}".format(
+                results.command, results.stdout))
         elif results.exit_status == 1:
             # REMOVE BELOW IF Once DAOS-5635 is resolved
             if results.stdout and err_msg in results.stdout:
@@ -227,8 +227,8 @@ class ContSecurityTestBase(TestWithServers):
             elif results.stderr and err_msg in results.stderr:
                 self.log.info("Found expected error %s", results.stderr)
             else:
-                self.fail("get-acl seems to have failed with \
-                    unexpected error: {}".format(results))
+                self.fail("{} seems to have failed with \
+                    unexpected error: {}".format(results.command, results))
         return test_errs
 
     def acl_file_diff(self, prev_acl, flag=True):
