@@ -90,6 +90,14 @@ func raftDir(cfg *Configuration) string {
 	return filepath.Join(cfg.Servers[0].Storage.SCM.MountPoint, "control_raft")
 }
 
+func hostname() string {
+	hn, err := os.Hostname()
+	if err != nil {
+		return "unknown"
+	}
+	return hn
+}
+
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	err := cfg.Validate(log)
@@ -339,6 +347,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, mgmtSvc)
 	sysdb.OnLeaderGained(func(ctx context.Context) error {
+		log.Infof("MS leader running on %s", hostname())
 		mgmtSvc.startUpdateLoop(ctx)
 		return nil
 	})

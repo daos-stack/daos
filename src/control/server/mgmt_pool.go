@@ -25,7 +25,6 @@ package server
 
 import (
 	"strings"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
@@ -36,13 +35,6 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
-)
-
-const (
-	// poolCreateRetryDelay defines the amount of time between pool create retries.
-	// In the management service, the system map distribution code has a 3s backoff
-	// for distribution errors.
-	poolCreateRetryDelay = 1500 * time.Millisecond
 )
 
 type poolServiceReq interface {
