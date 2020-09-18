@@ -458,6 +458,8 @@ rebuild_snap_punch_empty(void **state)
 	daos_epoch_t	snap_epoch;
 	int		i;
 
+	skip(); /** DAOS-4698 */
+
 	if (!test_runable(arg, 4))
 		return;
 
