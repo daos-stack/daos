@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,20 +22,18 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
-
-import os
 import traceback
 
 from apricot import TestWithServers
-
 import check_for_pool
-from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from test_utils_pool import TestPool
 
 class GlobalHandle(TestWithServers):
 
     """
     This class contains tests to verify the ability to share pool
-    handles amoung processes.
+    handles among processes.
     :avocado: recursive
     """
 
@@ -74,33 +72,21 @@ class GlobalHandle(TestWithServers):
 
         :avocado: tags=all,pool,pr,tiny,poolglobalhandle
         """
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
+
+        self.pool.connect()
 
         try:
-
-            # use the uid/gid of the user running the test, these should
-            # be perfectly valid
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # parameters used in pool create that are in yaml
-            createmode = self.params.get("mode", '/run/testparams/createmode/')
-            createsetid = self.params.get("setname",
-                                          '/run/testparams/createset/')
-            createsize = self.params.get("size", '/run/testparams/createsize/')
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-            self.pool.connect(1 << 1)
-
             # create a container just to make sure handle is good
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
             # create a global handle
-            iov_len, buf_len, buf = self.pool.local2global()
+            iov_len, buf_len, buf = self.pool.pool.local2global()
 
             # this should work in the future but need on-line server addition
             #arg_list = (buf_len, iov_len, buf, pool.get_uuid_str(), 0)
@@ -110,7 +96,7 @@ class GlobalHandle(TestWithServers):
             # for now verifying global handle in the same process which is not
             # the intended use case
             self.check_handle(buf_len, iov_len, buf,
-                              self.pool.get_uuid_str(), 0)
+                              self.pool.pool.get_uuid_str(), 0)
 
         except DaosApiError as excep:
             print(excep)

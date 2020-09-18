@@ -1,14 +1,18 @@
 ## DAOS server configuration file.
 #
 ## Location of this configuration file is determined by first checking for the
-## path specified through the -f option of the daos_server command line.
-## Otherwise, /etc/daos_server.conf is used.
+## path specified through the -o option of the daos_server command line.
+## Otherwise, /etc/daos/daos_server.conf is used.
 #
 #
 ## Name associated with the DAOS system.
 ## Immutable after reformat.
 #
-#name: daos
+## NOTE: Changing the name is not supported in DAOS 1.0, it must not be changed
+##       from the default "daos_server".
+#
+## default: daos_server
+#name: daos_server
 #
 #
 ## Access points
@@ -19,31 +23,33 @@
 ## Hosts can be specified with or without port, default port below
 ## assumed if not specified.
 #
-## default: hostname of this node at port 10000 for local testing
-#access_points: ['hostname1:10001']
+## default: hostname of this node
+#access_points: ['hostname1']
 #
 #
-## Force default port
+## Default port
 #
-## Force different port number to bind daos_server to, this will also
-## be used when connecting to access points if no port is specified.
+## Port number to bind daos_server to, this will also
+## be used when connecting to access points unless a port is specified.
 #
-## default: 10000
+## default: 10001
 #port: 10001
 #
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Location where daos_server will look for Client certificates
-#  client_cert_dir: .daos/clients
+#  client_cert_dir: /etc/daos/certs/clients
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: .daos/daosCA.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt
 #  # Server certificate for use in TLS handshakes
-#  cert: .daos/daos_server.crt
+#  cert: /etc/daos/certs/server.crt
 #  # Key portion of Server Certificate
-#  key: .daos/daos_server.key
+#  key: /etc/daos/certs/server.key
 #
 #
 ## Fault domain path
@@ -62,17 +68,6 @@
 #fault_cb: ./.daos/fd_callback
 #
 #
-## Use specific OFI interfaces
-#
-## Specify either a single fabric interface that will be used by all
-## spawned servers or a comma-seperated list of fabric interfaces to be
-## assigned individually.
-## By default, the DAOS server will auto-detect and use all fabric
-## interfaces if any and fall back to socket on the first eth card
-## otherwise.
-#
-#fabric_ifaces: [qib0,qib1]
-#
 #
 ## Use specific OFI provider
 #
@@ -84,18 +79,12 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
-## Storage mount directory
+## global CRT_CTX_SHARE_ADDR shared with client
+#crt_ctx_share_addr: 1
 #
-## TODO: If no pre-configured mountpoints are specified, DAOS will auto-detect
-## NVDIMMs, configure them in interleave mode, format with ext4 and
-## mount with the DAX extension creating a subdirectory within scm_mount_path.
 #
-## This option allows to specify a preferred path where the mountpoints will
-## be created. Either the specified directory or its parent must be a mount
-## point.
-#
-## default: /mnt/daos
-#scm_mount_path: /mnt/daosa
+## global CRT_TIMEOUT shared with client
+#crt_timeout: 30
 #
 #
 ## NVMe SSD whitelist
@@ -115,6 +104,25 @@
 ## Immutable after reformat, colons replaced by dots in PCI identifiers.
 #
 #bdev_exclude: ["0000:81:00.1"]
+#
+#
+## Disable VFIO Driver
+#
+## In some circumstances it may be preferable to force SPDK to use the UIO
+## driver for NVMe device access even though an IOMMU is available. Note
+## that use of the UIO driver requires that DAOS must run as root.
+#
+## default: false
+#disable_vfio: true
+#
+#
+## Disable VMD Usage
+#
+## In some circumstances it may be preferable to not use Volume Management
+## Devices even if available.
+#
+## default: true
+#disable_vmd: false
 #
 #
 ## Use Hyperthreads
@@ -140,11 +148,11 @@
 ## Number of hugepages to allocate for use by NVMe SSDs
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. This indicates the total number to be used by any spawned
-## servers. Default system hugepage size will be used and hugepages will be
-## evenly distributed between CPU nodes.
+## through SPDK. This indicates the number to be used for each spawned
+## I/O server, so the total will be this number * number of I/O servers.
+## Default system hugepage size will be used.
 #
-## default: 1024
+## default: 4096
 #nr_hugepages: 4096
 #
 #
@@ -163,19 +171,16 @@
 #control_log_file: /tmp/daos_control.log
 #
 #
-## Username used to lookup user uid/gid to drop privileges to if started
-## as root. After control plane start-up and configuration, before starting
-## data plane, process ownership will be dropped to those of supplied user.
+## Enable daos_admin (privileged helper) logging.
 #
-#user_name: daosuser
+## default: disabled (errors only to control plane log)
+#helper_log_file: /tmp/daos_admin.log
 #
 #
-## Group name used to lookup group gid to drop privileges to when user_name
-## is root. If user is a member of group, this group gid is set for the running
-## process. If group look up fails or user is not member, use uid return from
-## user lookup.
+## Enable daos_firmware (privileged helper) logging.
 #
-#group_name: daosgroup
+## default: disabled (errors only to control plane log)
+#firmware_helper_log_file: /tmp/daos_firmware.log
 #
 #
 ## When per-server definitions exist, auto-allocation of resources is not
@@ -198,11 +203,10 @@
 #
 #  targets: 20
 #
-#  # Count of offload/helper xstreams per target. (allowed values: 0-2)
+#  # Count of offload/helper xstreams per server.
 #  # Immutable after reformat.
 #
-#  # default: 2
-#  nr_xs_helpers: 0
+#  nr_xs_helpers: 20
 #
 #  # Offset of the first core for service xstreams.
 #  # Immutable after reformat.
@@ -292,11 +296,10 @@
 #
 #  targets: 20
 #
-#  # Number of helper XStreams per VOS target. (allowed values: 0-2)
+#  # Number of helper XStreams per VOS server.
 #  # Immutable after reformat.
 #
-#  # default: 2
-#  nr_xs_helpers: 1
+#  nr_xs_helpers: 20
 #
 #  # Index of first core for service thread.
 #  # Immutable after reformat.
@@ -310,7 +313,7 @@
 #  # by this server but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
-#  fabric_iface: qib0
+#  fabric_iface: qib1
 #  fabric_iface_port: 20000
 #  pinned_numa_node: 1
 #
@@ -379,3 +382,9 @@
 #  # block devices that should be different across different server instance.
 #  bdev_class: kdev
 #  bdev_list: [/dev/sdc,/dev/sdd]
+#
+#  # If Volume Management Devices (VMD) are to be used, then the disable_vmd
+#  # flag needs to be set to false (default). The bdev_class will remain the
+#  # default "nvme" type, and bdev_list will include the VMD addresses.
+#  bdev_class: nvme
+#  bdev_list: ["0000:82:00.0","0000:5d:05.5"]

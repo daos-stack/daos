@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,13 +60,22 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 				attr->st_size);
 		to_set &= ~(FUSE_SET_ATTR_SIZE);
 		dfs_flags |= DFS_SET_ATTR_SIZE;
+		if (ie->ie_dfs->dfs_attr_timeout > 0 &&
+		    ie->ie_stat.st_size == 0 && attr->st_size > 0) {
+			DFUSE_TRA_DEBUG(ie, "truncating 0-size file");
+			ie->ie_truncated = true;
+			ie->ie_start_off = 0;
+			ie->ie_end_off = 0;
+			ie->ie_stat.st_size = attr->st_size;
+		} else {
+			ie->ie_truncated = false;
+		}
 	}
 
 	if (to_set) {
 		DFUSE_TRA_WARNING(ie, "Unknown flags %#x", to_set);
 		DFUSE_REPLY_ERR_RAW(ie, req, ENOTSUP);
 		return;
-
 	}
 
 	rc = dfs_osetattr(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, dfs_flags);
@@ -75,5 +84,5 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		return;
 	}
 
-	DFUSE_REPLY_ATTR(req, attr);
+	DFUSE_REPLY_ATTR(ie, req, attr);
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ nvme_recov_1(void **state)
 
 	/*
 	 * FIXME: Due to lack of infrastructures for checking each target
-	 *	  status, let's just wait for an arbitray time and hope the
+	 *	  status, let's just wait for an arbitrary time and hope the
 	 *	  faulty reaction & rebuild is triggered.
 	 */
 	print_message("Waiting for faulty reaction being triggered...\n");
@@ -124,6 +124,17 @@ static const struct CMUnitTest nvme_recov_tests[] = {
 	 nvme_recov_1, NULL, test_case_teardown},
 };
 
+static int
+nvme_recov_test_setup(void **state)
+{
+	int     rc;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			NULL);
+
+	return rc;
+}
+
 int
 run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			 int sub_tests_size)
@@ -136,9 +147,10 @@ run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests(nvme_recov_tests, ARRAY_SIZE(nvme_recov_tests),
-				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL, NULL);
+	rc = run_daos_sub_tests("DAOS nvme recov tests", nvme_recov_tests,
+				ARRAY_SIZE(nvme_recov_tests), sub_tests,
+				sub_tests_size, nvme_recov_test_setup,
+				test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

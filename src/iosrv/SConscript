@@ -11,14 +11,14 @@ def scons():
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c']
 
-    prereqs.require(denv, 'hwloc', 'cart', 'argobots', 'protobufc')
+    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc')
 
     # the "-rdynamic" is to allow other dll to refer symbol defined in
     # daos_io_server such as dss_tls_key etc.
     denv.AppendUnique(LINKFLAGS=['-rdynamic'])
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
     # Generate I/O server program
     iosrv = daos_build.program(denv, 'daos_io_server',
@@ -26,7 +26,7 @@ def scons():
                                 'drpc_listener.c', 'drpc_progress.c', 'init.c',
                                 'module.c', 'srv_cli.c', 'profile.c', 'rpc.c',
                                 'server_iv.c', 'srv.c', 'srv.pb-c.c', 'tls.c',
-                                'vos.c'],
+                                'sched.c', 'ult.c'],
                                LIBS=libraries)
     denv.Install('$PREFIX/bin', iosrv)
 

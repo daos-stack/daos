@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
+	"strings"
 )
 
 const debugLogFlags = log.Lmicroseconds | log.Lshortfile
@@ -50,9 +52,24 @@ type DefaultDebugLogger struct {
 // Debugf emits a formatted debug message.
 func (l *DefaultDebugLogger) Debugf(format string, args ...interface{}) {
 	depth := logOutputDepth
-	if len(args) == 0 {
-		// Adjust for the extra call to Debug()
-		depth += 1
+
+	// Adjust depth to account for any convenience wrappers. Enables
+	// printing of correct caller info.
+	pc := make([]uintptr, depth+5)
+	n := runtime.Callers(depth, pc)
+	if n > 0 {
+		pc = pc[:n]
+		frames := runtime.CallersFrames(pc)
+		for {
+			frame, more := frames.Next()
+			if !more {
+				break
+			}
+			fnName := frame.Function[strings.LastIndex(frame.Function, ".")+1:]
+			if fnName == "Debug" || fnName == "Debugf" {
+				depth++
+			}
+		}
 	}
 
 	out := fmt.Sprintf(format, args...)

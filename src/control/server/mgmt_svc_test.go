@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -47,24 +49,6 @@ func makeBadBytes(count int) (badBytes []byte) {
 		badBytes[i] = byte(i)
 	}
 	return
-}
-
-func TestHasPort(t *testing.T) {
-	tests := []struct {
-		addr        string
-		expectedHas bool
-	}{
-		{"localhost", false},
-		{"localhost:10000", true},
-		{"192.168.1.1", false},
-		{"192.168.1.1:10000", true},
-	}
-
-	for _, test := range tests {
-		if has := hasPort(test.addr); has != test.expectedHas {
-			t.Errorf("hasPort(%q) = %v", test.addr, has)
-		}
-	}
 }
 
 func TestCheckMgmtSvcReplica(t *testing.T) {
@@ -151,89 +135,6 @@ func TestCheckMgmtSvcReplica(t *testing.T) {
 	}
 }
 
-func newTestListPoolsReq() *mgmtpb.ListPoolsReq {
-	return &mgmtpb.ListPoolsReq{
-		Sys: "daos",
-	}
-}
-
-func TestListPools_NoMS(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
-
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("no managed instances"), err)
-}
-
-func TestListPools_DrpcFailed(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
-
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, expectedErr, err)
-}
-
-func TestPoolListPools_BadDrpcResp(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	// dRPC call returns junk in the message body
-	badBytes := makeBadBytes(12)
-
-	setupMockDrpcClientBytes(svc, badBytes, nil)
-
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("unmarshal"), err)
-}
-
-func TestListPools_Success(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-
-	expectedResp := &mgmtpb.ListPoolsResp{
-		Pools: []*mgmtpb.ListPoolsResp_Pool{
-			{Uuid: "12345678-1234-1234-1234-123456789abc"},
-			{Uuid: "87654321-4321-4321-4321-cba987654321"},
-		},
-	}
-	setupMockDrpcClient(svc, expectedResp, nil)
-
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
-
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
-		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
-	}
-}
-
 func newTestListContReq() *mgmtpb.ListContReq {
 	return &mgmtpb.ListContReq{
 		Uuid: "12345678-1234-1234-1234-123456789abc",
@@ -244,7 +145,7 @@ func TestListCont_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
 
@@ -252,7 +153,7 @@ func TestListCont_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, errors.New("no managed instances"), err)
+	common.CmpErr(t, FaultHarnessNotStarted, err)
 }
 
 func TestListCont_DrpcFailed(t *testing.T) {
@@ -340,455 +241,593 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 	}
 }
 
-func newTestGetACLReq() *mgmtpb.GetACLReq {
-	return &mgmtpb.GetACLReq{
-		Uuid: "testUUID",
-	}
-}
-
-func TestPoolGetACL_NoMS(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
-
-	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("no managed instances"), err)
-}
-
-func TestPoolGetACL_DrpcFailed(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
-
-	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, expectedErr, err)
-}
-
-func TestPoolGetACL_BadDrpcResp(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	// dRPC call returns junk in the message body
-	badBytes := makeBadBytes(12)
-
-	setupMockDrpcClientBytes(svc, badBytes, nil)
-
-	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("unmarshal"), err)
-}
-
-func TestPoolGetACL_Success(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-
-	expectedResp := &mgmtpb.ACLResp{
-		Status: 0,
-		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
-	}
-	setupMockDrpcClient(svc, expectedResp, nil)
-
-	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
-
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
-		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
-	}
-}
-
-func newTestModifyACLReq() *mgmtpb.ModifyACLReq {
-	return &mgmtpb.ModifyACLReq{
-		Uuid: "testUUID",
-		ACL: []string{
-			"A::OWNER@:rw",
-		},
-	}
-}
-
-func TestPoolOverwriteACL_NoMS(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
-
-	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("no managed instances"), err)
-}
-
-func TestPoolOverwriteACL_DrpcFailed(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
-
-	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, expectedErr, err)
-}
-
-func TestPoolOverwriteACL_BadDrpcResp(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	// dRPC call returns junk in the message body
-	badBytes := makeBadBytes(16)
-
-	setupMockDrpcClientBytes(svc, badBytes, nil)
-
-	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("unmarshal"), err)
-}
-
-func TestPoolOverwriteACL_Success(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-
-	expectedResp := &mgmtpb.ACLResp{
-		Status: 0,
-		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
-	}
-	setupMockDrpcClient(svc, expectedResp, nil)
-
-	resp, err := svc.PoolOverwriteACL(nil, newTestModifyACLReq())
-
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
-		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
-	}
-}
-
-func TestPoolUpdateACL_NoMS(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
-
-	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("no managed instances"), err)
-}
-
-func TestPoolUpdateACL_DrpcFailed(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
-
-	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, expectedErr, err)
-}
-
-func TestPoolUpdateACL_BadDrpcResp(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	// dRPC call returns junk in the message body
-	badBytes := makeBadBytes(16)
-
-	setupMockDrpcClientBytes(svc, badBytes, nil)
-
-	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("unmarshal"), err)
-}
-
-func TestPoolUpdateACL_Success(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-
-	expectedResp := &mgmtpb.ACLResp{
-		Status: 0,
-		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
-	}
-	setupMockDrpcClient(svc, expectedResp, nil)
-
-	resp, err := svc.PoolUpdateACL(nil, newTestModifyACLReq())
-
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
-		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
-	}
-}
-
-func newTestDeleteACLReq() *mgmtpb.DeleteACLReq {
-	return &mgmtpb.DeleteACLReq{
-		Uuid:      "testUUID",
-		Principal: "u:user@",
-	}
-}
-
-func TestPoolDeleteACL_NoMS(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
-
-	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("no managed instances"), err)
-}
-
-func TestPoolDeleteACL_DrpcFailed(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
-
-	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, expectedErr, err)
-}
-
-func TestPoolDeleteACL_BadDrpcResp(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-	// dRPC call returns junk in the message body
-	badBytes := makeBadBytes(16)
-
-	setupMockDrpcClientBytes(svc, badBytes, nil)
-
-	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("unmarshal"), err)
-}
-
-func TestPoolDeleteACL_Success(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(log)
-
-	expectedResp := &mgmtpb.ACLResp{
-		Status: 0,
-		ACL:    []string{"A::OWNER@:rw", "A:G:readers@:r"},
-	}
-	setupMockDrpcClient(svc, expectedResp, nil)
-
-	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
-
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
-		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
-	}
-}
-
-func TestMgmtSvc_LeaderQuery(t *testing.T) {
-	missingSB := newTestMgmtSvc(nil)
-	missingSB.harness.instances[0]._superblock = nil
-	missingAPs := newTestMgmtSvc(nil)
-	missingAPs.harness.instances[0].msClient.cfg.AccessPoints = nil
-
+func TestServer_MgmtSvc_SmdQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mgmtSvc *mgmtSvc
-		req     *mgmtpb.LeaderQueryReq
-		expResp *mgmtpb.LeaderQueryResp
-		expErr  error
+		setupAP        bool
+		req            *mgmtpb.SmdQueryReq
+		junkResp       bool
+		drpcResps      map[int][]*mockDrpcResponse
+		harnessStopped bool
+		ioStopped      bool
+		expResp        *mgmtpb.SmdQueryResp
+		expErr         error
 	}{
-		"nil request": {
-			expErr: errors.New("nil request"),
-		},
-		"wrong system": {
-			req: &mgmtpb.LeaderQueryReq{
-				System: "quack",
-			},
-			expErr: errors.New("wrong system"),
-		},
-		"no i/o servers": {
-			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil),
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("no I/O servers"),
-		},
-		"missing superblock": {
-			mgmtSvc: missingSB,
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("no I/O superblock"),
-		},
-		"fail to get current leader address": {
-			mgmtSvc: missingAPs,
-			req:     &mgmtpb.LeaderQueryReq{},
-			expErr:  errors.New("current leader address"),
-		},
-		"successful query": {
-			req: &mgmtpb.LeaderQueryReq{},
-			expResp: &mgmtpb.LeaderQueryResp{
-				CurrentLeader: "localhost",
-				Replicas:      []string{"localhost"},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(log)
-			}
-
-			gotResp, gotErr := tc.mgmtSvc.LeaderQuery(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestMgmtSvc_PoolQuery(t *testing.T) {
-	missingSB := newTestMgmtSvc(nil)
-	missingSB.harness.instances[0]._superblock = nil
-
-	for name, tc := range map[string]struct {
-		mgmtSvc *mgmtSvc
-		req     *mgmtpb.PoolQueryReq
-		expResp *mgmtpb.PoolQueryResp
-		expErr  error
-	}{
-		"nil request": {
-			expErr: errors.New("nil request"),
-		},
-		"missing superblock": {
-			mgmtSvc: missingSB,
-			req: &mgmtpb.PoolQueryReq{
-				Uuid: mockUUID,
-			},
-			expErr: errors.New("not an access point"),
-		},
 		"dRPC send fails": {
-			req: &mgmtpb.PoolQueryReq{
-				Uuid: mockUUID,
+			req: &mgmtpb.SmdQueryReq{},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					&mockDrpcResponse{
+						Message: &mgmtpb.SmdQueryReq{},
+						Error:   errors.New("send failure"),
+					},
+				},
 			},
 			expErr: errors.New("send failure"),
 		},
-		"garbage req": {
-			req: &mgmtpb.PoolQueryReq{
-				Uuid: "garbage",
-			},
-			expErr: errors.New("unmarshal"),
+		"dRPC resp fails": {
+			req:      &mgmtpb.SmdQueryReq{},
+			junkResp: true,
+			expErr:   errors.New("unmarshal"),
 		},
-		"successful query": {
-			req: &mgmtpb.PoolQueryReq{
-				Uuid: mockUUID,
+		"set-faulty": {
+			req: &mgmtpb.SmdQueryReq{
+				SetFaulty: true,
+				Uuid:      common.MockUUID(),
 			},
-			expResp: &mgmtpb.PoolQueryResp{
-				Uuid: mockUUID,
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(),
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.DevStateResp{
+							DevUuid:  common.MockUUID(),
+							DevState: "FAULTY",
+						},
+					},
+				},
 			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid:  common.MockUUID(),
+								State: "FAULTY",
+							},
+						},
+					},
+				},
+			},
+		},
+		"set-faulty (DAOS Failure)": {
+			req: &mgmtpb.SmdQueryReq{
+				SetFaulty: true,
+				Uuid:      common.MockUUID(),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(),
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.DevStateResp{
+							Status: int32(drpc.DaosInvalidInput),
+						},
+					},
+				},
+			},
+			expErr: drpc.DaosInvalidInput,
+		},
+		"list-pools": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitDevices: true,
+				Rank:        uint32(system.NilRank),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Pools: []*mgmtpb.SmdQueryResp_Pool{
+							{
+								Uuid: common.MockUUID(),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-pools (filter by rank)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitDevices: true,
+				Rank:        1,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(1),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Rank: 1,
+						Pools: []*mgmtpb.SmdQueryResp_Pool{
+							{
+								Uuid: common.MockUUID(1),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-pools (filter by uuid)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitDevices: true,
+				Rank:        uint32(system.NilRank),
+				Uuid:        common.MockUUID(1),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Pools: []*mgmtpb.SmdPoolResp_Pool{
+								{
+									Uuid: common.MockUUID(1),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{},
+					{
+						Rank: 1,
+						Pools: []*mgmtpb.SmdQueryResp_Pool{
+							{
+								Uuid: common.MockUUID(1),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-pools (DAOS Failure)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitDevices: true,
+				Rank:        uint32(system.NilRank),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdPoolResp{
+							Status: int32(drpc.DaosBusy),
+						},
+					},
+				},
+			},
+			expErr: drpc.DaosBusy,
+		},
+		"list-devices": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools: true,
+				Rank:      uint32(system.NilRank),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid: common.MockUUID(),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-devices (filter by rank)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools: true,
+				Rank:      1,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(1),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Rank: 1,
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid: common.MockUUID(1),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-devices (filter by uuid)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools: true,
+				Rank:      uint32(system.NilRank),
+				Uuid:      common.MockUUID(1),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(1),
+								},
+							},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{},
+					{
+						Rank: 1,
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid: common.MockUUID(1),
+							},
+						},
+					},
+				},
+			},
+		},
+		"list-devices (DAOS Failure)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools: true,
+				Rank:      uint32(system.NilRank),
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Status: int32(drpc.DaosBusy),
+						},
+					},
+				},
+			},
+			expErr: drpc.DaosBusy,
+		},
+		"device-health": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(system.NilRank),
+				Uuid:             common.MockUUID(1),
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid:  common.MockUUID(1),
+									State: "FAULTY",
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.BioHealthResp{
+							Temperature: 1000000,
+							TempWarn:    true,
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{},
+					{
+						Rank: 1,
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid:  common.MockUUID(1),
+								State: "FAULTY",
+								Health: &mgmtpb.BioHealthResp{
+									Temperature: 1000000,
+									TempWarn:    true,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"device-health (DAOS Failure)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(system.NilRank),
+				Uuid:             common.MockUUID(1),
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid:  common.MockUUID(1),
+									State: "FAULTY",
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.BioHealthResp{
+							Status: int32(drpc.DaosFreeMemError),
+						},
+					},
+				},
+			},
+			expErr: drpc.DaosFreeMemError,
+		},
+		"target-health": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             1,
+				Target:           "0",
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid:   common.MockUUID(1),
+									TgtIds: []int32{0},
+									State:  "FAULTY",
+								},
+							},
+						},
+					},
+					{
+						Message: &mgmtpb.BioHealthResp{
+							Temperature: 1000000,
+							TempWarn:    true,
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdQueryResp{
+				Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+					{
+						Rank: 1,
+						Devices: []*mgmtpb.SmdQueryResp_Device{
+							{
+								Uuid:   common.MockUUID(1),
+								TgtIds: []int32{0},
+								State:  "FAULTY",
+								Health: &mgmtpb.BioHealthResp{
+									Temperature: 1000000,
+									TempWarn:    true,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"target-health (bad target)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             0,
+				Target:           "eleventy",
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+			},
+			expErr: errors.New("invalid"),
+		},
+		"target-health (missing rank)": {
+			req: &mgmtpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(system.NilRank),
+				Target:           "0",
+				IncludeBioHealth: true,
+			},
+			expErr: errors.New("invalid"),
+		},
+		"ambiguous UUID": {
+			req: &mgmtpb.SmdQueryReq{
+				Rank: uint32(system.NilRank),
+				Uuid: common.MockUUID(),
+			},
+			expErr: errors.New("ambiguous"),
+		},
+		"harness not started": {
+			req:            &mgmtpb.SmdQueryReq{},
+			harnessStopped: true,
+			expErr:         FaultHarnessNotStarted,
+		},
+		"i/o servers not started": {
+			req:       &mgmtpb.SmdQueryReq{},
+			ioStopped: true,
+			expErr:    FaultDataPlaneNotStarted,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(log)
+			ioserverCount := len(tc.drpcResps)
+			if ioserverCount == 0 {
+				ioserverCount = 1
 			}
-			tc.mgmtSvc.log = log
-
-			if _, err := tc.mgmtSvc.harness.GetMSLeaderInstance(); err == nil {
-				if tc.req != nil && tc.req.Uuid == "garbage" {
-					// dRPC call returns junk in the message body
-					badBytes := makeBadBytes(42)
-
-					setupMockDrpcClientBytes(tc.mgmtSvc, badBytes, nil)
-				} else {
-					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+			svc := newTestMgmtSvcMulti(t, log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				cfg := new(mockDrpcClientConfig)
+				if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					for _, mock := range tc.drpcResps[i] {
+						cfg.setSendMsgResponseList(t, mock)
+					}
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+			if tc.harnessStopped {
+				svc.harness.started.SetFalse()
+			}
+			if tc.ioStopped {
+				for _, srv := range svc.harness.instances {
+					srv.ready.SetFalse()
 				}
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolQuery(context.TODO(), tc.req)
+			gotResp, gotErr := svc.SmdQuery(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -798,5 +837,88 @@ func TestMgmtSvc_PoolQuery(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
+	}
+}
+
+func newTestContSetOwnerReq() *mgmtpb.ContSetOwnerReq {
+	return &mgmtpb.ContSetOwnerReq{
+		ContUUID:   "contUUID",
+		PoolUUID:   "poolUUID",
+		Owneruser:  "user@",
+		Ownergroup: "group@",
+	}
+}
+
+func TestContSetOwner_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, FaultHarnessNotStarted, err)
+}
+
+func TestContSetOwner_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, expectedErr, err)
+}
+
+func TestContSetOwner_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := makeBadBytes(16)
+
+	setupMockDrpcClientBytes(svc, badBytes, nil)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("unmarshal"), err)
+}
+
+func TestContSetOwner_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.ContSetOwnerResp{
+		Status: 0,
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }

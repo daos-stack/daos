@@ -26,6 +26,7 @@ from ior_test_base import IorTestBase
 
 
 class IorSmall(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with 1 server with basic parameters.
 
     :avocado: recursive
@@ -36,7 +37,7 @@ class IorSmall(IorTestBase):
 
         Test Description:
             Purpose of this test is to have small ior test to check basic
-            functionality for both DAOS and MPIIO api
+            functionality for both DFS and MPIIO api
 
         Use case:
             Run ior with read, write, CheckWrite, CheckRead in ssf mode.
@@ -46,6 +47,32 @@ class IorSmall(IorTestBase):
             All above three cases to be run with single client and
                 multiple client processes in two separate nodes.
 
-        :avocado: tags=all,daosio,small,pr,hw,iorsmall
+        :avocado: tags=all,pr,hw,large,daosio,iorsmall
         """
+        flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
+        apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+        transfer_block_size = self.params.get("transfer_block_size",
+                                              '/run/ior/iorflags/*')
+        obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
+
+        # run tests for different variants
+        self.ior_cmd.flags.update(flags[0])
+        for oclass in obj_class:
+            self.ior_cmd.dfs_oclass.update(oclass)
+            for api in apis:
+                self.ior_cmd.api.update(api)
+                for test in transfer_block_size:
+                    # update transfer and block size
+                    self.ior_cmd.transfer_size.update(test[0])
+                    self.ior_cmd.block_size.update(test[1])
+                    # run ior
+                    self.run_ior_with_pool()
+
+        # Running a variant for ior fpp
+        self.ior_cmd.flags.update(flags[1])
+        self.ior_cmd.api.update(apis[0])
+        self.ior_cmd.block_size.update((transfer_block_size[1])[1])
+        self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
+        self.ior_cmd.dfs_oclass.update(obj_class[0])
+        # run ior
         self.run_ior_with_pool()

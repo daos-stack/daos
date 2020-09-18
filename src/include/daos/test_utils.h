@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,5 +85,27 @@ void mock_valid_drpc_resp_in_recvmsg(Drpc__Status status);
  * \return	Newly allocated Drpc__Response
  */
 Drpc__Response *new_drpc_response(void);
+
+/*
+ * ACL unit test utilities
+ */
+
+/**
+ * Fills up ACE array with unique named users.
+ *
+ * \param[in][out]	ace		Array of pointers to DAOS ACEs
+ * \param[in]		num_aces	Length of ace array
+ */
+void
+fill_ace_list_with_users(struct daos_ace *ace[], size_t num_aces);
+
+/**
+ * Frees all items in ACE array.
+ *
+ * \param	ace		ACEs to be freed
+ * \param	num_aces	Length of ace array
+ */
+void
+free_all_aces(struct daos_ace *ace[], size_t num_aces);
 
 #endif /* __DAOS_TEST_UTILS_H__ */

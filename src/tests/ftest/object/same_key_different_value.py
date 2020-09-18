@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,12 +23,11 @@
 '''
 from __future__ import print_function
 
-import os
-import time
 import traceback
-from apricot import TestWithServers
 
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError
+
 
 class SameKeyDifferentValue(TestWithServers):
     """
@@ -37,26 +36,13 @@ class SameKeyDifferentValue(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
+        super(SameKeyDifferentValue, self).setUp()
+        self.prepare_pool()
+
         try:
-            super(SameKeyDifferentValue, self).setUp()
-
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool/createmode/')
-            createsetid = self.params.get("setname", '/run/pool/createset/')
-            createsize = self.params.get("size", '/run/pool/createsize/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-            self.pool.connect(1 << 1)
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
             # now open it
             self.container.open()
@@ -101,13 +87,13 @@ class SameKeyDifferentValue(TestWithServers):
         for i in range(3):
             try:
                 # create an object and write single value data into it
-                obj, txn = self.container.write_an_obj(single_value_data,
-                                                       len(single_value_data)+1,
-                                                       dkey, akey, obj_cls=1)
+                obj = self.container.write_an_obj(single_value_data,
+                                                  len(single_value_data)+1,
+                                                  dkey, akey, obj_cls=1)
 
                 # read the data back and make sure its correct
                 read_back_data = self.container.read_an_obj(
-                    len(single_value_data)+1, dkey, akey, obj, txn)
+                    len(single_value_data)+1, dkey, akey, obj)
                 if single_value_data != read_back_data.value:
                     print("data I wrote:" + single_value_data)
                     print("data I read back" + read_back_data.value)
@@ -205,13 +191,13 @@ class SameKeyDifferentValue(TestWithServers):
         for i in range(3):
             try:
                 # create an object and write array value data into it
-                obj, txn = self.container.write_an_array_value(array_value_data,
-                                                               dkey, akey,
-                                                               obj_cls=1)
+                obj = self.container.write_an_array_value(array_value_data,
+                                                          dkey, akey,
+                                                          obj_cls=1)
                 # read the data back and make sure its correct
                 length = len(array_value_data[0])
                 read_back_data = self.container.read_an_array(
-                    len(array_value_data), length + 1, dkey, akey, obj, txn)
+                    len(array_value_data), length + 1, dkey, akey, obj)
 
                 for j in range(3):
                     if (array_value_data[j][0:length-1] !=

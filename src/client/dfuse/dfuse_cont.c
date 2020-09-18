@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,9 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
+	struct dfuse_pool		*dfp = parent->ie_dfs->dfs_dfp;
 	struct dfuse_dfs		*dfs;
+	struct dfuse_dfs		*dfsi;
 	dfs_t				*ddfs;
 	int				rc;
 
@@ -44,9 +46,12 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_root);
 
 	D_ALLOC_PTR(dfs);
-	if (!dfs) {
+	if (!dfs)
 		D_GOTO(err, rc = ENOMEM);
-	}
+
+	dfuse_dfs_init(dfs, parent->ie_dfs);
+
+	dfs->dfs_dfp = dfp;
 
 	/* Dentry names where are not valid uuids cannot possibly be added so in
 	 * this case return the negative dentry with a timeout to prevent future
@@ -55,77 +60,107 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (uuid_parse(name, dfs->dfs_cont) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
-		DFUSE_LOG_ERROR("Invalid container uuid");
-		DFUSE_REPLY_ENTRY(req, entry);
+		DFUSE_TRA_INFO(parent, "Invalid container uuid");
+		DFUSE_REPLY_ENTRY(parent, req, entry);
 		D_FREE(dfs);
 		return;
 	}
-	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
 
 	DFUSE_TRA_UP(dfs, fs_handle, "dfs");
 
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+
 	if (create) {
-		rc = dfs_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
+		rc = dfs_cont_create(dfp->dfp_poh, dfs->dfs_cont,
 				     NULL, NULL, NULL);
 		if (rc) {
-			DFUSE_LOG_ERROR("dfs_cont_create() failed: (%d)", rc);
-			D_GOTO(err, rc);
+			DFUSE_TRA_ERROR(dfs,
+					"dfs_cont_create() failed: (%d)",
+					rc);
+			D_GOTO(err_unlock, rc);
 		}
 	} else {
-		rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
-		if (rc == -DER_SUCCESS) {
-			struct fuse_entry_param	entry = {0};
+		d_list_for_each_entry(dfsi,
+				      &dfp->dfp_dfs_list,
+				      dfs_list) {
+			{
+				struct fuse_entry_param	entry = {0};
 
-			DFUSE_TRA_INFO(ie, "Reusing existing container entry "
-				       "without reconnect");
+				DFUSE_TRA_DEBUG(parent, "Checking %p", dfsi);
 
-			/* Update the stat information, but copy in the
-			 * inode value afterwards.
-			 */
-			rc = dfs_ostat(ie->ie_dfs->dfs_ns,
-				       ie->ie_obj, &entry.attr);
-			if (rc) {
-				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)",
-						strerror(rc));
-				d_hash_rec_decref(&fs_handle->dpi_iet,
-						  &ie->ie_htl);
-				D_GOTO(err, rc);
+				if (uuid_compare(dfsi->dfs_cont,
+						 dfs->dfs_cont) != 0)
+					continue;
+
+				DFUSE_TRA_INFO(parent,
+					       "Found existing container dfs %p",
+					       dfsi);
+
+				rc = dfuse_check_for_inode(fs_handle, dfsi,
+							   &ie);
+				if (rc == -DER_NONEXIST) {
+					D_FREE(dfs);
+					dfs = dfsi;
+					D_GOTO(alloc_ie, 0);
+				} else {
+					D_ASSERT(rc == -DER_SUCCESS);
+				}
+
+				DFUSE_TRA_INFO(ie,
+					       "Reusing existing container entry without reconnect");
+
+				/* Update the stat information, but copy in the
+				 * inode value afterwards.
+				 */
+				rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj,
+					       &entry.attr);
+				if (rc) {
+					DFUSE_TRA_ERROR(ie,
+							"dfs_ostat() failed: (%s)",
+							strerror(rc));
+					D_GOTO(err_unlock, rc);
+				}
+
+				entry.attr.st_ino = ie->ie_stat.st_ino;
+				entry.generation = 1;
+				entry.ino = entry.attr.st_ino;
+				DFUSE_REPLY_ENTRY(ie, req, entry);
+				D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
+				D_FREE(dfs);
+				return;
 			}
-
-			entry.attr.st_ino = ie->ie_stat.st_ino;
-			entry.generation = 1;
-			entry.ino = entry.attr.st_ino;
-			DFUSE_REPLY_ENTRY(req, entry);
-			D_FREE(dfs);
-			return;
 		}
 	}
 
-	rc = daos_cont_open(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
+	rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
 			    DAOS_COO_RW, &dfs->dfs_coh, &dfs->dfs_co_info,
 			    NULL);
 	if (rc == -DER_NONEXIST) {
-		DFUSE_LOG_INFO("daos_cont_open() failed: (%d)", rc);
-		D_GOTO(err, rc = daos_der2errno(rc));
+		DFUSE_TRA_INFO(dfs, "daos_cont_open() failed: (%d)", rc);
+		D_GOTO(err_unlock, rc = daos_der2errno(rc));
 	} else if (rc != -DER_SUCCESS) {
-		DFUSE_LOG_ERROR("daos_cont_open() failed: (%d)", rc);
-		D_GOTO(err, rc = daos_der2errno(rc));
+		DFUSE_TRA_ERROR(dfs, "daos_cont_open() failed: (%d)", rc);
+		D_GOTO(err_unlock, rc = daos_der2errno(rc));
 	}
 
-	D_ALLOC_PTR(ie);
-	if (!ie) {
-		D_GOTO(close, rc = ENOMEM);
-	}
-
-	DFUSE_TRA_UP(ie, parent, "inode");
-
-	rc = dfs_mount(parent->ie_dfs->dfs_poh, dfs->dfs_coh, O_RDWR, &ddfs);
+	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &ddfs);
 	if (rc) {
-		DFUSE_LOG_ERROR("dfs_mount() failed: (%s)", strerror(rc));
+		DFUSE_TRA_ERROR(ie, "dfs_mount() failed: (%s)", strerror(rc));
 		D_GOTO(close, rc);
 	}
 
 	dfs->dfs_ns = ddfs;
+
+	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+
+alloc_ie:
+	D_ALLOC_PTR(ie);
+	if (!ie)
+		D_GOTO(close, rc = ENOMEM);
+
+	ie->ie_root = true;
+
+	DFUSE_TRA_UP(ie, parent, "inode");
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, NULL,
 			&ie->ie_stat);
@@ -138,12 +173,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 
-	atomic_fetch_add(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
-
-	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
-	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
-	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);
@@ -156,6 +187,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return;
 
 release:
@@ -163,10 +195,11 @@ release:
 close:
 	daos_cont_close(dfs->dfs_coh, NULL);
 	D_FREE(ie);
+err_unlock:
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(dfs);
-	return;
 }
 
 void

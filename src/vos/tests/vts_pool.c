@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ pool_ref_count_test(void **state)
 	uuid_generate(uuid);
 	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
 	for (i = 0; i < num; i++) {
-		ret = vos_pool_open(arg->fname[0], uuid,
+		ret = vos_pool_open(arg->fname[0], uuid, false /*small */,
 				    &arg->poh[i]);
 		assert_int_equal(ret, 0);
 	}
@@ -130,7 +130,7 @@ pool_interop(void **state)
 	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
 	assert_int_equal(ret, 0);
 
-	ret = vos_pool_open(arg->fname[0], uuid, &poh);
+	ret = vos_pool_open(arg->fname[0], uuid, false, &poh);
 	assert_int_equal(ret, -DER_DF_INCOMPT);
 
 	ret = vos_pool_destroy(arg->fname[0], uuid);
@@ -169,6 +169,7 @@ pool_ops_run(void **state)
 			case OPEN:
 				ret = vos_pool_open(arg->fname[j],
 						    arg->uuid[j],
+						    false /* small */,
 						    &arg->poh[j]);
 				break;
 			case CLOSE:
@@ -182,14 +183,15 @@ pool_ops_run(void **state)
 				ret = vos_pool_query(arg->poh[j], &pinfo);
 				assert_int_equal(ret, 0);
 				assert_int_equal(pinfo.pif_cont_nr, 0);
-				assert_false(pinfo.pif_scm_sz != VPOOL_16M);
-				assert_false(pinfo.pif_nvme_sz != 0);
-				assert_false(pinfo.pif_scm_free >
+				assert_false(SCM_TOTAL(&pinfo.pif_space) !=
+						VPOOL_16M);
+				assert_false(NVME_TOTAL(&pinfo.pif_space) != 0);
+				assert_false(SCM_FREE(&pinfo.pif_space) >
 				     (VPOOL_16M - sizeof(struct vos_pool_df)));
-				assert_false(pinfo.pif_nvme_free != 0);
+				assert_false(NVME_FREE(&pinfo.pif_space) != 0);
 				break;
 			default:
-				fail_msg("Shoudln't be here Unkown ops?\n");
+				fail_msg("Shouldn't be here Unknown ops?\n");
 				break;
 			}
 			if (arg->ops_seq[j][i] != QUERY)
@@ -419,8 +421,11 @@ static const struct CMUnitTest pool_tests[] = {
 
 
 int
-run_pool_test(void)
+run_pool_test(const char *cfg)
 {
-	return cmocka_run_group_tests_name("VOS Pool tests", pool_tests,
+	char	test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "VOS Pool tests %s", cfg);
+	return cmocka_run_group_tests_name(test_name, pool_tests,
 					   setup, teardown);
 }

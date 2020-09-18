@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,8 @@ struct mgmt_join_out {
 	struct rsvc_hint	jo_hint;
 };
 int ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out);
-int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp);
+int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp,
+				    bool all_ranks);
 
 /** srv_pool.c */
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
@@ -92,6 +93,16 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
 			d_rank_list_t **svcp);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
+int ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group);
+int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
+				     struct pool_target_id_list *tgt_list,
+				     pool_comp_state_t new_state);
+int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, uint32_t reint_rank,
+			     struct pool_target_id_list *reint_list);
+int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
+			char *tgt_dev,  size_t scm_size, size_t nvme_size);
+int ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
+			  daos_prop_t **result);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 void ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len);
@@ -108,13 +119,18 @@ int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
 int ds_mgmt_pool_list_cont(uuid_t uuid,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
+int ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info);
+int ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
+			   const char *group);
+int ds_mgmt_pool_get_svc_ranks(struct mgmt_svc *svc, uuid_t uuid,
+			       d_rank_list_t **ranks);
 
 /** srv_query.c */
 
-/* Device health stats from bio_dev_state */
+/* Device health stats from nvme_health_stats */
 struct mgmt_bio_health {
-	struct bio_dev_state	 mb_dev_state;
-	uuid_t			 mb_devid;
+	struct nvme_health_stats	mb_dev_state;
+	uuid_t				mb_devid;
 };
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
@@ -125,8 +141,8 @@ int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp);
 int ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp);
 
 /** srv_target.c */
-int ds_mgmt_tgt_init(void);
-void ds_mgmt_tgt_fini(void);
+int ds_mgmt_tgt_setup(void);
+void ds_mgmt_tgt_cleanup(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
@@ -141,5 +157,6 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 /** srv_util.c */
 int ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 			 int nservers, uint32_t version);
+void ds_mgmt_kill_rank(bool force);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

@@ -276,7 +276,8 @@ func TestDrpc_Errors(t *testing.T) {
 			}
 			mc := newMockDrpcClient(cfg)
 
-			_, err := makeDrpcCall(mc, drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+			_, err := makeDrpcCall(mc, drpc.MethodPoolCreate,
+				&mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}

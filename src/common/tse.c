@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,6 +190,24 @@ tse_task_set_priv(tse_task_t *task, void *priv)
 	void			*old = dtp->dtp_priv;
 
 	dtp->dtp_priv = priv;
+	return old;
+}
+
+void *
+tse_task_get_priv_internal(tse_task_t *task)
+{
+	struct tse_task_private *dtp = tse_task2priv(task);
+
+	return dtp->dtp_priv_internal;
+}
+
+void *
+tse_task_set_priv_internal(tse_task_t *task, void *priv)
+{
+	struct tse_task_private *dtp = tse_task2priv(task);
+	void			*old = dtp->dtp_priv_internal;
+
+	dtp->dtp_priv_internal = priv;
 	return old;
 }
 
@@ -834,7 +852,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	}
 
 	if (dtp->dtp_completed) {
-		D_ERROR("Can't add a depedency for a completed task (%p)\n",
+		D_ERROR("Can't add a dependency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
@@ -964,7 +982,7 @@ tse_task_reinit(tse_task_t *task)
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (dsp->dsp_cancelling) {
-		D_ERROR("Scheduler is cancelling, can't re-insert task\n");
+		D_ERROR("Scheduler is canceling, can't re-insert task\n");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 

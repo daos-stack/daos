@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,13 +32,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService {
-	cfg := defaultMockConfig(t)
-	return mockControlService(t, log, cfg, nil, nil, nil)
-}
-
-// mockControlService takes cfgs for tuneable scm and sys provider behaviour but
-// default nvmeStorage behaviour (cs.nvoe can be subsequently replaced in test).
+// mockControlService takes cfgs for tuneable scm and sys provider behavior but
+// default nvmeStorage behavior (cs.nvoe can be subsequently replaced in test).
 func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
 	t.Helper()
 

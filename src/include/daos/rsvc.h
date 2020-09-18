@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ enum rsvc_client_complete_rpc_rc {
 
 int rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks);
 void rsvc_client_fini(struct rsvc_client *client);
-void rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep);
+int rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep);
 int rsvc_client_complete_rpc(struct rsvc_client *client,
 			     const crt_endpoint_t *ep, int rc_crt, int rc_svc,
 			     const struct rsvc_hint *hint);

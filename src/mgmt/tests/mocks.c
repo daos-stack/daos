@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -272,6 +272,44 @@ ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 	}
 }
 
+int		ds_mgmt_pool_set_prop_return;
+daos_prop_t	*ds_mgmt_pool_set_prop_prop;
+daos_prop_t	*ds_mgmt_pool_set_prop_result;
+void		*ds_mgmt_pool_set_prop_result_ptr;
+int
+ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
+		      daos_prop_t **result)
+{
+	if (prop != NULL)
+		ds_mgmt_pool_set_prop_prop = daos_prop_dup(prop, true);
+	ds_mgmt_pool_set_prop_result_ptr = (void *)result;
+
+	if (result != NULL && ds_mgmt_pool_set_prop_result != NULL) {
+		size_t len = ds_mgmt_pool_set_prop_result->dpp_nr;
+
+		*result = daos_prop_alloc(len);
+		daos_prop_copy(*result, ds_mgmt_pool_set_prop_result);
+	}
+
+	return ds_mgmt_pool_set_prop_return;
+}
+
+void
+mock_ds_mgmt_pool_set_prop_setup(void)
+{
+	ds_mgmt_pool_set_prop_return = 0;
+	ds_mgmt_pool_set_prop_prop = NULL;
+	ds_mgmt_pool_set_prop_result = NULL;
+	ds_mgmt_pool_set_prop_result_ptr = NULL;
+}
+
+void
+mock_ds_mgmt_pool_set_prop_teardown(void)
+{
+	daos_prop_free(ds_mgmt_pool_set_prop_result);
+	daos_prop_free(ds_mgmt_pool_set_prop_prop);
+}
+
 /*
  * Mock ds_mgmt_pool_list_cont
  */
@@ -320,6 +358,120 @@ void mock_ds_mgmt_pool_list_cont_teardown(void)
 	}
 }
 
+int			ds_mgmt_pool_query_return;
+uuid_t			ds_mgmt_pool_query_uuid;
+daos_pool_info_t	ds_mgmt_pool_query_info_out;
+daos_pool_info_t	ds_mgmt_pool_query_info_in;
+void			*ds_mgmt_pool_query_info_ptr;
+int
+ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
+{
+	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
+	ds_mgmt_pool_query_info_ptr = (void *)pool_info;
+	if (pool_info != NULL) {
+		ds_mgmt_pool_query_info_in = *pool_info;
+		*pool_info = ds_mgmt_pool_query_info_out;
+	}
+	return ds_mgmt_pool_query_return;
+}
+
+void
+mock_ds_mgmt_pool_query_setup(void)
+{
+	ds_mgmt_pool_query_return = 0;
+	uuid_clear(ds_mgmt_pool_query_uuid);
+	ds_mgmt_pool_query_info_ptr = NULL;
+	memset(&ds_mgmt_pool_query_info_out, 0, sizeof(daos_pool_info_t));
+}
+
+int	ds_mgmt_cont_set_owner_return;
+uuid_t	ds_mgmt_cont_set_owner_pool;
+uuid_t	ds_mgmt_cont_set_owner_cont;
+char	*ds_mgmt_cont_set_owner_user;
+char	*ds_mgmt_cont_set_owner_group;
+int
+ds_mgmt_cont_set_owner(uuid_t pool_uuid, uuid_t cont_uuid, const char *user,
+		       const char *group)
+{
+	uuid_copy(ds_mgmt_cont_set_owner_pool, pool_uuid);
+	uuid_copy(ds_mgmt_cont_set_owner_cont, cont_uuid);
+	if (user != NULL)
+		D_STRNDUP(ds_mgmt_cont_set_owner_user, user,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	if (group != NULL)
+		D_STRNDUP(ds_mgmt_cont_set_owner_group, group,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+
+	return ds_mgmt_cont_set_owner_return;
+}
+
+void
+mock_ds_mgmt_cont_set_owner_setup(void)
+{
+	ds_mgmt_cont_set_owner_return = 0;
+
+	uuid_clear(ds_mgmt_cont_set_owner_pool);
+	uuid_clear(ds_mgmt_cont_set_owner_cont);
+	ds_mgmt_cont_set_owner_user = NULL;
+	ds_mgmt_cont_set_owner_group = NULL;
+}
+void mock_ds_mgmt_cont_set_owner_teardown(void)
+{
+	D_FREE(ds_mgmt_cont_set_owner_user);
+	D_FREE(ds_mgmt_cont_set_owner_group);
+}
+
+int     ds_mgmt_target_update_return;
+uuid_t  ds_mgmt_target_update_uuid;
+int
+ds_mgmt_pool_target_update_state(uuid_t pool_uuid, uint32_t rank,
+				struct pool_target_id_list *target_list,
+				pool_comp_state_t state)
+{
+	uuid_copy(ds_mgmt_target_update_uuid, pool_uuid);
+	return ds_mgmt_target_update_return;
+}
+
+void
+mock_ds_mgmt_tgt_update_setup(void)
+{
+	ds_mgmt_target_update_return = 0;
+	uuid_clear(ds_mgmt_target_update_uuid);
+}
+
+int     ds_mgmt_pool_extend_return;
+uuid_t  ds_mgmt_pool_extend_uuid;
+int
+ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
+			char *tgt_dev,  size_t scm_size, size_t nvme_size)
+{
+	uuid_copy(ds_mgmt_pool_extend_uuid, pool_uuid);
+	return ds_mgmt_pool_extend_return;
+}
+
+void
+mock_ds_mgmt_pool_extend_setup(void)
+{
+	ds_mgmt_pool_extend_return = 0;
+	uuid_clear(ds_mgmt_pool_extend_uuid);
+}
+
+int     ds_mgmt_pool_evict_return;
+uuid_t  ds_mgmt_pool_evict_uuid;
+int
+ds_mgmt_evict_pool(uuid_t pool_uuid, const char *group)
+{
+	uuid_copy(ds_mgmt_pool_evict_uuid, pool_uuid);
+	return ds_mgmt_pool_evict_return;
+}
+
+void
+mock_ds_mgmt_pool_evict_setup(void)
+{
+	ds_mgmt_pool_evict_return = 0;
+	uuid_clear(ds_mgmt_pool_evict_uuid);
+}
+
 /*
  * Stubs, to avoid linker errors
  * TODO: Implement mocks when there is a test that uses these
@@ -349,7 +501,7 @@ ds_rsvc_get_md_cap(void)
 }
 
 int
-ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
+ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 {
 	return 0;
 }

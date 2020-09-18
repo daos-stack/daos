@@ -22,11 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__    import print_function
-from mpio_test_base import LlnlMpi4pyHdf5
+from mpio_test_base import MpiioTests
 
 
 # pylint: disable=too-many-ancestors
-class LlnlMpi4py(LlnlMpi4pyHdf5):
+class LlnlMpi4py(MpiioTests):
     """
     Runs LLNL and MPI4PY test suites.
     :avocado: recursive

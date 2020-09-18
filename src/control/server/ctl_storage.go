@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
@@ -33,35 +35,19 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-const (
-	msgBdevNotFound = "controller at pci addr not found, check device exists " +
-		"and can be discovered, you may need to run `sudo daos_server " +
-		"storage prepare --nvme-only` to setup SPDK to access SSDs"
-	msgBdevNoDevs      = "no controllers specified"
-	msgBdevScmNotReady = "nvme format not performed because scm not ready"
-)
-
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
 	bdev            *bdev.Provider
 	scm             *scm.Provider
-	instanceStorage []ioserver.StorageConfig
-}
-
-// DefaultStorageControlService returns a initialized *StorageControlService
-// with default behaviour
-func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
-	return NewStorageControlService(log,
-		bdev.DefaultProvider(log),
-		scm.DefaultProvider(log), cfg.Servers), nil
+	instanceStorage []*ioserver.StorageConfig
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
 func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.Provider, srvCfgs []*ioserver.Config) *StorageControlService {
-	instanceStorage := []ioserver.StorageConfig{}
+	instanceStorage := []*ioserver.StorageConfig{}
 	for _, srvCfg := range srvCfgs {
-		instanceStorage = append(instanceStorage, srvCfg.Storage)
+		instanceStorage = append(instanceStorage, &srvCfg.Storage)
 	}
 
 	return &StorageControlService{
@@ -72,7 +58,61 @@ func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.
 	}
 }
 
+func (c *StorageControlService) findBdevsWithDomain(sr *bdev.ScanResponse, prefix string) ([]string, error) {
+	var found []string
+
+	for _, c := range sr.Controllers {
+		domain, _, _, _, err := bdev.ParsePCIAddress(c.PciAddr)
+		if err != nil {
+			return nil, err
+		}
+		if fmt.Sprintf("%x", domain) == prefix {
+			found = append(found, c.PciAddr)
+		}
+	}
+
+	return found, nil
+}
+
+// substBdevVmdAddrs replaces VMD PCI addresses in bdev device list with the
+// PCI addresses of the backing devices behind the VMD.
+//
+// Select any PCI addresses that have the compressed VMD address BDF as backing
+// address domain.
+func (c *StorageControlService) substBdevVmdAddrs(sr *bdev.ScanResponse) error {
+	if len(c.instanceStorage) == 0 {
+		return nil
+	}
+
+	for i := range c.instanceStorage {
+		var newDevs []string
+		oldDevs := c.instanceStorage[i].Bdev.DeviceList
+
+		for _, dev := range oldDevs {
+			_, b, d, f, err := bdev.ParsePCIAddress(dev)
+			if err != nil {
+				return err
+			}
+			matchDevs, err := c.findBdevsWithDomain(sr,
+				fmt.Sprintf("%02x%02x%02x", b, d, f))
+			if err != nil {
+				return err
+			}
+			if len(matchDevs) == 0 {
+				matchDevs = append(matchDevs, dev)
+			}
+			newDevs = append(newDevs, matchDevs...)
+		}
+
+		c.instanceStorage[i].Bdev.DeviceList = newDevs
+	}
+
+	return nil
+}
+
 // canAccessBdevs evaluates if any specified Bdevs are not accessible.
+//
+// Specified Bdevs can be VMD addresses.
 func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing []string, ok bool) {
 	getController := func(pciAddr string) *storage.NvmeController {
 		for _, c := range sr.Controllers {
@@ -96,19 +136,25 @@ func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing [
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *StorageControlService) Setup() error {
-	sr, err := c.bdev.Scan(bdev.ScanRequest{})
+	sr, err := c.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
-	} else {
+		return nil
+	}
 
-		// fail if config specified nvme devices are inaccessible
-		missing, ok := c.canAccessBdevs(sr)
-		if !ok {
-			return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
+	if !c.bdev.IsVMDDisabled() {
+		if err := c.substBdevVmdAddrs(sr); err != nil {
+			return err
 		}
 	}
 
-	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {
+	// fail if config specified nvme devices are inaccessible
+	missing, ok := c.canAccessBdevs(sr)
+	if !ok {
+		return FaultBdevNotFound(missing)
+	}
+
+	if _, err := c.ScmScan(scm.ScanRequest{}); err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
@@ -122,7 +168,7 @@ func (c *StorageControlService) NvmePrepare(req bdev.PrepareRequest) (*bdev.Prep
 	return c.bdev.Prepare(req)
 }
 
-// GetScmState performs required initialisation and returns current state
+// GetScmState performs required initialization and returns current state
 // of SCM module preparation.
 func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
 	return c.scm.GetState()
@@ -137,16 +183,12 @@ func (c *StorageControlService) ScmPrepare(req scm.PrepareRequest) (*scm.Prepare
 	return c.scm.Prepare(req)
 }
 
-// NvmeScan scans locally attached SSDs and returns list directly.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) NvmeScan() (*bdev.ScanResponse, error) {
-	return c.bdev.Scan(bdev.ScanRequest{})
+// NvmeScan scans locally attached SSDs.
+func (c *StorageControlService) NvmeScan(req bdev.ScanRequest) (*bdev.ScanResponse, error) {
+	return c.bdev.Scan(req)
 }
 
 // ScmScan scans locally attached modules, namespaces and state of DCPM config.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScmScan() (*scm.ScanResponse, error) {
-	return c.scm.Scan(scm.ScanRequest{})
+func (c *StorageControlService) ScmScan(req scm.ScanRequest) (*scm.ScanResponse, error) {
+	return c.scm.Scan(req)
 }

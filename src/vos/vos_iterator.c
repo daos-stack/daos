@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	}
 
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
+		D_ERROR("Please call vos_iter_probe to initialize cursor\n");
 		return -DER_NO_PERM;
 	}
 
@@ -133,16 +133,9 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	rc = iter->it_ops->iop_nested_tree_fetch(iter, type, &info);
 
 	if (rc != 0) {
-		if ((type == VOS_ITER_RECX || type == VOS_ITER_SINGLE) &&
-		    rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "%s iterator does not exist\n",
-				dict->id_name);
-		else if (rc == -DER_INPROGRESS)
-			D_DEBUG(DB_TRACE, "Cannot fetch nested tree from "
-				"because of conflict modification: %d\n", rc);
-		else
-			D_ERROR("Problem fetching nested tree from iterator:"
-				" %d\n", rc);
+		VOS_TX_TRACE_FAIL(rc, "Problem fetching nested tree (%s) from "
+				  "iterator: "DF_RC"\n", dict->id_name,
+				  DP_RC(rc));
 		return rc;
 	}
 
@@ -172,11 +165,13 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 
 int
 vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
-		 daos_handle_t *ih)
+		 daos_handle_t *ih, struct dtx_handle *dth)
 {
 	struct vos_iter_dict	*dict;
 	struct vos_iterator	*iter;
+	struct vos_ts_set	*ts_set = NULL;
 	int			 rc;
+	int			 rlevel;
 
 	if (ih == NULL) {
 		D_ERROR("Argument 'ih' is invalid to vos_iter_param\n");
@@ -200,23 +195,60 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_ERROR("Can't find iterator type %d\n", type);
 		return -DER_NOSYS;
 	}
+
 	if (!daos_handle_is_inval(param->ip_ih)) {
 		D_DEBUG(DB_TRACE, "Preparing nested iterator of type %s\n",
 			dict->id_name);
-		return nested_prepare(type, dict, param, ih);
+		/** Nested operations are only used internally so there
+		 * shouldn't be any active transaction involved.  However,
+		 * the upper layer is still passing in a valid handle in
+		 * some cases.
+		 */
+		rc = nested_prepare(type, dict, param, ih);
+
+		goto out;
 	}
+
+	switch (type) {
+	case VOS_ITER_OBJ:
+		rlevel = VOS_TS_READ_CONT;
+		break;
+	case VOS_ITER_DKEY:
+		rlevel = VOS_TS_READ_OBJ;
+		break;
+	case VOS_ITER_AKEY:
+		rlevel = VOS_TS_READ_DKEY;
+		break;
+	case VOS_ITER_RECX:
+		rlevel = VOS_TS_READ_AKEY;
+		break;
+	default:
+		rlevel = 0;
+		/** There should not be any cases where a DTX is active outside
+		 *  of the four listed above.
+		 */
+		D_ASSERT(!dtx_is_valid_handle(dth));
+		break;
+	}
+	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */,
+				 dtx_is_valid_handle(dth) ?
+				 &dth->dth_xid : NULL);
+	if (rc != 0)
+		goto out;
+
 
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
 		dict->id_name);
-	rc = dict->id_ops->iop_prepare(type, param, &iter);
+	rc = dict->id_ops->iop_prepare(type, param, &iter, ts_set);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "No %s to iterate: %d\n",
-				dict->id_name, rc);
+			D_DEBUG(DB_TRACE, "No %s to iterate: "DF_RC"\n",
+				dict->id_name, DP_RC(rc));
 		else
-			D_ERROR("Failed to prepare %s iterator: %d\n",
-				dict->id_name, rc);
-		return rc;
+			D_ERROR("Failed to prepare %s iterator: "DF_RC"\n",
+				dict->id_name, DP_RC(rc));
+
+		goto out;
 	}
 
 	D_ASSERT(iter->it_type == type);
@@ -226,9 +258,15 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	iter->it_ref_cnt	= 1;
 	iter->it_parent		= NULL;
 	iter->it_from_parent	= 0;
+	iter->it_ts_set		= ts_set;
 
 	*ih = vos_iter2hdl(iter);
-	return 0;
+out:
+	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth))
+		vos_ts_set_update(ts_set, dth->dth_epoch);
+	if (rc != 0)
+		vos_ts_set_free(ts_set);
+	return rc;
 }
 
 /* Internal function to ensure parent iterator remains
@@ -242,8 +280,21 @@ iter_decref(struct vos_iterator *iter)
 	if (iter->it_ref_cnt)
 		return 0;
 
+	vos_ts_set_free(iter->it_ts_set);
 	D_ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_finish(iter);
+}
+
+void
+vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time)
+{
+	struct vos_iterator	*iter;
+
+	if (daos_handle_is_inval(ih))
+		return;
+
+	iter = vos_hdl2iter(ih);
+	vos_ts_set_update(iter->it_ts_set, read_time);
 }
 
 int
@@ -284,7 +335,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 		iter->it_state = VOS_ITS_END;
 	else
 		iter->it_state = VOS_ITS_NONE;
-	D_DEBUG(DB_IO, "done probing iterator rc = %d\n", rc);
+	D_DEBUG(DB_IO, "done probing iterator rc = "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -293,7 +344,7 @@ static inline int
 iter_verify_state(struct vos_iterator *iter)
 {
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
+		D_ERROR("Please call vos_iter_probe to initialize cursor\n");
 		return -DER_NO_PERM;
 	} else if (iter->it_state == VOS_ITS_END) {
 		D_DEBUG(DB_TRACE, "The end of iteration\n");
@@ -538,10 +589,12 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
  */
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg)
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
-	vos_iter_entry_t	iter_ent;
+	vos_iter_entry_t	iter_ent = {0};
+	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
 	unsigned int		acts = 0;
 	bool			skipped;
@@ -549,21 +602,23 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
 	D_ASSERT(anchors != NULL);
+	D_ASSERT(pre_cb || post_cb);
 
 	anchor = type2anchor(type, anchors);
 
-	rc = vos_iter_prepare(type, param, &ih);
+	rc = vos_iter_prepare(type, param, &ih, dth);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
-			D_ERROR("failed to prepare iterator (type=%d): %d\n",
-				type, rc);
+			D_ERROR("failed to prepare iterator (type=%d): "
+				""DF_RC"\n", type, DP_RC(rc));
 		}
+
 		return rc;
 	}
-
+	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	if (!daos_anchor_is_zero(anchor))
 		probe_anchor = anchor;
@@ -574,13 +629,9 @@ probe:
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
-			if (rc == -DER_INPROGRESS)
-				D_DEBUG(DB_TRACE, "Cannot probe because of "
-					"some conflict modification: %d\n", rc);
-			else
-				D_ERROR("failed to probe iterator (type=%d "
-					"anchor=%p): %d\n",
-					type, probe_anchor, rc);
+			VOS_TX_TRACE_FAIL(rc, "Failed to probe iterator "
+					  "(type=%d anchor=%p): "DF_RC"\n",
+					  type, probe_anchor, DP_RC(rc));
 		}
 		D_GOTO(out, rc);
 	}
@@ -588,28 +639,27 @@ probe:
 	while (1) {
 		rc = vos_iter_fetch(ih, &iter_ent, anchor);
 		if (rc != 0) {
-			if (rc == -DER_INPROGRESS)
-				D_DEBUG(DB_TRACE, "Cannot fetch iterator "
-					"(type=%d) because of conflict "
-					"modification: %d\n", type, rc);
-			else
-				D_ERROR("failed to fetch iterator (type=%d): "
-					"%d\n", type, rc);
+			VOS_TX_TRACE_FAIL(rc, "Failed to fetch iterator "
+					  "(type=%d): "DF_RC"\n", type,
+					  DP_RC(rc));
 			break;
 		}
 
-		rc = cb(ih, &iter_ent, type, param, arg, &acts);
-		if (rc != 0)
-			break;
+		skipped = false;
+		if (pre_cb) {
+			rc = pre_cb(ih, &iter_ent, type, param, arg, &acts);
+			if (rc != 0)
+				break;
 
-		set_reprobe(type, acts, anchors, param->ip_flags);
-		skipped = (acts & VOS_ITER_CB_SKIP);
-		acts = 0;
+			set_reprobe(type, acts, anchors, param->ip_flags);
+			skipped = (acts & VOS_ITER_CB_SKIP);
+			acts = 0;
 
-		if (need_reprobe(type, anchors)) {
-			D_ASSERT(!daos_anchor_is_zero(anchor) &&
-				 !daos_anchor_is_eof(anchor));
-			goto probe;
+			if (need_reprobe(type, anchors)) {
+				D_ASSERT(!daos_anchor_is_zero(anchor) &&
+					 !daos_anchor_is_eof(anchor));
+				goto probe;
+			}
 		}
 
 		if (recursive && !is_last_level(type) && !skipped &&
@@ -636,24 +686,35 @@ probe:
 			}
 
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
-					 recursive, anchors, cb, arg);
+					 recursive, anchors, pre_cb, post_cb,
+					 arg, dth);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
+		}
 
-			if (need_reprobe(type, anchors)) {
-				D_ASSERT(!daos_anchor_is_zero(anchor) &&
-					 !daos_anchor_is_eof(anchor));
-				goto probe;
-			}
+		if (post_cb) {
+			rc = post_cb(ih, &iter_ent, type, param, arg, &acts);
+			if (rc != 0)
+				break;
+
+			set_reprobe(type, acts, anchors, param->ip_flags);
+			acts = 0;
+
+		}
+
+		if (need_reprobe(type, anchors)) {
+			D_ASSERT(!daos_anchor_is_zero(anchor) &&
+				 !daos_anchor_is_eof(anchor));
+			goto probe;
 		}
 
 		rc = vos_iter_next(ih);
 		if (rc) {
-			if (rc != -DER_NONEXIST)
-				D_ERROR("failed to iterate next (type=%d): "
-					"%d\n", type, rc);
+			VOS_TX_TRACE_FAIL(rc,
+					  "failed to iterate next (type=%d): "
+					  DF_RC"\n", type, DP_RC(rc));
 			break;
 		}
 	}
@@ -663,8 +724,11 @@ probe:
 		rc = 0;
 	}
 out:
-	if (rc < 0)
-		D_ERROR("abort iteration type:%d, rc:%d\n", type, rc);
+	if (rc >= 0)
+		vos_iter_ts_set_update(ih, read_time);
+
+	VOS_TX_LOG_FAIL(rc, "abort iteration type:%d, "DF_RC"\n", type,
+			DP_RC(rc));
 
 	vos_iter_finish(ih);
 	return rc;

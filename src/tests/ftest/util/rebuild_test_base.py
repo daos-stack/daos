@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,8 +22,9 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from command_utils import ObjectWithParameters, BasicParameter
-from test_utils import TestPool, TestContainer
+from command_utils_base import ObjectWithParameters, BasicParameter
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class RebuildTestParams(ObjectWithParameters):
@@ -66,7 +67,7 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
     def setup_test_container(self):
@@ -157,12 +158,17 @@ class RebuildTestBase(TestWithServers):
         """Execute test steps during rebuild."""
         pass
 
-    def verify_container_data(self):
-        """Verify the container data."""
+    def verify_container_data(self, txn=None):
+        """Verify the container data.
+
+        Args:
+            txn (int, optional): transaction timestamp to read. Defaults to None
+                which uses the last timestamp written.
+        """
         if self.container is not None:
             self.assertTrue(
-                self.container.read_objects(),
-                "Error verifying contianer data")
+                self.container.read_objects(txn),
+                "Error verifying container data")
 
     def execute_rebuild_test(self, create_container=True):
         """Execute the rebuild test steps.

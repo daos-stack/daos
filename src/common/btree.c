@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -300,7 +300,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma,
 			    coh, priv, &tcx->tc_tins);
 	if (rc != 0) {
-		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
+			DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
@@ -326,7 +327,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 	return 0;
 
  failed:
-	D_DEBUG(DB_TRACE, "Failed to create tree context: %d\n", rc);
+	D_DEBUG(DB_TRACE, "Failed to create tree context: "DF_RC"\n",
+		DP_RC(rc));
 	btr_context_decref(tcx);
 	return rc;
 }
@@ -604,7 +606,12 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 	struct btr_node		*nd;
 	umem_off_t		 nd_off;
 
-	nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+	if (btr_ops(tcx)->to_node_alloc != NULL)
+		nd_off = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins,
+						     btr_node_size(tcx));
+	else
+		nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
+
 	if (UMOFF_IS_NULL(nd_off))
 		return btr_umm(tcx)->umm_nospc_rc;
 
@@ -1808,7 +1815,8 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 	}
 
 	if (rc != 0) { /* failed */
-		D_DEBUG(DB_TRACE, "Failed to update record: %d\n", rc);
+		D_DEBUG(DB_TRACE, "Failed to update record: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 	return 0;
@@ -1821,7 +1829,7 @@ static int
 btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 {
 	struct btr_record *rec;
-	char		  *rec_str;
+	char		  *rec_str = NULL;
 	char		   str[BTR_PRINT_BUF];
 	union btr_rec_buf  rec_buf = {0};
 	int		   rc;
@@ -1831,7 +1839,8 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 
 	rc = btr_rec_alloc(tcx, key, val, rec);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to create new record: %d\n", rc);
+		D_DEBUG(DB_TRACE, "Failed to create new record: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -1848,7 +1857,8 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 		rc = btr_node_insert_rec(tcx, trace, rec);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE,
-				"Failed to insert record to leaf: %d\n", rc);
+				"Failed to insert record to leaf: "DF_RC"\n",
+					DP_RC(rc));
 			return rc;
 		}
 
@@ -1858,7 +1868,8 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 
 		rc = btr_root_start(tcx, rec);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "Failed to start the tree: %d\n", rc);
+			D_DEBUG(DB_TRACE, "Failed to start the tree: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1878,7 +1889,8 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 
 	switch (rc) {
 	default:
-		D_ASSERTF(false, "unknown returned value: %d\n", rc);
+		D_ASSERTF(false, "unknown returned value: "DF_RC"\n",
+			DP_RC(rc));
 		break;
 
 	case PROBE_RC_OK:
@@ -2257,7 +2269,7 @@ btr_node_del_leaf(struct btr_context *tcx,
  * direction. In addition, caller should guarantee the child being deleted
  * is already empty.
  *
- * NB: This function may leave the node in an intermeidate state if it only
+ * NB: This function may leave the node in an intermediate state if it only
  * has one key (and two children). In this case, after returning from this
  * function, caller should either grab a child from a sibling node, or move
  * the only child of this node to a sibling node, then free this node.
@@ -2552,7 +2564,7 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 
 	if (cur_nd->tn_keyn > 1) {
 		/* OK to delete record without doing any extra work */
-		D_DEBUG(DB_TRACE, "Straightaway deletion, no rebalance.\n");
+		D_DEBUG(DB_TRACE, "Straight away deletion, no rebalance.\n");
 		sib_off	= BTR_NODE_NULL;
 		sib_on_right	= false; /* whatever... */
 
@@ -2943,7 +2955,7 @@ btr_tree_alloc(struct btr_context *tcx)
 	int	rc;
 
 	rc = btr_root_alloc(tcx);
-	D_DEBUG(DB_TRACE, "Allocate tree root: %d\n", rc);
+	D_DEBUG(DB_TRACE, "Allocate tree root: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -3307,12 +3319,12 @@ dbtree_destroy(daos_handle_t toh, void *args)
 
 /**
  * This function drains key/values from the tree, each time it deletes a KV
- * pair, it consumes a @credits, which is input paramter of this function.
+ * pair, it consumes a @credits, which is input parameter of this function.
  * It returns if all input credits are consumed, or the tree is empty, in
  * the later case, it also destroys the btree.
  *
  * \param toh		[IN]	 Tree open handle.
- * \param credis	[IN/OUT] Input and returned drain credits
+ * \param credits	[IN/OUT] Input and returned drain credits
  * \param args		[IN]	 user parameter for btr_ops_t::to_rec_free
  * \param destroy	[OUT]	 Tree is empty and destroyed
  */
@@ -3351,7 +3363,7 @@ failed:
 /**** Iterator APIs *********************************************************/
 
 /**
- * Initialise iterator.
+ * Initialize iterator.
  *
  * \param toh		[IN]	Tree open handle
  * \param options	[IN]	Options for the iterator.
@@ -3500,19 +3512,20 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 static int
 btr_iter_is_ready(struct btr_iterator *iter)
 {
-	D_DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
+
+	if (likely(iter->it_state == BTR_ITR_READY))
+		return 0;
 
 	switch (iter->it_state) {
-	default:
-		D_ASSERT(0);
 	case BTR_ITR_NONE:
 	case BTR_ITR_INIT:
 		return -DER_NO_PERM;
-	case BTR_ITR_READY:
-		return 0;
 	case BTR_ITR_FINI:
 		return -DER_NONEXIST;
+	default:
+		D_ASSERT(0);
 	}
+	return 0;
 }
 
 static int
@@ -3627,8 +3640,6 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 	struct btr_record   *rec;
 	int		     rc;
 
-	D_DEBUG(DB_TRACE, "Current iterator\n");
-
 	tcx = btr_hdl2tcx(ih);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
@@ -3663,7 +3674,7 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 
 /**
  * Delete the record pointed by the current iterating cursor. This function
- * will reset interator before return, it means that caller should call
+ * will reset iterator before return, it means that caller should call
  * dbtree_iter_probe() again to reinitialize the iterator.
  *
  * \param ih		[IN]	Iterator open handle.
@@ -3736,7 +3747,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 
 	rc = dbtree_iter_prepare(toh, 0 /* options */, &ih);
 	if (rc != 0) {
-		D_ERROR("failed to prepare tree iterator: %d\n", rc);
+		D_ERROR("failed to prepare tree iterator: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -3745,7 +3757,7 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 	if (rc == -DER_NONEXIST) {
 		D_GOTO(out_iter, rc = 0);
 	} else if (rc != 0) {
-		D_ERROR("failed to initialize iterator: %d\n", rc);
+		D_ERROR("failed to initialize iterator: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_iter, rc);
 	}
 
@@ -3758,7 +3770,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 
 		rc = dbtree_iter_fetch(ih, &key, &val, NULL /* anchor */);
 		if (rc != 0) {
-			D_ERROR("failed to fetch iterator: %d\n", rc);
+			D_ERROR("failed to fetch iterator: "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 
@@ -3783,7 +3796,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 			rc = 0;
 			break;
 		} else if (rc != 0) {
-			D_ERROR("failed to move iterator: %d\n", rc);
+			D_ERROR("failed to move iterator: "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 	}
@@ -3791,7 +3805,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 out_iter:
 	dbtree_iter_finish(ih);
 out:
-	D_DEBUG(DB_TRACE, "iterated %d records: %d\n", niterated, rc);
+	D_DEBUG(DB_TRACE, "iterated %d records: "DF_RC"\n", niterated,
+		DP_RC(rc));
 	return rc;
 }
 
@@ -3800,7 +3815,7 @@ out:
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 
 /**
- * Intialise a tree instance from a registerd tree class.
+ * Initialize a tree instance from a registered tree class.
  */
 static int
 btr_class_init(umem_off_t root_off, struct btr_root *root,
@@ -3946,9 +3961,10 @@ dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t ofeat,
 	ovhd->to_record_msize = ops->to_rec_msize(alloc_overhead);
 	ovhd->to_node_rec_msize = btr_size;
 
-	ovhd->to_node_overhead.no_order = tree_order;
-	ovhd->to_node_overhead.no_size = alloc_overhead +
+	ovhd->to_leaf_overhead.no_order = tree_order;
+	ovhd->to_leaf_overhead.no_size = alloc_overhead +
 		sizeof(struct btr_node) + btr_size * tree_order;
+	ovhd->to_int_node_size = ovhd->to_leaf_overhead.no_size;
 
 	order_idx = 0;
 

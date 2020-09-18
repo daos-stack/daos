@@ -1,48 +1,44 @@
-# DAOS client configuration file.
+# DAOS agent configuration file.
 #
 # Location of this configuration file is determined by first checking for the
-# path specified through the -o option of the daos_agent and DMG command line.
-# Otherwise, etc/daos.yml is used.
+# path specified through the -o option of the daos_agent command line.
+# Otherwise, /etc/daos/daos_agent.yml is used.
 #
-# Section describing the client configuration
+# Section describing the daos_agent configuration
 #
 # Although not supported for now, one might want to connect to multiple
 # DAOS installations from the same node in the future.
 #
 # Specify the associated DAOS systems.
-# Name must match name specifed in the daos_server.yml file on the server.
+# Name must match name specified in the daos_server.yml file on the server.
+#
+# NOTE: changing the name is not supported in DAOS 1.0, it must be daos_server
 #
 # default: daos_server
-#name: daos
+#name: daos_server
 
 # Management server access points
 # Must have the same value for all agents and servers in a system.
-# default: hostname of this node at port 10001 for local testing
-#access_points: ['hostname1:10001','hostname2:10001','hostname3:10001']
-#access_points: [hostname1,hostname2,hostname3]
+# default: hostname of this node
+#access_points: ['hostname1']
 
 # Force different port number to connect to access points.
-# default: 10000
+# default: 10001
 #port: 10001
-
-# Hostlist
-# comma separated list of addresses <ipv4addr/hostname:port>
-# default: ['localhost:10001']
-#hostlist: ['localhost:10001']
 
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Custom CA Root certificate for generated certs
-#  ca_cert: .daos/daosCA.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt
 #  # Agent certificate for use in TLS handshakes
-#  cert: .daos/daos_agent.crt
-#  # Key portion of Server Certificate
-#  key: .daos/daos_agent.key
-#  # Name of server accodring to its certificate
-#  server_name: server
+#  cert: /etc/daos/certs/agent.crt
+#  # Key portion of Agent Certificate
+#  key: /etc/daos/certs/agent.key
 
 # Use the given directory for creating unix domain sockets
 # default: /var/run/daos_agent

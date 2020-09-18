@@ -33,25 +33,27 @@ tests:
       group:
         - nfsnobody
         - PASS
-  setnames: !mux
-    validsetname:
-      setname:
+  systemnames: !mux
+    validsystemname:
+      systemname:
         - daos_server
         - PASS
-    badsetname:
-      setname:
-        - complete_rubbish
-        - FAIL
+    # This case doesn't work now, but might become necessary in the future. See
+    # DAOS-4057
+    # badsetname:
+    #   setname:
+    #     - complete_rubbish
+    #     - FAIL
   tgtlist: !mux
     firsttgt:
       tgt:
-        - "0"
+        - [0]
         - PASS
     bothtgt:
       tgt:
-        - "0,1"
+        - [0, 1]
         - PASS
     badtgt:
       tgt:
-        - "0,1,2"
+        - [0, 1, 2]
         - FAIL

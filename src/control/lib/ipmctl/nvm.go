@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,20 +40,20 @@ import "C"
 
 import (
 	"fmt"
+	"os"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 // IpmCtl is the interface that provides access to libipmctl.
 type IpmCtl interface {
-	// SetInterleaved mode for app-direct regions
-	// process referred to as "set goal" in NVM API
-	//SetRegion(...)
 	// Discover persistent memory modules
 	Discover() ([]DeviceDiscovery, error)
+	// Get firmware information from persistent memory modules
+	GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
 	// Update persistent memory module firmware
-	//Update(...)
-	// Cleanup persistent memory references
-	//Cleanup()
+	UpdateFirmware(uid DeviceUID, fwPath string, force bool) error
 }
 
 // NvmMgmt is an implementation of the IpmCtl interface which exercises
@@ -94,61 +94,54 @@ func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
 	return
 }
 
-// GetStatuses return status for each device in devices
-func (n *NvmMgmt) GetStatuses(devices []DeviceDiscovery) (
-	statuses []DeviceStatus, err error) {
-
-	// printing for debug
-	for i, d := range devices {
-		fmt.Printf("Device ID: %d, Memory type: %d, Fw Rev: %v, Capacity %d, ",
-			d.Device_id, d.Memory_type, d.Fw_revision, d.Capacity)
-		fmt.Printf("Channel Pos: %d, Channel ID: %d, Memory Ctrlr: %d, Socket ID: %d.\n",
-			d.Channel_pos, d.Channel_id, d.Memory_controller_id, d.Socket_id)
-
-		uidCharPtr := (*C.char)(unsafe.Pointer(&devices[0].Uid))
-		//uidCharPtr := (*C.char)(unsafe.Pointer(&devs[0].uid))
-
-		fmt.Printf("uid of device %d: %s\n", i, C.GoString(uidCharPtr))
-
-		status := C.struct_device_status{}
-		if err = Rc2err(
-			"get_device_status",
-			C.nvm_get_device_status(uidCharPtr, &status)); err != nil {
-			return
-		}
-		statuses = append(statuses, *(*DeviceStatus)(unsafe.Pointer(&status)))
-	}
-
-	// verify api call passing in uid as param
-	// dev := C.struct_device_discovery{}
-	// C.nvm_get_device_discovery(uidCharPtr, &dev)
-	// dd := (*DeviceDiscovery)(unsafe.Pointer(&dev))
-	// fmt.Printf("Device ID: %d, Memory type: %d, Fw Rev: %v, Capacity %d, ",
-	//    dd.Device_id, dd.Memory_type, dd.Fw_revision, dd.Capacity)
-
-	return
-}
-
 // Rc2err returns an failure if rc != NVM_SUCCESS.
 //
 // TODO: print human readable error with provided lib macros
 func Rc2err(label string, rc C.int) error {
-	if rc != C.NVM_SUCCESS {
-		// e := errors.Error(C.NVDIMM_ERR_W(FORMAT_STR_NL, rc))
-		return fmt.Errorf("%s: rc=%d", label, int(rc)) // e
+	if rc != C.NVM_SUCCESS && rc != C.NVM_SUCCESS_FW_RESET_REQUIRED {
+		return fmt.Errorf("%s: rc=%d", label, int(rc))
 	}
 	return nil
 }
 
-// example unit test from NVM API source
-//TEST_F(NvmApi_Tests, GetDeviceStatus)
-//{
-//  unsigned int dimm_cnt = 0;
-//  nvm_get_number_of_devices(&dimm_cnt);
-//  device_discovery *p_devices = (device_discovery *)malloc(sizeof(device_discovery) * dimm_cnt);
-//  nvm_get_devices(p_devices, dimm_cnt);
-//  device_status *p_status = (device_status *)malloc(sizeof(device_status));
-//  EXPECT_EQ(nvm_get_device_status(p_devices->uid, p_status), NVM_SUCCESS);
-//  free(p_status);
-//  free(p_devices);
-//}
+// GetFirmwareInfo fetches the firmware revision and other information from the device
+func (n *NvmMgmt) GetFirmwareInfo(uid DeviceUID) (fw DeviceFirmwareInfo, err error) {
+	cUID := C.CString(uid.String())
+	cInfo := new(C.struct_device_fw_info)
+
+	if err = Rc2err(
+		"get_device_fw_info",
+		C.nvm_get_device_fw_image_info(cUID, cInfo)); err != nil {
+		return
+	}
+
+	fw = *(*DeviceFirmwareInfo)(unsafe.Pointer(cInfo))
+	return
+}
+
+// UpdateFirmware updates the firmware on the device
+func (n *NvmMgmt) UpdateFirmware(uid DeviceUID, fwPath string, force bool) error {
+	if len(fwPath) == 0 {
+		return errors.New("firmware path is required")
+	}
+
+	if _, err := os.Stat(fwPath); err != nil {
+		return errors.Wrap(err, "unable to access firmware file")
+	}
+
+	cUID := C.CString(uid.String())
+	cPath := C.CString(fwPath)
+	cPathLen := C.ulong(len(fwPath))
+	var cForce C.uchar
+	if force {
+		cForce = 1
+	}
+
+	if err := Rc2err(
+		"update_device_fw",
+		C.nvm_update_device_fw(cUID, cPath, cPathLen, cForce)); err != nil {
+		return err
+	}
+
+	return nil
+}

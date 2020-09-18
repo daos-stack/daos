@@ -1,0 +1,11 @@
+"""Build DAOS man pages"""
+import os
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    env.Install("$PREFIX/share/man/", ['man8'])
+
+if __name__ == "SCons.Script":
+    scons()

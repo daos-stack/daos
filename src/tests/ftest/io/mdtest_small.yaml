@@ -7,19 +7,26 @@ hosts:
   test_clients:
     - client-E
     - client-F
-timeout: 800
+timeout: 1500
 server_config:
-    name: daos_server
+  name: daos_server
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        group: daos_server
-    createsize:
-        scm_size: 1600000000
-    createsvc:
-        svcn: 1
+  mode: 146
+  name: daos_server
+  scm_size: 6000000000
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 mdtest:
   client_processes:
     np_8:
@@ -28,47 +35,16 @@ mdtest:
   iteration: 1
   dfs_destroy: True
   manager: "MPICH"
-  mdtest_flags: !mux
-    ssf:
-      flags: ' '
-      mdtest_api: !mux
-        dfs:
-          api: 'DFS'
-          write_bytes: 4096
-          read_bytes: 4096
-        posix:
-          api: 'POSIX'
-          write_bytes: 0
-          read_bytes: 0
-      branch: !mux
-        zero:
-          branching_factor: 1
-          num_of_files_dirs: 1000
-          directory_depth: !mux
-            depth_0:
-              depth: 0
-            depth_20:
-              depth: 20
-        two:
-          branching_factor: 2
-          items: 10
-          depth: 5
-    fpp:
-      flags: "-u"
-      mdtest_api: !mux
-        posix_api:
-          api: 'POSIX'
-          write_bytes: 4096
-          read_bytes: 4096
-          branching_factor: 1
-          num_of_files_dirs: 1000
-          depth: 20
-        dfs_api:
-          api: 'DFS'
-          write_bytes: 0
-          read_bytes: 0
-          branching_factor: 2
-          items: 10
-          depth: 5
+  mdtest_params:
+#     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
+    - [DFS, 4096, 4096, 1, 1000, 0, ' ']
+    - [DFS, 4096, 4096, 1, 1000, 20, ' ']
+    - [POSIX, 0, 0, 1, 1000, 0, ' ']
+    - [POSIX, 0, 0, 1, 1000, 20, ' ']
+    - [DFS, 4096, 4096, 2, 10, 5, ' ']
+    - [POSIX, 4096, 4096, 2, 10, 5, ' ']
+    - [DFS, 4096, 4096, 1, 1000, 20, '-u']
+    - [POSIX, 0, 0, 2, 10, 5, '-u']
+
 dfuse:
   mount_dir: "/tmp/daos_dfuse"

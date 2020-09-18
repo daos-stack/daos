@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,8 +152,8 @@ CRT_RPC_DECLARE(mgmt_params_set, DAOS_ISEQ_MGMT_PARAMS_SET,
 		DAOS_OSEQ_MGMT_PARAMS_SET)
 
 #define DAOS_ISEQ_MGMT_PROFILE /* input fields */		 \
-	((uint64_t)		(p_module)		CRT_VAR) \
 	((d_string_t)		(p_path)		CRT_VAR) \
+	((int32_t)		(p_avg)			CRT_VAR) \
 	((int32_t)		(p_op)			CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_PROFILE /* output fields */	 \

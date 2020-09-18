@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -274,7 +274,7 @@ static inline int
 rdb_vos_fetch_check(d_iov_t *value, d_iov_t *value_orig)
 {
 	/*
-	 * An emtpy value represents nonexistence. Keep the caller value intact
+	 * An empty value represents nonexistence. Keep the caller value intact
 	 * in this case.
 	 */
 	if (value->iov_len == 0) {
@@ -304,7 +304,8 @@ rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
 	rdb_vos_set_sgls(RDB_VOS_QUERY, 1 /* n */, value, &sgl);
-	rc = vos_obj_fetch(cont, uoid, epoch, &rdb_dkey, 1 /* n */, &iod, &sgl);
+	rc = vos_obj_fetch(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
+			   1 /* n */, &iod, &sgl);
 	if (rc != 0)
 		return rc;
 
@@ -332,14 +333,15 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
-	rc = vos_fetch_begin(cont, uoid, epoch, &rdb_dkey, 1 /* n */,
-			     &iod, false /* size_fetch */, &io);
+	rc = vos_fetch_begin(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
+			     1 /* n */, &iod, 0 /* fetch_flags */, NULL, &io,
+			     NULL /* dth */);
 	if (rc != 0)
 		return rc;
 
 	rc = bio_iod_prep(vos_ioh2desc(io));
 	if (rc) {
-		D_ERROR("prep io descriptor error:%d\n", rc);
+		D_ERROR("prep io descriptor error:"DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -366,10 +368,10 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	}
 
 	rc = bio_iod_post(vos_ioh2desc(io));
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
 	rc = vos_fetch_end(io, 0 /* err */);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return rdb_vos_fetch_check(value, &value_orig);
 }
@@ -393,7 +395,7 @@ rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	param.ip_dkey = rdb_dkey;
 	param.ip_epr.epr_lo = epoch;
 	param.ip_epr.epr_hi = epoch;
-	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter);
+	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter, NULL);
 	if (rc != 0)
 		goto out;
 	rc = vos_iter_probe(iter, NULL /* anchor */);
@@ -448,7 +450,7 @@ rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	param.ip_dkey = rdb_dkey;
 	param.ip_epr.epr_lo = epoch;
 	param.ip_epr.epr_hi = epoch;
-	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter);
+	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			/* No a-keys. */
@@ -502,19 +504,20 @@ out:
 }
 
 int
-rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-	       d_iov_t akeys[], d_iov_t values[])
+rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, bool crit,
+	       int n, d_iov_t akeys[], d_iov_t values[])
 {
 	daos_unit_oid_t	uoid;
 	daos_iod_t	iods[n];
 	d_sg_list_t	sgls[n];
+	uint64_t	vos_flags = crit ? VOS_OF_CRIT : 0;
 
 	D_ASSERTF(n <= RDB_VOS_BATCH_MAX, "%d <= %d\n", n, RDB_VOS_BATCH_MAX);
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
-	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, &rdb_dkey, n,
-			      iods, sgls);
+	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, vos_flags,
+			      &rdb_dkey, n, iods, NULL, sgls);
 }
 
 int
@@ -539,7 +542,7 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 	range.epr_lo = low;
 	range.epr_hi = high;
 
-	return vos_discard(cont, &range);
+	return vos_discard(cont, &range, NULL, NULL);
 }
 
 int
@@ -551,5 +554,5 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr);
+	return vos_aggregate(cont, &epr, NULL, NULL, NULL);
 }

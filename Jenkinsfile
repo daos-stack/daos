@@ -1,104 +1,308 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019 Intel Corporation
+/* Copyright (C) 2019-2020 Intel Corporation
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted for any purpose (including commercial purposes)
- * provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions, and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions, and the following disclaimer in the
- *    documentation and/or materials provided with the distribution.
- *
- * 3. In addition, redistributions of modified forms of the source or binary
- *    code must carry prominent notices stating that the original code was
- *    changed and the date of the change.
- *
- *  4. All publications or advertising materials mentioning features or use of
- *     this software are asked, but not required, to acknowledge that it was
- *     developed by Intel Corporation and credit the contributors.
- *
- * 5. Neither the name of Intel Corporation, nor the name of any Contributor
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This file is part of the DAOS Project. It is subject to the license terms
+ * in the LICENSE file found in the top-level directory of this distribution
+ * and at https://img.shields.io/badge/License-Apache%202.0-blue.svg.
+ * No part of the DAOS Project, including this file, may be copied, modified,
+ * propagated, or distributed except according to the terms contained in the
+ * LICENSE file.
  */
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
+boolean doc_only_change() {
+    if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
+        return true
+    }
+    if (cachedCommitPragma(pragma: 'Doc-only') == 'false') {
+        return false
+    }
 
+    def rc = sh label: "Determine if doc-only change",
+                script: "CHANGE_ID=${env.CHANGE_ID} " +
+                        "TARGET_BRANCH=${target_branch} " +
+                        'ci/doc_only_change.sh',
+                returnStatus: true
+    return rc == 1
+}
+
+def skip_stage(String stage, boolean def_val = false) {
+    String value = 'false'
+    if (def_val) {
+        value = 'true'
+    }
+    return cachedCommitPragma(pragma: 'Skip-' + stage,
+                              def_val: value) == 'true'
+}
+
+boolean quickbuild() {
+    return cachedCommitPragma(pragma: 'Quick-build') == 'true'
+}
+
+def functional_post_always() {
+   return sh(label: "Job Cleanup",
+             script: 'ci/functional/job_cleanup.sh',
+             returnStatus: true)
+}
+
+String get_daos_packages() {
+    Map stage_info = parseStageInfo()
+    return get_daos_packages(stage_info['target'])
+}
+
+String get_daos_packages(String distro) {
+
+    String pkgs
+    if (env.TEST_RPMS == 'true') {
+        pkgs = "daos{,-{client,tests,server}}"
+    } else {
+        pkgs = "daos{,-client}"
+    }
+
+    return pkgs + "-" + daos_packages_version(distro)
+}
+
+String pr_repos() {
+    Map stage_info = parseStageInfo()
+    return pr_repos(stage_info['target'])
+}
+
+String pr_repos(String distro) {
+    String repos = ""
+    if (distro == 'centos7') {
+        repos = cachedCommitPragma(pragma: 'PR-repos-el7')
+    } else if (distro == 'leap15') {
+        repos = cachedCommitPragma(pragma: 'PR-repos-leap15')
+    } else {
+       error 'pr_repos not implemented for ' + distro
+    }
+    return repos + ' ' + cachedCommitPragma(pragma: 'PR-repos')
+}
+
+String daos_repo() {
+    if (cachedCommitPragma(pragma: 'RPM-test-version') == '') {
+        return "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
+    } else {
+        return ""
+    }
+}
+
+String hw_distro_target() {
+    if (env.STAGE_NAME.contains('Hardware')) {
+        if (env.STAGE_NAME.contains('Small')) {
+            return hw_distro('small')
+        }
+        if (env.STAGE_NAME.contains('Medium')) {
+            return hw_distro('medium')
+        }
+        if (env.STAGE_NAME.contains('Large')) {
+            return hw_distro('large')
+        }
+    }
+    Map stage_info = parseStageInfo()
+    return stage_info['target']
+}
+
+String daos_repos() {
+    String target = hw_distro_target()
+    return daos_repos(target)
+}
+
+String daos_repos(String distro) {
+    return pr_repos(distro) + ' ' + daos_repo()
+}
+
+String unit_packages() {
+    Map stage_info = parseStageInfo()
+    boolean need_qb = quickbuild()
+    if (env.STAGE_NAME.contains('Bullseye')) {
+        need_qb = true
+    }
+    if (stage_info['target'] == 'centos7') {
+        String packages =  'gotestsum openmpi3 ' +
+                           'hwloc-devel argobots ' +
+                           'fuse3-libs fuse3 ' +
+                           'boost-devel ' +
+                           'libisa-l-devel libpmem ' +
+                           'libpmemobj protobuf-c ' +
+                           'spdk-devel libfabric-devel '+
+                           'pmix numactl-devel ' +
+                           'libipmctl-devel ' +
+                           'python36-tabulate '
+        if (need_qb) {
+            // TODO: these should be gotten from the Requires: of RPM
+            packages += " spdk-tools mercury-2.0.0~rc1" +
+                        " boost-devel libisa-l_crypto libfabric-debuginfo"
+        }
+        return packages
+    } else {
+        error 'unit packages not implemented for ' + stage_info['target']
+    }
+}
+
+commit_pragma_cache = [:]
+def cachedCommitPragma(Map config) {
+
+    if (commit_pragma_cache[config['pragma']]) {
+        return commit_pragma_cache[config['pragma']]
+    }
+
+    commit_pragma_cache[config['pragma']] = commitPragma(config)
+
+    return commit_pragma_cache[config['pragma']]
+
+}
+
+String daos_packages_version() {
+    stage_info = parseStageInfo()
+    return daos_packages_version(stage_info['target'])
+}
+
+String daos_packages_version(String distro) {
+    // commit pragma has highest priority
+    // TODO: this should actually be determined from the PR-repos artifacts
+    String version = cachedCommitPragma(pragma: 'RPM-test-version')
+    if (version != "") {
+        String dist
+        if (distro == "centos7") {
+            dist = "el7"
+        } else if (distro == "leap15") {
+            dist = "suse.lp152"
+        }
+        return version + "." + dist
+    }
+
+    // use the stash after that
+    unstash distro + '-rpm-version'
+    version = readFile(distro + '-rpm-version').trim()
+    if (version != "") {
+        return version
+    }
+
+    error "Don't know how to determine package version for " + distro
+}
+
+boolean parallel_build() {
+    // defaults to false
+    // true if Quick-build: true unless Parallel-build: false
+    def pb = cachedCommitPragma(pragma: 'Parallel-build')
+    if (pb == "true" ||
+        (quickbuild() && pb != "false")) {
+        return true
+    }
+
+    return false
+}
+
+String hw_distro(String size) {
+    // Possible values:
+    //'leap15
+    //'centos7
+    return cachedCommitPragma(pragma: 'Func-hw-test-' + size + '-distro',
+                              def_val: cachedCommitPragma(pragma: 'Func-hw-test-distro',
+                                                          def_val: 'centos7'))
+}
+
+String functional_packages() {
+    String target = hw_distro_target()
+    return functional_packages(target)
+}
+
+String functional_packages(String distro) {
+    String pkgs = get_daos_packages(distro)
+    pkgs += " openmpi3 hwloc ndctl fio " +
+            "ior-hpc-cart-4-daos-0 " +
+            "romio-tests-cart-4-daos-0 " +
+            "testmpio-cart-4-daos-0 " + 
+            "mpi4py-tests-cart-4-daos-0 " +
+            "hdf5-mpich2-tests-daos-0 " +
+            "hdf5-openmpi3-tests-daos-0 " +
+            "hdf5-vol-daos-mpich2-tests-daos-0 " +
+            "hdf5-vol-daos-openmpi3-tests-daos-0 " +
+            "MACSio-mpich2-daos-0 " +
+            "MACSio-openmpi3-daos-0"
+    if (quickbuild()) {
+        pkgs += " spdk_tools"
+    }
+    if (distro == "leap15") {
+        return pkgs
+    } else if (distro == "centos7") {
+        // need to exclude openmpi until we remove it from the repo
+        return  "--exclude openmpi " + pkgs
+    } else {
+        error 'functional_packages not implemented for ' + stage_info['target']
+    }
+}
+
+// Don't define this as a type or it loses it's global scope
+target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
-def el7_component_repos = ""
-def component_repos = ""
-def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
-def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def functional_rpms  = "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
-                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
-
-def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
-                          exit 0
-                      fi
-                      nodelist=(${NODELIST//,/ })
-                      scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
-                                    jenkins@${nodelist[0]}:/tmp
-                      scp -i ci_key src/tests/ftest/data/daos_agent_baseline.yaml \
-                                    jenkins@${nodelist[0]}:/tmp
-                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
-
-def rpm_test_daos_test = '''me=\\\$(whoami)
-                            for dir in server agent; do
-                                sudo mkdir /var/run/daos_\\\$dir
-                                sudo chmod 0755 /var/run/daos_\\\$dir
-                                sudo chown \\\$me:\\\$me /var/run/daos_\\\$dir
-                            done
-                            sudo mkdir /tmp/daos_sockets
-                            sudo chmod 0755 /tmp/daos_sockets
-                            sudo chown \\\$me:\\\$me /tmp/daos_sockets
-                            sudo mkdir -p /mnt/daos
-                            sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
-                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_server_baseline.yaml
-                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_agent_baseline.yaml
-                            sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
-                            sudo cp /tmp/daos_agent_baseline.yaml /usr/etc/daos_agent.yml
-                            cat /usr/etc/daos_server.yml
-                            cat /usr/etc/daos_agent.yml
-                            module load mpi/openmpi3-x86_64
-                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -i --recreate-superblocks
-                            trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
-                            line=\"\"
-                            while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
-                                read line <&\\\${COPROC[0]}
-                                echo \"Server stdout: \\\$line\"
-                            done
-                            echo \"Server started!\"
-                            daos_agent -o /usr/etc/daos_agent.yml -i &
-                            AGENT_PID=\\\$!
-                            trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
-                            orterun -np 1 -x OFI_INTERFACE=eth0 daos_test -m'''
-
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (env.BRANCH_NAME != "weekly-testing" &&
+    (!env.BRANCH_NAME.startsWith("weekly-testing") &&
+     !env.BRANCH_NAME.startsWith("release/") &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
+}
+
+// The docker agent setup and the provisionNodes step need to know the
+// UID that the build agent is running under.
+cached_uid = 0
+def getuid() {
+    if (cached_uid == 0)
+        cached_uid = sh(label: 'getuid()',
+                        script: "id -u",
+                        returnStdout: true).trim()
+    return cached_uid
+}
+
+// This sets up the additinal build arguments for setting up a docker
+// build agent from a dockerfile.
+// The result of this function need to be stored in an environment
+// variable.  Calling this function to create a docker build agent
+// fails.  The log shows a truncated command string.
+def docker_build_args(Map config = [:]) {
+    ret_str = " --build-arg NOBUILD=1 --build-arg UID=" + getuid() +
+              " --build-arg JENKINS_URL=$env.JENKINS_URL" +
+              " --build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+
+    if (env.REPOSITORY_URL) {
+      ret_str += ' --build-arg REPO_URL=' + env.REPOSITORY_URL
+    }
+    if (env.DAOS_STACK_EL_7_LOCAL_REPO) {
+      ret_str += ' --build-arg REPO_EL7=' + env.DAOS_STACK_EL_7_LOCAL_REPO
+    }
+    if (env.DAOS_STACK_EL_8_LOCAL_REPO) {
+      ret_str += ' --build-arg REPO_EL8=' + env.DAOS_STACK_EL_8_LOCAL_REPO
+    }
+    if (env.DAOS_STACK_LEAP_15_LOCAL_REPO) {
+      ret_str += ' --build-arg REPO_LOCAL_LEAP15=' +
+                 env.DAOS_STACK_LEAP_15_LOCAL_REPO
+    }
+    if (env.DAOS_STACK_LEAP_15_GROUP_REPO) {
+      ret_str += ' --build-arg REPO_GROUP_LEAP15=' +
+                 env.DAOS_STACK_LEAP_15_GROUP_REPO
+    }
+    if (env.HTTP_PROXY) {
+      ret_str += ' --build-arg HTTP_PROXY="' + env.HTTP_PROXY + '"'
+                 ' --build-arg http_proxy="' + env.HTTP_PROXY + '"'
+    }
+    if (env.HTTPS_PROXY) {
+      ret_str += ' --build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '"'
+                 ' --build-arg https_proxy="' + env.HTTPS_PROXY + '"'
+    }
+    if (config['qb']) {
+      ret_str += ' --build-arg QUICKBUILD=true'
+    }
+    ret_str += ' '
+    return ret_str
 }
 
 pipeline {
@@ -110,24 +314,34 @@ pipeline {
     }
 
     environment {
+        BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
-        BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
-        BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
-        UID = sh(script: "id -u", returnStdout: true)
-        BUILDARGS = "$env.BAHTTP_PROXY $env.BAHTTPS_PROXY "                   +
-                    "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
-                    "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
-                    "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
-        QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
-                        returnStatus: true)
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
-        CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config", returnStdout: true).trim()
+        BUILDARGS = docker_build_args()
+        BUILDARGS_QB_CHECK = docker_build_args(qb: quickbuild())
+        BUILDARGS_QB_TRUE = docker_build_args(qb: true)
+        QUICKBUILD_DEPS_EL7 = sh label:'Get Quickbuild dependencies',
+                                 script: "rpmspec -q --define dist\\ .el7 " +
+                                         "--undefine suse_version " +
+                                         "--define rhel\\ 7 --srpm " +
+                                         "--requires utils/rpms/daos.spec " +
+                                         "2>/dev/null",
+                                 returnStdout: true
+        QUICKBUILD_DEPS_LEAP15 = sh label:'Get Quickbuild dependencies',
+                                    script: "rpmspec -q --define dist\\ .suse.lp151 " +
+                                            "--undefine rhel " +
+                                            "--define suse_version\\ 1501 --srpm " +
+                                            "--requires utils/rpms/daos.spec " +
+                                            "2>/dev/null",
+                                    returnStdout: true
+        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
     }
 
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
+        ansiColor('xterm')
     }
 
     stages {
@@ -142,24 +356,31 @@ pipeline {
                 beforeAgent true
                 allOf {
                     not { branch 'weekly-testing' }
-                    expression { env.CHANGE_TARGET != 'weekly-testing' }
-                    expression { return env.QUICKBUILD == '1' }
+                    not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
                 }
             }
             parallel {
                 stage('checkpatch') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('checkpatch') }
+                            expression { ! doc_only_change() }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
+                            additionalBuildArgs '$BUILDARGS' +
+                                           "-t ${sanitized_JOB_NAME}-centos7 "
                         }
                     }
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem"
+                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go:src/cart/_structures_from_macros_.h"
                     }
                     post {
                         always {
@@ -192,7 +413,35 @@ pipeline {
                         }
                         */
                     }
-                }
+                } // stage('checkpatch')
+                stage('Python Bandit check') {
+                    when {
+                      beforeAgent true
+                      expression {
+                          cachedCommitPragma(pragma: 'Skip-python-bandit',
+                                             def_val: 'true') != 'true'
+                      }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.code_scanning'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs '$BUILDARGS'
+                        }
+                    }
+                    steps {
+                        pythonBanditCheck()
+                    }
+                    post {
+                        always {
+                            // Bandit will have empty results if it does not
+                            // find any issues.
+                            junit testResults: 'bandit.xml',
+                                  allowEmptyResults: true
+                        }
+                    }
+                } // stage('Python Bandit check')
             }
         }
         stage('Build') {
@@ -203,83 +452,46 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                // expression { skipTest != true }
-                expression { ! commitPragma(pragma: 'Skip-build').contains('true') }
+                anyOf {
+                    // always build branch landings as we depend on lastSuccessfulBuild
+                    // always having RPMs in it
+                    branch target_branch
+                    allOf {
+                        expression { ! skip_stage('build') }
+                        expression { ! doc_only_change() }
+                        expression { cachedCommitPragma(pragma: 'RPM-test-version') == '' }
+                    }
+                }
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                        }
-                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
-                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
-                                                env.JENKINS_URL
+                            additionalBuildArgs '$BUILDARGS'
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
                     steps {
-                         githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                      description: env.STAGE_NAME,
-                                      context: "build" + "/" + env.STAGE_NAME,
-                                      status: "PENDING"
-                        checkoutScm withSubmodules: true
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            sh label: env.STAGE_NAME,
-                               script: '''rm -rf artifacts/centos7/
-                                          mkdir -p artifacts/centos7/
-                                          if git show -s --format=%B | grep "^Skip-build: true"; then
-                                              exit 0
-                                          fi
-                                          make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
-                        }
+                        buildRpm()
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
-                               script: '''mockroot=/var/lib/mock/epel-7-x86_64
-                                          (cd $mockroot/result/ &&
-                                           cp -r . $OLDPWD/artifacts/centos7/)
-                                          createrepo artifacts/centos7/
-                                          cat $mockroot/result/{root,build}.log'''
-                            publishToRepository product: 'daos',
-                                                format: 'yum',
-                                                maturity: 'stable',
-                                                tech: 'el-7',
-                                                repo_dir: 'artifacts/centos7/'
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "SUCCESS"
+                            buildRpmPost condition: 'success'
                         }
                         unstable {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE", ignore_failure: true
+                            buildRpmPost condition: 'unstable'
                         }
                         failure {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE", ignore_failure: true
+                            buildRpmPost condition: 'failure'
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
-                               script: '''mockroot=/var/lib/mock/epel-7-x86_64
-                                          artdir=$PWD/artifacts/centos7
-                                          if srpms=$(ls _topdir/SRPMS/*); then
-                                              cp -af $srpms $artdir
-                                          fi
-                                          (if cd $mockroot/result/; then
-                                               cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
+                            buildRpmPost condition: 'unsuccessful'
                         }
                         cleanup {
-                            archiveArtifacts artifacts: 'artifacts/centos7/**'
+                            buildRpmPost condition: 'cleanup'
                         }
                     }
                 }
@@ -288,7 +500,9 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            not { environment name: 'CHANGE_TARGET',
+                                              value: 'weekly-testing' }
+                            expression { ! skip_stage('build-leap15-rpm') }
                         }
                     }
                     agent {
@@ -297,139 +511,66 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             args '--privileged=true'
-                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
-                                                env.JENKINS_URL
+                            additionalBuildArgs '$BUILDARGS'
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
                     steps {
-                        githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                      description: env.STAGE_NAME,
-                                      context: "build" + "/" + env.STAGE_NAME,
-                                      status: "PENDING"
-                        checkoutScm withSubmodules: true
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            sh label: env.STAGE_NAME,
-                               script: '''rm -rf artifacts/leap15/
-                                  mkdir -p artifacts/leap15/
-                                  if git show -s --format=%B | grep "^Skip-build: true"; then
-                                      exit 0
-                                  fi
-                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
-                        }
+                        buildRpm unstable: true
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
-                               script: '''(cd /var/lib/mock/opensuse-leap-15.1-x86_64/result/ &&
-                                           cp -r . $OLDPWD/artifacts/leap15/)
-                                          createrepo artifacts/leap15/'''
-                            publishToRepository product: 'daos',
-                                                format: 'yum',
-                                                maturity: 'stable',
-                                                tech: 'leap-15',
-                                                repo_dir: 'artifacts/leap15/'
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "SUCCESS"
+                            buildRpmPost condition: 'success'
                         }
                         unstable {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
+                            buildRpmPost condition: 'unstable'
                         }
                         failure {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                            buildRpmPost condition: 'failure'
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
-                               script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
-                                          cat $mockroot/result/{root,build}.log
-                                          artdir=$PWD/artifacts/leap15
-                                          if srpms=$(ls _topdir/SRPMS/*); then
-                                              cp -af $srpms $artdir
-                                          fi
-                                          (if cd $mockroot/result/; then
-                                               cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
+                            buildRpmPost condition: 'unsuccessful'
                         }
                         cleanup {
-                            archiveArtifacts artifacts: 'artifacts/leap15/**'
+                            buildRpmPost condition: 'cleanup'
                         }
                     }
                 }
                 stage('Build on CentOS 7') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('build-centos7-gcc') }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                                '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=' + env.QUICKBUILD +
-                                                ' --build-arg CART_COMMIT=-' + env.CART_COMMIT +
-                                                ' --build-arg REPOS="' + component_repos + '"'
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-centos7-gcc'
-                        stash name: 'CentOS-install', includes: 'install/**'
-                        stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
-                        stash name: 'CentOS-tests',
-                                    includes: '''build/src/rdb/raft/src/tests_main,
-                                                 build/src/common/tests/btree_direct,
-                                                 build/src/common/tests/btree,
-                                                 build/src/common/tests/sched,
-                                                 build/src/common/tests/drpc_tests,
-                                                 build/src/common/tests/acl_api_tests,
-                                                 build/src/common/tests/acl_util_tests,
-                                                 build/src/common/tests/acl_principal_tests,
-                                                 build/src/common/tests/acl_real_tests,
-                                                 build/src/iosrv/tests/drpc_progress_tests,
-                                                 build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
-                                                 build/src/client/api/tests/eq_tests,
-                                                 build/src/iosrv/tests/drpc_handler_tests,
-                                                 build/src/iosrv/tests/drpc_listener_tests,
-                                                 build/src/mgmt/tests/srv_drpc_tests,
-                                                 build/src/security/tests/cli_security_tests,
-                                                 build/src/security/tests/srv_acl_tests,
-                                                 build/src/vos/vea/tests/vea_ut,
-                                                 build/src/common/tests/umem_test,
-                                                 build/src/bio/smd/tests/smd_ut,
-                                                 scons_local/build_info/**,
-                                                 src/common/tests/btree.sh,
-                                                 src/control/run_go_tests.sh,
-                                                 src/rdb/raft_tests/raft_tests.py,
-                                                 src/vos/tests/evt_ctl.sh
-                                                 src/control/lib/netdetect/netdetect.go'''
+                        sconsBuild parallel_build: parallel_build(),
+                                   stash_files: 'ci/test_files_to_stash.txt'
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-centos7",
-                                             tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-gcc-centos7",
+                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
+                                                  cppCheck(pattern: 'centos7-gcc-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
                         }
                         unsuccessful {
                             sh """if [ -f config${arch}.log ]; then
@@ -437,21 +578,16 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
                                              allowEmptyArchive: true
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
                         }
                     }
                 }
-                stage('Build on CentOS 7 with Clang') {
+                stage('Build on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            not { environment name: 'NO_CI_TESTING',
+                                  value: 'true' }
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
@@ -459,37 +595,163 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_TRUE' +
+                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-centos7-clang'
+                        sconsBuild parallel_build: parallel_build(),
+                                   stash_files: 'ci/test_files_to_stash.txt'
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-centos7-clang",
-                                             tools: [ clang(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-covc-centos7",
+                                         tools: [ gcc4(pattern: 'centos7-covc-build.log'),
+                                                  cppCheck(pattern: 'centos7-covc-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unsuccessful {
+                            sh """if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log config.log-centos7-covc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-covc',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 debug') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('build-centos7-gcc-debug') }
+                            expression { ! quickbuild() }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build()
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-gcc-centos7-debug",
+                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log'),
+                                                  cppCheck(pattern: 'centos7-gcc-debug-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*') ]
+                        }
+                        success {
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unsuccessful {
+                            sh """if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log config.log-centos7-gcc-debug
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 release') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('build-centos7-gcc-release') }
+                            expression { ! quickbuild() }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build()
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-gcc-centos7-release",
+                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log'),
+                                                  cppCheck(pattern: 'centos7-gcc-release-build.log') ],
+                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*')]
+                        }
+                        success {
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unsuccessful {
+                            sh """if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log config.log-centos7-gcc-release
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 with Clang') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            branch target_branch
+                            expression { ! quickbuild() }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build()
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-centos7-clang",
+                                         tools: [ clang(pattern: 'centos7-clang-build.log'),
+                                                  cppCheck(pattern: 'centos7-clang-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
+                        }
+                        success {
                             sh "rm -rf _build.external${arch}"
                         }
                         unsuccessful {
@@ -498,182 +760,123 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-clang',
                                              allowEmptyArchive: true
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
                         }
                     }
                 }
-                stage('Build on Ubuntu 18.04') {
+                stage('Build on Ubuntu 20.04') {
                     when {
                         beforeAgent true
                         allOf {
-                            branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            branch target_branch
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.18.04'
+                            filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu20.04 " +
+                                                '$BUILDARGS'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-ubuntu18.04-gcc'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-ubuntu18",
-                                             tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-ubuntu20",
+                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
+                                                  cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
                             sh "rm -rf _build.external${arch}"
                         }
                         unsuccessful {
                             sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-ubuntu18.04-gcc
+                                      mv config${arch}.log config.log-ubuntu20.04-gcc
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc',
+                            archiveArtifacts artifacts: 'config.log-ubuntu20.04-gcc',
                                              allowEmptyArchive: true
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
                         }
                     }
                 }
-                stage('Build on Ubuntu 18.04 with Clang') {
+                stage('Build on Ubuntu 20.04 with Clang') {
                     when {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            expression { ! quickbuild() }
+                            expression { ! skip_stage('build-ubuntu-clang') }
                         }
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.18.04'
+                            filename 'Dockerfile.ubuntu.20.04'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu18.04 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu20.04 " +
+                                                '$BUILDARGS'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-ubuntu18.04-clag'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-ubuntu18-clang",
-                                             tools: [ clang(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-ubuntu20-clang",
+                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
+                                                  cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
                             sh "rm -rf _build.external${arch}"
                         }
                         unsuccessful {
                             sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-ubuntu18.04-clang
+                                      mv config${arch}.log config.log-ubuntu20.04-clang
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang',
+                            archiveArtifacts artifacts: 'config.log-ubuntu20.04-clang',
                                              allowEmptyArchive: true
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
                         }
                     }
                 }
                 stage('Build on Leap 15') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
-                        }
-                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_LEAP15 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-leap15-gcc'
+                        sconsBuild parallel_build: parallel_build(),
+                                   stash_files: 'ci/test_files_to_stash.txt'
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap15",
-                                             tools: [ gcc4(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-gcc-leap15",
+                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
+                                                  cppCheck(pattern: 'leap15-gcc-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
                             sh "rm -rf _build.external${arch}"
                         }
                         unsuccessful {
@@ -682,12 +885,6 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-leap15-gcc',
                                              allowEmptyArchive: true
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
                         }
                     }
                 }
@@ -695,8 +892,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            branch target_branch
+                            expression { ! quickbuild() }
                         }
                     }
                     agent {
@@ -704,37 +901,24 @@ pipeline {
                             filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
+                                                 '$BUILDARGS'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "clang",
-                                   failure_artifacts: 'config.log-leap15-clang'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap15-clang",
-                                             tools: [ clang(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-leap15-clang",
+                                         tools: [ clang(pattern: 'leap15-clang-build.log'),
+                                                  cppCheck(pattern: 'leap15-clang-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
                             sh "rm -rf _build.external${arch}"
                         }
                         unsuccessful {
@@ -743,12 +927,6 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-leap15-clang',
                                              allowEmptyArchive: true
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
                         }
                     }
                 }
@@ -757,8 +935,9 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            expression { ! quickbuild() }
+                            expression { ! skip_stage('build-leap15-icc') }
                         }
                     }
                     agent {
@@ -766,38 +945,25 @@ pipeline {
                             filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
+                                                '$BUILDARGS'
                             args '-v /opt/intel:/opt/intel'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
-                                   TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
-                            node('lightweight') {
-                                recordIssues enabledForFailure: true,
-                                             aggregatingResults: true,
-                                             id: "analysis-leap15-intelc",
-                                             tools: [ intel(), cppCheck() ],
-                                             filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                       excludeFile('_build\\.external\\/.*')]
-                            }
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-leap15-intelc",
+                                         tools: [ intel(pattern: 'leap15-icc-build.log'),
+                                                  cppCheck(pattern: 'leap15-icc-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                            */
                             sh "rm -rf _build.external${arch}"
                         }
                         unsuccessful {
@@ -806,404 +972,326 @@ pipeline {
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-leap15-intelc',
                                              allowEmptyArchive: true
-                            /* temporarily moved into stepResult due to JENKINS-39203
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                            */
                         }
                     }
                 }
             }
         }
-        stage('Unit Test') {
+        stage('Unit Tests') {
             when {
                 beforeAgent true
-                // expression { skipTest != true }
-                expression { env.NO_CI_TESTING != 'true' }
-                expression { ! commitPragma(pragma: 'Skip-test').contains('true') }
+                allOf {
+                    not { environment name: 'NO_CI_TESTING', value: 'true' }
+                    // nothing to test if build was skipped
+                    expression { ! skip_stage('build') }
+                    // or it's a doc-only change
+                    expression { ! doc_only_change() }
+                    expression { ! skip_stage('test') }
+                    expression { cachedCommitPragma(pragma: 'RPM-test-version') == '' }
+                }
             }
             parallel {
-                stage('run_test.sh') {
+                stage('Unit Test') {
                     when {
                       beforeAgent true
-                      expression {
-                        ! commitPragma(pragma: 'Skip-run_test').contains('true')
+                      allOf {
+                          expression { ! skip_stage('unit-test')}
+                          expression { ! skip_stage('run_test') }
                       }
                     }
                     agent {
                         label 'ci_vm1'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       snapshot: true,
-                                       inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: "openmpi3 hwloc-devel argobots cart-${env.CART_COMMIT} fuse3-libs libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
-                        runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''# JENKINS-52781 tar function is breaking symlinks
-                                           rm -rf test_results
-                                           mkdir test_results
-                                           rm -f build/src/control/src/github.com/daos-stack/daos/src/control
-                                           mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
-                                           ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
-                                           . ./.build_vars.sh
-                                           DAOS_BASE=${SL_PREFIX%/install*}
-                                           NODE=${NODELIST%%,*}
-                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                               set -e
-                                               sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
-                                               if grep /mnt/daos\\  /proc/mounts; then
-                                                   sudo umount /mnt/daos
-                                               else
-                                                   sudo mkdir -p /mnt/daos
-                                               fi
-                                               sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-                                               sudo mkdir -p $DAOS_BASE
-                                               sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-
-                                               # copy daos_admin binary into \$PATH and fix perms
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-                                                   sudo chown root /usr/bin/daos_admin && \
-                                                   sudo chmod 4755 /usr/bin/daos_admin && \
-                                                   mv $DAOS_BASE/install/bin/daos_admin \
-                                                      $DAOS_BASE/install/bin/orig_daos_admin
-
-                                               # set CMOCKA envs here
-                                               export CMOCKA_MESSAGE_OUTPUT="xml"
-                                               export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
-                                               cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh"''',
-                              junit_files: 'test_results/*.xml'
+                        unitTest timeout_time: 60,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
                     }
                     post {
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
-                        always {
-                            /* https://issues.jenkins-ci.org/browse/JENKINS-58952
-                             * label is at the end
-                            sh label: "Collect artifacts and tear down",
-                               script '''set -ex */
-                            sh script: '''set -ex
-                                      . ./.build_vars.sh
-                                      DAOS_BASE=${SL_PREFIX%/install*}
-                                      NODE=${NODELIST%%,*}
-                                      ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                          cd $DAOS_BASE
-                                          rm -rf run_test.sh/
-                                          mkdir run_test.sh/
-                                          if ls /tmp/daos*.log > /dev/null; then
-                                              mv /tmp/daos*.log run_test.sh/
-                                          fi
-                                          # servers can sometimes take a while to stop when the test is done
-                                          x=0
-                                          while [ \"\\\$x\" -lt \"10\" ] &&
-                                                pgrep '(orterun|daos_server|daos_io_server)'; do
-                                              sleep 1
-                                              let x=\\\$x+1
-                                          done
-                                          if ! sudo umount /mnt/daos; then
-                                              echo \"Failed to unmount $DAOS_BASE\"
-                                              ps axf
-                                          fi
-                                          cd
-                                          if ! sudo umount \"$DAOS_BASE\"; then
-                                              echo \"Failed to unmount $DAOS_BASE\"
-                                              ps axf
-                                          fi"
-                                      # Note that we are taking advantage of the NFS mount here and if that
-                                      # should ever go away, we need to pull run_test.sh/ from $NODE
-                                      python utils/fix_cmocka_xml.py''',
-                            label: "Collect artifacts and tear down"
-                            junit 'test_results/*.xml'
-                            archiveArtifacts artifacts: 'run_test.sh/**'
+                      always {
+                            unitTestPost artifacts: ['unit_test_logs/*',
+                                                     'unit_vm_test/**'],
+                                         valgrind_stash: 'centos7-gcc-unit-valg'
                         }
                     }
                 }
+                stage('Unit Test Bullseye') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('bullseye', true) }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        unitTest timeout_time: 60,
+                                 ignore_failure: true,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPost ignore_failure: true,
+                                         artifacts: ['covc_test_logs/*',
+                                                     'covc_vm_test/**']
+                        }
+                    }
+                } // stage('Unit test Bullseye')
             }
         }
         stage('Test') {
             when {
                 beforeAgent true
                 allOf {
-                    // expression { skipTest != true }
-                    expression { env.NO_CI_TESTING != 'true' }
-                    expression { ! commitPragma(pragma: 'Skip-test').contains('true') }
+                    not { environment name: 'NO_CI_TESTING', value: 'true' }
+                    // nothing to test if build was skipped
+                    expression { ! skip_stage('build') }
+                    // or it's a doc-only change
+                    expression { ! doc_only_change() }
+                    expression { ! skip_stage('test') }
                 }
             }
             parallel {
                 stage('Coverity on CentOS 7') {
-                    // Eventually this will only run on Master builds.
-                    // Unfortunately for now, a PR build could break
-                    // the quickbuild, which would not be detected until
-                    // the master build fails.
-//                    when {
-//                        beforeAgent true
-//                        anyOf {
-//                            branch 'master'
-//                            not {
-//                                // expression returns false on grep match
-//                                expression {
-//                                    sh script: 'git show -s --format=%B |' +
-//                                               ' grep "^Coverity-test: true"',
-//                                    returnStatus: true
-//                                }
-//                            }
-//                        }
-//                    }
+                    when {
+                        beforeAgent true
+                        expression { ! skip_stage('coverity-test') }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                                '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=0' +
-                                                ' --build-arg CART_COMMIT=-' + env.CART_COMMIT +
-                                                ' --build-arg REPOS="' + component_repos + '"'
+                                '$BUILDARGS_QB_TRUE' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sh "rm -f coverity/daos_coverity.tgz"
                         sconsBuild coverity: "daos-stack/daos",
-                                   clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-centos7-cov'
+                                   parallel_build: parallel_build()
                     }
                     post {
                         success {
-                            sh """rm -rf _build.external${arch}
-                                  mkdir -p coverity
-                                  rm -f coverity/*
-                                  if [ -e cov-int ]; then
-                                      tar czf coverity/daos_coverity.tgz cov-int
-                                  fi"""
-                            archiveArtifacts artifacts: 'coverity/daos_coverity.tgz',
-                                             allowEmptyArchive: true
+                            coverityPost condition: 'success'
                         }
                         unsuccessful {
-                            sh """mkdir -p coverity
-                                  if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log coverity/config.log-centos7-cov
-                                  fi
-                                  if [ -f cov-int/build-log.txt ]; then
-                                      mv cov-int/build-log.txt coverity/cov-build-log.txt
-                                  fi"""
-                            archiveArtifacts artifacts: 'coverity/cov-build-log.txt',
-                                             allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'coverity/config.log-centos7-cov',
-                                             allowEmptyArchive: true
-                      }
+                            coverityPost condition: 'unsuccessful'
+                        }
                     }
                 }
-                stage('Functional') {
+                stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression {
-                            ! commitPragma(pragma: 'Skip-func-test').contains('true')
+                        allOf {
+                            expression { ! skip_stage('func-test') }
+                            expression { ! skip_stage('func-test-vm') }
+                            expression { ! skip_stage('func-test-el7')}
                         }
                     }
                     agent {
                         label 'ci_vm9'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 9,
-                                       snapshot: true,
-                                       inst_repos: el7_daos_repos,
-                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms + ' ndctl'
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
-                                           if [ -z "$test_tag" ]; then
-                                               test_tag=pr,-hw
-                                           fi
-                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
-                                           ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
-                                failure_artifacts: env.STAGE_NAME
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
-                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
-                                  if [ -n "$STAGE_NAME" ]; then
-                                      rm -rf "$STAGE_NAME/"
-                                      mkdir "$STAGE_NAME/"
-                                      # compress those potentially huge DAOS logs
-                                      if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
-                                          lbzip2 $daos_logs
-                                      fi
-                                      arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
-                                      if [ -n "$arts" ]; then
-                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
-                                      fi
-                                  else
-                                      echo "The STAGE_NAME environment variable is missing!"
-                                      false
-                                  fi'''
-                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+                            functionalTestPost()
                         }
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
                     }
                 }
-                stage('Functional_Hardware') {
+                stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
-                            expression {
-                              ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
-                            }
+                            expression { ! skip_stage('func-test') }
+                            expression { ! skip_stage('func-test-vm') }
+                            expression { ! skip_stage('func-test-leap15') }
                         }
                     }
                     agent {
-                        label 'ci_nvme9'
+                        label 'ci_vm9'
                     }
                     steps {
-                        // First snapshot provision the VM at beginning of list
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       snapshot: true,
-                                       inst_repos: el7_daos_repos,
-                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms + ' ndctl'
-                        // Then just reboot the physical nodes
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 9,
-                                       power_only: true,
-                                       inst_repos: el7_daos_repos,
-                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms + ' ndctl'
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
-                                           if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw
-                                           fi
-                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
-                                           ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
-                                failure_artifacts: env.STAGE_NAME
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
-                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
-                                  if [ -n "$STAGE_NAME" ]; then
-                                      rm -rf "$STAGE_NAME/"
-                                      mkdir "$STAGE_NAME/"
-                                      # compress those potentially huge DAOS logs
-                                      if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
-                                          lbzip2 $daos_logs
-                                      fi
-                                      arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
-                                      if [ -n "$arts" ]; then
-                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
-                                      fi
-                                  else
-                                      echo "The STAGE_NAME environment variable is missing!"
-                                      false
-                                  fi'''
-                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+                            functionalTestPost()
                         }
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
+                    } // post
+                } // stage('Functional on Leap 15')
+                stage('Functional_Hardware_Small') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
+                            expression { ! skip_stage('func-hw-test') }
+                            expression { ! skip_stage('func-hw-test-small') }
                         }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
                     }
-                }
+                    agent {
+                        // 2 node cluster with 1 IB/node + 1 test control node
+                        label 'ci_nvme3'
+                    }
+                    steps {
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                    }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    }
+                } // stage('Functional_Hardware_Small')
+                stage('Functional_Hardware_Medium') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
+                            expression { ! skip_stage('func-hw-test') }
+                            expression { ! skip_stage('func-hw-test-medium') }
+                        }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label 'ci_nvme5'
+                    }
+                    steps {
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                   }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium')
+                stage('Functional_Hardware_Large') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
+                            expression { ! skip_stage('func-hw-test') }
+                            expression { ! skip_stage('func-hw-test-large') }
+                        }
+                    }
+                    agent {
+                        // 8+ node cluster with 1 IB/node + 1 test control node
+                        label 'ci_nvme9'
+                    }
+                    steps {
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                    }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    }
+                } // stage('Functional_Hardware_Large')
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            not { environment name: 'CHANGE_TARGET',
+                                              value: 'weekly-testing' }
+                            expression { ! skip_stage('test') }
+                            expression { ! skip_stage('test-centos-rpms') }
                         }
                     }
                     agent {
                         label 'ci_vm1'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       snapshot: true,
-                                       inst_repos: el7_daos_repos
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: "${rpm_test_pre}" +
-                                         '''sudo yum -y install daos-client
-                                            sudo yum -y history rollback last-1
-                                            sudo yum -y install daos-server
-                                            sudo yum -y install daos-tests\n''' +
-                                            "${rpm_test_daos_test}" + '"',
-                                    junit_files: null,
-                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
+                        testRpm inst_repos: daos_repos(),
+                                daos_pkg_version: daos_packages_version()
+                   }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Scan CentOS 7 RPMs') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            not { environment name: 'CHANGE_TARGET',
+                                              value: 'weekly-testing' }
+                            expression { ! skip_stage('scan-centos-rpms') }
                         }
                     }
-                }
-            }
-        }
-    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        testRpm inst_repos: daos_repos(),
+                                daos_pkg_version: daos_packages_version(),
+                                inst_rpms: 'clamav clamav-devel',
+                                test_script: 'ci/rpm/scan_daos.sh',
+                                junit_files: 'maldetect.xml'
+                    }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
+                    }
+                } // stage('Scan CentOS 7 RPMs')
+            } // parallel
+        } // stage('Test')
+        stage ('Test Report') {
+            parallel {
+                stage('Bullseye Report') {
+                    when {
+                      beforeAgent true
+                      allOf {
+                        expression { ! env.BULLSEYE != null }
+                        expression { ! skip_stage('bullseye', true) }
+                      }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_TRUE' +
+                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
+                        }
+                    }
+                    steps {
+                        // The coverage_healthy is primarily set here
+                        // while the code coverage feature is being implemented.
+                        cloverReportPublish(
+                                   coverage_stashes: ['centos7-covc-unit-cov'],
+                                   coverage_healthy: [methodCoverage: 0,
+                                                      conditionalCoverage: 0,
+                                                      statementCoverage: 0],
+                                   ignore_failure: true)
+                    }
+                } // stage('Bullseye Report')
+            } // parallel
+        } // stage ('Test Report')
+    } // stages
     post {
-        unsuccessful {
-            notifyBrokenBranch branches: "master"
+        always {
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
         }
-    }
+        unsuccessful {
+            notifyBrokenBranch branches: target_branch
+        }
+    } // post
 }

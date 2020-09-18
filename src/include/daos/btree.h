@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,11 +88,11 @@ struct btr_node {
 
 enum {
 	BTR_ORDER_MIN			= 3,
-	BTR_ORDER_MAX			= 255
+	BTR_ORDER_MAX			= 63
 };
 
 /**
- * Tree root descriptor, it consits of tree attributes and reference to the
+ * Tree root descriptor, it consists of tree attributes and reference to the
  * actual root node.
  *
  * NB: Can be stored in pmem
@@ -108,7 +108,7 @@ struct btr_root {
 	uint16_t			tr_depth;
 	/**
 	 * ID to find a registered tree class, which provides customized
-	 * funtions etc.
+	 * functions etc.
 	 */
 	uint32_t			tr_class;
 	/** the actual features of the tree, e.g. hash type, integer key */
@@ -394,7 +394,7 @@ typedef struct {
 	 * \param tins	[IN]	Tree instance which contains the root umem
 	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be checked.
-	 * \parem intent [IN]	The intent for why check the record.
+	 * \param intent [IN]	The intent for why check the record.
 	 *
 	 * \a return	ALB_AVAILABLE_DIRTY	The target is available but with
 	 *					some uncommitted modification
@@ -411,6 +411,16 @@ typedef struct {
 	int		(*to_check_availability)(struct btr_instance *tins,
 						 struct btr_record *rec,
 						 uint32_t intent);
+	/**
+	 * Allocate a tree node
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
+	 * \param size	[IN]	Node size
+	 * \a return		Allocated node address (offset within the pool)
+	 */
+	umem_off_t	(*to_node_alloc)(struct btr_instance *tins, int size);
+
 } btr_ops_t;
 
 /**
@@ -465,6 +475,13 @@ dbtree_key_cmp_rc(int rc)
 		return BTR_CMP_LT;
 	else
 		return BTR_CMP_GT;
+}
+
+static inline int
+dbtree_is_empty_inplace(const struct btr_root *root)
+{
+	D_ASSERT(root != NULL);
+	return root->tr_depth == 0;
 }
 
 int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,

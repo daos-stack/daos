@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,22 +55,21 @@ notify_ready(void)
 	/* Do not free, this string is managed by the dRPC listener */
 	req.drpclistenersock = drpc_listener_socket_path;
 	req.instanceidx = dss_instance_idx;
+	req.ntgts = dss_tgt_nr;
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
-	if (reqb == NULL) {
-		rc = -DER_NOMEM;
-		goto out_uri;
-	}
-	srv__notify_ready_req__pack(&req, reqb);
+	if (reqb == NULL)
+		D_GOTO(out_uri, rc = -DER_NOMEM);
 
-	dreq = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
-				DRPC_METHOD_SRV_NOTIFY_READY);
-	if (dreq == NULL) {
-		rc = -DER_NOMEM;
+	srv__notify_ready_req__pack(&req, reqb);
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+			      DRPC_METHOD_SRV_NOTIFY_READY, &dreq);
+	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_uri;
 	}
+
 	dreq->body.len = reqb_size;
 	dreq->body.data = reqb;
 
@@ -95,7 +94,7 @@ out:
 
 /* Notify daos_server that there has been a I/O error. */
 int
-notify_bio_error(bool unmap, bool update, int tgt_id)
+notify_bio_error(int media_err_type, int tgt_id)
 {
 	Srv__BioErrorReq	 bioerr_req = SRV__BIO_ERROR_REQ__INIT;
 	Drpc__Call		*dreq;
@@ -109,36 +108,33 @@ notify_bio_error(bool unmap, bool update, int tgt_id)
 		return -DER_INVAL;
 	}
 
+	/* TODO: How does this get freed on error? */
 	rc = crt_self_uri_get(0 /* tag */, &bioerr_req.uri);
 	if (rc != 0)
 		return rc;
 
-	if (unmap)
+	/* TODO: add checksum error */
+	if (media_err_type == MET_UNMAP)
 		bioerr_req.unmaperr = true;
-	else {
-		if (update)
-			bioerr_req.writeerr = true;
-		else
-			bioerr_req.readerr = true;
-	}
+	else if (media_err_type == MET_WRITE)
+		bioerr_req.writeerr = true;
+	else if (media_err_type == MET_READ)
+		bioerr_req.readerr = true;
 	bioerr_req.tgtid = tgt_id;
 	bioerr_req.instanceidx = dss_instance_idx;
 	bioerr_req.drpclistenersock = drpc_listener_socket_path;
 
 	req_size = srv__bio_error_req__get_packed_size(&bioerr_req);
 	D_ALLOC(req, req_size);
-	if (req == NULL) {
-		D_ERROR("Unable to alloc bio error dRPC request\n");
+	if (req == NULL)
 		return -DER_NOMEM;
-	}
 
 	srv__bio_error_req__pack(&bioerr_req, req);
-	dreq = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
-				DRPC_METHOD_SRV_BIO_ERR);
-
-	if (dreq == NULL) {
+	rc = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+			      DRPC_METHOD_SRV_BIO_ERR, &dreq);
+	if (rc != 0) {
 		D_FREE(req);
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	dreq->body.len = req_size;
@@ -167,18 +163,15 @@ drpc_init(void)
 	char   *path;
 	int	rc;
 
-	rc = asprintf(&path, "%s/%s", dss_socket_dir, "daos_server.sock");
-	if (rc < 0) {
-		rc = -DER_NOMEM;
-		goto out;
+	D_ASPRINTF(path, "%s/%s", dss_socket_dir, "daos_server.sock");
+	if (path == NULL) {
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	D_ASSERT(dss_drpc_ctx == NULL);
-	dss_drpc_ctx = drpc_connect(path);
-	if (dss_drpc_ctx == NULL) {
-		rc = -DER_NOMEM;
-		goto out_path;
-	}
+	rc = drpc_connect(path, &dss_drpc_ctx);
+	if (dss_drpc_ctx == NULL)
+		D_GOTO(out_path, 0);
 
 	rc = notify_ready();
 	if (rc != 0) {
@@ -199,6 +192,6 @@ drpc_fini(void)
 
 	D_ASSERT(dss_drpc_ctx != NULL);
 	rc = drpc_close(dss_drpc_ctx);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	dss_drpc_ctx = NULL;
 }

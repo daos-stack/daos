@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ smd_dev_assign(uuid_t dev_id, int tgt_id)
 		rc = -DER_EXIST;
 		goto out;
 	} else if (rc != -DER_NONEXIST) {
-		D_ERROR("Get target %d failed. %d\n", tgt_id, rc);
+		D_ERROR("Get target %d failed. "DF_RC"\n", tgt_id, DP_RC(rc));
 		goto out;
 	}
 
@@ -81,8 +81,8 @@ smd_dev_assign(uuid_t dev_id, int tgt_id)
 		entry.sde_tgt_cnt = 1;
 		entry.sde_tgts[0] = tgt_id;
 	} else {
-		D_ERROR("Fetch dev "DF_UUID" failed. %d\n",
-			DP_UUID(&key_dev.uuid), rc);
+		D_ERROR("Fetch dev "DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(&key_dev.uuid), DP_RC(rc));
 		goto out;
 	}
 
@@ -93,8 +93,8 @@ smd_dev_assign(uuid_t dev_id, int tgt_id)
 
 	rc = dbtree_update(smd_store.ss_dev_hdl, &key, &val);
 	if (rc) {
-		D_ERROR("Update dev "DF_UUID" failed. %d\n",
-			DP_UUID(&key_dev.uuid), rc);
+		D_ERROR("Update dev "DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(&key_dev.uuid), DP_RC(rc));
 		goto tx_end;
 	}
 
@@ -102,7 +102,8 @@ smd_dev_assign(uuid_t dev_id, int tgt_id)
 	d_iov_set(&val, &key_dev, sizeof(key_dev));
 	rc = dbtree_update(smd_store.ss_tgt_hdl, &key, &val);
 	if (rc) {
-		D_ERROR("Update target %d failed. %d\n", tgt_id, rc);
+		D_ERROR("Update target %d failed. "DF_RC"\n", tgt_id,
+			DP_RC(rc));
 		goto tx_end;
 	}
 tx_end:
@@ -118,7 +119,7 @@ smd_dev_unassign(uuid_t dev_id, int tgt_id)
 	return -DER_NOSYS;
 }
 
-static char *
+char *
 smd_state_enum_to_str(enum smd_dev_state state)
 {
 	switch (state) {
@@ -148,16 +149,16 @@ smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state)
 	rc = dbtree_fetch(smd_store.ss_dev_hdl, BTR_PROBE_EQ,
 			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
 	if (rc) {
-		D_ERROR("Fetch dev "DF_UUID" failed. %d\n",
-			DP_UUID(&key_dev.uuid), rc);
+		D_ERROR("Fetch dev "DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(&key_dev.uuid), DP_RC(rc));
 		goto out;
 	}
 
 	entry.sde_state = state;
 	rc = dbtree_update(smd_store.ss_dev_hdl, &key, &val);
 	if (rc) {
-		D_ERROR("SMD dev "DF_UUID" state set failed. %d\n",
-			DP_UUID(&key_dev.uuid), rc);
+		D_ERROR("SMD dev "DF_UUID" state set failed. "DF_RC"\n",
+			DP_UUID(&key_dev.uuid), DP_RC(rc));
 		goto out;
 	} else
 		D_DEBUG(DB_MGMT, "SMD dev "DF_UUID" state set to %s\n",
@@ -213,8 +214,8 @@ fetch_dev_info(uuid_t dev_id, struct smd_dev_info **dev_info)
 			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
 	if (rc) {
 		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
-			 "Fetch dev "DF_UUID" failed. %d\n",
-			 DP_UUID(&key_dev.uuid), rc);
+			 "Fetch dev "DF_UUID" failed. "DF_RC"\n",
+			 DP_UUID(&key_dev.uuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -253,7 +254,8 @@ smd_dev_get_by_tgt(int tgt_id, struct smd_dev_info **dev_info)
 			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
 	if (rc) {
 		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
-			 "Fetch target %d failed. %d\n", tgt_id, rc);
+			 "Fetch target %d failed. "DF_RC"\n", tgt_id,
+			 DP_RC(rc));
 		goto out;
 	}
 
@@ -281,7 +283,7 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 
 	rc = dbtree_iter_prepare(smd_store.ss_dev_hdl, 0, &iter_hdl);
 	if (rc) {
-		D_ERROR("Prepare device iterator failed. %d\n", rc);
+		D_ERROR("Prepare device iterator failed. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -289,7 +291,8 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 			       NULL, NULL);
 	if (rc) {
 		if (rc != -DER_NONEXIST)
-			D_ERROR("Probe first device failed. %d\n", rc);
+			D_ERROR("Probe first device failed. "DF_RC"\n",
+				DP_RC(rc));
 		else
 			rc = 0;
 		goto done;
@@ -301,14 +304,15 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 	while (1) {
 		rc = dbtree_iter_fetch(iter_hdl, &key, &val, NULL);
 		if (rc != 0) {
-			D_ERROR("Iterate fetch failed. %d\n", rc);
+			D_ERROR("Iterate fetch failed. "DF_RC"\n", DP_RC(rc));
 			break;
 		}
 
 		info = create_dev_info(key_dev.uuid, &entry);
 		if (info == NULL) {
 			rc = -DER_NOMEM;
-			D_ERROR("Create device info failed. %d\n", rc);
+			D_ERROR("Create device info failed. "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 		d_list_add_tail(&info->sdi_link, dev_list);
@@ -318,7 +322,8 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 		rc = dbtree_iter_next(iter_hdl);
 		if (rc) {
 			if (rc != -DER_NONEXIST)
-				D_ERROR("Iterate next failed. %d\n", rc);
+				D_ERROR("Iterate next failed. "DF_RC"\n",
+					DP_RC(rc));
 			else
 				rc = 0;
 			break;

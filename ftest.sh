@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) 2019 Intel Corporation
+# Copyright (C) Copyright 2019-2020 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,8 @@ if [ -f .localenv ]; then
 fi
 
 TEST_TAG_ARG="${1:-quick}"
-TEST_TAG_ARR=($TEST_TAG_ARG)
+mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
+
 TEST_TAG_DIR="/tmp/Functional_${TEST_TAG_ARG// /_}"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
@@ -54,6 +55,12 @@ trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 IFS=" " read -r -a nodes <<< "${2//,/ }"
 TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
+
+# Optional --nvme argument for launch.py
+NVME_ARG=""
+if [ -n "${3}" ]; then
+    NVME_ARG="-n ${3}"
+fi
 
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
@@ -86,8 +93,13 @@ cleanup() {
                 fi
             fi
             x=0
+            if grep \"# DAOS_BASE # added by ftest.sh\" /etc/fstab; then
+                nfs_mount=true
+            else
+                nfs_mount=false
+            fi
             sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-            if [ -n \"$DAOS_BASE\" ]; then
+            if [ -n \"$DAOS_BASE\" ] && \$nfs_mount; then
                 while [ \$x -lt 30 ] &&
                       grep $DAOS_BASE /proc/mounts &&
                       ! sudo umount $DAOS_BASE; do
@@ -103,7 +115,7 @@ cleanup() {
                     if [ -d $DAOS_BASE ]; then
                         ls -l $DAOS_BASE
                     else
-                        echo \"because it doesnt exist\"
+                        echo \"because it does not exist\"
                     fi
                     exit 1
                 fi
@@ -117,26 +129,37 @@ cleanup() {
 pre_clean
 
 # shellcheck disable=SC1091
-. .build_vars.sh
+if ${TEST_RPMS:-false}; then
+    PREFIX=/usr
+    SL_PREFIX=$PWD
+else
+    TEST_RPMS=false
+    PREFIX=install
+    . .build_vars.sh
+fi
 
 if ${TEARDOWN_ONLY:-false}; then
     cleanup
     exit 0
 fi
 
-# let's output to a dir in the tree
-rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
-mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
-
 trap 'set +e; cleanup' EXIT
 
+# doesn't work: mapfile -t CLUSH_ARGS <<< "$CLUSH_ARGS"
+# shellcheck disable=SC2206
 CLUSH_ARGS=($CLUSH_ARGS)
 
 DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
-ulimit -c unlimited
-if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
+# allow core files to be generated
+sudo bash -c \"set -ex
+if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
+    echo \\\"*  soft  core  unlimited\\\" >> /etc/security/limits.conf
+fi
+echo \\\"/var/tmp/core.%e.%t.%p\\\" > /proc/sys/kernel/core_pattern\"
+rm -f /var/tmp/core.*
+if [ \"\${HOSTNAME%%.*}\" != \"${nodes[0]}\" ]; then
     if grep /mnt/daos\\  /proc/mounts; then
         sudo umount /mnt/daos
     else
@@ -165,29 +188,56 @@ fi
 current_username=\$(whoami)
 sudo bash -c \"set -ex
 if [ -d  /var/run/daos_agent ]; then
-    rmdir /var/run/daos_agent
+    rm -rf /var/run/daos_agent
 fi
 if [ -d  /var/run/daos_server ]; then
-    rmdir /var/run/daos_server
+    rm -rf /var/run/daos_server
 fi
 mkdir /var/run/daos_{agent,server}
 chown \$current_username -R /var/run/daos_{agent,server}
 chmod 0755 /var/run/daos_{agent,server}
-mkdir -p $DAOS_BASE
-ed <<EOF /etc/fstab
+if $TEST_RPMS || [ -f $DAOS_BASE/SConstruct ]; then
+    echo \\\"No need to NFS mount $DAOS_BASE\\\"
+else
+    mkdir -p $DAOS_BASE
+    ed <<EOF /etc/fstab
 \\\\\\\$a
-$NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # added by ftest.sh
+$NFS_SERVER:$PWD $DAOS_BASE nfs defaults,vers=3 0 0 # DAOS_BASE # added by ftest.sh
 .
 wq
 EOF
-mount \\\"$DAOS_BASE\\\"\"
+    mount \\\"$DAOS_BASE\\\"
+fi\"
 
-# first, strip the execute bit from the in-tree binary,
-# then copy daos_admin binary into \$PATH and fix perms
-chmod -x $DAOS_BASE/install/bin/daos_admin && \
-sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-	sudo chown root /usr/bin/daos_admin && \
-	sudo chmod 4755 /usr/bin/daos_admin
+if ! $TEST_RPMS; then
+    # set up symlinks to spdk scripts (none of this would be
+    # necessary if we were testing from RPMs) in order to
+    # perform NVMe operations via daos_admin
+    sudo mkdir -p /usr/share/daos/control
+    sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+               /usr/share/daos/control
+    sudo mkdir -p /usr/share/spdk/scripts
+    if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
+        sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+                   /usr/share/spdk/scripts
+    fi
+    if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
+        sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+                   /usr/share/spdk/scripts
+    fi
+    if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
+        sudo rm -f /usr/share/spdk/include
+        sudo ln -s $SL_PREFIX/include \
+                   /usr/share/spdk/include
+    fi
+
+    # first, strip the execute bit from the in-tree binary,
+    # then copy daos_admin binary into \$PATH and fix perms
+    chmod -x $DAOS_BASE/install/bin/daos_admin && \
+    sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
+	    sudo chown root /usr/bin/daos_admin && \
+	    sudo chmod 4755 /usr/bin/daos_admin
+fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
@@ -204,11 +254,22 @@ args+=" $*"
 
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
-if ! ssh $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
-ulimit -c unlimited
-rm -rf $DAOS_BASE/install/tmp
-mkdir -p $DAOS_BASE/install/tmp
-cd $DAOS_BASE
+if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
+if $TEST_RPMS; then
+    rm -rf $PWD/install/tmp
+    mkdir -p $PWD/install/tmp
+    # set the shared dir
+    # TODO: remove the need for a shared dir by copying needed files to
+    #       the test nodes
+    export DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
+    logs_prefix=\"/var/tmp\"
+else
+    rm -rf $DAOS_BASE/install/tmp
+    mkdir -p $DAOS_BASE/install/tmp
+    logs_prefix=\"$DAOS_BASE/install/lib/daos/TESTING\"
+    cd $DAOS_BASE
+fi
+
 export CRT_PHY_ADDR_STR=ofi+sockets
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
@@ -222,9 +283,10 @@ export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
-logs_dir = $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results
+logs_dir = \$logs_prefix/ftest/avocado/job-results
 
 [sysinfo.collectibles]
+files = \$HOME/.config/avocado/sysinfo/files
 # File with list of commands that will be executed and have their output
 # collected
 commands = \$HOME/.config/avocado/sysinfo/commands
@@ -237,10 +299,13 @@ dmesg
 df -h
 EOF
 
+cat <<EOF > ~/.config/avocado/sysinfo/files
+/proc/mounts
+EOF
+
 # apply patch for https://github.com/avocado-framework/avocado/pull/3076/
 if ! grep TIMEOUT_TEARDOWN \
     /usr/lib/python2.7/site-packages/avocado/core/runner.py; then
-    sudo yum -y install patch
     sudo patch -p0 -d/ << \"EOF\"
 From d9e5210cd6112b59f7caff98883a9748495c07dd Mon Sep 17 00:00:00 2001
 From: Cleber Rosa <crosa@redhat.com>
@@ -311,7 +376,7 @@ wq
 EOF
 fi
 
-pushd install/lib/daos/TESTING/ftest
+pushd $PREFIX/lib/daos/TESTING/ftest
 
 # make sure no lingering corefiles or junit files exist
 rm -f core.* *_results.xml
@@ -330,36 +395,20 @@ if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
     fi
 fi
 
+
+# can only process cores on EL7 currently
+if [ $(lsb_release -s -i) = CentOS ]; then
+    process_cores=\"p\"
+else
+    process_cores=\"\"
+fi
 # now run it!
-if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
+# DAOS-5622: Temporarily disable certs in CI
+if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} -ins \\
+                 ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
-fi
-
-# Remove the latest avocado symlink directory to avoid inclusion in the
-# jenkins build artifacts
-unlink $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results/latest
-
-# get stacktraces for the core files
-if ls core.*; then
-    # this really should be a debuginfo-install command but our systems lag
-    # current releases
-    python_rpm=\$(rpm -q python)
-    python_debuginfo_rpm=\"\${python_rpm/-/-debuginfo-}\"
-
-    if ! rpm -q \$python_debuginfo_rpm; then
-        sudo yum -y install \
- http://debuginfo.centos.org/7/x86_64/\$python_debuginfo_rpm.rpm
-    fi
-    sudo yum -y install gdb
-    for file in core.*; do
-        gdb -ex \"set pagination off\"                 \
-            -ex \"thread apply all bt full\"           \
-            -ex \"detach\"                             \
-            -ex \"quit\"                               \
-            /usr/bin/python2 \$file > \$file.stacktrace
-    done
 fi
 
 exit \$rc"; then

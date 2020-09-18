@@ -7,6 +7,11 @@ import time
 import errno
 from SCons.Script import BUILD_TARGETS
 
+try:
+    input = raw_input # pylint: disable=redefined-builtin
+except NameError:
+    pass
+
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 import daos_build
 
@@ -15,10 +20,34 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
-                 '-Wframe-larger-than=4096']
+                 '-Wno-unused-command-line-argument',
+                 '-Wframe-larger-than=4096',
+                 ' -mavx2']
+
+# Compiler flags to prevent optimizing out security checks
+DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
+                      '-fwrapv'])
+
+# Compiler flags for stack hardening
+DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
+
+def run_checks(env):
+    """Run all configure time checks"""
+    if GetOption('help') or GetOption('clean'):
+        return
+    cenv = env.Clone()
+    cenv.Append(CFLAGS='-Werror')
+    if cenv.get("COMPILER") == 'icc':
+        cenv.Replace(CC='gcc', CXX='g++')
+    config = Configure(cenv)
+
+    if config.CheckHeader('stdatomic.h'):
+        env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+
+    config.Finish()
 
 def get_version():
     """ Read version from VERSION file """
@@ -26,15 +55,31 @@ def get_version():
         return version_file.read().rstrip()
 
 DAOS_VERSION = get_version()
+API_VERSION = "0.9.0"
 
-def update_rpm_version(version):
+def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
     spec = open("utils/rpms/daos.spec", "r").readlines()
+    current_version = 0
+    release = 0
     for line_num, line in enumerate(spec):
         if line.startswith("Version:"):
-            spec[line_num] = "Version:       {}\n".format(version)
+            current_version = line[line.rfind(' ')+1:].rstrip()
+            if version < current_version:
+                print("You cannot create a new version ({}) lower than the RPM "
+                      "spec file has currently ({})".format(version,
+                                                            current_version))
+                return False
+            if version > current_version:
+                spec[line_num] = "Version:       {}\n".format(version)
         if line.startswith("Release:"):
-            spec[line_num] = "Release:       1%{?relval}%{?dist}\n"
+            if version == current_version:
+                current_release = int(line[line.rfind(' ')+1:line.find('%')])
+                release = current_release + 1
+            else:
+                release = 1
+            spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
+                             format(release)
         if line == "%changelog\n":
             try:
                 packager = subprocess.Popen(
@@ -47,17 +92,20 @@ def update_rpm_version(version):
                       "~/.rpmmacros as such:\n"
                       "%packager	John A. Doe <john.doe@intel.com>"
                       "so that package changelog entries are well defined")
-                exit(1)
+                return False
             date_str = time.strftime('%a %b %d %Y', time.gmtime())
             spec.insert(line_num + 1, "\n")
             spec.insert(line_num + 1,
-                        "- Version bump up to {}\n".format(version))
+                        "- Version bump up to {}\n".format(tag))
             spec.insert(line_num + 1,
-                        u'* {} {} - {}-1\n'.format(date_str,
-                                                   packager,
-                                                   version))
+                        u'* {} {} - {}-{}\n'.format(date_str,
+                                                    packager,
+                                                    version,
+                                                    release))
             break
     open("utils/rpms/daos.spec", "w").writelines(spec)
+
+    return True
 
 def is_platform_arm():
     """Detect if platform is ARM"""
@@ -74,12 +122,29 @@ def set_defaults(env):
               action='store_true',
               default=False,
               help='Preprocess selected files for profiling')
+    AddOption('--no-rpath',
+              dest='no_rpath',
+              action='store_true',
+              default=False,
+              help='Disable rpath')
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
-    env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
+    if env.get('BUILD_TYPE') == 'debug':
+        if env.get("COMPILER") == 'gcc':
+            env.AppendUnique(CCFLAGS=['-Og'])
+        else:
+            env.AppendUnique(CCFLAGS=['-O0'])
+    else:
+        if env.get('BUILD_TYPE') == 'release':
+            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
+        env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
+
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
@@ -90,16 +155,15 @@ def preload_prereqs(prereqs):
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    reqs = ['cart', 'argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc',
-            'uuid', 'crypto', 'fuse', 'protobufc']
+    reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
+            'uuid', 'crypto', 'fuse', 'protobufc', 'json-c']
     if not is_platform_arm():
-        reqs.extend(['spdk', 'isal'])
+        reqs.extend(['spdk', 'isal', 'isal_crypto'])
     prereqs.load_definitions(prebuild=reqs)
 
-def scons():
+def scons(): # pylint: disable=too-many-locals
+    """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
-        org_name = "daos-stack"
-        remote_name = "origin"
         try:
             import pygit2
             import github
@@ -108,6 +172,42 @@ def scons():
             print("You need yaml, pygit2 and pygithub python modules to "
                   "create releases")
             exit(1)
+
+        variables = Variables()
+
+        variables.Add('RELEASE', 'Set to the release version to make', None)
+        variables.Add('RELEASE_BASE', 'Set to the release version to make',
+                      'master')
+        variables.Add('ORG_NAME', 'The GitHub project to do the release on.',
+                      'daos-stack')
+        variables.Add('REMOTE_NAME', 'The remoten name release on.', 'origin')
+
+        env = Environment(variables=variables)
+
+        org_name = env['ORG_NAME']
+        remote_name = env['REMOTE_NAME']
+        base_branch = env['RELEASE_BASE']
+
+        try:
+            tag = env['RELEASE']
+        except KeyError:
+            print("Usage: scons RELEASE=x.y.z release")
+            exit(1)
+
+        dash = tag.find('-')    # pylint: disable=no-member
+        if dash > 0:
+            version = tag[0:dash]
+        else:
+            print("** Final releases should be made on GitHub directly "
+                  "using a previous pre-release such as a release candidate.\n")
+            question = "Are you sure you want to continue? (y/N): "
+            answer = None
+            while answer not in ["y", "n", ""]:
+                answer = input(question).lower().strip()
+            if answer != 'y':
+                exit(1)
+
+            version = tag
 
         try:
             token = yaml.safe_load(open(os.path.join(os.path.expanduser("~"),
@@ -121,39 +221,50 @@ def scons():
                 exit(1)
             raise
 
-        variables = Variables()
-        variables.Add('RELEASE', 'Set to the release version to make', None)
-        env = Environment(variables=variables)
-        try:
-            version = env['RELEASE']
-        except KeyError:
-            print("Usage: scons RELEASE=x.y.z release")
-            exit(1)
-
         # create a branch for the PR
-        branch = 'create-release-{}'.format(version)
+        branch = 'create-release-{}'.format(tag)
         print("Creating a branch for the PR...")
         repo = pygit2.Repository('.git')
-        master = repo.lookup_reference(
-            'refs/remotes/{}/master'.format(remote_name))
         try:
-            repo.branches.create(branch, repo[master.target])
-        except pygit2.AlreadyExistsError: # pylint: disable=no-member
-            print("Branch {} exists in GitHub already\n"
-                  "See https://github.com/{}/daos/branches".format(branch,
-                                                                   org_name))
+            base_ref = repo.lookup_reference(
+                'refs/remotes/{}/{}'.format(remote_name, base_branch))
+        except KeyError:
+            print("Branch {}/{} is not a valid branch\n"
+                  "See https://github.com/{}/daos/branches".format(
+                      remote_name, base_branch, org_name))
+            exit(1)
+
+        # older pygit2 didn't have AlreadyExistsError
+        try:
+            already_exists_error_exception = pygit2.AlreadyExistsError
+        except AttributeError:
+            already_exists_error_exception = ValueError
+
+        try:
+            repo.branches.create(branch, repo[base_ref.target])
+        except already_exists_error_exception:
+            print("Branch {} exists locally already.\n"
+                  "You need to delete it or rename it to try again.".format(
+                      branch))
             exit(1)
 
         # and check it out
         print("Checking out branch for the PR...")
         repo.checkout(repo.lookup_branch(branch))
 
-        print("Updating the VERSION file...")
+        print("Updating the RPM specfile...")
+        if not update_rpm_version(version, tag):
+            print("Branch has been left in the created state.  You will have "
+                  "to clean it up manually.")
+            exit(1)
+
+        print("Updating the API_VERSION, VERSION and TAG files...")
+        with open("API_VERSION", "w") as version_file:
+            version_file.write(API_VERSION + '\n')
         with open("VERSION", "w") as version_file:
             version_file.write(version + '\n')
-
-        print("Updating the RPM specfile...")
-        update_rpm_version(version)
+        with open("TAG", "w") as version_file:
+            version_file.write(tag + '\n')
 
         print("Committing the changes...")
         # now create the commit
@@ -161,7 +272,7 @@ def scons():
         index.read()
         author = repo.default_signature
         committer = repo.default_signature
-        summary = "Update version to v{}".format(version)
+        summary = "Update version to v{}".format(tag)
         # pylint: disable=no-member
         message = "{}\n\n" \
                   "Signed-off-by: {} <{}>".format(summary,
@@ -169,7 +280,9 @@ def scons():
                                                   repo.default_signature.email)
         # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
+        index.add("API_VERSION")
         index.add("VERSION")
+        index.add("TAG")
         index.write()
         tree = index.write_tree()
         # pylint: disable=no-member
@@ -178,9 +291,11 @@ def scons():
         # pylint: enable=no-member
 
         # set up authentication callback
-        class MyCallbacks(pygit2.RemoteCallbacks):
+        class MyCallbacks(pygit2.RemoteCallbacks): # pylint: disable=too-few-public-methods
             """ Callbacks for pygit2 """
-            def credentials(self, url, username_from_url, allowed_types): # pylint: disable=method-hidden
+            @staticmethod
+            def credentials(_url, username_from_url, allowed_types): # pylint: disable=method-hidden
+                """setup credentials"""
                 if allowed_types & pygit2.credentials.GIT_CREDTYPE_SSH_KEY:
                     if "SSH_AUTH_SOCK" in os.environ:
                         # Use ssh agent for authentication
@@ -200,6 +315,7 @@ def scons():
                                     "by remote end.  SSH_AUTH_SOCK not found "
                                     "in your environment.  Are you running an "
                                     "ssh-agent?")
+                return None
 
         # and push it
         print("Pushing the changes to GitHub...")
@@ -207,9 +323,8 @@ def scons():
         try:
             remote.push(['refs/heads/{}'.format(branch)],
                         callbacks=MyCallbacks())
-        except pygit2.GitError:
-            print("Error pushing branch.  Does it exist in GitHub already?\n"
-                  "See https://github.com/{}/daos/branches".format(org_name))
+        except pygit2.GitError as excpt:
+            print("Error pushing branch: {}".format(excpt))
             exit(1)
 
         print("Creating the PR...")
@@ -221,7 +336,7 @@ def scons():
         except github.UnknownObjectException:
             # maybe not an organization
             repo = gh_context.get_repo('{}/daos'.format(org_name))
-        new_pr = repo.create_pull(title=summary, body="", base="master",
+        new_pr = repo.create_pull(title=summary, body="", base=base_branch,
                                   head="{}:{}".format(org_name, branch))
 
         print("Successfully created PR#{0} for this version "
@@ -238,15 +353,8 @@ def scons():
 
         exit(0)
 
-    """Execute build"""
-    try:
-        sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
-        from prereq_tools import PreReqComponent
-        print ('Using scons_local build')
-    except ImportError:
-        print ('scons_local submodule is needed in order to do DAOS build')
-        print ('Use git submodule update --init')
-        sys.exit(-1)
+    sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
+    from prereq_tools import PreReqComponent
 
     env = Environment(TOOLS=['extra', 'default'])
 
@@ -261,14 +369,24 @@ def scons():
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
+    if not GetOption('help') and not GetOption('clean'):
+        daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+
+    run_checks(env)
+
+    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
+
+    CONF_DIR = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm')
+    Export('DAOS_VERSION', 'API_VERSION',
+           'env', 'prereqs', 'platform_arm',
+           'CONF_DIR')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
@@ -288,10 +406,14 @@ def scons():
     # also install to $PREFIX/lib to work with existing avocado test code
     daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")
+    env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
+    env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                ['scons_local/env_modules.py'])
+                ['utils/sl/env_modules.py'])
+    env.Install('$PREFIX/lib/daos/TESTING/ftest/',
+                ['ftest.sh'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')
@@ -299,8 +421,14 @@ def scons():
     # install certificate generation files
     SConscript('utils/certs/SConscript')
 
+    # install man pages
+    SConscript('doc/man/SConscript')
+
     Default(build_prefix)
     Depends('install', build_prefix)
+
+    # an "rpms" target
+    env.Command('rpms', '', 'make -C utils/rpms rpms')
 
     try:
         #if using SCons 2.4+, provide a more complete help

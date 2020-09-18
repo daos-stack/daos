@@ -6,6 +6,8 @@ hosts:
 server_config:
    name: daos_server
 timeout: 50
+pool:
+   control_method: dmg
 createtests:
    modes: !mux
       goodmode:

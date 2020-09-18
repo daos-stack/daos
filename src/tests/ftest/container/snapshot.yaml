@@ -10,11 +10,10 @@ faults:
       fault_list: []
 server_config:
    name: daos_server
-poolparams:
-   createset:
-     setname: daos_server
-   createsize:
-       size: 107374182
+pool:
+    name: daos_server
+    scm_size: 107374182
+    control_method: dmg
 snapshot:
     dkey: "dkey"
     akey: "akey"

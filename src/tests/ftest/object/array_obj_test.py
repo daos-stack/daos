@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017-2019 Intel Corporation.
+  (C) Copyright 2017-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,15 +23,13 @@
 '''
 from __future__ import print_function
 
-import os
 import time
 import traceback
 import logging
-from avocado import main
+
 from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
 
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError, c_uuid_to_str
 
 class ArrayObjTest(TestWithServers):
     """
@@ -52,28 +50,12 @@ class ArrayObjTest(TestWithServers):
 
         :avocado: tags=all,smoke,pr,object,tiny,basicobject
         """
+        self.prepare_pool()
+
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool_params/createmode/')
-            createsetid = self.params.get("setname",
-                                          '/run/pool_params/createset/')
-            createsize = self.params.get("size", '/run/pool_params/createsize/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-            self.plog.info("Pool %s created.", pool.get_uuid_str())
-
-            # need a connection to create container
-            pool.connect(1 << 1)
-
             # create a container
             container = DaosContainer(self.context)
-            container.create(pool.handle)
+            container.create(self.pool.pool.handle)
             self.plog.info("Container %s created.", container.get_uuid_str())
 
             # now open it
@@ -96,13 +78,13 @@ class ArrayObjTest(TestWithServers):
             akey = "this is the akey"
 
             self.plog.info("writing array to dkey >%s< akey >%s<.", dkey, akey)
-            oid, epoch = container.write_an_array_value(thedata, dkey, akey,
-                                                        obj_cls=3)
+            oid = container.write_an_array_value(thedata, dkey, akey,
+                                                 obj_cls=3)
 
             # read the data back and make sure its correct
             length = len(thedata[0])
             thedata2 = container.read_an_array(len(thedata), length+1,
-                                               dkey, akey, oid, epoch)
+                                               dkey, akey, oid)
             if thedata[0][0:length-1] != thedata2[0][0:length-1]:
                 self.plog.error("Data mismatch")
                 self.plog.error("Wrote: >%s<", thedata[0])
@@ -121,9 +103,6 @@ class ArrayObjTest(TestWithServers):
             time.sleep(5)
             container.destroy()
 
-            # cleanup the pool
-            pool.disconnect()
-            pool.destroy(1)
             self.plog.info("Test Complete")
 
         except DaosApiError as excep:
@@ -131,6 +110,3 @@ class ArrayObjTest(TestWithServers):
             print(excep)
             print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
-
-if __name__ == "__main__":
-    main()

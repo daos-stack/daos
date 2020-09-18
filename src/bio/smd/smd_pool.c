@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -289,7 +289,7 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 
 	rc = dbtree_iter_prepare(smd_store.ss_pool_hdl, 0, &iter_hdl);
 	if (rc) {
-		D_ERROR("Prepare pool iterator failed. %d\n", rc);
+		D_ERROR("Prepare pool iterator failed. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -297,7 +297,8 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 			       NULL, NULL);
 	if (rc) {
 		if (rc != -DER_NONEXIST)
-			D_ERROR("Probe first pool failed. %d\n", rc);
+			D_ERROR("Probe first pool failed. "DF_RC"\n",
+				DP_RC(rc));
 		else
 			rc = 0;
 		goto done;
@@ -309,14 +310,15 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 	while (1) {
 		rc = dbtree_iter_fetch(iter_hdl, &key, &val, NULL);
 		if (rc != 0) {
-			D_ERROR("Iterate fetch failed. %d\n", rc);
+			D_ERROR("Iterate fetch failed. "DF_RC"\n", DP_RC(rc));
 			break;
 		}
 
 		info = create_pool_info(key_pool.uuid, &entry);
 		if (info == NULL) {
 			rc = -DER_NOMEM;
-			D_ERROR("Create pool info failed. %d\n", rc);
+			D_ERROR("Create pool info failed. "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 		d_list_add_tail(&info->spi_link, pool_list);
@@ -325,7 +327,8 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 		rc = dbtree_iter_next(iter_hdl);
 		if (rc) {
 			if (rc != -DER_NONEXIST)
-				D_ERROR("Iterate next failed. %d\n", rc);
+				D_ERROR("Iterate next failed. "DF_RC"\n",
+					DP_RC(rc));
 			else
 				rc = 0;
 			break;

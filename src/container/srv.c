@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,10 @@ init(void)
 	if (rc)
 		D_GOTO(err, rc);
 
+	rc = ds_cont_prop_default_init();
+	if (rc)
+		D_GOTO(err, rc);
+
 	return 0;
 err:
 	ds_oid_iv_fini();
@@ -57,6 +61,8 @@ fini(void)
 {
 	ds_cont_iv_fini();
 	ds_oid_iv_fini();
+	ds_cont_prop_default_fini();
+
 	return 0;
 }
 
@@ -72,11 +78,6 @@ static struct crt_corpc_ops ds_cont_tgt_close_co_ops = {
 
 static struct crt_corpc_ops ds_cont_tgt_query_co_ops = {
 	.co_aggregate   = ds_cont_tgt_query_aggregator,
-	.co_pre_forward = NULL,
-};
-
-static struct crt_corpc_ops ds_cont_tgt_epoch_discard_co_ops = {
-	.co_aggregate   = ds_cont_tgt_epoch_discard_aggregator,
 	.co_pre_forward = NULL,
 };
 
@@ -129,7 +130,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 	rc = ds_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
 	if (rc != 0) {
 		D_ERROR("failed to create thread-local container handle cache:"
-			" %d\n", rc);
+			" "DF_RC"\n", DP_RC(rc));
 		ds_cont_child_cache_destroy(tls->dt_cont_cache);
 		D_FREE(tls);
 		return NULL;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,24 +20,27 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package bdev
 
 import (
+	"sync"
+
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type (
-	// InitRequest defines the parameters for initializing the provider.
-	InitRequest struct {
-		SPDKShmID int
-	}
-
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
-		Forwarded bool
+		pbin.ForwardableRequest
+		DeviceList []string
+		DisableVMD bool
+		Rescan     bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -47,52 +50,71 @@ type (
 
 	// PrepareRequest defines the parameters for a Prepare operation.
 	PrepareRequest struct {
-		Forwarded     bool
+		pbin.ForwardableRequest
 		HugePageCount int
 		PCIWhitelist  string
+		PCIBlacklist  string
 		TargetUser    string
 		ResetOnly     bool
+		DisableVFIO   bool
+		DisableVMD    bool
 	}
 
 	// PrepareResponse contains the results of a successful Prepare operation.
-	PrepareResponse struct{}
+	PrepareResponse struct {
+		VmdDetected bool
+	}
 
 	// FormatRequest defines the parameters for a Format operation.
 	FormatRequest struct {
-		Forwarded  bool
+		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
+		MemSize    int // size MiB memory to be used by SPDK proc
+		DisableVMD bool
+	}
+
+	// DeviceFormatRequest designs the parameters for a device-specific format.
+	DeviceFormatRequest struct {
+		MemSize int // size MiB memory to be used by SPDK proc
+		Device  string
+		Class   storage.BdevClass
 	}
 
 	// DeviceFormatResponse contains device-specific Format operation results.
 	DeviceFormatResponse struct {
-		Formatted  bool
-		Error      error
-		Controller *storage.NvmeController
+		Formatted bool
+		Error     *fault.Fault
 	}
 
 	// DeviceFormatResponses is a map of device identifiers to device Format results.
 	DeviceFormatResponses map[string]*DeviceFormatResponse
 
-	// FormatResults contains the results of a Format operation.
+	// FormatResponse contains the results of a Format operation.
 	FormatResponse struct {
 		DeviceResponses DeviceFormatResponses
 	}
 
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
-		Init(shmID ...int) error
-		Reset() error
-		Prepare(hugePageCount int, targetUser string, pciWhitelist string) error
-		Scan() (storage.NvmeControllers, error)
-		Format(pciAddr string) (*storage.NvmeController, error)
+		PrepareReset() error
+		Prepare(PrepareRequest) (*PrepareResponse, error)
+		Scan(ScanRequest) (*ScanResponse, error)
+		Format(FormatRequest) (*FormatResponse, error)
+		DisableVMD()
+		IsVMDDisabled() bool
+		UpdateFirmware(pciAddr string, path string, slot int32) error
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
 	// Device Backend.
 	Provider struct {
-		log     logging.Logger
-		backend Backend
+		sync.Mutex // ensure mutually exclusive access to scan cache
+		firmwareProvider
+		log       logging.Logger
+		backend   Backend
+		fwd       *Forwarder
+		scanCache *ScanResponse
 	}
 )
 
@@ -103,47 +125,87 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
+		fwd:     NewForwarder(log),
 	}
+	p.setupFirmwareProvider(log)
+	return p
 }
 
-// Init performs any initialization steps required by the provider.
-func (p *Provider) Init(req InitRequest) error {
-	return p.backend.Init(req.SPDKShmID)
+// WithForwardingDisabled returns a provider with forwarding disabled.
+func (p *Provider) WithForwardingDisabled() *Provider {
+	p.fwd.Disabled = true
+	return p
+}
+
+func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
+	return !p.fwd.Disabled && !req.IsForwarded()
+}
+
+func (p *Provider) disableVMD() {
+	p.backend.DisableVMD()
+}
+
+// IsVMDDisabled returns true if provider has disabled VMD device awareness.
+func (p *Provider) IsVMDDisabled() bool {
+	return p.backend.IsVMDDisabled()
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
-	cs, err := p.backend.Scan()
-	if err != nil {
-		return nil, err
+	if p.shouldForward(req) {
+		req.DisableVMD = p.IsVMDDisabled()
+
+		p.Lock()
+		defer p.Unlock()
+
+		if p.scanCache == nil || req.Rescan {
+			p.log.Debug("bdev provider rescan requested")
+
+			resp, err := p.fwd.Scan(req)
+			if err != nil {
+				return nil, err
+			}
+			p.scanCache = resp
+		}
+
+		return p.scanCache, nil
+	}
+	// set vmd state on remote provider in forwarded request
+	if req.IsForwarded() && req.DisableVMD {
+		p.disableVMD()
 	}
 
-	return &ScanResponse{
-		Controllers: cs,
-	}, nil
+	return p.backend.Scan(req)
 }
 
 // Prepare attempts to perform all actions necessary to make NVMe components available for
 // use by DAOS.
 func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
+	if p.shouldForward(req) {
+		resp, err := p.fwd.Prepare(req)
+		// set vmd state on local provider after forwarding request
+		if err == nil && !resp.VmdDetected {
+			p.disableVMD()
+		}
+
+		return resp, err
+	}
+
 	// run reset first to ensure reallocation of hugepages
-	if err := p.backend.Reset(); err != nil {
-		return nil, errors.WithMessage(err, "SPDK setup reset")
+	if err := p.backend.PrepareReset(); err != nil {
+		return nil, errors.Wrap(err, "bdev prepare reset")
 	}
 
-	res := &PrepareResponse{}
-	// if we're only resetting, just return before prep
+	resp := new(PrepareResponse)
+	// if we're only resetting, return before prep
 	if req.ResetOnly {
-		return res, nil
+		return resp, nil
 	}
 
-	return res, errors.WithMessage(
-		p.backend.Prepare(req.HugePageCount, req.TargetUser, req.PCIWhitelist),
-		"SPDK setup",
-	)
+	return p.backend.Prepare(req)
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).
@@ -152,33 +214,14 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		return nil, errors.New("empty DeviceList in FormatRequest")
 	}
 
-	// TODO: Kick off device formats in goroutines? Serially formatting a large
-	// number of NVMe devices can be slow.
-	res := &FormatResponse{
-		DeviceResponses: make(DeviceFormatResponses),
+	if p.shouldForward(req) {
+		req.DisableVMD = p.IsVMDDisabled()
+		return p.fwd.Format(req)
+	}
+	// set vmd state on remote provider in forwarded request
+	if req.IsForwarded() && req.DisableVMD {
+		p.disableVMD()
 	}
 
-	for _, dev := range req.DeviceList {
-		res.DeviceResponses[dev] = &DeviceFormatResponse{}
-		switch req.Class {
-		default:
-			res.DeviceResponses[dev].Error = errors.Wrap(FaultFormatUnknownClass, req.Class.String())
-		case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
-			res.DeviceResponses[dev].Formatted = true
-			p.log.Infof("%s format for non-NVMe bdev skipped (%s)", req.Class, dev)
-		case storage.BdevClassNvme:
-			p.log.Infof("%s format starting (%s)", req.Class, dev)
-			c, err := p.backend.Format(dev)
-			if err != nil {
-				p.log.Errorf("%s format failed (%s)", req.Class, dev)
-				res.DeviceResponses[dev].Error = err
-				continue
-			}
-			res.DeviceResponses[dev].Controller = c
-			res.DeviceResponses[dev].Formatted = true
-			p.log.Infof("%s format successful (%s)", req.Class, dev)
-		}
-	}
-
-	return res, nil
+	return p.backend.Format(req)
 }

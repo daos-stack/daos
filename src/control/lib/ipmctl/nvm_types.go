@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,26 @@
 //
 
 package ipmctl
+
+import "bytes"
+
+// DeviceUID represents the Go equivalent of an NVM_UID string buffer
+type DeviceUID [22]byte
+
+// String converts the DeviceUID bytes to a string
+func (d DeviceUID) String() string {
+	n := bytes.IndexByte(d[:], 0)
+	return string(d[:n])
+}
+
+// Version represents the Go equivalent of an NVM_VERSION string buffer
+type Version [25]byte
+
+// String converts the Version bytes to a string
+func (v Version) String() string {
+	n := bytes.IndexByte(v[:], 0)
+	return string(v[:n])
+}
 
 // DeviceDiscovery struct represents Go equivalent of C.struct_device_discovery
 // from nvm_management.h (NVM API) as reported by "go tool cgo -godefs nvm.go"
@@ -50,14 +70,14 @@ type DeviceDiscovery struct {
 	Manufacturing_location   uint8
 	Manufacturing_date       uint16
 	Part_number              [21]int8
-	Fw_revision              [25]int8
-	Fw_api_version           [25]int8
+	Fw_revision              Version
+	Fw_api_version           Version
 	Pad_cgo_2                [5]byte
 	Capacity                 uint64
 	Interface_format_codes   [9]uint16
 	Security_capabilities    _Ctype_struct_device_security_capabilities
 	Device_capabilities      _Ctype_struct_device_capabilities
-	Uid                      [22]int8
+	Uid                      DeviceUID
 	Lock_state               uint32
 	Manageability            uint32
 	Controller_revision_id   uint16
@@ -65,30 +85,23 @@ type DeviceDiscovery struct {
 	Pad_cgo_3                [6]byte
 }
 
-// DeviceStatus struct represents Go equivalent of C.struct_device_status
-// from nvm_management.h (NVM API) as reported by "go tool cgo -godefs nvm.go"
-type DeviceStatus struct {
-	Is_new                       uint8
-	Is_configured                uint8
-	Is_missing                   uint8
-	Package_spares_available     uint8
-	Pad_cgo_0                    [3]byte
-	Last_shutdown_status_details uint32
-	Config_status                uint32
-	Last_shutdown_time           uint64
-	Mixed_sku                    uint8
-	Sku_violation                uint8
-	Viral_state                  uint8
-	Pad_cgo_1                    [1]byte
-	Ars_status                   uint32
-	Overwritedimm_status         uint32
-	New_error_count              uint32
-	Newest_error_log_timestamp   uint64
-	Ait_dram_enabled             uint8
-	Pad_cgo_2                    [7]byte
-	Boot_status                  uint64
-	Injected_media_errors        uint32
-	Injected_non_media_errors    uint32
-	Error_log_status             _Ctype_struct_device_error_log_status
-	Reserved                     [56]uint8
+// FWUpdateStatus values represent the ipmctl fw_update_status enum
+const (
+	// FWUpdateStatusUnknown represents unknown status
+	FWUpdateStatusUnknown = 0
+	// FWUpdateStatusStaged represents a staged FW update to be loaded on reboot
+	FWUpdateStatusStaged = 1
+	// FWUpdateStatusSuccess represents a successfully applied FW update
+	FWUpdateStatusSuccess = 2
+	// FWUpdateStatusFailed represents a failed FW update
+	FWUpdateStatusFailed = 3
+)
+
+// DeviceFirmwareInfo represents an ipmctl device_fw_info structure
+type DeviceFirmwareInfo struct {
+	ActiveFWVersion Version // currently running FW version
+	StagedFWVersion Version // FW version to be applied on next reboot
+	FWImageMaxSize  uint32  // maximum FW image size in 4096-byte chunks
+	FWUpdateStatus  uint32  // last update status
+	Reserved        [4]uint8
 }

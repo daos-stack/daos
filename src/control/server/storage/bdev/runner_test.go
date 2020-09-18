@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ func TestBdevRunnerPrepare(t *testing.T) {
 		testNrHugePages  = 42
 		testTargetUser   = "amos"
 		testPciWhitelist = "a,b,c"
+		testPciBlacklist = "x,y,z"
 	)
 
 	for name, tc := range map[string]struct {
@@ -47,10 +48,10 @@ func TestBdevRunnerPrepare(t *testing.T) {
 		expEnv []string
 		expErr error
 	}{
-		"reset fails": {
+		"prepare reset fails": {
 			req: PrepareRequest{},
 			mbc: &MockBackendConfig{
-				ResetErr: errors.New("reset failed"),
+				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("reset failed"),
 		},
@@ -74,13 +75,41 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				HugePageCount: testNrHugePages,
 				TargetUser:    testTargetUser,
 				PCIWhitelist:  testPciWhitelist,
+				DisableVFIO:   true,
 			},
 			expEnv: []string{
 				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
 				fmt.Sprintf("%s=%s", pciWhiteListEnv, testPciWhitelist),
+				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
+		},
+		"blacklist": {
+			req: PrepareRequest{
+				HugePageCount: testNrHugePages,
+				TargetUser:    testTargetUser,
+				PCIBlacklist:  testPciBlacklist,
+				DisableVFIO:   true,
+			},
+			expEnv: []string{
+				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+				fmt.Sprintf("%s=%s", targetUserEnv, testTargetUser),
+				fmt.Sprintf("%s=%s", pciBlackListEnv, testPciBlacklist),
+				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
+			},
+		},
+		"blacklist whitelist fails": {
+			req: PrepareRequest{
+				HugePageCount: testNrHugePages,
+				TargetUser:    testTargetUser,
+				PCIBlacklist:  testPciBlacklist,
+				PCIWhitelist:  testPciWhitelist,
+				DisableVFIO:   true,
+			},
+			expErr: errors.New(
+				"bdev_include and bdev_exclude can't be used together"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -89,10 +118,10 @@ func TestBdevRunnerPrepare(t *testing.T) {
 
 			s := &spdkSetupScript{
 				log: log,
-				runCmd: func(env []string, cmdStr string, args ...string) (string, error) {
+				runCmd: func(log logging.Logger, env []string, cmdStr string, args ...string) (string, error) {
 					if len(args) > 0 && args[0] == "reset" {
 						if tc.mbc != nil {
-							return "", tc.mbc.ResetErr
+							return "", tc.mbc.PrepareResetErr
 						}
 						return "", nil
 					}
@@ -109,7 +138,7 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				},
 			}
 			b := newBackend(log, s)
-			p := NewProvider(log, b)
+			p := NewProvider(log, b).WithForwardingDisabled()
 
 			_, gotErr := p.Prepare(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)

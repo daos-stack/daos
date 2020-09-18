@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,82 +24,37 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-var daosVersion string
-
-func exitWithError(log logging.Logger, err error) {
-	if err == nil {
-		err = errors.New("Unknown error")
-	}
-	log.Error(err.Error())
-	os.Exit(1)
-}
-
-func configureLogging(binName string) logging.Logger {
-	logLevel := logging.LogLevelError
-	combinedOut := ioutil.Discard
-	if logPath, set := os.LookupEnv(pbin.DaosAdminLogFileEnvVar); set {
-		lf, err := common.AppendFile(logPath)
-		if err == nil {
-			combinedOut = lf
-			logLevel = logging.LogLevelDebug
-		}
-	}
-
-	// By default, we only want to log errors to stderr.
-	return logging.NewCombinedLogger(binName, combinedOut).
-		WithErrorLogger(logging.NewCommandLineErrorLogger(os.Stderr)).
-		WithLogLevel(logLevel)
-}
-
-func checkParentName(log logging.Logger) {
-	pPath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", os.Getppid()))
-	if err != nil {
-		exitWithError(log, errors.Wrap(err, "failed to check parent process binary"))
-	}
-	daosServer := "daos_server"
-	if !strings.HasSuffix(pPath, daosServer) {
-		exitWithError(log, errors.Errorf("%s (version %s) may only be invoked by %s",
-			os.Args[0], daosVersion, daosServer))
-	}
-}
-
 func main() {
-	binName := filepath.Base(os.Args[0])
-	log := configureLogging(binName)
+	app := pbin.NewApp().
+		WithAllowedCallers("daos_server")
 
-	checkParentName(log)
-
-	if os.Geteuid() != 0 {
-		exitWithError(log, errors.Errorf("%s not setuid root", binName))
+	if logPath, set := os.LookupEnv(pbin.DaosAdminLogFileEnvVar); set {
+		app = app.WithLogFile(logPath)
 	}
 
-	// hack for stuff that doesn't use geteuid() (e.g. ipmctl)
-	if err := setuid(0); err != nil {
-		exitWithError(log, errors.Wrap(err, "unable to setuid(0)"))
-	}
+	addMethodHandlers(app)
 
-	conn := pbin.NewStdioConn(binName, "daos_server", os.Stdin, os.Stdout)
-	req, err := readRequest(log, conn)
+	err := app.Run()
 	if err != nil {
-		exitWithError(log, err)
+		os.Exit(1)
 	}
+}
 
-	scmProvider := scm.DefaultProvider(log).WithForwardingDisabled()
-	if err := handleRequest(log, scmProvider, req, conn); err != nil {
-		exitWithError(log, err)
-	}
+// addMethodHandlers adds all of daos_admin's supported handler functions.
+func addMethodHandlers(app *pbin.App) {
+	app.AddHandler("ScmMount", &scmMountUnmountHandler{})
+	app.AddHandler("ScmUnmount", &scmMountUnmountHandler{})
+	app.AddHandler("ScmFormat", &scmFormatCheckHandler{})
+	app.AddHandler("ScmCheckFormat", &scmFormatCheckHandler{})
+	app.AddHandler("ScmScan", &scmScanHandler{})
+	app.AddHandler("ScmPrepare", &scmPrepHandler{})
+
+	app.AddHandler("BdevPrepare", &bdevPrepHandler{})
+	app.AddHandler("BdevScan", &bdevScanHandler{})
+	app.AddHandler("BdevFormat", &bdevFormatHandler{})
 }

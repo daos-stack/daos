@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,75 +26,114 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestStorageQueryCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"NVMe health query",
-			"storage query nvme-health",
-			"ConnectClients StorageScan-<nil>",
+			"per-server metadata target health query",
+			"storage query target-health -r 0 -t 1",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:             system.Rank(0),
+				OmitPools:        true,
+				IncludeBioHealth: true,
+				Target:           "1",
+			}),
 			nil,
 		},
 		{
-			"blobstore health query none specified",
-			"storage query blobstore-health",
-			"ConnectClients BioHealthQuery",
-			fmt.Errorf("device UUID or target ID is required"),
+			"per-server metadata target health query (missing flags)",
+			"storage query target-health",
+			printRequest(t, &control.SmdQueryReq{}),
+			errors.New("required flags"),
 		},
 		{
-			"blobstore health query both specified",
-			"storage query blobstore-health --tgtid 123 --devuuid abc",
-			"ConnectClients BioHealthQuery",
-			fmt.Errorf("either device UUID OR target ID need to be specified not both"),
-		},
-		{
-			"blobstore health query tgtid",
-			"storage query blobstore-health --tgtid 123",
-			"ConnectClients BioHealthQuery-tgt_id:\"123\" ",
+			"per-server metadata device health query",
+			"storage query device-health --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:             system.NilRank,
+				OmitPools:        true,
+				IncludeBioHealth: true,
+				UUID:             "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			}),
 			nil,
 		},
 		{
-			"blobstore health query devuuid",
-			"storage query blobstore-health --devuuid abcd",
-			"ConnectClients BioHealthQuery-dev_uuid:\"abcd\" ",
-			nil,
+			"per-server metadata device health query (missing uuid)",
+			"storage query device-health",
+			printRequest(t, &control.SmdQueryReq{}),
+			errors.New("required flag"),
 		},
 		{
 			"per-server metadata query pools",
-			"storage query smd --pools",
-			"ConnectClients SmdListPools-",
+			"storage query list-pools",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:        system.NilRank,
+				OmitDevices: true,
+			}),
+			nil,
+		},
+		{
+			"per-server metadata query pools (by rank)",
+			"storage query list-pools --rank 42",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:        system.Rank(42),
+				OmitDevices: true,
+			}),
+			nil,
+		},
+		{
+			"per-server metadata query pools (by uuid)",
+			"storage query list-pools --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:        system.NilRank,
+				OmitDevices: true,
+				UUID:        "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			}),
 			nil,
 		},
 		{
 			"per-server metadata query devices",
-			"storage query smd --devices",
-			"ConnectClients SmdListDevs-",
+			"storage query list-devices",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:      system.NilRank,
+				OmitPools: true,
+			}),
 			nil,
 		},
 		{
-			"per-server metadata query not specified",
-			"storage query smd",
-			"ConnectClients SmdListDevs- SmdListPools-",
+			"per-server metadata query devices (include health)",
+			"storage query list-devices --health",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:             system.NilRank,
+				OmitPools:        true,
+				IncludeBioHealth: true,
+			}),
 			nil,
 		},
 		{
-			"per-server metadata query both specified",
-			"storage query smd --pools --devices",
-			"ConnectClients SmdListDevs- SmdListPools-",
+			"per-server metadata query devices (by rank)",
+			"storage query list-devices --rank 42",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:      system.Rank(42),
+				OmitPools: true,
+			}),
 			nil,
 		},
 		{
-			"device state query",
-			"storage query device-state --devuuid abcd",
-			"ConnectClients DevStateQuery-dev_uuid:\"abcd\" ",
+			"per-server metadata query devices (by uuid)",
+			"storage query list-devices --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:      system.NilRank,
+				UUID:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				OmitPools: true,
+			}),
 			nil,
-		},
-		{
-			"device state query no device uuid specified",
-			"storage query device-state",
-			"ConnectClients DevStateQuery",
-			fmt.Errorf("the required flag `-u, --devuuid' was not specified"),
 		},
 		{
 			"Nonexistent subcommand",

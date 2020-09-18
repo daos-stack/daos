@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -390,7 +390,8 @@ dbtree_nv_update(daos_handle_t tree, const void *key, size_t key_size,
 
 	rc = dbtree_update(tree, &key_iov, &val);
 	if (rc != 0)
-		D_ERROR("failed to update \"%s\": %d\n", (char *)key, rc);
+		D_ERROR("failed to update \"%s\": "DF_RC"\n", (char *)key,
+			DP_RC(rc));
 
 	return rc;
 }
@@ -492,7 +493,8 @@ dbtree_nv_create_tree(daos_handle_t tree, const void *key, size_t key_size,
 
 	rc = create_tree(tree, &key_iov, class, feats, order, tree_new);
 	if (rc != 0)
-		D_ERROR("failed to create \"%s\": %d\n", (char *)key, rc);
+		D_ERROR("failed to create \"%s\": "DF_RC"\n", (char *)key,
+			DP_RC(rc));
 
 	return rc;
 }
@@ -511,7 +513,8 @@ dbtree_nv_open_tree(daos_handle_t tree, const void *key, size_t key_size,
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", (char *)key);
 		else
-			D_ERROR("failed to open \"%s\": %d\n", (char *)key, rc);
+			D_ERROR("failed to open \"%s\": "DF_RC"\n", (char *)key,
+				DP_RC(rc));
 	}
 
 	return rc;
@@ -722,7 +725,8 @@ dbtree_uv_update(daos_handle_t tree, const uuid_t uuid, const void *value,
 
 	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
-		D_ERROR("failed to update "DF_UUID": %d\n", DP_UUID(uuid), rc);
+		D_ERROR("failed to update "DF_UUID": "DF_RC"\n", DP_UUID(uuid),
+			DP_RC(rc));
 
 	return rc;
 }
@@ -815,7 +819,8 @@ dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid, unsigned int class,
 
 	rc = create_tree(tree, &key, class, feats, order, tree_new);
 	if (rc != 0)
-		D_ERROR("failed to create "DF_UUID": %d\n", DP_UUID(uuid), rc);
+		D_ERROR("failed to create "DF_UUID": "DF_RC"\n", DP_UUID(uuid),
+			DP_RC(rc));
 
 	return rc;
 }
@@ -988,7 +993,8 @@ dbtree_ec_update(daos_handle_t tree, uint64_t epoch, const uint64_t *count)
 
 	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
-		D_ERROR("failed to update "DF_U64": %d\n", epoch, rc);
+		D_ERROR("failed to update "DF_U64": "DF_RC"\n", epoch,
+			DP_RC(rc));
 
 	return rc;
 }
@@ -1007,7 +1013,8 @@ dbtree_ec_lookup(daos_handle_t tree, uint64_t epoch, uint64_t *count)
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DB_TRACE, "cannot find "DF_U64"\n", epoch);
 	else if (rc != 0)
-		D_ERROR("failed to look up "DF_U64": %d\n", epoch, rc);
+		D_ERROR("failed to look up "DF_U64": "DF_RC"\n", epoch,
+			DP_RC(rc));
 
 	return rc;
 }
@@ -1050,7 +1057,8 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DB_TRACE, "cannot find "DF_U64"\n", epoch);
 	else if (rc != 0)
-		D_ERROR("failed to delete "DF_U64": %d\n", epoch, rc);
+		D_ERROR("failed to delete "DF_U64": "DF_RC"\n", epoch,
+			DP_RC(rc));
 
 	return rc;
 }
@@ -1235,6 +1243,39 @@ struct iv_rec {
 };
 
 static int
+iv_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
+{
+	struct iv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void		*v = umem_off2ptr(&tins->ti_umm, r->ir_value);
+	uint64_t	 a, b;
+
+	D_ASSERT(key->iov_buf != NULL);
+	b = *(uint64_t *)key->iov_buf;
+
+	D_ASSERT(r->ir_value_len >= sizeof(uint64_t));
+	D_ASSERT(v != NULL);
+	/* The first field of value is the integer key */
+	a = *(uint64_t *)v;
+
+	return (a < b) ? BTR_CMP_LT : ((a > b) ? BTR_CMP_GT : BTR_CMP_EQ);
+}
+
+static void
+iv_key_encode(struct btr_instance *tins, d_iov_t *key, daos_anchor_t *anchor)
+{
+	D_ASSERT(key->iov_len >= sizeof(uint64_t));
+	memcpy(&anchor->da_buf[0], key->iov_buf, sizeof(uint64_t));
+}
+
+static void
+iv_key_decode(struct btr_instance *tins, d_iov_t *key, daos_anchor_t *anchor)
+{
+	key->iov_buf = &anchor->da_buf[0];
+	key->iov_buf_len = sizeof(uint64_t);
+	key->iov_len = key->iov_buf_len;
+}
+
+static int
 iv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	     struct btr_record *rec)
 {
@@ -1283,17 +1324,27 @@ static int
 iv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key,
 	     d_iov_t *val)
 {
-	if (key != NULL) {
-		if (key->iov_buf == NULL)
-			key->iov_buf = rec->rec_hkey;
-		else if (key->iov_buf_len >= sizeof(uint64_t))
-			memcpy(key->iov_buf, rec->rec_hkey, sizeof(uint64_t));
-		key->iov_len = sizeof(uint64_t);
-	}
-	if (val != NULL) {
-		struct iv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-		void	       *v = umem_off2ptr(&tins->ti_umm, r->ir_value);
+	struct iv_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	void	       *v = umem_off2ptr(&tins->ti_umm, r->ir_value);
 
+	if (key != NULL) {
+		size_t	len = sizeof(uint64_t);
+
+		if (tins->ti_root->tr_feats & BTR_FEAT_DIRECT_KEY) {
+			if (key->iov_buf == NULL)
+				key->iov_buf = v;
+			else if (key->iov_buf_len >= len)
+				memcpy(key->iov_buf, v, len);
+		} else {
+			if (key->iov_buf == NULL)
+				key->iov_buf = rec->rec_hkey;
+			else if (key->iov_buf_len >= len)
+				memcpy(key->iov_buf, rec->rec_hkey, len);
+		}
+		key->iov_len = len;
+	}
+
+	if (val != NULL) {
 		if (val->iov_buf == NULL)
 			val->iov_buf = v;
 		else if (r->ir_value_len <= val->iov_buf_len)
@@ -1347,7 +1398,24 @@ iv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	return buf;
 }
 
+static int
+iv_key_msize(int alloc_overhead)
+{
+	return alloc_overhead + sizeof(struct iv_rec);
+}
+
+static int
+iv_hkey_size(void)
+{
+	return sizeof(uint32_t);
+}
+
 btr_ops_t dbtree_iv_ops = {
+	.to_rec_msize	= iv_key_msize,
+	.to_hkey_size	= iv_hkey_size,
+	.to_key_cmp	= iv_key_cmp,
+	.to_key_encode	= iv_key_encode,
+	.to_key_decode	= iv_key_decode,
 	.to_rec_alloc	= iv_rec_alloc,
 	.to_rec_free	= iv_rec_free,
 	.to_rec_fetch	= iv_rec_fetch,

@@ -373,49 +373,49 @@ void   mgmt__prep_shutdown_req__free_unpacked
   assert(message->base.descriptor == &mgmt__prep_shutdown_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mgmt__kill_rank_req__init
-                     (Mgmt__KillRankReq         *message)
+void   mgmt__ping_rank_req__init
+                     (Mgmt__PingRankReq         *message)
 {
-  static const Mgmt__KillRankReq init_value = MGMT__KILL_RANK_REQ__INIT;
+  static const Mgmt__PingRankReq init_value = MGMT__PING_RANK_REQ__INIT;
   *message = init_value;
 }
-size_t mgmt__kill_rank_req__get_packed_size
-                     (const Mgmt__KillRankReq *message)
+size_t mgmt__ping_rank_req__get_packed_size
+                     (const Mgmt__PingRankReq *message)
 {
-  assert(message->base.descriptor == &mgmt__kill_rank_req__descriptor);
+  assert(message->base.descriptor == &mgmt__ping_rank_req__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t mgmt__kill_rank_req__pack
-                     (const Mgmt__KillRankReq *message,
+size_t mgmt__ping_rank_req__pack
+                     (const Mgmt__PingRankReq *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &mgmt__kill_rank_req__descriptor);
+  assert(message->base.descriptor == &mgmt__ping_rank_req__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t mgmt__kill_rank_req__pack_to_buffer
-                     (const Mgmt__KillRankReq *message,
+size_t mgmt__ping_rank_req__pack_to_buffer
+                     (const Mgmt__PingRankReq *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &mgmt__kill_rank_req__descriptor);
+  assert(message->base.descriptor == &mgmt__ping_rank_req__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Mgmt__KillRankReq *
-       mgmt__kill_rank_req__unpack
+Mgmt__PingRankReq *
+       mgmt__ping_rank_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Mgmt__KillRankReq *)
-     protobuf_c_message_unpack (&mgmt__kill_rank_req__descriptor,
+  return (Mgmt__PingRankReq *)
+     protobuf_c_message_unpack (&mgmt__ping_rank_req__descriptor,
                                 allocator, len, data);
 }
-void   mgmt__kill_rank_req__free_unpacked
-                     (Mgmt__KillRankReq *message,
+void   mgmt__ping_rank_req__free_unpacked
+                     (Mgmt__PingRankReq *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &mgmt__kill_rank_req__descriptor);
+  assert(message->base.descriptor == &mgmt__ping_rank_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   mgmt__set_rank_req__init
@@ -817,7 +817,7 @@ const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor =
   (ProtobufCMessageInit) mgmt__leader_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[2] =
 {
   {
     "sys",
@@ -831,14 +831,27 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descripto
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "allRanks",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoReq, allranks),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__get_attach_info_req__field_indices_by_name[] = {
+  1,   /* field[1] = allRanks */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__get_attach_info_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
 {
@@ -848,7 +861,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   "Mgmt__GetAttachInfoReq",
   "mgmt",
   sizeof(Mgmt__GetAttachInfoReq),
-  1,
+  2,
   mgmt__get_attach_info_req__field_descriptors,
   mgmt__get_attach_info_req__field_indices_by_name,
   1,  mgmt__get_attach_info_req__number_ranges,
@@ -906,7 +919,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__psr__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[8] =
 {
   {
     "status",
@@ -932,15 +945,93 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "Provider",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, provider),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "Interface",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, interface),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "Domain",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, domain),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "CrtCtxShareAddr",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, crtctxshareaddr),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "CrtTimeout",
+    7,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, crttimeout),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "NetDevClass",
+    8,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, netdevclass),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__get_attach_info_resp__field_indices_by_name[] = {
+  5,   /* field[5] = CrtCtxShareAddr */
+  6,   /* field[6] = CrtTimeout */
+  4,   /* field[4] = Domain */
+  3,   /* field[3] = Interface */
+  7,   /* field[7] = NetDevClass */
+  2,   /* field[2] = Provider */
   1,   /* field[1] = psrs */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__get_attach_info_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
 {
@@ -950,7 +1041,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
   "Mgmt__GetAttachInfoResp",
   "mgmt",
   sizeof(Mgmt__GetAttachInfoResp),
-  2,
+  8,
   mgmt__get_attach_info_resp__field_descriptors,
   mgmt__get_attach_info_resp__field_indices_by_name,
   1,  mgmt__get_attach_info_resp__number_ranges,
@@ -995,55 +1086,42 @@ const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor =
   (ProtobufCMessageInit) mgmt__prep_shutdown_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__kill_rank_req__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__ping_rank_req__field_descriptors[1] =
 {
   {
-    "force",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__KillRankReq, force),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "rank",
-    2,
+    1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__KillRankReq, rank),
+    offsetof(Mgmt__PingRankReq, rank),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__kill_rank_req__field_indices_by_name[] = {
-  0,   /* field[0] = force */
-  1,   /* field[1] = rank */
+static const unsigned mgmt__ping_rank_req__field_indices_by_name[] = {
+  0,   /* field[0] = rank */
 };
-static const ProtobufCIntRange mgmt__kill_rank_req__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__ping_rank_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 1 }
 };
-const ProtobufCMessageDescriptor mgmt__kill_rank_req__descriptor =
+const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.KillRankReq",
-  "KillRankReq",
-  "Mgmt__KillRankReq",
+  "mgmt.PingRankReq",
+  "PingRankReq",
+  "Mgmt__PingRankReq",
   "mgmt",
-  sizeof(Mgmt__KillRankReq),
-  2,
-  mgmt__kill_rank_req__field_descriptors,
-  mgmt__kill_rank_req__field_indices_by_name,
-  1,  mgmt__kill_rank_req__number_ranges,
-  (ProtobufCMessageInit) mgmt__kill_rank_req__init,
+  sizeof(Mgmt__PingRankReq),
+  1,
+  mgmt__ping_rank_req__field_descriptors,
+  mgmt__ping_rank_req__field_indices_by_name,
+  1,  mgmt__ping_rank_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__ping_rank_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__set_rank_req__field_descriptors[1] =

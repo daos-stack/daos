@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -165,7 +165,7 @@ ut_reserve(void **state)
 	/*
 	 * Reserve two extents from I/O stream 0 and I/O stream 1 in
 	 * interleaved order, the reservation from I/O stream 0 will be
-	 * cancelled later, and the reservation from I/O stream 1 will
+	 * canceled later, and the reservation from I/O stream 1 will
 	 * be published.
 	 */
 	off_a = off_b = VEA_HINT_OFF_INVAL;
@@ -492,12 +492,12 @@ vea_ut_setup(void **state)
 {
 	int rc;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST) {
 		fprintf(stderr, "register DBTREE_CLASS_IV error %d\n", rc);
@@ -686,7 +686,7 @@ ut_inval_params_load(void **state)
 	uint32_t block_size = 0; /* use the default size */
 	uint32_t header_blocks = 1;
 	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128 MB */
-	struct vea_unmap_context unmap_ctxt;
+	struct vea_unmap_context unmap_ctxt = {0};
 	int rc;
 
 	ut_setup(&args);
@@ -1186,7 +1186,7 @@ ut_fragmentation(void **state)
 		rc = vea_reserve(args.vua_vsi, block_count, NULL, r_list);
 	}
 
-	/* Free some of the fragments. The cancelled ones remain in r_list */
+	/* Free some of the fragments. The canceled ones remain in r_list */
 	D_INIT_LIST_HEAD(&persist_list);
 
 	d_list_for_each_entry_safe(ext, tmp_ext, r_list, vre_link) {

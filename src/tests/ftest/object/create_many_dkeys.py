@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,16 +23,15 @@
 '''
 from __future__ import print_function
 
-import os
 import sys
 import ctypes
 import avocado
-from apricot import Test, skipForTicket
+
+from apricot import TestWithServers
+from pydaos.raw import DaosContainer, IORequest, DaosApiError
 
 
-from pydaos.raw import DaosPool, DaosContainer, IORequest, DaosApiError
-
-class CreateManyDkeys(Test):
+class CreateManyDkeys(TestWithServers):
     """
     Test Class Description:
         Tests that create large numbers of keys in objects/containers and then
@@ -40,23 +39,6 @@ class CreateManyDkeys(Test):
 
     :avocado: recursive
     """
-    def setUp(self):
-        super(CreateManyDkeys, self).setUp()
-        self.pool = DaosPool(self.context)
-        self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
-                         os.geteuid(),
-                         os.getegid(),
-                         self.params.get("size", '/run/pool/createsize/*'),
-                         self.params.get("setname", '/run/pool/createset/*'),
-                         None)
-        self.pool.connect(1 << 1)
-
-    def tearDown(self):
-        try:
-            if self.pool:
-                self.pool.destroy(1)
-        finally:
-            super(CreateManyDkeys, self).tearDown()
 
     def write_a_bunch_of_values(self, how_many):
         """
@@ -65,12 +47,10 @@ class CreateManyDkeys(Test):
         """
 
         self.container = DaosContainer(self.context)
-        self.container.create(self.pool.handle)
+        self.container.create(self.pool.pool.handle)
         self.container.open()
 
         ioreq = IORequest(self.context, self.container, None)
-        epoch = self.container.get_new_tx()
-        c_epoch = ctypes.c_uint64(epoch)
 
         print("Started Writing the Dataset-----------\n")
         inc = 50000
@@ -84,15 +64,12 @@ class CreateManyDkeys(Test):
             ioreq.single_insert(c_dkey,
                                 c_akey,
                                 c_value,
-                                c_size,
-                                c_epoch)
+                                c_size)
 
             if key > last_key:
                 print("written: {}".format(key))
                 sys.stdout.flush()
                 last_key = key + inc
-
-        self.container.commit_tx(c_epoch)
 
         print("Started Verification of the Dataset-----------\n")
         last_key = inc
@@ -102,8 +79,7 @@ class CreateManyDkeys(Test):
             the_data = "some data that gets stored with the key {0}".format(key)
             val = ioreq.single_fetch(c_dkey,
                                      c_akey,
-                                     len(the_data)+1,
-                                     c_epoch)
+                                     len(the_data)+1)
 
             if the_data != (repr(val.value)[1:-1]):
                 self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}, "
@@ -124,17 +100,16 @@ class CreateManyDkeys(Test):
         print("destroy complete")
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-1721")
     def test_many_dkeys(self):
         """
         Test ID: DAOS-1701
         Test Description: Test many of dkeys in same object.
         Use Cases: 1. large key counts
-                   2. space reclaimation after destroy
+                   2. space reclamation after destroy
         :avocado: tags=all,full,small,object,many_dkeys
 
         """
-
+        self.prepare_pool()
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')
 
         # write a lot of individual data items, verify them, then destroy
@@ -142,5 +117,5 @@ class CreateManyDkeys(Test):
 
 
         # do it again, which should verify the first container
-        # was truely destroyed because a second round won't fit otherwise
+        # was truly destroyed because a second round won't fit otherwise
         self.write_a_bunch_of_values(no_of_dkeys)

@@ -1,10 +1,12 @@
 """Build drpc test"""
 
+import daos_build
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    libs = ['$LIBS', 'daos_common']
+    libs = ['$LIBS', 'daos_common', 'gurt']
     sources = ['drpc_test.c', 'drpc_test.pb-c.c']
 
     denv = env.Clone()
@@ -13,11 +15,11 @@ def scons():
 
     prereqs.require(denv, 'protobufc')
 
-    drpc_test = denv.Program('drpc_test', sources, LIBS=libs)
+    drpc_test = daos_build.program(denv, 'drpc_test', sources, LIBS=libs)
     env.Install('$PREFIX/bin/', drpc_test)
 
-    drpc_iosrv_test = denv.Program('drpc_iosrv_test',
-                                   ['drpc_iosrv_test.c'], LIBS=libs)
+    drpc_iosrv_test = daos_build.program(denv, 'drpc_iosrv_test',
+                                         ['drpc_iosrv_test.c'], LIBS=libs)
     env.Install('$PREFIX/bin/', drpc_iosrv_test)
 
 if __name__ == "SCons.Script":

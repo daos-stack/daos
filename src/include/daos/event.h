@@ -32,6 +32,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <daos_task.h>
+#include <daos/task.h>
 
 enum daos_ev_flags {
 	/**
@@ -43,7 +44,7 @@ enum daos_ev_flags {
 	DAOS_EVF_NO_POLL	= (1 << 0),
 	/**
 	 * Only useful for parent event:
-	 * without this flag, a parent event will be automatially launched
+	 * without this flag, a parent event will be automatically launched
 	 * if any child event is launched. With this flag, a parent event
 	 * always needs to be explicitly launched.
 	 */
@@ -119,7 +120,7 @@ daos_ev2sched(struct daos_event *ev);
 /**
  * Return the EQ handle of the specified event.
  *
- * \param ev [IN]	event to retrive handle.
+ * \param ev [IN]	event to retrieve handle.
  */
 daos_handle_t
 daos_ev2eqh(struct daos_event *ev);
@@ -193,10 +194,10 @@ dc_task_get_opc(tse_task_t *task);
 	tse_task_decref(task)
 
 #define dc_task_set_priv(task, priv)				\
-	tse_task_set_priv(task, priv)
+	tse_task_set_priv_internal(task, priv)
 
 #define dc_task_get_priv(task)					\
-	tse_task_get_priv(task)
+	tse_task_get_priv_internal(task)
 
 #define dc_task_list_add(task, head)				\
 	tse_task_list_add(task, head)

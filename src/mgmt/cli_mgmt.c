@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 #include <daos/event.h>
 #include "srv.pb-c.h"
 #include "rpc.h"
+#include <errno.h>
 
 struct cp_arg {
 	struct dc_mgmt_sys	*sys;
@@ -50,7 +51,7 @@ cp(tse_task_t *task, void *data)
 	int		 rc = task->dt_result;
 
 	if (rc)
-		D_ERROR("RPC error: %d\n", rc);
+		D_ERROR("RPC error: "DF_RC"\n", DP_RC(rc));
 
 	dc_mgmt_sys_detach(arg->sys);
 	crt_req_decref(arg->rpc);
@@ -71,8 +72,9 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	args = dc_task_get_args(task);
 	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc %d.\n", args->grp, rc);
-		rc = DER_INVAL;
+		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n",
+			args->grp, DP_RC(rc));
+		rc = -DER_INVAL;
 		goto out_task;
 	}
 
@@ -83,8 +85,8 @@ dc_mgmt_svc_rip(tse_task_t *task)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
-			rc);
+		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC".\n",
+			DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
 
@@ -130,7 +132,8 @@ dc_mgmt_set_params(tse_task_t *task)
 	args = dc_task_get_args(task);
 	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc %d.\n", args->grp, rc);
+		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n", args->grp,
+			DP_RC(rc));
 		rc = -DER_INVAL;
 		goto out_task;
 	}
@@ -145,8 +148,8 @@ dc_mgmt_set_params(tse_task_t *task)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
-			rc);
+		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC".\n",
+			DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
 
@@ -183,7 +186,7 @@ out_task:
 }
 
 int
-dc_mgmt_profile(uint64_t modules, char *path, bool start)
+dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
 	struct mgmt_profile_in	*in;
@@ -194,7 +197,7 @@ dc_mgmt_profile(uint64_t modules, char *path, bool start)
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp rc %d.\n", rc);
+		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
 		return -DER_INVAL;
 	}
 
@@ -205,19 +208,19 @@ dc_mgmt_profile(uint64_t modules, char *path, bool start)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc: %d.\n", rc);
+		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
 
 	D_ASSERT(rpc != NULL);
 	in = crt_req_get(rpc);
-	in->p_module = modules;
 	in->p_path = path;
+	in->p_avg = avg;
 	in->p_op = start ? MGMT_PROFILE_START : MGMT_PROFILE_STOP;
 	/** send the request */
 	rc = daos_rpc_send_wait(rpc);
 err_grp:
-	D_DEBUG(DB_MGMT, "mgmt profile: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "mgmt profile: rc "DF_RC"\n", DP_RC(rc));
 	dc_mgmt_sys_detach(sys);
 	return rc;
 }
@@ -234,7 +237,7 @@ dc_mgmt_add_mark(const char *mark)
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp rc %d.\n", rc);
+		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
 		return -DER_INVAL;
 	}
 
@@ -245,7 +248,7 @@ dc_mgmt_add_mark(const char *mark)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc: %d.\n", rc);
+		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
 
@@ -255,7 +258,7 @@ dc_mgmt_add_mark(const char *mark)
 	/** send the request */
 	rc = daos_rpc_send_wait(rpc);
 err_grp:
-	D_DEBUG(DB_MGMT, "mgmt mark: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "mgmt mark: rc "DF_RC"\n", DP_RC(rc));
 	dc_mgmt_sys_detach(sys);
 	return rc;
 
@@ -266,14 +269,38 @@ struct dc_mgmt_psr {
 	char		*uri;
 };
 
+#define copy_str(dest, src)				\
+({							\
+	int	__rc = 1;				\
+	size_t	__size = strnlen(src, sizeof(dest));	\
+							\
+	if (__size != sizeof(dest)) {			\
+		memcpy(dest, src, __size + 1);		\
+		__rc = 0;				\
+	}						\
+	__rc;						\
+})
+
+static void
+put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
+{
+	int i;
+
+	for (i = 0; i < npsrs; i++)
+		D_FREE(psrs[i].uri);
+	D_FREE(psrs);
+}
+
 /*
  * Get the attach info (i.e., the CaRT PSRs) for name. npsrs outputs the number
  * of elements in psrs. psrs outputs the array of struct dc_mgmt_psr objects.
  * Callers are responsible for freeing psrs using put_attach_info.
  */
 static int
-get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
+get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
+		struct sys_info *sy_info)
 {
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		*ctx;
 	Mgmt__GetAttachInfoReq	 req = MGMT__GET_ATTACH_INFO_REQ__INIT;
 	Mgmt__GetAttachInfoResp	*resp;
@@ -289,11 +316,11 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 
 	/* Connect to daos_agent. */
 	D_ASSERT(dc_agent_sockpath != NULL);
-	ctx = drpc_connect(dc_agent_sockpath);
-	if (ctx == NULL) {
-		D_ERROR("failed to connect to %s\n", dc_agent_sockpath);
-		rc = -DER_BADPATH;
-		goto out;
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
 	}
 
 	/* Prepare the GetAttachInfo request. */
@@ -305,10 +332,9 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 		goto out_ctx;
 	}
 	mgmt__get_attach_info_req__pack(&req, reqb);
-	dreq = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-				DRPC_METHOD_MGMT_GET_ATTACH_INFO);
-	if (dreq == NULL) {
-		rc = -DER_NOMEM;
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+				DRPC_METHOD_MGMT_GET_ATTACH_INFO, &dreq);
+	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_ctx;
 	}
@@ -318,7 +344,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 	/* Make the GetAttachInfo call and get the response. */
 	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
 	if (rc != 0) {
-		D_ERROR("GetAttachInfo call failed: %d\n", rc);
+		D_ERROR("GetAttachInfo call failed: "DF_RC"\n", DP_RC(rc));
 		goto out_dreq;
 	}
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
@@ -326,8 +352,10 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 		rc = -DER_MISC;
 		goto out_dresp;
 	}
-	resp = mgmt__get_attach_info_resp__unpack(NULL, dresp->body.len,
+	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len,
 						  dresp->body.data);
+	if (alloc.oom)
+		D_GOTO(out_dresp, rc = -DER_MISC);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack GetAttachInfo response\n");
 		rc = -DER_MISC;
@@ -364,8 +392,49 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 	*npsrs = resp->n_psrs;
 	*psrs = p;
 
+	if (sy_info) {
+		if (strnlen(resp->provider, sizeof(sy_info->provider)) == 0) {
+			D_ERROR("GetAttachInfo provider string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (strnlen(resp->interface, sizeof(sy_info->interface)) == 0) {
+			D_ERROR("GetAttachInfo interface string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (strnlen(resp->domain, sizeof(sy_info->domain)) == 0) {
+			D_ERROR("GetAttachInfo domain string is empty\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (copy_str(sy_info->provider, resp->provider)) {
+			D_ERROR("GetAttachInfo provider string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (copy_str(sy_info->interface, resp->interface)) {
+			D_ERROR("GetAttachInfo interface string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		if (copy_str(sy_info->domain, resp->domain)) {
+			D_ERROR("GetAttachInfo domain string too long\n");
+			D_GOTO(out_resp, rc = -DER_INVAL);
+		}
+
+		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
+		sy_info->crt_timeout = resp->crttimeout;
+
+		D_DEBUG(DB_MGMT,
+			"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
+			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
+			sy_info->provider, sy_info->interface, sy_info->domain,
+			sy_info->crt_ctx_share_addr, sy_info->crt_timeout);
+	}
+
 out_resp:
-	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);
+	mgmt__get_attach_info_resp__free_unpacked(resp, &alloc.alloc);
 out_dresp:
 	drpc_response_free(dresp);
 out_dreq:
@@ -374,6 +443,86 @@ out_dreq:
 out_ctx:
 	drpc_close(ctx);
 out:
+	return rc;
+}
+
+/*
+ * Get the CaRT network configuration for this client node
+ * via the get_attach_info() dRPC.
+ * Configure the client's local environment with these parameters
+ */
+int dc_mgmt_net_cfg(const char *name)
+{
+	int rc;
+	int npsrs;
+	char buf[SYS_INFO_BUF_SIZE];
+	char *crt_timeout;
+	char *ofi_interface;
+	char *ofi_domain;
+	struct sys_info sy_info;
+	struct dc_mgmt_psr *psrs;
+
+	if (name == NULL)
+		name = DAOS_DEFAULT_SYS_NAME;
+
+	/* Query the agent for the CaRT network configuration parameters */
+	rc = get_attach_info(name, &npsrs, &psrs, &sy_info);
+	if (rc != 0)
+		return rc;
+
+	/* These two are always set */
+	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	sprintf(buf, "%d", sy_info.crt_ctx_share_addr);
+	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	/* Allow client env overrides for these three */
+	crt_timeout = getenv("CRT_TIMEOUT");
+	if (!crt_timeout) {
+		sprintf(buf, "%d", sy_info.crt_timeout);
+		rc = setenv("CRT_TIMEOUT", buf, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
+			crt_timeout);
+	}
+
+	ofi_interface = getenv("OFI_INTERFACE");
+	if (!ofi_interface) {
+		rc = setenv("OFI_INTERFACE", sy_info.interface, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided OFI_INTERFACE: %s\n",
+			ofi_interface);
+	}
+
+	ofi_domain = getenv("OFI_DOMAIN");
+	if (!ofi_domain) {
+		rc = setenv("OFI_DOMAIN", sy_info.domain, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+	}
+
+	D_DEBUG(DB_MGMT,
+		"CaRT initialization with:\n"
+		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
+		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
+		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
+		getenv("CRT_PHY_ADDR_STR"),
+		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+
+cleanup:
+	/* free the psrs allocated by get_attach_info() */
+	put_attach_info(npsrs, psrs);
+
 	return rc;
 }
 
@@ -426,16 +575,6 @@ get_attach_info_from_buf(int npsrbs, struct psr_buf *psrbs, int *npsrs,
 	return 0;
 }
 
-static void
-put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
-{
-	int i;
-
-	for (i = 0; i < npsrs; i++)
-		D_FREE(psrs[i].uri);
-	D_FREE(psrs);
-}
-
 static int
 attach_group(const char *name, int npsrs, struct dc_mgmt_psr *psrs,
 	     crt_group_t **groupp)
@@ -446,7 +585,8 @@ attach_group(const char *name, int npsrs, struct dc_mgmt_psr *psrs,
 
 	rc = crt_group_view_create((char *)name, &group);
 	if (rc != 0) {
-		D_ERROR("failed to create group %s: %d\n", name, rc);
+		D_ERROR("failed to create group %s: "DF_RC"\n", name,
+			DP_RC(rc));
 		goto err;
 	}
 
@@ -483,7 +623,7 @@ detach_group(bool server, crt_group_t *group)
 
 	if (!server)
 		rc = crt_group_view_destroy(group);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -503,7 +643,7 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	}
 	D_INIT_LIST_HEAD(&sys->sy_link);
 	rc = snprintf(sys->sy_name, sizeof(sys->sy_name), "%s", name);
-	D_ASSERTF(rc >= 0, "%d\n", rc);
+	D_ASSERTF(rc >= 0, ""DF_RC"\n", DP_RC(rc));
 	if (rc >= sizeof(sys->sy_name)) {
 		D_ERROR("system name %s longer than %zu bytes\n", sys->sy_name,
 			sizeof(sys->sy_name) - 1);
@@ -520,7 +660,8 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	}
 
 	if (psrbs == NULL)
-		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs);
+		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs,
+				     &sys->sy_info);
 	else
 		rc = get_attach_info_from_buf(npsrbs, psrbs, &sys->sy_npsrs,
 					      &sys->sy_psrs);
@@ -528,6 +669,7 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 		goto err_sys;
 	if (sys->sy_npsrs < 1) {
 		D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
+		rc = -DER_MISC;
 		goto err_psrs;
 	}
 
@@ -736,7 +878,7 @@ dc_mgmt_init()
 	rc = daos_rpc_register(&mgmt_proto_fmt, MGMT_PROTO_CLI_COUNT,
 				NULL, DAOS_MGMT_MODULE);
 	if (rc != 0)
-		D_ERROR("failed to register mgmt RPCs: %d\n", rc);
+		D_ERROR("failed to register mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

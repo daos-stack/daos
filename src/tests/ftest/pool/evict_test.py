@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,7 +25,8 @@ from __future__ import print_function
 
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 import ctypes
 import uuid
 
@@ -39,6 +40,7 @@ class EvictTests(TestWithServers):
     """
 
     def connected_pool(self, hostlist, targets=None):
+        # pylint: disable=unused-argument
         """Connect to pool.
 
         Args:
@@ -48,19 +50,21 @@ class EvictTests(TestWithServers):
             TestPool (object)
 
         """
-        pool = TestPool(self.context, self.log)
+        pool = TestPool(self.context, self.log,
+                        dmg_command=self.get_dmg_command())
         pool.get_params(self)
         if targets is not None:
             pool.target_list.value = targets
         # create pool
         pool.create()
-        # Commented out due to DAOS-3836.
+        # Commented out due to DAOS-3836. Remove the pylint disable at the top
+        # of this method when the following lines are uncommented.
         ## Check that the pool was created
         #status = pool.check_files(hostlist)
         #if not status:
         #    self.fail("Invalid pool - pool data not detected on servers")
         # Connect to the pool
-        status = pool.connect(1)
+        status = pool.connect()
         if not status:
             self.fail("Pool connect failed or already connected")
         # Return connected pool
@@ -84,13 +88,13 @@ class EvictTests(TestWithServers):
             self.pool.uuid, self.pool.pool.handle.value, self.pool.name)
 
         if test_param == "BAD_SERVER_NAME":
-            # Attempt to evict pool with invald server group name
+            # Attempt to evict pool with invalid server group name
             # set the server group name directly
             self.pool.pool.group = ctypes.create_string_buffer(test_param)
             self.log.info(
                 "Evicting pool with invalid Server Group Name: %s", test_param)
         elif test_param == "invalid_uuid":
-            # Attempt to evict pool with invald UUID
+            # Attempt to evict pool with invalid UUID
             bogus_uuid = self.pool.uuid
             # in case uuid4() generates pool.uuid
             while bogus_uuid == self.pool.uuid:
@@ -108,8 +112,7 @@ class EvictTests(TestWithServers):
         # exception is expected
         except DaosApiError as result:
             if test_param == "BAD_SERVER_NAME":
-                # Due to DAOS-3835, no specific error code is available for now.
-                err = "-1025"
+                err = "-1003"
             else:
                 err = "-1005"
             status = err in str(result)
@@ -177,14 +180,14 @@ class EvictTests(TestWithServers):
         """
         pool = []
         container = []
-        non_pool_servers = []
+        #non_pool_servers = []
         # Target list is configured so that the pools are across all servers
         # except the pool under test is created on half of the servers
         pool_tgt = [num for num in range(len(self.hostlist_servers))]
         pool_tgt_ut = [num for num in range(int(len(self.hostlist_servers)/2))]
         tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
         pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
-        non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
+        #non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
         # Create Connected TestPool
         for count, target_list in enumerate(tlist):
             pool.append(self.connected_pool(pool_servers[count], target_list))

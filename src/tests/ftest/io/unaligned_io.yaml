@@ -1,0 +1,29 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+    - server-G
+    - server-H
+timeout: 900
+server_config:
+  name: daos_server
+  targets: 8
+  servers:
+   bdev_class: nvme
+   bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+   scm_class: dcpm
+   scm_list: ["/dev/pmem0"]
+pool:
+  scm_size: 12G
+datasize:
+  sizes:
+    - 20
+    - 300
+    - 16000
+    - 1048599
+    # Skip this large size until DAOS-2164 resolved.
+    #- 1073741824

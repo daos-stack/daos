@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,28 +45,19 @@
  * and ds_pool_prop_map_uuids, respectively. The target UUIDs are stored in
  * target ID order.
  *
- * ds_pool_prop_mode stores three sets of the capability bits: user, group, and
- * other.  Each set consists of DAOS_PC_NBITS bits, for DAOS_PC_*. Let N be
- * DAOS_PC_NBITS:
- *
- *                 Bit: 31      3N    2N      N      0
- *                       v       v     v      v      v
- *   ds_pool_prop_mode:  [padding][user][group][other]
  */
-extern d_iov_t ds_pool_prop_uid;		/* uint32_t */
-extern d_iov_t ds_pool_prop_gid;		/* uint32_t */
-extern d_iov_t ds_pool_prop_mode;		/* uint32_t */
 extern d_iov_t ds_pool_prop_map_version;	/* uint32_t */
-extern d_iov_t ds_pool_prop_map_buffer;	/* pool_buf */
-extern d_iov_t ds_pool_prop_map_uuids;	/* uuid_t[] (unused now) */
+extern d_iov_t ds_pool_prop_map_buffer;		/* pool_buf */
+extern d_iov_t ds_pool_prop_map_uuids;		/* uuid_t[] (unused now) */
 extern d_iov_t ds_pool_prop_label;		/* string */
 extern d_iov_t ds_pool_prop_acl;		/* daos_acl */
-extern d_iov_t ds_pool_prop_space_rb;	/* uint64_t */
-extern d_iov_t ds_pool_prop_self_heal;	/* uint64_t */
-extern d_iov_t ds_pool_prop_reclaim;		/*  uint64_t */
+extern d_iov_t ds_pool_prop_space_rb;		/* uint64_t */
+extern d_iov_t ds_pool_prop_self_heal;		/* uint64_t */
+extern d_iov_t ds_pool_prop_reclaim;		/* uint64_t */
 extern d_iov_t ds_pool_prop_owner;		/* string */
 extern d_iov_t ds_pool_prop_owner_group;	/* string */
-extern d_iov_t ds_pool_prop_nhandles;	/* uint32_t */
+extern d_iov_t ds_pool_prop_connectable;	/* uint32_t */
+extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
 
 /** pool handle KVS */
 extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */
@@ -76,7 +67,8 @@ extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 
 /** value of key (handle uuid) in pool handle KVS (RDB_KVS_GENERIC) */
 struct pool_hdl {
-	uint64_t	ph_capas;
+	uint64_t	ph_flags;
+	uint64_t	ph_sec_capas;
 };
 
 extern daos_prop_t pool_prop_default;

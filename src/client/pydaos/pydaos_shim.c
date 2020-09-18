@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 #ifdef __USE_PYTHON3__
 /* Those are gone from python3, replaced with new functions */
 #define PyInt_FromLong		PyLong_FromLong
-#define PyInt_AsLong		PyLong_AsLong
 #define PyString_FromString	PyUnicode_FromString
 #define PyString_FromStringAndSize PyUnicode_FromStringAndSize
 #define PyString_AsString	PyBytes_AsString
@@ -37,6 +36,7 @@
 
 #include <daos_types.h>
 #include <daos.h>
+#include <daos_prop.h>
 #include <daos_obj_class.h>
 #include <gurt/common.h>
 #include <daos_kv.h>
@@ -48,7 +48,7 @@ static int
 __is_magic_valid(int input)
 {
 	if (input != PY_SHIM_MAGIC_NUMBER) {
-		D_ERROR("MAGIC number doesnt match, expected %d got %d\n",
+		D_ERROR("MAGIC number does not match, expected %d got %d\n",
 			PY_SHIM_MAGIC_NUMBER, input);
 		return 0;
 	}
@@ -132,11 +132,11 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
  */
 
 static PyObject *
-cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
+cont_open(int ret, uuid_t puuid, uuid_t cuuid, char *svc_str, int flags)
 {
 	PyObject	*return_list;
-	daos_handle_t	 poh;
-	daos_handle_t	 coh;
+	daos_handle_t	 coh = {0};
+	daos_handle_t	 poh = {0};
 	d_rank_list_t	*svcl = NULL;
 	int		 rc;
 
@@ -145,7 +145,7 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 		goto out;
 	}
 
-	svcl = daos_rank_list_parse("0", ":");
+	svcl = daos_rank_list_parse(svc_str, ":");
 	if (svcl == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
@@ -178,33 +178,35 @@ __shim_handle__cont_open(PyObject *self, PyObject *args)
 {
 	const char	*puuid_str;
 	const char	*cuuid_str;
+	char		*svc_str;
 	uuid_t		 puuid;
 	uuid_t		 cuuid;
 	int		 flags;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &puuid_str, &cuuid_str,
-				       &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sssi", &puuid_str, &cuuid_str,
+				       &svc_str, &flags);
 	uuid_parse(puuid_str, puuid);
 	uuid_parse(cuuid_str, cuuid);
 
-	return cont_open(DER_SUCCESS, puuid, cuuid, flags);
+	return cont_open(DER_SUCCESS, puuid, cuuid, svc_str, flags);
 }
 
 static PyObject *
 __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 {
 	const char		*path;
+	char			*svc_str;
 	int			 flags;
 	struct duns_attr_t	 attr;
 	int			 rc;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "si", &path, &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &path, &svc_str, &flags);
 
 	rc = duns_resolve_path(path, &attr);
 
-	return cont_open(rc, attr.da_puuid, attr.da_cuuid, flags);
+	return cont_open(rc, attr.da_puuid, attr.da_cuuid, svc_str, flags);
 }
 
 static PyObject *
@@ -299,6 +301,34 @@ do {				\
 
 	DEFINE_OC_INTERNAL(RP_4G);          /** OC_RP_4G1, OC_RP_4G2, ... */
 }
+
+static void
+cont_prop_define(PyObject *module)
+{
+#define DEFINE_CONT(value) \
+	PyModule_AddIntConstant(module, "DAOS_PROP_" #value, DAOS_PROP_##value)
+	DEFINE_CONT(CO_MIN);
+	DEFINE_CONT(CO_LABEL);
+	DEFINE_CONT(CO_LAYOUT_VER);
+	DEFINE_CONT(CO_LAYOUT_TYPE);
+	DEFINE_CONT(CO_LAYOUT_VER);
+	DEFINE_CONT(CO_CSUM);
+	DEFINE_CONT(CO_CSUM_CHUNK_SIZE);
+	DEFINE_CONT(CO_CSUM_SERVER_VERIFY);
+	DEFINE_CONT(CO_REDUN_FAC);
+	DEFINE_CONT(CO_REDUN_LVL);
+	DEFINE_CONT(CO_SNAPSHOT_MAX);
+	DEFINE_CONT(CO_ACL);
+	DEFINE_CONT(CO_COMPRESS);
+	DEFINE_CONT(CO_ENCRYPT);
+	DEFINE_CONT(CO_OWNER);
+	DEFINE_CONT(CO_OWNER_GROUP);
+	DEFINE_CONT(CO_MAX);
+	DEFINE_CONT(CO_LAYOUT_UNKOWN);
+	DEFINE_CONT(CO_LAYOUT_POSIX);
+	DEFINE_CONT(CO_LAYOUT_HDF5);
+}
+
 
 /**
  * Anchor management
@@ -440,14 +470,13 @@ __shim_handle__obj_close(PyObject *self, PyObject *args)
 /** max number of concurrent put/get requests */
 #define MAX_INFLIGHT 16
 
-#define VAL_SZ		1024
-
 struct kv_op {
 	daos_event_t	 ev;
 	PyObject	*key_obj;
 	char		*key;
 	char		*buf;
 	daos_size_t	 size;
+	daos_size_t	buf_size;
 };
 
 static inline int
@@ -461,14 +490,19 @@ kv_get_comp(struct kv_op *op, PyObject *daos_dict)
 		Py_INCREF(Py_None);
 		val = Py_None;
 	} else {
-		val = PyString_FromStringAndSize(op->buf, op->size);
+		val = PyBytes_FromStringAndSize(op->buf, op->size);
 	}
+
+	if (val == NULL)
+		return -DER_IO;
 
 	rc = PyDict_SetItem(daos_dict, op->key_obj, val);
 	if (rc < 0)
 		rc = -DER_IO;
 	else
 		rc = DER_SUCCESS;
+
+	Py_DECREF(val);
 
 	return rc;
 }
@@ -487,9 +521,11 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	int		 i = 0;
 	int		 rc;
 	int		 ret;
+	size_t		 v_size;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO", &oh.cookie, &daos_dict);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!l", &oh.cookie, &PyDict_Type,
+				       &daos_dict, &v_size);
 
 	rc = daos_eq_create(&eq);
 	if (rc)
@@ -509,18 +545,21 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 			rc = daos_event_init(evp, eq, NULL);
 			if (rc)
 				break;
-			D_ALLOC(op->buf, VAL_SZ);
+			op->buf_size = v_size;
+			op->size = op->buf_size;
+			D_ALLOC(op->buf, op->buf_size);
 			if (op->buf == NULL) {
 				rc = -DER_NOMEM;
 				break;
 			}
-			op->size = VAL_SZ;
+
 			i++;
 		} else {
 			/**
 			 * max request request in flight reached, wait
 			 * for one i/o to complete to reuse the slot
 			 */
+rewait:
 			rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
 			if (rc < 0)
 				break;
@@ -535,19 +574,35 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 			if (evp->ev_error == DER_SUCCESS) {
 				rc = kv_get_comp(op, daos_dict);
 				if (rc != DER_SUCCESS)
-					break;
+					D_GOTO(err, 0);
+				/* Reset the size of the request */
+				op->size = op->buf_size;
+				evp->ev_error = 0;
 			} else if (evp->ev_error == -DER_REC2BIG) {
-				/**
-				 * op->size = VAL_SZ;
-				 * D_REALLOC(op->buf, op->buf, op->size);
-				 */
+				char *new_buff;
+
+				D_REALLOC(new_buff, op->buf, op->size);
+				if (new_buff == NULL) {
+					rc = -DER_NOMEM;
+					break;
+				}
+				op->buf_size = op->size;
+				op->buf = new_buff;
+
+				daos_event_fini(evp);
+				rc = daos_event_init(evp, eq, NULL);
+				if (rc != -DER_SUCCESS)
+					break;
+
+				rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key,
+						&op->size, op->buf, evp);
+				if (rc != -DER_SUCCESS)
+					break;
+				D_GOTO(rewait, 0);
 			} else {
 				rc = evp->ev_error;
 				break;
 			}
-			if (op->size < VAL_SZ)
-				op->size = VAL_SZ;
-			evp->ev_error = 0;
 		}
 
 		/** submit get request */
@@ -564,8 +619,9 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 			D_GOTO(err, 0);
 		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size,
 				 op->buf, evp);
-		if (rc)
+		if (rc) {
 			break;
+		}
 	}
 
 	/** wait for completion of all in-flight requests */
@@ -574,23 +630,35 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 		if (ret == 1) {
 			int rc2;
 
+			op = container_of(evp, struct kv_op, ev);
+
 			/** check result of completed operation */
 			if (evp->ev_error == DER_SUCCESS) {
-				op = container_of(evp, struct kv_op, ev);
 				rc2 = kv_get_comp(op, daos_dict);
 				if (rc == DER_SUCCESS && rc2 != DER_SUCCESS)
-					rc = rc2;
+					D_GOTO(err, rc = rc2);
 				continue;
 			} else if (evp->ev_error == -DER_REC2BIG) {
-				/**
-				 * XXX: TODO
-				 * op->size = VAL_SZ;
-				 * D_REALLOC(op->buf, op->buf, op->size);
-				 */
-			}
+				char *new_buff;
 
-			if (rc == DER_SUCCESS)
-				rc = evp->ev_error;
+				daos_event_fini(evp);
+				rc2 = daos_event_init(evp, eq, NULL);
+
+				D_REALLOC(new_buff, op->buf, op->size);
+				if (new_buff == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+
+				op->buf_size = op->size;
+				op->buf = new_buff;
+
+				rc2 = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key,
+						&op->size, op->buf, evp);
+				if (rc2 != -DER_SUCCESS)
+					D_GOTO(out, rc = rc2);
+			} else {
+				if (rc == DER_SUCCESS)
+					rc = evp->ev_error;
+			}
 		}
 		if (rc == DER_SUCCESS && ret == 1)
 			rc = evp->ev_error;
@@ -602,16 +670,14 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	/** free up all buffers */
 	for (i = 0; i < MAX_INFLIGHT; i++) {
 		op = &kv_array[i];
-		if (op->buf != NULL)
-			D_FREE(op->buf);
+		D_FREE(op->buf);
 	}
 
 out:
-	if (kv_array != NULL)
-		D_FREE(kv_array);
+	D_FREE(kv_array);
 
 	/** destroy event queue */
-	ret = daos_eq_destroy(eq, 0);
+	ret = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
 	if (rc == DER_SUCCESS && ret < 0)
 		rc = ret;
 
@@ -619,6 +685,8 @@ out:
 	return PyInt_FromLong(rc);
 
 err:
+	D_FREE(kv_array);
+
 	return NULL;
 }
 
@@ -638,7 +706,8 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	int		 ret;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO", &oh.cookie, &daos_dict);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!", &oh.cookie,
+				&PyDict_Type, &daos_dict);
 
 	rc = daos_eq_create(&eq);
 	if (rc)
@@ -688,12 +757,13 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 			size = pysize;
 #endif
 		} else {
-			buf = PyString_AsString(value);
-			if (buf == NULL)
+			Py_ssize_t pysize = 0;
+
+			rc = PyBytes_AsStringAndSize(value, &buf, &pysize);
+			if (buf == NULL || rc != 0)
 				D_GOTO(err, 0);
 
-			/** don't store final '\0' */
-			size = strlen(buf);
+			size = pysize;
 		}
 
 #ifdef __USE_PYTHON3__
@@ -888,7 +958,8 @@ out:
 	PyList_SetItem(return_list, 1, PyInt_FromLong(nr_req));
 	PyList_SetItem(return_list, 2, PyInt_FromLong(size));
 	if (rc || daos_anchor_is_eof(anchor)) {
-		Py_DECREF(anchor_cap);
+		if (anchor_cap != NULL)
+			Py_DECREF(anchor_cap);
 		Py_INCREF(Py_None);
 		PyList_SetItem(return_list, 3, Py_None);
 	} else {
@@ -990,6 +1061,9 @@ initpydaos_shim_27(void)
 
 	/** export object class */
 	oc_define(module);
+
+	/** export container properties */
+	cont_prop_define(module);
 
 #if PY_MAJOR_VERSION >= 3
 	return module;

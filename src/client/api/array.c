@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,9 +168,8 @@ daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 }
 
 int
-daos_array_read(daos_handle_t oh, daos_handle_t th,
-		daos_array_iod_t *iod, d_sg_list_t *sgl,
-		daos_csum_buf_t *csums, daos_event_t *ev)
+daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		d_sg_list_t *sgl, daos_event_t *ev)
 {
 	daos_array_io_t	*args;
 	tse_task_t	*task;
@@ -185,15 +184,13 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
 	args->th	= th;
 	args->iod	= iod;
 	args->sgl	= sgl;
-	args->csums	= csums;
 
 	return dc_task_schedule(task, true);
 }
 
 int
-daos_array_write(daos_handle_t oh, daos_handle_t th,
-		 daos_array_iod_t *iod, d_sg_list_t *sgl,
-		 daos_csum_buf_t *csums, daos_event_t *ev)
+daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		 d_sg_list_t *sgl, daos_event_t *ev)
 {
 	daos_array_io_t	*args;
 	tse_task_t	*task;
@@ -208,7 +205,6 @@ daos_array_write(daos_handle_t oh, daos_handle_t th,
 	args->th	= th;
 	args->iod	= iod;
 	args->sgl	= sgl;
-	args->csums	= csums;
 
 	return dc_task_schedule(task, true);
 }
@@ -230,7 +226,6 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th,
 	args->th	= th;
 	args->iod	= iod;
 	args->sgl	= NULL;
-	args->csums	= NULL;
 
 	return dc_task_schedule(task, true);
 }

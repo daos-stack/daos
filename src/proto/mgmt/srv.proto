@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ message LeaderQueryResp {
 
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
+	bool allRanks = 2;      // Return PSRs for all ranks, not just the MS replicas.
 }
 
 message GetAttachInfoResp {
@@ -70,6 +71,15 @@ message GetAttachInfoResp {
 		string uri = 2;
 	}
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
+				// These CaRT settings are shared with the
+				// libdaos client to aid in CaRT initialization.
+	string Provider = 3;	// CaRT OFI provider
+	string Interface = 4;	// CaRT OFI_INTERFACE
+	string Domain = 5;	// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	uint32 CrtCtxShareAddr = 6; // CaRT CRT_CTX_SHARE_ADDR
+	uint32 CrtTimeout = 7;	// CaRT CRT_TIMEOUT
+	uint32 NetDevClass = 8; // ARP protocol hardware identifier of the
+				// IO server network interface
 }
 
 message PrepShutdownReq {
@@ -78,12 +88,11 @@ message PrepShutdownReq {
 
 // PrepShutdownResp is identical to DaosResp.
 
-message KillRankReq {
-	bool force = 1;		// Force service termination.
-	uint32 rank = 2;	// DAOS IO server unique identifier.
+message PingRankReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
 }
 
-// KillRankResp is identical to DaosResp.
+// PingRankResp is identical to DaosResp.
 
 message SetRankReq {
 	uint32 rank = 1;	// DAOS IO server unique identifier.
@@ -105,4 +114,4 @@ message CreateMsReq {
 
 // SetUpReq is nil.
 
-// SetUpResp is idential to DaosResp.
+// SetUpResp is identical to DaosResp.

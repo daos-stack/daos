@@ -23,25 +23,38 @@
 '''
 from __future__ import print_function
 
-import os
-import traceback
-import json
-
-from avocado.utils import process
 from apricot import TestWithServers
+from command_utils import CommandFailure
 
-import agent_utils
-import server_utils
 import check_for_pool
-import write_host_file
 
-# pylint: disable = broad-except
 class MultipleCreatesTest(TestWithServers):
     """
     Tests DAOS pool creation, calling it repeatedly one after another
 
     :avocado: recursive
     """
+
+    def create_pool(self):
+        """Create and verify a pool."""
+        try:
+            pool = self.get_pool(connect=False)
+        except CommandFailure as error:
+            self.fail("Expecting to pass but test has failed with error '{}' \
+                .\n".format(error))
+        return pool
+
+
+    def verify_pool(self, host, uuid):
+        """Verify the pool.
+
+        Args:
+            host (str): Server host name
+            uuid (str): Pool UUID to verify
+        """
+        if check_for_pool.check_for_pool(host, uuid.lower()):
+            self.fail("Pool {0} not found on host {1}.".format(uuid, host))
+
 
     def test_create_one(self):
         """
@@ -50,67 +63,11 @@ class MultipleCreatesTest(TestWithServers):
         :avocado: tags=all,pool,smoke,pr,small,createone
         """
 
-        # Accumulate a list of pass/fail indicators representing
-        # what is expected for each parameter then "and" them
-        # to determine the expected result of the test
-        expected_for_param = []
+        self.pool = self.create_pool()
+        print("uuid is {0}\n".format(self.pool.uuid))
 
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
-        expected_for_param.append(modelist[1])
-
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
-        expected_for_param.append(setidlist[1])
-
-        uid = os.geteuid()
-        gid = os.getegid()
-
-        # if any parameter results in failure then the test should FAIL
-        expected_result = 'PASS'
-        for result in expected_for_param:
-            if result == 'FAIL':
-                expected_result = 'FAIL'
-                break
-        try:
-            cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(self.daosctl, mode, uid, gid, setid))
-
-            uuid_str = """{0}""".format(process.system_output(cmd))
-            print("uuid is {0}\n".format(uuid_str))
-
-            host = self.hostlist_servers[0]
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str,
-                                                                     host))
-
-            delete_cmd = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str, setid))
-
-            process.system(delete_cmd)
-
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str, host))
-
-            if expected_result == 'FAIL':
-                self.fail("Expected to fail but passed.\n")
-
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            if expected_result == 'PASS':
-                self.fail("Expecting to pass but test has failed.\n")
+        host = self.hostlist_servers[0]
+        self.verify_pool(host, self.pool.uuid)
 
 
     def test_create_two(self):
@@ -120,82 +77,13 @@ class MultipleCreatesTest(TestWithServers):
         :avocado: tags=all,pool,smoke,pr,small,createtwo
         """
 
-        # Accumulate a list of pass/fail indicators representing
-        # what is expected for each parameter then "and" them to
-        # determine the expected result of the test
-        expected_for_param = []
+        self.pool = [self.create_pool() for _ in range(2)]
+        for pool in self.pool:
+            print("uuid is {0}\n".format(pool.uuid))
 
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
-        expected_for_param.append(modelist[1])
-
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
-        expected_for_param.append(setidlist[1])
-
-        uid = os.geteuid()
-        gid = os.getegid()
-
-        # if any parameter results in failure then the test should FAIL
-        expected_result = 'PASS'
-        for result in expected_for_param:
-            if result == 'FAIL':
-                expected_result = 'FAIL'
-                break
-        try:
-            cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(self.daosctl, mode, uid, gid, setid))
-
-            uuid_str_1 = """{0}""".format(process.system_output(cmd))
-            uuid_str_2 = """{0}""".format(process.system_output(cmd))
-
-            host = self.hostlist_servers[0]
-            exists = check_for_pool.check_for_pool(host, uuid_str_1)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
-                                                                     host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_2)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2,
-                                                                     host))
-
-            delete_cmd_1 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_1, setid))
-
-            delete_cmd_2 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_2, setid))
-
-            process.system(delete_cmd_1)
-            process.system(delete_cmd_2)
-
-            exists = check_for_pool.check_for_pool(host, uuid_str_1)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_1, host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_2)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_2, host))
-
-            if expected_result == 'FAIL':
-                self.fail("Expected to fail but passed.\n")
-
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            if expected_result == 'PASS':
-                self.fail("Expecting to pass but test has failed.\n")
+        for host in self.hostlist_servers:
+            for pool in self.pool:
+                self.verify_pool(host, pool.uuid)
 
 
     def test_create_three(self):
@@ -205,98 +93,14 @@ class MultipleCreatesTest(TestWithServers):
         :avocado: tags=all,pool,pr,small,createthree
         """
 
-        # Accumulate a list of pass/fail indicators representing what is
-        # expected for each parameter then "and" them to determine the
-        # expected result of the test
-        expected_for_param = []
+        self.pool = [self.create_pool() for _ in range(3)]
+        for pool in self.pool:
+            print("uuid is {0}\n".format(pool.uuid))
 
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
-        expected_for_param.append(modelist[1])
+        for host in self.hostlist_servers:
+            for pool in self.pool:
+                self.verify_pool(host, pool.uuid)
 
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
-        expected_for_param.append(setidlist[1])
-
-        uid = os.geteuid()
-        gid = os.getegid()
-
-        # if any parameter results in failure then the test should FAIL
-        expected_result = 'PASS'
-        for result in expected_for_param:
-            if result == 'FAIL':
-                expected_result = 'FAIL'
-                break
-        try:
-            cmd = (
-                "{0} create-pool "
-                "-m {1} "
-                "-u {2} "
-                "-g {3} "
-                "-s {4} "
-                "-c 1".format(self.daosctl, mode, uid, gid, setid))
-
-            uuid_str_1 = """{0}""".format(process.system_output(cmd))
-            uuid_str_2 = """{0}""".format(process.system_output(cmd))
-            uuid_str_3 = """{0}""".format(process.system_output(cmd))
-
-            host = self.hostlist_servers[0]
-            exists = check_for_pool.check_for_pool(host, uuid_str_1)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
-                                                                     host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_2)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_2,
-                                                                     host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_3)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_3,
-                                                                     host))
-
-            delete_cmd_1 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_1, setid))
-
-            delete_cmd_2 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_2, setid))
-
-            delete_cmd_3 = (
-                "{0} destroy-pool "
-                "-i {1} "
-                "-s {2} "
-                "-f".format(self.daosctl, uuid_str_3, setid))
-
-            process.system(delete_cmd_1)
-            process.system(delete_cmd_2)
-            process.system(delete_cmd_3)
-
-            exists = check_for_pool.check_for_pool(host, uuid_str_1)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_1, host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_2)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_2, host))
-            exists = check_for_pool.check_for_pool(host, uuid_str_3)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} after destroy.\n"
-                          .format(uuid_str_3, host))
-
-            if expected_result == 'FAIL':
-                self.fail("Expected to fail but passed.\n")
-
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            if expected_result == 'PASS':
-                self.fail("Expecting to pass but test has failed.\n")
 
     # COMMENTED OUT because test environments don't always have enough
     # memory to run this

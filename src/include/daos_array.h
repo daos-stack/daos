@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ typedef struct {
 	 * read.
 	 */
 	daos_size_t		arr_nr_short_read;
+	daos_size_t		arr_nr_read;
 } daos_array_iod_t;
 
 /**
@@ -146,11 +147,8 @@ daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
  *			0		Success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Cannot find object
- *			-DER_EP_OLD	Epoch is too old and has no data for
- *					this object
+ *			-DER_UNREACH	Network is unreachable
  */
 int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
@@ -170,7 +168,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			Record size of the array.
  * \param[out]	chunk_size
  *			Contiguous bytes to store per DKey before moving to a
- *			differen dkey.
+ *			different dkey.
  * \param[out]	oh	Returned array object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
@@ -180,11 +178,9 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			0		Success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Cannot find object
- *			-DER_EP_OLD	Epoch is too old and has no data for
- *					this object
+ *			-DER_UNREACH	Network is unreachable
  */
 int
 daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
@@ -203,11 +199,11 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			be set to DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
- * \param[out]	cell_size
+ * \param[in]	cell_size
  *			Record size of the array.
- * \param[out]	chunk_size
+ * \param[in]	chunk_size
  *			Contiguous bytes to store per DKey before moving to a
- *			differen dkey.
+ *			different dkey.
  * \param[out]	oh	Returned array object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
@@ -217,11 +213,7 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *			0		Success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Cannot find object
- *			-DER_EP_OLD	Epoch is too old and has no data for
- *					this object
  */
 int
 daos_array_open_with_attr(daos_handle_t coh, daos_obj_id_t oid,
@@ -295,11 +287,9 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to read from the array.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
- *			Buffer sizes do not have to match the indiviual range
+ *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does. User allocates the
  *			buffer(s) and sets the length of each buffer.
- * \param[in]	csums	Array of checksums for each buffer in the sgl.
- *			This is optional (pass NULL to ignore).
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -311,12 +301,10 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
- *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_array_read(daos_handle_t oh, daos_handle_t th,
-		daos_array_iod_t *iod, d_sg_list_t *sgl,
-		daos_csum_buf_t *csums, daos_event_t *ev);
+daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		d_sg_list_t *sgl, daos_event_t *ev);
 
 /**
  * Write data to an array object.
@@ -325,12 +313,10 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
  * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to write to the array.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
- *			Buffer sizes do not have to match the indiviual range
+ *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
- * \param[in]	csums	Array of checksums for each buffer in the sgl.
- *			This is optional (pass NULL to ignore).
  *
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
@@ -340,12 +326,10 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
- *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_array_write(daos_handle_t oh, daos_handle_t th,
-		 daos_array_iod_t *iod, d_sg_list_t *sgl,
-		 daos_csum_buf_t *csums, daos_event_t *ev);
+daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		 d_sg_list_t *sgl, daos_event_t *ev);
 
 /**
  * Query the number of records in the array object.
@@ -356,7 +340,12 @@ daos_array_write(daos_handle_t oh, daos_handle_t th,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
 int
 daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
@@ -374,7 +363,12 @@ daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
 int
 daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
@@ -387,14 +381,19 @@ daos_array_set_size(daos_handle_t oh, daos_handle_t th, daos_size_t size,
  * daos_array_close(), but any other access with that handle, or other array
  * open handles, will fail. The destroy will happen regardless of any open
  * handle, so it's the user responsibility to ensure that there is no further
- * access to the array before the destory is called.
+ * access to the array before the destroy is called.
  *
  * \param[in]	oh	Array object open handle.
  * \param[in]	th	Transaction handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
 int
 daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
@@ -408,7 +407,12 @@ daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
 int
 daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
@@ -423,7 +427,11 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  * \param[out]	cell_size
  *			Cell size of the array.
  *
- * \return		0 on Success, negative on failure.
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
  */
 int
 daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,13 +79,10 @@ daos_iod_copy(daos_iod_t *dst, daos_iod_t *src)
 	if (rc)
 		return rc;
 
-	dst->iod_kcsum	= src->iod_kcsum;
 	dst->iod_type	= src->iod_type;
 	dst->iod_size	= src->iod_size;
 	dst->iod_nr	= src->iod_nr;
 	dst->iod_recxs	= src->iod_recxs;
-	dst->iod_csums	= src->iod_csums;
-	dst->iod_eprs	= src->iod_eprs;
 
 	return 0;
 }
@@ -100,12 +97,6 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 
 		if (iods[i].iod_recxs)
 			D_FREE(iods[i].iod_recxs);
-
-		if (iods[i].iod_eprs)
-			D_FREE(iods[i].iod_eprs);
-
-		if (iods[i].iod_csums)
-			D_FREE(iods[i].iod_csums);
 	}
 
 	if (need_free)
@@ -235,12 +226,13 @@ obj_utils_init(void)
 	rc = dbtree_class_register(DBTREE_CLASS_RECX, BTR_FEAT_DIRECT_KEY,
 				   &recx_btr_ops);
 	if (rc != 0 && rc != -DER_EXIST) {
-		D_ERROR("failed to register DBTREE_CLASS_RECX: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_RECX: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	return 0;
 failed:
-	D_ERROR("Failed to initailze DAOS object utilities\n");
+	D_ERROR("Failed to initialize DAOS object utilities\n");
 	return rc;
 }
 

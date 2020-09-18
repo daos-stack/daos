@@ -5,12 +5,201 @@
 System monitoring and telemetry data will be provided as part of the
 control plane and will be documented in a future revision.
 
+### NVMe SSD Health Monitoring
+
+Useful admin dmg commands to query NVMe SSD health:
+
+- Query Per-Server Metadata: `dmg storage query (list-devices|list-pools)`
+
+Queries persistently stored device and pool metadata tables. The device table maps
+the internal device UUID to attached VOS target IDs. The rank number of the server
+where the device is located is also listed, along with the current persistent
+device state (NORMAL|FAULTY).
+The pool table maps the DAOS pool UUID to attached VOS target IDs, and will list
+all of the server ranks that the pool is distributed on. With the additional
+--verbose flag, the mapping of SPDK blob IDs to VOS target IDs is also displayed.
+```bash
+$ dmg -l boro-11,boro-13 storage query list-devices
+-------
+boro-11
+-------
+  Devices
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 1 2 3] Rank:0 State:NORMAL
+    UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[0 1 2 3] Rank:1 State:FAULTY
+```
+```bash
+$ dmg -l boro-11,boro-13 storage query list-pools
+-------
+boro-11
+-------
+  Pools
+    UUID:08d6839b-c71a-4af6-901c-28e141b2b429
+      Rank:0 Targets:[0 1 2 3]
+      Rank:1 Targets:[0 1 2 3]
+
+$ dmg -l boro-11,boro-13 storage query list-pools --verbose
+-------
+boro-11
+-------
+  Pools
+    UUID:08d6839b-c71a-4af6-901c-28e141b2b429
+      Rank:0 Targets:[0 1 2 3] Blobs:[4294967404 4294967405 4294967407 4294967406]
+      Rank:1 Targets:[0 1 2 3] Blobs:[4294967410 4294967411 4294967413 4294967412]
+
+```
+
+- Query Storage Device Health Data: `dmg storage query (device-health|target-health)`
+
+Queries device health data, including NVMe SSD health stats and in-memory I/O error
+and checksum error counters. The server rank and device state are also listed.
+The device health data can either be queried by device UUID (device-health) or by
+VOS target ID along with server rank (target-health). The same device health info
+is displayed with both command options.
+```bash
+$ dmg -l boro-11 storage query device-health
+  --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+or
+$ dmg -l boro-11 storage query target-health
+  --rank=0 --tgtid=0
+-------
+boro-11
+-------
+  Devices
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0 1 2 3] Rank:0 State:NORMAL
+      Health Stats:
+        Temperature:289K(15C)
+        Controller Busy Time:0s
+        Power Cycles:0
+        Power On Duration:0s
+        Unsafe Shutdowns:0
+        Media Errors:0
+        Read Errors:0
+        Write Errors:0
+        Unmap Errors:0
+        Checksum Errors:0
+        Error Log Entries:0
+      Critical Warnings:
+        Temperature: OK
+        Available Spare: OK
+        Device Reliability: OK
+        Read Only: OK
+        Volatile Memory Backup: OK
+```
+
+- Manually Set Device State to FAULTY: `dmg storage set nvme-faulty`
+
+Allows the admin to manually set the device state of the given device to FAULTY,
+which will trigger faulty device reaction (all targets on the SSD will be
+rebuilt and the SSD will remain in an OUT state until reintegration is
+supported).
+```bash
+$ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-------
+boro-11
+-------
+  Devices
+    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[0] Rank:1 State:FAULTY
+```
+
 ## System Operations
 
-### Full Shutdown and Restart
+The DAOS Control Server acting as the access point records details of DAOS I/O
+Server instances that join the DAOS system. Once an I/O Server has joined the
+DAOS system, it is identified by a unique system "rank". Multiple ranks can
+reside on the same host machine, accessible via the same network address.
 
-Details on how to support proper DAOS server shutdown will be provided
-in a future revision.
+A DAOS system can be shutdown and restarted to perform maintenance and/or
+reboot hosts. Pool data and state will be maintained providing no changes are
+made to the rank's metadata stored on persistent memory.
+
+Storage reformat can also be performed after system shutdown. Pools will be
+removed and storage wiped.
+
+System commands will be handled by the DAOS Server listening at the access point
+address specified as the first entry in the DMG config file "hostlist" parameter.
+See
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+for details.
+
+The "access point" address should be the same as that specified in the server
+config file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+specified when starting `daos_server` instances.
+
+!!! warning
+    Controlled start/stop/reformat have some known limitations.
+    Whilst individual system instances can be stopped, if a subset is restarted,
+    existing pools will not be automatically integrated with restarted instances.
+
+### Query
+
+The system membership can be queried using the command:
+
+`$ dmg system query [--verbose] [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `--verbose` flag gives more information on each rank
+
+Output table will provide system rank mappings to host address and instance
+UUID, in addition to rank state.
+
+### Shutdown
+
+When up and running, the entire system can be shutdown with the command:
+
+`$ dmg system stop [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS Control Servers will continue to operate and listen on the management
+network.
+
+### Start
+
+To start the system after a controlled shutdown run the command:
+
+`$ dmg system start [--ranks <rankset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS I/O Servers will be started.
+
+### Reformat
+
+To reformat the system after a controlled shutdown run the command:
+
+`$ dmg storage format --system [--ranks <rankset>]`
+
+- `--system` flag indicates that the format operation should be performed on
+  provided set of system ranks or all ranks if `--ranks` is omitted.
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+
+Output table will indicate action and result.
+
+DAOS I/O Servers will be started and all DAOS pools will have been removed.
+
+### Manual Fresh Start
+
+To reset the DAOS metadata across all hosts, the system must be reformatted.
+First, ensure all `daos_server` processes on all hosts have been
+stopped, then for each SCM mount specified in the config file
+(`scm_mount` in the `servers` section) umount and wipe FS signatures.
+
+Example illustration with two IO instances specified in the config file:
+
+- `clush -w wolf-[118-121,130-133] umount /mnt/daos1`
+
+- `clush -w wolf-[118-121,130-133] umount /mnt/daos0`
+
+- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem1`
+
+- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem0`
+
+- Then restart DAOS Servers and format.
 
 ### Fault Domain Maintenance and Reintegration
 
@@ -47,7 +236,7 @@ this target will be rejected and re-routed.
 Once detected, the faulty target or servers (effectively a set of
 targets) must be excluded from each pool membership. This process is
 triggered either manually by the administrator or automatically (see
-next section for more information). Upon exclusion from the pool map,
+the next section for more information). Upon exclusion from the pool map,
 each target starts the collective rebuild process automatically to
 restore data redundancy. The rebuild process is designed to operate
 online while servers continue to process incoming I/O operations from
@@ -63,8 +252,8 @@ current logic relies on CPU cycles on the storage nodes. By default, the
 rebuild process is configured to consume up to 30% of the CPU cycles,
 leaving the other 70% for regular I/O operations.
 
-During the rebuild process, the user can set the throttle to guarantee the
-rebuild will not use more resource than the user setting. The user can
+During the rebuild process, the user can set the throttle to guarantee that
+the rebuild will not use more resources than the user setting. The user can
 only set the CPU cycle for now. For example, if the user set the
 throttle to 50, then the rebuild will at most use 50% of the CPU cycle to do
 the rebuild job. The default rebuild throttle for CPU cycle is 30. This

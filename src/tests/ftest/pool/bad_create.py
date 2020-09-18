@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,7 +25,8 @@ import os
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContext, DaosPool, DaosApiError
+from test_utils_pool import TestPool
+from avocado.core.exceptions import TestFail
 
 
 class BadCreateTest(TestWithServers):
@@ -33,8 +34,7 @@ class BadCreateTest(TestWithServers):
 
     Test Class Description:
         Tests pool create API by passing NULL and otherwise inappropriate
-        parameters.  This can't be done with daosctl, need to use the python
-        API.
+        parameters.  This use the python API.
 
     :avocado: recursive
     """
@@ -50,8 +50,6 @@ class BadCreateTest(TestWithServers):
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
-
-        pool = None
         expected_for_param = []
 
         modelist = self.params.get("mode", '/run/createtests/modes/*')
@@ -78,12 +76,13 @@ class BadCreateTest(TestWithServers):
             group = setidlist[0]
         expected_for_param.append(setidlist[1])
 
-        targetlist = self.params.get("rankptr", '/run/createtests/target/*')
-        if targetlist[0] == 'NULL':
-            targetptr = None
-        else:
-            targetptr = [0]
-        expected_for_param.append(targetlist[1])
+        # Uncomment this block when we test targetptr.
+        # targetlist = self.params.get("rankptr", '/run/createtests/target/*')
+        # if targetlist[0] == 'NULL':
+        #     targetptr = None
+        # else:
+        #     targetptr = [0]
+        # expected_for_param.append(targetlist[1])
 
         # not ready for this yet
         # devicelist = self.params.get("devptr", '/run/createtests/device/*')
@@ -113,20 +112,28 @@ class BadCreateTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context,
+                             dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        # Manually set TestPool members before calling create
+        self.pool.mode.value = mode
+        self.pool.uid = uid
+        self.pool.gid = gid
+        self.pool.scm_size.value = size
+        self.pool.name.value = group
+
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(mode, uid, gid, size, group, targetptr)
+            self.pool.create()
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except DaosApiError as excep:
+        # create with invalid parameter will cause test failure, so catch it if
+        # we expect it
+        except TestFail as excep:
             self.log.error(str(excep))
             self.log.error(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            if pool is not None and pool.attached:
-                pool.destroy(1)

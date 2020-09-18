@@ -7,21 +7,31 @@ def scons():
 
     denv.AppendUnique(LIBPATH=['../../client/api'])
 
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
     ring_test_tgt = denv.SharedObject('ring_map_place_obj.c')
     jump_test_tgt = denv.SharedObject('jump_map_place_obj.c')
+    pl_bench_tgt = denv.SharedObject('pl_bench.c')
 
-    ring_pl_test = daos_build.program(denv, 'ring_pl_map', ring_test_tgt + common_tgts,
-                                 LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                                       'placement', 'uuid', 'pthread', 'isal'])
+    ring_pl_test = daos_build.program(denv, 'ring_pl_map',
+                                      ring_test_tgt + common_tgts,
+                                      LIBS=['daos', 'daos_common', 'gurt',
+                                            'cart', 'placement', 'uuid',
+                                            'pthread', 'isal'])
 
-    jump_pl_test = daos_build.program(denv, 'jump_pl_map', jump_test_tgt + common_tgts,
-                                 LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                                       'placement', 'uuid', 'pthread', 'isal'])
+    jump_pl_test = daos_build.program(denv, 'jump_pl_map',
+                                      jump_test_tgt + common_tgts,
+                                      LIBS=['daos', 'daos_common', 'gurt',
+                                            'cart', 'placement', 'uuid',
+                                            'pthread', 'isal'])
+
+    pl_bench = daos_build.program(denv, 'pl_bench', pl_bench_tgt + common_tgts,
+                                  LIBS=['daos', 'daos_common', 'gurt', 'cart',
+                                        'placement', 'uuid', 'pthread', 'isal'])
 
     denv.Install('$PREFIX/bin/', ring_pl_test)
     denv.Install('$PREFIX/bin/', jump_pl_test)
+    denv.Install('$PREFIX/bin/', pl_bench)
 
 if __name__ == "SCons.Script":
     scons()

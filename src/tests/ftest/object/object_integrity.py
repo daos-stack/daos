@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,21 +21,16 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
-import os
 import ctypes
 import time
 import avocado
 import random
-import agent_utils
-import server_utils
-import write_host_file
 
-from pydaos.raw import (DaosPool, DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
-from apricot import skipForTicket, TestWithoutServers
+from pydaos.raw import (DaosContainer, IORequest, DaosObj, DaosApiError)
+from apricot import TestWithServers
 
-class ObjectDataValidation(TestWithoutServers):
+
+class ObjectDataValidation(TestWithServers):
     """
     Test Class Description:
         Tests that create Different length records,
@@ -47,42 +42,21 @@ class ObjectDataValidation(TestWithoutServers):
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
         super(ObjectDataValidation, self).setUp()
-        self.agent_sessions = None
-        self.pool = None
-        self.container = None
         self.obj = None
         self.ioreq = None
-        self.hostlist = None
-        self.hostfile = None
         self.no_of_dkeys = None
         self.no_of_akeys = None
         self.array_size = None
         self.record_length = None
-        server_group = self.params.get("name",
-                                       '/server_config/',
-                                       'daos_server')
-        self.hostlist = self.params.get("test_servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
-        self.agent_sessions = agent_utils.run_agent(
-            self, self.hostlist)
-        server_utils.run_server(self, self.hostfile, server_group)
 
-        self.pool = DaosPool(self.context)
-        self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
-                         os.geteuid(),
-                         os.getegid(),
-                         self.params.get("size", '/run/pool/createsize/*'),
-                         self.params.get("setname", '/run/pool/createset/*'),
-                         None)
-        self.pool.connect(2)
+        self.prepare_pool()
 
         self.container = DaosContainer(self.context)
-        self.container.create(self.pool.handle)
+        self.container.create(self.pool.pool.handle)
         self.container.open()
 
         self.obj = DaosObj(self.context, self.container)
@@ -91,19 +65,6 @@ class ObjectDataValidation(TestWithoutServers):
         self.ioreq = IORequest(self.context,
                                self.container,
                                self.obj, objtype=4)
-
-    def tearDown(self):
-        try:
-            if self.container:
-                self.container.close()
-                self.container.destroy()
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
 
     def reconnect(self):
         '''
@@ -232,9 +193,9 @@ class ObjectDataValidation(TestWithoutServers):
             self.log.info(str(excep))
             self.fail("##(6.2)Failed on abort_tx.")
 
+        self.container.close_tx(new_transaction2)
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-3208")
     def test_single_object_validation(self):
         """
         Test ID: DAOS-707
@@ -244,7 +205,6 @@ class ObjectDataValidation(TestWithoutServers):
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
-        transaction = []
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0])
@@ -254,11 +214,7 @@ class ObjectDataValidation(TestWithoutServers):
                 c_value = ctypes.create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
 
-                new_transaction = self.container.get_new_tx()
-                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
-                                         new_transaction)
-                self.container.commit_tx(new_transaction)
-                transaction.append(new_transaction)
+                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
                 record_index = record_index + 1
                 if record_index == len(self.record_length):
                     record_index = 0
@@ -293,7 +249,6 @@ class ObjectDataValidation(TestWithoutServers):
                     record_index = 0
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-3208")
     def test_array_object_validation(self):
         """
         Test ID: DAOS-707
@@ -303,7 +258,6 @@ class ObjectDataValidation(TestWithoutServers):
         """
         self.d_log.info("Writing the Array Dataset")
         record_index = 0
-        transaction = []
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
                 c_values = []
@@ -315,11 +269,7 @@ class ObjectDataValidation(TestWithoutServers):
                 c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
                 c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
 
-                new_transaction = self.container.get_new_tx()
-                self.ioreq.insert_array(c_dkey, c_akey, c_values,
-                                        new_transaction)
-                self.container.commit_tx(new_transaction)
-                transaction.append(new_transaction)
+                self.ioreq.insert_array(c_dkey, c_akey, c_values)
 
                 record_index = record_index + 1
                 if record_index == len(self.record_length):

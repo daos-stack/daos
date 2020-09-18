@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,45 +24,526 @@
 
 #include <daos/common.h>
 #include <daos/placement.h>
+#include "daos_api.h"
 #include <daos.h>
 #include "place_obj_common.h"
 
-#define DOM_NR		8
+#define DOM_NR		18
 #define	NODE_PER_DOM	1
 #define VOS_PER_TARGET	4
 #define SPARE_MAX_NUM	(DOM_NR * 3)
-
 #define COMPONENT_NR	(DOM_NR + DOM_NR * NODE_PER_DOM + \
 			 DOM_NR * NODE_PER_DOM * VOS_PER_TARGET)
+#define NUM_TARGETS	(DOM_NR * NODE_PER_DOM * VOS_PER_TARGET)
+
+#define TEST_PER_OC 1000
 
 static bool			 pl_debug_msg;
+
+void
+placement_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	struct pl_obj_layout	*layout;
+	daos_obj_id_t		oid;
+	int			test_num;
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+				   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	srand(time(NULL));
+	oid.hi = 5;
+
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+
+		plt_obj_place(oid, &layout, pl_map, false);
+		plt_obj_layout_check(layout, COMPONENT_NR, 0);
+
+		pl_obj_layout_free(layout);
+	}
+
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tPlacement: OK\n");
+}
+
+void
+rebuild_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		spare_tgt_ranks[SPARE_MAX_NUM];
+	uint32_t		shard_ids[SPARE_MAX_NUM];
+	daos_obj_id_t		oid;
+	uuid_t			pl_uuid;
+	struct daos_obj_md	*md_arr;
+	struct daos_obj_md	md = { 0 };
+	struct pl_obj_layout	**org_layout;
+	struct pl_obj_layout    *layout;
+	uint32_t		po_ver;
+	int			test_num;
+	int			num_new_spares;
+	int			fail_tgt;
+	int			spares_left;
+	int			rc, i;
+
+	uuid_generate(pl_uuid);
+	srand(time(NULL));
+	oid.hi = 5;
+	po_ver = 1;
+
+	D_ALLOC_ARRAY(md_arr, TEST_PER_OC);
+	D_ASSERT(md_arr != NULL);
+	D_ALLOC_ARRAY(org_layout, TEST_PER_OC);
+	D_ASSERT(org_layout != NULL);
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+				   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	/* Create array of object IDs to use later */
+	for (i = 0; i < TEST_PER_OC; ++i) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+		dc_obj_fetch_md(oid, &md);
+		md.omd_ver = po_ver;
+		md_arr[i] = md;
+	}
+
+	/* Generate layouts for later comparison*/
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&org_layout[test_num]);
+		D_ASSERT(rc == 0);
+		plt_obj_layout_check(org_layout[test_num], COMPONENT_NR, 0);
+	}
+
+	for (fail_tgt = 0; fail_tgt < NUM_TARGETS; ++fail_tgt) {
+		/* Fail target and update the pool map */
+		plt_fail_tgt(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+		pl_map = pl_map_find(pl_uuid, oid);
+
+		/*
+		 * For each failed target regenerate all layouts and
+		 * fetch rebuild targets, then verify basic conditions met
+		 */
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+
+			rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&layout);
+			D_ASSERT(rc == 0);
+
+			num_new_spares = pl_obj_find_rebuild(pl_map,
+					&md_arr[test_num], NULL, po_ver,
+					spare_tgt_ranks, shard_ids,
+					SPARE_MAX_NUM, -1);
+
+			spares_left = NUM_TARGETS - layout->ol_nr + fail_tgt;
+			plt_obj_rebuild_layout_check(layout,
+					org_layout[test_num], COMPONENT_NR,
+					&fail_tgt, 1, spares_left,
+					num_new_spares, spare_tgt_ranks,
+					shard_ids);
+
+			pl_obj_layout_free(layout);
+		}
+
+		/* Move target to Down state */
+		plt_fail_tgt_out(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+		pl_map = pl_map_find(pl_uuid, oid);
+
+		/* Verify post rebuild layout */
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+
+			rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&layout);
+			D_ASSERT(rc == 0);
+			D_ASSERT(layout->ol_nr == org_layout[test_num]->ol_nr);
+
+			plt_obj_layout_check(layout, COMPONENT_NR,
+					layout->ol_nr);
+			pl_obj_layout_free(layout);
+		}
+
+	}
+
+	/* Cleanup Memory */
+	for (i = 0; i < TEST_PER_OC; ++i)
+		D_FREE(org_layout[i]);
+	D_FREE(org_layout);
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tRebuild: OK\n");
+}
+
+void
+reint_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		spare_tgt_ranks[SPARE_MAX_NUM];
+	uint32_t		shard_ids[SPARE_MAX_NUM];
+	daos_obj_id_t		oid;
+	uuid_t			pl_uuid;
+	struct daos_obj_md	*md_arr;
+	struct daos_obj_md	md = { 0 };
+	struct pl_obj_layout	***layout;
+	struct pl_obj_layout	*temp_layout;
+	uint32_t		po_ver;
+	int			test_num;
+	int			num_reint;
+	int			fail_tgt;
+	int			spares_left;
+	int			rc, i;
+
+	uuid_generate(pl_uuid);
+	srand(time(NULL));
+	oid.hi = 5;
+	po_ver = 1;
+
+	D_ALLOC_ARRAY(md_arr, TEST_PER_OC);
+	D_ASSERT(md_arr != NULL);
+	D_ALLOC_ARRAY(layout, NUM_TARGETS + 1);
+	D_ASSERT(layout != NULL);
+
+	for (i = 0; i < NUM_TARGETS + 1; ++i) {
+		D_ALLOC_ARRAY(layout[i], TEST_PER_OC);
+		D_ASSERT(layout[i] != NULL);
+	}
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+			   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+			   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	for (i = 0; i < TEST_PER_OC; ++i) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+		dc_obj_fetch_md(oid, &md);
+		md.omd_ver = po_ver;
+		md_arr[i] = md;
+	}
+
+	/* Generate original layouts for later comparison*/
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&layout[0][test_num]);
+		D_ASSERT(rc == 0);
+		plt_obj_layout_check(layout[0][test_num], COMPONENT_NR, 0);
+	}
+
+	/* fail all the targets */
+	for (fail_tgt = 0; fail_tgt < NUM_TARGETS; ++fail_tgt) {
+
+		plt_fail_tgt(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+
+		plt_fail_tgt_out(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+
+		/* Generate layouts for all N target failures*/
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+
+			rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&layout[fail_tgt + 1][test_num]);
+			D_ASSERT(rc == 0);
+			plt_obj_layout_check(layout[fail_tgt + 1][test_num],
+					COMPONENT_NR, NUM_TARGETS);
+		}
+	}
+
+	/* Reintegrate targets one-by-one and compare layouts */
+	spares_left = NUM_TARGETS - (layout[0][0]->ol_nr + fail_tgt);
+	for (fail_tgt = NUM_TARGETS-1; fail_tgt >= 0; --fail_tgt) {
+		plt_reint_tgt(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+		pl_map = pl_map_find(pl_uuid, oid);
+
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+			rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&temp_layout);
+			D_ASSERT(rc == 0);
+
+			num_reint = pl_obj_find_reint(pl_map, &md_arr[test_num],
+					NULL, po_ver,  spare_tgt_ranks,
+					shard_ids, SPARE_MAX_NUM, -1);
+
+			plt_obj_reint_layout_check(temp_layout,
+					layout[fail_tgt][test_num],
+					COMPONENT_NR, &fail_tgt, 1, spares_left,
+					num_reint, spare_tgt_ranks, shard_ids);
+
+			pl_obj_layout_free(temp_layout);
+		}
+
+		/* Set the target to up */
+		plt_reint_tgt_up(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+
+		/*
+		 * Verify that the post-reintegration layout matches the
+		 * pre-failure layout
+		 */
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+
+			rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&temp_layout);
+			D_ASSERT(rc == 0);
+
+			plt_obj_layout_check(temp_layout, COMPONENT_NR,
+					NUM_TARGETS);
+
+			D_ASSERT(plt_obj_layout_match(temp_layout,
+					layout[fail_tgt][test_num]));
+
+			pl_obj_layout_free(temp_layout);
+		}
+
+	}
+	/* Cleanup Memory */
+	for (i = 0; i <= NUM_TARGETS; ++i) {
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num)
+			D_FREE(layout[i][test_num]);
+		D_FREE(layout[i]);
+	}
+	D_FREE(layout);
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tReintegration: OK\n");
+}
+
+void
+drain_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		spare_tgt_ranks[SPARE_MAX_NUM];
+	uint32_t		shard_ids[SPARE_MAX_NUM];
+	uint32_t		po_ver;
+	daos_obj_id_t		oid;
+	uuid_t			pl_uuid;
+	struct daos_obj_md	*md_arr;
+	struct daos_obj_md	md = { 0 };
+	struct pl_obj_layout	*layout;
+	struct pl_obj_layout	**org_layout;
+	int			test_num;
+	int			num_new_spares;
+	int			fail_tgt;
+	int			rc, i;
+	int			spares_left;
+
+	uuid_generate(pl_uuid);
+	srand(time(NULL));
+	oid.hi = 5;
+	po_ver = 1;
+
+	D_ALLOC_ARRAY(md_arr, TEST_PER_OC);
+	D_ASSERT(md_arr != NULL);
+	D_ALLOC_ARRAY(org_layout, TEST_PER_OC);
+	D_ASSERT(org_layout != NULL);
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+				   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	for (i = 0; i < TEST_PER_OC; ++i) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+		dc_obj_fetch_md(oid, &md);
+		md.omd_ver = po_ver;
+		md_arr[i] = md;
+	}
+
+	/* Generate layouts for later comparison*/
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		md_arr[test_num].omd_ver = po_ver;
+
+		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&org_layout[test_num]);
+		D_ASSERT(rc == 0);
+		plt_obj_layout_check(org_layout[test_num], COMPONENT_NR, 0);
+	}
+
+	for (fail_tgt = 0; fail_tgt < NUM_TARGETS; ++fail_tgt) {
+		/* Drain target and update the pool map */
+		plt_drain_tgt(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+		pl_map = pl_map_find(pl_uuid, oid);
+
+		spares_left = NUM_TARGETS - (org_layout[0]->ol_nr + fail_tgt);
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+			rc = pl_obj_place(pl_map, &md_arr[test_num],
+					  NULL, &layout);
+			D_ASSERT(rc == 0);
+
+			num_new_spares = pl_obj_find_rebuild(pl_map,
+					&md_arr[test_num], NULL, po_ver,
+					spare_tgt_ranks, shard_ids,
+					SPARE_MAX_NUM, -1);
+
+			plt_obj_layout_check(layout, COMPONENT_NR,
+					layout->ol_nr);
+
+			plt_obj_drain_layout_check(layout,
+					org_layout[test_num], COMPONENT_NR,
+					&fail_tgt, 1, spares_left,
+					num_new_spares, spare_tgt_ranks,
+					shard_ids);
+
+			pl_obj_layout_free(layout);
+		}
+
+		/* Move target to Down-Out state */
+		plt_fail_tgt_out(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+		pl_map = pl_map_find(pl_uuid, oid);
+
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+			pl_obj_layout_free(org_layout[test_num]);
+
+			rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&org_layout[test_num]);
+			D_ASSERT(rc == 0);
+
+			plt_obj_layout_check(org_layout[test_num], COMPONENT_NR,
+					org_layout[test_num]->ol_nr);
+
+		}
+
+	}
+
+	/* Cleanup Memory */
+	for (i = 0; i < TEST_PER_OC; ++i)
+		D_FREE(org_layout[i]);
+	D_FREE(org_layout);
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tRebuild with Drain: OK\n");
+}
+
+#define NUM_TO_EXTEND 2
+
+void
+add_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		spare_tgt_ranks[SPARE_MAX_NUM];
+	uint32_t		shard_ids[SPARE_MAX_NUM];
+	uint32_t		po_ver;
+	d_rank_list_t		rank_list;
+	daos_obj_id_t		oid;
+	uuid_t			pl_uuid;
+	struct daos_obj_md	*md_arr;
+	struct daos_obj_md	md = { 0 };
+	struct pl_obj_layout	*layout;
+	struct pl_obj_layout	**org_layout;
+	int			test_num;
+	int			num_new_spares;
+	int			rc, i;
+	uuid_t target_uuids[NUM_TO_EXTEND] = {"e0ab4def", "60fcd487"};
+	int32_t domains[NUM_TO_EXTEND] = {1, 1};
+
+	if (is_max_class_obj(cid))
+		return;
+
+	rank_list.rl_nr = NUM_TO_EXTEND;
+	rank_list.rl_ranks = malloc(sizeof(d_rank_t) * NUM_TO_EXTEND);
+	rank_list.rl_ranks[0] = DOM_NR + 1;
+	rank_list.rl_ranks[1] = DOM_NR + 2;
+
+	uuid_generate(pl_uuid);
+	srand(time(NULL));
+	oid.hi = 5;
+	po_ver = 1;
+
+	D_ALLOC_ARRAY(md_arr, TEST_PER_OC);
+	D_ASSERT(md_arr != NULL);
+	D_ALLOC_ARRAY(org_layout, TEST_PER_OC);
+	D_ASSERT(org_layout != NULL);
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+				   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	for (i = 0; i < TEST_PER_OC; ++i) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+		dc_obj_fetch_md(oid, &md);
+		md.omd_ver = po_ver;
+		md_arr[i] = md;
+	}
+
+	/* Generate layouts for later comparison*/
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		md_arr[test_num].omd_ver = po_ver;
+
+		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+				  &org_layout[test_num]);
+		D_ASSERTF(rc == 0, "rc == %d\n", rc);
+		plt_obj_layout_check(org_layout[test_num], COMPONENT_NR, 0);
+	}
+	extend_test_pool_map(po_map, NUM_TO_EXTEND, target_uuids, &rank_list,
+			     NUM_TO_EXTEND, domains, NULL, NULL,
+			     VOS_PER_TARGET);
+
+
+	/* test normal placement for pools currently being extended */
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL, &layout);
+		D_ASSERT(rc == 0);
+
+		num_new_spares = pl_obj_find_addition(pl_map, &md_arr[test_num],
+						      NULL, po_ver,
+						      spare_tgt_ranks,
+						      shard_ids,
+						      SPARE_MAX_NUM, -1);
+		D_ASSERT(num_new_spares >= 0);
+
+		plt_obj_add_layout_check(layout, org_layout[test_num],
+					 COMPONENT_NR, num_new_spares,
+					spare_tgt_ranks, shard_ids);
+
+		pl_obj_layout_free(layout);
+	}
+
+	/* Cleanup Memory */
+	for (i = 0; i < TEST_PER_OC; ++i)
+		D_FREE(org_layout[i]);
+	D_FREE(org_layout);
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tAddition: OK\n");
+}
+
 
 int
 main(int argc, char **argv)
 {
-	struct pool_buf		*buf;
-	struct pl_map_init_attr	 mia;
-	int			 i;
-	int			 nr;
-	struct pool_map		*po_map;
-	struct pool_component	*comp;
-	struct pl_obj_layout	*lo_1;
-	struct pl_obj_layout	*lo_2;
-	struct pl_obj_layout	*lo_3;
-	struct pl_map		*pl_map;
-	struct pool_component	 comps[COMPONENT_NR];
-	uuid_t			 pl_uuid;
-	daos_obj_id_t		 oid;
-	uint32_t		 spare_tgt_candidate[SPARE_MAX_NUM];
-	uint32_t		 spare_tgt_ranks[SPARE_MAX_NUM];
-	uint32_t		 shard_ids[SPARE_MAX_NUM];
-	uint32_t		 failed_tgts[SPARE_MAX_NUM];
-	static uint32_t		 po_ver;
-	unsigned int		 spare_cnt;
+	daos_oclass_id_t	*test_classes;
+	uint32_t		 num_test_oc;
+	char			 oclass_name[50];
+	int			 oc_index;
 	int			 rc;
 
-	po_ver = 1;
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 
@@ -72,136 +553,24 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	uuid_generate(pl_uuid);
-	srand(time(NULL));
-	oid.lo = rand();
-	oid.hi = 5;
+	num_test_oc = getObjectClasses(&test_classes);
 
-	comp = &comps[0];
-	/* fake the pool map */
-	for (i = 0; i < DOM_NR; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_RACK;
-		comp->co_status = PO_COMP_ST_UPIN;
-		comp->co_id	= i;
-		comp->co_rank   = i;
-		comp->co_ver    = 1;
-		comp->co_nr	= NODE_PER_DOM;
+	for (oc_index = 0; oc_index < num_test_oc; ++oc_index) {
+
+		daos_oclass_id2name(test_classes[oc_index],  oclass_name);
+		D_PRINT("Running oclass test: %s\n", oclass_name);
+
+		placement_object_class(test_classes[oc_index]);
+		rebuild_object_class(test_classes[oc_index]);
+		drain_object_class(test_classes[oc_index]);
+		reint_object_class(test_classes[oc_index]);
+		add_object_class(test_classes[oc_index]);
+
 	}
 
-	for (i = 0; i < DOM_NR * NODE_PER_DOM; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_NODE;
-		comp->co_status = PO_COMP_ST_UPIN;
-		comp->co_id	= i;
-		comp->co_rank   = i;
-		comp->co_ver    = 1;
-		comp->co_nr	= VOS_PER_TARGET;
-	}
+	D_FREE(test_classes);
+	D_PRINT("all tests passed!\n");
 
-	for (i = 0; i < DOM_NR * NODE_PER_DOM * VOS_PER_TARGET; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_TARGET;
-		comp->co_status = PO_COMP_ST_UPIN;
-		comp->co_id	= i;
-		comp->co_rank   = i;
-		comp->co_ver    = 1;
-		comp->co_nr	= 1;
-	}
-
-	nr = ARRAY_SIZE(comps);
-	buf = pool_buf_alloc(nr);
-	D_ASSERT(buf != NULL);
-
-	rc = pool_buf_attach(buf, comps, nr);
-	D_ASSERT(rc == 0);
-
-	rc = pool_map_create(buf, 1, &po_map);
-	D_ASSERT(rc == 0);
-
-	pool_map_print(po_map);
-
-	mia.ia_type	    = PL_TYPE_JUMP_MAP;
-	mia.ia_jump_map.domain  = PO_COMP_TP_RACK;
-
-	rc = pl_map_create(po_map, &mia, &pl_map);
-	D_ASSERT(rc == 0);
-
-	pl_map_print(pl_map);
-
-	/* initial placement when all nodes alive */
-	daos_obj_generate_id(&oid, 0, OC_RP_4G2, 0);
-	D_PRINT("\ntest initial placement when no failed shard ...\n");
-	plt_obj_place(oid, &lo_1, pl_map);
-	plt_obj_layout_check(lo_1);
-
-	/* test plt_obj_place when some/all shards failed */
-	D_PRINT("\ntest to fail all shards  and new placement ...\n");
-	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
-		plt_fail_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
-				pl_debug_msg);
-	plt_obj_place(oid, &lo_2, pl_map);
-	plt_obj_layout_check(lo_2);
-	D_ASSERT(!pt_obj_layout_match(lo_1, lo_2, DOM_NR));
-	D_PRINT("spare target candidate:");
-	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++) {
-		spare_tgt_candidate[i] = lo_2->ol_shards[i].po_target;
-		D_PRINT(" %d", spare_tgt_candidate[i]);
-	}
-	D_PRINT("\n");
-
-	D_PRINT("\ntest to add back all failed shards and new placement ...\n");
-	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
-		plt_add_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
-				pl_debug_msg);
-	plt_obj_place(oid, &lo_3, pl_map);
-	plt_obj_layout_check(lo_3);
-	D_ASSERT(pt_obj_layout_match(lo_1, lo_3, DOM_NR));
-
-	/* test pl_obj_find_rebuild */
-	D_PRINT("\ntest pl_obj_find_rebuild to get correct spare tagets ...\n");
-	failed_tgts[0] = lo_3->ol_shards[0].po_target;
-	failed_tgts[1] = lo_3->ol_shards[1].po_target;
-	D_PRINT("failed target %d[0], %d[1]\n, expected %d[0], %d[1]\n",
-		failed_tgts[0], failed_tgts[1], spare_tgt_candidate[0],
-		spare_tgt_candidate[1]);
-	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 2, spare_tgt_ranks,
-			pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
-	D_ASSERT(spare_cnt == 2);
-	D_ASSERT(spare_tgt_ranks[0] == spare_tgt_candidate[0]);
-	D_ASSERT(spare_tgt_ranks[1] == spare_tgt_candidate[1]);
-
-	/* fail the to-be-spare target and select correct next spare */
-	failed_tgts[0] = lo_3->ol_shards[0].po_target;
-	failed_tgts[1] = lo_3->ol_shards[1].po_target;
-	failed_tgts[2] = spare_tgt_candidate[0];
-	D_PRINT("\nfailed targets %d[1] %d %d[0], expected spare %d[1]\n",
-		failed_tgts[0], failed_tgts[1], failed_tgts[2],
-		spare_tgt_candidate[1]);
-	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 3, spare_tgt_ranks,
-			   pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			   PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
-	D_ASSERT(spare_cnt == 2);
-	D_ASSERT(spare_tgt_ranks[0] == spare_tgt_candidate[1]);
-
-	failed_tgts[0] = spare_tgt_candidate[0];
-	failed_tgts[1] = spare_tgt_candidate[1];
-	failed_tgts[2] = lo_3->ol_shards[3].po_target;
-	failed_tgts[3] = lo_3->ol_shards[0].po_target;
-	failed_tgts[4] = lo_3->ol_shards[1].po_target;
-	D_PRINT("\nfailed targets %d %d %d[3] %d[0] %d[1]\n",
-		failed_tgts[0], failed_tgts[1], failed_tgts[2], failed_tgts[3],
-		failed_tgts[4]);
-	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 5, spare_tgt_ranks,
-			   pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			   PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
-	D_ASSERT(spare_cnt == 3);
-
-	pl_obj_layout_free(lo_1);
-	pl_obj_layout_free(lo_2);
-	pl_obj_layout_free(lo_3);
-
-	pool_map_decref(po_map);
-	pool_buf_free(buf);
 	daos_debug_fini();
-	D_PRINT("\nall tests passed!\n");
 	return 0;
 }

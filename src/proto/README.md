@@ -1,6 +1,6 @@
 # Protobuf definitions
 
-The proto directory contains [protocol buffer](https://developers.google.com/protocol-buffers) definitions for the messaging format used in communication over the gRPC and dRPC channels. For information on using protobuf tools for development see [here](../../doc/development.md#protobuf-compiler).
+The proto directory contains [protocol buffer](https://developers.google.com/protocol-buffers) definitions for the messaging format used in communication over the gRPC and dRPC channels. For information on using protobuf tools for development see [here](../../doc/dev/development.md#protobuf-compiler).
 
 When modifying these files, make sure to update all generated files. Relevant files can be generated with commands listed below issued from within the [src/proto](.) top level directory of DAOS source:
 

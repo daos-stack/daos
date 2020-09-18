@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,7 +156,7 @@ ring_comp_ver_cmp(struct pool_component *comp_a, struct pool_component *comp_b)
 	return 0;
 }
 
-/** compare versoin of two targets */
+/** compare version of two targets */
 static int
 ring_target_ver_cmp(void *array, int a, int b)
 {
@@ -318,7 +318,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 	}
 	*buf_pp = buf;
 	return 0;
- err_out:
+err_out:
 	ring_buf_destroy(buf);
 	return rc;
 }
@@ -410,7 +410,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 			&ring_domain_ver_sops);
 
 	ver = buf->rb_domains[0].rd_comp->co_ver;
-	merged = &scratch[buf->rb_domain_nr];
+	merged = scratch + buf->rb_domain_nr;
 
 	for (i = start = 0; i < buf->rb_domain_nr; i++) {
 		struct pool_component	 *comp;
@@ -488,10 +488,10 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 
 	first = pool_map_targets(rimap->rmp_map.pl_poolmap);
 	if (first == NULL)
-		return DER_INVAL;
+		return -DER_INVAL;
 
 	for (plt = &ring->ri_targets[0], i = 0;
-	     plt < &ring->ri_targets[rimap->rmp_target_nr]; i++) {
+	     plt <= &ring->ri_targets[rimap->rmp_target_nr - 1]; i++) {
 		for (j = 0; j < buf->rb_domain_nr; j++) {
 			struct ring_domain *rdom = &buf->rb_domains[j];
 			struct pool_target *target;
@@ -562,6 +562,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(buf != NULL);
 	rimap->rmp_domain_nr = buf->rb_domain_nr;
 	rimap->rmp_target_nr = buf->rb_target_nr;
 
@@ -574,8 +575,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 	D_DEBUG(DB_PL, "Built %d rings for placement map\n",
 		rimap->rmp_ring_nr);
  out:
-	if (buf != NULL)
-		ring_buf_destroy(buf);
+	ring_buf_destroy(buf);
 	return rc;
 }
 
@@ -588,7 +588,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 /* max to 8 million rings */
 #define RING_HASH_BITS		23
 
-/** for comparision of float/double */
+/** for comparison of float/double */
 #define RING_PRECISION		0.00001
 
 /**
@@ -677,7 +677,7 @@ ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 
 	*mapp = &rimap->rmp_map;
 	return 0;
- err_out:
+err_out:
 	ring_map_destroy(&rimap->rmp_map);
 	return rc;
 }
@@ -822,7 +822,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	oc_attr = daos_oclass_attr_find(oid);
 
 	if (oc_attr == NULL) {
-		D_ERROR("Can not find obj class, invlaid oid="DF_OID"\n",
+		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
 			DP_OID(oid));
 		return -DER_INVAL;
 	}
@@ -984,7 +984,8 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 static int
 ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		      struct pl_obj_layout *layout,
-		      struct ring_obj_placement *rop, d_list_t *remap_list)
+		      struct ring_obj_placement *rop, d_list_t *remap_list,
+		      bool for_reint)
 {
 	struct failed_shard *f_shard;
 	struct pool_map		 *map = rimap->rmp_map.pl_poolmap;
@@ -1026,7 +1027,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
-				remap_list, f_shard, l_shard);
+				       remap_list, for_reint, f_shard, l_shard);
 	}
 
 	remap_dump(remap_list, md, "after remap:");
@@ -1036,7 +1037,8 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 static int
 ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 		     struct ring_obj_placement *rop,
-		     struct pl_obj_layout *layout, d_list_t *remap_list)
+		     struct pl_obj_layout *layout, d_list_t *remap_list,
+		     bool for_reint)
 {
 	struct pl_ring_map	*rimap = pl_map2rimap(map);
 	struct pool_target	*tgts;
@@ -1054,7 +1056,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	grp_start = rop->rop_begin;
 	tgts = pool_map_targets(map->pl_poolmap);
 	if (tgts == NULL) {
-		rc = DER_INVAL;
+		rc = -DER_INVAL;
 		goto out;
 	}
 
@@ -1082,8 +1084,9 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 			layout->ol_shards[k].po_target = tgt->ta_comp.co_id;
 			layout->ol_shards[k].po_fseq   = tgt->ta_comp.co_fseq;
 
-			if (pool_target_unavail(tgt)) {
-				rc = remap_alloc_one(remap_list, k, tgt);
+			if (pool_target_unavail(tgt, for_reint)) {
+				rc = remap_alloc_one(remap_list, k, tgt,
+						for_reint);
 				if (rc)
 					D_GOTO(out, rc);
 			}
@@ -1091,13 +1094,14 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 		grp_start += grp_dist;
 	}
 
-	rc = ring_obj_remap_shards(rimap, md, layout, rop, remap_list);
+	rc = ring_obj_remap_shards(rimap, md, layout, rop, remap_list,
+			for_reint);
 
 	if (rc == 0)
 		obj_layout_dump(md->omd_id, layout);
 out:
 	if (rc) {
-		D_ERROR("ring_obj_layout_fill failed, rc %d.\n", rc);
+		D_ERROR("ring_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
 		remap_list_free_all(remap_list);
 	}
 	return rc;
@@ -1113,23 +1117,26 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	struct pl_obj_layout	  *layout;
 	d_list_t		   remap_list;
 	int			   rc;
+	bool			   for_reint = false;
 
 	rc = ring_obj_placement_get(rimap, md, shard_md, &rop);
 	if (rc) {
-		D_ERROR("ring_obj_placement_get failed, rc %d.\n", rc);
+		D_ERROR("ring_obj_placement_get failed, rc "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
-	rc = pl_obj_layout_alloc(rop.rop_grp_size * rop.rop_grp_nr, &layout);
+	rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr, &layout);
 	if (rc) {
-		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
+		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	D_INIT_LIST_HEAD(&remap_list);
-	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list);
+	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list,
+				  for_reint);
 	if (rc) {
-		D_ERROR("ring_obj_layout_fill failed, rc %d.\n", rc);
+		D_ERROR("ring_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
 		pl_obj_layout_free(layout);
 		return rc;
 	}
@@ -1156,8 +1163,9 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	unsigned int		   shards_count;
 	int			   idx = 0;
 	int			   rc;
+	bool			   for_reint = false;
 
-	/* Caller should guarantee the pl_map is uptodate */
+	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < rebuild_ver) {
 		D_ERROR("pl_map version(%u) < rebuild version(%u)\n",
 			pl_map_version(map), rebuild_ver);
@@ -1176,7 +1184,8 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	shards_count = rop.rop_grp_size * rop.rop_grp_nr;
 	if (shards_count > SHARDS_ON_STACK_COUNT) {
-		rc = pl_obj_layout_alloc(shards_count, &layout);
+		rc = pl_obj_layout_alloc(rop.rop_grp_size,
+				rop.rop_grp_nr, &layout);
 		if (rc)
 			return rc;
 	} else {
@@ -1188,12 +1197,13 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	D_INIT_LIST_HEAD(&remap_list);
-	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list);
+	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list,
+				  for_reint);
 	if (rc)
 		goto out;
 
 	remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx,
-			array_size, myrank, &idx, layout, &remap_list);
+			array_size, myrank, &idx, layout, &remap_list, false);
 out:
 	remap_list_free_all(&remap_list);
 	if (shards_count > SHARDS_ON_STACK_COUNT)
@@ -1204,12 +1214,115 @@ out:
 /** see \a dsr_obj_find_reint */
 int
 ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
-		    struct daos_obj_shard_md *shard_md,
-		    struct pl_target_grp *tgp_reint,
-		    uint32_t *tgt_reint)
+			struct daos_obj_shard_md *shard_md,
+			uint32_t reint_ver, uint32_t *tgt_rank,
+			uint32_t *shard_id, unsigned int array_size,
+			int myrank)
 {
-	D_ERROR("Unsupported\n");
-	return -DER_NOSYS;
+	uint32_t                   reint_shard_cnt = SHARDS_ON_STACK_COUNT / 2;
+	struct ring_obj_placement  rop;
+	struct pl_ring_map        *rimap = pl_map2rimap(map);
+	struct pl_obj_layout      *layout;
+	struct pl_obj_layout      *reint_layout;
+	struct pl_obj_layout       layout_on_stack;
+	struct pl_obj_layout       reint_layout_on_stack;
+	struct pl_obj_shard        shards_on_stack[reint_shard_cnt];
+	struct pl_obj_shard        reint_shards_on_stack[reint_shard_cnt];
+	d_list_t                   remap_list;
+	d_list_t                   reint_list;
+	unsigned int               shards_count;
+	int                        idx = 0;
+	int                        index = 0;
+	int                        rc;
+
+	/* Caller should guarantee the pl_map is up-to-date */
+	if (pl_map_version(map) < reint_ver) {
+		D_ERROR("pl_map version(%u) < reintegration version(%u)\n",
+			pl_map_version(map), reint_ver);
+		return -DER_INVAL;
+	}
+
+	rc = ring_obj_placement_get(rimap, md, shard_md, &rop);
+	if (rc)
+		return rc;
+
+	if (rop.rop_grp_size == 1) {
+		D_DEBUG(DB_PL, "Not replicated object "DF_OID"\n",
+			DP_OID(md->omd_id));
+		return 0;
+	}
+
+	shards_count = rop.rop_grp_size * rop.rop_grp_nr;
+	if (shards_count > reint_shard_cnt) {
+		rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr,
+				&layout);
+		if (rc)
+			return rc;
+		rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr,
+				&reint_layout);
+		if (rc)
+			return rc;
+	} else {
+		layout = &layout_on_stack;
+		reint_layout = &reint_layout_on_stack;
+
+		layout->ol_nr = shards_count;
+		reint_layout->ol_nr = shards_count;
+
+		layout->ol_shards = shards_on_stack;
+		reint_layout->ol_shards = reint_shards_on_stack;
+
+		memset(layout->ol_shards, 0,
+		       sizeof(*layout->ol_shards) * layout->ol_nr);
+		memset(reint_layout->ol_shards, 0,
+		       sizeof(*reint_layout->ol_shards) * reint_layout->ol_nr);
+
+	}
+
+	D_INIT_LIST_HEAD(&remap_list);
+	D_INIT_LIST_HEAD(&reint_list);
+
+	/* Find targets affected directly by reintegration. */
+	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list,
+				  false);
+	if (rc)
+		goto out;
+
+	/* Clear list for next placement operation. */
+	remap_list_free_all(&remap_list);
+	D_INIT_LIST_HEAD(&remap_list);
+
+	/* Find targets indirectly affected by reintegration. */
+	rc = ring_obj_layout_fill(map, md, &rop, reint_layout, &remap_list,
+				  true);
+	if (rc)
+		goto out;
+
+
+	for (index = 0; index < layout->ol_nr; ++index) {
+		uint32_t reint_tgt = reint_layout->ol_shards[index].po_target;
+		uint32_t original_target = layout->ol_shards[index].po_target;
+		struct pool_target *temp_tgt;
+
+		if (reint_tgt != original_target) {
+			pool_map_find_target(rimap->rmp_map.pl_poolmap,
+					     reint_tgt, &temp_tgt);
+			remap_alloc_one(&reint_list, index, temp_tgt, true);
+		}
+	}
+
+	remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
+			array_size, myrank, &idx, layout, &reint_list, false);
+out:
+	remap_list_free_all(&remap_list);
+	remap_list_free_all(&reint_list);
+
+	if (shards_count > reint_shard_cnt) {
+		pl_obj_layout_free(layout);
+		pl_obj_layout_free(reint_layout);
+	}
+
+	return rc < 0 ? rc : idx;
 }
 
 struct pl_map_ops	ring_map_ops = {

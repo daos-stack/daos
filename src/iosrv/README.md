@@ -20,7 +20,7 @@ In addition, a module can optionally configure:
 
 The I/O server is a multi-threaded process using Argobots for non-blocking processing.
 
-By default, one main xstream plus two offload xstreams are created per target. The actual number of offload xstream can be configured through daos_io_server command line parameters. Moreover, an extra xtream is created to handle incoming metadata requests. Each xstream is bound to a specific CPU core. The main xstream is the one receiving incoming target requests from both client and the other servers. A specific ULT is started to make progress on network and NVMe I/O opeations.
+By default, one main xstream and no offload xstreams are created per target. The actual number of offload xstream can be configured through daos_io_server command line parameters. Moreover, an extra xstream is created to handle incoming metadata requests. Each xstream is bound to a specific CPU core. The main xstream is the one receiving incoming target requests from both client and the other servers. A specific ULT is started to make progress on network and NVMe I/O operations.
 
 ## Thread-local Storage (TLS)
 
@@ -48,7 +48,7 @@ The server loop runs in its own User-Level Thread (ULT) in xstream 0. The dRPC s
     2. If the client has disconnected or the connection has been broken: Free the `struct drpc` object and remove it from the `drpc_progress_context`.
 3. If any activity is seen on the listener:
     1. If a new connection has come in: Call `drpc_accept` and add the new `struct drpc` object to the client connection list in the `drpc_progress_context`.
-    2. If there was an error: Return `-DER_UNKNOWN` to the caller. This causes an error to be logged in the I/O server, but does not interrupt the dRPC server loop. Getting an error on the listener is unexpected.
+    2. If there was an error: Return `-DER_MISC` to the caller. This causes an error to be logged in the I/O server, but does not interrupt the dRPC server loop. Getting an error on the listener is unexpected.
 4. If no activity was seen, return `-DER_TIMEDOUT` to the caller. This is purely for debugging purposes. In practice the I/O server ignores this error code, since lack of activity is not actually an error case.
 
 ### dRPC Handler Registration

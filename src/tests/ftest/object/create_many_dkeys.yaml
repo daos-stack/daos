@@ -8,11 +8,9 @@ timeout: 8000
 server_config:
   name: daos_server
 pool:
-  createmode:
-    mode: 511
-  createset:
-    setname: daos_server
-  createsize:
-    size: 2000000000
+  mode: 511
+  name: daos_server
+  scm_size: 2000000000
+  control_method: dmg
 dkeys:
   number_of_dkeys: 1000000

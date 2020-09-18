@@ -3,12 +3,12 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'DAOS_VERSION', 'prereqs')
+    Import('env', 'API_VERSION', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'protobufc', 'cart')
+    prereqs.require(denv, 'protobufc')
 
     dc_tgts = denv.SharedObject(Glob('*.c'))
 
@@ -17,11 +17,11 @@ def scons():
     dc_tgts += dc_pool_tgts + dc_co_tgts + dc_placement_tgts + dc_obj_tgts
     dc_tgts += dc_mgmt_tgts + dc_array_tgts + dc_kv_tgts + dc_security_tgts
     libdaos = daos_build.library(env, 'daos', dc_tgts,
-                                 SHLIBVERSION=DAOS_VERSION,
+                                 SHLIBVERSION=API_VERSION,
                                  LIBS=['daos_common'])
     if hasattr(env, 'InstallVersionedLib'):
         env.InstallVersionedLib('$PREFIX/lib64/', libdaos,
-                                SHLIBVERSION=DAOS_VERSION)
+                                SHLIBVERSION=API_VERSION)
     else:
         env.Install('$PREFIX/lib64/', libdaos)
 

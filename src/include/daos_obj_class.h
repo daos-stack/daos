@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -466,6 +466,17 @@ struct daos_oclass_list {
  */
 int
 daos_oclass_name2id(const char *name);
+
+/**
+ * Return the list of object class.
+ *
+ * \param[in]	size	length in bytes of str buffer.
+ * \param[out]	str	buffer to get all registered oclass names
+ *
+ * \return		>= 0 on success and required length of str, -1 if error.
+ */
+size_t
+daos_oclass_names_list(size_t size, char *str);
 
 /**
  * Return the object class name given it's ID.

@@ -1,7 +1,7 @@
 # Object
 
 DAOS object stores user's data, it is identified by object ID which is unique
-within the DAOS conatiner it belongs to. Objects can be distributed across any
+within the DAOS container it belongs to. Objects can be distributed across any
 target of the pool for both performance and resilience.
 DAOS object in DAOS storage model is shown in the diagram -
 ![/doc/graph/Fig_002.png](/doc/graph/Fig_002.png "object in storage model")
@@ -108,7 +108,7 @@ forward shards embedded in the RPC request, when the leader shard gets that IO
 request it handles it as below steps:
 -   firstly forwards the IO request to others shards
     For the request forwarding, it is offload to the vos target's offload
-    extream to release the main IO service extream from IO request sending and
+    xstream to release the main IO service xstream from IO request sending and
     reply receiving (see shard_req_forward).
 -   then serves the IO request locally
 -   waits the forwarded IO's completion and reply client IO request.
@@ -135,60 +135,89 @@ Erasure codes may be used to improve resilience, with lower space overhead. This
 feature is still working in progress.
 
 ### Checksum
-#### Checksum Container Setup
-End-to-end checksums are enabled and configured while creating a
-container using the following container properties.
 
-- `DAOS_PROP_CO_CSUM`: Type of checksum algorithm to use (Default is
-none). The current plan is to support the CRC32 and CRC64 algorithms as
-the different checksum types. These are supported by the ISA-L library
-so that hardware acceleration might be available. Additional checksum
-types can be added later.
+The checksum feature attempts to provide end-to-end data integrity. On an update,
+ the DAOS client calculates checksums for user data and sends with the RPC to
+ the DAOS server. The DAOS server returns the checksum with the data on a fetch
+ so the DAOS client can verify the integrity of the data. See [End-to-end Data
+ Integrity Overiew](../../doc/overview/data_integrity.md) for more information.
 
-- `DAOS_PROP_CO_CSUM_CHUNK_SIZE`: Checksums will be calculated for a
-subset of the data. The size of this subset will be configured as the
-"Chunksize". Special care is required, so that chunk sizes align well
-with record sizes and erasure code alignments.
+Checksums are configured at the container level and when a client opens a
+ container, the checksum properties will be queried automatically, and, if
+ enabled, both the server and client will init and hold a reference to a
+ [daos_csummer](src/common/README.md) in ds_cont_hdl and dc_cont respectively.
 
-- `DAOS_PROP_CO_CSUM_SERVER_VERIFY`: Because of the probable decrease to
-IOPS, in most cases, it is not desired to verify checksums on an object
-update on the server side. It is sufficient for the client to verify on
-a fetch because any data corruption, whether on the object update,
-storage, or fetch, will be caught. However, there is an advantage to
-knowing if corruption happens on an update. The update would fail
-right away, indicating to the client to retry the RPC or report an
-error to upper levels.
-
-When a client opens a container, the checksum properties will be queried
-automatically, and, if enabled, both the server and client will init and
-hold a reference to a [daos_csummer](src/common/README.md) in
-ds_cont_hdl and dc_cont respectively.
+For Array Value Types, the DAOS server might need to calculate new checksums for
+ requested extents. After extents are fetched by the server object layer, the
+ checksums srv_csum
 
 #### Object Update
 On an object update (`dc_obj_update`) the client will calculate checksums
-using the data in the sgl as described by an iod (`daos_csummer_calc`).
-Memory will be allocated for the checksums and the daos_csum_buf_t
-structures that represent the checksums. The checksums will be sent to
-the server as part of the IOD and the server will store in [VOS]
-(src/vos/README.md).
+using the data in the sgl as described by an iod (`daos_csummer_calc_iod`).
+Memory will be allocated for the checksums and the iod checksum
+structures that represent the checksums (`dcs_iod_csums`). The checksums will
+ be sent to the server as part of the IOD and the server will store in [VOS]
+ (src/vos/README.md).
 
-#### Object Fetch
-On handling an object fetch (ds_obj_rw_handler), the server will allocate
-memory for the checksums and daos_csum_buf_t structures. Then during the
-`vos_fetch_begin` stage, the checksums will be fetched from [VOS]
-(src/vos/README.md).
+#### Object Fetch - Server
+On handling an object fetch (`ds_obj_rw_handler`), the server will allocate
+ memory for the checksums and iod checksum structures. Then during the
+ `vos_fetch_begin` stage, the checksums will be fetched from
+ [VOS](src/vos/README.md). For Array Value Types, the extents fetched will
+ need to be compared to the requested extent and new checksums might need
+ to be calculated. `ds_csum_add2iod` will look at the fetched bio_sglist and
+ the iod request to determine if the stored checksums for the request
+ are sufficient or if new ones need to be calculated.
 
+
+##### `cc_need_new_csum` Logic
+The following are some examples of when checksums are copied and when
+ new checksums are needed. There are more examples in the unit tests for this
+ logic( ./src/object/tests/srv_checksum_tests.c)
+```
+     Request  |----|----|----|----|
+     Extent 2           |----|----|
+     Extent 1 |----|----|
+```
+> Chunk length is 4. Extent 1 is bytes 0-7, extent 2 is bytes 8-15. Request is
+ bytes 0-15. There is no overlap of extents and each extent is completely
+ requested. Therefore, the checksum for each chunk of each extent is copied.
+---
+```
+     Request  |----|----|----
+     Extent 2 |    |----|----
+     Extent 1 |----|----|
+```
+> Chunk length is 4. Extent 1 is bytes 0-7. Extent 2 is bytes 8-11. Request is
+ bytes 0-1. Even though there is overlap, the extents are aligned to chunks,
+ therefore each chunk's checksum is copied. The checksum for the first chunk
+ will come from extent 1, the second and third checksums come from extent 2,
+ just like the data does.
+---
+```
+     Request  |  ----  |
+     Extent 1 |--------|
+```
+> Chunk length is 8. Extent 1 is bytes 0-7. Request is bytes 2-5. Because the
+ request is only part of the stored extent, a new checksum will need to be created
+
+---
+```
+     Request  |--------|--------|
+     Extent 2 |   -----|--------|
+     Extent 1 |------  |        |
+```
+> Chunk length is 8. Extent 1 is bytes 0-5. Extent 2 is bytes 3-15. Request
+ is bytes 0-15. The first chunk needs a new checksum because it will be
+ made up of data from extent 1 and extent 2. The checksum for the second
+ chunk is copied.
+
+Note: Anytime the server calculates a new checksum; it will use the stored
+ checksum to verify the original chunks.
+
+#### Object Fetch - Client
 In the client RPC callback, the client will calculate checksums for the
-data fetched and compare to the checksums fetched
-(`daos_csummer_verify`).
-
-#### Note!
-Currently the I/O Descriptor (`daos_iod_t`), which is part of the public
-API, is used to contain the checksums along with other info about the
-data. It is expected that in the future this will go away, but for now it
-should be understood that the checksum fields are for internal use only.
-If they are set by a caller, a warning will be logged and the values
-will be overwritten.
+ data fetched and compare to the checksums fetched (`daos_csummer_verify`).
 
 ## Object Sharding
 

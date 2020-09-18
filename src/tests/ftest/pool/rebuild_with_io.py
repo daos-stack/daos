@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers, skipForTicket
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class RebuildWithIO(TestWithServers):
@@ -35,7 +36,7 @@ class RebuildWithIO(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-2922")
+    @skipForTicket("DAOS-5611")
     def test_rebuild_with_io(self):
         """JIRA ID: Rebuild-003.
 
@@ -43,13 +44,14 @@ class RebuildWithIO(TestWithServers):
             Trigger a rebuild while I/O is ongoing.
 
         Use Cases:
-            single pool, single client performing continous read/write/verify
+            single pool, single client performing continuous read/write/verify
             sequence while failure/rebuild is triggered in another process
 
         :avocado: tags=all,pool,rebuild,pr,medium,rebuildwithio
         """
         # Get the test params
-        pool = TestPool(self.context, self.log)
+        pool = TestPool(self.context, self.log,
+                        dmg_command=self.get_dmg_command())
         pool.get_params(self)
         container = TestContainer(pool)
         container.get_params(self)
@@ -73,7 +75,7 @@ class RebuildWithIO(TestWithServers):
         # Create and open the contaner
         container.create()
 
-        # Write data to the contianer for 30 seconds
+        # Write data to the container for 30 seconds
         self.log.info(
             "Wrote %s bytes to container %s",
             container.execute_io(30, rank, obj_class), container.uuid)
@@ -87,7 +89,7 @@ class RebuildWithIO(TestWithServers):
         # Wait for recovery to start
         pool.wait_for_rebuild(True)
 
-        # Write data to the contianer for another 30 seconds
+        # Write data to the container for another 30 seconds
         self.log.info(
             "Wrote an additional %s bytes to container %s",
             container.execute_io(30), container.uuid)
@@ -108,5 +110,5 @@ class RebuildWithIO(TestWithServers):
         # Verify the data after rebuild
         self.assertTrue(
             container.read_objects(),
-            "Data verifiaction error after rebuild")
+            "Data verification error after rebuild")
         self.log.info("Test Passed")

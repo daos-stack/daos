@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ query(void **state)
 
 	/** connect to the pool */
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RW, &poh,
+			       arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -108,7 +108,7 @@ create(void **state)
 
 	/** connect to the pool in read-only mode */
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RO, &poh,
+			       arg->pool.svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -125,7 +125,7 @@ create(void **state)
 
 	/** connect to the pool in read-write mode */
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RW, &poh,
+			       arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -158,7 +158,7 @@ destroy(void **state)
 
 	/** connect to the pool in read-write mode */
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RW, &poh,
+			       arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -182,7 +182,7 @@ destroy(void **state)
 
 	/** connect to the pool in read-only mode */
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RO, &poh,
+			       arg->pool.svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -198,7 +198,7 @@ destroy(void **state)
 
 	/** connect to the pool in read-write mode */
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RW, &poh,
+			       arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -228,7 +228,7 @@ open(void **state)
 
 	/** connect to the pool in read-write mode */
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RW, &poh,
+			       arg->pool.svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -247,15 +247,20 @@ open(void **state)
 
 	/** reconnect to the pool in read-only mode */
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RO, &poh,
+			       arg->pool.svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 
-	/** open container in read/write mode */
+	/** open container in read/write mode - this is OK, RW on pool handle
+	 * only applies to creating/deleting containers.
+	 */
 	print_message("opening container RW with RO pool handle ...\n");
 	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
 
 	/** invalidate pool handle */
 	poh_invalidate_local(&poh);
@@ -295,7 +300,7 @@ io_invalid_poh(void **state)
 	if (arg->myrank == 0) {
 		/** connect to the pool in read-write mode */
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc, DAOS_PC_RW, &poh,
+				       arg->pool.svc, DAOS_PC_RW, &poh,
 				       NULL /* info */,
 				       NULL /* ev */);
 		assert_int_equal(rc, 0);
@@ -333,14 +338,11 @@ io_invalid_poh(void **state)
 		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-		dcb_set_null(&iod.iod_kcsum);
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
-		iod.iod_eprs	= NULL;
-		iod.iod_csums	= NULL;
 		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
@@ -424,14 +426,11 @@ io_invalid_coh(void **state)
 		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-		dcb_set_null(&iod.iod_kcsum);
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
-		iod.iod_eprs	= NULL;
-		iod.iod_csums	= NULL;
 		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
@@ -503,14 +502,11 @@ update_ro(void **state)
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */

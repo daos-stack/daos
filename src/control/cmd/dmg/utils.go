@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,43 +27,15 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/system"
 )
-
-// splitPort separates port from compressed host string
-func splitPort(addrPattern string, defaultPort int) (string, string, error) {
-	var port string
-	hp := strings.Split(addrPattern, ":")
-
-	switch len(hp) {
-	case 1:
-		// no port specified, use default
-		port = strconv.Itoa(defaultPort)
-	case 2:
-		port = hp[1]
-		if port == "" {
-			return "", "", errors.Errorf("invalid port %q", port)
-		}
-		if _, err := strconv.Atoi(port); err != nil {
-			return "", "", errors.WithMessagef(err, "cannot parse %q",
-				addrPattern)
-		}
-	default:
-		return "", "", errors.Errorf("cannot parse %q", addrPattern)
-	}
-
-	if hp[0] == "" {
-		return "", "", errors.Errorf("invalid host %q", hp[0])
-	}
-
-	return hp[0], port, nil
-}
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
 // of ports to HostSets.
@@ -78,7 +50,7 @@ func hostsByPort(addrPatterns string, defaultPort int) (portHosts hostlist.HostG
 	}
 
 	for _, ptn := range strings.Split(inHostSet.DerangedString(), ",") {
-		hostSet, port, err = splitPort(ptn, defaultPort)
+		hostSet, port, err = common.SplitPort(ptn, defaultPort)
 		if err != nil {
 			return
 		}
@@ -116,27 +88,6 @@ func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err
 	return
 }
 
-// checkConns analyses connection results and returns summary compressed active
-// and inactive hostlists (but disregards connection port).
-func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err error) {
-	connStates = make(hostlist.HostGroups)
-
-	for addr := range results {
-		resultErr := results[addr].Err
-		if resultErr != nil {
-			if err = connStates.AddHost(resultErr.Error(), addr); err != nil {
-				return
-			}
-			continue
-		}
-		if err = connStates.AddHost("connected", addr); err != nil {
-			return
-		}
-	}
-
-	return
-}
-
 // formatHostGroups adds group title header per group results.
 func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 	for _, res := range groups.Keys() {
@@ -148,19 +99,19 @@ func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 	return buf.String()
 }
 
-// tabulateHostGroups is a helper function representing hostgroups in a tabular form.
-func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, error) {
+// tabulateRankGroups is a helper function representing rankgroups in a tabular form.
+func tabulateRankGroups(groups system.RankGroups, titles ...string) (string, error) {
 	if len(titles) < 2 {
 		return "", errors.New("insufficient number of column titles")
 	}
 	groupTitle := titles[0]
 	columnTitles := titles[1:]
 
-	formatter := NewTableFormatter(titles)
-	var table []TableRow
+	formatter := txtfmt.NewTableFormatter(titles...)
+	var table []txtfmt.TableRow
 
 	for _, result := range groups.Keys() {
-		row := TableRow{groupTitle: groups[result].RangedString()}
+		row := txtfmt.TableRow{groupTitle: groups[result].RangedString()}
 
 		summary := strings.Split(result, rowFieldSep)
 		if len(summary) != len(columnTitles) {

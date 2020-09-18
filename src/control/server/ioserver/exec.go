@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,12 +28,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -53,7 +53,8 @@ type (
 	Runner struct {
 		Config  *Config
 		log     logging.Logger
-		started uint32
+		running atm.Bool
+		cmd     *exec.Cmd
 	}
 )
 
@@ -61,13 +62,14 @@ func (es ExitStatus) Error() string {
 	return string(es)
 }
 
-// Ensure that a monitored subcommand always returns
-// an error of some sort when it exits so that we
-// can respond appropriately.
-func exitStatus(err error) error {
+// GetExitStatus ensure that a monitored subcommand always returns
+// an error of some sort when it exits so that we can respond
+// appropriately.
+func GetExitStatus(err error) error {
 	if err != nil {
 		return err
 	}
+
 	return NormalExit
 }
 
@@ -110,19 +112,24 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 		},
 	}
 
-	r.log.Debugf("%s:%d config: %#v", ioServerBin, r.Config.Index, r.Config)
 	r.log.Debugf("%s:%d args: %s", ioServerBin, r.Config.Index, args)
 	r.log.Debugf("%s:%d env: %s", ioServerBin, r.Config.Index, env)
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
 
-	r.setStarted()
-	defer r.setStopped()
+	if err := cmd.Start(); err != nil {
+		return errors.Wrapf(GetExitStatus(err),
+			"%s (instance %d) failed to start", binPath, r.Config.Index)
+	}
+	r.cmd = cmd
 
-	return errors.Wrapf(exitStatus(cmd.Run()), "%s (instance %d) exited", binPath, r.Config.Index)
+	r.running.SetTrue()
+	defer r.running.SetFalse()
+
+	return errors.Wrapf(GetExitStatus(cmd.Wait()),
+		"%s (instance %d) exited", binPath, r.Config.Index)
 }
 
-// Start asynchronously starts the IOServer instance
-// and reports any errors on the output channel
+// Start asynchronously starts the IOServer instance.
 func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	args, err := r.Config.CmdLineArgs()
 	if err != nil {
@@ -140,16 +147,20 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	return nil
 }
 
-func (r *Runner) setStarted() {
-	atomic.StoreUint32(&r.started, 1)
+// IsRunning indicates whether the Runner process is running or not.
+func (r *Runner) IsRunning() bool {
+	return r.running.Load()
 }
 
-func (r *Runner) setStopped() {
-	atomic.StoreUint32(&r.started, 0)
-}
+// Signal sends relevant signal to the Runner process (idempotent).
+func (r *Runner) Signal(signal os.Signal) error {
+	if !r.IsRunning() {
+		return nil
+	}
 
-func (r *Runner) IsStarted() bool {
-	return atomic.LoadUint32(&r.started) == 1
+	r.log.Debugf("Signalling I/O server instance %d (%s)", r.Config.Index, signal)
+
+	return r.cmd.Process.Signal(signal)
 }
 
 // GetConfig returns the runner's configuration

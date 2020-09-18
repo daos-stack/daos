@@ -32,22 +32,21 @@ timeout: 2400
 server_config:
   name: daos_server
   servers:
+    log_mask: INFO
     bdev_class: nvme
-    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+    bdev_list: ["0000:81:00.0","0000:da:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
-    scm_size: 60
 pool:
-  createmode:
-    mode_RW:
-      mode: 146
-  createset:
-    setname: daos_server
-  createsize:
-    scm_size: 20000000000   # large scm_size for 1K transfersize
-    nvme_size: 40000000000
-  createsvc:
-    svcn: 1
+  mode: 146
+  name: daos_server
+  scm_size: 20000000000   # large scm_size for 1K transfersize
+  nvme_size: 40000000000
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
 ior:
   client_processes: !mux
     np_1:
@@ -65,7 +64,7 @@ ior:
       F: "-v -W -w -r -R -F"
   ior_api: !mux
     daos:
-      api: DAOS
+      api: DFS
     mpiio:
       api: MPIIO
     posix:
@@ -93,8 +92,8 @@ ior:
       block_size: '64M'
   objectclass: !mux
     SX:
-      daos_oclass: "SX"
+      dfs_oclass: "SX"
     2-way_Replication:
-      daos_oclass: "RP_2GX"
+      dfs_oclass: "RP_2GX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"

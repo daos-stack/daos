@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -188,8 +188,8 @@ update_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 
 	D_DEBUG(DB_IO, "Writing "DF_U64" records of size "DF_U64" at offset "
 		DF_U64"\n", nr, rec_size, offset);
-	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0,
-			      &array->va_dkey, 1, &array->va_iod, sgls);
+	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0, 0,
+			      &array->va_dkey, 1, &array->va_iod, NULL, sgls);
 }
 
 static int
@@ -231,7 +231,7 @@ fetch_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 
 	D_DEBUG(DB_IO, "Reading "DF_U64" records of size "DF_U64" at offset "
 		DF_U64"\n", nr, rec_size, offset);
-	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
+	return vos_obj_fetch(array->va_coh, array->va_oid, epoch, 0,
 			     &array->va_dkey, 1, &array->va_iod, sgls);
 }
 
@@ -251,8 +251,8 @@ update_meta(struct vts_array *array, daos_epoch_t epoch,
 	d_iov_set(&array->va_sv_iod.iod_name, &akey, sizeof(akey));
 
 	D_DEBUG(DB_IO, "Writing metadata at epoch "DF_U64"\n", epoch);
-	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0,
-			      &array->va_dkey, 1, &array->va_sv_iod, &sgl);
+	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0, 0,
+			&array->va_dkey, 1, &array->va_sv_iod, NULL, &sgl);
 }
 
 static int
@@ -271,7 +271,7 @@ fetch_meta(struct vts_array *array, daos_epoch_t epoch,
 	d_iov_set(&array->va_sv_iod.iod_name, &akey, sizeof(akey));
 
 	D_DEBUG(DB_IO, "Reading metadata at epoch "DF_U64"\n", epoch);
-	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
+	return vos_obj_fetch(array->va_coh, array->va_oid, epoch, 0,
 			     &array->va_dkey, 1, &array->va_sv_iod, &sgl);
 }
 
@@ -430,7 +430,7 @@ vts_array_get_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t *size)
 	rc = vos_obj_query_key(array->va_coh, array->va_oid,
 			       DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
 			       epoch, &dkey, &array->va_iod.iod_name,
-			       &recx);
+			       &recx, NULL);
 
 	if (rc == -DER_NONEXIST) {
 		*size = 0;

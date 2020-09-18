@@ -24,8 +24,10 @@ def scons():
     for src_file in SRC_FILES:
         cache[src_file] = denv.SharedObject(src_file)
 
+    denv.AppendUnique(LIBS=['gurt'])
     ds_sec = daos_build.library(denv, 'security',
-                                get_objects(cache, 'srv.c', 'srv_acl.c'))
+                                get_objects(cache, 'srv.c', 'srv_acl.c'),
+                                install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
     # dc_security: Security Client

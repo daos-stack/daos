@@ -3,7 +3,8 @@ import os
 import daos_build
 
 HEADERS = ['ioil_io.h', 'ioil_defines.h',
-           'ioil_api.h', 'ioil_preload.h']
+           'ioil_api.h', 'ioil_preload.h',
+           'ioil.h']
 COMMON_SRC = ['dfuse_da.c',
               'dfuse_obj_da.c',
               'dfuse_vector.c']
@@ -32,7 +33,8 @@ OPS_SRC = ['create',
            'setattr',
            'symlink',
            'unlink',
-           'write']
+           'write',
+           'statfs']
 
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
 
@@ -54,6 +56,8 @@ def build_client_libs_shared(env):
     ilenv = env.Clone()
     ilenv.AppendUnique(CFLAGS=['-fPIC'])
     ilenv.AppendUnique(CPPDEFINES=['IOIL_PRELOAD'])
+    ilenv.AppendUnique(LIBPATH=["../dfs"])
+    ilenv.AppendUnique(LIBS=['dfs'])
     penv = ilenv.Clone()
     penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
 
@@ -103,6 +107,31 @@ def build_client_libs_static(env, common):
 
     return il_lib + dfuse_lib
 
+def check_struct_member(env, text, struct, member):
+    """scons check for a struct member existing"""
+
+    env.Message('Checking for {} in {} '.format(member, struct))
+
+    src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct,
+                                                                 member)
+    rc = env.TryCompile(src, '.c')
+    env.Result(rc)
+    return rc
+
+def configure_fuse(cenv):
+    """Configure for specific version of fuse"""
+    if GetOption('help') or GetOption('clean'):
+        return
+
+    check = Configure(cenv,
+                      custom_tests={'CheckStructMember': check_struct_member})
+
+    if check.CheckStructMember('#include <fuse3/fuse.h>',
+                               'struct fuse_file_info',
+                               'cache_readdir'):
+        cenv.AppendUnique(CPPDEFINES=['-DHAVE_CACHE_READDIR=1'])
+    check.Finish()
+
 def scons():
     """Scons function"""
 
@@ -128,22 +157,24 @@ def scons():
     common = build_common(dfuse_env, COMMON_SRC, False)
     libs += build_client_libs_static(static_env, common)
 
-    # Now build the CNSS application
     cenv = dfuse_env.Clone()
     # Set the define in SConscript so that it's in place for the prereqs.require
     # check which will verify fuse3/fuse.h can be loaded.
-    cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
+    cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=35'])
     cenv.AppendUnique(LIBPATH=["../dfs"])
 
-    cenv.AppendUnique(LIBS=['dfs'])
+    cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
     prereqs.require(cenv, 'fuse')
+
+    configure_fuse(cenv)
 
     dfuse_obj = []
     for src in DFUSE_SRC:
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
+    cenv.AppendUnique(LIBS=['gurt'])
     progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj)
 
     Default(progs + libs)

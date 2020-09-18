@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,7 @@ extern "C" {
  * terminator.
  */
 #define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
+/** DAOS_ACL_MAX_PRINCIPAL_LEN including NULL terminator */
 #define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
@@ -60,7 +61,7 @@ extern "C" {
 /**
  * Maximum length of daos_acl::dal_ace (dal_len's value).
  */
-#define DAOS_ACL_MAX_ACE_LEN		(8192)
+#define DAOS_ACL_MAX_ACE_LEN		(65536)
 
 /**
  * Maximum length of an ACE provided in string format:
@@ -110,6 +111,13 @@ enum daos_acl_access_type {
 };
 
 /**
+ * Mask of all valid access bits
+ */
+#define DAOS_ACL_ACCESS_ALL	(DAOS_ACL_ACCESS_ALLOW |		\
+				 DAOS_ACL_ACCESS_AUDIT |		\
+				 DAOS_ACL_ACCESS_ALARM)
+
+/**
  * Bits representing access flags
  */
 enum daos_acl_flags {
@@ -124,12 +132,54 @@ enum daos_acl_flags {
 };
 
 /**
+ * Mask of all valid flag bits
+ */
+#define DAOS_ACL_FLAG_ALL	(DAOS_ACL_FLAG_GROUP |			\
+				 DAOS_ACL_FLAG_POOL_INHERIT |		\
+				 DAOS_ACL_FLAG_ACCESS_FAIL |		\
+				 DAOS_ACL_FLAG_ACCESS_SUCCESS)
+
+/**
  * Bits representing the specific permissions that may be set
  */
 enum daos_acl_perm {
-	DAOS_ACL_PERM_READ	= (1U << 0),
-	DAOS_ACL_PERM_WRITE	= (1U << 1)
+	DAOS_ACL_PERM_READ		= (1U << 0),
+	DAOS_ACL_PERM_WRITE		= (1U << 1),
+	DAOS_ACL_PERM_CREATE_CONT	= (1U << 2),
+	DAOS_ACL_PERM_DEL_CONT		= (1U << 3),
+	DAOS_ACL_PERM_GET_PROP		= (1U << 4),
+	DAOS_ACL_PERM_SET_PROP		= (1U << 5),
+	DAOS_ACL_PERM_GET_ACL		= (1U << 6),
+	DAOS_ACL_PERM_SET_ACL		= (1U << 7),
+	DAOS_ACL_PERM_SET_OWNER		= (1U << 8),
 };
+
+/**
+ * Mask of all valid permissions for DAOS pools
+ */
+#define DAOS_ACL_PERM_POOL_ALL	(DAOS_ACL_PERM_READ |			\
+				 DAOS_ACL_PERM_GET_PROP |		\
+				 DAOS_ACL_PERM_WRITE |			\
+				 DAOS_ACL_PERM_CREATE_CONT |		\
+				 DAOS_ACL_PERM_DEL_CONT)
+
+/**
+ * Mask of all valid permissions for DAOS containers
+ */
+#define DAOS_ACL_PERM_CONT_ALL	(DAOS_ACL_PERM_READ |			\
+				 DAOS_ACL_PERM_WRITE |			\
+				 DAOS_ACL_PERM_DEL_CONT |		\
+				 DAOS_ACL_PERM_GET_PROP |		\
+				 DAOS_ACL_PERM_SET_PROP |		\
+				 DAOS_ACL_PERM_GET_ACL |		\
+				 DAOS_ACL_PERM_SET_ACL |		\
+				 DAOS_ACL_PERM_SET_OWNER)
+
+/**
+ * Mask of all valid permission bits in DAOS
+ */
+#define DAOS_ACL_PERM_ALL	(DAOS_ACL_PERM_POOL_ALL |		\
+				 DAOS_ACL_PERM_CONT_ALL)
 
 /**
  * Access Control Entry for a given principal.
@@ -266,8 +316,6 @@ daos_acl_add_ace(struct daos_acl **acl, struct daos_ace *new_ace);
  * \param[in]	type			Principal type of the ACE to remove
  * \param[in]	principal_name		Principal name of the ACE to remove
  *					(NULL if type isn't user/group)
- * \param[out]	new_acl			Reallocated copy of the ACL with the
- *					ACE removed
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
@@ -299,6 +347,34 @@ daos_acl_dump(struct daos_acl *acl);
  */
 int
 daos_acl_validate(struct daos_acl *acl);
+
+/**
+ * Check that the Access Control List is valid for use with a DAOS pool.
+ *
+ * This includes the checks in daos_acl_validate().
+ *
+ * \param	acl	Access Control List to sanity check
+ *
+ * \return	0		ACL is valid
+ *		-DER_INVAL	ACL is not valid
+ *		-DER_NOMEM	Ran out of memory while checking
+ */
+int
+daos_acl_pool_validate(struct daos_acl *acl);
+
+/**
+ * Check that the Access Control List is valid for use with a DAOS container.
+ *
+ * This includes the checks in daos_acl_validate().
+ *
+ * \param	acl	Access Control List to sanity check
+ *
+ * \return	0		ACL is valid
+ *		-DER_INVAL	ACL is not valid
+ *		-DER_NOMEM	Ran out of memory while checking
+ */
+int
+daos_acl_cont_validate(struct daos_acl *acl);
 
 /**
  * Allocate a new Access Control Entry with an appropriately aligned principal
@@ -436,6 +512,17 @@ int
 daos_acl_principal_to_gid(const char *principal, gid_t *gid);
 
 /**
+ * Get the principal name string from an Access Control Entry.
+ *
+ * \param[in]	ace	Access Control Entry
+ *
+ * \return	Either the string from the principal name field, or one of the
+ *		special principal names: OWNER@, GROUP@, EVERYONE@
+ */
+const char *
+daos_ace_get_principal_str(struct daos_ace *ace);
+
+/**
  * Convert an Access Control Entry formatted as a string to a daos_ace
  * structure.
  *
@@ -465,6 +552,20 @@ daos_ace_from_str(const char *str, struct daos_ace **ace);
  */
 int
 daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
+
+/**
+ * Convert an Access Control Entry string to a verbose string.
+ *
+ * \param[in]	ace_str		ACE string
+ * \param[out]	buf		Output buffer
+ * \param[in]	buf_len		Length of output buffer
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input string
+ *		-DER_TRUNC	Output didn't fit in buffer
+ */
+int
+daos_ace_str_get_verbose(const char *ace_str, char *buf, size_t buf_len);
 
 /**
  * Convert a list of Access Control Entries formatted as strings to a daos_acl

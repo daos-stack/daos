@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,12 +89,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	dfuse_show_flags(fs_handle, conn->capable);
 
-	/* This does not work as ioctl.c assumes fi->fh is a file handle */
-	conn->want &= ~FUSE_CAP_IOCTL_DIR;
-
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
 	dfuse_show_flags(fs_handle, conn->want);
+
+	conn->max_background = 16;
+	conn->congestion_threshold = 8;
 
 	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
 	DFUSE_TRA_INFO(fs_handle,
@@ -119,9 +119,8 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dfs_ops->create) {
+	if (!parent_inode->ie_dfs->dfs_ops->create)
 		D_GOTO(err, rc = ENOTSUP);
-	}
 
 	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode,
 					      fi);
@@ -160,7 +159,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (inode->ie_dfs->dfs_ops->getattr)
 		inode->ie_dfs->dfs_ops->getattr(req, inode);
 	else
-		DFUSE_REPLY_ATTR(req, &inode->ie_stat);
+		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
 	if (rlink)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -239,7 +238,7 @@ static void
 df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*parent_inode;
+	struct dfuse_inode_entry	*parent_inode = NULL;
 	d_list_t			*rlink;
 	int				rc;
 
@@ -251,9 +250,8 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dfs_ops->mkdir) {
+	if (!parent_inode->ie_dfs->dfs_ops->mkdir)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
 
 	parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,	name, mode);
 
@@ -262,7 +260,7 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent_inode, req, rc);
 }
 
 static void
@@ -341,9 +339,9 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!parent_inode->ie_dfs->dfs_ops->unlink) {
+	if (!parent_inode->ie_dfs->dfs_ops->unlink)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -378,9 +376,9 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->readdir) {
+	if (!inode->ie_dfs->dfs_ops->readdir)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->readdir(req, inode, size, offset, fi);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -408,9 +406,9 @@ df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->symlink) {
+	if (!inode->ie_dfs->dfs_ops->symlink)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->symlink(req, link, inode, name);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -438,9 +436,9 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->setxattr) {
+	if (!inode->ie_dfs->dfs_ops->setxattr)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->setxattr(req, inode, name, value, size, flags);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -467,9 +465,9 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->getxattr) {
+	if (!inode->ie_dfs->dfs_ops->getxattr)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->getxattr(req, inode, name, size);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -496,9 +494,9 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->removexattr) {
+	if (!inode->ie_dfs->dfs_ops->removexattr)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->removexattr(req, inode, name);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -525,9 +523,9 @@ df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 
 	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	if (!inode->ie_dfs->dfs_ops->listxattr) {
+	if (!inode->ie_dfs->dfs_ops->listxattr)
 		D_GOTO(decref, rc = ENOTSUP);
-	}
+
 	inode->ie_dfs->dfs_ops->listxattr(req, inode, size);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -572,7 +570,6 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		newparent_inode = container_of(rlink2, struct dfuse_inode_entry,
 					       ie_htl);
 
-
 		if (parent_inode->ie_dfs != newparent_inode->ie_dfs)
 			D_GOTO(decref_both, rc = EXDEV);
 	}
@@ -586,6 +583,35 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	return;
 decref_both:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink2);
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+static void
+df_ll_statfs(fuse_req_t req, fuse_ino_t ino)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", ino);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!inode->ie_dfs->dfs_ops->statfs)
+		D_GOTO(decref, rc = ENOTSUP);
+
+	inode->ie_dfs->dfs_ops->statfs(req, inode);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
@@ -615,15 +641,18 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.listxattr	= dfuse_cb_listxattr,
 	.removexattr	= dfuse_cb_removexattr,
 	.setattr	= dfuse_cb_setattr,
+	.statfs		= dfuse_cb_statfs,
 };
 
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
 	.mkdir		= dfuse_cont_mkdir,
+	.statfs		= dfuse_cb_statfs,
 };
 
 struct dfuse_inode_ops dfuse_pool_ops = {
 	.lookup		= dfuse_pool_lookup,
+	.statfs		= dfuse_cb_statfs,
 };
 
 /* Return the ops that should be passed to fuse */
@@ -653,6 +682,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->listxattr	= df_ll_listxattr;
 	fuse_ops->removexattr	= df_ll_removexattr;
 	fuse_ops->setattr	= df_ll_setattr;
+	fuse_ops->statfs	= df_ll_statfs;
 
 	/* Ops that do not need to support per-inode indirection */
 	fuse_ops->init = dfuse_fuse_init;
@@ -669,7 +699,7 @@ struct fuse_lowlevel_ops
 	 */
 	fuse_ops->open		= dfuse_cb_open;
 	fuse_ops->release	= dfuse_cb_release;
-	fuse_ops->write		= dfuse_cb_write;
+	fuse_ops->write_buf	= dfuse_cb_write;
 	fuse_ops->read		= dfuse_cb_read;
 	fuse_ops->readlink	= dfuse_cb_readlink;
 	fuse_ops->ioctl		= dfuse_cb_ioctl;

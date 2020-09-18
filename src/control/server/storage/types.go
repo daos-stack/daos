@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+
 package storage
 
 import (
@@ -27,7 +28,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/inhies/go-bytesize"
+	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
@@ -61,14 +62,15 @@ type (
 		SocketID        uint32
 		PhysicalID      uint32
 		Capacity        uint64
+		UID             string
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
-	ScmModules []ScmModule
+	ScmModules []*ScmModule
 
 	// ScmNamespace represents a mapping of AppDirect regions to block device files.
 	ScmNamespace struct {
-		UUID        string `json:"uuid"`
+		UUID        string `json:"uuid" hash:"ignore"`
 		BlockDevice string `json:"blockdev"`
 		Name        string `json:"dev"`
 		NumaNode    uint32 `json:"numa_node"`
@@ -76,41 +78,70 @@ type (
 	}
 
 	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
-	ScmNamespaces []ScmNamespace
+	ScmNamespaces []*ScmNamespace
 
-	// NvmeDeviceHealth represents a set of health statistics for a NVMe device.
-	NvmeDeviceHealth struct {
-		Temp            uint32
-		TempWarnTime    uint32
-		TempCritTime    uint32
-		CtrlBusyTime    uint64
-		PowerCycles     uint64
-		PowerOnHours    uint64
-		UnsafeShutdowns uint64
-		MediaErrors     uint64
-		ErrorLogEntries uint64
-		TempWarn        bool
-		AvailSpareWarn  bool
-		ReliabilityWarn bool
-		ReadOnlyWarn    bool
-		VolatileWarn    bool
+	ScmMountPoint struct {
+		Info string
+		Path string
 	}
 
-	// NvmeNamespace represents an individual NVMe namespace on a device.
+	ScmMountPoints []*ScmMountPoint
+
+	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
+	ScmFirmwareUpdateStatus uint32
+
+	// ScmFirmwareInfo describes the firmware information of an SCM module.
+	ScmFirmwareInfo struct {
+		ActiveVersion     string
+		StagedVersion     string
+		ImageMaxSizeBytes uint32
+		UpdateStatus      ScmFirmwareUpdateStatus
+	}
+
+	// NvmeControllerHealth represents a set of health statistics for a NVMe device
+	// and mirrors C.struct_nvme_health_stats.
+	NvmeControllerHealth struct {
+		Model           string `json:"model"`
+		Serial          string `json:"serial"`
+		Timestamp       uint64 `json:"timestamp"`
+		ErrorCount      uint64 `json:"err_count"`
+		TempWarnTime    uint32 `json:"warn_temp_time"`
+		TempCritTime    uint32 `json:"crit_temp_time"`
+		CtrlBusyTime    uint64 `json:"ctrl_busy_time"`
+		PowerCycles     uint64 `json:"power_cycles"`
+		PowerOnHours    uint64 `json:"power_on_hours"`
+		UnsafeShutdowns uint64 `json:"unsafe_shutdowns"`
+		MediaErrors     uint64 `json:"media_errs"`
+		ErrorLogEntries uint64 `json:"err_log_entries"`
+		ReadErrors      uint32 `json:"bio_read_errs"`
+		WriteErrors     uint32 `json:"bio_write_errs"`
+		UnmapErrors     uint32 `json:"bio_unmap_errs"`
+		ChecksumErrors  uint32 `json:"checksum_errs"`
+		Temperature     uint32 `json:"temperature"`
+		TempWarn        bool   `json:"temp_warn"`
+		AvailSpareWarn  bool   `json:"avail_spare_warn"`
+		ReliabilityWarn bool   `json:"dev_reliability_warn"`
+		ReadOnlyWarn    bool   `json:"read_only_warn"`
+		VolatileWarn    bool   `json:"volatile_mem_warn"`
+	}
+
+	// NvmeNamespace represents an individual NVMe namespace on a device and
+	// mirrors C.struct_ns_t.
 	NvmeNamespace struct {
-		ID   int32
-		Size int32
+		ID   uint32
+		Size uint64
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
-	// and namespace information.
+	// and namespace information and mirrors C.struct_ns_t.
 	NvmeController struct {
+		Info        string
 		Model       string
-		Serial      string
+		Serial      string `hash:"ignore"`
 		PciAddr     string
 		FwRev       string
 		SocketID    int32
-		HealthStats *NvmeDeviceHealth
+		HealthStats *NvmeControllerHealth `hash:"ignore"`
 		Namespaces  []*NvmeNamespace
 	}
 
@@ -118,101 +149,135 @@ type (
 	NvmeControllers []*NvmeController
 )
 
-func (m *ScmModule) String() string {
-	return fmt.Sprintf("PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", m.PhysicalID, bytesize.New(float64(m.Capacity)),
-		m.SocketID, m.ControllerID, m.ChannelID, m.ChannelPosition)
+const (
+	// ScmUpdateStatusUnknown indicates that the firmware update status is unknown.
+	ScmUpdateStatusUnknown ScmFirmwareUpdateStatus = iota
+	// ScmUpdateStatusStaged indicates that a new firmware version has been staged.
+	ScmUpdateStatusStaged
+	// ScmUpdateStatusSuccess indicates that the firmware update was successfully applied.
+	ScmUpdateStatusSuccess
+	// ScmUpdateStatusFailed indicates that the firmware update failed.
+	ScmUpdateStatusFailed
+)
+
+// String translates the update status to a string
+func (s ScmFirmwareUpdateStatus) String() string {
+	switch s {
+	case ScmUpdateStatusStaged:
+		return "Staged"
+	case ScmUpdateStatusSuccess:
+		return "Success"
+	case ScmUpdateStatusFailed:
+		return "Failed"
+	}
+	return "Unknown"
 }
 
-func (ms ScmModules) String() string {
+func (ndh *NvmeControllerHealth) TempK() uint32 {
+	return uint32(ndh.Temperature)
+}
+
+func (ndh *NvmeControllerHealth) TempC() float32 {
+	return float32(ndh.Temperature) - 273.15
+}
+
+func (ndh *NvmeControllerHealth) TempF() float32 {
+	return ndh.TempC()*(9/5) + 32
+}
+
+func (sm *ScmModule) String() string {
+	// capacity given in IEC standard units.
+	return fmt.Sprintf("UID:%s PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
+		"chan:%d pos:%d)", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
+		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition)
+}
+
+func (sms ScmModules) String() string {
 	var buf bytes.Buffer
 
-	if len(ms) == 0 {
+	if len(sms) == 0 {
 		return "\t\tnone\n"
 	}
 
-	sort.Slice(ms, func(i, j int) bool { return ms[i].PhysicalID < ms[j].PhysicalID })
+	sort.Slice(sms, func(i, j int) bool { return sms[i].PhysicalID < sms[j].PhysicalID })
 
-	for _, m := range ms {
-		fmt.Fprintf(&buf, "\t\t%s\n", &m)
+	for _, sm := range sms {
+		fmt.Fprintf(&buf, "\t\t%s\n", sm)
 	}
 
 	return buf.String()
 }
 
-// Summary reports accumulated storage space and the number of modules.
-func (ms ScmModules) Summary() string {
-	tCap := bytesize.New(0)
-	for _, m := range ms {
-		tCap += bytesize.New(float64(m.Capacity))
+// Capacity reports total storage capacity (bytes) across all modules.
+func (sms ScmModules) Capacity() (tb uint64) {
+	for _, sm := range sms {
+		tb += sm.Capacity
 	}
-
-	return fmt.Sprintf("%s (%d %s)",
-		tCap, len(ms), common.Pluralise("module", len(ms)))
+	return
 }
 
-func (n *ScmNamespace) String() string {
-	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", n.BlockDevice, n.NumaNode,
-		bytesize.New(float64(n.Size)))
+// Summary reports total storage space and the number of modules.
+//
+// Capacity given in IEC standard units.
+func (sms ScmModules) Summary() string {
+	return fmt.Sprintf("%s (%d %s)", humanize.IBytes(sms.Capacity()), len(sms),
+		common.Pluralise("module", len(sms)))
 }
 
-func (ns ScmNamespaces) String() string {
+func (sn *ScmNamespace) String() string {
+	// capacity given in IEC standard units.
+	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", sn.BlockDevice, sn.NumaNode,
+		humanize.Bytes(sn.Size))
+}
+
+func (sns ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
-	if len(ns) == 0 {
+	if len(sns) == 0 {
 		return "\t\tnone\n"
 	}
 
-	sort.Slice(ns, func(i, j int) bool { return ns[i].BlockDevice < ns[j].BlockDevice })
+	sort.Slice(sns, func(i, j int) bool { return sns[i].BlockDevice < sns[j].BlockDevice })
 
-	for _, n := range ns {
-		fmt.Fprintf(&buf, "\t\t%s\n", &n)
+	for _, sn := range sns {
+		fmt.Fprintf(&buf, "\t\t%s\n", sn)
 	}
 
 	return buf.String()
 }
 
-// Summary reports accumulated storage space and the number of namespaces.
-func (ns ScmNamespaces) Summary() string {
-	tCap := bytesize.New(0)
-	for _, n := range ns {
-		tCap += bytesize.New(float64(n.Size))
+// Capacity reports total storage capacity (bytes) across all namespaces.
+func (sns ScmNamespaces) Capacity() (tb uint64) {
+	for _, sn := range sns {
+		tb += sn.Size
 	}
-
-	return fmt.Sprintf("%s (%d %s)",
-		tCap, len(ns), common.Pluralise("namespace", len(ns)))
+	return
 }
 
-// ctrlrDetail provides custom string representation for Controller type
-// defined outside this package.
-func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *NvmeController) {
-	if c == nil {
-		fmt.Fprintf(buf, "<nil>\n")
-		return
-	}
-
-	tCap := bytesize.New(0)
-	for _, n := range c.Namespaces {
-		tCap += bytesize.GB * bytesize.New(float64(n.Size))
-	}
-
-	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		c.PciAddr, c.Model, c.FwRev, c.SocketID, tCap)
+// Summary reports total storage space and the number of namespaces.
+//
+// Capacity given in IEC standard units.
+func (sns ScmNamespaces) Summary() string {
+	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(sns.Capacity()), len(sns),
+		common.Pluralise("namespace", len(sns)))
 }
 
-func (ncs NvmeControllers) String() string {
-	buf := bytes.NewBufferString("NVMe controllers and namespaces:\n")
-
-	if len(ncs) == 0 {
-		fmt.Fprint(buf, "\t\tnone\n")
-		return buf.String()
+func (nc *NvmeController) Capacity() (tb uint64) {
+	for _, n := range nc.Namespaces {
+		tb += n.Size
 	}
+	return
+}
 
-	sort.Slice(ncs, func(i, j int) bool { return ncs[i].PciAddr < ncs[j].PciAddr })
-
-	for _, ctrlr := range ncs {
-		ncs.ctrlrDetail(buf, ctrlr)
+func (ncs NvmeControllers) Capacity() (tb uint64) {
+	for _, c := range ncs {
+		tb += (*NvmeController)(c).Capacity()
 	}
+	return
+}
 
-	return buf.String()
+// Summary reports accumulated storage space and the number of controllers.
+func (ncs NvmeControllers) Summary() string {
+	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ncs.Capacity()),
+		len(ncs), common.Pluralise("controller", len(ncs)))
 }

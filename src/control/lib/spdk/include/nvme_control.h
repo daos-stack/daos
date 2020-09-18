@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2018-2019 Intel Corporation.
+* (C) Copyright 2018-2020 Intel Corporation.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -34,6 +34,18 @@ struct ret_t *
 nvme_discover(void);
 
 /**
+ * Wipe NVMe controller namespace LBA-0.
+ *
+ * Removes any data container structures e.g. blobstore.
+ *
+ * \param ctrlr_pci_addr PCI address of NVMe controller.
+ *
+ * \return a pointer to a return struct (ret_t).
+ */
+struct ret_t *
+nvme_wipe_namespaces(void);
+
+/**
  * Format NVMe controller namespace.
  *
  * \param ctrlr_pci_addr PCI address of NVMe controller.
@@ -54,11 +66,5 @@ nvme_format(char *ctrlr_pci_addr);
  */
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
-
-/**
- * Cleanup structs held in memory.
- */
-void
-nvme_cleanup(void);
 
 #endif

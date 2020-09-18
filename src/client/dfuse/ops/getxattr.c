@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		  const char *name, size_t size)
 {
 	size_t out_size = 0;
-	char *value;
+	char *value = NULL;
 	int rc;
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
@@ -60,5 +60,6 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	D_FREE(value);
 	return;
 err:
+	D_FREE(value);
 	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }

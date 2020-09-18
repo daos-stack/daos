@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/tse.h>
+#include <daos/task.h>
 #include <daos/placement.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
@@ -48,13 +49,6 @@
  * This environment is mostly for performance evaluation.
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
-
-/* EC parity is stored in a private address range that is selected by setting
- * the most-significant bit of the offset (an unsigned long). This effectively
- * limits the addressing of user extents to the lower 63 bits of the offset
- * range. The client stack should enforce this limitation.
- */
-#define PARITY_INDICATOR (1UL << 63)
 
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
@@ -73,7 +67,7 @@ struct dc_obj_shard {
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	uint32_t		do_target_idx;	/* target VOS index in node */
+	uint8_t			do_target_idx;	/* target VOS index in node */
 	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
@@ -135,17 +129,44 @@ struct dc_object {
  *    it, create oiod/siod to specify each shard/tgt's IO req.
  */
 struct obj_reasb_req {
+	/* epoch for IO (now only used for fetch */
+	struct dtx_epoch		 orr_epoch;
+	/* original user input iods/sgls */
+	daos_iod_t			*orr_uiods;
+	d_sg_list_t			*orr_usgls;
+	/* reassembled iods/sgls */
 	daos_iod_t			*orr_iods;
 	d_sg_list_t			*orr_sgls;
 	struct obj_io_desc		*orr_oiods;
 	struct obj_ec_recx_array	*orr_recxs;
 	struct obj_ec_seg_sorter	*orr_sorters;
+	struct dcs_layout		*orr_singv_los;
+	/* to record returned data size from each targets */
+	daos_size_t			*orr_data_sizes;
 	uint32_t			 orr_tgt_nr;
+	struct daos_oclass_attr		*orr_oca;
+	struct obj_ec_codec		*orr_codec;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
 	uint8_t				*tgt_bitmap;
 	struct obj_tgt_oiod		*tgt_oiods;
+	/* IO failure information */
+	struct obj_ec_fail_info		*orr_fail;
+	/* object ID */
+	daos_obj_id_t			 orr_oid;
+	/* #iods of IO req */
+	uint32_t			 orr_iod_nr;
+	/* for data recovery flag */
+	uint32_t			 orr_recov:1,
+	/* for iod_size fetching flag */
+					 orr_size_fetch:1,
+	/* for iod_size fetched flag */
+					 orr_size_fetched:1,
+	/* only with single target flag */
+					 orr_single_tgt:1,
+	/* only for single-value IO flag */
+					 orr_singv_only:1;
 };
 
 static inline void
@@ -155,19 +176,75 @@ enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 }
 
 extern struct dss_module_key obj_module_key;
-enum obj_profile_op {
-	OBJ_PF_UPDATE_PREP = 0,
-	OBJ_PF_UPDATE_DISPATCH,
-	OBJ_PF_UPDATE_LOCAL,
-	OBJ_PF_UPDATE_END,
-	OBJ_PF_UPDATE_WAIT,
-	OBJ_PF_UPDATE_REPLY,
-	OBJ_PF_UPDATE,
+
+/* Per pool attached to the migrate tls(per xstream) */
+struct migrate_pool_tls {
+	/* POOL UUID and pool to be migrated */
+	uuid_t			mpt_pool_uuid;
+	struct ds_pool_child	*mpt_pool;
+	unsigned int		mpt_version;
+
+	/* Link to the migrate_pool_tls list */
+	d_list_t		mpt_list;
+
+	/* Pool/Container handle UUID to be migrated, the migrate
+	 * should provide the pool/handle uuid
+	 */
+	uuid_t			mpt_poh_uuid;
+	uuid_t			mpt_coh_uuid;
+	daos_handle_t		mpt_pool_hdl;
+
+	/* Container/objects to be migrated will be attached to the tree */
+	daos_handle_t		mpt_root_hdl;
+	struct btr_root		mpt_root;
+
+	/* Hash table to store the container uuids which have already been
+	 * deleted (used by reintegration)
+	 */
+	struct d_hash_table	mpt_cont_dest_tab;
+
+	/* Service rank list for migrate fetch RPC */
+	d_rank_list_t		mpt_svc_list;
+
+	ABT_eventual		mpt_done_eventual;
+	/* Migrate status */
+	uint64_t		mpt_obj_count;
+	uint64_t		mpt_rec_count;
+	uint64_t		mpt_size;
+	int			mpt_status;
+
+	/* Max epoch for the migration, used for migrate fetch RPC */
+	uint64_t		mpt_max_eph;
+
+	/* The ULT number generated on the xstream */
+	uint64_t		mpt_generated_ult;
+
+	/* The ULT number executed on the xstream */
+	uint64_t		mpt_executed_ult;
+
+	/* The ULT number generated for object on the xstream */
+	uint64_t		mpt_obj_generated_ult;
+
+	/* The ULT number executed on the xstream */
+	uint64_t		mpt_obj_executed_ult;
+
+	/* reference count for the structure */
+	uint64_t		mpt_refcount;
+	/* migrate leader ULT */
+	unsigned int		mpt_ult_running:1,
+	/* Indicates whether containers should be cleared of all contents
+	 * before any data is migrated to them (via destroy & recreate)
+	 */
+				mpt_clear_conts:1,
+				mpt_fini:1;
 };
+
+void
+migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
-	struct srv_profile	*ot_sp;
+	d_list_t		ot_pool_list;
 };
 
 struct obj_ec_parity {
@@ -193,15 +270,17 @@ struct shard_auxi_args {
 	struct dc_object	*obj;
 	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
-	uint64_t		 epoch;
+	struct dtx_epoch	 epoch;
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
-	uint16_t		 flags;
+	/* only for EC, the target idx [0, k + p) */
+	uint16_t		 ec_tgt_idx;
 	/* group index within the req_tgts->ort_shard_tgts */
 	uint16_t		 grp_idx;
 	/* only for EC, the start shard of the EC stripe */
 	uint32_t		 start_shard;
+	uint32_t		 flags;
 };
 
 struct shard_rw_args {
@@ -212,6 +291,9 @@ struct shard_rw_args {
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
 	uint64_t		*offs;
+	struct dcs_csum_info	*dkey_csum;
+	struct dcs_iod_csums	*iod_csums;
+	struct obj_reasb_req	*reasb_req;
 };
 
 struct shard_punch_args {
@@ -227,7 +309,36 @@ struct shard_punch_args {
 struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
+	struct dtx_id		 la_dti;
+	daos_recx_t		*la_recxs;
+	uint32_t		la_nr;
+	d_sg_list_t		*la_sgl;
+	daos_key_desc_t		*la_kds;
+	daos_anchor_t		*la_anchor;
+	daos_anchor_t		*la_akey_anchor;
+	daos_anchor_t		*la_dkey_anchor;
 };
+
+struct obj_auxi_list_recx {
+	daos_recx_t	recx;
+	d_list_t	recx_list;
+};
+
+struct obj_auxi_list_key {
+	d_iov_t		key;
+	d_list_t	key_list;
+};
+
+struct obj_auxi_list_obj_enum {
+	d_iov_t		dkey;
+	d_list_t	enum_list;
+	daos_iod_t	*iods;
+	d_list_t	*recx_lists;
+	int		iods_nr;
+};
+
+int
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;
@@ -317,10 +428,12 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
-			   uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
+int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
+			   uint32_t flags, struct dc_object *obj,
+			   daos_key_t *dkey, daos_key_t *akey,
 			   daos_recx_t *recx, const uuid_t coh_uuid,
-			   const uuid_t cont_uuid, unsigned int *map_ver,
+			   const uuid_t cont_uuid, struct dtx_id *dti,
+			   unsigned int *map_ver, daos_handle_t th,
 			   tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
@@ -329,13 +442,95 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
+bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
+int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
+		      daos_recx_t **recxs_p, unsigned int *nr);
+int obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
+		       uint32_t iod_nr, struct daos_oclass_attr *oca);
+void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
+int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
+		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
+		  crt_bulk_t **p_bulks);
+int obj_get_replicas(struct dc_object *obj);
+int obj_shard_open(struct dc_object *obj, unsigned int shard,
+		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
+int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
+int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
+			tse_task_t **taskp);
+
+#define obj_shard_close(shard)	dc_obj_shard_close(shard)
+int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
+			   daos_recx_t **recxs_p, unsigned int *iod_nr);
+int obj_ec_singv_encode_buf(daos_obj_id_t oid, daos_iod_t *iod,
+			    struct daos_oclass_attr *oca,
+			    d_sg_list_t *sgl, d_iov_t *e_iov);
+int obj_ec_singv_split(daos_obj_id_t oid, uint32_t shard, daos_size_t iod_size,
+		       struct daos_oclass_attr *oca, d_sg_list_t *sgl);
+int
+obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
+		       daos_epoch_t epoch, uint32_t flags, uint32_t start_shard,
+		       uint32_t nr, bool for_update, bool deg_fetch,
+		       struct daos_recx_ep_list **recov_lists_ptr);
 
 static inline bool
 obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EVICTED || daos_crt_network_error(err);
+	       err == -DER_EVICTED || err == -DER_CSUM || err == -DER_TX_BUSY ||
+	       daos_crt_network_error(err);
+}
+
+static inline daos_handle_t
+obj_ptr2hdl(struct dc_object *obj)
+{
+	daos_handle_t oh;
+
+	daos_hhash_link_key(&obj->cob_hlink, &oh.cookie);
+	return oh;
+}
+
+static inline void
+dc_io_epoch_set(struct dtx_epoch *epoch)
+{
+	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
+		epoch->oe_value = crt_hlc_get();
+		epoch->oe_first = epoch->oe_value;
+		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
+		epoch->oe_flags = 0;
+	} else {
+		epoch->oe_value = DAOS_EPOCH_MAX;
+		epoch->oe_first = epoch->oe_value;
+		epoch->oe_flags = 0;
+	}
+}
+
+static inline void
+dc_sgl_out_set(d_sg_list_t *sgl, daos_size_t data_size)
+{
+	d_iov_t		*iov;
+	daos_size_t	 buf_size;
+	uint32_t	 i;
+
+	if (data_size == 0) {
+		sgl->sg_nr_out = 0;
+		return;
+	}
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++) {
+		iov = &sgl->sg_iovs[i];
+		buf_size += iov->iov_buf_len;
+		if (buf_size < data_size) {
+			iov->iov_len = iov->iov_buf_len;
+			sgl->sg_nr_out = i + 1;
+			continue;
+		}
+
+		iov->iov_len = iov->iov_buf_len -
+			       (buf_size - data_size);
+		sgl->sg_nr_out = i + 1;
+		break;
+	}
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);
@@ -343,13 +538,25 @@ void obj_shard_addref(struct dc_obj_shard *shard);
 void obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
+struct dc_object *obj_hdl2ptr(daos_handle_t oh);
+
+/* handles, pointers for handling I/O */
+struct obj_io_context {
+	struct ds_cont_hdl	*ioc_coh;
+	struct ds_cont_child	*ioc_coc;
+	daos_handle_t		 ioc_vos_coh;
+	uint32_t		 ioc_map_ver;
+	uint32_t		 ioc_began:1,
+				 ioc_free_sgls:1,
+				 ioc_lost_reply:1;
+};
 
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
-	struct ds_cont_hdl	*cont_hdl;
-	struct ds_cont_child	*cont;
+	struct obj_io_context	*ioc;
 	void			*args;
 	uint32_t		 flags;
+	uint32_t		 start; /* The start shard for EC obj. */
 };
 
 int
@@ -358,6 +565,10 @@ ds_obj_remote_update(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
 		    dtx_sub_comp_cb_t comp_cb);
+int
+ds_obj_cpd_dispatch(struct dtx_leader_handle *dth, void *arg, int idx,
+		    dtx_sub_comp_cb_t comp_cb);
+
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
@@ -366,8 +577,102 @@ void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
-ABT_pool ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
+void ds_obj_migrate_handler(crt_rpc_t *rpc);
+void ds_obj_cpd_handler(crt_rpc_t *rpc);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
+
+struct daos_cpd_args {
+	struct obj_io_context	*dca_ioc;
+	crt_rpc_t		*dca_rpc;
+	ABT_future		 dca_future;
+	uint32_t		 dca_idx;
+};
+
+static inline struct daos_cpd_sub_head *
+ds_obj_cpd_get_dcsh(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_heads.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
+
+	/* daos_cpd_sub_head is unique for a DTX. */
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_cpd_sub_req *
+ds_obj_cpd_get_dcsr(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_reqs.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
+
+	/* daos_cpd_sub_req array is shared by all tgts for a DTX. */
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_shard_tgt *
+ds_obj_cpd_get_tgts(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_disp_tgts.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_tgts.ca_arrays + dtx_idx;
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_cpd_disp_ent *
+ds_obj_cpd_get_dcde(crt_rpc_t *rpc, int dtx_idx, int ent_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_disp_ents.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_ents.ca_arrays + dtx_idx;
+
+	if (ent_idx >= dcs->dcs_nr)
+		return NULL;
+
+	return (struct daos_cpd_disp_ent *)dcs->dcs_buf + ent_idx;
+}
+
+static inline int
+ds_obj_cpd_get_dcsr_cnt(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_reqs.ca_count <= dtx_idx)
+		return -DER_INVAL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_reqs.ca_arrays + dtx_idx;
+	return dcs->dcs_nr;
+}
+
+static inline int
+ds_obj_cpd_get_tgt_cnt(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_disp_tgts.ca_count <= dtx_idx)
+		return -DER_INVAL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_tgts.ca_arrays + dtx_idx;
+	return dcs->dcs_nr;
+}
 
 static inline uint64_t
 obj_dkey2hash(daos_key_t *dkey)
@@ -383,34 +688,35 @@ obj_dkey2hash(daos_key_t *dkey)
 int  obj_utils_init(void);
 void obj_utils_fini(void);
 
-/* obj_class.c */
-int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
-			   uint32_t *sg_idx, size_t *sg_off,
-			   struct obj_ec_parity *parity, uint32_t p_idx);
-bool
-ec_mult_data_targets(uint32_t fw_cnt, daos_obj_id_t oid);
+/* obj_tx.c */
+int
+dc_tx_check_pmv(daos_handle_t th);
 
 int
-ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
-	       struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list);
+dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
+			uint32_t *pmv);
+
+/** See dc_tx_get_epoch. */
+enum dc_tx_get_epoch_rc {
+	DC_TX_GE_CHOSEN,
+	DC_TX_GE_CHOOSING,
+	DC_TX_GE_REINIT
+};
 
 int
-ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
-		 struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list);
-
+dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch);
 
 int
-ec_copy_iods(daos_iod_t *in, int nr, daos_iod_t **out);
-
-/* cli_ec.c */
-void
-ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
-	       bool parify_include, uint64_t *tgt_set);
+dc_tx_op_end(tse_task_t *task, daos_handle_t th, struct dtx_epoch *req_epoch,
+	     int rep_rc, daos_epoch_t rep_epoch);
 
 int
-ec_split_recxs(tse_task_t *task, struct daos_oclass_attr *oca);
+dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
-void
-ec_free_iods(daos_iod_t *iods, int nr);
+int
+dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task);
 
+/* obj_enum.c */
+int
+fill_oid(daos_unit_oid_t oid, struct dss_enum_arg *arg);
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

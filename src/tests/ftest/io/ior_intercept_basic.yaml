@@ -7,23 +7,22 @@ timeout: 2400
 server_config:
     name: daos_server
     servers:
+        log_mask: INFO
         bdev_class: nvme
-        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-        scm_size: 40
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        group: daos_server
-    createsize:
-        # 300 G
-        scm_size: 30000000000
-        nvme_size: 320000000000
-    createsvc:
-        svcn: 1
+    mode: 146 # 146 is RW
+    name: daos_server
+    # 300 G
+    scm_size: 30000000000
+    nvme_size: 320000000000
+    svcn: 1
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 ior:
     client_processes:
         np_16:
@@ -31,7 +30,7 @@ ior:
     test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
-    daos_destroy: False
+    dfs_destroy: False
     iorflags:
         ssf:
           flags: "-v -D 300 -w -r"
@@ -50,6 +49,6 @@ ior:
               read_x: 2
           objectclass:
             oclass_SX:
-              daos_oclass: "SX"
+              dfs_oclass: "SX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"

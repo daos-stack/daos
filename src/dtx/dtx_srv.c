@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,8 +51,9 @@ dtx_handler(crt_rpc_t *rpc)
 	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID
-			" for DTX rpc %u: rc = %d\n", DP_UUID(din->di_po_uuid),
-			DP_UUID(din->di_co_uuid), opc, rc);
+			" for DTX rpc %u: rc = "DF_RC"\n",
+			DP_UUID(din->di_po_uuid), DP_UUID(din->di_co_uuid),
+			opc, DP_RC(rc));
 		goto out;
 	}
 
@@ -63,8 +64,8 @@ dtx_handler(crt_rpc_t *rpc)
 				count = din->di_dtx_array.ca_count - i;
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count);
-			if (rc == 0 && rc1 != 0)
+			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, NULL);
+			if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
 			i += count;
@@ -78,7 +79,7 @@ dtx_handler(crt_rpc_t *rpc)
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
 					    dtis, count);
-			if (rc == 0 && rc1 != 0)
+			if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
 			i += count;
@@ -90,7 +91,8 @@ dtx_handler(crt_rpc_t *rpc)
 			rc = -DER_PROTO;
 		else
 			rc = vos_dtx_check(cont->sc_hdl,
-					   din->di_dtx_array.ca_arrays);
+					   din->di_dtx_array.ca_arrays,
+					   NULL, NULL, false);
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -99,14 +101,15 @@ dtx_handler(crt_rpc_t *rpc)
 
 out:
 	D_DEBUG(DB_TRACE, "Handle DTX ("DF_DTI") rpc %u, count %d, epoch "
-		DF_X64" : rc = %d\n",
+		DF_X64" : rc = "DF_RC"\n",
 		DP_DTI(din->di_dtx_array.ca_arrays), opc,
-		(int)din->di_dtx_array.ca_count, din->di_epoch, rc);
+		(int)din->di_dtx_array.ca_count, din->di_epoch, DP_RC(rc));
 
 	dout->do_status = rc;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed for DTX rpc %u: rc = %d\n", opc, rc);
+		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
+			DP_RC(rc));
 
 	if (cont != NULL)
 		ds_cont_child_put(cont);
@@ -117,8 +120,13 @@ dtx_init(void)
 {
 	int	rc;
 
-	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF, BTR_FEAT_UINT_KEY,
+	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 				   &dbtree_dtx_cf_ops);
+	if (rc == 0)
+		rc = dbtree_class_register(DBTREE_CLASS_DTX_COS, 0,
+					   &dtx_btr_cos_ops);
+
 	return rc;
 }
 
@@ -133,9 +141,10 @@ dtx_setup(void)
 {
 	int	rc;
 
-	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
+	rc = dss_ult_create_all(dtx_batched_commit, NULL, DSS_ULT_GC, true);
 	if (rc != 0)
-		D_ERROR("Failed to create DTX batched commit ULT: %d\n", rc);
+		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n",
+			DP_RC(rc));
 
 	return rc;
 }

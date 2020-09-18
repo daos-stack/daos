@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,7 +59,8 @@ func NewStdioConn(localID, remoteID string, in io.ReadCloser, out io.WriteCloser
 // connection between two processes over stdin/stdout.
 type StdioConn struct {
 	sync.RWMutex
-	closed bool
+	readClosed  bool
+	writeClosed bool
 
 	local  *StdioAddr
 	remote *StdioAddr
@@ -74,30 +75,55 @@ func (sc *StdioConn) String() string {
 func (sc *StdioConn) isClosed() bool {
 	sc.RLock()
 	defer sc.RUnlock()
-	return sc.closed
+	return sc.writeClosed && sc.readClosed
+}
+
+func (sc *StdioConn) isReadClosed() bool {
+	sc.RLock()
+	defer sc.RUnlock()
+	return sc.readClosed
+}
+
+func (sc *StdioConn) isWriteClosed() bool {
+	sc.RLock()
+	defer sc.RUnlock()
+	return sc.writeClosed
 }
 
 func (sc *StdioConn) Read(b []byte) (int, error) {
-	if sc.isClosed() {
+	if sc.isReadClosed() {
 		return 0, errors.New("read on closed conn")
 	}
 	return sc.in.Read(b)
 }
 
 func (sc *StdioConn) Write(b []byte) (int, error) {
-	if sc.isClosed() {
+	if sc.isWriteClosed() {
 		return 0, errors.New("write on closed conn")
 	}
 	return sc.out.Write(b)
 }
 
-func (sc *StdioConn) Close() error {
+func (sc *StdioConn) CloseRead() error {
 	sc.Lock()
 	defer sc.Unlock()
-	sc.closed = true
-	sc.in.Close()
-	sc.out.Close()
-	return nil
+	sc.readClosed = true
+	return sc.in.Close()
+}
+
+func (sc *StdioConn) CloseWrite() error {
+	sc.Lock()
+	defer sc.Unlock()
+	sc.writeClosed = true
+	return sc.out.Close()
+}
+
+func (sc *StdioConn) Close() error {
+	if err := sc.CloseRead(); err != nil {
+		return err
+	}
+
+	return sc.CloseWrite()
 }
 
 func (sc *StdioConn) LocalAddr() net.Addr {

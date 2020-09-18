@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ dfuse_cb_removexattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	rc = dfs_removexattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name);
 	if (rc == 0)
-		DFUSE_REPLY_ZERO(req);
+		DFUSE_REPLY_ZERO(inode, req);
 	else
 		DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }

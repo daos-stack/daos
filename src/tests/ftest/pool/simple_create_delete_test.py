@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2017-2019 Intel Corporation.
+  (C) Copyright 2017-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ import os
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosApiError
+from test_utils_pool import TestPool
+from avocado.core.exceptions import TestFail
 
 
 class SimpleCreateDeleteTest(TestWithServers):
@@ -47,9 +48,6 @@ class SimpleCreateDeleteTest(TestWithServers):
         # expected for each parameter then "and" them to determine the
         # expected result of the test
         expected_for_param = []
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
-        expected_for_param.append(modelist[1])
 
         uidlist = self.params.get("uid", '/run/tests/uids/*', os.geteuid())
         if uidlist[0] == 'valid':
@@ -76,13 +74,18 @@ class SimpleCreateDeleteTest(TestWithServers):
                 break
 
         try:
-            self.pool = DaosPool(self.context)
-            self.pool.create(mode, uid, gid, 1073741824, setid)
-            if expected_result in ['FAIL']:
+            self.pool = TestPool(
+                self.context, dmg_command=self.get_dmg_command())
+            self.pool.get_params(self)
+            self.pool.uid = uid
+            self.pool.gid = gid
+            self.pool.name.update(setid)
+            self.pool.create()
+            if expected_result == 'FAIL':
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except DaosApiError as exc:
+        except TestFail as exc:
             print(exc)
             print(traceback.format_exc())
-            if expected_result not in ['FAIL']:
+            if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")

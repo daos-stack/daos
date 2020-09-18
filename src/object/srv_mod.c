@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@
 #include "obj_internal.h"
 
 /**
- * Swtich of enable DTX or not, enabled by default.
+ * Switch of enable DTX or not, enabled by default.
  */
 static int
 obj_mod_init(void)
@@ -86,6 +86,10 @@ obj_tls_init(const struct dss_thread_local_storage *dtls,
 	struct obj_tls *tls;
 
 	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	D_INIT_LIST_HEAD(&tls->ot_pool_list);
 	return tls;
 }
 
@@ -94,55 +98,17 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 	     struct dss_module_key *key, void *data)
 {
 	struct obj_tls *tls = data;
+	struct migrate_pool_tls *pool_tls;
+	struct migrate_pool_tls *tmp;
+
+	d_list_for_each_entry_safe(pool_tls, tmp, &tls->ot_pool_list,
+				   mpt_list)
+		migrate_pool_tls_destroy(pool_tls);
 
 	if (tls->ot_echo_sgl.sg_iovs != NULL)
 		daos_sgl_fini(&tls->ot_echo_sgl, true);
 
-	if (tls->ot_sp)
-		srv_profile_destroy(tls->ot_sp);
-
 	D_FREE(tls);
-}
-
-char *profile_op_names[] = {
-	[OBJ_PF_UPDATE_PREP] = "update_prep",
-	[OBJ_PF_UPDATE_DISPATCH] = "update_dispatch",
-	[OBJ_PF_UPDATE_LOCAL] = "update_local",
-	[OBJ_PF_UPDATE_END] = "update_end",
-	[OBJ_PF_UPDATE_WAIT] = "update_end",
-	[OBJ_PF_UPDATE_REPLY] = "update_repl",
-	[OBJ_PF_UPDATE] = "update",
-};
-
-static int
-ds_obj_profile_start(char *path)
-{
-	struct obj_tls *tls = obj_tls_get();
-	int rc;
-
-	if (tls->ot_sp)
-		return 0;
-
-	rc = srv_profile_start(&tls->ot_sp, path, profile_op_names);
-
-	D_DEBUG(DB_MGMT, "object profile start: %d\n", rc);
-	return rc;
-}
-
-static int
-ds_obj_profile_stop(void)
-{
-	struct obj_tls *tls = obj_tls_get();
-	int	rc;
-
-	if (tls->ot_sp == NULL)
-		return 0;
-
-	rc = srv_profile_stop(tls->ot_sp);
-
-	D_DEBUG(DB_MGMT, "object profile stop: %d\n", rc);
-	tls->ot_sp = NULL;
-	return rc;
 }
 
 struct dss_module_key obj_module_key = {
@@ -152,10 +118,34 @@ struct dss_module_key obj_module_key = {
 	.dmk_fini = obj_tls_fini,
 };
 
+static int
+obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
+{
+	if (obj_rpc_is_update(rpc)) {
+		struct obj_rw_in	*orw = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE,
+				    &orw->orw_pool_uuid);
+	} else if (obj_rpc_is_fetch(rpc)) {
+		struct obj_rw_in	*orw = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_FETCH,
+				    &orw->orw_pool_uuid);
+	} else if (obj_rpc_is_migrate(rpc)) {
+		struct obj_migrate_in	*omi = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_MIGRATE,
+				    &omi->om_pool_uuid);
+	} else {
+		/* Other requests will not be queued, see dss_rpc_hdlr() */
+		return -DER_NOSYS;
+	}
+
+	return 0;
+}
+
 static struct dss_module_ops ds_obj_mod_ops = {
-	.dms_abt_pool_choose_cb = ds_obj_abt_pool_choose_cb,
-	.dms_profile_start = ds_obj_profile_start,
-	.dms_profile_stop = ds_obj_profile_stop,
+	.dms_get_req_attr = obj_get_req_attr,
 };
 
 struct dss_module obj_module =  {

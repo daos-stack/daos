@@ -138,9 +138,16 @@ func TestHostList_Create(t *testing.T) {
 			startList: "node[0-1",
 			expErr:    errors.New("invalid range"),
 		},
+		"no hostname": {
+			startList: "[0-1,3-5]",
+			expErr:    errors.New("invalid range"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			hl, gotErr := hostlist.Create(tc.startList)
+			if gotErr != nil {
+				t.Log(gotErr.Error())
+			}
 			cmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return

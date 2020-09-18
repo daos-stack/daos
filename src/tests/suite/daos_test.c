@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,9 +34,9 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXVizADKCoROdrFNv"
+#define TESTS "mpcetTViADKFCoRvSbOzUdrNb"
 /**
- * These tests will only be run if explicity specified. They don't get
+ * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
  */
 #define EXPLICIT_TESTS "x"
@@ -62,7 +62,10 @@ print_usage(int rank)
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
 	print_message("daos_test -C|--capa\n");
-	print_message("daos_test -X|--dtx\n");
+	print_message("daos_test -U|--dedup\n");
+	print_message("daos_test -z|--checksum\n");
+	print_message("daos_test -t|--base_tx\n");
+	print_message("daos_test -T|--dist_tx\n");
 	print_message("daos_test -i|--daos_io_tests\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
@@ -76,6 +79,8 @@ print_usage(int rank)
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -v|--rebuild_simple\n");
+	print_message("daos_test -S|--rebuild_ec\n");
+	print_message("daos_test -b|--drain_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
@@ -87,6 +92,7 @@ print_usage(int rank)
 	print_message("daos_test -f|--filter TESTS\n");
 	print_message("daos_test -h|--help\n");
 	print_message("daos_test -u|--subtests\n");
+	print_message("daos_test -n|--dmg_config\n");
 	print_message("daos_test --csum_type CSUM_TYPE\n");
 	print_message("daos_test --csum_cs CHUNKSIZE\n");
 	print_message("daos_test --csum_sv\n");
@@ -128,12 +134,19 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_capa_test(rank, size);
 			break;
-		case 'X':
+		case 't':
 			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "dtx test..");
+			daos_test_print(rank, "Single RDG TX test..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_dtx_test(rank, size, sub_tests,
-						       sub_tests_size);
+			nr_failed += run_daos_base_tx_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+		case 'T':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "Distributed TX tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_dist_tx_test(rank, size,
+						sub_tests, sub_tests_size);
 			break;
 		case 'i':
 			daos_test_print(rank, "\n\n=================");
@@ -146,7 +159,15 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS checksum tests..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_checksum_test(rank, size);
+			nr_failed += run_daos_checksum_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+		case 'U':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS dedup tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_dedup_test(rank, size,
+						sub_tests, sub_tests_size);
 			break;
 		case 'x':
 			daos_test_print(rank, "\n\n=================");
@@ -239,6 +260,21 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_rebuild_simple_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
+		case 'b':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS drain simple tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_drain_simple_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+		case 'S':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS rebuild ec tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_rebuild_simple_ec_test(rank, size,
+								     sub_tests,
+								sub_tests_size);
+			break;
 
 		default:
 			D_ASSERT(0);
@@ -266,6 +302,9 @@ main(int argc, char **argv)
 	int		 rank;
 	int		 size;
 	int		 rc;
+#if CMOCKA_FILTER_SUPPORTED == 1 /** for cmocka filter(requires cmocka 1.1.5) */
+	char		 filter[1024];
+#endif
 
 	d_register_alt_assert(mock_assert);
 
@@ -281,10 +320,12 @@ main(int argc, char **argv)
 		{"pool",	no_argument,		NULL,	'p'},
 		{"cont",	no_argument,		NULL,	'c'},
 		{"capa",	no_argument,		NULL,	'C'},
-		{"dtx",		no_argument,		NULL,	'X'},
+		{"base_dtx",	no_argument,		NULL,	't'},
+		{"dist_dtx",	no_argument,		NULL,	'T'},
 		{"verify",	no_argument,		NULL,	'V'},
 		{"io",		no_argument,		NULL,	'i'},
 		{"checksum",	no_argument,		NULL,	'z'},
+		{"dedup",	no_argument,		NULL,	'u'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
 		{"array",	no_argument,		NULL,	'D'},
@@ -295,7 +336,8 @@ main(int argc, char **argv)
 		{"oid_alloc",	no_argument,		NULL,	'O'},
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
-		{"rebuild_simple",	no_argument,	NULL,	's'},
+		{"rebuild_simple",	no_argument,	NULL,	'v'},
+		{"drain_simple",	no_argument,	NULL,	'b'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"csum_type",	required_argument,	NULL,
@@ -304,6 +346,7 @@ main(int argc, char **argv)
 						CHECKSUM_ARG_VAL_CHUNKSIZE},
 		{"csum_sv",	no_argument,		NULL,
 						CHECKSUM_ARG_VAL_SERVERVERIFY},
+		{"dmg_config",	required_argument,	NULL,	'n'},
 		{"svcn",	required_argument,	NULL,	's'},
 		{"subtests",	required_argument,	NULL,	'u'},
 		{"exclude",	required_argument,	NULL,	'E'},
@@ -311,6 +354,7 @@ main(int argc, char **argv)
 		{"dfs",		no_argument,		NULL,	'F'},
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
+		{"obj_class",	required_argument,	NULL,	'l'},
 		{"help",	no_argument,		NULL,	'h'},
 		{NULL,		0,			NULL,	0}
 	};
@@ -324,7 +368,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:s:u:E:f:Fw:W:hrNv",
+				  "ampcCdtTVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvbSl:",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
@@ -336,6 +380,9 @@ main(int argc, char **argv)
 			break;
 		case 'g':
 			server_group = optarg;
+			break;
+		case 'n':
+			dmg_config_file = optarg;
 			break;
 		case 'h':
 			print_usage(rank);
@@ -353,8 +400,6 @@ main(int argc, char **argv)
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 		{
 			/** Add wildcards for easier filtering */
-			char filter[sizeof(optarg) + 2];
-
 			sprintf(filter, "*%s*", optarg);
 			cmocka_set_test_filter(filter);
 		}
@@ -370,8 +415,13 @@ main(int argc, char **argv)
 			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
 			if (test_io_dir == NULL)
 				return -1;
+		case 'l':
+			dt_obj_class = daos_oclass_name2id(optarg);
+			if (dt_obj_class == OC_UNKNOWN)
+				return -1;
+			break;
 		case CHECKSUM_ARG_VAL_TYPE:
-			dt_csum_type = atoi(optarg);
+			dt_csum_type = daos_checksum_test_arg2type(optarg);
 			break;
 		case CHECKSUM_ARG_VAL_CHUNKSIZE:
 			dt_csum_chunksize = atoi(optarg);

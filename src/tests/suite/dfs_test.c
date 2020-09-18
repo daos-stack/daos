@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -347,16 +347,9 @@ dfs_test_short_read(void **state)
 		wbuf[i] = i+1;
 
 	for (i = 0; i < NUM_SEGS; i++) {
-		D_ALLOC_ARRAY(rbuf[i], buf_size);
+		D_ALLOC_ARRAY(rbuf[i], buf_size + 100);
 		assert_non_null(rbuf[i]);
 	}
-
-	/** set memory location */
-	rsgl.sg_nr = NUM_SEGS;
-	D_ALLOC_ARRAY(rsgl.sg_iovs, NUM_SEGS);
-	assert_non_null(rsgl.sg_iovs);
-	for (i = 0; i < NUM_SEGS; i++)
-		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
 
 	d_iov_set(&iov, wbuf, buf_size);
 	wsgl.sg_nr = 1;
@@ -371,6 +364,9 @@ dfs_test_short_read(void **state)
 	dfs_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
 
 	/** reading empty file should return 0 */
+	rsgl.sg_nr = 1;
+	d_iov_set(&iov, rbuf[0], buf_size);
+	rsgl.sg_iovs = &iov;
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
@@ -382,6 +378,25 @@ dfs_test_short_read(void **state)
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** set contig mem location */
+	rsgl.sg_nr = 1;
+	d_iov_set(&iov, rbuf[0], buf_size + 100);
+	rsgl.sg_iovs = &iov;
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size);
+
+	/* reset write iov */
+	d_iov_set(&iov, wbuf, buf_size);
+
+	/** set strided memory location */
+	rsgl.sg_nr = NUM_SEGS;
+	D_ALLOC_ARRAY(rsgl.sg_iovs, NUM_SEGS);
+	assert_non_null(rsgl.sg_iovs);
+	for (i = 0; i < NUM_SEGS; i++)
+		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
+
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size);
@@ -443,9 +458,414 @@ dfs_test_short_read(void **state)
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
 	rc = dfs_release(obj);
-	dfs_test_file_del(name);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		dfs_test_file_del(name);
 
 	D_FREE(wbuf);
+	for (i = 0; i < NUM_SEGS; i++)
+		D_FREE(rbuf[i]);
+	D_FREE(rsgl.sg_iovs);
+}
+
+static int
+check_one_success(int rc, int err, MPI_Comm comm)
+{
+	int *rc_arr;
+	int mpi_size, mpi_rank, i;
+	int passed, expect_fail, failed;
+
+	MPI_Comm_size(comm, &mpi_size);
+	MPI_Comm_rank(comm, &mpi_rank);
+
+	D_ALLOC_ARRAY(rc_arr, mpi_size);
+	assert_non_null(rc_arr);
+
+	MPI_Allgather(&rc, 1, MPI_INT, rc_arr, 1, MPI_INT, comm);
+	passed = expect_fail = failed = 0;
+	for (i = 0; i < mpi_size; i++) {
+		if (rc_arr[i] == 0)
+			passed++;
+		else if (rc_arr[i] == err)
+			expect_fail++;
+		else
+			failed++;
+	}
+
+	free(rc_arr);
+
+	if (failed || passed != 1)
+		return -1;
+	if ((expect_fail + passed) != mpi_size)
+		return -1;
+	return 0;
+}
+
+static void
+dfs_test_cond(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*file;
+	char			*filename = "cond_testfile";
+	char			*dirname = "cond_testdir";
+	int			rc, op_rc;
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same file with O_EXCL\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	op_rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	assert_int_equal(rc, 0);
+	if (op_rc == 0) {
+		rc = dfs_release(file);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks unlink the same file\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	op_rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
+	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent file unlink\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same directory\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	op_rc = dfs_mkdir(dfs_mt, NULL, dirname, S_IWUSR | S_IRUSR, 0);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent dir creation\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks remove the same directory\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	op_rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent rmdir\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** test atomic rename with DFS DTX mode */
+	bool use_dtx;
+
+	d_getenv_bool("DFS_USE_DTX", &use_dtx);
+	if (!use_dtx)
+		return;
+	if (arg->myrank == 0) {
+		print_message("All ranks rename the same file\n");
+		rc = dfs_open(dfs_mt, NULL, filename,
+			      S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+		if (rc)
+			print_error("Failed creating file for rename\n");
+		rc = dfs_release(file);
+		assert_int_equal(rc, 0);
+	}
+
+	char newfilename[1024];
+
+	sprintf(newfilename, "%s_new.%d", filename, arg->myrank);
+	op_rc = dfs_move(dfs_mt, NULL, filename, NULL, newfilename, NULL);
+	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent rename\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dfs_test_syml(void **state)
+{
+	dfs_obj_t		*sym;
+	char			*filename = "syml_file";
+	char			*val = "SYMLINK VAL 1";
+	char			tmp_buf[64];
+	struct stat		stbuf;
+	daos_size_t		size = 0;
+	int			rc, op_rc;
+
+	op_rc = dfs_open(dfs_mt, NULL, filename, S_IFLNK | S_IWUSR | S_IRUSR,
+			 O_RDWR | O_CREAT | O_EXCL, 0, 0, val, &sym);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	assert_int_equal(rc, 0);
+	if (op_rc != 0)
+		goto syml_stat;
+
+	rc = dfs_get_symlink_value(sym, NULL, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(val)+1);
+
+	rc = dfs_get_symlink_value(sym, tmp_buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(val) + 1);
+	assert_string_equal(val, tmp_buf);
+
+	rc = dfs_release(sym);
+	assert_int_equal(rc, 0);
+
+syml_stat:
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, strlen(val));
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dfs_test_hole_mgmt(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	daos_size_t		read_size;
+	daos_size_t		chunk_size = 2000;
+	daos_size_t		buf_size = 1024;
+	char			*wbuf, *zbuf, *obuf, *rbuf[NUM_SEGS];
+	char			*name = "short_read_file";
+	d_sg_list_t		wsgl, rsgl;
+	d_iov_t			iov;
+	struct stat		stbuf;
+	int			i, rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	D_ALLOC(wbuf, buf_size);
+	assert_non_null(wbuf);
+	memset(wbuf, 'c', buf_size);
+
+	/** all 0 buf */
+	D_ALLOC(zbuf, buf_size + 100);
+	assert_non_null(zbuf);
+	memset(zbuf, 0, buf_size + 100);
+
+	/** buf with '-' data */
+	D_ALLOC(obuf, buf_size + 100);
+	assert_non_null(obuf);
+	memset(obuf, '-', buf_size + 100);
+
+	/** read buffers with orig data "-" */
+	for (i = 0; i < NUM_SEGS; i++) {
+		D_ALLOC(rbuf[i], buf_size + 100);
+		assert_non_null(rbuf[i]);
+		memset(rbuf[i], '-', buf_size + 100);
+	}
+
+	if (arg->myrank == 0) {
+		rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
+
+	/** reading empty file should return 0 & not touch user buffer */
+	rsgl.sg_nr = 1;
+	d_iov_set(&iov, rbuf[0], buf_size);
+	rsgl.sg_iovs = &iov;
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+	rc = memcmp(rbuf[0], obuf, buf_size);
+	assert_int_equal(rc, 0);
+
+	/** write 1 byte at a large offset */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		d_iov_set(&iov, wbuf, 1);
+		wsgl.sg_nr = 1;
+		wsgl.sg_iovs = &iov;
+
+		rc = dfs_write(dfs_mt, obj, &wsgl, 10485760, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 10485761);
+
+	/** reading before the EOF should detect holes and set buf to 0 */
+	d_iov_set(&iov, rbuf[0], buf_size);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size);
+	rc = memcmp(rbuf[0], zbuf, buf_size);
+	assert_int_equal(rc, 0);
+
+	/** reset */
+	memset(rbuf[0], '-', buf_size + 100);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	/** truncate file back to 0 */
+	if (arg->myrank == 0) {
+		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+
+	/** reading before the EOF should detect holes and set buf to 0 */
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+	rc = memcmp(rbuf[0], obuf, buf_size);
+	assert_int_equal(rc, 0);
+
+	/** write a strided pattern, every 1k bytes */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		d_iov_set(&iov, wbuf, buf_size);
+		wsgl.sg_nr = 1;
+		wsgl.sg_iovs = &iov;
+
+		for (i = 0; i < NUM_SEGS; i++) {
+			rc = dfs_write(dfs_mt, obj, &wsgl, i*2*buf_size, NULL);
+			assert_int_equal(rc, 0);
+		}
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, buf_size * (NUM_SEGS * 2 - 1));
+
+	/** read the first NUM_SEGS blocks. should get 1/2 data back */
+	/** set strided memory location */
+	rsgl.sg_nr = NUM_SEGS;
+	D_ALLOC_ARRAY(rsgl.sg_iovs, NUM_SEGS);
+	assert_non_null(rsgl.sg_iovs);
+	for (i = 0; i < NUM_SEGS; i++)
+		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * NUM_SEGS);
+	/** should get written data every other block, and 0s in between */
+	for (i = 0; i < NUM_SEGS; i++) {
+		if (i%2 == 0) {
+			rc = memcmp(rbuf[i], wbuf, buf_size);
+			assert_int_equal(rc, 0);
+		} else {
+			rc = memcmp(rbuf[i], zbuf, buf_size);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	/** reset */
+	for (i = 0; i < NUM_SEGS; i++)
+		memset(rbuf[i], '-', buf_size + 100);
+
+	/** read last 2 blocks of file + the rest 8 blocks beyond EOF */
+	rc = dfs_read(dfs_mt, obj, &rsgl, buf_size * (NUM_SEGS*2-3),
+		      &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * 2);
+	/** should get written data every other block, and 0s in between */
+	for (i = 0; i < NUM_SEGS; i++) {
+		if (i == 0) {
+			/** first block is a hole */
+			rc = memcmp(rbuf[i], zbuf, buf_size);
+			assert_int_equal(rc, 0);
+		} else if (i == 1) {
+			/** second block is valid data */
+			rc = memcmp(rbuf[i], wbuf, buf_size);
+			assert_int_equal(rc, 0);
+		} else {
+			/** the rest are beyond EOF */
+			rc = memcmp(rbuf[i], obuf, buf_size);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	/** reset */
+	for (i = 0; i < NUM_SEGS; i++)
+		memset(rbuf[i], '-', buf_size + 100);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	/** truncate file back to 0 */
+	if (arg->myrank == 0) {
+		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+
+	/** write strided 64 byte blocks */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		char		*ptr = wbuf;
+		daos_off_t	off = 0;
+
+		for (i = 0; i < buf_size/64; i++) {
+			d_iov_set(&iov, ptr, 64);
+			wsgl.sg_nr = 1;
+			wsgl.sg_iovs = &iov;
+
+			rc = dfs_write(dfs_mt, obj, &wsgl, off, NULL);
+			assert_int_equal(rc, 0);
+			ptr += 64;
+			off += 64*2;
+		}
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, buf_size * 2 - 64);
+
+	/** read the first 2 blocks, should see a strided 64 block */
+	for (i = 0; i < 2; i++)
+		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
+	rsgl.sg_nr = 2;
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	/** should see a short read of the last 64 bytes */
+	assert_int_equal(read_size, buf_size * 2 - 64);
+
+	/** should get written data every other block, and 0s in between */
+	char *wptr = wbuf;
+	char *rptr = rbuf[0];
+
+	for (i = 0; i < (buf_size*2)/64; i++) {
+		if (i == buf_size/64)
+			rptr = rbuf[1];
+
+		if (i%2 == 0) {
+			rc = memcmp(rptr, wptr, 64);
+			assert_int_equal(rc, 0);
+			wptr += 64;
+		} else {
+			/** last block is beyond EOF */
+			if (i == (buf_size*2)/64 - 1) {
+				rc = memcmp(rptr, obuf, 64);
+				assert_int_equal(rc, 0);
+			} else {
+				rc = memcmp(rptr, zbuf, 64);
+				assert_int_equal(rc, 0);
+			}
+		}
+		rptr += 64;
+	}
+
+	rc = dfs_release(obj);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		dfs_test_file_del(name);
+
+	D_FREE(wbuf);
+	D_FREE(zbuf);
+	D_FREE(obuf);
 	for (i = 0; i < NUM_SEGS; i++)
 		D_FREE(rbuf[i]);
 	D_FREE(rsgl.sg_iovs);
@@ -458,6 +878,12 @@ static const struct CMUnitTest dfs_tests[] = {
 	  dfs_test_short_read, async_disable, test_case_teardown},
 	{ "DFS_TEST3: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
+	{ "DFS_TEST4: Conditional OPs",
+	  dfs_test_cond, async_disable, test_case_teardown},
+	{ "DFS_TEST5: Simple Symlinks",
+	  dfs_test_syml, async_disable, test_case_teardown},
+	{ "DFS_TEST6: DFS hole management",
+	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
 };
 
 static int

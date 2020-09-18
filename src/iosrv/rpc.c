@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,23 +73,6 @@ out:
 }
 
 /**
- * Argobots-sleep \a ms milliseconds. If you'd like to sleep more than a
- * second, then you'd likely need to write your own loop and check a cancel
- * flag or something similar, so that the sleep can be canceled.
- *
- * \param[in]	ms	milliseconds to sleep for
- */
-void
-dss_sleep(int ms)
-{
-	double t = ABT_get_wtime() + ms / 1000.0;
-
-	do {
-		ABT_thread_yield();
-	} while (ABT_get_wtime() < t);
-}
-
-/**
  * Server send reply or drop reply by fail_loc.
  *
  * \param[in] rpc	rpc to be replied.
@@ -107,7 +90,7 @@ dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc)
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,7 +285,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 1,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 1 << 20,
 		},
 	},
 	{
@@ -297,7 +297,55 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 32,
+			.ca_ec_cell		= 1 << 20,
+		},
+	},
+	{
+		.oc_name	= "DAOS_OC_EC_K2P2_L32K",
+		.oc_id		= DAOS_OC_EC_K2P2_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 2,
+			.ca_ec_cell		= 1 << 15,
+		},
+	},
+	{
+		.oc_name	= "EC_4P1G1",
+		.oc_id		= OC_EC_4P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 1,
+			.ca_ec_cell		= 1 << 20,
+		},
+	},
+	{
+		.oc_name	= "EC_4P2G1",
+		.oc_id		= OC_EC_4P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 2,
+			.ca_ec_cell		= 1 << 20,
+		},
+	},
+	{
+		.oc_name	= "DAOS_OC_EC_K4P2_L32K",
+		.oc_id		= DAOS_OC_EC_K4P2_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 2,
+			.ca_ec_cell		= 1 << 15,
 		},
 	},
 	{
@@ -310,6 +358,42 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_ec_k		= 8,
 			.ca_ec_p		= 2,
 			.ca_ec_cell		= 1 << 20,
+		},
+	},
+	{
+		.oc_name	= "EC_16P2G1",
+		.oc_id		= OC_EC_16P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 16,
+			.ca_ec_p		= 2,
+			.ca_ec_cell		= 1 << 20,
+		},
+	},
+	{
+		.oc_name	= "EC_2P1G1_SPEC",
+		.oc_id		= DAOS_OC_EC_K2P1_SPEC_RANK_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 1,
+			.ca_ec_cell		= 1 << 15,
+		},
+	},
+	{
+		.oc_name	= "EC_4P1G1_SPEC",
+		.oc_id		= DAOS_OC_EC_K4P1_SPEC_RANK_L32K,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 1,
+			.ca_ec_cell		= 1 << 15,
 		},
 	},
 	{
@@ -370,7 +454,29 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 	}
 
 	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	strcpy(str, "UNKNOWN");
 	return -1;
+}
+
+/** Return the list of registered oclass names */
+size_t
+daos_oclass_names_list(size_t size, char *str)
+{
+	struct daos_obj_class   *oc;
+	size_t len = 0;
+
+	if (size <= 0 || str == NULL)
+		return -1;
+
+	*str = '\0';
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
+		len += strlen(oc->oc_name) + 2;
+		if (len < size) {
+			strcat(str, oc->oc_name);
+			strcat(str, ", ");
+		}
+	}
+	return len;
 }
 
 /** Return the redundancy group size of @oc_attr */

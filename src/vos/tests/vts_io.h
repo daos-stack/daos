@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,8 @@ enum vts_test_flags {
 	TF_REC_EXT		= (1 << 4),
 	TF_FIXED_AKEY		= (1 << 5),
 	IF_USE_ARRAY		= (1 << 6),
-	TF_USE_CSUM		= (1 << 7),
+	TF_USE_VAL		= (1 << 7),
+	TF_USE_CSUMS		= (1 << 8),
 	IF_DISABLED		= (1 << 30),
 };
 
@@ -109,13 +110,14 @@ void			inc_cntr(unsigned long op_flags);
 void			test_args_reset(struct io_test_args *args,
 					uint64_t pool_size);
 int			io_test_obj_update(struct io_test_args *arg,
-					   daos_epoch_t epoch, daos_key_t *dkey,
-					   daos_iod_t *iod,
+					   daos_epoch_t epoch, uint64_t flags,
+					   daos_key_t *dkey, daos_iod_t *iod,
 					   d_sg_list_t *sgl,
 					   struct dtx_handle *dth,
 					   bool verbose);
 int			io_test_obj_fetch(struct io_test_args *arg,
-					  daos_epoch_t epoch, daos_key_t *dkey,
+					  daos_epoch_t epoch, uint64_t flags,
+					  daos_key_t *dkey,
 					  daos_iod_t *iod,
 					  d_sg_list_t *sgl,
 					  bool verbose);

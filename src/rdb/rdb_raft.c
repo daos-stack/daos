@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_SHUTDOWN:			return -DER_SHUTDOWN;
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
-	default:				return -DER_UNKNOWN;
+	default:				return -DER_MISC;
 	}
 }
 
@@ -225,9 +225,11 @@ rdb_lc_store_replicas(daos_handle_t lc, uint64_t index,
 	keys[1] = rdb_lc_replicas;
 	d_iov_set(&vals[1], replicas->rl_ranks,
 		     sizeof(*replicas->rl_ranks) * nreplicas);
-	return rdb_lc_update(lc, index, RDB_LC_ATTRS, 2 /* n */, keys, vals);
+	return rdb_lc_update(lc, index, RDB_LC_ATTRS, true /* crit */,
+			     2 /* n */, keys, vals);
 }
 
+/* Caller must hold d_raft_mutex. */
 static int
 rdb_raft_add_node(struct rdb *db, d_rank_t rank)
 {
@@ -240,7 +242,7 @@ rdb_raft_add_node(struct rdb *db, d_rank_t rank)
 	if (dnode == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	rc = crt_group_rank(NULL, &self);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	dnode->dn_rank = rank;
 	node = raft_add_node(db->d_raft, dnode, rank, (rank == self));
 	if (node == NULL) {
@@ -287,7 +289,8 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 			   &rdb_lc_replicas, &value);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to read replicas: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB": failed to read replicas: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
 		goto err_replicas;
 	}
 	return 0;
@@ -347,7 +350,7 @@ rdb_raft_load_snapshot(struct rdb *db)
 	rdb_raft_unload_replicas(db);
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_base);
 	/* TODO: If rc != 0, shut down this replica. */
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	/* Add the corresponding nodes to raft. */
 	for (i = 0; i < db->d_replicas->rl_nr; i++) {
@@ -359,7 +362,7 @@ rdb_raft_load_snapshot(struct rdb *db)
 	}
 
 	rc = raft_end_load_snapshot(db->d_raft);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return 0;
 }
@@ -401,11 +404,13 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 	sgl.sg_iovs = data;
 	arg.sgl = &sgl;
 
+	arg.copy_data_cb = vos_iter_copy;
 	/* Attempt to inline all values until recx bulks are implemented. */
 	arg.inline_thres = 1 * 1024 * 1024;
 
 	/* Enumerate from the object level. */
-	rc = dss_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg);
+	rc = dss_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg,
+			   vos_iterate, NULL /* dth */);
 	if (rc < 0)
 		return rc;
 
@@ -590,7 +595,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 
 	/* Allocate the data buffers. */
 	rc = crt_bulk_get_len(in->isi_kds, &kds->iov_buf_len);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	kds->iov_len = kds->iov_buf_len;
 	D_ALLOC(kds->iov_buf, kds->iov_buf_len);
 	if (kds->iov_buf == NULL) {
@@ -598,7 +603,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 		goto out;
 	}
 	rc = crt_bulk_get_len(in->isi_data, &data->iov_buf_len);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	data->iov_len = data->iov_buf_len;
 	D_ALLOC(data->iov_buf, data->iov_buf_len);
 	if (data->iov_buf == NULL) {
@@ -709,35 +714,30 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	}
 #endif
 	return vos_obj_update(unpack_arg->slc, io->ui_oid, unpack_arg->eph,
-			      io->ui_version, &io->ui_dkey, io->ui_iods_top + 1,
-			      io->ui_iods, io->ui_sgls);
+			      io->ui_version, VOS_OF_CRIT /* flags */,
+			      &io->ui_dkey, io->ui_iods_top + 1, io->ui_iods,
+			      NULL, io->ui_sgls);
 }
 
 static int
-rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
+rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds_iov, d_iov_t *data,
+		      int index)
 {
-	struct dss_enum_arg	   arg;
 	struct rdb_raft_unpack_arg unpack_arg;
+	daos_unit_oid_t		   invalid_oid = { 0 };
 	d_sg_list_t		   sgl;
 
-	/* Set up the same iteration as rdb_raft_pack_chunk. */
-	memset(&arg, 0, sizeof(arg));
-	arg.chk_key2big = true;
-
 	/* Set up the buffers. */
-	arg.kds = kds->iov_buf;
-	arg.kds_cap = kds->iov_buf_len / sizeof(*arg.kds);
-	arg.kds_len = kds->iov_len / sizeof(*arg.kds);
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
 	sgl.sg_iovs = data;
-	arg.sgl = &sgl;
 
 	unpack_arg.eph = index;
 	unpack_arg.slc = slc;
 
-	/* Unpack from the object level. */
-	return dss_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
+	return dss_enum_unpack(invalid_oid, kds_iov->iov_buf,
+			       kds_iov->iov_len / sizeof(daos_key_desc_t),
+			       &sgl, NULL, rdb_raft_exec_unpack_io,
 			       &unpack_arg);
 }
 
@@ -817,7 +817,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 			return rc;
 		rc = vos_cont_open(db->d_pool, slc_record->dlr_uuid, slc);
 		/* Not good, but we've just created it ourself... */
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	}
 
 	/* We have an SLC matching this chunk. */
@@ -1039,6 +1039,7 @@ out:
 	return rc;
 }
 
+/* Caller must hold d_raft_mutex. */
 static int
 rdb_raft_remove_node(struct rdb *db, uint64_t index, d_rank_t rank)
 {
@@ -1079,6 +1080,7 @@ out:
 	return rc;
 }
 
+/* Caller must hold d_raft_mutex. */
 static int
 rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 {
@@ -1115,11 +1117,13 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	d_iov_t		values[2];
 	struct rdb_entry	header;
 	int			n = 0;
+	bool			crit;
 	int			rc;
 	int			rc_tmp;
 
 	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n",
 		  index, db->d_lc_record.dlr_tail);
+
 	/*
 	 * If this is an rdb_tx entry, apply it. Note that the updates involved
 	 * won't become visible to queries until entry index is committed.
@@ -1129,13 +1133,14 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 	 */
 	if (entry->type == RAFT_LOGTYPE_NORMAL) {
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
-				  rdb_raft_lookup_result(db, index));
+				  rdb_raft_lookup_result(db, index), &crit);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
 				DP_DB(db), index, rc);
 			goto err_discard;
 		}
 	} else if (raft_entry_is_cfg_change(entry)) {
+		crit = true;
 		rc = rdb_raft_update_node(db, index, entry);
 		if (rc != 0)
 			goto err_discard;
@@ -1156,7 +1161,8 @@ rdb_raft_log_offer_single(raft_server_t *raft, void *arg,
 		d_iov_set(&values[n], entry->data.buf, entry->data.len);
 		n++;
 	}
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, n, keys, values);
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, n,
+			   keys, values);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to persist entry "DF_U64": %d\n",
 			DP_DB(db), index, rc);
@@ -1340,6 +1346,32 @@ static raft_cbs_t rdb_raft_cbs = {
 	.log				= rdb_raft_cb_debug
 };
 
+static int
+rdb_raft_compact_to_index(struct rdb *db, uint64_t index)
+{
+	int rc;
+
+	D_DEBUG(DB_TRACE, DF_DB": snapping "DF_U64"\n", DP_DB(db),
+		index);
+	rc = raft_begin_snapshot(db->d_raft, index);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	/*
+	 * VOS snaps every new index implicitly.
+	 *
+	 * raft_end_snapshot() only polls the log and wakes up
+	 * rdb_compactd(), which does the real compaction (i.e., VOS
+	 * aggregation) in the background.
+	 */
+	rc = raft_end_snapshot(db->d_raft);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to poll entries: %d\n",
+			DP_DB(db), rc);
+		rc = rdb_raft_rc(rc);
+	}
+
+	return rc;
+}
+
 /*
  * Check if the log should be compacted. If so, trigger the compaction by
  * taking a snapshot (i.e., simply increasing the log base index in our
@@ -1374,23 +1406,8 @@ rdb_raft_trigger_compaction(struct rdb *db)
 			index = base + 1;
 		else
 			index = base + n / 2;
-		D_DEBUG(DB_TRACE, DF_DB": snapping "DF_U64"\n", DP_DB(db),
-			index);
-		rc = raft_begin_snapshot(db->d_raft, index);
-		D_ASSERTF(rc == 0, "%d\n", rc);
-		/*
-		 * VOS snaps every new index implicitly.
-		 *
-		 * raft_end_snapshot() only polls the log and wakes up
-		 * rdb_compactd(), which does the real compaction (i.e., VOS
-		 * aggregation) in the background.
-		 */
-		rc = raft_end_snapshot(db->d_raft);
-		if (rc != 0) {
-			D_ERROR(DF_DB": failed to poll %d entries: %d\n",
-				DP_DB(db), n, rc);
-			rc = rdb_raft_rc(rc);
-		}
+
+		rc = rdb_raft_compact_to_index(db, index);
 	}
 	return rc;
 }
@@ -1399,8 +1416,8 @@ rdb_raft_trigger_compaction(struct rdb *db)
 static int
 rdb_raft_compact(struct rdb *db, uint64_t index)
 {
-	uint64_t	aggregated = db->d_lc_record.dlr_aggregated;
-	d_iov_t	value;
+	uint64_t	aggregated;
+	d_iov_t		value;
 	int		rc;
 
 	D_DEBUG(DB_TRACE, DF_DB": compacting to "DF_U64"\n", DP_DB(db), index);
@@ -1410,6 +1427,8 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 		return rc;
 
 	/* Update the last aggregated index. */
+	ABT_mutex_lock(db->d_raft_mutex);
+	aggregated = db->d_lc_record.dlr_aggregated;
 	db->d_lc_record.dlr_aggregated = index;
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
@@ -1419,11 +1438,25 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 			DF_U64": %d\n", DP_DB(db),
 			db->d_lc_record.dlr_aggregated, rc);
 		db->d_lc_record.dlr_aggregated = aggregated;
+		ABT_mutex_unlock(db->d_raft_mutex);
 		return rc;
 	}
+	ABT_mutex_unlock(db->d_raft_mutex);
 
 	D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64"\n", DP_DB(db), index);
 	return 0;
+}
+
+static inline bool
+rdb_gc_yield(void *arg)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+
+	if (dss_xstream_exiting(dx))
+		return true;
+
+	ABT_thread_yield();
+	return false;
 }
 
 /* Daemon ULT for compacting polled entries (i.e., indices <= base). */
@@ -1438,7 +1471,7 @@ rdb_compactd(void *arg)
 		bool		stop;
 		int		rc;
 
-		ABT_mutex_lock(db->d_mutex);
+		ABT_mutex_lock(db->d_raft_mutex);
 		for (;;) {
 			base = db->d_lc_record.dlr_base;
 			stop = db->d_stop;
@@ -1446,9 +1479,9 @@ rdb_compactd(void *arg)
 				break;
 			if (stop)
 				break;
-			ABT_cond_wait(db->d_compact_cv, db->d_mutex);
+			ABT_cond_wait(db->d_compact_cv, db->d_raft_mutex);
 		}
-		ABT_mutex_unlock(db->d_mutex);
+		ABT_mutex_unlock(db->d_raft_mutex);
 		if (stop)
 			break;
 		rc = rdb_raft_compact(db, base);
@@ -1457,7 +1490,7 @@ rdb_compactd(void *arg)
 				": %d\n", DP_DB(db), base, rc);
 			break;
 		}
-		dss_gc_run(db->d_pool, -1);
+		vos_gc_pool_run(db->d_pool, -1, rdb_gc_yield, NULL);
 	}
 	D_DEBUG(DB_MD, DF_DB": compactd stopping\n", DP_DB(db));
 }
@@ -1549,6 +1582,7 @@ rdb_raft_process_event(struct rdb *db, struct rdb_raft_event *event)
 		if (rc == 0)
 			break;
 		/* An error occurred. Step down if we are still that leader. */
+		ABT_mutex_lock(db->d_raft_mutex);
 		if (raft_is_leader(db->d_raft) &&
 		    raft_get_current_term(db->d_raft) ==
 		    event->dre_term) {
@@ -1572,6 +1606,7 @@ rdb_raft_process_event(struct rdb *db, struct rdb_raft_event *event)
 				  "%d "DF_U64" "DF_U64"\n", next.dre_type,
 				  next.dre_term, event->dre_term);
 		}
+		ABT_mutex_unlock(db->d_raft_mutex);
 		break;
 	case RDB_RAFT_STEP_DOWN:
 		if (db->d_cbs == NULL || db->d_cbs->dc_step_down == NULL)
@@ -1594,7 +1629,7 @@ rdb_callbackd(void *arg)
 		struct rdb_raft_event	event;
 		bool			stop;
 
-		ABT_mutex_lock(db->d_mutex);
+		ABT_mutex_lock(db->d_raft_mutex);
 		for (;;) {
 			stop = db->d_stop;
 			if (db->d_nevents > 0) {
@@ -1603,9 +1638,9 @@ rdb_callbackd(void *arg)
 			}
 			if (stop)
 				break;
-			ABT_cond_wait(db->d_events_cv, db->d_mutex);
+			ABT_cond_wait(db->d_events_cv, db->d_raft_mutex);
 		}
-		ABT_mutex_unlock(db->d_mutex);
+		ABT_mutex_unlock(db->d_raft_mutex);
 		if (stop)
 			break;
 		rdb_raft_process_event(db, &event);
@@ -1656,7 +1691,7 @@ struct rdb_raft_state {
 	uint64_t	drs_committed;
 };
 
-/* Save the variables into "state". */
+/* Save the variables into "state". Caller must hold d_raft_mutex. */
 static void
 rdb_raft_save_state(struct rdb *db, struct rdb_raft_state *state)
 {
@@ -1667,7 +1702,7 @@ rdb_raft_save_state(struct rdb *db, struct rdb_raft_state *state)
 
 /*
  * Check the current state against "state", which shall be a previously-saved
- * state, and handle any changes and errors.
+ * state, and handle any changes and errors. Caller must hold d_raft_mutex.
  */
 static int
 rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
@@ -1718,7 +1753,11 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		rc = compaction_rc;
 	switch (rc) {
 	case -DER_NOMEM:
+	case -DER_NOSPACE:
 		if (leader) {
+			/* No space / desperation: compact to committed idx */
+			rdb_raft_compact_to_index(db, committed);
+
 			raft_become_follower(db->d_raft);
 			leader = false;
 			/* If stepping up fails, don't step down. */
@@ -1728,7 +1767,6 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		}
 		break;
 	case -DER_SHUTDOWN:
-	case -DER_NOSPACE:
 	case -DER_IO:
 		db->d_cbs->dc_stop(db, rc, db->d_arg);
 		break;
@@ -1813,7 +1851,7 @@ rdb_raft_unregister_result(struct rdb *db, uint64_t index)
 	D_FREE(result);
 }
 
-/* Append and wait for \a entry to be applied. */
+/* Append and wait for \a entry to be applied. Caller must hold d_raft_mutex. */
 static int
 rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 			       void *result)
@@ -1823,10 +1861,6 @@ rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 	uint64_t		index;
 	int			rc;
 
-	/*
-	 * Do not yield before calling rdb_recv_entry(), so that the index
-	 * assertion below will hold.
-	 */
 	index = raft_get_current_idx(db->d_raft) + 1;
 	if (result != NULL) {
 		rc = rdb_raft_register_result(db, index, result);
@@ -1868,7 +1902,9 @@ rdb_raft_add_replica(struct rdb *db, d_rank_t rank)
 	entry.type = RAFT_LOGTYPE_ADD_NODE;
 	entry.data.buf = &rank;
 	entry.data.len = sizeof(d_rank_t);
+	ABT_mutex_lock(db->d_raft_mutex);
 	rc = rdb_raft_append_apply_internal(db, &entry, &result);
+	ABT_mutex_unlock(db->d_raft_mutex);
 	return (rc != 0) ? rc : result;
 }
 
@@ -1883,10 +1919,13 @@ rdb_raft_remove_replica(struct rdb *db, d_rank_t rank)
 	entry.type = RAFT_LOGTYPE_REMOVE_NODE;
 	entry.data.buf = &rank;
 	entry.data.len = sizeof(d_rank_t);
+	ABT_mutex_lock(db->d_raft_mutex);
 	rc = rdb_raft_append_apply_internal(db, &entry, &result);
+	ABT_mutex_unlock(db->d_raft_mutex);
 	return (rc != 0) ? rc : result;
 }
 
+/* Caller must hold d_raft_mutex. */
 int
 rdb_raft_append_apply(struct rdb *db, void *entry, size_t size, void *result)
 {
@@ -1940,9 +1979,11 @@ rdb_timerd(void *arg)
 			D_WARN(DF_DB": not scheduled for %f second\n",
 			       DP_DB(db), d_prev - d);
 
+		ABT_mutex_lock(db->d_raft_mutex);
 		rdb_raft_save_state(db, &state);
 		rc = raft_periodic(db->d_raft, d_prev * 1000 /* ms */);
 		rc = rdb_raft_check_state(db, &state, rc);
+		ABT_mutex_unlock(db->d_raft_mutex);
 		if (rc != 0)
 			D_ERROR(DF_DB": raft_periodic() failed: %d\n",
 				DP_DB(db), rc);
@@ -2073,12 +2114,13 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 	/* Record the configuration in the LC at index 1. */
 	rc = vos_cont_open(pool, record.dlr_uuid, &lc);
 	/* This really should not be happening.. */
-	D_ASSERTF(rc == 0, "Open VOS container: %d\n", rc);
+	D_ASSERTF(rc == 0, "Open VOS container: "DF_RC"\n", DP_RC(rc));
 
 	/* No initial configuration if rank list empty */
 	rc = rdb_lc_store_replicas(lc, 1 /* base */, replicas);
 	if (rc != 0)
-		D_ERROR("failed to create list of replicas: %d\n", rc);
+		D_ERROR("failed to create list of replicas: "DF_RC"\n",
+			DP_RC(rc));
 	rc_close = vos_cont_close(lc);
 	return (rc != 0) ? rc : rc_close;
 }
@@ -2169,7 +2211,8 @@ rdb_raft_load_lc(struct rdb *db)
 		db->d_slc = DAOS_HDL_INVAL;
 		goto lc;
 	} else if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up SLC: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB": failed to look up SLC: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
 		goto err;
 	}
 	rc = vos_cont_open(db->d_pool, db->d_slc_record.dlr_uuid, &db->d_slc);
@@ -2188,7 +2231,8 @@ lc:
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_lc, &value);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up LC: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB": failed to look up LC: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
 		goto err_slc;
 	}
 	rc = vos_cont_open(db->d_pool, db->d_lc_record.dlr_uuid, &db->d_lc);
@@ -2271,10 +2315,10 @@ rdb_raft_get_request_timeout(void)
 static uint64_t
 rdb_raft_get_compact_thres(void)
 {
-	unsigned int i = 0;
+	unsigned int i = 256;
 
 	d_getenv_int("RDB_COMPACT_THRESHOLD", &i);
-	return i == 0 ? UINT64_MAX : i;
+	return i;
 }
 
 int
@@ -2345,7 +2389,7 @@ rdb_raft_start(struct rdb *db)
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_term, &value);
 	if (rc == 0) {
 		rc = raft_set_current_term(db->d_raft, term);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	} else if (rc != -DER_NONEXIST) {
 		goto err_raft;
 	}
@@ -2353,7 +2397,7 @@ rdb_raft_start(struct rdb *db)
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
 	if (rc == 0) {
 		rc = raft_vote_for_nodeid(db->d_raft, vote);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	} else if (rc != -DER_NONEXIST) {
 		goto err_raft;
 	}
@@ -2399,18 +2443,18 @@ rdb_raft_start(struct rdb *db)
 err_callbackd:
 	db->d_stop = true;
 	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_callbackd);
 err_timerd:
 	db->d_stop = true;
 	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_timerd);
 err_recvd:
 	db->d_stop = true;
 	ABT_cond_broadcast(db->d_replies_cv);
 	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_recvd);
 err_lc:
 	rdb_raft_unload_lc(db);
@@ -2435,16 +2479,19 @@ rdb_raft_stop(struct rdb *db)
 {
 	int rc;
 
-	ABT_mutex_lock(db->d_mutex);
 
 	/* Stop sending any new RPCs. */
 	db->d_stop = true;
 
 	/* Wake up all daemons and TXs. */
+	ABT_mutex_lock(db->d_raft_mutex);
 	ABT_cond_broadcast(db->d_applied_cv);
 	ABT_cond_broadcast(db->d_events_cv);
-	ABT_cond_broadcast(db->d_replies_cv);
 	ABT_cond_broadcast(db->d_compact_cv);
+	ABT_mutex_unlock(db->d_raft_mutex);
+
+	ABT_mutex_lock(db->d_mutex);
+	ABT_cond_broadcast(db->d_replies_cv);
 
 	/* Abort all in-flight RPCs. */
 	rdb_abort_raft_rpcs(db);
@@ -2459,21 +2506,20 @@ rdb_raft_stop(struct rdb *db)
 			db->d_ref - RDB_BASE_REFS);
 		ABT_cond_wait(db->d_ref_cv, db->d_mutex);
 	}
-
 	ABT_mutex_unlock(db->d_mutex);
 
 	/* Join and free all daemons. */
 	rc = ABT_thread_join(db->d_compactd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_compactd);
 	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_callbackd);
 	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_timerd);
 	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_recvd);
 
 	rdb_raft_unload_lc(db);
@@ -2492,26 +2538,56 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	struct rdb_raft_state	state;
 	int			rc;
 
+	ABT_mutex_lock(db->d_raft_mutex);
 	if (term != raft_get_current_term(db->d_raft) ||
-	    !raft_is_leader(db->d_raft))
+	    !raft_is_leader(db->d_raft)) {
+		ABT_mutex_unlock(db->d_raft_mutex);
 		return;
+	}
+
 	D_DEBUG(DB_MD, DF_DB": resigning from term "DF_U64"\n", DP_DB(db),
 		term);
 	rdb_raft_save_state(db, &state);
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_mutex_unlock(db->d_raft_mutex);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
-/* Wait for index to be applied in term. For leaders only. */
+/* Call new election (campaign to be leader) by a follower */
+int
+rdb_raft_campaign(struct rdb *db)
+{
+	struct rdb_raft_state	state;
+	int			rc;
+
+	ABT_mutex_lock(db->d_raft_mutex);
+	if (!raft_is_follower(db->d_raft)) {
+		ABT_mutex_unlock(db->d_raft_mutex);
+		D_DEBUG(DB_MD, DF_DB": no election called, must be follower\n",
+			DP_DB(db));
+		return 0;
+	}
+
+	rdb_raft_save_state(db, &state);
+	D_DEBUG(DB_MD, DF_DB": calling election from current term %d\n",
+		DP_DB(db), raft_get_current_term(db->d_raft));
+	rc = raft_election_start(db->d_raft);
+	rc = rdb_raft_check_state(db, &state, rc /* raft_rc */);
+	ABT_mutex_unlock(db->d_raft_mutex);
+	return rc;
+}
+
+/* Wait for index to be applied in term. For leaders only.
+ * Caller initially holds d_raft_mutex.
+ */
 int
 rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
 {
-	int rc = 0;
+	int	rc = 0;
 
 	D_DEBUG(DB_TRACE, DF_DB": waiting for entry "DF_U64" to be applied\n",
 		DP_DB(db), index);
-	ABT_mutex_lock(db->d_mutex);
 	for (;;) {
 		if (db->d_stop) {
 			rc = -DER_CANCELED;
@@ -2524,9 +2600,8 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
 		}
 		if (index <= db->d_applied)
 			break;
-		ABT_cond_wait(db->d_applied_cv, db->d_mutex);
+		ABT_cond_wait(db->d_applied_cv, db->d_raft_mutex);
 	}
-	ABT_mutex_unlock(db->d_mutex);
 	return rc;
 }
 
@@ -2541,7 +2616,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	db = rdb_lookup(in->rvi_op.ri_uuid);
 	if (db == NULL)
@@ -2551,12 +2626,14 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_TRACE, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
 		srcrank);
+	ABT_mutex_lock(db->d_raft_mutex);
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_requestvote(db->d_raft,
 				   raft_get_node(db->d_raft,
 						 srcrank),
 				   &in->rvi_msg, &out->rvo_msg);
 	rc = rdb_raft_check_state(db, &state, rc);
+	ABT_mutex_unlock(db->d_raft_mutex);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to process REQUESTVOTE from rank %u: "
 			"%d\n", DP_DB(db), srcrank, rc);
@@ -2586,7 +2663,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	db = rdb_lookup(in->aei_op.ri_uuid);
 	if (db == NULL)
@@ -2596,11 +2673,13 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_TRACE, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
 		srcrank);
+	ABT_mutex_lock(db->d_raft_mutex);
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_appendentries(db->d_raft,
 				     raft_get_node(db->d_raft, srcrank),
 				     &in->aei_msg, &out->aeo_msg);
 	rc = rdb_raft_check_state(db, &state, rc);
+	ABT_mutex_unlock(db->d_raft_mutex);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to process APPENDENTRIES from rank %u: "
 			"%d\n", DP_DB(db), srcrank, rc);
@@ -2630,7 +2709,7 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	db = rdb_lookup(in->isi_op.ri_uuid);
 	if (db == NULL) {
@@ -2655,11 +2734,13 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 		goto out_db;
 	}
 
+	ABT_mutex_lock(db->d_raft_mutex);
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_installsnapshot(db->d_raft,
 				       raft_get_node(db->d_raft, srcrank),
 				       &in->isi_msg, &out->iso_msg);
 	rc = rdb_raft_check_state(db, &state, rc);
+	ABT_mutex_unlock(db->d_raft_mutex);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to process INSTALLSNAPSHOT from rank "
 			"%u: %d\n", DP_DB(db), srcrank, rc);
@@ -2699,7 +2780,7 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	 * rank of this reply. This CaRT API is based on request hdr.
 	 */
 	rc = crt_req_dst_rank_get(rpc, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	rc = ((struct rdb_op_out *)out)->ro_rc;
 	if (rc != 0) {
@@ -2714,6 +2795,7 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 		return;
 	}
 
+	ABT_mutex_lock(db->d_raft_mutex);
 	rdb_raft_save_state(db, &state);
 	switch (opc) {
 	case RDB_REQUESTVOTE:
@@ -2735,6 +2817,7 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
 	rc = rdb_raft_check_state(db, &state, rc);
+	ABT_mutex_unlock(db->d_raft_mutex);
 	if (rc != 0 && rc != -DER_NOTLEADER)
 		D_ERROR(DF_DB": failed to process opc %u response: %d\n",
 			DP_DB(db), opc, rc);
@@ -2754,7 +2837,7 @@ rdb_raft_free_bulk_and_buffer(crt_bulk_t bulk)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 	rc = crt_bulk_access(bulk, &sgl);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	D_ASSERTF(sgl.sg_nr_out == 1, "%d\n", sgl.sg_nr_out);
 	D_ASSERT(iov.iov_buf != NULL);
 

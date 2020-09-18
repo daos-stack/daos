@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		dfir->ir_id.irid_oid.hi = oid->hi;
 	}
 
-	dfir->ir_ino = atomic_fetch_add(&fs_handle->dpi_ino_next, 1);
+	dfir->ir_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 	dfir->ir_id.irid_dfs = dfs;
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_irt,
@@ -90,18 +90,16 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 				&ir_id,
 				sizeof(ir_id));
 
-	if (!rlink) {
+	if (!rlink)
 		return -DER_NONEXIST;
-	}
 
 	dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
 				&dfir->ir_ino,
 				sizeof(dfir->ir_ino));
-	if (!rlink) {
+	if (!rlink)
 		return -DER_NONEXIST;
-	}
 
 	entry = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -114,7 +112,7 @@ void
 ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
 	int			rc;
-	int			ref = atomic_load_consume(&ie->ie_ref);
+	int			ref = atomic_load_relaxed(&ie->ie_ref);
 
 	DFUSE_TRA_DEBUG(ie, "closing, inode %lu ref %u, name '%s', parent %lu",
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
@@ -129,39 +127,49 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		}
 	}
 
-	if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
+	if (ie->ie_root) {
+		struct dfuse_dfs	*dfs = ie->ie_dfs;
+		struct dfuse_pool	*dfp = dfs->dfs_dfp;
+
+		D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+
 		DFUSE_TRA_INFO(ie->ie_dfs, "Closing dfs_root %d %d",
-			       !daos_handle_is_inval(ie->ie_dfs->dfs_poh),
-			       !daos_handle_is_inval(ie->ie_dfs->dfs_coh));
+			       !daos_handle_is_inval(dfp->dfp_poh),
+			       !daos_handle_is_inval(dfs->dfs_coh));
 
-		if (!daos_handle_is_inval(ie->ie_dfs->dfs_coh)) {
-
-			rc = dfs_umount(ie->ie_dfs->dfs_ns);
+		if (!daos_handle_is_inval(dfs->dfs_coh)) {
+			rc = dfs_umount(dfs->dfs_ns);
 			if (rc != 0)
-				DFUSE_TRA_ERROR(ie->ie_dfs,
+				DFUSE_TRA_ERROR(dfs,
 						"dfs_umount() failed (%d)",
 						rc);
 
-			rc = daos_cont_close(ie->ie_dfs->dfs_coh, NULL);
-			if (rc == -DER_SUCCESS) {
-				ie->ie_dfs->dfs_coh = DAOS_HDL_INVAL;
-			} else {
-				DFUSE_TRA_ERROR(ie->ie_dfs,
+			rc = daos_cont_close(dfs->dfs_coh, NULL);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(dfs,
 						"daos_cont_close() failed: (%d)",
 						rc);
 			}
-			ie->ie_dfs->dfs_coh = DAOS_HDL_INVAL;
-		} else if (!daos_handle_is_inval(ie->ie_dfs->dfs_poh)) {
-			rc = daos_pool_disconnect(ie->ie_dfs->dfs_poh, NULL);
-			if (rc == -DER_SUCCESS) {
-				ie->ie_dfs->dfs_poh = DAOS_HDL_INVAL;
-			} else {
-				DFUSE_TRA_ERROR(ie->ie_dfs,
-						"daos_pool_disconnect() failed: (%d)",
-						rc);
-			}
-
 		}
+
+		d_list_del(&dfs->dfs_list);
+		D_MUTEX_DESTROY(&dfs->dfs_read_mutex);
+		D_FREE(dfs);
+
+		if (d_list_empty(&dfp->dfp_dfs_list)) {
+			if (!daos_handle_is_inval(dfp->dfp_poh)) {
+				rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+				if (rc != -DER_SUCCESS) {
+					DFUSE_TRA_ERROR(dfp,
+							"daos_pool_disconnect() failed: (%d)",
+							rc);
+				}
+			}
+			d_list_del(&dfp->dfp_list);
+
+			D_FREE(dfp);
+		}
+		D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	}
 
 	DFUSE_TRA_DOWN(ie);

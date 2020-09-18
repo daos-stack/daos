@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,8 @@ dtx_iter_fini(struct vos_iterator *iter)
 	if (!daos_handle_is_inval(oiter->oit_hdl)) {
 		rc = dbtree_iter_finish(oiter->oit_hdl);
 		if (rc != 0)
-			D_ERROR("oid_iter_fini failed: rc = %d\n", rc);
+			D_ERROR("oid_iter_fini failed: rc = "DF_RC"\n",
+				DP_RC(rc));
 	}
 
 	if (oiter->oit_cont != NULL)
@@ -69,7 +70,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 
 static int
 dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
-	      struct vos_iterator **iter_pp)
+	      struct vos_iterator **iter_pp, struct vos_ts_set *ts_set)
 {
 	struct vos_dtx_iter	*oiter;
 	struct vos_container	*cont;
@@ -94,7 +95,8 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	rc = dbtree_iter_prepare(cont->vc_dtx_active_hdl, 0, &oiter->oit_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare DTX iteration: rc = %d\n", rc);
+		D_ERROR("Failed to prepare DTX iteration: rc = "DF_RC"\n",
+			DP_RC(rc));
 		dtx_iter_fini(&oiter->oit_iter);
 	} else {
 		*iter_pp = &oiter->oit_iter;
@@ -139,10 +141,9 @@ dtx_iter_next(struct vos_iterator *iter)
 		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
 		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
 
-		/* Only need to return the DTX that was handled before the
-		 * latest DTX resync.
-		 */
-		if (DAE_SRV_GEN(dae) < oiter->oit_cont->vc_dtx_resync_gen)
+		/* Skip committable, committed, or aborted ones. */
+		if (!dae->dae_committable && !dae->dae_committed &&
+		    !dae->dae_aborted)
 			break;
 	}
 
@@ -163,20 +164,30 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
-		D_ERROR("Error while fetching DTX info: rc = %d\n", rc);
+		D_ERROR("Error while fetching DTX info: rc = "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
 	dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
 
-	it_entry->ie_xid = DAE_XID(dae);
-	it_entry->ie_oid = DAE_OID(dae);
 	it_entry->ie_epoch = DAE_EPOCH(dae);
-	it_entry->ie_dtx_intent = DAE_INTENT(dae);
-	it_entry->ie_dtx_hash = DAE_DKEY_HASH(dae);
+	it_entry->ie_dtx_xid = DAE_XID(dae);
+	it_entry->ie_dtx_oid = DAE_OID(dae);
+	it_entry->ie_dtx_ver = DAE_VER(dae);
+	it_entry->ie_dtx_flags = DAE_FLAGS(dae);
+	it_entry->ie_dtx_tgt_cnt = DAE_TGT_CNT(dae);
+	it_entry->ie_dtx_grp_cnt = DAE_GRP_CNT(dae);
+	it_entry->ie_dtx_mbs_dsize = DAE_MBS_DSIZE(dae);
+	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae)))
+		it_entry->ie_dtx_mbs = DAE_MBS_INLINE(dae);
+	else
+		it_entry->ie_dtx_mbs = umem_off2ptr(
+					&oiter->oit_cont->vc_pool->vp_umm,
+					DAE_MBS_OFF(dae));
 
-	D_DEBUG(DB_TRACE, "DTX iterator fetch the one "DF_DTI"\n",
+	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",
 		DP_DTI(&DAE_XID(dae)));
 
 	return 0;
@@ -192,14 +203,15 @@ dtx_iter_delete(struct vos_iterator *iter, void *args)
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
 	umm = &oiter->oit_cont->vc_pool->vp_umm;
-	rc = umem_tx_begin(umm, vos_txd_get());
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		return rc;
 
 	rc = dbtree_iter_delete(oiter->oit_hdl, args);
 	if (rc != 0) {
 		umem_tx_abort(umm, rc);
-		D_ERROR("Failed to delete DTX entry: rc = %d\n", rc);
+		D_ERROR("Failed to delete DTX entry: rc = "DF_RC"\n",
+			DP_RC(rc));
 	} else {
 		umem_tx_commit(umm);
 	}

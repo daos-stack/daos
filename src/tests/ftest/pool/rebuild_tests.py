@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers, skipForTicket
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class RebuildTests(TestWithServers):
@@ -44,7 +45,8 @@ class RebuildTests(TestWithServers):
         pools = []
         containers = []
         for index in range(pool_quantity):
-            pools.append(TestPool(self.context, self.log))
+            pools.append(TestPool(self.context, self.log,
+                                  dmg_command=self.get_dmg_command()))
             pools[index].get_params(self)
             containers.append(TestContainer(pools[index]))
             containers[index].get_params(self)
@@ -125,10 +127,10 @@ class RebuildTests(TestWithServers):
         for index in range(pool_quantity):
             self.assertTrue(
                 containers[index].read_objects(),
-                "Data verifiaction error after rebuild")
+                "Data verification error after rebuild")
         self.log.info("Test Passed")
 
-    @skipForTicket("DAOS-2922")
+    @skipForTicket("DAOS-5611")
     def test_simple_rebuild(self):
         """JIRA ID: DAOS-XXXX Rebuild-001.
 
@@ -136,13 +138,13 @@ class RebuildTests(TestWithServers):
             The most basic rebuild test.
 
         Use Cases:
-            single pool rebuild, single client, various reord/object counts
+            single pool rebuild, single client, various record/object counts
 
         :avocado: tags=all,pr,medium,pool,rebuild,rebuildsimple
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-2922")
+    @skipForTicket("DAOS-5611")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 
@@ -150,7 +152,7 @@ class RebuildTests(TestWithServers):
             Expand on the basic test by rebuilding 2 pools at once.
 
         Use Cases:
-            multipool rebuild, single client, various object and record counds
+            multipool rebuild, single client, various object and record counts
 
         :avocado: tags=all,pr,medium,pool,rebuild,rebuildmulti
         """

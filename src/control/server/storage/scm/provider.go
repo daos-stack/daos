@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,12 +26,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/provider/system"
@@ -40,7 +42,7 @@ import (
 
 const (
 	defaultUnmountFlags = 0
-	defaultMountFlags   = 0
+	defaultMountFlags   = unix.MS_NOATIME
 
 	defaultMountPointPerms = 0700
 
@@ -51,7 +53,7 @@ const (
 	fsTypeTmpfs = "tmpfs"
 
 	dcpmFsType    = fsTypeExt4
-	dcpmMountOpts = "dax"
+	dcpmMountOpts = "dax,nodelalloc"
 
 	ramFsType = fsTypeTmpfs
 
@@ -63,9 +65,9 @@ const (
 )
 
 type (
-	// PrepareRequest defines the parameters for a Prepare opration.
+	// PrepareRequest defines the parameters for a Prepare operation.
 	PrepareRequest struct {
-		Forwarded bool
+		pbin.ForwardableRequest
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
 		Reset bool
 	}
@@ -79,8 +81,9 @@ type (
 
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
-		Forwarded bool
-		Rescan    bool
+		pbin.ForwardableRequest
+		DeviceList []string
+		Rescan     bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -104,7 +107,7 @@ type (
 
 	// FormatRequest defines the parameters for a Format operation or query.
 	FormatRequest struct {
-		Forwarded  bool
+		pbin.ForwardableRequest
 		Reformat   bool
 		Mountpoint string
 		OwnerUID   int
@@ -123,24 +126,18 @@ type (
 
 	// MountRequest defines the parameters for a Mount operation.
 	MountRequest struct {
-		Forwarded bool
-		Source    string
-		Target    string
-		FsType    string
-		Flags     uintptr
-		Data      string
+		pbin.ForwardableRequest
+		Source string
+		Target string
+		FsType string
+		Flags  uintptr
+		Data   string
 	}
 
 	// MountResponse contains the results of a successful Mount operation.
 	MountResponse struct {
 		Target  string
 		Mounted bool
-	}
-
-	// forwardableRequest defines an interface for any request that
-	// could have been forwarded.
-	forwardableRequest interface {
-		isForwarded() bool
 	}
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
@@ -150,10 +147,12 @@ type (
 		PrepReset(storage.ScmState) (bool, error)
 		GetState() (storage.ScmState, error)
 		GetNamespaces() (storage.ScmNamespaces, error)
+		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
+		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
-	// of SCM-specific system capabilties.
+	// of SCM-specific system capabilities.
 	SystemProvider interface {
 		system.IsMountedProvider
 		system.MountProvider
@@ -175,11 +174,11 @@ type (
 		modules       storage.ScmModules
 		namespaces    storage.ScmNamespaces
 
-		log               logging.Logger
-		backend           Backend
-		sys               SystemProvider
-		fwd               *Forwarder
-		disableForwarding bool
+		log     logging.Logger
+		backend Backend
+		sys     SystemProvider
+		fwd     *AdminForwarder
+		firmwareProvider
 	}
 )
 
@@ -212,48 +211,32 @@ func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatReques
 }
 
 // Validate checks the request for validity.
-func (fr FormatRequest) Validate() error {
-	if fr.Mountpoint == "" {
+func (r FormatRequest) Validate() error {
+	if r.Mountpoint == "" {
 		return FaultFormatMissingMountpoint
 	}
 
-	if fr.Ramdisk != nil && fr.Dcpm != nil {
+	if r.Ramdisk != nil && r.Dcpm != nil {
 		return FaultFormatConflictingParam
 	}
 
-	if fr.Ramdisk == nil && fr.Dcpm == nil {
+	if r.Ramdisk == nil && r.Dcpm == nil {
 		return FaultFormatMissingParam
 	}
 
-	if fr.Ramdisk != nil {
-		if fr.Ramdisk.Size == 0 {
+	if r.Ramdisk != nil {
+		if r.Ramdisk.Size == 0 {
 			return FaultFormatInvalidSize
 		}
 	}
 
-	if fr.Dcpm != nil {
-		if fr.Dcpm.Device == "" {
+	if r.Dcpm != nil {
+		if r.Dcpm.Device == "" {
 			return FaultFormatInvalidDeviceCount
 		}
 	}
 
 	return nil
-}
-
-func (fr FormatRequest) isForwarded() bool {
-	return fr.Forwarded
-}
-
-func (sr ScanRequest) isForwarded() bool {
-	return sr.Forwarded
-}
-
-func (pr PrepareRequest) isForwarded() bool {
-	return pr.Forwarded
-}
-
-func (mr MountRequest) isForwarded() bool {
-	return mr.Forwarded
 }
 
 func checkDevice(device string) error {
@@ -284,7 +267,28 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	// TODO: Think about a way to allow for some kind of progress
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
-	args := []string{device}
+	args := []string{
+		// use direct i/o to avoid polluting page cache
+		"-D",
+		// use DAOS label
+		"-L", "daos",
+		// don't reserve blocks for super-user
+		"-m", "0",
+		// use largest possible block size
+		"-b", "4096",
+		// disable lazy initialization (hurts perf) and discard
+		"-E", "lazy_itable_init=0,lazy_journal_init=0,nodiscard",
+		// enable bigalloc to reduce metadata overhead
+		// enable flex_bg to allow larger contiguous block allocation
+		// disable uninit_bg to initialize everything upfront
+		"-O", "bigalloc,flex_bg,^uninit_bg",
+		// use 16M bigalloc cluster size
+		"-C", "16M",
+		// don't need that many inodes
+		"-i", "16777216",
+		// device always comes last
+		device,
+	}
 	if force {
 		args = append([]string{"-F"}, args...)
 	}
@@ -352,29 +356,19 @@ func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provi
 		log:     log,
 		backend: backend,
 		sys:     sys,
-		fwd:     &Forwarder{log: log},
+		fwd:     NewAdminForwarder(log),
 	}
-
-	if val, set := os.LookupEnv(pbin.DisableReqFwdEnvVar); set {
-		disabled, err := strconv.ParseBool(val)
-		if err != nil {
-			log.Errorf("%s was set to non-boolean value (%q); not disabling",
-				pbin.DisableReqFwdEnvVar, val)
-			return p
-		}
-		p.disableForwarding = disabled
-	}
-
+	p.setupFirmwareProvider(log)
 	return p
 }
 
 func (p *Provider) WithForwardingDisabled() *Provider {
-	p.disableForwarding = true
+	p.fwd.Disabled = true
 	return p
 }
 
-func (p *Provider) shouldForward(req forwardableRequest) bool {
-	return !p.disableForwarding && !req.isForwarded()
+func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
+	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
 func (p *Provider) isInitialized() bool {
@@ -586,7 +580,7 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	fsType, err := p.sys.Getfs(req.Dcpm.Device)
 	if err != nil {
 		if os.IsNotExist(errors.Cause(err)) {
-			return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+			return nil, FaultFormatMissingDevice(req.Dcpm.Device)
 		}
 		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
 	}
@@ -817,4 +811,39 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
+}
+
+func (p *Provider) getRequestedModules(requestedUIDs []string) (storage.ScmModules, error) {
+	modules, err := p.backend.Discover()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(requestedUIDs) == 0 {
+		return modules, nil
+	}
+
+	uniqueUIDs := common.DedupeStringSlice(requestedUIDs)
+	sort.Strings(uniqueUIDs)
+
+	result := make(storage.ScmModules, 0, len(modules))
+	for _, uid := range uniqueUIDs {
+		mod, err := getModule(uid, modules)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mod)
+	}
+
+	return result, nil
+}
+
+func getModule(uid string, modules storage.ScmModules) (*storage.ScmModule, error) {
+	for _, mod := range modules {
+		if mod.UID == uid {
+			return mod, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no module found with UID %q", uid)
 }

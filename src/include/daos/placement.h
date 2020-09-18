@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,7 +126,7 @@ void pl_map_decref(struct pl_map *map);
 uint32_t pl_map_version(struct pl_map *map);
 
 void pl_obj_layout_free(struct pl_obj_layout *layout);
-int  pl_obj_layout_alloc(unsigned int shard_nr,
+int  pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
 			 struct pl_obj_layout **layout_pp);
 
 int pl_obj_place(struct pl_map *map,
@@ -142,10 +142,18 @@ int pl_obj_find_rebuild(struct pl_map *map,
 			int myrank);
 
 int pl_obj_find_reint(struct pl_map *map,
-		      struct daos_obj_md *md,
-		      struct daos_obj_shard_md *shard_md,
-		      struct pl_target_grp *tgp_recov,
-		      uint32_t *tgt_reint);
+			struct daos_obj_md *md,
+			struct daos_obj_shard_md *shard_md,
+			uint32_t rebuild_ver, uint32_t *tgt_rank,
+			uint32_t *shard_id, unsigned int array_size,
+			int myrank);
+
+int pl_obj_find_addition(struct pl_map *map,
+			 struct daos_obj_md *md,
+			struct daos_obj_shard_md *shard_md,
+			uint32_t rebuild_ver, uint32_t *tgt_rank,
+			uint32_t *shard_id, unsigned int array_size,
+			int myrank);
 
 typedef struct pl_obj_shard *(*pl_get_shard_t)(void *data, int idx);
 

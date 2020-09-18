@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016-2019 Intel Corporation.
+/*
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * ds_rsvc: RPC Protocol Definitions
  */
 
@@ -71,16 +73,17 @@ extern struct crt_proto_format rsvc_proto_fmt;
 	((uint64_t)		(sai_size)		CRT_VAR) \
 	((d_rank_list_t)	(sai_ranks)		CRT_PTR)
 
-#define DAOS_OSEQ_RSVC_START /* output fields */		 \
-	((int32_t)		(sao_rc)		CRT_VAR)
+#define DAOS_OSEQ_RSVC_START /* output fields (rc: err count) */ \
+	((int32_t)		(sao_rc)		CRT_VAR) \
+	((int32_t)		(sao_rc_errval)		CRT_VAR)
+
 
 CRT_RPC_DECLARE(rsvc_start, DAOS_ISEQ_RSVC_START, DAOS_OSEQ_RSVC_START)
 
 #define DAOS_ISEQ_RSVC_STOP /* input fields */			 \
 	((d_iov_t)		(soi_svc_id)		CRT_VAR) \
 	((uint32_t)		(soi_class)		CRT_VAR) \
-	((uint32_t)		(soi_flags)		CRT_VAR) \
-	((d_rank_list_t)	(soi_ranks)		CRT_PTR)
+	((uint32_t)		(soi_flags)		CRT_VAR)
 
 #define DAOS_OSEQ_RSVC_STOP /* output fields */			 \
 	((int32_t)		(soo_rc)		CRT_VAR)

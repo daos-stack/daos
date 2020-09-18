@@ -5,17 +5,27 @@ import os
 HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
            'daos_event.h', 'daos_mgmt.h', 'daos_types.h', 'daos_array.h',
            'daos_task.h', 'daos_fs.h', 'daos_uns.h', 'daos_security.h',
-           'daos_prop.h', 'daos_obj_class.h', 'daos_obj.h']
+           'daos_prop.h', 'daos_obj_class.h', 'daos_obj.h', 'daos_pool.h',
+           'daos_cont.h']
 HEADERS_SRV = ['vos.h', 'vos_types.h']
+HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
+                'heap.h', 'fault_inject.h', 'debug_setup.h',
+                'types.h', 'atomic.h', 'mem.h']
+
+# Keep versioned libs for now to avoid any conflict with 1.0
+CART_VERSION = "4.8.0"
 
 def scons():
     """Execute build"""
 
-    Import('env', 'prereqs')
+    Import('env')
 
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
+
+    env.AppendUnique(RPATH_FULL=[Dir('gurt')])
+    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('gurt').path])
 
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
@@ -24,7 +34,17 @@ def scons():
     for header in HEADERS_SRV:
         env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
                     'include/daos_srv/%s' % header)
+    for header in HEADERS_GURT:
+        env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
+                    'include/gurt/%s' % header)
 
+    env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
+    env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
+    Export('env', 'CART_VERSION')
+
+    SConscript('gurt/SConscript')
+    SConscript('cart/SConscript')
+    Default('gurt')
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
@@ -32,7 +52,6 @@ def scons():
     SConscript('vos/SConscript')
 
     # Build each DAOS component
-    SConscript('rdb/SConscript')
     SConscript('rsvc/SConscript')
     SConscript('mgmt/SConscript')
     SConscript('pool/SConscript')
@@ -46,6 +65,9 @@ def scons():
     # Build DAOS client libraries
     SConscript('client/SConscript')
 
+    # rdb unit test rdbt depends on libdaos
+    SConscript('rdb/SConscript')
+
     # Then the DAOS I/O server executable
     SConscript('iosrv/SConscript')
 
@@ -57,6 +79,21 @@ def scons():
 
     # Build test
     SConscript('tests/SConscript')
+
+    if not env.GetOption('clean') and not env.GetOption('help'):
+
+        print("Checking local headers can be included")
+        broken_includes = False
+        config_env = env.Clone()
+        config = Configure(config_env)
+        for header in HEADERS_GURT:
+            if not config.CheckHeader(os.path.join('gurt', header)):
+                broken_includes = True
+        config.Finish()
+
+        if broken_includes:
+            print("Broken local header files, cannot continue")
+            Exit(2)
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,9 +26,12 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
+	"os/user"
+	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -36,6 +39,8 @@ import (
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -43,6 +48,16 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
+)
+
+const (
+	// ControlPlaneName defines a consistent name for the control plane server.
+	ControlPlaneName = "DAOS Control Server"
+	// DataPlaneName defines a consistent name for the ioserver.
+	DataPlaneName = "DAOS I/O Server"
+
+	iommuPath        = "/sys/class/iommu"
+	minHugePageCount = 128
 )
 
 func cfgHasBdev(cfg *Configuration) bool {
@@ -55,14 +70,20 @@ func cfgHasBdev(cfg *Configuration) bool {
 	return false
 }
 
-// define supported maximum number of I/O servers
-const maxIoServers = 2
+func iommuDetected() bool {
+	// Simple test for now -- if the path exists and contains
+	// DMAR entries, we assume that's good enough.
+	dmars, err := ioutil.ReadDir(iommuPath)
+	if err != nil {
+		return false
+	}
+
+	return len(dmars) > 0
+}
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
-	log.Debugf("cfg: %#v", cfg)
-
-	err := cfg.Validate()
+	err := cfg.Validate(log)
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
@@ -73,6 +94,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	if cfg.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
 			return errors.Wrap(err, "unable to configure privileged helper logging")
+		}
+	}
+
+	if cfg.FWHelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
 		}
 	}
 
@@ -87,15 +114,57 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to resolve daos_server control address")
 	}
 
-	if len(cfg.Servers) > 1 && cfgHasBdev(cfg) {
-		return errors.New("NVMe support only available with single server in this release")
+	bdevProvider := bdev.DefaultProvider(log)
+	runningUser, err := user.Current()
+	if err != nil {
+		return errors.Wrap(err, "unable to lookup current user")
 	}
 
-	bdevProvider := bdev.DefaultProvider(log)
-	// temporary scaffolding -- remove when bdev forwarding to pbin works
-	if os.Geteuid() == 0 {
-		if err := bdevProvider.Init(bdev.InitRequest{SPDKShmID: cfg.NvmeShmID}); err != nil {
-			return errors.Wrap(err, "failed to init SPDK")
+	iommuDisabled := !iommuDetected()
+	// Perform an automatic prepare based on the values in the config file.
+	prepReq := bdev.PrepareRequest{
+		// Default to minimum necessary for scan to work correctly.
+		HugePageCount: minHugePageCount,
+		TargetUser:    runningUser.Username,
+		PCIWhitelist:  strings.Join(cfg.BdevInclude, " "),
+		PCIBlacklist:  strings.Join(cfg.BdevExclude, " "),
+		DisableVFIO:   cfg.DisableVFIO,
+		DisableVMD:    cfg.DisableVMD || cfg.DisableVFIO || iommuDisabled,
+		// TODO: pass vmd include/white list
+	}
+
+	if cfgHasBdev(cfg) {
+		// The config value is intended to be per-ioserver, so we need to adjust
+		// based on the number of ioservers.
+		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
+
+		// Perform these checks to avoid even trying a prepare if the system
+		// isn't configured properly.
+		if runningUser.Uid != "0" {
+			if cfg.DisableVFIO {
+				return FaultVfioDisabled
+			}
+
+			if iommuDisabled {
+				return FaultIommuDisabled
+			}
+		}
+	}
+
+	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+	if _, err := bdevProvider.Prepare(prepReq); err != nil {
+		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+	}
+
+	hugePages, err := getHugePageInfo()
+	if err != nil {
+		return errors.Wrap(err, "unable to read system hugepage info")
+	}
+
+	if cfgHasBdev(cfg) {
+		// Double-check that we got the requested number of huge pages after prepare.
+		if hugePages.Free < prepReq.HugePageCount {
+			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 		}
 	}
 
@@ -104,10 +173,47 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
+	var netDevClass uint32
+
+	netCtx, err := netdetect.Init(context.Background())
+	if err != nil {
+		return err
+	}
+	defer netdetect.CleanUp(netCtx)
+
+	// On a NUMA-aware system, emit a message when the configuration
+	// may be sub-optimal.
+	numaCount := netdetect.NumNumaNodes(netCtx)
+	if numaCount > 0 && len(cfg.Servers) > numaCount {
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected", numaCount, len(cfg.Servers))
+	}
+
 	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIoServers {
-			break
+		// Provide special handling for the ofi+verbs provider.
+		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
+		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
+		// specify the correct device for each.
+		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
+			deviceAlias, err := netdetect.GetDeviceAlias(netCtx, srvCfg.Fabric.Interface)
+			if err != nil {
+				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
+			}
+			envVar := "OFI_DOMAIN=" + deviceAlias
+			srvCfg.WithEnvVars(envVar)
 		}
+
+		// If the configuration specifies that we should explicitly set hugepage values
+		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
+		if cfg.SetHugepages {
+			// If we have multiple I/O instances with block devices, then we need to apportion
+			// the hugepage memory among the instances.
+			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
+			// reserve a little for daos_admin
+			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
+		}
+
+		// Indicate whether VMD devices have been detected and can be used.
+		srvCfg.Storage.Bdev.VmdDisabled = bdevProvider.IsVMDDisabled()
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
@@ -124,18 +230,24 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
+
+		if i == 0 {
+			netDevClass, err = cfg.getDeviceClassFn(srvCfg.Fabric.Interface)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	// Single daos_server dRPC server to handle all iosrv requests
-	if err := drpcSetup(ctx, log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
-		return errors.WithMessage(err, "dRPC setup")
-	}
+	// Create rpcClient for inter-server communication.
+	cliCfg := control.DefaultConfig()
+	cliCfg.TransportConfig = cfg.TransportConfig
+	rpcClient := control.NewClient(
+		control.WithConfig(cliCfg),
+		control.WithClientLogger(log))
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
-	if err != nil {
-		return errors.Wrap(err, "init control service")
-	}
+	controlService := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership, rpcClient)
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
@@ -147,72 +259,67 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create new grpc server, register services and start serving.
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		unaryErrorInterceptor,
+		unaryStatusInterceptor,
+	}
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		streamErrorInterceptor,
+	}
+	opts := []grpc.ServerOption{}
 	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
+	opts = append(opts, tcOpt)
 
-	grpcServer := grpc.NewServer(tcOpt)
+	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return err
+	}
+	if uintOpt != nil {
+		unaryInterceptors = append(unaryInterceptors, uintOpt)
+	}
+	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return err
+	}
+	if sintOpt != nil {
+		streamInterceptors = append(streamInterceptors, sintOpt)
+	}
+	opts = append(opts, []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
+		grpc.ChainStreamInterceptor(streamInterceptors...),
+	}...)
+
+	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 
-	// If running as root and user name specified in config file, respawn proc.
-	needsRespawn := syscall.Getuid() == 0 && cfg.UserName != ""
-
-	// Only provide IO/Agent communication if not attempting to respawn after format,
-	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
-	if !needsRespawn {
-		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
+	clientNetworkCfg := ClientNetworkCfg{
+		Provider:        cfg.Fabric.Provider,
+		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
+		CrtTimeout:      cfg.Fabric.CrtTimeout,
+		NetDevClass:     netDevClass,
 	}
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &clientNetworkCfg))
 
 	go func() {
 		_ = grpcServer.Serve(lis)
 	}()
 	defer grpcServer.GracefulStop()
 
-	log.Infof("DAOS control server (pid %d) listening on %s", os.Getpid(), controlAddr)
+	log.Infof("%s (pid %d) listening on %s", ControlPlaneName, os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		for {
-			select {
-			case sig := <-sigChan:
-				log.Debugf("Caught signal: %s", sig)
-				if err := drpcCleanup(cfg.SocketDir); err != nil {
-					log.Errorf("error during dRPC cleanup: %s", err)
-				}
-				shutdown()
-			}
-		}
+		// SIGKILL I/O servers immediately on exit.
+		// TODO: Re-enable attempted graceful shutdown of I/O servers.
+		sig := <-sigChan
+		log.Debugf("Caught signal: %s", sig)
+
+		shutdown()
 	}()
 
-	// If the configuration is SCM-only, don't require the running user to be
-	// root in order to handle storage setup.
-	//
-	// TODO: Remove all references to root when NVMe support is added to the
-	// privileged binary helper.
-	if !cfgHasBdev(cfg) || syscall.Geteuid() == 0 {
-		if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
-			return err
-		}
-	}
-
-	if err := harness.CreateSuperblocks(cfg.RecreateSuperblocks); err != nil {
-		return err
-	}
-
-	// TODO: Move any ownership changes into the privileged binary as necessary.
-	if needsRespawn {
-		// Chown required files and respawn process under new user.
-		if err := changeFileOwnership(cfg); err != nil {
-			return errors.WithMessage(err, "changing file ownership")
-		}
-
-		log.Infof("formatting complete and file ownership changed,"+
-			"please rerun %s as user %s\n", os.Args[0], cfg.UserName)
-
-		return nil
-	}
-
-	return errors.Wrap(harness.Start(ctx, membership), "DAOS I/O Server harness exited with error")
+	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
 }

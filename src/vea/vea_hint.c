@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,8 @@ hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
 {
 	int	rc;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK ||
+		 umm->umm_id == UMEM_CLASS_VMEM);
 
 	if (hint == NULL)
 		return 0;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,15 +30,16 @@
 #include "vos_internal.h"
 
 static int
-vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
-		    uint32_t intent, void *args)
+vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
+		    daos_epoch_t epoch, uint32_t intent, void *args)
 {
 	int	rc;
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(umm, coh, tx_id, intent, DTX_RT_ILOG);
+	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent,
+					DTX_RT_ILOG);
 	if (rc < 0)
 		return rc;
 
@@ -57,34 +58,46 @@ vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 }
 
 static int
-vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
-		    void *args)
+vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
+		    daos_epoch_t epoch, bool *same, void *args)
 {
-	umem_off_t dtx = vos_dtx_get();
+	struct dtx_handle	*dth = vos_dth_get();
+	uint32_t		 dtx = vos_dtx_get();
 
-	if (dtx == tx_id)
+	*same = false;
+
+	if (tx_id == DTX_LID_COMMITTED) {
+		/** If it's committed and the current update is not
+		 * transactional, treat it as the same transaction and let the
+		 * minor epoch handle any conflicts.
+		 */
+		if (!dtx_is_valid_handle(dth))
+			*same = true;
+	} else if (tx_id == dtx) {
 		*same = true;
-	else
-		*same = false;
+	}
 
 	return 0;
 }
 
 static int
-vos_ilog_add(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t *tx_id,
-	     void *args)
+vos_ilog_add(struct umem_instance *umm, umem_off_t ilog_off, uint32_t *tx_id,
+	     daos_epoch_t epoch, void *args)
 {
 	return vos_dtx_register_record(umm, ilog_off, DTX_RT_ILOG, tx_id);
 }
 
 static int
-vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t tx_id,
-	     void *args)
+vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, uint32_t tx_id,
+	     daos_epoch_t epoch, bool deregister, void *args)
 {
 	daos_handle_t	coh;
 
+	if (!deregister)
+		return 0;
+
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, tx_id, ilog_off);
+	vos_dtx_deregister_record(umm, coh, tx_id, epoch, ilog_off);
 	return 0;
 }
 
@@ -101,14 +114,43 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh)
 	cbs->dc_log_del_args = (void *)(unsigned long)coh.cookie;
 }
 
+/** Returns true if the entry is covered by a punch */
+static inline bool
+vos_ilog_punched(const struct ilog_entry *entry,
+		 const struct vos_punch_record *punch)
+{
+	if (ilog_is_punch(entry))
+		return vos_epc_punched(entry->ie_id.id_epoch,
+				       entry->ie_id.id_punch_minor_eph,
+				       punch);
+	return vos_epc_punched(entry->ie_id.id_epoch,
+			       entry->ie_id.id_update_minor_eph, punch);
+
+}
+
+/** Returns true if the entry is a punch and covers a punch */
+static inline bool
+vos_ilog_punch_covered(const struct ilog_entry *entry,
+		       const struct vos_punch_record *punch)
+{
+	struct vos_punch_record	new_punch;
+
+	if (!ilog_has_punch(entry))
+		return false;
+
+	new_punch.pr_epc = entry->ie_id.id_epoch;
+	new_punch.pr_minor_epc = entry->ie_id.id_punch_minor_eph;
+
+	return vos_epc_punched(punch->pr_epc, punch->pr_minor_epc, &new_punch);
+}
+
 static void
 vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
-	       daos_epoch_t punch, daos_epoch_t any_punch)
-{
+	       const struct vos_punch_record *punch) {
 	struct ilog_entry	*entry;
+	struct vos_punch_record	*any_punch = &info->ii_prior_any_punch;
 
-	D_ASSERT(punch <= epoch);
-	D_ASSERT(any_punch <= epoch);
+	D_ASSERT(punch->pr_epc <= epoch);
 
 	ilog_foreach_entry_reverse(&info->ii_entries, entry) {
 		if (entry->ie_status == ILOG_REMOVED)
@@ -119,60 +161,86 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		/** If a punch epoch is passed in, and it is later than any
 		 * punch in this log, treat it as a prior punch
 		 */
-		if (entry->ie_id.id_epoch <= punch) {
-			info->ii_prior_punch = punch;
-			if (info->ii_prior_any_punch < punch)
-				info->ii_prior_any_punch = punch;
+		if (vos_ilog_punched(entry, punch)) {
+			info->ii_prior_punch = *punch;
+			if (vos_epc_punched(any_punch->pr_epc,
+					    any_punch->pr_minor_epc, punch))
+				info->ii_prior_any_punch = *punch;
 			break;
 		}
 
 		if (entry->ie_id.id_epoch > epoch) {
-			if (entry->ie_punch &&
+			if (ilog_has_punch(entry) &&
 			    entry->ie_status == ILOG_COMMITTED)
 				info->ii_next_punch = entry->ie_id.id_epoch;
 			continue;
 		}
 
-		if (entry->ie_punch &&
-		    info->ii_prior_any_punch < entry->ie_id.id_epoch)
-			info->ii_prior_any_punch = entry->ie_id.id_epoch;
+		if (vos_ilog_punch_covered(entry, &info->ii_prior_any_punch)) {
+			info->ii_prior_any_punch.pr_epc = entry->ie_id.id_epoch;
+			info->ii_prior_any_punch.pr_minor_epc =
+				entry->ie_id.id_punch_minor_eph;
+		}
 
 		if (entry->ie_status == ILOG_UNCOMMITTED) {
+			daos_epoch_t	epc = entry->ie_id.id_epoch;
+			uint16_t	minor_epc =
+				entry->ie_id.id_punch_minor_eph;
+
 			/** Key is not visible at current entry but may be yet
 			 *  visible at prior entry
 			 */
+			if (info->ii_uncommitted < entry->ie_id.id_epoch &&
+			    epc > info->ii_create &&
+			    !vos_epc_punched(epc, minor_epc,
+					     &info->ii_prior_punch))
+				info->ii_uncommitted = entry->ie_id.id_epoch;
 			continue;
 		}
 
+		/** We we have a committed entry that exceeds uncommitted
+		 *  epoch, clear the uncommitted epoch.
+		 */
+		if (entry->ie_id.id_epoch > info->ii_uncommitted)
+			info->ii_uncommitted = 0;
+
 		D_ASSERT(entry->ie_status == ILOG_COMMITTED);
 
-		if (entry->ie_punch) {
-			info->ii_prior_punch = entry->ie_id.id_epoch;
+		if (ilog_has_punch(entry)) {
+			info->ii_prior_punch.pr_epc = entry->ie_id.id_epoch;
+			info->ii_prior_punch.pr_minor_epc =
+				entry->ie_id.id_punch_minor_eph;
+			if (!ilog_is_punch(entry))
+				info->ii_create = entry->ie_id.id_epoch;
 			break;
 		}
 
 		info->ii_create = entry->ie_id.id_epoch;
 	}
 
-	if (punch > info->ii_prior_punch)
-		info->ii_prior_punch = punch;
-	if (punch > info->ii_prior_any_punch)
-		info->ii_prior_any_punch = punch;
+	if (vos_epc_punched(info->ii_prior_punch.pr_epc,
+			    info->ii_prior_punch.pr_minor_epc,
+			    punch))
+		info->ii_prior_punch = *punch;
+	if (vos_epc_punched(info->ii_prior_any_punch.pr_epc,
+			    info->ii_prior_any_punch.pr_minor_epc,
+			    punch))
+		info->ii_prior_any_punch = *punch;
 
-	D_DEBUG(DB_TRACE, "After fetch at "DF_U64": create="DF_U64
-		" prior_punch="DF_U64" next_punch="DF_U64"%s\n", epoch,
-		info->ii_create, info->ii_prior_punch, info->ii_next_punch,
-		info->ii_empty ? " is empty" : "");
+	D_DEBUG(DB_TRACE, "After fetch at "DF_X64": create="DF_X64
+		" prior_punch="DF_PUNCH" next_punch="DF_X64"%s\n", epoch,
+		info->ii_create, DP_PUNCH(&info->ii_prior_punch),
+		info->ii_next_punch, info->ii_empty ? " is empty" : "");
 }
 
 int
 vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-		struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punched,
+		struct ilog_df *ilog, daos_epoch_t epoch,
+		const struct vos_punch_record *punched,
 		const struct vos_ilog_info *parent, struct vos_ilog_info *info)
 {
 	struct ilog_desc_cbs	 cbs;
-	daos_epoch_t		 punch;
-	daos_epoch_t		 punch_any;
+	struct vos_punch_record	 punch = {0};
 	int			 rc;
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
@@ -186,20 +254,23 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 	}
 
 init:
+	info->ii_uncommitted = 0;
 	info->ii_create = 0;
 	info->ii_next_punch = 0;
 	info->ii_empty = true;
-	info->ii_prior_punch = 0;
-	info->ii_prior_any_punch = 0;
-	punch = punched;
-	punch_any = punched; /* Only matters if parent is passed in */
+	info->ii_prior_punch.pr_epc = 0;
+	info->ii_prior_punch.pr_minor_epc = 0;
+	info->ii_prior_any_punch.pr_epc = 0;
+	info->ii_prior_any_punch.pr_minor_epc = 0;
+	if (punched != NULL)
+		punch = *punched;
 	if (parent != NULL) {
 		punch = parent->ii_prior_punch;
-		punch_any = parent->ii_prior_any_punch;
+		info->ii_uncommitted = parent->ii_uncommitted;
 	}
 
 	if (rc == 0)
-		vos_parse_ilog(info, epoch, punch, punch_any);
+		vos_parse_ilog(info, epoch, &punch);
 
 	return rc;
 }
@@ -224,15 +295,16 @@ vos_ilog_check_(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 	 */
 	if (info->ii_empty) {
 		/* mark whole thing as punched */
-		info->ii_prior_punch = epr_in->epr_hi;
+		info->ii_prior_punch.pr_epc = epr_in->epr_hi;
+		info->ii_prior_punch.pr_minor_epc = VOS_MINOR_EPC_MAX;
 		return 0;
 	}
 
 	if (info->ii_create == 0) {
-		if (info->ii_prior_punch == 0)
+		if (info->ii_prior_punch.pr_epc == 0)
 			return -DER_NONEXIST;
 		/* Punch isn't in range so ignore it */
-		if (info->ii_prior_punch < epr_in->epr_lo)
+		if (info->ii_prior_punch.pr_epc < epr_in->epr_lo)
 			return -DER_NONEXIST;
 		return 0;
 	}
@@ -247,7 +319,7 @@ vos_ilog_check_(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 static inline int
 vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
 {
-	if (info->ii_create <= info->ii_prior_any_punch)
+	if (info->ii_create <= info->ii_prior_any_punch.pr_epc)
 		return -DER_NONEXIST;
 
 	return 0;
@@ -255,43 +327,58 @@ vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
 
 int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     const daos_epoch_range_t *epr,
-		     struct vos_ilog_info *parent, struct vos_ilog_info *info)
+		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
+		     uint32_t cond, struct vos_ts_set *ts_set)
 {
-	daos_epoch_range_t	max_epr = *epr;
-	struct ilog_desc_cbs	cbs;
-	daos_handle_t		loh;
-	int			rc;
+	struct dtx_handle	*dth = vos_dth_get();
+	daos_epoch_range_t	 max_epr = *epr;
+	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 loh;
+	int			 rc;
 
 	if (parent != NULL) {
-		D_ASSERT(parent->ii_prior_any_punch >= parent->ii_prior_punch);
+		D_ASSERT(parent->ii_prior_any_punch.pr_epc >=
+			 parent->ii_prior_punch.pr_epc);
 
-		if (parent->ii_prior_any_punch > max_epr.epr_lo)
-			max_epr.epr_lo = parent->ii_prior_any_punch;
+		if (parent->ii_prior_any_punch.pr_epc > max_epr.epr_lo)
+			max_epr.epr_lo = parent->ii_prior_any_punch.pr_epc;
 	}
 
 	D_DEBUG(DB_TRACE, "Checking and updating incarnation log in range "
-		DF_U64"-"DF_U64"\n", max_epr.epr_lo, max_epr.epr_hi);
+		DF_X64"-"DF_X64"\n", max_epr.epr_lo, max_epr.epr_hi);
 
 	/** Do a fetch first.  The log may already exist */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi,
 			    0, parent, info);
+	/** For now, if the state isn't settled, just retry with later
+	 *  timestamp.   The state should get settled quickly when there
+	 *  is conditional update and sharing.
+	 */
+	if (cond == VOS_ILOG_COND_UPDATE && info->ii_uncommitted != 0)
+		return -DER_INPROGRESS;
 	if (rc == -DER_NONEXIST)
 		goto update;
 	if (rc != 0) {
-		D_ERROR("Could not update ilog %p at "DF_U64": "DF_RC"\n",
+		D_ERROR("Could not update ilog %p at "DF_X64": "DF_RC"\n",
 			ilog, epr->epr_hi, DP_RC(rc));
 		return rc;
 	}
 
 	rc = vos_ilog_update_check(info, &max_epr);
-	if (rc == 0)
+	if (rc == 0) {
+		if (cond == VOS_ILOG_COND_INSERT)
+			return -DER_EXIST;
 		return rc;
+	}
 	if (rc != -DER_NONEXIST) {
 		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 update:
+	if (rc == -DER_NONEXIST && cond == VOS_ILOG_COND_UPDATE)
+		return -DER_NONEXIST;
+
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
 	if (rc != 0) {
@@ -299,15 +386,15 @@ update:
 		return rc;
 	}
 
-	rc = ilog_update(loh, &max_epr, epr->epr_hi, false);
+	rc = ilog_update(loh, &max_epr, epr->epr_hi, dtx_is_valid_handle(dth) ?
+			 dth->dth_op_seq : VOS_MINOR_EPC_MAX, false);
 
 	ilog_close(loh);
 
-	if (rc != 0) {
-		D_ERROR("Could not update incarnation log: "DF_RC"\n",
+	if (rc == -DER_ALREADY) /* operation had no effect */
+		rc = 0;
+	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
 			DP_RC(rc));
-		return rc;
-	}
 
 	/* No need to refetch the log.  The only field that is used by update
 	 * is prior_any_punch.   This field will not be changed by ilog_update
@@ -315,6 +402,121 @@ update:
 	 */
 
 	return rc;
+}
+
+int
+vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
+		const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
+		struct vos_ilog_info *info, struct vos_ts_set *ts_set,
+		bool leaf, bool replay)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+	daos_epoch_range_t	 max_epr = *epr;
+	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 loh;
+	int			 rc;
+	uint16_t		 minor_epc = VOS_MINOR_EPC_MAX;
+
+	if (ts_set == NULL ||
+	    (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
+		if (leaf)
+			goto punch_log;
+		return 0;
+	}
+
+	/** If we get here, we need to check if the entry exists */
+	D_ASSERT(ts_set->ts_flags & VOS_OF_COND_PUNCH);
+
+	if (parent != NULL) {
+		D_ASSERT(parent->ii_prior_any_punch.pr_epc >=
+			 parent->ii_prior_punch.pr_epc);
+
+		if (parent->ii_prior_any_punch.pr_epc > max_epr.epr_lo)
+			max_epr.epr_lo = parent->ii_prior_any_punch.pr_epc;
+	}
+
+	D_DEBUG(DB_TRACE, "Checking existence of incarnation log in range "
+		DF_X64"-"DF_X64"\n", max_epr.epr_lo, max_epr.epr_hi);
+
+	/** Do a fetch first.  The log may already exist */
+	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
+			    DAOS_INTENT_PUNCH, ilog, epr->epr_hi,
+			    0, parent, info);
+	/** For now, if the state isn't settled, just retry with later
+	 *  timestamp.   The state should get settled quickly when there
+	 *  is conditional update and sharing.
+	 */
+	if (info->ii_uncommitted != 0)
+		return -DER_INPROGRESS;
+	if (rc == -DER_NONEXIST)
+		return -DER_NONEXIST;
+	if (rc != 0) {
+		D_ERROR("Could not update ilog %p at "DF_X64": "DF_RC"\n",
+			ilog, epr->epr_hi, DP_RC(rc));
+		return rc;
+	}
+
+	rc = vos_ilog_update_check(info, &max_epr);
+	if (rc == -DER_NONEXIST)
+		return -DER_NONEXIST;
+	if (rc != 0) {
+		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+	if (!leaf)
+		return 0;
+
+punch_log:
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	if (rc != 0) {
+		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (dth) {
+		minor_epc = dth->dth_op_seq;
+	} else if (replay) {
+		/* If it's a replay, punch lower than the max in case there
+		 * are later visible updates with same major epoch.
+		 */
+		minor_epc--;
+	}
+	rc = ilog_update(loh, NULL, epr->epr_hi, minor_epc, true);
+
+	ilog_close(loh);
+
+	if (rc == -DER_ALREADY) /* operation had no effect */
+		rc = 0;
+	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
+			DP_RC(rc));
+
+	return rc;
+}
+
+int
+vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
+		   const daos_epoch_range_t *epr,
+		   bool discard, daos_epoch_t punched,
+		   struct vos_ilog_info *info)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct umem_instance	*umm = vos_cont2umm(cont);
+	struct ilog_desc_cbs	 cbs;
+	struct vos_punch_record	 punch_rec = {punched, 0};
+	int			 rc;
+
+	vos_ilog_desc_cbs_init(&cbs, coh);
+	D_DEBUG(DB_TRACE, "log="DF_X64"\n", umem_ptr2off(umm, ilog));
+
+	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, punched,
+			    &info->ii_entries);
+
+	if (rc != 0)
+		return rc;
+
+	return vos_ilog_fetch(umm, coh, DAOS_INTENT_PURGE, ilog, epr->epr_hi,
+			      &punch_rec, NULL, info);
 }
 
 void
@@ -343,4 +545,37 @@ vos_ilog_init(void)
 	}
 
 	return 0;
+}
+
+int
+vos_ilog_ts_add(struct vos_ts_set *ts_set, struct ilog_df *ilog,
+		const void *record, daos_size_t rec_size)
+{
+	uint32_t	*idx = NULL;
+
+	if (!vos_ts_in_tx(ts_set))
+		return 0;
+
+	if (ilog != NULL)
+		idx = ilog_ts_idx_get(ilog);
+
+	return vos_ts_set_add(ts_set, idx, record, rec_size);
+}
+
+void
+vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog)
+{
+	uint32_t		*idx = ilog_ts_idx_get(ilog);
+
+	vos_ts_set_mark_entry(ts_set, idx);
+}
+
+void
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type)
+{
+	uint32_t	*idx;
+
+	idx = ilog_ts_idx_get(ilog);
+
+	return vos_ts_evict(idx, type);
 }

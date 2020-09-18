@@ -30,9 +30,44 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
-func TestFindBinaryInPath(t *testing.T) {
+func TestUtils_ResolvePath(t *testing.T) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adjacentDir := path.Dir(selfPath)
+
+	for name, tc := range map[string]struct {
+		inPath      string
+		defaultPath string
+		expected    string
+		expErrMsg   string
+	}{
+		"absolute path": {"/foo/bar", "some/default", "/foo/bar", ""},
+		"relative path": {"foo/bar", "some/default", path.Join(workingDir, "foo/bar"), ""},
+		"empty path":    {"", "some/default", path.Join(adjacentDir, "some/default"), ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			outPath, err := ResolvePath(tc.inPath, tc.defaultPath)
+			ExpectError(t, err, tc.expErrMsg, name)
+
+			if diff := cmp.Diff(tc.expected, outPath); diff != "" {
+				t.Fatalf("unexpected resolved path (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestUtils_FindBinaryInPath(t *testing.T) {
 	testDir, err := ioutil.TempDir("", t.Name())
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +104,7 @@ func TestFindBinaryInPath(t *testing.T) {
 	})
 }
 
-func TestFindBinaryAdjacent(t *testing.T) {
+func TestUtils_FindBinaryAdjacent(t *testing.T) {
 	testDir := filepath.Dir(os.Args[0])
 	testFile, err := os.OpenFile(path.Join(testDir, t.Name()), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,13 +44,16 @@
 #include <daos_test.h>
 #include "dts_common.h"
 
+/* path to dmg config file */
+const char *dmg_config_file;
+
 enum {
 	DTS_INIT_NONE,		/* nothing has been initialized */
 	DTS_INIT_DEBUG,		/* debug system has been initialized */
 	DTS_INIT_MODULE,	/* modules have been loaded */
 	DTS_INIT_POOL,		/* pool has been created */
 	DTS_INIT_CONT,		/* container has been created */
-	DTS_INIT_CREDITS,	/* I/O credits have been initalized */
+	DTS_INIT_CREDITS,	/* I/O credits have been initialized */
 };
 
 /**
@@ -71,7 +74,8 @@ credit_poll(struct dts_context *tsc, bool drain)
 		rc = daos_eq_poll(tsc->tsc_eqh, 0, DAOS_EQ_WAIT, DTS_CRED_MAX,
 				  evs);
 		if (rc < 0) {
-			fprintf(stderr, "failed to pool event: %d\n", rc);
+			fprintf(stderr, "failed to pool event: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 
@@ -163,7 +167,7 @@ credits_init(struct dts_context *tsc)
 
 		if (!daos_handle_is_inval(tsc->tsc_eqh)) {
 			rc = daos_event_init(&cred->tc_ev, tsc->tsc_eqh, NULL);
-			D_ASSERTF(!rc, "rc=%d\n", rc);
+			D_ASSERTF(!rc, "rc="DF_RC"\n", DP_RC(rc));
 			cred->tc_evp = &cred->tc_ev;
 		}
 		tsc->tsc_credits[i] = cred;
@@ -219,17 +223,17 @@ pool_init(struct dts_context *tsc)
 		if (rc)
 			goto out;
 
-		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, &poh);
+		rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
 		if (rc)
 			goto out;
 
 	} else if (tsc->tsc_mpi_rank == 0) { /* DAOS mode and rank zero */
 		d_rank_list_t	*svc = &tsc->tsc_svc;
 
-		rc = daos_pool_create(0731, geteuid(), getegid(),
-				      NULL, NULL, "pmem",
-				      tsc->tsc_scm_size, tsc->tsc_nvme_size,
-				      NULL, svc, tsc->tsc_pool_uuid, NULL);
+		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(),
+				     NULL, NULL,
+				     tsc->tsc_scm_size, tsc->tsc_nvme_size,
+				     NULL, svc, tsc->tsc_pool_uuid);
 		if (rc)
 			goto bcast;
 
@@ -261,16 +265,18 @@ pool_fini(struct dts_context *tsc)
 	if (tsc->tsc_pmem_file) { /* VOS mode */
 		vos_pool_close(tsc->tsc_poh);
 		rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
-		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
+		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc="DF_RC"\n",
+			DP_RC(rc));
 
 	} else { /* DAOS mode */
 		daos_pool_disconnect(tsc->tsc_poh, NULL);
 		MPI_Barrier(MPI_COMM_WORLD);
 		if (tsc->tsc_mpi_rank == 0) {
-			rc = daos_pool_destroy(tsc->tsc_pool_uuid, NULL, true,
-					       NULL);
+			rc = dmg_pool_destroy(dmg_config_file,
+					      tsc->tsc_pool_uuid, NULL, true);
 			D_ASSERTF(rc == 0 || rc == -DER_NONEXIST ||
-				  rc == -DER_TIMEDOUT, "rc=%d\n", rc);
+				  rc == -DER_TIMEDOUT, "rc="DF_RC"\n",
+				  DP_RC(rc));
 		}
 	}
 }
@@ -330,6 +336,12 @@ cont_fini(struct dts_context *tsc)
 	 */
 }
 
+bool
+dts_is_async(struct dts_context *tsc)
+{
+	return !daos_handle_is_inval(tsc->tsc_eqh);
+}
+
 /* see comments in dts_common.h */
 int
 dts_ctx_init(struct dts_context *tsc)
@@ -337,7 +349,7 @@ dts_ctx_init(struct dts_context *tsc)
 	int	rc;
 
 	tsc->tsc_init = DTS_INIT_NONE;
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;

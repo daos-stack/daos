@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,8 @@
 #include <daos_array.h>
 #include <daos_kv.h>
 #include <daos_prop.h>
-
+#include <daos_cont.h>
+#include <daos_pool.h>
 #include <daos_mgmt.h>
 #include <daos_security.h>
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ abt_ult_create_rate(void)
 	while (1) {
 		if (!abt_exiting) {
 			now = abt_current_ms();
-			if (now - then >= opt_secs * 1000)
+			if (now - then >= (uint64_t)opt_secs * 1000)
 				abt_exiting = true;
 		}
 
@@ -167,7 +167,7 @@ abt_sched_rate(void)
 	while (1) {
 		if (then && !abt_exiting) {
 			now = abt_current_ms();
-			if (now - then >= opt_secs * 1000)
+			if (now - then >= (uint64_t)opt_secs * 1000)
 				abt_exiting = true;
 		}
 
@@ -232,7 +232,7 @@ abt_lock_create_rate(void *arg)
 	while (1) {
 		if (!abt_exiting) {
 			now = abt_current_ms();
-			if (now - then >= opt_secs * 1000)
+			if (now - then >= (uint64_t)opt_secs * 1000)
 				abt_exiting = true;
 		}
 
@@ -301,7 +301,7 @@ static struct option abt_ops[] = {
 	{ "num",	required_argument,	NULL,	'n'	},
 	/** test duration in seconds.  */
 	{ "sec",	required_argument,	NULL,	's'	},
-	/** stack szie (kilo-bytes) */
+	/** stack size (kilo-bytes) */
 	{ "stack",	required_argument,	NULL,	'S'	},
 };
 

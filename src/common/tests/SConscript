@@ -1,35 +1,10 @@
-"""Build doas common tests"""
+"""Build daos common tests"""
 import daos_build
 from prereq_tools import GitRepoRetriever
 
 def define_checksum_timing(build, env, prereqs):
     """Define the Checksum Timing build"""
-    checksum_timing_libs = ['daos_common']
-    AddOption('--mchecksum',
-              dest='mchecksum',
-              action='store_true',
-              default=False,
-              help='Include mchecksum library')
-    if GetOption("mchecksum"):
-        prereqs.define('mchecksum',
-                       retriever=GitRepoRetriever("https://github.com/"
-                                                  "mercury-hpc/"
-                                                  "mchecksum.git"),
-                       commands=['cmake -DBUILD_SHARED_LIBS=ON $MCHECKSUM_SRC '
-                                 '-DBUILD_TESTING=ON '
-                                 '-DCMAKE_INSTALL_PREFIX=$MCHECKSUM_PREFIX '
-                                 '-DMCHECKSUM_ENABLE_COVERAGE=OFF '
-                                 '-DMCHECKSUM_ENABLE_VERBOSE_ERROR=ON '
-                                 '-DMCHECKSUM_USE_ZLIB=OFF '
-                                 '-DCMAKE_INSTALL_RPATH=$MCHECKSUM_PREFIX/lib '
-                                 '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ',
-                                 'make $JOBS_OPT', 'make install'],
-                       libs=['mchecksum'],
-                       out_of_src_build=True)
-        prereqs.require(env, 'mchecksum')
-        env.Append(CCFLAGS=['-DMCHECKSUM_SUPPORT=1'])
-        checksum_timing_libs += ['mchecksum']
-
+    checksum_timing_libs = ['daos_common', 'gurt']
     build.test(env, 'checksum_timing', 'checksum_timing.c',
                LIBS=checksum_timing_libs)
 
@@ -52,7 +27,7 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
-    daos_build.test(tenv, 'common_test',
+    common_test = daos_build.test(tenv, 'common_test',
                     ['common_test.c', 'checksum_tests.c',
                      'misc_tests.c'],
                     LIBS=['daos_common', 'daos_tests', 'gurt', 'cart',
@@ -65,7 +40,11 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'abt'])
     daos_build.test(tenv, 'acl_real_tests', 'acl_util_real_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv, prereqs)
+
+    tenv.Install('$PREFIX/bin/', [common_test])
 
     unit_env = tenv.Clone()
     # Some syscalls are aliased when fortification is enabled, which makes
@@ -73,12 +52,19 @@ def scons():
     # The compiler decides this on its own, but let's force the issue.
     unit_env.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
 
+    acl_api = unit_env.Object('../acl_api.c')
+
     daos_build.test(unit_env, 'drpc_tests',
                     ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c',
                      common_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_api_tests',
-                    source=['acl_api_tests.c', '../acl_api.c'],
+                    source=['acl_api_tests.c', acl_api,
+                            common_test_utils],
+                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+    daos_build.test(unit_env, 'acl_valid_tests',
+                    source=['acl_valid_tests.c', acl_api,
+                            common_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_util_tests',
                     source=['acl_util_tests.c', '../acl_util.c'],

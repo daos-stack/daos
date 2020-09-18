@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,40 +24,53 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os/user"
+	"os"
 	"strconv"
 	"strings"
 
-	"github.com/inhies/go-bytesize"
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
-	msgSizeNoNumber = "size string doesn't specify a number"
-	msgSizeZeroScm  = "non-zero scm size is required"
-	maxNumSvcReps   = 13
+	// minScmNvmeRatio indicates the minimum storage size ratio SCM:NVMe
+	// (requested on pool creation), warning issued if ratio is lower
+	minScmNvmeRatio = 0.01
+	// maxNumSvcReps is the maximum number of pool service replicas
+	// that can be requested when creating a pool
+	maxNumSvcReps = 13
 )
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
+	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
+	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
+	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
+	Drain        PoolDrainCmd        `command:"drain" alias:"d" description:"Drain targets from a rank"`
+	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
 	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
 	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" alias:"da" description:"Delete an entry from a DAOS pool's Access Control List"`
+	SetProp      PoolSetPropCmd      `command:"set-prop" alias:"sp" description:"Set pool property"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
 type PoolCreateCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	jsonOutputCmd
 	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
@@ -70,77 +83,389 @@ type PoolCreateCmd struct {
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (c *PoolCreateCmd) Execute(args []string) error {
-	return poolCreate(c.log, c.conns,
-		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
-		c.GroupName, c.UserName, c.Sys, c.ACLFile)
+	msg := "SUCCEEDED: "
+
+	scmBytes, err := humanize.ParseBytes(c.ScmSize)
+	if err != nil {
+		return errors.Wrap(err, "pool SCM size")
+	}
+
+	var nvmeBytes uint64
+	if c.NVMeSize != "" {
+		nvmeBytes, err = humanize.ParseBytes(c.NVMeSize)
+		if err != nil {
+			return errors.Wrap(err, "pool NVMe size")
+		}
+	}
+
+	ratio := 1.00
+	if nvmeBytes > 0 {
+		ratio = float64(scmBytes) / float64(nvmeBytes)
+	}
+
+	if ratio < minScmNvmeRatio {
+		c.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
+			"performance will suffer!\n", ratio*100)
+	}
+	c.log.Infof("Creating DAOS pool with %s SCM and %s NVMe storage "+
+		"(%0.2f %% ratio)\n", humanize.Bytes(scmBytes),
+		humanize.Bytes(nvmeBytes), ratio*100)
+
+	var acl *control.AccessControlList
+	if c.ACLFile != "" {
+		acl, err = control.ReadACLFile(c.ACLFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.NumSvcReps > maxNumSvcReps {
+		return errors.Errorf("max number of service replicas is %d, got %d",
+			maxNumSvcReps, c.NumSvcReps)
+	}
+
+	ranks, err := system.ParseRanks(c.RankList)
+	if err != nil {
+		return errors.Wrap(err, "parsing rank list")
+	}
+
+	req := &control.PoolCreateReq{
+		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, Ranks: ranks,
+		NumSvcReps: c.NumSvcReps, Sys: c.Sys,
+		User: c.UserName, UserGroup: c.GroupName, ACL: acl,
+	}
+
+	ctx := context.Background()
+	resp, err := control.PoolCreate(ctx, c.ctlInvoker, req)
+
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		msg = errors.WithMessage(err, "FAILED").Error()
+	} else {
+		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
+			resp.UUID, formatPoolSvcReps(resp.SvcReps))
+	}
+
+	c.log.Infof("Pool-create command %s\n", msg)
+
+	return err
 }
 
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
 type PoolDestroyCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	jsonOutputCmd
 	// TODO: implement --sys & --svc options (currently unsupported server side)
-	Uuid  string `long:"pool" required:"1" description:"UUID of DAOS pool to destroy"`
+	UUID  string `long:"pool" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
 }
 
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (d *PoolDestroyCmd) Execute(args []string) error {
-	return poolDestroy(d.log, d.conns, d.Uuid, d.Force)
+	msg := "succeeded"
+
+	req := &control.PoolDestroyReq{UUID: d.UUID, Force: d.Force}
+
+	ctx := context.Background()
+	err := control.PoolDestroy(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.errorJSON(err)
+	}
+
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	d.log.Infof("Pool-destroy command %s\n", msg)
+
+	return err
 }
 
-// PoolQueryCmd is the struct representing the command to destroy a DAOS pool.
+// PoolEvictCmd is the struct representing the command to evict a DAOS pool.
+type PoolEvictCmd struct {
+	logCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to evict connection to"`
+	Sys  string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that the pools connections be evicted from."`
+}
+
+// Execute is run when PoolEvictCmd subcommand is activated
+func (d *PoolEvictCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	req := &control.PoolEvictReq{UUID: d.UUID, Sys: d.Sys}
+
+	ctx := context.Background()
+	err := control.PoolEvict(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.errorJSON(err)
+	}
+
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	d.log.Infof("Pool-evict command %s\n", msg)
+
+	return err
+}
+
+// PoolExcludeCmd is the struct representing the command to exclude a DAOS target.
+type PoolExcludeCmd struct {
+	logCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to exclude a target from"`
+	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be excluded"`
+	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
+}
+
+// Execute is run when PoolExcludeCmd subcommand is activated
+func (r *PoolExcludeCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	var idxlist []uint32
+	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
+		return errors.WithMessage(err, "parsing rank list")
+	}
+
+	req := &control.PoolExcludeReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
+
+	ctx := context.Background()
+	err := control.PoolExclude(ctx, r.ctlInvoker, req)
+
+	if r.jsonOutputEnabled() {
+		return r.errorJSON(err)
+	}
+
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	r.log.Infof("Exclude command %s\n", msg)
+
+	return err
+}
+
+// PoolDrainCmd is the struct representing the command to Drain a DAOS target.
+type PoolDrainCmd struct {
+	logCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to drain a target in"`
+	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be drained"`
+	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
+}
+
+// Execute is run when PoolDrainCmd subcommand is activated
+func (r *PoolDrainCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	var idxlist []uint32
+	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
+		err = errors.WithMessage(err, "parsing rank list")
+		if r.jsonOutputEnabled() {
+			return r.errorJSON(err)
+		}
+		return err
+	}
+
+	req := &control.PoolDrainReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
+
+	ctx := context.Background()
+	err := control.PoolDrain(ctx, r.ctlInvoker, req)
+
+	if r.jsonOutputEnabled() {
+		return r.errorJSON(err)
+	}
+
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	r.log.Infof("Drain command %s\n", msg)
+
+	return err
+}
+
+// PoolExtendCmd is the struct representing the command to Extend a DAOS pool.
+type PoolExtendCmd struct {
+	logCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	UUID     string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
+	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
+	// Everything after this needs to be removed when pool info can be fetched
+	ScmSize  string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of the original DAOS pool being extended"`
+	NVMeSize string `short:"n" long:"nvme-size" description:"Size of NVMe component of the original DAOS pool being extended, or none if not originally supplied to pool create."`
+	// END TEMPORARY SECTION
+}
+
+// Execute is run when PoolExtendCmd subcommand is activated
+func (e *PoolExtendCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	ranks, err := system.ParseRanks(e.RankList)
+	if err != nil {
+		err = errors.Wrap(err, "parsing rank list")
+		if e.jsonOutputEnabled() {
+			return e.errorJSON(err)
+		}
+		return err
+	}
+
+	// Everything below this needs to be removed once Pool Info can be fetched
+
+	scmBytes, err := humanize.ParseBytes(e.ScmSize)
+	if err != nil {
+		return errors.Wrap(err, "pool SCM size")
+	}
+
+	var nvmeBytes uint64
+	if e.NVMeSize != "" {
+		nvmeBytes, err = humanize.ParseBytes(e.NVMeSize)
+		if err != nil {
+			return errors.Wrap(err, "pool NVMe size")
+		}
+	}
+
+	req := &control.PoolExtendReq{
+		UUID: e.UUID, Ranks: ranks,
+		ScmBytes: scmBytes, NvmeBytes: nvmeBytes,
+	}
+	// END TEMP SECTION
+
+	ctx := context.Background()
+	err = control.PoolExtend(ctx, e.ctlInvoker, req)
+
+	if e.jsonOutputEnabled() {
+		return e.errorJSON(err)
+	}
+
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	e.log.Infof("Extend command %s\n", msg)
+
+	return err
+}
+
+// PoolReintegrateCmd is the struct representing the command to Add a DAOS target.
+type PoolReintegrateCmd struct {
+	logCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
+	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
+	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
+}
+
+// Execute is run when PoolReintegrateCmd subcommand is activated
+func (r *PoolReintegrateCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	var idxlist []uint32
+	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
+		err = errors.WithMessage(err, "parsing rank list")
+		if r.jsonOutputEnabled() {
+			return r.errorJSON(err)
+		}
+		return err
+	}
+
+	req := &control.PoolReintegrateReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
+
+	ctx := context.Background()
+	err := control.PoolReintegrate(ctx, r.ctlInvoker, req)
+
+	if r.jsonOutputEnabled() {
+		return r.errorJSON(err)
+	}
+
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	r.log.Infof("Reintegration command %s\n", msg)
+
+	return err
+}
+
+// PoolQueryCmd is the struct representing the command to query a DAOS pool.
 type PoolQueryCmd struct {
 	logCmd
-	connectedCmd
-	Uuid string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
+	ctlInvokerCmd
+	jsonOutputCmd
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (c *PoolQueryCmd) Execute(args []string) error {
-	req := client.PoolQueryReq{
-		UUID: c.Uuid,
+	req := &control.PoolQueryReq{
+		UUID: c.UUID,
 	}
 
-	resp, err := c.conns.PoolQuery(req)
+	ctx := context.Background()
+	resp, err := control.PoolQuery(ctx, c.ctlInvoker, req)
+
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(resp, err)
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "pool query failed")
 	}
 
-	formatBytes := func(size uint64) string {
-		return bytesize.ByteSize(size).Format("%.0f", "", false)
-	}
-
-	// Maintain output compability with the `daos pool query` output.
 	var bld strings.Builder
-	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%t\n",
-		resp.UUID, resp.TotalTargets, resp.Disabled)
-	bld.WriteString("Pool space info:\n")
-	fmt.Fprintf(&bld, "- Target(VOS) count:%d\n", resp.ActiveTargets)
-	if resp.Scm != nil {
-		bld.WriteString("- SCM:\n")
-		fmt.Fprintf(&bld, "  Total size: %s\n", formatBytes(resp.Scm.Total))
-		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			formatBytes(resp.Scm.Free), formatBytes(resp.Scm.Min),
-			formatBytes(resp.Scm.Max), formatBytes(resp.Scm.Mean))
+	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
+		return err
 	}
-	if resp.Nvme != nil {
-		bld.WriteString("- NVMe:\n")
-		fmt.Fprintf(&bld, "  Total size: %s\n", formatBytes(resp.Nvme.Total))
-		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			formatBytes(resp.Nvme.Free), formatBytes(resp.Nvme.Min),
-			formatBytes(resp.Nvme.Max), formatBytes(resp.Nvme.Mean))
-	}
-	if resp.Rebuild != nil {
-		if resp.Rebuild.Status == 0 {
-			fmt.Fprintf(&bld, "Rebuild %s, %d objs, %d recs\n",
-				resp.Rebuild.State, resp.Rebuild.Objects, resp.Rebuild.Records)
-		} else {
-			fmt.Fprintf(&bld, "Rebuild failed, rc=%d, status=%d", resp.Status, resp.Rebuild.Status)
-		}
+	c.log.Info(bld.String())
+	return nil
+}
+
+// PoolSetPropCmd represents the command to set a property on a pool.
+type PoolSetPropCmd struct {
+	logCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+	UUID     string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	Property string `short:"n" long:"name" required:"1" description:"Name of property to be set"`
+	Value    string `short:"v" long:"value" required:"1" description:"Value of property to be set"`
+}
+
+// Execute is run when PoolSetPropCmd subcommand is activated.
+func (c *PoolSetPropCmd) Execute(_ []string) error {
+	req := &control.PoolSetPropReq{
+		UUID:     c.UUID,
+		Property: c.Property,
 	}
 
-	c.log.Info(bld.String())
+	req.SetString(c.Value)
+	if numVal, err := strconv.ParseUint(c.Value, 10, 64); err == nil {
+		req.SetNumber(numVal)
+	}
+
+	ctx := context.Background()
+	resp, err := control.PoolSetProp(ctx, c.ctlInvoker, req)
+
+	if c.jsonOutputEnabled() {
+		return c.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "pool set-prop failed")
+	}
+
+	c.log.Infof("pool set-prop succeeded (%s=%q)", resp.Property, resp.Value)
 	return nil
 }
 
@@ -148,22 +473,67 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 // DAOS pool.
 type PoolGetACLCmd struct {
 	logCmd
-	connectedCmd
-	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	ctlInvokerCmd
+	jsonOutputCmd
+	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	File    string `short:"o" long:"outfile" required:"0" description:"Output ACL to file"`
+	Force   bool   `short:"f" long:"force" required:"0" description:"Allow to clobber output file"`
+	Verbose bool   `short:"v" long:"verbose" required:"0" description:"Add descriptive comments to ACL entries"`
 }
 
 // Execute is run when the PoolGetACLCmd subcommand is activated
 func (d *PoolGetACLCmd) Execute(args []string) error {
-	req := client.PoolGetACLReq{UUID: d.UUID}
+	req := &control.PoolGetACLReq{UUID: d.UUID}
 
-	resp, err := d.conns.PoolGetACL(req)
-	if err != nil {
-		d.log.Infof("Pool-get-ACL command failed: %s\n", err.Error())
-		return err
+	ctx := context.Background()
+	resp, err := control.PoolGetACL(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(resp.ACL, err)
 	}
 
-	d.log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+	if err != nil {
+		return errors.Wrap(err, "Pool-get-ACL command failed")
+	}
+
+	d.log.Debugf("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
+
+	acl := control.FormatACL(resp.ACL, d.Verbose)
+
+	if d.File != "" {
+		err = d.writeACLToFile(acl)
+		if err != nil {
+			return err
+		}
+		d.log.Infof("Wrote ACL to output file: %s", d.File)
+	} else {
+		d.log.Info(acl)
+	}
+
+	return nil
+}
+
+func (d *PoolGetACLCmd) writeACLToFile(acl string) error {
+	if !d.Force {
+		// Keep the user from clobbering existing files
+		_, err := os.Stat(d.File)
+		if err == nil {
+			return errors.New(fmt.Sprintf("file already exists: %s", d.File))
+		}
+	}
+
+	f, err := os.Create(d.File)
+	if err != nil {
+		d.log.Errorf("Unable to create file: %s", d.File)
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(acl)
+	if err != nil {
+		d.log.Errorf("Failed to write to file: %s", d.File)
+		return err
+	}
 
 	return nil
 }
@@ -172,31 +542,41 @@ func (d *PoolGetACLCmd) Execute(args []string) error {
 // List of a DAOS pool.
 type PoolOverwriteACLCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	jsonOutputCmd
 	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	ACLFile string `short:"a" long:"acl-file" required:"1" description:"Path for new Access Control List file"`
 }
 
 // Execute is run when the PoolOverwriteACLCmd subcommand is activated
 func (d *PoolOverwriteACLCmd) Execute(args []string) error {
-	acl, err := readACLFile(d.ACLFile)
+	acl, err := control.ReadACLFile(d.ACLFile)
 	if err != nil {
+		if d.jsonOutputEnabled() {
+			return d.errorJSON(err)
+		}
 		return err
 	}
 
-	req := client.PoolOverwriteACLReq{
+	req := &control.PoolOverwriteACLReq{
 		UUID: d.UUID,
 		ACL:  acl,
 	}
 
-	resp, err := d.conns.PoolOverwriteACL(req)
+	ctx := context.Background()
+	resp, err := control.PoolOverwriteACL(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(resp.ACL, err)
+	}
+
 	if err != nil {
-		d.log.Infof("Pool-overwrite-ACL command failed: %s\n", err.Error())
-		return err
+		return errors.Wrap(err, "Pool-overwrite-ACL command failed")
 	}
 
 	d.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+
+	d.log.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
 }
@@ -205,7 +585,8 @@ func (d *PoolOverwriteACLCmd) Execute(args []string) error {
 // a DAOS pool.
 type PoolUpdateACLCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	jsonOutputCmd
 	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	ACLFile string `short:"a" long:"acl-file" required:"0" description:"Path for new Access Control List file"`
 	Entry   string `short:"e" long:"entry" required:"0" description:"Single Access Control Entry to add or update"`
@@ -217,32 +598,41 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 		return errors.New("either ACL file or entry parameter is required")
 	}
 
-	var acl *client.AccessControlList
+	var acl *control.AccessControlList
 	if d.ACLFile != "" {
-		aclFileResult, err := readACLFile(d.ACLFile)
+		aclFileResult, err := control.ReadACLFile(d.ACLFile)
 		if err != nil {
+			if d.jsonOutputEnabled() {
+				return d.errorJSON(err)
+			}
 			return err
 		}
 		acl = aclFileResult
 	} else {
-		acl = &client.AccessControlList{
+		acl = &control.AccessControlList{
 			Entries: []string{d.Entry},
 		}
 	}
 
-	req := client.PoolUpdateACLReq{
+	req := &control.PoolUpdateACLReq{
 		UUID: d.UUID,
 		ACL:  acl,
 	}
 
-	resp, err := d.conns.PoolUpdateACL(req)
+	ctx := context.Background()
+	resp, err := control.PoolUpdateACL(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(resp.ACL, err)
+	}
+
 	if err != nil {
-		d.log.Infof("Pool-update-ACL command failed: %s\n", err.Error())
-		return err
+		return errors.Wrap(err, "Pool-update-ACL command failed")
 	}
 
 	d.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+
+	d.log.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
 }
@@ -251,197 +641,33 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 // Control List of a DAOS pool.
 type PoolDeleteACLCmd struct {
 	logCmd
-	connectedCmd
+	ctlInvokerCmd
+	jsonOutputCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 	Principal string `short:"p" long:"principal" required:"1" description:"Principal whose entry should be removed"`
 }
 
 // Execute is run when the PoolDeleteACLCmd subcommand is activated
 func (d *PoolDeleteACLCmd) Execute(args []string) error {
-	req := client.PoolDeleteACLReq{
+	req := &control.PoolDeleteACLReq{
 		UUID:      d.UUID,
 		Principal: d.Principal,
 	}
 
-	resp, err := d.conns.PoolDeleteACL(req)
+	ctx := context.Background()
+	resp, err := control.PoolDeleteACL(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(resp.ACL, err)
+	}
+
 	if err != nil {
-		d.log.Infof("Pool-delete-ACL command failed: %s\n", err.Error())
-		return err
+		return errors.Wrap(err, "Pool-delete-ACL command failed")
 	}
 
 	d.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+
+	d.log.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
-}
-
-// getSize retrieves number of bytes from human readable string representation
-func getSize(sizeStr string) (bytesize.ByteSize, error) {
-	if sizeStr == "" {
-		return bytesize.New(0.00), nil
-	}
-	if common.IsAlphabetic(sizeStr) {
-		return bytesize.New(0.00), errors.New(msgSizeNoNumber)
-	}
-
-	// change any alphabetic characters to upper before ByteSize.parse()
-	sizeStr = strings.ToUpper(sizeStr)
-
-	// append "B" character if absent (required by ByteSize.parse())
-	if !strings.HasSuffix(sizeStr, "B") {
-		sizeStr += "B"
-	}
-
-	return bytesize.Parse(sizeStr)
-}
-
-// calcStorage calculates SCM & NVMe size for pool from user supplied parameters
-func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
-	scmBytes bytesize.ByteSize, nvmeBytes bytesize.ByteSize, err error) {
-
-	scmBytes, err = getSize(scmSize)
-	if err != nil {
-		err = errors.WithMessagef(
-			err, "illegal scm size: %s", scmSize)
-		return
-	}
-
-	if scmBytes == 0 {
-		err = errors.New(msgSizeZeroScm)
-		return
-	}
-
-	nvmeBytes, err = getSize(nvmeSize)
-	if err != nil {
-		err = errors.WithMessagef(
-			err, "illegal nvme size: %s", nvmeSize)
-		return
-	}
-
-	ratio := 1.00
-	if nvmeBytes > 0 {
-		ratio = float64(scmBytes) / float64(nvmeBytes)
-	}
-
-	if ratio < 0.01 {
-		log.Infof(
-			"SCM:NVMe ratio is less than 1%%, DAOS performance " +
-				"will suffer!\n")
-	}
-	log.Infof(
-		"Creating DAOS pool with %s SCM and %s NvMe storage "+
-			"(%.3f ratio)\n",
-		scmBytes.Format("%.0f", "", false),
-		nvmeBytes.Format("%.0f", "", false),
-		ratio)
-
-	return scmBytes, nvmeBytes, nil
-}
-
-// formatNameGroup converts system names to principal and if both user and group
-// are unspecified, takes effective user name and that user's primary group.
-func formatNameGroup(usr string, grp string) (string, string, error) {
-	if usr == "" && grp == "" {
-		eUsr, err := user.Current()
-		if err != nil {
-			return "", "", err
-		}
-
-		eGrp, err := user.LookupGroupId(eUsr.Gid)
-		if err != nil {
-			return "", "", err
-		}
-
-		usr, grp = eUsr.Username, eGrp.Name
-	}
-
-	if usr != "" && !strings.Contains(usr, "@") {
-		usr += "@"
-	}
-
-	if grp != "" && !strings.Contains(grp, "@") {
-		grp += "@"
-	}
-
-	return usr, grp, nil
-}
-
-// poolCreate with specified parameters.
-func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
-	nvmeSize string, rankList string, numSvcReps uint32, groupName string,
-	userName string, sys string, aclFile string) error {
-
-	msg := "SUCCEEDED: "
-
-	scmBytes, nvmeBytes, err := calcStorage(log, scmSize, nvmeSize)
-	if err != nil {
-		return errors.Wrap(err, "calculating pool storage sizes")
-	}
-
-	var acl *client.AccessControlList
-	if aclFile != "" {
-		acl, err = readACLFile(aclFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	if numSvcReps > maxNumSvcReps {
-		return errors.Errorf("max number of service replicas is %d, got %d",
-			maxNumSvcReps, numSvcReps)
-	}
-
-	usr, grp, err := formatNameGroup(userName, groupName)
-	if err != nil {
-		return errors.WithMessage(err, "formatting user/group strings")
-	}
-
-	ranks := make([]uint32, 0)
-	if len(rankList) > 0 {
-		rankStr := strings.Split(rankList, ",")
-		for _, rank := range rankStr {
-			r, err := strconv.Atoi(rank)
-			if err != nil {
-				return errors.WithMessage(err, "parsing rank list")
-			}
-			if r < 0 {
-				return errors.Errorf("invalid rank: %d", r)
-			}
-			ranks = append(ranks, uint32(r))
-		}
-	}
-
-	req := &client.PoolCreateReq{
-		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
-		RankList: ranks, NumSvcReps: numSvcReps, Sys: sys,
-		Usr: usr, Grp: grp, ACL: acl,
-	}
-
-	resp, err := conns.PoolCreate(req)
-	if err != nil {
-		msg = errors.WithMessage(err, "FAILED").Error()
-	} else {
-		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
-			resp.UUID, formatPoolSvcReps(resp.SvcReps))
-	}
-
-	log.Infof("Pool-create command %s\n", msg)
-
-	return err
-}
-
-// poolDestroy identified by UUID.
-func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, force bool) error {
-	msg := "succeeded"
-
-	req := &client.PoolDestroyReq{UUID: poolUUID, Force: force}
-
-	err := conns.PoolDestroy(req)
-	if err != nil {
-		msg = errors.WithMessage(err, "failed").Error()
-	}
-
-	log.Infof("Pool-destroy command %s\n", msg)
-
-	return err
 }

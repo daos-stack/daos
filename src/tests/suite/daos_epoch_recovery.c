@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 		}
 
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/ rec_size,
-		       rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req);
+		       rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req, 0);
 	} else {	/* op == VERIFY */
 		char *rec_verify;
 
@@ -145,7 +145,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 		if (arg->myrank == 0) {
 			print_message("evicting pool connections\n");
 			rc = daos_pool_evict(arg->pool.pool_uuid, arg->group,
-					     &arg->pool.svc, NULL /* ev */);
+					     arg->pool.svc, NULL /* ev */);
 			assert_int_equal(rc, 0);
 		}
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -164,7 +164,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 		print_message("reconnecting to pool\n");
 		if (arg->myrank == 0) {
 			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-					       &arg->pool.svc, DAOS_PC_RW,
+					       arg->pool.svc, DAOS_PC_RW,
 					       &arg->pool.poh, NULL /* info */,
 					       NULL /* ev */);
 			assert_int_equal(rc, 0);

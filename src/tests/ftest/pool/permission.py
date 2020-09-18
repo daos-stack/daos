@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,10 +21,13 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-import os
-
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
+from avocado.core.exceptions import TestFail
+from test_utils_pool import TestPool
+
+RESULT_PASS = "PASS"
+RESULT_FAIL = "FAIL"
 
 
 class Permission(TestWithServers):
@@ -45,14 +48,10 @@ class Permission(TestWithServers):
 
         :avocado: tags=pool,permission,connectpermission
         """
-        # parameters used in pool create
+        # parameter used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
 
-        # parameters used for pool connect
+        # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
 
         if createmode == 73 or \
@@ -61,36 +60,40 @@ class Permission(TestWithServers):
             self.cancelForTicket("DAOS-3442")
 
         if createmode == 73:
-            expected_result = 'FAIL'
+            expected_result = RESULT_FAIL
         if createmode == 511 and permissions == 0:
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
         elif createmode in [146, 511] and permissions == 1:
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
         elif createmode in [292, 511] and permissions == 2:
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
         else:
-            expected_result = 'FAIL'
+            expected_result = RESULT_FAIL
+
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.test_log.debug("Pool initialization successful")
+        self.pool.get_params(self)
+        self.pool.mode.value = createmode
+        self.pool.create()
+        self.test_log.debug("Pool Creation successful")
 
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.multi_log("Pool initialisation successful", "debug")
-
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-            self.multi_log("Pool Creation successful", "debug")
-
             self.pool.connect(1 << permissions)
-            self.multi_log("Pool Connect successful", "debug")
+            self.test_log.debug("Pool Connect successful")
 
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
+            if expected_result == RESULT_FAIL:
+                self.fail(
+                    "Test was expected to fail at pool.connect, but it " +
+                    "passed.\n")
 
-        except DaosApiError as excep:
+        except TestFail as excep:
             self.log.error(str(excep))
-            if expected_result == 'PASS':
-                self.fail("Test was expected to pass but it failed.\n")
+            if expected_result == RESULT_PASS:
+                self.fail(
+                    "Test was expected to pass but it failed at " +
+                    "pool.connect.\n")
 
     def test_filemodification(self):
         """Test ID: DAOS-???.
@@ -103,45 +106,48 @@ class Permission(TestWithServers):
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createuid = self.params.get("uid", '/run/createtests/createuid/')
-        creategid = self.params.get("gid", '/run/createtests/creategid/')
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
 
         if createmode == 73:
-            expected_result = 'FAIL'
+            expected_result = RESULT_FAIL
         elif createmode in [146, 511]:
             permissions = 1
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
         elif createmode == 292:
             permissions = 2
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
+
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.test_log.debug("Pool initialization successful")
+        self.pool.get_params(self)
+        self.pool.mode.value = createmode
+        self.test_log.debug("Pool Creation successful")
 
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.multi_log("Pool initialisation successful", "debug")
-            self.pool.create(createmode,
-                             createuid,
-                             creategid,
-                             createsize,
-                             createsetid,
-                             None)
-            self.multi_log("Pool Creation successful", "debug")
-
             self.pool.connect(1 << permissions)
-            self.multi_log("Pool Connect successful", "debug")
+            self.test_log.debug("Pool Connect successful")
+            if expected_result == RESULT_FAIL:
+                self.fail(
+                    "Test was expected to fail at pool.connect but it " +
+                    "passed.\n")
+        except TestFail as excep:
+            self.log.error(str(excep))
+            if expected_result == RESULT_PASS:
+                self.fail(
+                    "Test was expected to pass but it failed at " +
+                    "pool.connect.\n")
 
+        try:
             self.container = DaosContainer(self.context)
-            self.multi_log("Contianer initialisation successful", "debug")
+            self.test_log.debug("Container initialization successful")
 
-            self.container.create(self.pool.handle)
-            self.multi_log("Container create successful", "debug")
+            self.container.create(self.pool.pool.handle)
+            self.test_log.debug("Container create successful")
 
             # now open it
             self.container.open()
-            self.multi_log("Container open successful", "debug")
+            self.test_log.debug("Container open successful")
 
             thedata = "a string that I want to stuff into an object"
             size = 45
@@ -149,11 +155,15 @@ class Permission(TestWithServers):
             akey = "this is the akey"
 
             self.container.write_an_obj(thedata, size, dkey, akey)
-            self.multi_log("Container write successful", "debug")
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
+            self.test_log.debug("Container write successful")
+            if expected_result == RESULT_FAIL:
+                self.fail(
+                    "Test was expected to fail at container operations " +
+                    "but it passed.\n")
 
         except DaosApiError as excep:
             self.log.error(str(excep))
-            if expected_result == 'PASS':
-                self.fail("Test was expected to pass but it failed.\n")
+            if expected_result == RESULT_PASS:
+                self.fail(
+                    "Test was expected to pass but it failed at container " +
+                    "operations.\n")

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,23 +39,35 @@ extern "C" {
 
 #include <dirent.h>
 
+/** Maximum Path length */
 #define DFS_MAX_PATH		NAME_MAX
+/** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
 
+/** File/Directory/Symlink object handle struct */
 typedef struct dfs_obj dfs_obj_t;
+/** DFS mount handle struct */
 typedef struct dfs dfs_t;
 
+/** struct holding attributes for a DFS container */
 typedef struct {
-	/*
-	 * User ID for DFS container (Optional); can be mapped to a Lustre FID
-	 * for example in the Unified namespace.
-	 */
+	/** Optional user ID for DFS container. */
 	uint64_t		da_id;
 	/** Default Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
 	/** Default Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass_id;
+	/** DAOS properties on the DFS container */
+	daos_prop_t		*da_props;
 } dfs_attr_t;
+
+/** IO descriptor of ranges in a file to access */
+typedef struct {
+	/** Number of entries in dfs_rgs */
+	daos_size_t		iod_nr;
+	/** Array of ranges; each range defines a starting index and length. */
+	daos_range_t	       *iod_rgs;
+} dfs_iod_t;
 
 /**
  * Create a DFS container with the the POSIX property layout set.
@@ -103,6 +115,17 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  */
 int
 dfs_umount(dfs_t *dfs);
+
+/**
+ * Query attributes of a DFS mount.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	attr	Attributes on the DFS container.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_query(dfs_t *dfs, dfs_attr_t *attr);
 
 /**
  * Convert a local dfs mount to global representation data which can be
@@ -201,7 +224,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
  */
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf);
+	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf);
 
 /**
  * Create/Open a directory, file, or Symlink.
@@ -297,9 +320,6 @@ dfs_release(dfs_obj_t *obj);
  * \param[in]	off	Offset into the file to read from.
  * \param[out]	read_size
  *			How much data is actually read.
- *			TODO - support short reads when iom is supported.
- *			For now this returns whatever was requested and short
- *			read is not supported.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -308,6 +328,25 @@ dfs_release(dfs_obj_t *obj);
 int
 dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	 daos_size_t *read_size, daos_event_t *ev);
+
+/**
+ * Non-contiguous read interface to a DFS file.
+ * Same as dfs_read with the ability to have a segmented file layout to read.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	iod	IO descriptor for list-io.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[out]	read_size
+ *			How much data is actually read.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	  daos_size_t *read_size, daos_event_t *ev);
 
 /**
  * Write data to the file object.
@@ -324,6 +363,22 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 int
 dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	  daos_event_t *ev);
+
+/**
+ * Non-contiguous write interface to a DFS file.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	iod	IO descriptor of file view.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	   daos_event_t *ev);
 
 /**
  * Query size of file data.
@@ -406,17 +461,57 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata);
 
 /**
+ * Provide a function for large directories to split an anchor to be able to
+ * execute a parallel readdir or iterate. This routine suggests the optimal
+ * number of anchors to use instead of just 1 and optionally returns all those
+ * anchors. The user would allocate the array of anchors after querying the
+ * number of anchors needed. Alternatively, user does not provide an array and
+ * can call dfs_obj_anchor_set() for every anchor to set.
+ *
+ * The user could suggest how many anchors to split the iteration over. This
+ * feature is not supported yet.
+ *
+ * \param[in]	obj	Dir object to split anchor for.
+ * \param[in/out]
+ *		nr	[in]: Number of anchors requested and allocated in
+ *			\a anchors. Pass 0 for DAOS to recommend split num.
+ *			[out]: Number of anchors recommended if 0 is passed in.
+ * \param[in]	anchors	Optional array of anchors that are split.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors);
+
+/**
+ * Set an anchor with an index based on split done with dfs_obj_anchor_split.
+ * The anchor passed will be re-intialized and set to start and finish iteration
+ * based on the specified index.
+ *
+ * \param[in]   obj     Dir object to split anchor for.
+ * \param[in]	index	Index of set this anchor for iteration.
+ * \param[in,out]
+ *		anchor	Hash anchor to set.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor);
+
+/**
  * Create a directory.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Link name of new dir.
  * \param[in]	mode	mkdir mode.
+ * \param[in]	cid	DAOS object class id (pass 0 for default MAX_RW).
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
+dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
+	  daos_oclass_id_t cid);
 
 /**
  * Remove an object from parent directory. If object is a directory and is
@@ -443,7 +538,8 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  * \param[in]	name	Link name of object.
  * \param[in]	new_parent
  *			Target parent directory object. If NULL, use root obj.
- * \param[in]	name	New link name of object.
+ * \param[in]	new_name
+ *			New link name of object.
  * \param[in]	oid	Optionally return the DAOS Object ID of a removed obj
  *			as a result of a rename.
  *
@@ -508,12 +604,12 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
 /**
  * Retrieve Symlink value of object if it's a symlink. If the buffer size passed
  * in is not large enough, we copy up to size of the buffer, and update the size
- * to actual value size.
+ * to actual value size. The size returned includes the null terminator.
  *
  * \param[in]	obj	Open object to query.
  * \param[in]	buf	user buffer to copy the symlink value in.
  * \param[in,out]
- *		size	[in]: Size of buffer pased in. [out]: Actual size of
+ *		size	[in]: Size of buffer passed in. [out]: Actual size of
  *			value.
  *
  * \return		0 on success, errno code on failure.
@@ -529,7 +625,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  * is a local operation and doesn't change anything on the storage.
  *
  * \param[in]	obj	Open object handle to update.
- * \param[in]	parent_oid
+ * \param[in]	parent_obj
  *			Open object handle of new parent.
  * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
  *			the entry name unchanged.
@@ -576,9 +672,13 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name,
 int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 
+/** Option to set the mode_t on an entry */
 #define DFS_SET_ATTR_MODE	(1 << 0)
+/** Option to set the access time on an entry */
 #define DFS_SET_ATTR_ATIME	(1 << 1)
+/** Option to set the modify time on an entry */
 #define DFS_SET_ATTR_MTIME	(1 << 2)
+/** Option to set size of a file */
 #define DFS_SET_ATTR_SIZE	(1 << 3)
 
 /**

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ extern int dts_obj_replica_cnt;
 extern int dts_ec_obj_class;
 extern int dts_ec_grp_size;
 
-#define UPDATE_CSUM_SIZE	32
 #define IOREQ_IOD_NR	5
 #define IOREQ_SG_NR	5
 #define IOREQ_SG_IOD_NR	5
@@ -55,10 +54,8 @@ struct ioreq {
 	daos_event_t		ev;
 	daos_key_t		dkey;
 	daos_key_t		akey;
-	d_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
 	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
-	daos_csum_buf_t		csum;
-	char			csum_buf[UPDATE_CSUM_SIZE];
 	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
 	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
 	daos_iod_t		iod[IOREQ_SG_IOD_NR];
@@ -79,6 +76,11 @@ ioreq_fini(struct ioreq *req);
 void
 insert_single(const char *dkey, const char *akey, uint64_t idx, void *value,
 	      daos_size_t iod_size, daos_handle_t th, struct ioreq *req);
+
+void
+insert_single_with_flags(const char *dkey, const char *akey, uint64_t idx,
+			 void *value, daos_size_t iod_size, daos_handle_t th,
+			 struct ioreq *req, uint64_t flags);
 
 void
 insert_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
@@ -110,8 +112,8 @@ enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	       daos_size_t len, struct ioreq *req);
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
-	struct ioreq *req);
+       int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+       struct ioreq *req, uint64_t flags);
 
 void
 insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
@@ -130,8 +132,17 @@ void
 punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req);
 
 void
+punch_dkey_with_flags(const char *dkey, daos_handle_t th, struct ioreq *req,
+		      uint64_t flags);
+
+void
 punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 	   struct ioreq *req);
+
+void
+punch_akey_with_flags(const char *dkey, const char *akey, daos_handle_t th,
+		      struct ioreq *req, uint64_t flags);
+
 void
 punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
 	    int nr, daos_handle_t th, struct ioreq *req);
@@ -169,22 +180,19 @@ enum test_op_type {
 	TEST_OP_MIN		= 0,
 	TEST_OP_UPDATE		= 0,
 	TEST_OP_PUNCH		= 1,
-	TEST_OP_EPOCH_DISCARD	= 2,
 	/* above are modification OP, below are read-only OP */
-	TEST_OP_FETCH		= 3,
-	TEST_OP_ENUMERATE	= 4,
-	TEST_OP_ADD		= 5,
-	TEST_OP_EXCLUDE		= 6,
-	TEST_OP_POOL_QUERY	= 7,
-	TEST_OP_MAX		= 7,
+	TEST_OP_FETCH		= 2,
+	TEST_OP_ENUMERATE	= 3,
+	TEST_OP_ADD		= 4,
+	TEST_OP_EXCLUDE		= 5,
+	TEST_OP_POOL_QUERY	= 6,
+	TEST_OP_MAX		= 6,
 };
 
 static inline bool
 test_op_is_modify(int op)
 {
-	return (op == TEST_OP_UPDATE	||
-		op == TEST_OP_PUNCH	||
-		op == TEST_OP_EPOCH_DISCARD);
+	return (op == TEST_OP_UPDATE || op == TEST_OP_PUNCH);
 }
 
 struct test_op_record;
@@ -229,6 +237,7 @@ struct test_add_exclude_arg {
 };
 
 struct test_punch_arg {
+	bool		 pa_singv;
 	daos_recx_t	*pa_recxs;
 	int		 pa_recxs_num;
 };

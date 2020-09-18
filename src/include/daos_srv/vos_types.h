@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,15 +25,56 @@
 #define __VOS_TYPES_H__
 
 #include <daos_types.h>
+#include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos/object.h>
 #include <daos/dtx.h>
+#include <daos/checksum.h>
+
+struct dtx_rsrvd_uint {
+	void			*dru_scm;
+	d_list_t		dru_nvme;
+};
 
 enum dtx_cos_flags {
-	DCF_FOR_PUNCH	= (1 << 0),
-	DCF_HAS_ILOG	= (1 << 1),
+	DCF_SHARED	= (1 << 0),
 };
+
+struct dtx_cos_key {
+	daos_unit_oid_t		oid;
+	uint64_t		dkey_hash;
+};
+
+enum dtx_entry_flags {
+	/* The DTX is the leader */
+	DTE_LEADER		= (1 << 0),
+	/* The DTX entry is invalid. */
+	DTE_INVALID		= (1 << 1),
+	/* If the DTX with this flag is non-committed, then others
+	 * will be blocked (retry again and again) when access the
+	 * data being modified via this DTX. Currently, it is used
+	 * for distributed transaction. It also can be used for EC
+	 * object modification via standalone update/punch.
+	 */
+	DTE_BLOCK		= (1 << 2),
+};
+
+struct dtx_entry {
+	/** The identifier of the DTX. */
+	struct dtx_id			 dte_xid;
+	/** The pool map version when the DTX happened. */
+	uint32_t			 dte_ver;
+	/** The reference count. */
+	uint32_t			 dte_refs;
+	/** The DAOS targets participating in the DTX. */
+	struct dtx_memberships		*dte_mbs;
+};
+
+/* The 'dte_mbs' must be the last member of 'dtx_entry'. */
+D_CASSERT(sizeof(struct dtx_entry) ==
+	  offsetof(struct dtx_entry, dte_mbs) +
+	  sizeof(struct dtx_memberships *));
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -57,24 +98,32 @@ struct vos_gc_stat {
 	uint64_t	gs_recxs;	/**< GCed array values */
 };
 
+struct vos_pool_space {
+	/** Total & free space */
+	struct daos_space	vps_space;
+	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
+	daos_size_t		vps_space_sys[DAOS_MEDIA_MAX];
+	/** NVMe block allocator attributes */
+	struct vea_attr		vps_vea_attr;
+	/** NVMe block allocator statistics */
+	struct vea_stat		vps_vea_stat;
+};
+
+#define SCM_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_SCM])
+#define SCM_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_SCM])
+#define SCM_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_SCM])
+#define NVME_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_NVME])
+#define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
+#define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
+
 /**
  * pool attributes returned to query
  */
 typedef struct {
 	/** # of containers in this pool */
 	uint64_t		pif_cont_nr;
-	/** Total SCM space in bytes */
-	daos_size_t		pif_scm_sz;
-	/** Total NVMe space in bytes */
-	daos_size_t		pif_nvme_sz;
-	/** Current SCM free space in bytes */
-	daos_size_t		pif_scm_free;
-	/** Current NVMe free space in bytes */
-	daos_size_t		pif_nvme_free;
-	/** NVMe block allocator attributes */
-	struct vea_attr		pif_vea_attr;
-	/** NVMe block allocator statistics */
-	struct vea_stat		pif_vea_stat;
+	/** Space information */
+	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
 	/** TODO */
@@ -157,9 +206,70 @@ typedef enum {
 } vos_it_epc_expr_t;
 
 enum {
+	/** Conditional Op: Punch key if it exists, fail otherwise */
+	VOS_OF_COND_PUNCH	= DAOS_COND_PUNCH,
+	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_DKEY_INSERT	= DAOS_COND_DKEY_INSERT,
+	/** Conditional Op: Update dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_UPDATE	= DAOS_COND_DKEY_UPDATE,
+	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_FETCH	= DAOS_COND_DKEY_FETCH,
+	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_AKEY_INSERT	= DAOS_COND_AKEY_INSERT,
+	/** Conditional Op: Update akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
+	/** Conditional Op: Fetch akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 0),
+	VOS_OF_REPLAY_PC	= (1 << 7),
+	/* critical update - skip checks on SCM system/held space */
+	VOS_OF_CRIT		= (1 << 8),
+	/** Instead of update or punch of extents, remove all extents
+	 * under the specified range. Intended for internal use only.
+	 */
+	VOS_OF_REMOVE		= (1 << 9),
 };
+
+/** Mask for any conditionals passed to to the fetch */
+#define VOS_COND_FETCH_MASK	\
+	(VOS_OF_COND_AKEY_FETCH | VOS_OF_COND_DKEY_FETCH)
+
+/** Mask for akey conditionals passed to to the update */
+#define VOS_COND_AKEY_UPDATE_MASK					\
+	(VOS_OF_COND_AKEY_UPDATE | VOS_OF_COND_AKEY_INSERT)
+
+/** Mask for dkey conditionals passed to to the update */
+#define VOS_COND_DKEY_UPDATE_MASK					\
+	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_DKEY_INSERT)
+
+/** Mask for any conditionals passed to to the update */
+#define VOS_COND_UPDATE_MASK					\
+	(VOS_COND_DKEY_UPDATE_MASK | VOS_COND_AKEY_UPDATE_MASK)
+
+/** Mask for if the update has any conditional update */
+#define VOS_COND_UPDATE_OP_MASK					\
+	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
+
+D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
+
+/** vos definitions that match daos_obj_key_query flags */
+enum {
+	/** retrieve the max of dkey, akey, and/or idx of array value */
+	VOS_GET_MAX		= DAOS_GET_MAX,
+	/** retrieve the min of dkey, akey, and/or idx of array value */
+	VOS_GET_MIN		= DAOS_GET_MIN,
+	/** retrieve the dkey */
+	VOS_GET_DKEY		= DAOS_GET_DKEY,
+	/** retrieve the akey */
+	VOS_GET_AKEY		= DAOS_GET_AKEY,
+	/** retrieve the idx of array value */
+	VOS_GET_RECX		= DAOS_GET_RECX,
+	/** Internal flag to indicate timestamps are used */
+	VOS_USE_TIMESTAMPS	= (1 << 5),
+};
+
+D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
+				 VOS_GET_AKEY | VOS_GET_RECX)) == 0);
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
@@ -184,7 +294,7 @@ enum {
 };
 
 /**
- * Parameters for initialising VOS iterator
+ * Parameters for initializing VOS iterator
  */
 typedef struct {
 	/** standalone prepare:	pool connection handle or container open handle
@@ -231,27 +341,23 @@ typedef struct {
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
+		/** Key, object, or DTX entry */
 		struct {
-			/** dkey or akey */
-			daos_key_t		ie_key;
 			/** Non-zero if punched */
-			daos_epoch_t		ie_key_punch;
+			daos_epoch_t		ie_punch;
+			union {
+				/** key value */
+				daos_key_t	ie_key;
+				/** oid */
+				daos_unit_oid_t	ie_oid;
+			};
 		};
-		struct {
-			/** The DTX identifier. */
-			struct dtx_id		ie_xid;
-			/** oid */
-			daos_unit_oid_t		ie_oid;
-			/** Non-zero if punched */
-			daos_epoch_t		ie_obj_punch;
-			/* The DTX dkey hash for DTX iteration. */
-			uint64_t		ie_dtx_hash;
-			/* The DTX intent for DTX iteration. */
-			uint32_t		ie_dtx_intent;
-		};
+		/** Array entry */
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
+			/** record size for the whole global single record */
+			daos_size_t		ie_gsize;
 			/** record extent */
 			daos_recx_t		ie_recx;
 			/* original in-tree extent */
@@ -259,9 +365,30 @@ typedef struct {
 			/** biov to return address for single value or recx */
 			struct bio_iov		ie_biov;
 			/** checksum */
-			daos_csum_buf_t		ie_csum;
+			struct dcs_csum_info	ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
+			/** Minor epoch of extent */
+			uint16_t		ie_minor_epc;
+		};
+		/** Active DTX entry. */
+		struct {
+			/** The DTX identifier. */
+			struct dtx_id		ie_dtx_xid;
+			/** The OID. */
+			daos_unit_oid_t		ie_dtx_oid;
+			/** The pool map version when handling DTX on server. */
+			uint32_t		ie_dtx_ver;
+			/* The dkey hash for DTX iteration. */
+			uint16_t		ie_dtx_flags;
+			/** DTX tgt count. */
+			uint32_t		ie_dtx_tgt_cnt;
+			/** DTX modified group count. */
+			uint32_t		ie_dtx_grp_cnt;
+			/** DTX mbs data size. */
+			uint32_t		ie_dtx_mbs_dsize;
+			/** DTX participants information. */
+			void			*ie_dtx_mbs;
 		};
 	};
 	/* Flags to describe the entry */
@@ -310,7 +437,7 @@ struct vos_iter_anchors {
 			ia_reprobe_ev:1;
 };
 
-/* Ignores DTX as they are transient records.   Add VEA overheads later */
+/* Ignores DTX as they are transient records */
 enum VOS_TREE_CLASS {
 	VOS_TC_CONTAINER,
 	VOS_TC_OBJECT,
@@ -318,6 +445,7 @@ enum VOS_TREE_CLASS {
 	VOS_TC_AKEY,
 	VOS_TC_SV,
 	VOS_TC_ARRAY,
+	VOS_TC_VEA,
 };
 
 #endif /* __VOS_TYPES_H__ */

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -219,7 +219,7 @@ drpc_progress_context_accept(struct drpc_progress_context *ctx)
 		 * Any failure to accept is weird and surprising
 		 */
 		D_ERROR("Failed to accept new drpc connection\n");
-		return -DER_UNKNOWN;
+		return -DER_MISC;
 	}
 
 	D_ALLOC_PTR(session_node);
@@ -255,7 +255,7 @@ process_listener_activity(struct drpc_progress_context *ctx,
 		/* Unexpected - don't do anything */
 		D_INFO("Ignoring surprising listener activity: %u\n",
 		       listener_comm->activity);
-		rc = -DER_UNKNOWN;
+		rc = -DER_MISC;
 		break;
 
 	default:
@@ -373,7 +373,8 @@ handle_incoming_call(struct drpc *session_ctx)
 	rc = dss_ult_create(drpc_handler_ult, (void *)call_ctx,
 			    DSS_ULT_DRPC_HANDLER, 0, 0, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to create drpc handler ULT: %d\n", rc);
+		D_ERROR("Failed to create drpc handler ULT: "DF_RC"\n",
+			DP_RC(rc));
 		free_call_ctx(call_ctx);
 		return rc;
 	}
@@ -476,7 +477,7 @@ drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
 	rc = drpc_progress_context_to_unixcomms(ctx, &comms);
 	if (rc < 0) {
 		D_ERROR("Failed to convert drpc_progress_context to unixcomm "
-			"structures, rc=%d\n", rc);
+			"structures, rc="DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

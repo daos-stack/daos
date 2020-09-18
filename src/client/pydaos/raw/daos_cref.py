@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-few-public-methods
+# pylint: disable=pylint-missing-docstring
 import ctypes
 
 # DAOS api C structures
@@ -99,6 +101,31 @@ class PoolInfo(ctypes.Structure):
                 ("pi_space", PoolSpace),
                 ("pi_rebuild_st", RebuildStatus)]
 
+
+class DaosPropertyEntry(ctypes.Structure):
+    _fields_ = [("dpe_type", ctypes.c_uint32),
+                ("dpe_reserv", ctypes.c_uint32),
+                ("dpe_val", ctypes.c_uint64)]
+
+
+class DaosProperty(ctypes.Structure):
+    _fields_ = [("dpp_nr", ctypes.c_uint32),
+                ("dpp_reserv", ctypes.c_uint32),
+                ("dpp_entries", ctypes.POINTER(DaosPropertyEntry))]
+
+    def __init__(self, num_structs):
+        super(DaosProperty, self).__init__()
+        total_prop_entries = (DaosPropertyEntry * num_structs)()
+        self.dpp_entries = ctypes.cast(total_prop_entries,
+                                       ctypes.POINTER(DaosPropertyEntry))
+        self.dpp_nr = num_structs
+        self.dpp_reserv = 0
+        for num in range(0, num_structs):
+            self.dpp_entries[num].dpe_type = ctypes.c_uint32(0)
+            self.dpp_entries[num].dpe_reserv = ctypes.c_uint32(0)
+            self.dpp_entries[num].dpe_val = ctypes.c_uint64(0)
+
+
 class ContInfo(ctypes.Structure):
     """ Structure to represent information about a container """
     _fields_ = [("ci_uuid", ctypes.c_ubyte * 16),
@@ -144,27 +171,16 @@ class DaosObjLayout(ctypes.Structure):
                 ("ol_nr", ctypes.c_uint32),
                 ("ol_shards", ctypes.POINTER(DaosObjShard * 5))]
 
-class CheckSum(ctypes.Structure):
-    _fields_ = [("cs_csum", ctypes.c_char_p),
-                ("cs_nr", ctypes.c_uint32),
-                ("cs_type", ctypes.c_uint16),
-                ("cs_len", ctypes.c_uint16),
-                ("cs_buf_len", ctypes.c_uint32),
-                ("cs_chunksize", ctypes.c_uint32)]
-
 class Extent(ctypes.Structure):
     _fields_ = [("rx_idx", ctypes.c_uint64),
                 ("rx_nr", ctypes.c_uint64)]
 
 class DaosIODescriptor(ctypes.Structure):
     _fields_ = [("iod_name", IOV),
-                ("iod_kcsum", CheckSum),
                 ("iod_type", ctypes.c_int),
                 ("iod_size", ctypes.c_uint64),
                 ("iod_nr", ctypes.c_uint32),
-                ("iod_recxs", ctypes.POINTER(Extent)),
-                ("iod_csums", ctypes.POINTER(CheckSum)),
-                ("iod_eprs", ctypes.c_void_p)]
+                ("iod_recxs", ctypes.POINTER(Extent))]
 
 class Anchor(ctypes.Structure):
     """ Class to represent a C daos_anchor_t struct. """
@@ -195,7 +211,7 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
         implementation if this is used as something other than a test
         tool.
     """
-    # TODO insufficient error handling in this function
+    # TO be Done insufficient error handling in this function
 
     # setup the asynchronous infrastructure the API requires
     the_event = param_list[-1]
@@ -233,11 +249,11 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
 
 def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     """
-        See AsyncWorker1 for details.  This does the same thing but
-        uses different API functions (test instead of poll) for test
-        coverage purposes.
+    See AsyncWorker1 for details.  This does the same thing but
+    uses different API functions (test instead of poll) for test
+    coverage purposes.
     """
-    # TODO insufficient error handling in this function
+    # TO be Done insufficient error handling in this function
 
     # setup the asynchronous infrastructure the API requires
     the_event = param_list[-1]
@@ -275,3 +291,6 @@ class Logfac:
     INFO = 1
     WARNING = 2
     ERROR = 3
+
+#Transaction handle to update for an independent transaction
+DAOS_TX_NONE = Daos_handle_t(0)

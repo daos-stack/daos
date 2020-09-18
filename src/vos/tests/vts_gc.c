@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,8 +107,8 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 		iod->iod_size = singv_size;
 
 		gc_add_stat(STAT_SINGV);
-		rc = vos_obj_update(coh, oid, epoch, 0, &cred->tc_dkey, 1,
-				    &cred->tc_iod, sgl);
+		rc = vos_obj_update(coh, oid, epoch, 0, 0, &cred->tc_dkey, 1,
+				    &cred->tc_iod, NULL, sgl);
 		if (rc != 0) {
 			print_error("Failed to update\n");
 			return rc;
@@ -123,8 +123,9 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 		cred->tc_recx.rx_nr = recx_size;
 
 		gc_add_stat(STAT_RECX);
-		rc = vos_update_begin(coh, oid, epoch, &cred->tc_dkey, 1,
-				      &cred->tc_iod, &ioh, NULL);
+		rc = vos_update_begin(coh, oid, epoch, 0, &cred->tc_dkey, 1,
+				      &cred->tc_iod, NULL, false, 0, &ioh,
+				      NULL);
 		if (rc != 0) {
 			print_error("Failed to prepare ZC update\n");
 			return rc;
@@ -262,7 +263,7 @@ gc_obj_run(struct gc_test_args *args)
 
 	rc = gc_obj_prepare(args, args->gc_ctx.tsc_coh, oids);
 	if (rc)
-		return rc;
+		goto out;
 
 	gc_print_stat();
 
@@ -271,11 +272,13 @@ gc_obj_run(struct gc_test_args *args)
 		if (rc) {
 			print_error("failed to delete objects: %s\n",
 				    d_errstr(rc));
-			return rc;
+			goto out;
 		}
 	}
 
 	rc = gc_wait_check(args, false);
+out:
+	D_FREE(oids);
 	return rc;
 }
 
@@ -427,8 +430,11 @@ static const struct CMUnitTest gc_tests[] = {
 };
 
 int
-run_gc_tests(void)
+run_gc_tests(const char *cfg)
 {
-	return cmocka_run_group_tests_name("Garbage collector",
+	char	test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "Garbage collector %s", cfg);
+	return cmocka_run_group_tests_name(test_name,
 					   gc_tests, gc_setup, gc_teardown);
 }

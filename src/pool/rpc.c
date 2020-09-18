@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/rpc.h>
+#include <daos/pool.h>
+#include <daos_pool.h>
 #include "rpc.h"
 
 static int
@@ -161,23 +163,30 @@ CRT_RPC_DEFINE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST,
 		DAOS_OSEQ_POOL_ATTR_LIST)
 CRT_RPC_DEFINE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DEFINE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
+CRT_RPC_DEFINE(pool_attr_del, DAOS_ISEQ_POOL_ATTR_DEL, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DEFINE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
 CRT_RPC_DEFINE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
+CRT_RPC_DEFINE(pool_extend, DAOS_ISEQ_POOL_EXTEND,
+		DAOS_OSEQ_POOL_EXTEND)
 CRT_RPC_DEFINE(pool_add, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DEFINE(pool_add_in, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_exclude, DAOS_ISEQ_POOL_TGT_UPDATE,
+		DAOS_OSEQ_POOL_TGT_UPDATE)
+CRT_RPC_DEFINE(pool_drain, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
 		DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_evict, DAOS_ISEQ_POOL_EVICT, DAOS_OSEQ_POOL_EVICT)
 CRT_RPC_DEFINE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
-CRT_RPC_DEFINE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
-		DAOS_OSEQ_POOL_TGT_CONNECT)
 CRT_RPC_DEFINE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 		DAOS_OSEQ_POOL_TGT_DISCONNECT)
 CRT_RPC_DEFINE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
+CRT_RPC_DEFINE(pool_tgt_dist_hdls, DAOS_ISEQ_POOL_TGT_DIST_HDLS,
+		DAOS_OSEQ_POOL_TGT_DIST_HDLS)
 CRT_RPC_DEFINE(pool_prop_get, DAOS_ISEQ_POOL_PROP_GET, DAOS_OSEQ_POOL_PROP_GET)
 CRT_RPC_DEFINE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
 CRT_RPC_DEFINE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
@@ -332,6 +341,39 @@ out:
 	return bits;
 }
 
+/**
+ * Translates the response from a pool query RPC to a pool_info structure.
+ *
+ * \param[in]		pool_uuid	UUID of the pool
+ * \param[in]		map_buf		Map buffer for pool
+ * \param[in]		map_version	Pool map version
+ * \param[in]		leader_rank	Pool leader rank
+ * \param[in]		ps		Pool space
+ * \param[in]		rs		Rebuild status
+ * @param[in][out]	info		Pool info - pass in with pi_bits set
+ *					Returned populated with inputs
+ */
+void
+pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
+			 uint32_t map_version, uint32_t leader_rank,
+			 struct daos_pool_space *ps,
+			 struct daos_rebuild_status *rs,
+			 daos_pool_info_t *info)
+{
+	D_ASSERT(ps != NULL);
+	D_ASSERT(rs != NULL);
+
+	uuid_copy(info->pi_uuid, pool_uuid);
+	info->pi_ntargets	= map_buf->pb_target_nr;
+	info->pi_nnodes		= map_buf->pb_node_nr;
+	info->pi_map_ver	= map_version;
+	info->pi_leader		= leader_rank;
+	if (info->pi_bits & DPI_SPACE)
+		info->pi_space		= *ps;
+	if (info->pi_bits & DPI_REBUILD_STATUS)
+		info->pi_rebuild_st	= *rs;
+}
+
 int
 list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
 		      struct daos_pool_cont_info *buf, daos_size_t ncont)
@@ -352,5 +394,38 @@ list_cont_bulk_destroy(crt_bulk_t bulk)
 {
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
+}
+
+int
+map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
+		unsigned int nr)
+{
+	d_iov_t	iov;
+	d_sg_list_t	sgl;
+	int		rc;
+
+	*buf = pool_buf_alloc(nr);
+	if (*buf == NULL)
+		return -DER_NOMEM;
+
+	d_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+	if (rc != 0) {
+		pool_buf_free(*buf);
+		*buf = NULL;
+	}
+
+	return rc;
+}
+
+void
+map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
+{
+	crt_bulk_free(bulk);
+	pool_buf_free(buf);
 }
 

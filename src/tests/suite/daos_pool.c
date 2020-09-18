@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ pool_connect_nonexist(void **state)
 		return;
 
 	uuid_generate(uuid);
-	rc = daos_pool_connect(uuid, arg->group, &arg->pool.svc, DAOS_PC_RW,
+	rc = daos_pool_connect(uuid, arg->group, arg->pool.svc, DAOS_PC_RW,
 			       &poh, NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
@@ -71,7 +71,7 @@ pool_connect(void **state)
 		print_message("rank 0 connecting to pool %ssynchronously ... ",
 			      arg->async ? "a" : "");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       &arg->pool.svc, DAOS_PC_RW, &poh, &info,
+				       arg->pool.svc, DAOS_PC_RW, &poh, &info,
 				       arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
@@ -125,12 +125,12 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 1: other connections already exist; shall get "
 		      "%d\n", -DER_BUSY);
 	print_message("establishing a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, arg->pool.svc,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("trying to establish an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, arg->pool.svc,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, -DER_BUSY);
@@ -140,7 +140,7 @@ pool_connect_exclusively(void **state)
 
 	print_message("SUBTEST 2: no other connections; shall succeed\n");
 	print_message("establishing an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, arg->pool.svc,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -148,7 +148,7 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 3: shall prevent other connections (%d)\n",
 		      -DER_BUSY);
 	print_message("trying to establish a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, arg->pool.svc,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, -DER_BUSY);
@@ -165,10 +165,10 @@ pool_exclude(void **state)
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
 	daos_pool_info_t info = {0};
-	struct d_tgt_list tgts;
 	d_rank_t	 rank;
 	int		 tgt = -1;
 	int		 rc;
+	int		 idx;
 
 	if (1) {
 		print_message("Skip it for now, because CaRT can't support "
@@ -188,7 +188,7 @@ pool_exclude(void **state)
 	/** connect to pool */
 	print_message("rank 0 connecting to pool %ssynchronously... ",
 		      arg->async ? "a" : "");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, arg->pool.svc,
 			       DAOS_PC_RW, &poh, &info,
 			       arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -196,20 +196,17 @@ pool_exclude(void **state)
 	print_message("success\n");
 
 	/** exclude last non-svc rank */
-	if (info.pi_nnodes - 1 /* rank 0 */ <= arg->pool.svc.rl_nr) {
+	if (info.pi_nnodes - 1 /* rank 0 */ <= arg->pool.svc->rl_nr) {
 		print_message("not enough non-svc targets; skipping\n");
 		goto disconnect;
 	}
 	rank = info.pi_nnodes - 1;
-	tgts.tl_nr = 1;
-	tgts.tl_ranks = &rank;
-	tgts.tl_tgts = &tgt;
-
 	print_message("rank 0 excluding rank %u... ", rank);
-	rc = daos_pool_tgt_exclude(arg->pool.pool_uuid, arg->group,
-				   &arg->pool.svc, &tgts,
-				   arg->async ? &ev : NULL /* ev */);
-	assert_int_equal(rc, 0);
+	for (idx = 0; idx < arg->pool.svc->rl_nr; idx++) {
+		daos_exclude_target(arg->pool.pool_uuid, arg->group,
+				    arg->dmg_config, arg->pool.svc,
+				    arg->pool.svc->rl_ranks[idx], tgt);
+	}
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
 
@@ -337,6 +334,20 @@ pool_attribute(void **state)
 	assert_int_equal(out_sizes[0], in_sizes[0]);
 	assert_int_equal(out_sizes[1], in_sizes[1]);
 
+	print_message("Deleting all attributes\n");
+	rc = daos_pool_del_attr(arg->pool.poh, n, names,
+				arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("Verifying all attributes deletion\n");
+	total_size = 0;
+	rc = daos_pool_list_attr(arg->pool.poh, NULL, &total_size,
+				 arg->async ? &ev : NULL);
+	assert_int_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(total_size, 0);
+
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
@@ -374,7 +385,7 @@ init_fini_conn(void **state)
 	assert_int_equal(rc, 0);
 
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RW,
+			       arg->pool.svc, DAOS_PC_RW,
 			       &arg->pool.poh, &arg->pool.pool_info,
 			       NULL /* ev */);
 	if (rc)
@@ -386,7 +397,7 @@ init_fini_conn(void **state)
 }
 
 static bool
-ace_has_default_permissions(struct daos_ace *ace)
+ace_has_permissions(struct daos_ace *ace, uint64_t perms)
 {
 	if (ace->dae_access_types != DAOS_ACL_ACCESS_ALLOW) {
 		print_message("Expected access type allow for ACE\n");
@@ -394,9 +405,8 @@ ace_has_default_permissions(struct daos_ace *ace)
 		return false;
 	}
 
-	if (ace->dae_allow_perms != (uint64_t)(DAOS_ACL_PERM_READ |
-					       DAOS_ACL_PERM_WRITE)) {
-		print_message("Expected allow RW perms for ACE\n");
+	if (ace->dae_allow_perms != perms) {
+		print_message("Expected allow perms 0x%lx for ACE\n", perms);
 		daos_ace_dump(ace, 0);
 		return false;
 	}
@@ -424,7 +434,8 @@ is_acl_prop_default(struct daos_acl *prop)
 
 	acl_expected_len += daos_ace_get_size(ace);
 
-	if (!ace_has_default_permissions(ace)) {
+	if (!ace_has_permissions(ace, DAOS_ACL_PERM_READ |
+				      DAOS_ACL_PERM_WRITE)) {
 		print_message("Owner ACE was wrong\n");
 		return false;
 	}
@@ -437,7 +448,8 @@ is_acl_prop_default(struct daos_acl *prop)
 
 	acl_expected_len += daos_ace_get_size(ace);
 
-	if (!ace_has_default_permissions(ace)) {
+	if (!ace_has_permissions(ace, DAOS_ACL_PERM_READ |
+				      DAOS_ACL_PERM_WRITE)) {
 		print_message("Owner Group ACE was wrong\n");
 		return false;
 	}
@@ -459,9 +471,11 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
+#if 0
 	char			*label = "test_pool_properties";
 	uint64_t		 space_rb = 36;
-	daos_prop_t		*prop;
+#endif
+	daos_prop_t		*prop = NULL;
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
 	daos_pool_info_t	 info = {0};
@@ -471,14 +485,17 @@ pool_properties(void **state)
 
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
+/* FIXME (DAOS-5456): label/space_rb props not supported with dmg */
+#if 0
 	prop = daos_prop_alloc(2);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	prop->dpp_entries[0].dpe_str = strdup(label);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SPACE_RB;
 	prop->dpp_entries[1].dpe_val = space_rb;
+#endif
 
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
@@ -498,6 +515,7 @@ pool_properties(void **state)
 	assert_int_equal(rc, 0);
 
 	assert_int_equal(prop_query->dpp_nr, DAOS_PROP_PO_NUM);
+#if 0
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
@@ -509,6 +527,7 @@ pool_properties(void **state)
 		print_message("space_rb verification filed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+#endif
 	/* not set properties should get default value */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SELF_HEAL);
 	if (entry == NULL ||
@@ -582,7 +601,7 @@ pool_op_retry(void **state)
 
 	print_message("connecting to pool ... ");
 	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       &arg->pool.svc, DAOS_PC_RW, &poh, &info,
+			       arg->pool.svc, DAOS_PC_RW, &poh, &info,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 	assert_memory_equal(info.pi_uuid, arg->pool.pool_uuid,
@@ -623,7 +642,7 @@ static int
 pool_setup_sync(void **state)
 {
 	async_disable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -631,14 +650,14 @@ static int
 pool_setup_async(void **state)
 {
 	async_enable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CREATE, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CREATE, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -656,6 +675,7 @@ setup_containers(void **state, daos_size_t nconts)
 	struct test_list_cont	*lcarg = NULL;
 	int			 i;
 	int			 rc = 0;
+	d_rank_list_t		tmp_list;
 
 	D_ALLOC_PTR(lcarg);
 	if (lcarg == NULL)
@@ -665,21 +685,22 @@ setup_containers(void **state, daos_size_t nconts)
 
 	/* Set some properties in the in/out tpool struct */
 	lcarg->tpool.poh = DAOS_HDL_INVAL;
-	lcarg->tpool.svc.rl_nr = svc_nreplicas;
-	lcarg->tpool.svc.rl_ranks = lcarg->tpool.ranks;
-	lcarg->tpool.pool_size = 1 << 30;	/* 1GB SCM */
+	tmp_list.rl_nr = svc_nreplicas;
+	tmp_list.rl_ranks = lcarg->tpool.ranks;
+	d_rank_list_dup(&lcarg->tpool.svc, &tmp_list);
+	lcarg->tpool.pool_size = 1 << 28;	/* 256MB SCM */
 	/* Create the pool */
 	rc = test_setup_pool_create(state, NULL /* ipool */, &lcarg->tpool,
 				    NULL /* prop */);
 	if (rc != 0) {
-		print_message("setup: daos_pool_create failed: %d\n", rc);
+		print_message("setup: pool creation failed: %d\n", rc);
 		goto err_free_lcarg;
 	}
 
 	/* TODO: make test_setup_pool_connect() more generic, call here */
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(lcarg->tpool.pool_uuid, arg->group,
-				       &lcarg->tpool.svc, DAOS_PC_RW,
+				       lcarg->tpool.svc, DAOS_PC_RW,
 				       &lcarg->tpool.poh, NULL /* pool info */,
 				       NULL /* ev */);
 		if (rc != 0)
@@ -755,6 +776,8 @@ err_destroy_pool:
 		pool_destroy_safe(arg, &lcarg->tpool);
 
 err_free_lcarg:
+	if (lcarg->tpool.svc)
+		d_rank_list_free(lcarg->tpool.svc);
 	D_FREE(lcarg);
 
 err:
@@ -767,7 +790,7 @@ teardown_containers(void **state)
 	test_arg_t		*arg = *state;
 	struct test_list_cont	*lcarg = arg->pool_lc_args;
 	int			 i;
-	int			 rc;
+	int			 rc = 0;
 
 	if (lcarg == NULL)
 		return 0;
@@ -1005,6 +1028,62 @@ list_containers_test(void **state)
 	print_message("success\n");
 }
 
+static void
+expect_pool_connect_access(test_arg_t *arg0, uint64_t perms,
+			   uint64_t flags, int exp_result)
+{
+	test_arg_t	*arg = NULL;
+	daos_prop_t	*prop;
+	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	arg->pool.pool_connect_flags = flags;
+	prop = get_daos_prop_with_owner_acl_perms(perms,
+						  DAOS_PROP_PO_ACL);
+
+	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
+
+	/* Make sure we actually got to pool connect */
+	assert_int_equal(arg->setup_state, SETUP_POOL_CONNECT);
+	assert_int_equal(rc, exp_result);
+
+	daos_prop_free(prop);
+	test_teardown((void **)&arg);
+}
+
+static void
+pool_connect_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+
+	print_message("pool ACL gives the owner no permissions\n");
+	expect_pool_connect_access(arg0, 0, DAOS_PC_RO, -DER_NO_PERM);
+
+	print_message("pool ACL gives the owner RO, they want RW\n");
+	expect_pool_connect_access(arg0, DAOS_ACL_PERM_READ, DAOS_PC_RW,
+				   -DER_NO_PERM);
+
+	print_message("pool ACL gives the owner RO, they want RO\n");
+	expect_pool_connect_access(arg0, DAOS_ACL_PERM_READ, DAOS_PC_RO,
+				   0);
+
+	print_message("pool ACL gives the owner RW, they want RO\n");
+	expect_pool_connect_access(arg0,
+				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				   DAOS_PC_RO,
+				   0);
+
+	print_message("pool ACL gives the owner RW, they want RW\n");
+	expect_pool_connect_access(arg0,
+				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				   DAOS_PC_RW,
+				   0);
+}
+
 static const struct CMUnitTest pool_tests[] = {
 	{ "POOL1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, test_case_teardown},
@@ -1032,7 +1111,9 @@ static const struct CMUnitTest pool_tests[] = {
 	{ "POOL12: pool list containers (many)",
 	  list_containers_test, setup_manycontainers, teardown_containers},
 	{ "POOL13: retry POOL_{CONNECT,DISCONNECT,QUERY}",
-	  pool_op_retry, NULL, test_case_teardown}
+	  pool_op_retry, NULL, test_case_teardown},
+	{ "POOL14: pool connect access based on ACL",
+	  pool_connect_access, NULL, test_case_teardown},
 };
 
 int

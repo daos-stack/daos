@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,10 +36,14 @@
 extern "C" {
 #endif
 
+/* Conditional Op: Insert key if it doesn't exist, fail otherwise */
 #define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT
+/* Conditional Op: Update key if it exists, fail otherwise */
 #define DAOS_COND_KEY_UPDATE	DAOS_COND_DKEY_UPDATE
-#define DAOS_COND_KEY_FETCH	DAOS_COND_DKEY_FETCH
-#define DAOS_COND_KEY_PUNCH	DAOS_COND_DKEY_PUNCH
+/* Conditional Op: Get key if it exists, fail otherwise */
+#define DAOS_COND_KEY_GET	DAOS_COND_DKEY_FETCH
+/* Conditional Op: Remove key if it exists, fail otherwise */
+#define DAOS_COND_KEY_REMOVE	DAOS_COND_PUNCH
 
 /**
  * Insert or update a single object KV pair. The key specified will be mapped to
@@ -49,7 +53,7 @@ extern "C" {
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Update flags (currently ignored).
+ * \param[in]	flags	Update flags.
  * \param[in]	key	Key associated with the update operation.
  * \param[in]	size	Size of the buffer to be inserted as an atomic val.
  * \param[in]	buf	Pointer to user buffer of the atomic value.
@@ -74,12 +78,12 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Fetch flags (currently ignored).
+ * \param[in]	flags	Fetch flags.
  * \param[in]	key	key associated with the update operation.
  * \param[in,out]
  *		size	[in]: Size of the user buf. if the size is unknown, set
  *			to DAOS_REC_ANY). [out]: The actual size of the value.
- * \param[in]	buf	Pointer to user buffer. If NULL, only size is returned.
+ * \param[out]	buf	Pointer to user buffer. If NULL, only size is returned.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -90,6 +94,7 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
+ *			-DER_REC2BIG	Record does not fit in buffer
  *			-DER_EP_RO	Epoch is read-only
  */
 int
@@ -101,7 +106,7 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Remove flags (currently ignored).
+ * \param[in]	flags	Remove flags.
  * \param[in]	key	Key to be punched/removed.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -128,8 +133,8 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *		nr	[in]: number of key descriptors in \a kds. [out]: number
  *			of returned key descriptors.
  * \param[in,out]
- *		kds	[in]: preallocated array of \nr key descriptors. [out]:
- *			size of each individual key.
+ *		kds	[in]: preallocated array of \a nr key descriptors.
+ *			[out]: size of each individual key.
  * \param[in]	sgl	Scatter/gather list to store the dkey list.
  *			All keys are written contiguously, with actual
  *			boundaries that can be calculated using \a kds.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,6 +120,14 @@ pmem_tx_add(struct umem_instance *umm, umem_off_t umoff,
 	return pmemobj_tx_add_range(umem_off2id(umm, umoff), offset, size);
 }
 
+static int
+pmem_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
+	     size_t size, uint64_t flags)
+{
+	return pmemobj_tx_xadd_range(umem_off2id(umm, umoff), offset, size,
+				     flags);
+}
+
 
 static int
 pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
@@ -145,11 +153,24 @@ static void
 pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 		    bool noop)
 {
-	struct umem_tx_stage_item	*txi;
-	int				 i;
+	struct umem_tx_stage_item	*txi, *txi_arr;
+	unsigned int			 i, num = *cnt;
 
-	for (i = 0; i < *cnt; i++) {
-		txi = &vec[i];
+	if (num == 0)
+		return;
+
+	/* @vec & @cnt could be changed by other ULT while txi_fn yielding */
+	D_ALLOC_ARRAY(txi_arr, num);
+	if (txi_arr == NULL) {
+		D_ERROR("Failed to allocate txi array\n");
+		return;
+	}
+	memcpy(txi_arr, vec, sizeof(*txi) * num);
+	*cnt = 0;
+	memset(vec, 0, sizeof(*txi) * num);
+
+	for (i = 0; i < num; i++) {
+		txi = &txi_arr[i];
 
 		D_ASSERT(txi->txi_magic == UMEM_TX_DATA_MAGIC);
 		D_ASSERT(txi->txi_fn != NULL);
@@ -158,10 +179,7 @@ pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 		txi->txi_fn(txi->txi_data, noop);
 	}
 
-	if (*cnt != 0) {
-		memset(vec, 0, sizeof(*txi) * (*cnt));
-		*cnt = 0;
-	}
+	D_FREE(txi_arr);
 }
 
 /*
@@ -243,6 +261,15 @@ pmem_tx_commit(struct umem_instance *umm)
 	rc = pmemobj_tx_end();
 
 	return rc ? umem_tx_errno(rc) : 0;
+}
+
+static void
+pmem_defer_free(struct umem_instance *umm, umem_off_t off,
+		struct pobj_action *act)
+{
+	PMEMoid	id = umem_off2id(umm, off);
+
+	pmemobj_defer_free(umm->umm_pool, id, act);
 }
 
 static umem_off_t
@@ -335,11 +362,13 @@ static umem_ops_t	pmem_ops = {
 	.mo_tx_free		= pmem_tx_free,
 	.mo_tx_alloc		= pmem_tx_alloc,
 	.mo_tx_add		= pmem_tx_add,
+	.mo_tx_xadd		= pmem_tx_xadd,
 	.mo_tx_add_ptr		= pmem_tx_add_ptr,
 	.mo_tx_abort		= pmem_tx_abort,
 	.mo_tx_begin		= pmem_tx_begin,
 	.mo_tx_commit		= pmem_tx_commit,
 	.mo_reserve		= pmem_reserve,
+	.mo_defer_free		= pmem_defer_free,
 	.mo_cancel		= pmem_cancel,
 	.mo_tx_publish		= pmem_tx_publish,
 	.mo_tx_add_callback	= pmem_tx_add_callback,
@@ -353,7 +382,7 @@ umem_tx_errno(int err)
 
 	if (err == 0) {
 		D_ERROR("Transaction aborted for unknown reason\n");
-		return -DER_UNKNOWN;
+		return -DER_MISC;
 	}
 
 	if (err < 0) {
@@ -370,7 +399,7 @@ umem_tx_errno(int err)
 	return daos_errno2der(err);
 }
 
-/* volatile memroy operations */
+/* volatile memory operations */
 
 static int
 vmem_free(struct umem_instance *umm, umem_off_t umoff)
@@ -502,7 +531,7 @@ set_offsets(struct umem_instance *umm)
  * Instantiate a memory class \a umm by attributes in \a uma
  *
  * \param uma [IN]	Memory attributes to instantiate the memory class.
- * \param umm [OUT]	The instantiated memroy class.
+ * \param umm [OUT]	The instantiated memory class.
  */
 int
 umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
@@ -532,6 +561,8 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_pool		= uma->uma_pool;
 	umm->umm_nospc_rc	= umc->umc_id == UMEM_CLASS_VMEM ?
 		-DER_NOMEM : -DER_NOSPACE;
+	memcpy(umm->umm_slabs, uma->uma_slabs,
+	       sizeof(struct pobj_alloc_class_desc) * UMM_SLABS_CNT);
 
 	set_offsets(umm);
 	return 0;

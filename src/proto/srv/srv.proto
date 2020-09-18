@@ -31,6 +31,7 @@ message NotifyReadyReq {
 	uint32 nctxs = 2; // Number of CaRT contexts
 	string drpcListenerSock = 3; // Path to IO server's dRPC listener socket
 	uint32 instanceIdx = 4; // IO server instance index
+	uint32 ntgts = 5; // number of VOS targets allocated in IO server
 }
 
 // NotifyReadyResp is nil.

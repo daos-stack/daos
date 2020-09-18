@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -423,7 +423,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 				  0 /* flags */,
 				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create system map update RPC: %d\n", rc);
+		D_ERROR("failed to create system map update RPC: "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 	in = crt_req_get(rpc);
@@ -442,8 +443,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: %d\n", map_version,
-		nservers, rc);
+	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: "DF_RC"\n",
+		map_version, nservers, DP_RC(rc));
 	return rc;
 }
 
@@ -452,14 +453,17 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 {
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct rdb_tx		tx;
+	uint32_t		map_version;
 	struct enum_server_arg	arg;
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
+	/* Retrieve map_version (from the cache) and arg (from the DB). */
 	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
 	if (rc != 0)
 		return rc;
 	ABT_rwlock_rdlock(svc->ms_lock);
+	map_version = svc->ms_map_version;
 	enum_server_arg_init(&arg);
 	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
 			    enum_server_cb, &arg);
@@ -470,7 +474,7 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 		return rc;
 	}
 
-	rc = map_update_bcast(info->dmi_ctx, svc, svc->ms_map_version,
+	rc = map_update_bcast(info->dmi_ctx, svc, map_version,
 			      arg.esa_servers_len, arg.esa_servers);
 
 	enum_server_arg_fini(&arg);
@@ -522,7 +526,7 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 		replicas.rl_ranks = &arg.sa_rank;
 
 		rc = crt_group_rank(NULL, &arg.sa_rank);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 		arg.sa_server.sr_flags = SERVER_IN;
 		arg.sa_server.sr_nctxs = dss_ctx_nr_get();
 		uuid_copy(arg.sa_server.sr_uuid, srv_uuid);
@@ -539,7 +543,7 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 		D_ASSERT(grp != NULL);
 		rc = crt_rank_uri_get(grp, arg.sa_rank, 0 /* tag */, &uri);
 		if (rc != 0) {
-			D_ERROR("unable to get self URI: %d\n", rc);
+			D_ERROR("unable to get self URI: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		len = strnlen(uri, ADDR_STR_MAX_LEN);
@@ -557,7 +561,8 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 			   create, size, bootstrap ? &replicas : NULL,
 			   bootstrap ? &arg : NULL);
 	if (rc != 0 && rc != -DER_ALREADY)
-		D_ERROR("failed to start management service: %d\n", rc);
+		D_ERROR("failed to start management service: "DF_RC"\n",
+			DP_RC(rc));
 
 	return rc;
 }
@@ -569,7 +574,8 @@ ds_mgmt_svc_stop(void)
 
 	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_MGMT);
 	if (rc != 0)
-		D_ERROR("failed to stop management service: %d\n", rc);
+		D_ERROR("failed to stop management service: "DF_RC"\n",
+			DP_RC(rc));
 	return rc;
 }
 
@@ -806,7 +812,7 @@ out:
 
 /* Callers are responsible for freeing resp->psrs. */
 int
-ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
+ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 {
 	struct mgmt_svc	       *svc;
 	d_rank_list_t	       *ranks;
@@ -814,21 +820,29 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
 	int			i;
 	int			rc;
 
-	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
-	if (rc != 0)
-		goto out;
+	grp = crt_group_lookup(NULL);
+	D_ASSERT(grp != NULL);
 
-	rc = rdb_get_ranks(svc->ms_rsvc.s_db, &ranks);
-	if (rc != 0)
-		goto out_svc;
+	if (all_ranks) {
+		rc = crt_group_ranks_get(grp, &ranks);
+		if (rc != 0)
+			goto out;
+	} else {
+		rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+		if (rc != 0)
+			goto out;
+
+		rc = rdb_get_ranks(svc->ms_rsvc.s_db, &ranks);
+		if (rc != 0)
+			goto out_svc;
+	}
 
 	D_ALLOC(resp->psrs, sizeof(*resp->psrs) * ranks->rl_nr);
 	if (resp->psrs == NULL) {
 		rc = -DER_NOMEM;
 		goto out_ranks;
 	}
-	grp = crt_group_lookup(NULL);
-	D_ASSERT(grp != NULL);
+
 	for (i = 0; i < ranks->rl_nr; i++) {
 		d_rank_t rank = ranks->rl_ranks[i];
 
@@ -842,7 +856,8 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
 		rc = crt_rank_uri_get(grp, rank, 0 /* tag */,
 				      &(resp->psrs[i]->uri));
 		if (rc != 0) {
-			D_ERROR("unable to get rank %u URI: %d\n", rank, rc);
+			D_ERROR("unable to get rank %u URI: "DF_RC"\n", rank,
+				DP_RC(rc));
 			break;
 		}
 	}
@@ -863,7 +878,8 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc:
-	ds_mgmt_svc_put_leader(svc);
+	if (!all_ranks)
+		ds_mgmt_svc_put_leader(svc);
 out:
 	return rc;
 }
