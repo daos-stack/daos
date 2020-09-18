@@ -85,7 +85,6 @@ fini_tests(void **state)
 	return 0;
 }
 
-
 int main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
@@ -94,5 +93,6 @@ int main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests(tests, init_tests, fini_tests);
+	return cmocka_run_group_tests_name("utest_swim", tests, init_tests,
+		fini_tests);
 }
