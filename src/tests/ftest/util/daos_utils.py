@@ -26,7 +26,7 @@ import re
 
 
 class DaosCommand(DaosCommandBase):
-    # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a daos command."""
 
     METHOD_REGEX = {
