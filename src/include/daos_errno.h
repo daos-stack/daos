@@ -172,7 +172,9 @@ extern "C" {
 	/** Operation canceled (non-crt) */				\
 	ACTION(DER_OP_CANCELED,		(DER_ERR_DAOS_BASE + 27))	\
 	/** TX is not committed, not sure whether committable or not */	\
-	ACTION(DER_TX_BUSY,		(DER_ERR_DAOS_BASE + 28))
+	ACTION(DER_TX_BUSY,		(DER_ERR_DAOS_BASE + 28))	\
+	/** Agent is incompatible with libdaos */			\
+	ACTION(DER_AGENT_INCOMPAT,	(DER_ERR_DAOS_BASE + 29))
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
