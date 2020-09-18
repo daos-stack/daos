@@ -265,12 +265,8 @@ class DaosServer():
                                                       delete=False)
         self._log_file = server_log_file.name
         self.__process_name = 'daos_io_server'
-        self.__agent_sleep_time = 2
-        self.__start_sleep_time = 0
         if self.valgrind:
             self.__process_name = 'valgrind'
-            self.__start_sleep_time = 20
-            self.__agent_sleep_time = 10
 
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
@@ -354,8 +350,6 @@ class DaosServer():
         server_env['DAOS_DISABLE_REQ_FWD'] = '1'
         self._sp = subprocess.Popen(cmd, env=server_env)
 
-        time.sleep(self.__start_sleep_time)
-
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
         agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
@@ -372,8 +366,24 @@ class DaosServer():
                                         '--logfile', agent_log_file.name],
                                        env=os.environ.copy())
         self.conf.agent_dir = self.agent_dir
-        time.sleep(self.__agent_sleep_time)
         self.running = True
+
+        # Use dmg to block until the server is ready to respond to requests.
+        start = time.time()
+        while True:
+            time.sleep(0.5)
+            rc = self.run_dmg(['system', 'query'])
+            ready = False
+            if rc.returncode == 0:
+                for line in rc.stdout.decode('utf-8').splitlines():
+                    if line.startswith('status'):
+                        if 'Ready' in line:
+                            ready = True
+
+            if ready:
+                break
+            if time.time() - start > 10:
+                raise Exception("Failed to start")
 
     def stop(self):
         """Stop a previously started DAOS server"""
@@ -444,9 +454,10 @@ class DaosServer():
         """Run the specified dmg command"""
 
         exe_cmd = [os.path.join(self.conf['PREFIX'], 'bin', 'dmg')]
+        exe_cmd.append('--insecure')
         exe_cmd.extend(cmd)
 
-        return subprocess.run(exe_cmd)
+        return subprocess.run(exe_cmd, stdout=subprocess.PIPE)
 
 def il_cmd(dfuse, cmd):
     """Run a command under the interception library"""
@@ -790,8 +801,7 @@ def make_pool(daos):
     rc = daos.run_dmg(['pool',
                        'create',
                        '--scm-size',
-                       '{}M'.format(size),
-                       '--insecure'])
+                       '{}M'.format(size)])
 
     print(rc)
     assert rc.returncode == 0
