@@ -677,6 +677,9 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
 	int			 rc = 0;
 
+	D_PRINT("lo: %lu, hi: %lu\n", agg_entry->ae_epr.epr_lo,
+		agg_entry->ae_epr.epr_lo);
+
 	switch (type) {
 	case VOS_ITER_DKEY:
 		rc = agg_dkey(ih, entry, agg_entry, acts);
