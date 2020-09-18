@@ -551,6 +551,6 @@ shell(int argc, char *argv[])
 	return rc;
 
  out_usage:
-	fprintf(stderr, "%s daos|vos [pmem_file]\n", argv[0]);
+	fprintf(stderr, "%s %s daos|vos [pmem_file]\n", argv[0], argv[1]);
 	return -DER_INVAL;
 }
