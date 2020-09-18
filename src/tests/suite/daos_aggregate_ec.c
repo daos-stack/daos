@@ -131,7 +131,7 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 
 static void
 ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
-		       daos_size_t offset, daos_size_t data_bytes)
+			  daos_size_t offset, daos_size_t data_bytes)
 {
 	if (mode != EC_SPECIFIED)
 		return;
@@ -177,6 +177,7 @@ incremental_fill(void **statep)
 	dts_ec_agg_oc = OC_EC_2P1G1;
 	return 0;
 }
+
 static void
 ec_cleanup_cont_obj(struct ec_agg_test_ctx *ctx)
 {
@@ -202,15 +203,19 @@ ec_cleanup_data(struct ec_agg_test_ctx *ctx)
 static void
 test_filled_stripe(void **statep)
 {
-	struct ec_agg_test_ctx	ctx = { 0 };
+	struct ec_agg_test_ctx	 ctx = { 0 };
+	struct daos_oclass_attr	*oca;
 	tse_task_t		*task = NULL;
-	unsigned int		shard = 2; /* 2+1, 1 group leadeer */
-	int			i, rc;
+	unsigned int		 len, shard = 2; /* 2+1, 1 group leadeer */
+	int			 i, rc;
 
 	ec_setup_from_test_args(&ctx, (test_arg_t *) *statep);
 	ec_setup_cont_obj(&ctx, dts_ec_agg_oc);
+	assert_int_equal(daos_oclass_is_ec(ctx.oid, &oca), true);
+	assert_int_equal(oca->u.ec.e_k, 2);
+	len = oca->u.ec.e_len;
 	for (i = 0; i < 256; i++) {
-		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (1 << 14),
+		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (len / 2),
 				       1 << 14);
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
 				     1, &ctx.update_iod, &ctx.update_sgl, NULL);
@@ -218,7 +223,7 @@ test_filled_stripe(void **statep)
 	}
 	sleep(30);
 	for (i = 0; i < 64; i++) {
-		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (1 << 16),
+		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (2 * len),
 				       1 << 16);
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
@@ -232,9 +237,9 @@ test_filled_stripe(void **statep)
 		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
-		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * (1 << 15)) |
+		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 						     PARITY_INDICATOR;
-		ctx.fetch_iod.iod_recxs[0].rx_nr = 1 << 15;
+		ctx.fetch_iod.iod_recxs[0].rx_nr = len;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,

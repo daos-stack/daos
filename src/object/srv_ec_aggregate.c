@@ -89,7 +89,7 @@ struct ec_agg_entry {
 	daos_handle_t		 ae_cont_hdl;
 	daos_handle_t		 ae_chdl;
 	daos_handle_t		 ae_thdl;
-	daos_epoch_range_t	 ae_epoch_range; /* hi/lo extent threshold */
+	daos_epoch_range_t	 ae_epr; /* hi/lo extent threshold */
 	daos_key_t		 ae_dkey;
 	daos_key_t		 ae_akey;
 	daos_size_t		 ae_rsize;
@@ -592,6 +592,10 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 	struct ec_agg_extent	*extent = NULL;
 	int			 rc = 0;
 
+	D_PRINT("Handling data extent: %lu,%lu, for stripe  %lu, shard: %u\n",
+		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
+		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
+		agg_entry->ae_oid.id_shard);
 	if (agg_stripenum(agg_entry, entry->ie_recx.rx_idx) !=
 			agg_entry->ae_cur_stripe.as_stripenum) {
 		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL)
@@ -781,12 +785,14 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct daos_oclass_attr *oca;
 	int			 rc = 0;
 
+	D_PRINT("Got an object\n");
 	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca))
 		return rc;
 
 	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
+	D_PRINT("We're checking if we're the leader, rc == %d\n", rc);
 	if (rc == 1) {
 		if (agg_param->ap_agg_entry == NULL) {
 			D_ALLOC_PTR(agg_param->ap_agg_entry);
@@ -796,6 +802,11 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			}
 			D_INIT_LIST_HEAD(&agg_param->ap_agg_entry->
 					 ae_cur_stripe.as_dextents);
+			/*
+			agg_param->ap_agg_entry->ae_pool_info =
+				&agg_param->ap_pool_info;
+			*/
+			agg_param->ap_agg_entry->ae_epr = param->ip_epr;
 
 		}
 		agg_reset_entry(agg_param->ap_cont_handle,
@@ -826,6 +837,15 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	int			 rc = 0;
 
 	D_PRINT("Aggregate all\n");
+	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
+		  cont->sc_pool->spc_uuid);
+	uuid_copy(agg_param.ap_pool_info.api_cont_uuid, cont->sc_uuid);
+
+	agg_param.ap_pool_info.api_pool_version =
+		cont->sc_pool->spc_pool->sp_map_version;
+	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
+	agg_param.ap_cont_handle	= cont->sc_hdl;
+
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= 0ULL;
 	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
