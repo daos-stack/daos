@@ -615,6 +615,7 @@ struct partial_unaligned_fetch_testcase_args {
 	size_t			 chunksize;
 	struct recx_config	 recx_cfgs[RECX_CONFIGS_NR];
 	daos_recx_t		 fetch_recx;
+	daos_oclass_id_t	 oclass;
 };
 
 static void
@@ -692,6 +693,9 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 	size_t			max_data_size = 0;
 	int			rc;
 	int			i;
+
+	if (args->oclass != OC_UNKNOWN)
+		oc = args->oclass;
 
 	if (args->dkey != NULL)
 		d_iov_set(&ctx.dkey, args->dkey, strlen(args->dkey));
@@ -1724,6 +1728,7 @@ rebuild_3(void **state)
 {
 	rebuild_test(state, 1024, BULK_DATA, DAOS_IOD_ARRAY);
 }
+
 static void
 rebuild_4(void **state)
 {
@@ -2049,6 +2054,42 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	cleanup_cont_obj(&ctx);
 }
 
+static void
+ec_chunk_plus_one(void **state)
+{
+	const uint32_t ec_chunk_plus_one = 1024 * 1024 + 1;
+
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.oclass = OC_EC_2P1G1,
+		.chunksize = 8,
+		.csum_prop_type = dts_csum_prop_type,
+		.server_verify = false,
+		.rec_size = 1,
+		.recx_cfgs = {
+			{.idx = 0, .nr = ec_chunk_plus_one, .data = "ABCDEF"},
+		},
+		.fetch_recx = {.rx_idx = 0, .rx_nr = ec_chunk_plus_one},
+	});
+}
+
+static void
+ec_two_chunk_plus_one(void **state)
+{
+	const uint32_t ec_chunk_plus_one = 2 * 1024 * 1024 + 1;
+
+	ARRAY_UPDATE_FETCH_TESTCASE(state, {
+		.oclass = OC_EC_2P1G1,
+		.chunksize = 8,
+		.csum_prop_type = dts_csum_prop_type,
+		.server_verify = false,
+		.rec_size = 1,
+		.recx_cfgs = {
+			{.idx = 0, .nr = ec_chunk_plus_one, .data = "ABCDEF"},
+		},
+		.fetch_recx = {.rx_idx = 0, .rx_nr = ec_chunk_plus_one},
+	});
+}
+
 static int
 setup(void **state)
 {
@@ -2134,6 +2175,10 @@ static const struct CMUnitTest csum_tests[] = {
 	EC_CSUM_TEST("DAOS_EC_CSUM02: Single Value Checksum", single_value),
 	EC_CSUM_TEST("DAOS_EC_CSUM03: DTX with checksum enabled against EC obj",
 		     dtx_with_csum),
+	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
+		  "EC chunk", ec_chunk_plus_one),
+	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
+		  "2 EC chunks", ec_two_chunk_plus_one),
 };
 
 static int
