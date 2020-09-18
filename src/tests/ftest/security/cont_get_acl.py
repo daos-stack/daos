@@ -25,6 +25,7 @@
 import os
 
 from cont_security_test_base import ContSecurityTestBase
+from security_test_base import read_acl_file
 from command_utils import CommandFailure
 from avocado import fail_on
 
@@ -49,80 +50,12 @@ class GetContainerACLTest(ContSecurityTestBase):
         self.cont_acl = self.get_container_acl_list(
             self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
 
-    def error_handling(self, results, err_msg):
-        """Handle errors when test fails and when command unexpectedly passes.
-
-        Args:
-            results (CmdResult): object containing stdout, stderr and
-                exit status
-            err_msg (str): error message string to look for in stderr.
-
-        Returns:
-            list: list of test errors encountered.
-        """
-        test_errs = []
-        if results.exit_status == 0:
-            test_errs.append("get-acl passed unexpectedly: {}".format(
-                results.stdout))
-        elif results.exit_status == 1:
-            # REMOVE BELOW IF Once DAOS-5635 is resolved
-            if results.stdout and err_msg in results.stdout:
-                self.log.info("Found expected error %s", results.stdout)
-            # REMOVE ABOVE IF Once DAOS-5635 is resolved
-            elif results.stderr and err_msg in results.stderr:
-                self.log.info("Found expected error %s", results.stderr)
-            else:
-                self.fail("get-acl seems to have failed with \
-                    unexpected error: {}".format(results))
-        return test_errs
-
-    def acl_file_diff(self, prev_acl, flag=True):
-        """Helper function to compare current content of acl-file.
-
-        If provided  prev_acl file information is different from current acl
-        file information test will fail if flag=True. If flag=False, test will
-        fail in the case that the acl contents are found to have no difference.
-
-        Args:
-            prev_acl (list): list of acl entries within acl-file.
-                Defaults to True.
-            flag (bool): if True, test will fail when acl-file contents are
-                different, else test will fail when acl-file contents are same.
-        """
-        current_acl = self.get_container_acl_list(
-            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
-        if self.compare_acl_lists(prev_acl, current_acl) != flag:
-            self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
-                prev_acl, current_acl))
-
-    def read_acl_file(self, filename):
-        """Read contents of given acl file.
-
-        Args:
-            filename: name of file to be read for acl information
-
-        Returns:
-            list: list containing ACL entries
-
-        """
-        f = open(filename, 'r')
-        content = f.readlines()
-        f.close()
-
-        # Parse
-        acl = []
-        for entry in content:
-            if not entry.startswith("#"):
-                acl.append(entry.strip())
-
-        return acl
-
     @fail_on(CommandFailure)
     def test_acl_get_valid(self):
         """
         JIRA ID: DAOS-3705
 
-        Test Description: Test that container get command performs as
+        Test Description: Test that container get-acl command performs as
             expected with invalid inputs.
 
         :avocado: tags=all,pr,security,container_acl,cont_get_acl_inputs
@@ -143,7 +76,7 @@ class GetContainerACLTest(ContSecurityTestBase):
                     verbose=verbose,
                     outfile=outfile)
 
-                file_acl = self.read_acl_file(path_to_file)
+                file_acl = read_acl_file(path_to_file)
 
                 # Verify consistency of acl obtained through the file
                 self.acl_file_diff(file_acl)

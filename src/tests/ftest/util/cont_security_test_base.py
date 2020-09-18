@@ -58,7 +58,6 @@ class ContSecurityTestBase(TestWithServers):
         self.pool_svc = None
         self.container_uuid = None
 
-
     def setUp(self):
         """Set up each test case."""
         super(ContSecurityTestBase, self).setUp()
@@ -70,7 +69,6 @@ class ContSecurityTestBase(TestWithServers):
                                        "/run/container/*")
         self.dmg = self.get_dmg_command()
         self.daos_tool = DaosCommand(self.bin)
-
 
     @fail_on(CommandFailure)
     def create_pool_with_dmg(self):
@@ -88,7 +86,6 @@ class ContSecurityTestBase(TestWithServers):
         pool_svc = self.pool.svc_ranks[0]
 
         return pool_uuid, pool_svc
-
 
     def create_container_with_daos(self, pool, acl_type=None):
         """Create a container with the daos tool
@@ -129,7 +126,6 @@ class ContSecurityTestBase(TestWithServers):
             container_uuid = None
 
         return container_uuid
-
 
     def get_container_acl_list(self, pool_uuid, pool_svc, container_uuid,
                                verbose=False, outfile=None):
@@ -173,7 +169,6 @@ class ContSecurityTestBase(TestWithServers):
                     cont_permission_list.append(line)
         return cont_permission_list
 
-
     def compare_acl_lists(self, get_acl_list, expected_list):
         """Compares two permission lists
 
@@ -196,7 +191,6 @@ class ContSecurityTestBase(TestWithServers):
             return True
         return False
 
-
     def cleanup(self, types):
         """Removes all temporal acl files created during the test.
 
@@ -208,3 +202,51 @@ class ContSecurityTestBase(TestWithServers):
             file_name = os.path.join(self.tmp, get_acl_file)
             cmd = "rm -r {}".format(file_name)
             general_utils.run_command(cmd)
+
+    def error_handling(self, results, err_msg):
+        """Handle errors when test fails and when command unexpectedly passes.
+
+        Args:
+            results (CmdResult): object containing stdout, stderr and
+                exit status
+            err_msg (str): error message string to look for in stderr.
+
+        Returns:
+            list: list of test errors encountered.
+
+        """
+        test_errs = []
+        if results.exit_status == 0:
+            test_errs.append("get-acl passed unexpectedly: {}".format(
+                results.stdout))
+        elif results.exit_status == 1:
+            # REMOVE BELOW IF Once DAOS-5635 is resolved
+            if results.stdout and err_msg in results.stdout:
+                self.log.info("Found expected error %s", results.stdout)
+            # REMOVE ABOVE IF Once DAOS-5635 is resolved
+            elif results.stderr and err_msg in results.stderr:
+                self.log.info("Found expected error %s", results.stderr)
+            else:
+                self.fail("get-acl seems to have failed with \
+                    unexpected error: {}".format(results))
+        return test_errs
+
+    def acl_file_diff(self, prev_acl, flag=True):
+        """Helper function to compare current content of acl-file.
+
+        If provided  prev_acl file information is different from current acl
+        file information test will fail if flag=True. If flag=False, test will
+        fail in the case that the acl contents are found to have no difference.
+
+        Args:
+            prev_acl (list): list of acl entries within acl-file.
+                Defaults to True.
+            flag (bool, optional): if True, test will fail when acl-file
+                contents are different, else test will fail when acl-file
+                contents are same. Defaults to True.
+        """
+        current_acl = self.get_container_acl_list(
+            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+        if self.compare_acl_lists(prev_acl, current_acl) != flag:
+            self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
+                prev_acl, current_acl))
