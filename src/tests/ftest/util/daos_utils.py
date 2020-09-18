@@ -350,28 +350,6 @@ class DaosCommand(DaosCommandBase):
             ("container", "update-acl"),
             pool=pool, svc=svc, cont=cont, entry=entry)
 
-    def container_overwrite_acl(self, pool, cont, acl_file, svc=None):
-        """Call daos container overwrite-acl.
-
-        Args:
-            pool (str): Pool UUID.
-            cont (str): Container UUID.
-            acl_file (str): Container acl filename.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: if the daos container overwrite-acl command fails.
-
-        """
-        return self._get_result(
-            ("container", "overwrite-acl"),
-            pool=pool, svc=svc, cont=cont, acl_file=acl_file)
-
     def container_set_prop(self, pool, cont, prop, value, svc=None):
         """Call daos container set-prop.
 
