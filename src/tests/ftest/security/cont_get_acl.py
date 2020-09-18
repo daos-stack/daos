@@ -41,14 +41,9 @@ class GetContainerACLTest(ContSecurityTestBase):
     def setUp(self):
         """Set up each test case."""
         super(GetContainerACLTest, self).setUp()
-        self.acl_filename = "test_acl_file.txt"
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
-
-        # Get list of ACL entries
-        self.cont_acl = self.get_container_acl_list(
-            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
 
     @fail_on(CommandFailure)
     def test_acl_get_valid(self):
@@ -60,21 +55,15 @@ class GetContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_get_acl_inputs
         """
-        # Get list of outfile filenames to put contents of ACL in
-        out_filenames = self.params.get("valid_out_filename", "/run/*")
-        path_to_file = os.path.join(self.tmp, self.acl_filename)
-
-        # Disable raising an exception if the daos command fails
-        self.daos_cmd.exit_status_exception = False
-
         for verbose in [True, False]:
-            for outfile in out_filenames:
+            for outfile in self.params.get("valid_out_filename", "/run/*"):
+                path_to_file = os.path.join(self.tmp, outfile)
                 self.daos_cmd.container_get_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
                     self.container.uuid,
                     verbose=verbose,
-                    outfile=outfile)
+                    outfile=path_to_file)
 
                 file_acl = read_acl_file(path_to_file)
 
@@ -88,7 +77,7 @@ class GetContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container get-acl command doesn't
             get ACL information without permission.
 
-        :avocado: tags=all,pr,security,container_acl,cont_get_acl
+        :avocado: tags=all,pr,security,container_acl,cont_get_acl_noperms
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

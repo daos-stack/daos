@@ -240,7 +240,6 @@ class ContSecurityTestBase(TestWithServers):
 
         Args:
             prev_acl (list): list of acl entries within acl-file.
-                Defaults to True.
             flag (bool, optional): if True, test will fail when acl-file
                 contents are different, else test will fail when acl-file
                 contents are same. Defaults to True.
