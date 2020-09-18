@@ -121,13 +121,17 @@ func (h *IOServerHarness) CallDrpc(ctx context.Context, method drpc.Method, body
 	}
 
 	// Iterate through the managed instances, looking for
-	// the first one that can successfully service the request.
-	// If none succeed, the last error will be returned.
+	// the first one that is available to service the request.
+	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
-		h.log.Debugf("calling %s on rank %s", method, i.getSuperblock().Rank)
+		h.log.Debugf("dRPC to rank %s: %s", i.getSuperblock().Rank, method)
 		resp, err = i.CallDrpc(ctx, method, body)
-		if err != dRPCNotReady || err == nil {
-			break
+
+		switch errors.Cause(err) {
+		case dRPCNotReady, FaultDataPlaneNotStarted:
+			continue
+		default:
+			return
 		}
 	}
 
