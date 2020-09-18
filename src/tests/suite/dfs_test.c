@@ -892,15 +892,18 @@ dfs_setup(void **state)
 	test_arg_t		*arg;
 	int			rc = 0;
 	char			buf[2121];
-
 	int myrank;
+	char processor_name[MPI_MAX_PROCESSOR_NAME];
+	int name_len;
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 	if (myrank == 0)
 		dts_buf_render(buf, 2121);
 
+	MPI_Get_processor_name(processor_name, &name_len);
+
 	MPI_Barrier(MPI_COMM_WORLD);
-	printf("%d: Start Initial Bcast\n", myrank);
+	printf("%d [%s] : Start Initial Bcast\n", myrank, processor_name);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	MPI_Bcast(buf, 2121, MPI_CHAR, 0, MPI_COMM_WORLD);

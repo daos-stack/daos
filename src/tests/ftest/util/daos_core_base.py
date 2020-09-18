@@ -121,7 +121,7 @@ class DaosCoreBase(TestWithServers):
                 "-n", str(num_clients),
                 "--hostfile", self.hostfile_clients,
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
-                "--map-by node", "-x", "D_LOG_MASK=DEBUG",
+                "--map-by node", "-x", "D_LOG_MASK=ERR",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
                 self.daos_test,
                 "-n", dmg_config_file,
