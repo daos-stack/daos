@@ -494,14 +494,15 @@ agg_update_vos(struct ec_agg_entry *entry)
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_recxs = &recx;
-	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * len;
+	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len) |
+							PARITY_INDICATOR;
 	recx.rx_nr = len;
 	rc = vos_obj_update(entry->ae_chdl, entry->ae_oid,
 			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
 			    &entry->ae_dkey, 1, &iod, NULL,
 			    &sgl);
 	if (rc)
-		D_PRINT("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -529,9 +530,6 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: %lu\n",
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
-	D_PRINT("Querying parity for stripe: %lu, offset: %lu\n",
-		entry->ae_cur_stripe.as_stripenum,
-		iter_param.ip_recx.rx_idx);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	if (rc != 0)
@@ -548,9 +546,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 				 && agg_stripe_is_filled(entry, false)) ||
 					agg_stripe_is_filled(entry, true)) {
 		/* Replicas constitute a full stripe. */
-		D_PRINT("Encoding local parity\n");
 		rc = agg_encode_local_parity(entry);
-		D_PRINT("Encoding local parity returned %d\n", rc);
 		goto out;
 	}
 	if (entry->ae_par_extent.ape_epoch == ~(0ULL)) {
@@ -586,16 +582,11 @@ agg_in_stripe(struct ec_agg_entry *entry, daos_recx_t *recx)
 /* Iterator call back sub-function for handling data extents.
  */
 static int
-agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
-		daos_handle_t ih, unsigned int *acts)
+agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry)
 {
 	struct ec_agg_extent	*extent = NULL;
 	int			 rc = 0;
 
-	D_PRINT("Handling data extent: %lu,%lu, for stripe  %lu, shard: %u\n",
-		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
-		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
-		agg_entry->ae_oid.id_shard);
 	if (agg_stripenum(agg_entry, entry->ie_recx.rx_idx) !=
 			agg_entry->ae_cur_stripe.as_stripenum) {
 		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL)
@@ -631,10 +622,6 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		agg_entry->ae_oid.id_shard);
-	D_PRINT("adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
-		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
-		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
-		agg_entry->ae_oid.id_shard);
 out:
 	return rc;
 }
@@ -662,7 +649,7 @@ agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
 
-	rc = agg_data_extent(entry, agg_entry, ih, acts);
+	rc = agg_data_extent(entry, agg_entry);
 
 	return rc;
 }
@@ -676,9 +663,6 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
 	int			 rc = 0;
-
-	D_PRINT("lo: %lu, hi: %lu\n", agg_entry->ae_epr.epr_lo,
-		agg_entry->ae_epr.epr_lo);
 
 	switch (type) {
 	case VOS_ITER_DKEY:
@@ -788,14 +772,12 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct daos_oclass_attr *oca;
 	int			 rc = 0;
 
-	D_PRINT("Got an object\n");
 	if (!daos_oclass_is_ec(entry->ie_oid.id_pub, &oca))
 		return rc;
 
 	rc = ds_pool_check_leader(agg_param->ap_pool_info.api_pool_uuid,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
-	D_PRINT("We're checking if we're the leader, rc == %d\n", rc);
 	if (rc == 1) {
 		if (agg_param->ap_agg_entry == NULL) {
 			D_ALLOC_PTR(agg_param->ap_agg_entry);
@@ -839,7 +821,6 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	struct ec_agg_param	 agg_param = { 0 };
 	int			 rc = 0;
 
-	D_PRINT("Aggregate all\n");
 	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
 		  cont->sc_pool->spc_uuid);
 	uuid_copy(agg_param.ap_pool_info.api_cont_uuid, cont->sc_uuid);
