@@ -141,6 +141,9 @@ def set_test_environment(args):
     usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
+    covfile = os.environ.get("COVFILE")
+    print("SCHAN15 - Using COVFILE={}".format(os.environ["COVFILE"]))
+
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
     if interface is None:
@@ -966,6 +969,8 @@ def archive_files(destination, host_list, source_files):
         "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
+        "echo SCHAN15 covfile on $(hostname -s) $COVFILE",
+        "ls $COVFILE",
         "exit $rc",
     ]
     spawn_commands(host_list, "; ".join(commands), 900)
