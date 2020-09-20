@@ -142,7 +142,7 @@ def set_test_environment(args):
     path = os.environ.get("PATH")
 
     covfile = os.environ.get("COVFILE")
-    print("SCHAN15 - Using COVFILE={}".format(os.environ["COVFILE"]))
+    print("SCHAN15 - Using COVFILE={}".format(covfile))
 
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
