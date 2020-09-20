@@ -142,9 +142,10 @@ def set_test_environment(args):
     path = os.environ.get("PATH")
 
     covfile_env = os.environ.get("COVFILE")
-    print("SCHAN15 - Using COVFILE_ENV={}".format(covfile_env))
-    covfile = os.path.join(base_dir, "../test.cov")
-    print("SCHAN15 - Using COVFILE={}".format(covfile))
+    print("SCHAN15 - What is COVFILE_ENV={}".format(covfile_env))
+    shared_env = os.environ.get("DAOS_TEST_SHARED_DIR")
+    print("SCHAN15 - What is DAOS_TEST_SHARED_DIR={}".format(shared_env))
+    print("SCHAN15 - Using COVFILE={}".format(covfile_env))
 
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
