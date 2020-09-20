@@ -266,8 +266,11 @@ if $TEST_RPMS; then
     echo SCHAN15 - on node 0 ls covfile
     ls $COVFILE
     echo SCHAN15 - copy test.cov to shared dir
-    cp $COVFILE $DAOS_TEST_SHARED_DIR
+    mv $COVFILE $DAOS_TEST_SHARED_DIR
     ls $DAOS_TEST_SHARED_DIR
+    export COVFILE_ORG=$COVFILE
+    export COVFILE=$DAOS_TEST_SHARED_DIR/test.cov
+    ls $COVFILE
 else
     rm -rf $DAOS_BASE/install/tmp
     mkdir -p $DAOS_BASE/install/tmp
@@ -276,7 +279,6 @@ else
 fi
 
 export CRT_PHY_ADDR_STR=ofi+sockets
-export COVFILE
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
@@ -416,6 +418,9 @@ if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} -ins \\
 else
     rc=0
 fi
+
+echo SCHAN15 - copy from daos shared to org path
+cp $COVFILE $COVFILE_ORG
 
 exit \$rc"; then
     rc=${PIPESTATUS[0]}
