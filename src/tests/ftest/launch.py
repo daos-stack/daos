@@ -141,7 +141,7 @@ def set_test_environment(args):
     usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
-    os.environ["COVFILE"] = os.path.join(base_dir, "../test.cov")
+    covfile = os.path.join(base_dir, "../test.cov")
     print("SCHAN15 - Using COVFILE={}".format(covfile))
 
     # Get the default interface to use if OFI_INTERFACE is not set
