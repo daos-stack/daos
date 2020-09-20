@@ -236,20 +236,21 @@ func (c *ControlService) setBdevScanResp(cs storage.NvmeControllers, inErr error
 		return nil
 	}
 
-	// trim unwanted fields so responses can be coalesced from hash map
-	for _, c := range cs {
-		if !req.Health {
-			c.HealthStats = new(storage.NvmeControllerHealth)
-		}
-		if !req.Meta {
-			c.SmdDevices = make([]*storage.SmdDevice, 0)
-		}
-	}
-
 	pbCtrlrs := make(proto.NvmeControllers, 0, len(cs))
 	if err := pbCtrlrs.FromNative(cs); err != nil {
 		return errors.Wrapf(err, "convert %#v to protobuf format", cs)
 	}
+
+	// trim unwanted fields so responses can be coalesced from hash map
+	for _, pbc := range pbCtrlrs {
+		if !req.Health {
+			pbc.Healthstats = nil
+		}
+		if !req.Meta {
+			pbc.Smddevices = nil
+		}
+	}
+
 	resp.State = state
 	resp.Ctrlrs = pbCtrlrs
 

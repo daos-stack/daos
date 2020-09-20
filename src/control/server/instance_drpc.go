@@ -176,8 +176,6 @@ func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *mgmtpb.BioHe
 		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")
 	}
 
-	srv.log.Debugf("bio health received for %s: %v", req.GetDevUuid(), resp)
-
 	return resp, nil
 }
 
