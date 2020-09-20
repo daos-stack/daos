@@ -187,7 +187,6 @@ class CartIvOneNodeTest(Test):
                 # 2.
                 # codecs.open(log_file, "w", "unicode").write('')
 
-
                 # DEBUGGING: dump contents of JSON file to screen
                 with open(log_path, 'r') as f:
                     print(f.read())
@@ -294,8 +293,6 @@ class CartIvOneNodeTest(Test):
 
         try:
             self._iv_test_actions(clicmd, actions)
-            # DEBUGGING
-            # raise ValueError
         except ValueError as exception:
             failed = True
             traceback.print_stack()
