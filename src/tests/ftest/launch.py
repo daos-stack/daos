@@ -141,6 +141,8 @@ def set_test_environment(args):
     usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
+    covfile_env = os.environ.get("COVFILE")
+    print("SCHAN15 - Using COVFILE_ENV={}".format(covfile_env))
     covfile = os.path.join(base_dir, "../test.cov")
     print("SCHAN15 - Using COVFILE={}".format(covfile))
 
