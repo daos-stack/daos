@@ -30,7 +30,7 @@ class DaosTestError(Exception):
     """DAOS API exception class."""
 
 
-def acl_entry(usergroup, name, perm, permissions):
+def acl_entry(usergroup, name, perm, permissions=None):
     """Create a daos acl entry for the specified user or group and permission
 
     Args:
@@ -124,6 +124,7 @@ def read_acl_file(filename):
 
     return acl
 
+  
 def generate_acl_file(acl_type, acl_args):
     """Creates an acl file for the specified type.
 
