@@ -107,7 +107,7 @@ class CartUtils():
         return procrtn
 
     @staticmethod
-    def stop_process(proc, self):
+    def stop_process(proc):
         """ wait for process to terminate """
         i = 60
         procrtn = None
@@ -282,13 +282,13 @@ class CartUtils():
 
         # Verify the server is still running.
         if not self.check_process(srv_rtn):
-            procrtn = self.stop_process(srv_rtn, self)
+            procrtn = self.stop_process(srv_rtn)
             cartobj.fail("Server did not launch, return code %s" \
                        % procrtn)
 
         cli_rtn = self.launch_test(cartobj, clicmd, srv_rtn)
 
-        srv_rtn = self.stop_process(srv_rtn, self)
+        srv_rtn = self.stop_process(srv_rtn)
 
         if srv_rtn:
             cartobj.fail("Failed, return codes client %d " % cli_rtn + \
@@ -374,10 +374,10 @@ class CartUtils():
 
         if rtn:
             if srv1 is not None:
-                self.stop_process(srv1, self)
+                self.stop_process(srv1)
 
             if srv2 is not None:
-                self.stop_process(srv2, self)
+                self.stop_process(srv2)
 
             cartobj.fail("Failed, return codes %d " % rtn)
 
