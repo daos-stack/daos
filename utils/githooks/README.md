@@ -5,7 +5,7 @@ automate things like copyright updates on modified files
 
 To use the pre-commit hook here, do the following locally
 
-```bash
+```
 
 cat << EOF 2>&1 > .git/hooks/pre-commit
 #!/bin/sh
