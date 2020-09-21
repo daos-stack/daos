@@ -268,9 +268,9 @@ if $TEST_RPMS; then
     echo SCHAN15 - copy test.cov to shared dir
     mv $COVFILE $DAOS_TEST_SHARED_DIR
     ls $DAOS_TEST_SHARED_DIR
-    export COVFILE_ORG=$COVFILE
-    export COVFILE=$DAOS_TEST_SHARED_DIR/test.cov
-    ls $COVFILE
+    export COVFILE_ORG=\"$COVFILE\"
+    export COVFILE=\"$DAOS_TEST_SHARED_DIR/test.cov\"
+    echo $COVFILE
 else
     rm -rf $DAOS_BASE/install/tmp
     mkdir -p $DAOS_BASE/install/tmp
