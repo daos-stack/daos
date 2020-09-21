@@ -128,25 +128,6 @@ func TestProto_AnnotateError(t *testing.T) {
 			if tc.expErr == nil {
 				return
 			}
-
-			switch tc.err.(type) {
-			case *fault.Fault:
-				if diff := cmp.Diff(testFault, gotErr); diff != "" {
-					t.Fatalf("unexpected fault: (-want, +got):\n%s\n", diff)
-				}
-			case drpc.DaosStatus:
-				if gotErr != testStatus {
-					t.Fatalf("unexpected status: %d != %d", testStatus, gotErr)
-				}
-			case *system.ErrNotReplica:
-				if diff := cmp.Diff(testNotReplica, gotErr); diff != "" {
-					t.Fatalf("unexpected ErrNotReplica: (-want, +got):\n%s\n", diff)
-				}
-			case *system.ErrNotLeader:
-				if diff := cmp.Diff(testNotLeader, gotErr); diff != "" {
-					t.Fatalf("unexpected ErrNotLeader: (-want, +got):\n%s\n", diff)
-				}
-			}
 		})
 	}
 }
