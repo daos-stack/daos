@@ -951,6 +951,8 @@ def archive_files(destination, host_list, source_files):
     print("Current disk space usage of {}".format(destination))
     print(get_output(["df", "-h", destination]))
 
+    covfile_env = os.environ.get("COVFILE")
+
     # Copy any source files that exist on the remote hosts and remove them from
     # the remote host if the copy is successful.  Attempt all of the commands
     # and report status at the end of the loop.  Include a listing of the file
@@ -972,8 +974,9 @@ def archive_files(destination, host_list, source_files):
         "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
-        "echo SCHAN15 covfile on $(hostname -s) $COVFILE",
-        "ls $COVFILE",
+        "echo SCHAN15 covfile on $(hostname -s) {}".format(covfile_env),
+        "ls {}".format(covfile_env),
+        "echo covfile = \$COVFILE",
         "exit $rc",
     ]
     spawn_commands(host_list, "; ".join(commands), 900)
