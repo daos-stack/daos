@@ -69,7 +69,8 @@ class CartSelfTest(TestWithServers):
         self.uri_file = None
         self.cart_env = EnvironmentVariables()
         myenv = self.cart_env.get_list()
-        print(*myenv, sep = "\n")
+        for item in myenv:
+            print(item)
 
     def setUp(self):
         """Set up each test case."""
