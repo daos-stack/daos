@@ -35,6 +35,7 @@ import general_utils
 from general_utils import DaosTestError
 from test_utils_container import TestContainer
 
+
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
 
@@ -69,7 +70,6 @@ class ContSecurityTestBase(TestWithServers):
                                        "/run/container/*")
         self.dmg = self.get_dmg_command()
         self.daos_tool = DaosCommand(self.bin)
-
 
     @fail_on(CommandFailure)
     def create_pool_with_dmg(self):
@@ -203,3 +203,51 @@ class ContSecurityTestBase(TestWithServers):
             file_name = os.path.join(self.tmp, get_acl_file)
             cmd = "rm -r {}".format(file_name)
             general_utils.run_command(cmd)
+
+    def error_handling(self, results, err_msg):
+        """Handle errors when test fails and when command unexpectedly passes.
+
+        Args:
+            results (CmdResult): object containing stdout, stderr and
+                exit status.
+            err_msg (str): error message string to look for in stderr.
+
+        Returns:
+            list: list of test errors encountered.
+
+        """
+        test_errs = []
+        if results.exit_status == 0:
+            test_errs.append("{} passed unexpectedly: {}".format(
+                results.command, results.stdout))
+        elif results.exit_status == 1:
+            # REMOVE BELOW IF Once DAOS-5635 is resolved
+            if results.stdout and err_msg in results.stdout:
+                self.log.info("Found expected error %s", results.stdout)
+            # REMOVE ABOVE IF Once DAOS-5635 is resolved
+            elif results.stderr and err_msg in results.stderr:
+                self.log.info("Found expected error %s", results.stderr)
+            else:
+                self.fail("{} seems to have failed with \
+                    unexpected error: {}".format(results.command, results))
+        return test_errs
+
+    def acl_file_diff(self, prev_acl, flag=True):
+        """Helper function to compare current content of acl-file.
+
+        If provided  prev_acl file information is different from current acl
+        file information test will fail if flag=True. If flag=False, test will
+        fail in the case that the acl contents are found to have no difference.
+
+        Args:
+            prev_acl (list): list of acl entries within acl-file.
+                Defaults to True.
+            flag (bool, optional): if True, test will fail when acl-file
+                contents are different, else test will fail when acl-file
+                contents are same. Defaults to True.
+        """
+        current_acl = self.get_container_acl_list(
+            self.pool.uuid, self.pool.svc_ranks[0], self.container.uuid)
+        if self.compare_acl_lists(prev_acl, current_acl) != flag:
+            self.fail("Previous ACL:\n{} \nPost command ACL:\n{}".format(
+                prev_acl, current_acl))
