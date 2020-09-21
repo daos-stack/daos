@@ -113,6 +113,7 @@ class DaosCoreBase(TestWithServers):
         args = self.params.get("args", self.TEST_PATH, "")
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
+        self.client_mca += " --mca btl_tcp_if_include eth0"
 
         cmd = " ".join(
             [

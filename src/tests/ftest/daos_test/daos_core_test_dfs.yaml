@@ -52,7 +52,7 @@ dmg:
     allow_insecure: True
 daos_tests:
   num_clients:
-    num_clients: 16
+    num_clients: 32
   Tests:
     test_F:
       daos_test: F
