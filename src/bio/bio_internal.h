@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,17 +82,17 @@ enum bio_bs_state {
  * SPDK device health monitoring.
  */
 struct bio_dev_health {
-	struct bio_dev_state	 bdh_health_state;
+	struct nvme_health_stats	 bdh_health_state;
 	/* writable open descriptor for health info polling */
-	struct spdk_bdev_desc	*bdh_desc;
-	struct spdk_io_channel	*bdh_io_channel;
-	void			*bdh_health_buf; /* health info logs */
-	void			*bdh_ctrlr_buf; /* controller data */
-	void			*bdh_error_buf; /* device error logs */
-	uint64_t		 bdh_stat_age;
-	unsigned int		 bdh_inflights;
+	struct spdk_bdev_desc		*bdh_desc;
+	struct spdk_io_channel		*bdh_io_channel;
+	void				*bdh_health_buf; /* health info logs */
+	void				*bdh_ctrlr_buf; /* controller data */
+	void				*bdh_error_buf; /* device error logs */
+	uint64_t			 bdh_stat_age;
+	unsigned int			 bdh_inflights;
 	/* period to query health stats */
-	unsigned int		 bdh_monitor_pd;
+	unsigned int			 bdh_monitor_pd;
 };
 
 /*

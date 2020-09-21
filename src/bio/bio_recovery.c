@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,31 +303,31 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 void
 bio_media_error(void *msg_arg)
 {
-	struct media_error_msg	*mem = msg_arg;
-	struct bio_dev_state	*dev_state;
-	int			 rc;
+	struct media_error_msg		*mem = msg_arg;
+	struct nvme_health_stats	*dev_state;
+	int				 rc;
 
 	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
 
 	switch (mem->mem_err_type) {
 	case MET_UNMAP:
 		/* Update unmap error counter */
-		dev_state->bds_bio_unmap_errs++;
+		dev_state->bio_unmap_errs++;
 		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_WRITE:
 		/* Update write I/O error counter */
-		dev_state->bds_bio_write_errs++;
+		dev_state->bio_write_errs++;
 		D_ERROR("Write error logged from xs_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_READ:
 		/* Update read I/O error counter */
-		dev_state->bds_bio_read_errs++;
+		dev_state->bio_read_errs++;
 		D_ERROR("Read error logged from xs_id:%d\n", mem->mem_tgt_id);
 		break;
 	case MET_CSUM:
 		/* Update CSUM error counter */
-		dev_state->bds_checksum_errs++;
+		dev_state->checksum_errs++;
 		D_ERROR("CSUM error logged from xs_id:%d\n", mem->mem_tgt_id);
 		break;
 	}

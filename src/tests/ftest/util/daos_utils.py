@@ -26,7 +26,7 @@ import re
 
 
 class DaosCommand(DaosCommandBase):
-    # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a daos command."""
 
     METHOD_REGEX = {
@@ -209,6 +209,49 @@ class DaosCommand(DaosCommandBase):
             ("container", "delete-acl"), pool=pool, svc=svc, cont=cont,
             principal=principal)
 
+    def container_overwrite_acl(self, pool, svc, cont, acl_file):
+        """Overwrite the ACL for a given container.
+
+        Args:
+            pool (str): Pool UUID
+            svc (str): Service replicas
+            cont (str): Container for which to get the ACL.
+            acl_file (str): input file containing ACL
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container overwrite-acl command fails.
+
+        """
+        return self._get_result(
+            ("container", "overwrite-acl"), pool=pool, svc=svc, cont=cont,
+            acl_file=acl_file)
+
+    def container_update_acl(self, pool, svc, cont, entry=None, acl_file=None):
+        """Add or update the ACL entries for a given container.
+
+        Args:
+            pool (str): Pool UUID
+            svc (str): Service replicas
+            cont (str): Container for which to get the ACL.
+            entry (bool, optional): Add or modify a single ACL entry
+            acl_file (str, optional): Input file containing ACL
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container get-acl command fails.
+
+        """
+        return self._get_result(
+            ("container", "update-acl"), pool=pool, svc=svc, cont=cont,
+            entry=entry, acl_file=acl_file)
+
     def pool_list_cont(self, pool, svc, sys_name=None):
         """List containers in the given pool.
 
@@ -307,6 +350,94 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("container", "query"), pool=pool, svc=svc, cont=cont,
             sys_name=sys_name)
+
+    def container_update_acl(self, pool, cont, entry, svc=None):
+        """Call daos container update-acl.
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            entry (str): Container acl entry to be updated.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container update-acl command fails.
+
+        """
+        return self._get_result(
+            ("container", "update-acl"),
+            pool=pool, svc=svc, cont=cont, entry=entry)
+
+    def container_set_prop(self, pool, cont, prop, value, svc=None):
+        """Call daos container set-prop.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            prop (str): Container property-name.
+            value (str): Container property-name value to set.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container set-prop command fails.
+
+        """
+        prop_value = ":".join([prop, value])
+        return self._get_result(
+            ("container", "set-prop"),
+            pool=pool, svc=svc, cont=cont, prop=prop_value)
+
+    def container_get_prop(self, pool, cont, svc=None):
+        """Call daos container get-prop.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container get-prop command fails.
+
+        """
+        return self._get_result(
+            ("container", "get-prop"), pool=pool, svc=svc, cont=cont)
+
+    def container_set_owner(self, pool, cont, user, group, svc=None):
+        """Call daos container set-owner.
+
+        Args:
+            pool (str): Pool UUID.
+            cont (str): Container UUID.
+            user (str): New-user who will own the container.
+            group (str): New-group who will own the container.
+            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
+                to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos container set-owner command fails.
+
+        """
+        return self._get_result(
+            ("container", "set-owner"),
+            pool=pool, svc=svc, cont=cont, user=user, group=group)
 
     def container_set_attr(
             self, pool, cont, attr, val, svc=None, sys_name=None):
