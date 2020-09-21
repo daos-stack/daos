@@ -50,7 +50,7 @@ class DmgSystemReformatTest(TestWithServers):
         scm_list = self.server_managers[-1].get_config_value("scm_list")
         pmem_ns = os.path.split(scm_list[-1])
         storage_info = self.get_dmg_command().storage_scan(verbose=True)
-        self.scm_cap = storage_info[host]["scm"][pmem_ns]["capacity"]
+        self.scm_cap = storage_info[host]["scm"][pmem_ns[-1]]["capacity"]
 
     @fail_on(CommandFailure)
     def create_pool_at_capacity(self, percentage):
