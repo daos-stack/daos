@@ -25,7 +25,7 @@ import time
 import random
 import ctypes
 import threading
-import os
+import copy
 from avocado import fail_on
 from apricot import TestWithServers
 from test_utils_pool import TestPool
@@ -121,7 +121,8 @@ class OSAOfflineParallelTest(TestWithServers):
                               like drain, reintegration, extend
             results (queue) : dmg command output queue.
         """
-        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
+        # dmg = DmgCommand(os.path.join(self.prefix, "bin"))
+        dmg = copy.deepcopy(self.dmg_command)
         self.log.info("Action: {0}".format(action))
         try:
             if action == "exclude":
