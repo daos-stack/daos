@@ -664,7 +664,6 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 #endif
 }
 
-#define OW_IOD_SIZE	1024ULL /* used for mixed record overwrite */
 /**
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is

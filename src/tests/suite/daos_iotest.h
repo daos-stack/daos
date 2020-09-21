@@ -47,6 +47,7 @@ extern int dts_ec_grp_size;
 #define DTS_MAX_EXTENT_SIZE	50
 #define DTS_MAX_OFFSET		1048576
 #define DTS_MAX_EPOCH_TIMES	20
+#define OW_IOD_SIZE	1024ULL
 
 struct ioreq {
 	daos_handle_t		oh;

@@ -273,11 +273,67 @@ nvme_recov_2(void **state)
 	D_FREE(devices);
 }
 
+/* Verify NVMe I/O error and notification*/
+static void
+nvme_recov_3(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		*ow_buf;
+	char			*fbuf;
+	const char		dkey[] = "dkey";
+	const char		akey[] = "akey";
+	daos_size_t		size = 4 * 4096; /* record size */
+	int		rx_nr; /* number of record extents */
+
+	if (!is_nvme_enabled(arg)) {
+		print_message("NVMe isn't enabled.\n");
+		skip();
+	}
+
+	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, 1);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/* Allocate and set buffer to be a string*/
+	D_ALLOC(ow_buf, size);
+	assert_non_null(ow_buf);
+	dts_buf_render(ow_buf, size);
+	/* Alloc the fetch buffer */
+	D_ALLOC(fbuf, size);
+	assert_non_null(fbuf);
+	memset(fbuf, 0, size);
+
+	/* Inject BIO Write Errors on Rank1 device*/
+	print_message("Inject BIO Write Error.\n");
+	set_fail_loc(arg, 1, DAOS_NVME_BIO_WRITE_ERR);
+
+	/* Insert the initial 4K record which will go through NVMe */
+	rx_nr = size / OW_IOD_SIZE;
+	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
+				rx_nr, DAOS_TX_NONE, &req);
+
+	/* Inject BIO Read Errors on Rank1 device*/
+	print_message("Inject BIO Read Error.\n");
+	set_fail_loc(arg, 1, DAOS_NVME_BIO_READ_ERR);
+
+	/*Read and verify the data */
+	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
+			OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
+	assert_memory_equal(ow_buf, fbuf, size);
+
+	D_FREE(ow_buf);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 1: Online faulty reaction",
 	 nvme_recov_1, NULL, test_case_teardown},
 	{"NVMe Recovery 2: Verify device states after NVMe set to Faulty",
 	 nvme_recov_2, NULL, test_case_teardown},
+	{"NVMe Recovery 3: Verify NVMe IO error and notification",
+	 nvme_recov_3, NULL, test_case_teardown},
 };
 
 static int
