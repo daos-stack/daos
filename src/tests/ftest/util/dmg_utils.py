@@ -27,6 +27,7 @@ from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
+import json
 
 from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
@@ -35,6 +36,21 @@ from dmg_utils_base import DmgCommandBase
 class DmgCommand(DmgCommandBase):
     # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a dmg command with helper methods."""
+
+    # Member state defined in control/system/member.go. Used for dmg system
+    # query.
+    SYSTEM_QUERY_STATES = {
+        "UNKNOWN": 0,
+        "AWAIT_FORMAT": 1,
+        "STARTING": 2,
+        "READY": 3,
+        "JOINED": 4,
+        "STOPPING": 5,
+        "STOPPED": 6,
+        "EVICTED": 7,
+        "ERRORED": 8,
+        "UNRESPONSIVE": 9
+    }
 
     # As the handling of these regular expressions are moved inside their
     # respective methods, they should be removed from this definition.
@@ -406,12 +422,30 @@ class DmgCommand(DmgCommandBase):
 
         # Extract the new pool UUID and SVC list from the command output
         data = {}
-        match = re.findall(
-            r"UUID:\s+([A-Za-z0-9-]+),\s+Service replicas:\s+([A-Za-z0-9-]+)",
-            self.result.stdout)
-        if match:
-            data["uuid"] = match[0][0]
-            data["svc"] = match[0][1]
+        if self.json.value:
+            # Sample json output.
+            # "response": {
+            #     "UUID": "ebac9285-61ec-4d2e-aa2d-4d0f7dd6b7d6",
+            #     "Svcreps": [
+            #     0
+            #     ]
+            # },
+            # "error": null,
+            # "status": 0
+            output = json.loads(self.result.stdout)
+            data["uuid"] = output["response"]["UUID"]
+            data["svc"] = ",".join(
+                [str(svc) for svc in output["response"]["Svcreps"]])
+
+        else:
+            match = re.findall(
+                r"UUID:\s+([A-Za-z0-9-]+),\s+"
+                r"Service replicas:\s+([A-Za-z0-9-]+)",
+                self.result.stdout)
+            if match:
+                data["uuid"] = match[0][0]
+                data["svc"] = match[0][1]
+
         return data
 
     def pool_query(self, pool):
@@ -608,24 +642,25 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def system_query(self, rank=None, verbose=True):
+    def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 
         Args:
-            rank: Specify specific rank to obtain it's status
-                  Defaults to None, which means report all available
-                  ranks.
+            ranks (str): Specify specific ranks to obtain it's status. Use
+                comma separated list for multiple ranks. e.g., 0,1.
+                Defaults to None, which means report all available ranks.
             verbose (bool): To obtain detailed query report
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg system query command fails.
 
         """
-        return self._get_result(("system", "query"), rank=rank, verbose=verbose)
+        return self._get_result(
+            ("system", "query"), ranks=ranks, verbose=verbose)
 
     def system_start(self):
         """Start the system.
@@ -640,12 +675,14 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("system", "start"))
 
-    def system_stop(self, force=False):
+    def system_stop(self, force=False, ranks=None):
         """Stop the system.
 
         Args:
             force (bool, optional): whether to force the stop. Defaults to
                 False.
+            ranks (str, optional): comma separated ranks to stop. Defaults to
+                None.
 
         Returns:
             list: a list containing system rank information.
@@ -654,10 +691,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system stop command fails.
 
         """
-        self._get_result(("system", "stop"), force=force)
-        return re.findall(
-            r"(\d+|\[[0-9-,]+\])\s+([A-Za-z]+)\s+([A-Za-z]+)",
-            self.result.stdout)
+        return self._get_result(("system", "stop"), force=force, ranks=ranks)
 
 
 def check_system_query_status(stdout_str):
