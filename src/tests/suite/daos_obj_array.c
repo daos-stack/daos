@@ -1378,7 +1378,7 @@ static int
 obj_array_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, false, DEFAULT_POOL_SIZE,
-			  NULL, NULL);
+			  NULL);
 }
 
 int

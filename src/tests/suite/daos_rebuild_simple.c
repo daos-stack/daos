@@ -38,8 +38,12 @@
 
 #define KEY_NR		10
 #define OBJ_NR		10
+#define OBJ_CLS		OC_RP_3G1
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
+#define REBUILD_POOL_SIZE	(4ULL << 30)
+#define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
+#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
 
 #define DATA_SIZE	(1048576 * 2 + 512)
 static void

@@ -128,7 +128,6 @@ typedef struct {
 	bool			multi_rank;
 	int			myrank;
 	int			rank_size;
-	d_rank_list_t		*rank_list;
 	const char		*group;
 	const char		*dmg_config;
 	struct test_pool	pool;
@@ -219,8 +218,7 @@ int
 test_teardown_cont(test_arg_t *arg);
 int
 test_setup(void **state, unsigned int step, bool multi_rank,
-	   daos_size_t pool_size, struct test_pool *pool,
-	   d_rank_list_t *rank_list);
+	   daos_size_t pool_size, struct test_pool *pool);
 int
 test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
@@ -311,8 +309,6 @@ int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 int run_daos_drain_simple_test(int rank, int size, int *tests, int test_size);
-int run_daos_addition_simple_test(int rank, int size, int *sub_tests,
-				  int sub_tests_size);
 int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 
@@ -345,12 +341,9 @@ void daos_drain_target(const uuid_t pool_uuid, const char *grp,
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config, const d_rank_list_t *svc,
 			 d_rank_t rank);
-void daos_add_server(const uuid_t pool_uuid, const char *grp,
-		     const char *dmg_config, const d_rank_list_t *svc,
-		     d_rank_t rank);
-void daos_extend_server(const uuid_t pool_uuid, const char *grp,
-			const char *dmg_config, const d_rank_list_t *svc,
-			d_rank_t rank);
+void daos_reint_server(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank);
 
 d_rank_t
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, bool parity);
@@ -386,8 +379,6 @@ void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
 void drain_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
 
-void addition_single_pool_rank(test_arg_t *arg, d_rank_t *ranks, int rank_nr);
-
 int rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 		struct test_pool *pool);
 void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
@@ -399,7 +390,6 @@ int rebuild_pool_connect_internal(void *data);
 int rebuild_sub_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
-int addition_small_sub_setup(void **state);
 
 static inline void
 daos_test_print(int rank, char *message)
@@ -482,7 +472,6 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 
 #define MAX_KILLS	3
 extern d_rank_t ranks_to_kill[MAX_KILLS];
-extern d_rank_t ranks_to_add[MAX_KILLS];
 d_rank_t test_get_last_svr_rank(test_arg_t *arg);
 
 /* make dir including its parent dir */

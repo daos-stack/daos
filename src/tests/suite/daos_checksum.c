@@ -1687,8 +1687,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 			    1, &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_success(rc);
 
-	daos_add_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			arg->pool.alive_svc, rank_to_exclude);
+	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
+			  arg->pool.alive_svc, rank_to_exclude);
 	assert_int_equal(disabled_nr, disabled_targets(arg));
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
@@ -2053,7 +2053,7 @@ static int
 setup(void **state)
 {
 	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			  NULL, NULL);
+			  NULL);
 }
 
 #define CSUM_TEST(dsc, test) { dsc, test, csum_replia_enable, \

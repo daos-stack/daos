@@ -374,7 +374,7 @@ pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int new_size)
 	new_conns->pic_buf_size = new_size - sizeof(*new_conns);
 	sgl->sg_iovs[0].iov_buf = new_conns;
 	sgl->sg_iovs[0].iov_buf_len = new_size;
-	return 0;
+	return 0; 
 }
 
 static int
@@ -482,7 +482,7 @@ pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst, d_sg_list_t *src)
 			if (rc) {
 				if (rc == -DER_REC2BIG)
 					pik->pik_entry_size =
-						sizeof(*src_conns) +
+						sizeof(*src_conns) + 
 						src_conns->pic_size +
 						dst_conns->pic_size;
 				D_GOTO(out, rc);
@@ -497,7 +497,7 @@ pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst, d_sg_list_t *src)
 				if (rc) {
 					if (rc == -DER_REC2BIG)
 						pik->pik_entry_size =
-							sizeof(*src_conns) +
+							sizeof(*src_conns) + 
 							src_conns->pic_size +
 							dst_conns->pic_size;
 					D_GOTO(out, rc);
