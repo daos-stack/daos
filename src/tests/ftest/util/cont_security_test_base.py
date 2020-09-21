@@ -35,6 +35,7 @@ import general_utils
 from general_utils import DaosTestError
 from test_utils_container import TestContainer
 
+
 class ContSecurityTestBase(TestWithServers):
     """Container security test cases.
 
@@ -208,7 +209,7 @@ class ContSecurityTestBase(TestWithServers):
 
         Args:
             results (CmdResult): object containing stdout, stderr and
-                exit status
+                exit status.
             err_msg (str): error message string to look for in stderr.
 
         Returns:
@@ -240,6 +241,7 @@ class ContSecurityTestBase(TestWithServers):
 
         Args:
             prev_acl (list): list of acl entries within acl-file.
+                Defaults to True.
             flag (bool, optional): if True, test will fail when acl-file
                 contents are different, else test will fail when acl-file
                 contents are same. Defaults to True.

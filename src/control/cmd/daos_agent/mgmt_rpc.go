@@ -25,6 +25,7 @@ package main
 
 import (
 	"net"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -49,6 +50,7 @@ type mgmtModule struct {
 	aiCache    *attachInfoCache
 	numaAware  bool
 	netCtx     context.Context
+	mutex      sync.Mutex
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -102,6 +104,20 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		}
 	}
 
+	// The flow is optimized for the case where isCached() is true.  In the normal case,
+	// caching is enabled, there's data in the info cache and the agent can quickly return
+	// a response without the overhead of a mutex.
+	if mod.aiCache.isCached() {
+		return mod.aiCache.getResponse(numaNode)
+	}
+
+	// If the cache was not initialized, protect cache initialization
+	// and check the initialization status once the mutex is obtained.
+	mod.mutex.Lock()
+	defer mod.mutex.Unlock()
+
+	// If another thread succeeded in initializing the cache while this thread waited
+	// to get the mutex, return the cached response instead of initializing the cache again.
 	if mod.aiCache.isCached() {
 		return mod.aiCache.getResponse(numaNode)
 	}
