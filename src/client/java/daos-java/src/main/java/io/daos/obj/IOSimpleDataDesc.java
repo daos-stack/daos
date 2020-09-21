@@ -49,30 +49,39 @@ public class IOSimpleDataDesc {
 
   private boolean dkeyChanged;
 
-  private int maxKenLen;
+  private final int maxKenLen;
 
   private int dkeyLen;
 
   private final SimpleEntry[] akeyEntries;
 
-  private final boolean updateOrFetch;
+  private boolean updateOrFetch;
 
-  private int totalDescBufferLen;
+  private final DaosEventQueue.Event event;
 
-  private int totalRequestBufLen;
+  private final int totalDescBufferLen;
+
+  private final int totalRequestBufLen;
 
   private int totalRequestSize;
 
   private int nbrOfAkeysToRequest;
 
-  private ByteBuf descBuffer;
+  private final ByteBuf descBuffer;
 
   private Throwable cause;
 
   private boolean resultParsed;
 
-  protected IOSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
-                             boolean updateOrFetch) {
+  private final boolean async;
+
+  private boolean released;
+
+  private int retCode;
+
+  public static final int RET_CODE_SUCCEEDED = 0;
+
+  protected IOSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen, DaosEventQueue.Event event) {
     if (maxKeyStrLen > Short.MAX_VALUE/2 || maxKeyStrLen <= 0) {
       throw new IllegalArgumentException("number of entries should be positive and no larger than " +
           Short.MAX_VALUE/2 + ". " + maxKeyStrLen);
@@ -82,23 +91,35 @@ public class IOSimpleDataDesc {
       throw new IllegalArgumentException("number of entries should be positive and no larger than " + Short.MAX_VALUE +
           ". " + nbrOfEntries);
     }
+    this.event = event;
+    this.async = event != null;
     // 8 for storing native desc pointer
     // 2 for storing maxKenLen
+    // 2 for number of entries
     // 2 for dkey length
     // 2 for actual number of entries starting from first entry having data
-    totalRequestBufLen += (8 + 2 + 2 + 2 + maxKenLen);
+    int tmpLen = (16 + maxKenLen);
+    // 8 for native EQ pointer
+    // 2 for event ID
+    tmpLen += async ? 10 : 0;
     this.akeyEntries = new SimpleEntry[nbrOfEntries];
     for (int i = 0; i < nbrOfEntries; i++) {
-      SimpleEntry entry = updateOrFetch ? createReusableEntryForUpdate(entryBufLen) :
-          createReusableEntryForFetch(entryBufLen);
+      SimpleEntry entry = new SimpleEntry(entryBufLen);
       akeyEntries[i] = entry;
-      totalRequestBufLen += entry.getDescLen();
+      tmpLen += entry.getDescLen();
     }
-    totalDescBufferLen += totalRequestBufLen;
-    if (!updateOrFetch) { // for returned actual size
-      totalDescBufferLen += akeyEntries.length * Constants.ENCODED_LENGTH_EXTENT;
-    }
-    this.updateOrFetch = updateOrFetch;
+    totalRequestBufLen = tmpLen;
+    // for rc and returned actual size
+    tmpLen += 4 + akeyEntries.length * Constants.ENCODED_LENGTH_EXTENT;
+    totalDescBufferLen = tmpLen;
+    this.descBuffer = BufferAllocator.objBufWithNativeOrder(totalDescBufferLen);
+    prepareNativeDesc();
+    if (!async) {
+      // native desc handle written to the start of descBuffer in native code.
+      DaosObjClient.allocateSimpleDesc(descBuffer.memoryAddress(), false);
+      checkNativeDesc();
+    } // group allocate native desc otherwise
+    this.updateOrFetch = true; // default to update
   }
 
   private void checkLen(int len, String keyType) {
@@ -108,12 +129,31 @@ public class IOSimpleDataDesc {
     }
   }
 
+  protected void checkNativeDesc() {
+    descBuffer.readerIndex(0);
+    if (descBuffer.readLong() == 0L) {
+      throw new IllegalStateException("no native desc created");
+    }
+  }
+
+  public void setUpdateOrFetch(boolean updateOrFetch) {
+    this.updateOrFetch = updateOrFetch;
+  }
+
+  public boolean isUpdateOrFetch() {
+    return updateOrFetch;
+  }
+
   public String getDkey() {
     return dkey;
   }
 
   public int getTotalRequestSize() {
     return totalRequestSize;
+  }
+
+  public boolean isAsync() {
+    return async;
   }
 
   /**
@@ -175,29 +215,49 @@ public class IOSimpleDataDesc {
    * encode entries data to Data Buffer.
    */
   public void encode() {
-    if (descBuffer != null) {
-      encodeReused();
-      return;
-    }
-    encodeFirstTime();
-  }
-
-  private void encodeFirstTime() {
     if (nbrOfAkeysToRequest == 0) {
       throw new IllegalArgumentException("at least one of entries should have data");
     }
-    this.descBuffer = BufferAllocator.objBufWithNativeOrder(getDescBufferLen());
+    descBuffer.readerIndex(0);
+    descBuffer.writerIndex(20);
+    if (async) { // assuming same event queue
+      descBuffer.writeShort(event.id);
+    }
+    if (dkeyChanged) {
+      descBuffer.writeShort(dkeyLen);
+      writeKey(dkey);
+    } else {
+      descBuffer.writerIndex(descBuffer.writerIndex() + 2 + maxKenLen);
+    }
+    descBuffer.writeShort(nbrOfAkeysToRequest);
+    int count = 0;
+    for (SimpleEntry entry : akeyEntries) {
+      if (!entry.isReused()) {
+        break;
+      }
+      entry.encode(descBuffer);
+      count++;
+    }
+    if (nbrOfAkeysToRequest > count) {
+      throw new IllegalStateException("number of akeys to request " + nbrOfAkeysToRequest + ", should not exceed " +
+          "total reused entries, " + count);
+    }
+  }
+
+  private void prepareNativeDesc() {
+    // skip native handle
     descBuffer.writeLong(0L);
     descBuffer.writeShort(maxKenLen);
-    descBuffer.writeShort(dkeyLen);
-    writeKey(dkey);
-    descBuffer.writeShort(nbrOfAkeysToRequest);
-    for (SimpleEntry entry : akeyEntries) {
-      entry.encode(descBuffer, true);
+    descBuffer.writeShort(akeyEntries.length);
+    if (async) { // for asynchronous
+      descBuffer.writeLong(event.eqHandle);
+      // skip event id
+      descBuffer.writerIndex(descBuffer.writerIndex() + 2);
     }
-    if (nbrOfAkeysToRequest > akeyEntries.length) {
-      throw new IllegalStateException("number of akeys to request " + nbrOfAkeysToRequest + ", should not exceed " +
-          "total number of entries, " + akeyEntries.length);
+    // skip dkeylen, dkey and nbr of requests
+    descBuffer.writerIndex(descBuffer.writerIndex() + 2 + maxKenLen + 2);
+    for (SimpleEntry entry : akeyEntries) {
+      entry.putAddress(descBuffer);
     }
   }
 
@@ -214,33 +274,10 @@ public class IOSimpleDataDesc {
     this.nbrOfAkeysToRequest = 0;
     this.totalRequestSize = 0;
     this.dkeyChanged = false;
+    this.retCode = Integer.MAX_VALUE;
     for (SimpleEntry e : akeyEntries) {
       e.reused = false;
       e.akeyChanged = false;
-    }
-  }
-
-  private void encodeReused() {
-    descBuffer.readerIndex(0);
-    descBuffer.writerIndex(10);
-    if (dkeyChanged) {
-      descBuffer.writeShort(dkeyLen);
-      writeKey(dkey);
-    } else {
-      descBuffer.writerIndex(descBuffer.writerIndex() + 2 + maxKenLen);
-    }
-    descBuffer.writeShort(nbrOfAkeysToRequest);
-    int count = 0;
-    for (SimpleEntry entry : akeyEntries) {
-      if (!entry.isReused()) {
-        break;
-      }
-      entry.encode(descBuffer, false);
-      count++;
-    }
-    if (nbrOfAkeysToRequest > count) {
-      throw new IllegalStateException("number of akeys to request " + nbrOfAkeysToRequest + ", should not exceed " +
-          "total reused entries, " + count);
     }
   }
 
@@ -250,11 +287,15 @@ public class IOSimpleDataDesc {
    * @return true or false
    */
   public boolean isSucceeded() {
-    return resultParsed;
+    return retCode == RET_CODE_SUCCEEDED;
   }
 
   public Throwable getCause() {
     return cause;
+  }
+
+  public int getRetCode() {
+    return retCode;
   }
 
   protected void setCause(Throwable de) {
@@ -262,6 +303,13 @@ public class IOSimpleDataDesc {
   }
 
   protected void succeed() {
+    if (async) {
+      descBuffer.writerIndex(descBuffer.capacity());
+      descBuffer.readerIndex(totalRequestBufLen);
+      retCode = descBuffer.readInt();
+    } else {
+      retCode = RET_CODE_SUCCEEDED;
+    }
     resultParsed = true;
   }
 
@@ -276,8 +324,13 @@ public class IOSimpleDataDesc {
       int nbrOfReq = nbrOfAkeysToRequest;
       int count = 0;
       // update actual size
-      int idx = getRequestBufLen();
+      int idx = totalRequestBufLen;
       descBuffer.writerIndex(descBuffer.capacity());
+      retCode = descBuffer.readInt();
+      if (retCode != RET_CODE_SUCCEEDED) {
+        resultParsed = true;
+        return;
+      }
       for (SimpleEntry entry : akeyEntries) {
         if (count < nbrOfReq) {
           descBuffer.readerIndex(idx);
@@ -314,14 +367,6 @@ public class IOSimpleDataDesc {
     return akeyEntries[index];
   }
 
-  public SimpleEntry createReusableEntryForUpdate(int bufferLen) {
-    return new SimpleEntry(bufferLen, true);
-  }
-
-  public SimpleEntry createReusableEntryForFetch(int bufferLen) {
-    return new SimpleEntry(bufferLen, false);
-  }
-
   /**
    * release all buffers created from this object and its entry objects. Be noted, the fetch data buffers are
    * released too if this desc is for fetch. If you don't want release them too early, please call
@@ -338,15 +383,17 @@ public class IOSimpleDataDesc {
    * true to release all fetch buffers, false otherwise.
    */
   public void release(boolean releaseFetchBuffer) {
-    if (descBuffer != null) {
-      descBuffer.readerIndex(0);
-      descBuffer.writerIndex(descBuffer.capacity());
-      long nativeDescPtr = descBuffer.readLong();
-      if (hasNativeDec(nativeDescPtr)) {
-        DaosObjClient.releaseDescSimple(nativeDescPtr);
+    if (!released) {
+      if (!async) {
+        descBuffer.readerIndex(0);
+        descBuffer.writerIndex(descBuffer.capacity());
+        long nativeDescPtr = descBuffer.readLong();
+        if (hasNativeDec(nativeDescPtr)) {
+          DaosObjClient.releaseDescSimple(nativeDescPtr);
+        }
       }
       this.descBuffer.release();
-      descBuffer = null;
+      this.released = true;
     }
     if (updateOrFetch || releaseFetchBuffer) {
       for (SimpleEntry entry : akeyEntries) {
@@ -395,7 +442,6 @@ public class IOSimpleDataDesc {
     private boolean reused;
     private int dataSize;
     private ByteBuf dataBuffer;
-    private final boolean updateOrFetch;
 
     private int actualSize; // to get from value buffer
 
@@ -403,12 +449,10 @@ public class IOSimpleDataDesc {
      * construction for reusable entry.
      *
      * @param bufferLen
-     * @param updateOrFetch
      * @throws IOException
      */
-    protected SimpleEntry(int bufferLen, boolean updateOrFetch) {
+    protected SimpleEntry(int bufferLen) {
       this.dataBuffer = BufferAllocator.objBufWithNativeOrder(bufferLen);
-      this.updateOrFetch = updateOrFetch;
     }
 
     /**
@@ -550,20 +594,7 @@ public class IOSimpleDataDesc {
      * @param descBuffer
      * the description buffer
      */
-    protected void encode(ByteBuf descBuffer, boolean firstTime) {
-      if (!firstTime) {
-        reuseEntry(descBuffer);
-        return;
-      }
-      encodeEntryFirstTime(descBuffer);
-    }
-
-    /**
-     * depend on encoded of IODataDesc to protect entry from encoding multiple times.
-     *
-     * @param descBuffer
-     */
-    private void reuseEntry(ByteBuf descBuffer) {
+    protected void encode(ByteBuf descBuffer) {
       if (akeyChanged) {
         descBuffer.writeShort(akeyLen);
         writeKey(akey);
@@ -576,11 +607,18 @@ public class IOSimpleDataDesc {
       descBuffer.writerIndex(descBuffer.writerIndex() + 8);
     }
 
-    private void encodeEntryFirstTime(ByteBuf descBuffer) {
-      descBuffer.writeShort(akeyLen);
-      writeKey(akey);
-      descBuffer.writeInt(offset);
-      descBuffer.writeInt(dataSize);
+    /**
+     * depend on encoded of IODataDesc to protect entry from encoding multiple times.
+     *
+     * @param descBuffer
+     */
+    private void reuseEntry(ByteBuf descBuffer) {
+
+    }
+
+    private void putAddress(ByteBuf descBuffer) {
+      // skip akeylen, akey, offset and length
+      descBuffer.writerIndex(descBuffer.writerIndex() + maxKenLen + 10);
       descBuffer.writeLong(dataBuffer.memoryAddress());
     }
 

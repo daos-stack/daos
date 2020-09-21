@@ -1,9 +1,6 @@
 package io.daos.obj;
 
-import io.daos.BufferAllocator;
-import io.daos.Constants;
-import io.daos.DaosIOException;
-import io.daos.DaosTestBase;
+import io.daos.*;
 import io.netty.buffer.ByteBuf;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -11,10 +8,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DaosObjectIT {
@@ -1106,9 +1100,10 @@ public class DaosObjectIT {
     try {
       object.open();
       IOSimpleDataDesc desc = object.createSimpleDataDesc(5, 1, 100,
-          true);
+          null);
       IOSimpleDataDesc fetchDesc = object.createSimpleDataDesc(5, 1, 100,
-          false);
+          null);
+      fetchDesc.setUpdateOrFetch(false);
       try {
         // initial
         writeAndFetchWithDescSimpleReused(object, desc, fetchDesc, 1, 7);
@@ -1176,7 +1171,8 @@ public class DaosObjectIT {
     IODataDesc fetchDesc = object.createReusableDesc(5, akeyLen, 2, bufLen,
         IODataDesc.IodType.ARRAY, 1, false);
     IOSimpleDataDesc fetchDescSim = object.createSimpleDataDesc(4,  2, bufLen,
-        false);
+        null);
+    fetchDescSim.setUpdateOrFetch(false);
     try {
       object.open();
       byte[] data = generateDataArray(bufLen);
@@ -1248,17 +1244,13 @@ public class DaosObjectIT {
     id.encode();
     DaosObject object = client.getObject(id);
     int bufLen = 8000;
-//    String dkey = "dkey1";
-    String akey = "1000";
-    int akeyLen = 4;
     int reduces = 125;
     int maps = 1000;
     IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
-        true);
-//    IODataDesc fetchDesc = object.createReusableDesc(5, akeyLen, 1, bufLen,
-//        IODataDesc.IodType.ARRAY, 1, false);
+        null);
     IOSimpleDataDesc fetchDesc = object.createSimpleDataDesc(4, 1, bufLen,
-        false);
+        null);
+    fetchDesc.setUpdateOrFetch(false);
     try {
       object.open();
       byte[] data = generateDataArray(bufLen);
@@ -1280,18 +1272,6 @@ public class DaosObjectIT {
       System.out.println((System.nanoTime() - start) / 1000000);
       // fetch
       start = System.nanoTime();
-//      IODataDescSimple.SimpleEntry fes = fetchDescSim.getEntry(0);
-//      for (int i = 0; i < reduces; i++) {
-//        fetchDescSim.setDkey(padZero(i, 3));
-//        for (int j = 0; j < maps; j++) {
-//          fes.setKeyForFetch(padZero(j, 4), 0, bufLen);
-//          object.fetchSimple(fetchDescSim);
-//          Assert.assertEquals(bufLen, fes.getActualSize());
-//          fetchDescSim.reuse();
-//        }
-//      }
-//      System.out.println((System.nanoTime() - start)/1000000);
-//      start = System.nanoTime();
       IOSimpleDataDesc.SimpleEntry fe = fetchDesc.getEntry(0);
       for (int i = 0; i < reduces; i++) {
         fetchDesc.setDkey(String.valueOf(i));
@@ -1306,7 +1286,6 @@ public class DaosObjectIT {
     } finally {
       desc.release();
       fetchDesc.release();
-//      fetchDescSim.release();
       if (object.isOpen()) {
         object.punch();
       }
@@ -1324,6 +1303,84 @@ public class DaosObjectIT {
       }
     }
     return sb.toString();
+  }
+
+  @Test
+  public void testAsyncUpdateAndFetch() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    int bufLen = 8000;
+    int reduces = 1;
+    int maps = 1;
+    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
+        null);
+//    IOSimpleDataDesc fetchDesc = object.createSimpleDataDesc(4, 1, bufLen,
+//        null);
+    byte[] data = generateDataArray(bufLen);
+//    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, 1, bufLen);
+//    for (int i = 0; i < dq.getNbrOfEvents(); i++) {
+//      DaosEventQueue.Event e = dq.getEvent(i);
+//      IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
+//      ByteBuf buf = entry.reuseBuffer();
+//      buf.writeBytes(data);
+//    }
+    try {
+      object.open();
+      // write
+      DaosEventQueue.Event e;
+//      IOSimpleDataDesc desc;
+      IOSimpleDataDesc.SimpleEntry entry;
+      ByteBuf buf;
+      long start = System.nanoTime();
+      for (int i = 0; i < reduces; i++) {
+        for (int j = 0; j < maps; j++) {
+//          e = dq.acquireEventBlock(true, 1000, null);
+//          desc = e.reuseDesc();
+          desc.setDkey(String.valueOf(i));
+          entry = desc.getEntry(0);
+          buf = entry.reuseBuffer();
+          buf.writerIndex(buf.capacity());
+          entry.setEntryForUpdate(String.valueOf(j), 0, buf);
+          object.updateSimple(desc);
+        }
+      }
+//      dq.waitForCompletion(5000, null);
+      System.out.println((System.nanoTime() - start) / 1000000);
+      System.out.println("written");
+      // fetch
+//      List<IOSimpleDataDesc> compList = new LinkedList<>();
+//      start = System.nanoTime();
+//      for (int i = 0; i < reduces; i++) {
+//        for (int j = 0; j < maps; j++) {
+//          compList.clear();
+//          e = dq.acquireEventBlock(false, 1000, compList);
+//          for (IOSimpleDataDesc d : compList) {
+//            Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
+//          }
+//          desc = e.reuseDesc();
+//          desc.setDkey(String.valueOf(i));
+//          entry = desc.getEntry(0);
+//          entry.setEntryForFetch(String.valueOf(j), 0, bufLen);
+//          object.fetchSimple(desc);
+//        }
+//      }
+////      System.out.println("waiting");
+//      dq.waitForCompletion(5000, compList);
+//      for (IOSimpleDataDesc d : compList) {
+//        Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
+//      }
+//      System.out.println((System.nanoTime() - start) / 1000000);
+    } catch (Exception e) {
+      throw e;
+    } finally {
+      desc.release();
+//      DaosEventQueue.destroyAll();
+      if (object.isOpen()) {
+        object.punch();
+      }
+      object.close();
+    }
   }
 
   @AfterClass

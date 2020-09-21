@@ -2,12 +2,10 @@ package io.daos.obj;
 
 import io.daos.DaosClient;
 import io.netty.buffer.ByteBuf;
+import org.junit.Assert;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class DescSimpleMain {
 
@@ -71,36 +69,55 @@ public class DescSimpleMain {
     }
   }
 
-  private static void generateData(DaosObject object, long totalBytes, int maps, int reduces) throws IOException {
+  private static byte[] generateDataArray(int dataSize) {
+    byte[] bytes = new byte[dataSize];
+    for (int i = 0; i < dataSize; i++) {
+      bytes[i] = (byte) ((i + 33) % 128);
+    }
+    return bytes;
+  }
+
+  private static void generateData(DaosObject object, long totalBytes, int maps, int reduces) throws IOException, InterruptedException {
     int akeyValLen = (int)(totalBytes/maps/reduces);
 //    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(akeyValLen);
-    IOSimpleDataDesc desc = object.createSimpleDataDesc(3, 1, akeyValLen,
-         true);
-
-    populate(desc.getEntry(0).getDataBuffer());
+//    IOSimpleDataDesc desc = object.createSimpleDataDesc(3, 1, akeyValLen,
+//         null);
     System.out.println("block size: " + akeyValLen);
+    byte[] data = generateDataArray(akeyValLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, 1, akeyValLen);
+    for (int i = 0; i < dq.getNbrOfEvents(); i++) {
+      DaosEventQueue.Event e = dq.getEvent(i);
+      IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
+      ByteBuf buf = entry.reuseBuffer();
+      buf.writeBytes(data);
+    }
+    DaosEventQueue.Event e;
+    IOSimpleDataDesc desc;
+    IOSimpleDataDesc.SimpleEntry entry;
+    ByteBuf buf;
     long start = System.nanoTime();
     try {
       for (int i = 0; i < reduces; i++) {
-        desc.setDkey(padZero(i, 3));
         for (int j = 0; j < maps; j++) {
-          IOSimpleDataDesc.SimpleEntry entry = desc.getEntry(0);
-          ByteBuf buf = entry.reuseBuffer();
-          buf.writerIndex(akeyValLen);
-          entry.setEntryForUpdate(padZero(j, 4), 0, buf);
+          e = dq.acquireEventBlock(true, 1000, null);
+          desc = e.reuseDesc();
+          desc.setDkey(String.valueOf(i));
+          entry = desc.getEntry(0);
+          buf = entry.reuseBuffer();
+          buf.writerIndex(buf.capacity());
+          entry.setEntryForUpdate(String.valueOf(j), 0, buf);
           object.updateSimple(desc);
-          desc.reuse();
         }
       }
+      dq.waitForCompletion(10000, null);
+      float seconds = ((float)(System.nanoTime()-start))/1000000000;
+      long expected = 1L*akeyValLen*reduces*maps;
+      System.out.println("perf (MB/s): " + ((float)expected)/seconds/1024/1024);
+      System.out.println("total read (MB): " + expected/1024/1024);
+      System.out.println("seconds: " + seconds);
     } finally {
-      desc.release();
+      DaosEventQueue.destroyAll();
     }
-    long expected = 1L*akeyValLen*reduces*maps;
-
-    float seconds = ((float)(System.nanoTime()-start))/1000000000;
-    System.out.println("perf (MB/s): " + ((float)expected)/seconds/1024/1024);
-    System.out.println("total read (MB): " + expected/1024/1024);
-    System.out.println("seconds: " + seconds);
   }
 
   private static String padZero(int v, int len) {
@@ -116,7 +133,7 @@ public class DescSimpleMain {
   }
 
   private static void read(DaosObject object, long totalBytes, int maps, int reduces,
-                           int sizeLimit, int offset, int nbrOfDkeys) throws IOException {
+                           int sizeLimit, int offset, int nbrOfDkeys) throws IOException, InterruptedException {
 //    Map<String, Integer> dkeyMap = readKeys(FILE_NAME_DKEY, offset, nbrOfDkeys);
 //    Map<String, Integer> akeyMap = readKeys(FILE_NAME_AKEY, 0, -1);
     int akeyValLen = (int)(totalBytes/maps/reduces);
@@ -134,47 +151,66 @@ public class DescSimpleMain {
     }
     int nbrOfEntries = sizeLimit/akeyValLen;
     int idx = 0;
-    long start = System.nanoTime();
-    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, nbrOfEntries,
-        akeyValLen, false);;
+    List<IOSimpleDataDesc> compList = new LinkedList<>();
+    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, nbrOfEntries, akeyValLen);
 //    IODataDesc.Entry entry = desc.getEntry(0);
+    DaosEventQueue.Event e;
+    IOSimpleDataDesc desc;
+    long start = System.nanoTime();
     try {
+      // acquire and check
+      compList.clear();
+      e = dq.acquireEventBlock(false, 1000, compList);
+      desc = e.reuseDesc();
+
       for (int i = offset; i < end; i++) {
-        desc.setDkey(padZero(i, 3));
         for (int j = 0; j < maps; j++) {
-          desc.getEntry(idx++).setEntryForFetch(padZero(j, 4), 0, akeyValLen);
+          desc.getEntry(idx++).setEntryForFetch(String.valueOf(j), 0, akeyValLen);
           if (idx == nbrOfEntries) {
             // read
+            desc.setDkey(String.valueOf(i));
             object.fetchSimple(desc);
-            for (int k = 0; k < nbrOfEntries; k++) {
-              totalRead += desc.getEntry(k).getActualSize();
-            }
             idx = 0;
-            desc.reuse();
+            // acquire and check
+            compList.clear();
+            e = dq.acquireEventBlock(false, 1000, compList);
+            for (IOSimpleDataDesc d : compList) {
+              for (int k = 0; k < nbrOfEntries; k++) {
+                totalRead += d.getEntry(k).getActualSize();
+              }
+            }
+            desc = e.reuseDesc();
           }
         }
         if (idx > 0) {
           // read
           object.fetchSimple(desc);
-          for (int k = 0; k < idx; k++) {
-            totalRead += desc.getEntry(k).getActualSize();
-          }
           idx = 0;
-          desc.reuse();
+          // acquire and check
+          compList.clear();
+          e = dq.acquireEventBlock(false, 1000, compList);
+          for (IOSimpleDataDesc d : compList) {
+            for (int k = 0; k < idx; k++) {
+              totalRead += d.getEntry(k).getActualSize();
+            }
+          }
+          desc = e.reuseDesc();
         }
       }
-    } finally {
-      desc.release();
-    }
-    long expected = 1L*akeyValLen*nbrOfDkeys*maps;
-    if (totalRead != expected) {
-      throw new IOException("expect totalRead: " + expected + ", actual: " + totalRead);
-    }
 
-    float seconds = ((float)(System.nanoTime()-start))/1000000000;
-    System.out.println("perf (MB/s): " + ((float)totalRead)/seconds/1024/1024);
-    System.out.println("total read (MB): " + totalRead/1024/1024);
-    System.out.println("seconds: " + seconds);
+      dq.waitForCompletion(10000, compList);
+      float seconds = ((float)(System.nanoTime()-start))/1000000000;
+
+      long expected = 1L*akeyValLen*nbrOfDkeys*maps;
+      if (totalRead != expected) {
+        throw new IOException("expect totalRead: " + expected + ", actual: " + totalRead);
+      }
+      System.out.println("perf (MB/s): " + ((float)totalRead)/seconds/1024/1024);
+      System.out.println("total read (MB): " + totalRead/1024/1024);
+      System.out.println("seconds: " + seconds);
+    } finally {
+      DaosEventQueue.destroyAll();
+    }
   }
 
   private static IODataDesc.Entry createEntry(String akey, long offset, long readSize) throws IOException {

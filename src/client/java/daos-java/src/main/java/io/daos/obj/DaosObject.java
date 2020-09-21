@@ -343,9 +343,13 @@ public class DaosObject {
       log.debug(oid + " fetch object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.fetchObjectSimple(objectPtr, 0, desc.getNbrOfEntries(),
-          desc.getDescBuffer().memoryAddress());
-      desc.parseResult();
+      boolean async = desc.isAsync();
+      client.fetchObjectSimple(objectPtr, 0, desc.getDescBuffer().memoryAddress(), async);
+      if (async) {
+        desc.succeed();
+      } else {
+        desc.parseResult();
+      }
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
           desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -393,8 +397,7 @@ public class DaosObject {
       log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.updateObjectSimple(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
-          -1L, -1);
+      client.updateObjectSimple(objectPtr, 0, desc.getDescBuffer().memoryAddress(), desc.isAsync());
       desc.succeed();
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
@@ -609,13 +612,13 @@ public class DaosObject {
    * @param entryBufLen
    * entry's buffer length
    * record size of all entries
-   * @param updateOrFetch
-   * for update or fetch
+   * @param event
+   * for asynchronous desc, null for synchronous
    * @return IODataDesc instance
    */
   public IOSimpleDataDesc createSimpleDataDesc(int maxKeyStrLen, int nbrOfEntries, int entryBufLen,
-                                               boolean updateOrFetch) {
-    return new IOSimpleDataDesc(maxKeyStrLen, nbrOfEntries, entryBufLen, updateOrFetch);
+                                               DaosEventQueue.Event event) {
+    return new IOSimpleDataDesc(maxKeyStrLen, nbrOfEntries, entryBufLen, event);
   }
 
   public IODataDesc createReusableDesc(int maxDkeyLen, int maxAkeyLen, int nbrOfEntries, int entryBufLen,

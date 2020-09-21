@@ -24,6 +24,7 @@
 package io.daos;
 
 import io.daos.dfs.*;
+import io.daos.obj.DaosEventQueue;
 import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,8 +75,8 @@ public class DaosClient implements ForceCloseable {
       @Override
       public void run() {
         try {
-          closeAll();
           DaosEventQueue.destroyAll();
+          closeAll();
           daosSafeFinalize();
           log.info("daos finalized");
           ShutdownHookManager.removeHook(this);

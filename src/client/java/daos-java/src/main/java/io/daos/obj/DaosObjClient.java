@@ -184,6 +184,12 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
    */
   native byte[] queryObjectAttribute(long objectPtr) throws DaosIOException;
 
+  native static void allocateSimpleDesc(long memoryAddress, boolean async);
+
+  native static long allocateSimDescGroup(long memoryAddress, int nbrOfEvents);
+
+  native static void releaseSimDescGroup(long descGrpHdl);
+
   /**
    * fetch object records of given dkey and akeys.
    *
@@ -206,8 +212,8 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
   native void fetchObject(long objectPtr, long flags, int nbrOfEntries, long descBufferAddress, long eqHandle,
                           int eventIdx) throws DaosIOException;
 
-  native void fetchObjectSimple(long objectPtr, long flags, int nbrOfEntries,
-                                long descBufferAddress) throws DaosIOException;
+  native void fetchObjectSimple(long objectPtr, long flags, long descBufferAddress, boolean async)
+      throws DaosIOException;
 
   /**
    * update object records of given dkey and akeys.
@@ -231,8 +237,8 @@ public class DaosObjClient extends SharableClient implements ForceCloseable {
   native void updateObject(long objectPtr, long flags, int nbrOfEntries, long descBufferAddress, long eqHandle,
                            int eventIdx) throws DaosIOException;
 
-  native void updateObjectSimple(long objectPtr, long flags, int nbrOfEntries,
-                                 long descBufferAddress, long eqHandle, int eventIdx) throws DaosIOException;
+  native void updateObjectSimple(long objectPtr, long flags, long descBufferAddress, boolean async)
+      throws DaosIOException;
 
   /**
    * list dkeys of given object.

@@ -67,12 +67,21 @@ typedef struct {
 typedef struct {
     daos_key_t dkey;
     uint16_t maxKeyLen;
+    uint16_t nbrOfEntries;
+    uint16_t nbrOfRequests;
+    event_queue_wrapper_t *eq;
+    daos_event_t *event;
     daos_iod_t *iods;
     d_sg_list_t *sgls;
     daos_recx_t *recxs;
     d_iov_t *iovs;
     long ret_buf_address;
 } data_desc_simple_t;
+
+typedef struct {
+    int nbrOfDescs;
+    data_desc_simple_t **descs;
+} data_desc_simple_grp_t;
 
 static jint JNI_VERSION = JNI_VERSION_1_8;
 
