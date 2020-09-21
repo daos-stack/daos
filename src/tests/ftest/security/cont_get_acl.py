@@ -55,9 +55,14 @@ class GetContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_get_acl_inputs
         """
+        test_errs = []
         for verbose in [True, False]:
             for outfile in self.params.get("valid_out_filename", "/run/*"):
-                path_to_file = os.path.join(self.tmp, outfile)
+                path_to_file = os.path.join(
+                    self.tmp, "{}_{}".format(outfile, verbose))
+
+                # Enable raising an exception if the daos command fails
+                self.daos_cmd.exit_status_exception = False
                 self.daos_cmd.container_get_acl(
                     self.pool.uuid,
                     self.pool.svc_ranks[0],
@@ -65,10 +70,26 @@ class GetContainerACLTest(ContSecurityTestBase):
                     verbose=verbose,
                     outfile=path_to_file)
 
-                file_acl = read_acl_file(path_to_file)
-
                 # Verify consistency of acl obtained through the file
+                file_acl = read_acl_file(path_to_file)
                 self.acl_file_diff(file_acl)
+
+                # Let's verify that we can't overwrite an already existing file
+                # Disable raising an exception if the daos command fails
+                self.daos_cmd.exit_status_exception = False
+                self.daos_cmd.container_get_acl(
+                    self.pool.uuid,
+                    self.pool.svc_ranks[0],
+                    self.container.uuid,
+                    verbose=verbose,
+                    outfile=path_to_file)
+                test_errs.extend(
+                    self.error_handling(
+                        self.daos_cmd.result, "File already exists"))
+
+        if test_errs:
+            self.fail("container get-acl command expected to fail: \
+                {}".format("\n".join(test_errs)))
 
     def test_no_user_permissions(self):
         """
