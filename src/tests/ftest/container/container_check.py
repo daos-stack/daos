@@ -21,8 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from avocado.core.exceptions import TestFail
+
 from dfuse_test_base import DfuseTestBase
-from command_utils import CommandFailure
 
 
 class DfuseContainerCheck(DfuseTestBase):
@@ -32,7 +33,7 @@ class DfuseContainerCheck(DfuseTestBase):
     :avocado: recursive
     """
 
-    def test_dfusecontainercheck(self):
+    def test_dfuse_container_check(self):
         """Jira ID: DAOS-3635.
 
         Test Description:
@@ -59,28 +60,28 @@ class DfuseContainerCheck(DfuseTestBase):
             if cont_type == "POSIX":
                 self.container.type.update(cont_type)
             self.container.create()
+
+            # Attempt to mount the dfuse mount point - this should only succeed
+            # with a POSIX container
             try:
-                # mount fuse
                 self.start_dfuse(
                     self.hostlist_clients, self.pool, self.container)
-                # check if fuse got mounted
+                if cont_type != "POSIX":
+                    self.fail("Non-POSIX type container mounted over dfuse")
+
+            except TestFail as error:
+                if cont_type == "POSIX":
+                    self.fail(
+                        "POSIX type container failed dfuse mount: {}".format(
+                            error))
+                self.log.info(
+                    "Non-POSIX type container expected to fail dfuse mount")
+
+            # Verify dfuse is running on the POSIX type container
+            if cont_type == "POSIX":
                 self.dfuse.check_running()
-                # fail the test if fuse mounts with non-posix type container
-                if cont_type == "":
-                    self.fail("Non-Posix type container got mounted over dfuse")
-            except CommandFailure as error:
-                # expected to throw CommandFailure exception for non-posix type
-                # container
-                if cont_type == "":
-                    self.log.info("Expected behavior: Default container type \
-                        is expected to fail on dfuse mount: %s", str(error))
-                # fail the test if exception is caught for POSIX type container
-                elif cont_type == "POSIX":
-                    self.log.error("Posix Container dfuse mount \
-                        failed: %s", str(error))
-                    self.fail("Posix container type was expected to mount \
-                        over dfuse")
-            # stop fuse and container for next iteration
+
+            # Stop dfuse and destroy the container for next iteration
             if not cont_type == "":
                 self.stop_dfuse()
             self.container.destroy(1)
