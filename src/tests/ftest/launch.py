@@ -908,14 +908,9 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Caution: the glob expression "_output.log" must match the
     #   --output-filename specified in # cart_utils.py:get_env()
 
-    # Create tar archives of orterun log dirs to prevent name collisions (e.g.,
-    # we'll have many # hundreds of tests with output files named "stdout")
-    archive_files(destination, host_list,
-      "{}/*_output.orterun_log".format(logs_dir), do_tar=True)
-
     # Plain files need not be tar'd, then can simply be scp'd to the archive
     # destination
-    archive_files(destination, host_list, "{}/*.{{tar*,log*}}".format(logs_dir))
+    archive_files(destination, host_list, "{}/*.log*".format(logs_dir))
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
@@ -938,17 +933,13 @@ def archive_config_files(avocado_logs_dir):
     archive_files(
         destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
 
-def archive_files(destination, host_list, source_files, do_tar=False):
+def archive_files(destination, host_list, source_files):
     """Archive all of the remote files to the destination directory.
 
     Args:
         destination (str): path to which to archive files
         host_list (list): hosts from which to archive files
         source_files (str): remote files to archive
-        do_tar (bool): tar directory before scp-ing to host
-          (Useful for copying, e.g., files from orterun --output-filename option
-          to the avocado results directory.)
-
     """
     this_host = socket.gethostname().split(".")[0]
 
@@ -962,12 +953,6 @@ def archive_files(destination, host_list, source_files, do_tar=False):
     print("Current disk space usage of {}".format(destination))
     print(get_output(["df", "-h", destination]))
 
-    # If we're tar-ing, then we're our source files ought to be a directory,
-    # hence the -d option to ls here.
-    ls_cmd = "ls"
-    if do_tar:
-      ls_cmd = "ls -d"
-
     # Copy any source files that exist on the remote hosts and remove them from
     # the remote host if the copy is successful.  Attempt all of the commands
     # and report status at the end of the loop.  Include a listing of the file
@@ -977,22 +962,9 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "set +x",
         "rc=0",
         "copied=()",
-        "for file in $({} {})".format(ls_cmd, source_files),
+        "for file in $(ls {})".format(source_files),
         "do ls -sh $file",
         "/lib/daos/TESTING/ftest/cart/util/cart_logtest.py $file",
-    ]
-
-    # If we have a directory, tar it before scp-ing it.
-    if do_tar:
-        commands.extend([
-            "tarfile=$(basename $file).tar",
-            "tar cf $tarfile $file",
-            "file=$tarfile",
-        ])
-
-    # Pylint might not like this indentation, but it improves readability
-    # pylint: disable=bad-continuation
-    commands.extend([
         "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, destination),
           "then copied+=($file)",
@@ -1004,7 +976,7 @@ def archive_files(destination, host_list, source_files, do_tar=False):
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
-    ])
+    ]
 
     spawn_commands(host_list, "; ".join(commands), timeout=900)
 
