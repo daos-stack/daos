@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,33 +68,31 @@ struct bio_dma_buffer {
 enum bio_bs_state {
 	/* Healthy and fully functional */
 	BIO_BS_STATE_NORMAL	= 0,
-	/* Being detected as faulty */
+	/* Being detected & marked as faulty */
 	BIO_BS_STATE_FAULTY,
 	/* Affected targets are marked as DOWN, safe to tear down blobstore */
 	BIO_BS_STATE_TEARDOWN,
-	/* Blobstore is torn down */
+	/* Blobstore is torn down, all in-memory structures cleared */
 	BIO_BS_STATE_OUT,
-	/* New device hotplugged, start to initialize blobstore & blobs */
-	BIO_BS_STATE_REPLACED,
-	/* Blobstore & blobs initialized, start to reint affected targets */
-	BIO_BS_STATE_REINT
+	/* Setup all in-memory structures, load blobstore */
+	BIO_BS_STATE_SETUP,
 };
 
 /*
  * SPDK device health monitoring.
  */
 struct bio_dev_health {
-	struct bio_dev_state	 bdh_health_state;
+	struct nvme_health_stats	 bdh_health_state;
 	/* writable open descriptor for health info polling */
-	struct spdk_bdev_desc	*bdh_desc;
-	struct spdk_io_channel	*bdh_io_channel;
-	void			*bdh_health_buf; /* health info logs */
-	void			*bdh_ctrlr_buf; /* controller data */
-	void			*bdh_error_buf; /* device error logs */
-	uint64_t		 bdh_stat_age;
-	unsigned int		 bdh_inflights;
+	struct spdk_bdev_desc		*bdh_desc;
+	struct spdk_io_channel		*bdh_io_channel;
+	void				*bdh_health_buf; /* health info logs */
+	void				*bdh_ctrlr_buf; /* controller data */
+	void				*bdh_error_buf; /* device error logs */
+	uint64_t			 bdh_stat_age;
+	unsigned int			 bdh_inflights;
 	/* period to query health stats */
-	unsigned int		 bdh_monitor_pd;
+	unsigned int			 bdh_monitor_pd;
 };
 
 /*
@@ -235,6 +233,8 @@ extern unsigned int	bio_chk_cnt_max;
 extern uint64_t		io_stat_period;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
 int get_bdev_type(struct spdk_bdev *bdev);
+void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
+		       void *event_ctx);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
@@ -243,8 +243,7 @@ void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
 
 /* bio_monitor.c */
-int bio_init_health_monitoring(struct bio_blobstore *bb,
-			       struct spdk_bdev *bdev);
+int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
 void bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now);
 void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);

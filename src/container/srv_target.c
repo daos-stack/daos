@@ -82,13 +82,13 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 }
 
 int
-ds_get_csum_cont_props(struct cont_props *cont_props,
-		       struct ds_iv_ns *pool_ns, uuid_t cont_uuid)
+ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
+		  uuid_t cont_uuid)
 {
 	daos_prop_t	*props;
 	int		 rc;
 
-	props = daos_prop_alloc(5);
+	props = daos_prop_alloc(7);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -97,6 +97,8 @@ ds_get_csum_cont_props(struct cont_props *cont_props,
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_DEDUP;
 	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	props->dpp_entries[5].dpe_type = DAOS_PROP_CO_COMPRESS;
+	props->dpp_entries[6].dpe_type = DAOS_PROP_CO_ENCRYPT;
 
 	rc = cont_iv_prop_fetch(pool_ns, cont_uuid, props);
 
@@ -126,9 +128,8 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	 * Need the pool for the IV namespace
 	 */
 	D_ASSERT(cont->sc_csummer == NULL);
-	rc = ds_get_csum_cont_props(cont_props,
-		cont->sc_pool->spc_pool->sp_iv_ns,
-		cont->sc_uuid);
+	rc = ds_get_cont_props(cont_props, cont->sc_pool->spc_pool->sp_iv_ns,
+			       cont->sc_uuid);
 	if (rc != 0)
 		goto done;
 
@@ -146,7 +147,7 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	/** If enabled, initialize the csummer for the container */
 	if (daos_cont_csum_prop_is_enabled(csum_val)) {
 		rc = daos_csummer_init_with_type(&cont->sc_csummer,
-					    daos_contprop2csumtype(csum_val),
+					    daos_contprop2hashtype(csum_val),
 					    cont_props->dcp_chunksize,
 					    cont_props->dcp_srv_verify);
 		if (dedup_only)
@@ -166,9 +167,11 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	if (!cont->sc_props_fetched)
 		ds_cont_csummer_init(cont);
 
-	if (cont->sc_props.dcp_dedup) {
-		D_DEBUG(DB_EPC, DF_CONT": skip aggregation for deduped "
-			"container\n",
+	if (cont->sc_props.dcp_dedup_enabled ||
+	    cont->sc_props.dcp_compress_enabled ||
+	    cont->sc_props.dcp_encrypt_enabled) {
+		D_DEBUG(DB_EPC, DF_CONT": skip aggregation for "
+			"deduped/compressed/encrypted container\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		return false;
 	}

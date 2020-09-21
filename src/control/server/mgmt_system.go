@@ -124,12 +124,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			"combining peer addr with listener port")
 	}
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodJoin, req)
+	dresp, err := svc.harness.CallDrpc(drpc.MethodJoin, req)
 	if err != nil {
 		return nil, err
 	}

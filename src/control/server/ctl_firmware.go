@@ -92,7 +92,7 @@ func (svc *ControlService) querySCMFirmware() ([]*ctlpb.ScmFirmwareQueryResp, er
 }
 
 func (svc *ControlService) queryNVMeFirmware() ([]*ctlpb.NvmeFirmwareQueryResp, error) {
-	scanResp, err := svc.bdev.Scan(bdev.ScanRequest{})
+	scanResp, err := svc.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		return nil, err
 	}
