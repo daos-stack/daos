@@ -270,7 +270,7 @@ if $TEST_RPMS; then
     ls $DAOS_TEST_SHARED_DIR
     export COVFILE_ORG=\"$COVFILE\"
     export COVFILE=\"$DAOS_TEST_SHARED_DIR/test.cov\"
-    echo $COVFILE
+    echo \$COVFILE
 else
     rm -rf $DAOS_BASE/install/tmp
     mkdir -p $DAOS_BASE/install/tmp
@@ -420,7 +420,7 @@ else
 fi
 
 echo SCHAN15 - copy from daos shared to org path
-cp $COVFILE $COVFILE_ORG
+cp \$COVFILE \$COVFILE_ORG
 
 exit \$rc"; then
     rc=${PIPESTATUS[0]}
