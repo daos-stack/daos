@@ -22,11 +22,15 @@ the parent pool and are not implemented on a per-file or per-directory basis.
 `setuid()` and `setgid()` programs, as well as supplementary groups, 
 are currently not supported.
 
-While `libdfs` can be used from a single instance (i.e., single process or client
-node if used through DFuse), special care is required when the same POSIX
-container is mounted concurrently by multiple processes. Concurrent DFS mounts
-are not recommended. Support for concurrency control is under development and
-will be documented here once ready.
+It is possible to use `libdfs` in a parallel application from multiple nodes.
+When the same POSIX container is mounted concurrently by multiple
+processes, a few limitations exist in DAOS v1.0. In particular:
+
+* Unlinking a file in one process while another process has the same file
+  open: This may or may not cause an I/O error on the open file.
+* The atomicity of rename operations is not guaranteed.
+
+These corner cases will be addressed in a future DAOS release. 
 
 ## DFuse
 
