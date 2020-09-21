@@ -1,0 +1,33 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+timeout: 120
+server_config:
+  name: daos_server
+pool:
+  control_method: dmg
+  mode: 511
+  scm_size: 1G
+  name: daos_server
+container:
+  control_method: daos
+  type: POSIX
+
+invalid_acl_filename:
+  - 123456789
+  - NoT_vAliD.txt
+  - 1ab2@3c4$%(
+
+invalid_acl_file_content:
+  - ["@$%656672!7", "987654321", "A::OWNER@:dtTaAo"]
+  - ["B::OWNER@:dtTaAo", "C::GROUP@:dtTaAo"]
+  - ["A::OWNER@:NOTPERMISSIONS", "A::OWNER@:123456"]
+  - ["A::OWNER:dtTaAo", "A:G:GROUP:dtTaAo"]
+
+valid_acl_file:
+  - []
+  - ["A::OWNER@:dtTaAo", "A:G:my_great_test@:rw", "A::person@:r"]
