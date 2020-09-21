@@ -18,7 +18,7 @@ container:
   type: POSIX
 
 valid_out_filename:
-  - 123456789
+  - "123456789"
   - vAliD.txt
   - 1ab2@3c4$%(
   - normal_filename.txt
