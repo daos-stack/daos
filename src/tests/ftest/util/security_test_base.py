@@ -124,7 +124,6 @@ def read_acl_file(filename):
 
     return acl
 
-  
 def generate_acl_file(acl_type, acl_args):
     """Creates an acl file for the specified type.
 
