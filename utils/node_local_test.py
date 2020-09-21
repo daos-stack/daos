@@ -1379,7 +1379,7 @@ def main():
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do list-containers, then
     # exit again.
-    if args.mode == 'all':
+    if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True)
         server.start()
         pools = get_pool_list()
