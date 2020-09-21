@@ -429,11 +429,12 @@ pool_iv_ent_copy(struct ds_iv_key *key, d_sg_list_t *dst, d_sg_list_t *src)
 			int src_len = pool_buf_size(
 				src_iv->piv_map.piv_pool_buf.pb_nr);
 			int dst_len = dst->sg_iovs[0].iov_buf_len -
-				      sizeof(*dst_iv) + sizeof(struct pool_buf);
+				      sizeof(struct pool_iv_map) +
+				      sizeof(struct pool_buf);
 
 			/* copy pool buf */
 			if (dst_len < src_len) {
-				D_ERROR("dst %d\n src %d\n", dst_len, src_len);
+				D_ERROR("dst %d src %d\n", dst_len, src_len);
 				return -DER_REC2BIG;
 			}
 
@@ -955,7 +956,14 @@ ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool, uuid_t key_uuid,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = conn_iov;
+	if (conn_iov != NULL && conn_iov->iov_buf) {
+		struct pool_iv_conns *conns;
 
+		conns = conn_iov->iov_buf;
+		conns->pic_size = 0;
+		conns->pic_buf_size = conn_iov->iov_buf_len -
+				      sizeof(*conns);
+	}
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_CONN;
 	pool_key = key2priv(&key);

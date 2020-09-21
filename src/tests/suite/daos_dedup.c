@@ -243,7 +243,7 @@ with_identical_updates(void *const *state, uint32_t iod_type, int csum_type,
 	assert_success(rc);
 
 	/** if threshold is less than data size, dedup should prevent the extra
-	 * update and therefor the data used from the pool is much less.
+	 * update and therefore the data used from the pool is much less.
 	 * Otherwise, the data used from the pool will be larger.
 	 */
 	after_second_update = get_size(&ctx);

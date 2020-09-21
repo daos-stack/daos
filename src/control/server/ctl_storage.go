@@ -136,7 +136,7 @@ func (c *StorageControlService) canAccessBdevs(sr *bdev.ScanResponse) (missing [
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *StorageControlService) Setup() error {
-	sr, err := c.bdev.Scan(bdev.ScanRequest{})
+	sr, err := c.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
 		return nil
@@ -154,7 +154,7 @@ func (c *StorageControlService) Setup() error {
 		return FaultBdevNotFound(missing)
 	}
 
-	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {
+	if _, err := c.ScmScan(scm.ScanRequest{}); err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
@@ -183,16 +183,12 @@ func (c *StorageControlService) ScmPrepare(req scm.PrepareRequest) (*scm.Prepare
 	return c.scm.Prepare(req)
 }
 
-// NvmeScan scans locally attached SSDs and returns list directly.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) NvmeScan() (*bdev.ScanResponse, error) {
-	return c.bdev.Scan(bdev.ScanRequest{})
+// NvmeScan scans locally attached SSDs.
+func (c *StorageControlService) NvmeScan(req bdev.ScanRequest) (*bdev.ScanResponse, error) {
+	return c.bdev.Scan(req)
 }
 
 // ScmScan scans locally attached modules, namespaces and state of DCPM config.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScmScan() (*scm.ScanResponse, error) {
-	return c.scm.Scan(scm.ScanRequest{})
+func (c *StorageControlService) ScmScan(req scm.ScanRequest) (*scm.ScanResponse, error) {
+	return c.scm.Scan(req)
 }

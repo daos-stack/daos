@@ -725,7 +725,7 @@ run_daos_base_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("Signle RDG TX tests", dtx_tests,
+	rc = run_daos_sub_tests("Single RDG TX tests", dtx_tests,
 				ARRAY_SIZE(dtx_tests), sub_tests,
 				sub_tests_size, dtx_test_setup, test_teardown);
 
