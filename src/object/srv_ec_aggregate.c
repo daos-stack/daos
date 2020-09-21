@@ -108,19 +108,19 @@ struct ec_agg_entry {
 /* Struct used to drive offloaded stripe update.
  */
 struct ec_agg_stripe_ud {
-	struct ec_agg_entry	*asu_agg_entry; /*                           */
-	uint8_t			*asu_bit_map;
-	unsigned int		 asu_cell_cnt;
-	bool			 asu_recalc;
-	ABT_eventual		 asu_eventual;
+	struct ec_agg_entry	*asu_agg_entry; /* Associated entry     */
+	uint8_t			*asu_bit_map;   /* Bitmap of cells      */
+	unsigned int		 asu_cell_cnt;  /* Count of cells       */
+	bool			 asu_recalc;    /* Should recalc parity */
+	ABT_eventual		 asu_eventual;  /* Eventual for offload */
 };
 
 /* Represents an replicated data extent.
  */
 struct ec_agg_extent {
-	d_list_t	ae_link;
-	daos_recx_t	ae_recx;
-	daos_epoch_t	ae_epoch;
+	d_list_t	ae_link;  /* for extents list   */
+	daos_recx_t	ae_recx;  /* idx, nr for extent */
+	daos_epoch_t	ae_epoch; /* epoch for extent   */
 };
 
 /* Reset iterator state upon completion of iteration of a subtree.
@@ -406,13 +406,12 @@ out:
 	return rc;
 }
 
-/* Encodes a full stripe. Called when replicas form a full stripe.
- * TBD: offload parity calculation to helper xstream.
- */
 static void
-agg_encode_full_stripe(void *arg)
+agg_encode_full_stripe_ult(void *arg)
 {
-	struct ec_agg_entry	*entry = (struct ec_agg_entry *)arg;
+	struct ec_agg_stripe_ud	*stripe_ud =
+					(struct ec_agg_stripe_ud *)arg;
+	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	unsigned int		 p = entry->ae_oca->u.ec.e_p;
@@ -420,7 +419,7 @@ agg_encode_full_stripe(void *arg)
 	unsigned char		*data[k];
 	unsigned char		*parity_bufs[p];
 	unsigned char		*buf;
-	int			 i;
+	int			 i, rc = 0;
 
 	buf = entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
 	for (i = 0; i < k; i++)
@@ -435,6 +434,45 @@ agg_encode_full_stripe(void *arg)
 		obj_ec_codec_get(daos_obj_id2class(entry->ae_oid.id_pub));
 	ec_encode_data(cell_bytes, k, p, entry->ae_codec->ec_gftbls, data,
 		       parity_bufs);
+
+        ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+}
+
+/* Encodes a full stripe. Called when replicas form a full stripe.
+ * TBD: offload parity calculation to helper xstream.
+ */
+static int
+agg_encode_full_stripe(struct ec_agg_entry *entry)
+{
+	struct ec_agg_stripe_ud		stripe_ud = { 0 };
+	int				*status;
+	int				rc = 0;
+
+	stripe_ud.asu_agg_entry = entry;
+	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out;
+	}
+	rc = dss_ult_create(agg_encode_full_stripe_ult, &stripe_ud,
+			    DSS_ULT_EC, 0, 0, NULL);
+	if (rc)
+		goto ev_out;
+	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto ev_out;
+	}
+	if (*status != 0)
+		rc = *status;
+	else
+		rc = 0;
+
+ev_out:
+	ABT_eventual_free(&stripe_ud.asu_eventual);
+out:
+	return rc;
+
 }
 
 /* Driver function for full_stripe encode. Fetches the data and then invokes
