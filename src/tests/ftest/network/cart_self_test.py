@@ -68,9 +68,10 @@ class CartSelfTest(TestWithServers):
         self.setup_start_servers = False
         self.uri_file = None
         self.cart_env = EnvironmentVariables()
-        myenv = self.cart_env.get_list()
-        for item in myenv:
-            print(item)
+        covfile = os.getenv("COVFILE", "")
+        print("SCHAN15 - in selftest covfile = {}".format(covfile))
+        covfile = os.getenv("COVFILE", "/var/tmp/daos_testing/test.cov")
+        print("SCHAN15 - in selftest covfile = {}".format(covfile))
 
     def setUp(self):
         """Set up each test case."""
