@@ -172,6 +172,176 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 	}
 }
 
+func TestPretty_PrintNVMetaMap(t *testing.T) {
+	var (
+		controllerA = storage.MockNvmeController(1)
+		controllerB = storage.MockNvmeController(2)
+		controllerC = storage.MockNvmeController(1)
+		controllerD = storage.MockNvmeController(2)
+		controllerE = storage.MockNvmeController(1)
+		controllerF = storage.MockNvmeController(2)
+	)
+	controllerA.SmdDevices = nil
+	controllerB.SmdDevices = nil
+	controllerE.SmdDevices = []*storage.SmdDevice{
+		{
+			UUID:      common.MockUUID(0),
+			TargetIDs: []int32{0, 1, 2},
+			Rank:      0,
+			State:     "NORMAL",
+		},
+		{
+			UUID:      common.MockUUID(1),
+			TargetIDs: []int32{3, 4, 5},
+			Rank:      0,
+			State:     "FAULTY",
+		},
+	}
+	controllerF.SmdDevices = []*storage.SmdDevice{
+		{
+			UUID:      common.MockUUID(2),
+			TargetIDs: []int32{6, 7, 8},
+			Rank:      1,
+			State:     "NORMAL",
+		},
+		{
+			UUID:      common.MockUUID(3),
+			TargetIDs: []int32{9, 10, 11},
+			Rank:      1,
+			State:     "FAULTY",
+		},
+	}
+	for name, tc := range map[string]struct {
+		hsm         control.HostStorageMap
+		expPrintStr string
+	}{
+		"no controllers": {
+			hsm: mockHostStorageMap(t, &mockHostStorage{"host1", &control.HostStorage{}}),
+			expPrintStr: `
+-----
+host1
+-----
+  No NVMe devices detected
+`,
+		},
+		"no smd devices on controllers": {
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						NvmeDevices: storage.NvmeControllers{
+							controllerA,
+							controllerB,
+						},
+					},
+				},
+			),
+			expPrintStr: fmt.Sprintf(`
+-----
+host1
+-----
+PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
+  No SMD devices found
+
+PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
+  No SMD devices found
+
+`,
+				controllerA.PciAddr, controllerA.Model, controllerA.FwRev,
+				controllerA.SocketID, humanize.Bytes(controllerA.Capacity()),
+				controllerB.PciAddr, controllerB.Model, controllerB.FwRev,
+				controllerB.SocketID, humanize.Bytes(controllerB.Capacity())),
+		},
+		"single smd device on each controller": {
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						NvmeDevices: storage.NvmeControllers{
+							controllerC,
+							controllerD,
+						},
+					},
+				},
+			),
+			expPrintStr: fmt.Sprintf(`
+-----
+host1
+-----
+PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
+  SMD Devices
+    UUID:%s Targets:%v Rank:%d State:%s
+
+PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
+  SMD Devices
+    UUID:%s Targets:%v Rank:%d State:%s
+
+`,
+				controllerC.PciAddr, controllerC.Model, controllerC.FwRev,
+				controllerC.SocketID, humanize.Bytes(controllerC.Capacity()),
+				controllerC.SmdDevices[0].UUID, controllerC.SmdDevices[0].TargetIDs,
+				controllerC.SmdDevices[0].Rank, controllerC.SmdDevices[0].State,
+
+				controllerD.PciAddr, controllerD.Model, controllerD.FwRev,
+				controllerD.SocketID, humanize.Bytes(controllerD.Capacity()),
+				controllerD.SmdDevices[0].UUID, controllerD.SmdDevices[0].TargetIDs,
+				controllerD.SmdDevices[0].Rank, controllerD.SmdDevices[0].State),
+		},
+		"multiple smd devices on each controller": {
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						NvmeDevices: storage.NvmeControllers{
+							controllerE,
+							controllerF,
+						},
+					},
+				},
+			),
+			expPrintStr: fmt.Sprintf(`
+-----
+host1
+-----
+PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
+  SMD Devices
+    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s Targets:%v Rank:%d State:%s
+
+PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
+  SMD Devices
+    UUID:%s Targets:%v Rank:%d State:%s
+    UUID:%s Targets:%v Rank:%d State:%s
+
+`,
+				controllerE.PciAddr, controllerE.Model, controllerE.FwRev,
+				controllerE.SocketID, humanize.Bytes(controllerE.Capacity()),
+				controllerE.SmdDevices[0].UUID, controllerE.SmdDevices[0].TargetIDs,
+				controllerE.SmdDevices[0].Rank, controllerE.SmdDevices[0].State,
+				controllerE.SmdDevices[1].UUID, controllerE.SmdDevices[1].TargetIDs,
+				controllerE.SmdDevices[1].Rank, controllerE.SmdDevices[1].State,
+
+				controllerF.PciAddr, controllerF.Model, controllerF.FwRev,
+				controllerF.SocketID, humanize.Bytes(controllerF.Capacity()),
+				controllerF.SmdDevices[0].UUID, controllerF.SmdDevices[0].TargetIDs,
+				controllerF.SmdDevices[0].Rank, controllerF.SmdDevices[0].State,
+				controllerF.SmdDevices[1].UUID, controllerF.SmdDevices[1].TargetIDs,
+				controllerF.SmdDevices[1].Rank, controllerF.SmdDevices[1].State),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintNvmeMetaMap(tc.hsm, &bld); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestPretty_PrintSmdInfoMap(t *testing.T) {
 	mockController := storage.MockNvmeController(1)
 

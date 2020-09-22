@@ -95,7 +95,7 @@ func PrintNvmeMetaMap(hsm control.HostStorageMap, out io.Writer, opts ...control
 					}
 				}
 			} else {
-				fmt.Fprintln(iw, "No devices found")
+				fmt.Fprintln(iw, "No SMD devices found")
 			}
 			fmt.Fprintln(out)
 		}
