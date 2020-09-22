@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -255,7 +256,7 @@ func (srv *IOServerInstance) startMgmtSvc(ctx context.Context) error {
 
 	// should have been loaded by now
 	if superblock == nil {
-		return errors.Errorf("%s instance %d: nil superblock", DataPlaneName, srv.Index())
+		return errors.Errorf("%s instance %d: nil superblock", build.DataPlaneName, srv.Index())
 	}
 
 	if superblock.CreateMS {
