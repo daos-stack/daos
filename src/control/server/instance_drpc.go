@@ -71,13 +71,13 @@ func (srv *IOServerInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *IOServerInstance) CallDrpc(method drpc.Method, body proto.Message) (*drpc.Response, error) {
+func (srv *IOServerInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
 	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return makeDrpcCall(dc, method, body)
+	return makeDrpcCall(ctx, srv.log, dc, method, body)
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.
@@ -140,7 +140,7 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *s
 
 	resChan := make(chan *system.MemberResult)
 	go func() {
-		dresp, err := srv.CallDrpc(method, nil)
+		dresp, err := srv.CallDrpc(ctx, method, nil)
 		resChan <- drespToMemberResult(rank, dresp, err, targetState)
 	}()
 

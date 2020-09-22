@@ -612,6 +612,15 @@ optional `pinned_numa_node`. The interfaces and NUMA Sockets listed in the scan
 results map to the daos_server.yml `fabric_iface` and `pinned_numa_node`
 respectively. The use of `pinned_numa_node` is optional, but recommended for best performance. When specified with the value that matches the network interface, the IO server will bind itself to that NUMA node and to cores purely within that NUMA node. This configuration yields the fastest access to that network device.
 
+### Changing Network Providers
+
+Information about the network configuration is stored as metadata on the DAOS
+storage.
+
+If, after initial deployment, the provider must be changed, it is necessary to
+reformat the storage devices using `dmg storage format` after the configuration
+file has been updated with the new provider.
+
 ## Network Scanning All DAOS Server Nodes
 While the `daos_server network scan` is useful for scanning the localhost, it does not provide results for any other daos_server instance on the network.  The DAOS Management tool, `dmg`, is used for that purpose. The network scan operates the same way as the daos_server network scan, however, to use the dmg tool, at least one known daos_server instance must be running.
 
