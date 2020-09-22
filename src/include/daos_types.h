@@ -235,6 +235,7 @@ enum {
 	DAOS_HTYPE_OBJ		= 7, /**< object */
 	DAOS_HTYPE_ARRAY	= 9, /**< array */
 	DAOS_HTYPE_TX		= 11, /**< transaction */
+	DAOS_HTYPE_KV		= 13, /**< KV */
 	/* Must enlarge D_HTYPE_BITS to add more types */
 };
 
