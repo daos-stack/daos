@@ -56,13 +56,15 @@ type (
 	//
 	// This is a simplified representation of the raw struct used in the ipmctl package.
 	ScmModule struct {
-		ChannelID       uint32
-		ChannelPosition uint32
-		ControllerID    uint32
-		SocketID        uint32
-		PhysicalID      uint32
-		Capacity        uint64
-		UID             string
+		ChannelID        uint32
+		ChannelPosition  uint32
+		ControllerID     uint32
+		SocketID         uint32
+		PhysicalID       uint32
+		Capacity         uint64
+		UID              string
+		PartNumber       string
+		FirmwareRevision string
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.

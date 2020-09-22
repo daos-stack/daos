@@ -89,6 +89,42 @@ func TestFirmwareCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Query with model ID",
+			"firmware query --model=Model1",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareQueryReq{
+					SCM:     true,
+					NVMe:    true,
+					ModelID: "Model1",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query with FW rev",
+			"firmware query --fwrev=FW100",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareQueryReq{
+					SCM:         true,
+					NVMe:        true,
+					FirmwareRev: "FW100",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query with device list",
+			"firmware query --devices=D1,D2,D3",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareQueryReq{
+					SCM:     true,
+					NVMe:    true,
+					Devices: []string{"D1", "D2", "D3"},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Query with invalid type",
 			"firmware query --type=none",
 			"",
@@ -141,6 +177,42 @@ func TestFirmwareCommands(t *testing.T) {
 				printRequest(t, &control.FirmwareUpdateReq{
 					FirmwarePath: "/dont/care",
 					Type:         control.DeviceTypeNVMe,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update with model ID",
+			"firmware update --type=scm --path=/dont/care --model=Model1",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareUpdateReq{
+					FirmwarePath: "/dont/care",
+					Type:         control.DeviceTypeSCM,
+					ModelID:      "Model1",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update with FW rev",
+			"firmware update --type=scm --path=/dont/care --fwrev=FW100",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareUpdateReq{
+					FirmwarePath: "/dont/care",
+					Type:         control.DeviceTypeSCM,
+					FirmwareRev:  "FW100",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update with device list",
+			"firmware update --type=scm --path=/dont/care --devices=D1,D2,D3",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareUpdateReq{
+					FirmwarePath: "/dont/care",
+					Type:         control.DeviceTypeSCM,
+					Devices:      []string{"D1", "D2", "D3"},
 				}),
 			}, " "),
 			nil,
