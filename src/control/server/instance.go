@@ -199,15 +199,15 @@ func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyRea
 		}
 	}
 
-	if err := srv.callSetRank(r); err != nil {
+	if err := srv.callSetRank(ctx, r); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
-	dresp, err := srv.CallDrpc(drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+func (srv *IOServerInstance) callSetRank(ctx context.Context, rank system.Rank) error {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
 	}
@@ -250,7 +250,7 @@ func (srv *IOServerInstance) setTargetCount(numTargets int) {
 // startMgmtSvc starts the DAOS management service replica associated
 // with this instance. If no replica is associated with this instance, this
 // function is a no-op.
-func (srv *IOServerInstance) startMgmtSvc() error {
+func (srv *IOServerInstance) startMgmtSvc(ctx context.Context) error {
 	superblock := srv.getSuperblock()
 
 	// should have been loaded by now
@@ -260,7 +260,7 @@ func (srv *IOServerInstance) startMgmtSvc() error {
 
 	if superblock.CreateMS {
 		srv.log.Debugf("create MS (bootstrap=%t)", superblock.BootstrapMS)
-		if err := srv.callCreateMS(superblock); err != nil {
+		if err := srv.callCreateMS(ctx, superblock); err != nil {
 			return err
 		}
 		superblock.CreateMS = false
@@ -273,7 +273,7 @@ func (srv *IOServerInstance) startMgmtSvc() error {
 
 	if superblock.MS {
 		srv.log.Debug("start MS")
-		if err := srv.callStartMS(); err != nil {
+		if err := srv.callStartMS(ctx); err != nil {
 			return err
 		}
 
@@ -294,11 +294,11 @@ func (srv *IOServerInstance) startMgmtSvc() error {
 }
 
 // loadModules initiates the I/O server startup sequence.
-func (srv *IOServerInstance) loadModules() error {
-	return srv.callSetUp()
+func (srv *IOServerInstance) loadModules(ctx context.Context) error {
+	return srv.callSetUp(ctx)
 }
 
-func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
+func (srv *IOServerInstance) callCreateMS(ctx context.Context, superblock *Superblock) error {
 	msAddr, err := srv.msClient.LeaderAddress()
 	if err != nil {
 		return err
@@ -310,7 +310,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 		req.Addr = msAddr
 	}
 
-	dresp, err := srv.CallDrpc(drpc.MethodCreateMS, req)
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodCreateMS, req)
 	if err != nil {
 		return err
 	}
@@ -326,8 +326,8 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 	return nil
 }
 
-func (srv *IOServerInstance) callStartMS() error {
-	dresp, err := srv.CallDrpc(drpc.MethodStartMS, nil)
+func (srv *IOServerInstance) callStartMS(ctx context.Context) error {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodStartMS, nil)
 	if err != nil {
 		return err
 	}
@@ -343,8 +343,8 @@ func (srv *IOServerInstance) callStartMS() error {
 	return nil
 }
 
-func (srv *IOServerInstance) callSetUp() error {
-	dresp, err := srv.CallDrpc(drpc.MethodSetUp, nil)
+func (srv *IOServerInstance) callSetUp(ctx context.Context) error {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}

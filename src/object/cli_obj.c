@@ -3263,6 +3263,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	}
 
 	if (obj->cob_time_fetch_leader != NULL &&
+	    obj_auxi->req_tgts.ort_shard_tgts != NULL &&
 	    ((!obj_is_modification_opc(obj_auxi->opc) &&
 	      task->dt_result == -DER_INPROGRESS) ||
 	     (obj_is_modification_opc(obj_auxi->opc) &&
@@ -3549,7 +3550,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
-	if (!cont_props.dcp_csum_enabled && cont_props.dcp_dedup) {
+	if (!cont_props.dcp_csum_enabled && cont_props.dcp_dedup_enabled) {
 		uint32_t	dedup_th = cont_props.dcp_dedup_size;
 		int		i;
 		bool		candidate = false;

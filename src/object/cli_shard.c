@@ -380,10 +380,21 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		} else {
-			D_ERROR("rpc %p opc %d to rank %d tag %d failed: "
-				DF_RC"\n", rw_args->rpc, opc,
-				rw_args->rpc->cr_ep.ep_rank,
-				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			/*
+			 * don't log errors in-case of possible conditionals or
+			 * rec2big errors which can be expected.
+			 */
+			if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
+			    rc == -DER_EXIST)
+				D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
+					" failed: "DF_RC"\n", rw_args->rpc, opc,
+					rw_args->rpc->cr_ep.ep_rank,
+					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			else
+				D_ERROR("rpc %p opc %d to rank %d tag %d"
+					" failed: "DF_RC"\n", rw_args->rpc, opc,
+					rw_args->rpc->cr_ep.ep_rank,
+					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 			if (rc == -DER_REC2BIG && opc == DAOS_OBJ_RPC_FETCH) {
 				/* update the sizes in iods */
 				iods = orw->orw_iod_array.oia_iods;

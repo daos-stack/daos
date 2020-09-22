@@ -91,50 +91,71 @@ host1
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
     Temperature:%dK(%.02fC)
-    Controller Busy Time:0s
+    Temperature Warning Duration:%dm0s
+    Temperature Critical Duration:%dm0s
+    Controller Busy Time:%dm0s
     Power Cycles:%d
     Power On Duration:%s
-    Unsafe Shutdowns:0
-    Media Errors:0
-    Read Errors:0
-    Write Errors:0
-    Unmap Errors:0
-    Checksum Errors:0
-    Error Log Entries:0
+    Unsafe Shutdowns:%d
+    Error Count:%d
+    Media Errors:%d
+    Read Errors:%d
+    Write Errors:%d
+    Unmap Errors:%d
+    Checksum Errors:%d
+    Error Log Entries:%d
   Critical Warnings:
     Temperature: WARNING
-    Available Spare: OK
-    Device Reliability: OK
-    Read Only: OK
-    Volatile Memory Backup: OK
+    Available Spare: WARNING
+    Device Reliability: WARNING
+    Read Only: WARNING
+    Volatile Memory Backup: WARNING
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
     Temperature:%dK(%.02fC)
-    Controller Busy Time:0s
+    Temperature Warning Duration:%dm0s
+    Temperature Critical Duration:%dm0s
+    Controller Busy Time:%dm0s
     Power Cycles:%d
     Power On Duration:%s
-    Unsafe Shutdowns:0
-    Media Errors:0
-    Read Errors:0
-    Write Errors:0
-    Unmap Errors:0
-    Checksum Errors:0
-    Error Log Entries:0
+    Unsafe Shutdowns:%d
+    Error Count:%d
+    Media Errors:%d
+    Read Errors:%d
+    Write Errors:%d
+    Unmap Errors:%d
+    Checksum Errors:%d
+    Error Log Entries:%d
   Critical Warnings:
     Temperature: WARNING
-    Available Spare: OK
-    Device Reliability: OK
-    Read Only: OK
-    Volatile Memory Backup: OK
+    Available Spare: WARNING
+    Device Reliability: WARNING
+    Read Only: WARNING
+    Volatile Memory Backup: WARNING
 
 `,
 				controllerA.PciAddr, controllerA.Model, controllerA.FwRev, controllerA.SocketID,
-				humanize.Bytes(controllerA.Capacity()), controllerA.HealthStats.TempK(), controllerA.HealthStats.TempC(),
-				controllerA.HealthStats.PowerCycles, time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
+				humanize.Bytes(controllerA.Capacity()),
+				controllerA.HealthStats.TempK(), controllerA.HealthStats.TempC(),
+				controllerA.HealthStats.TempWarnTime, controllerA.HealthStats.TempCritTime,
+				controllerA.HealthStats.CtrlBusyTime, controllerA.HealthStats.PowerCycles,
+				time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
+				controllerA.HealthStats.UnsafeShutdowns, controllerA.HealthStats.ErrorCount,
+				controllerA.HealthStats.MediaErrors, controllerA.HealthStats.ReadErrors,
+				controllerA.HealthStats.WriteErrors, controllerA.HealthStats.UnmapErrors,
+				controllerA.HealthStats.ChecksumErrors, controllerA.HealthStats.ErrorLogEntries,
+
 				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
-				humanize.Bytes(controllerB.Capacity()), controllerB.HealthStats.TempK(), controllerB.HealthStats.TempC(),
-				controllerB.HealthStats.PowerCycles, time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
+				humanize.Bytes(controllerB.Capacity()),
+				controllerB.HealthStats.TempK(), controllerB.HealthStats.TempC(),
+				controllerB.HealthStats.TempWarnTime, controllerB.HealthStats.TempCritTime,
+				controllerB.HealthStats.CtrlBusyTime, controllerB.HealthStats.PowerCycles,
+				time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
+				controllerB.HealthStats.UnsafeShutdowns, controllerB.HealthStats.ErrorCount,
+				controllerB.HealthStats.MediaErrors, controllerB.HealthStats.ReadErrors,
+				controllerB.HealthStats.WriteErrors, controllerB.HealthStats.UnmapErrors,
+				controllerB.HealthStats.ChecksumErrors, controllerB.HealthStats.ErrorLogEntries,
 			),
 		},
 	} {
@@ -346,28 +367,35 @@ host1
     UUID:00000000-0000-0000-0000-000000000000 Targets:[0 1 2] Rank:0 State:NORMAL
       Health Stats:
         Temperature:%dK(%.02fC)
-        Controller Busy Time:0s
+        Temperature Warning Duration:%dm0s
+        Temperature Critical Duration:%dm0s
+        Controller Busy Time:%dm0s
         Power Cycles:%d
         Power On Duration:%s
-        Unsafe Shutdowns:0
-        Media Errors:0
-        Read Errors:0
-        Write Errors:0
-        Unmap Errors:0
-        Checksum Errors:0
-        Error Log Entries:0
+        Unsafe Shutdowns:%d
+        Error Count:%d
+        Media Errors:%d
+        Read Errors:%d
+        Write Errors:%d
+        Unmap Errors:%d
+        Checksum Errors:%d
+        Error Log Entries:%d
       Critical Warnings:
         Temperature: WARNING
-        Available Spare: OK
-        Device Reliability: OK
-        Read Only: OK
-        Volatile Memory Backup: OK
+        Available Spare: WARNING
+        Device Reliability: WARNING
+        Read Only: WARNING
+        Volatile Memory Backup: WARNING
 
 `,
-				mockController.HealthStats.TempK(),
-				mockController.HealthStats.TempC(),
-				mockController.HealthStats.PowerCycles,
+				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
+				mockController.HealthStats.TempWarnTime, mockController.HealthStats.TempCritTime,
+				mockController.HealthStats.CtrlBusyTime, mockController.HealthStats.PowerCycles,
 				time.Duration(mockController.HealthStats.PowerOnHours)*time.Hour,
+				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.ErrorCount,
+				mockController.HealthStats.MediaErrors, mockController.HealthStats.ReadErrors,
+				mockController.HealthStats.WriteErrors, mockController.HealthStats.UnmapErrors,
+				mockController.HealthStats.ChecksumErrors, mockController.HealthStats.ErrorLogEntries,
 			),
 		},
 	} {

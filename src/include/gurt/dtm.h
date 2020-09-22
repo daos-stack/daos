@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,34 +21,35 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DFUSE_DA_H__
-#define __DFUSE_DA_H__
+#ifndef __DTM_H__
+#define __DTM_H__
 
 #include <pthread.h>
+#include <stdbool.h>
 #include <gurt/list.h>
 
-/* A datastructure used to describe and register a type */
-struct dfuse_da_reg {
+/* A data structure used to describe and register a type */
+struct d_dtm_reg {
 	/* Perform any one-time setup or assigning constants.
 	 */
-	void	(*init)(void *, void *);
+	void	(*dr_init)(void *, void *);
 
 	/* Prepare an object for use by freeing any old data
 	 * and allocating new data.
 	 * Returns true on success.
 	 */
-	bool	(*reset)(void *);
+	bool	(*dr_reset)(void *);
 
 	/* Called once at teardown */
-	void	(*release)(void *);
-	char	*name;
-	int	size;
-	int	offset;
+	void	(*dr_release)(void *);
+	char	*dr_name;
+	int	dr_size;
+	int	dr_offset;
 
 	/* Maximum number of descriptors to exist concurrently */
-	int	max_desc;
+	int	dr_max_desc;
 	/* Maximum number of descriptors to exist on the free_list */
-	int	max_free_desc;
+	int	dr_max_free_desc;
 };
 
 /* If max_desc is non-zero then at most max_desc descriptors can exist
@@ -57,84 +58,84 @@ struct dfuse_da_reg {
  * however once max_desc is reached no more descriptors will be created.
  */
 
-#define POOL_TYPE_INIT(itype, imember) .size = sizeof(struct itype),	\
-		.offset = offsetof(struct itype, imember),		\
-		.name = #itype,
+#define POOL_TYPE_INIT(itype, imember) .dr_size = sizeof(struct itype),	\
+		.dr_offset = offsetof(struct itype, imember),		\
+		.dr_name = #itype,
 
-/* A datastructure used to manage a type.  Includes both the
+/* A data structure used to manage a type.  Includes both the
  * registration data and any live state
  */
-struct dfuse_da_type {
-	struct dfuse_da_reg	reg;
-	d_list_t		type_list;
-	d_list_t		free_list;
-	d_list_t		pending_list;
-	pthread_mutex_t		lock;
-	struct dfuse_da		*da;
+struct d_dtm_type {
+	struct d_dtm_reg	dt_reg;
+	d_list_t		dt_type_list;
+	d_list_t		dt_free_list;
+	d_list_t		dt_pending_list;
+	pthread_mutex_t		dt_lock;
+	struct d_dtm		*dt_dtm;
 
 	/* Counters for current number of objects */
-	int			count; /* Total currently created */
-	int			free_count; /* Number currently free */
-	int			pending_count; /* Number currently created */
+	int			dt_count; /* Total currently created */
+	int			dt_free_count; /* Number currently free */
+	int			dt_pending_count; /* Number currently created */
 
 	/* Statistics counters */
-	int			init_count;
-	int			reset_count;
-	int			release_count;
+	int			dt_init_count;
+	int			dt_reset_count;
+	int			dt_release_count;
 
 	/* Performance metrics */
-	int			op_init; /* Number of on-path init calls */
-	int			op_reset; /* Number of on-path reset calls */
+	int			dt_op_init; /* Number of on-path init calls */
+	int			dt_op_reset; /* Number of on-path reset calls */
 	/* Number of sequental calls to acquire() without a call to restock() */
-	int			no_restock; /* Current count */
-	int			no_restock_hwm; /* High water mark */
+	int			dt_no_restock; /* Current count */
+	int			dt_no_restock_hwm; /* High water mark */
 };
 
-struct dfuse_da {
-	d_list_t	list;
-	void		*arg;
-	pthread_mutex_t	lock;
-	bool		init;
+struct d_dtm {
+	d_list_t	dtm_list;
+	void		*dtm_arg;
+	pthread_mutex_t	dtm_lock;
+	bool		dtm_init;
 };
 
-/* Create a new da, called once at startup
+/* Create a new data type manager, called once at startup
  *
  * Returns a CaRT error code.
  */
 int
-dfuse_da_init(struct dfuse_da *, void *arg)
+d_dtm_init(struct d_dtm *, void *arg)
 	__attribute((warn_unused_result, nonnull(1)));
 
-/* Destroy a da, called once at shutdown */
+/* Destroy a data type manager, called once at shutdown */
 void
-dfuse_da_destroy(struct dfuse_da *);
+d_dtm_destroy(struct d_dtm *);
 
-/* Register a new type to a da, called multiple times after init */
-struct dfuse_da_type *
-dfuse_da_register(struct dfuse_da *, struct dfuse_da_reg *);
+/* Register a new type to a manager, called multiple times after init */
+struct d_dtm_type *
+d_dtm_register(struct d_dtm *, struct d_dtm_reg *);
 
-/* Allocate a datastructure in performant way */
+/* Allocate a data structure in performant way */
 void *
-dfuse_da_acquire(struct dfuse_da_type *);
+d_dtm_acquire(struct d_dtm_type *);
 
-/* Release a datastructure in a performant way */
+/* Release a data structure in a performant way */
 void
-dfuse_da_release(struct dfuse_da_type *, void *);
+d_dtm_release(struct d_dtm_type *, void *);
 
-/* Pre-allocate datastructures
+/* Pre-allocate data structures
  * This should be called off the critical path, after previous acquire/release
  * calls and will do memory allocation as required.  Only 1 call is needed after
  * transitions so it does not need calling in progress loops.
  */
 void
-dfuse_da_restock(struct dfuse_da_type *);
+d_dtm_restock(struct d_dtm_type *);
 
 /* Reclaim any memory possible across all types
  *
  * Returns true of there are any descriptors in use.
  */
 bool
-dfuse_da_reclaim(struct dfuse_da *)
+d_dtm_reclaim(struct d_dtm *)
 	__attribute((warn_unused_result, nonnull));
 
-#endif /*  __DFUSE_DA_H__ */
+#endif /*  __DTM_H__ */
