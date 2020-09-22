@@ -27,8 +27,10 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/system"
@@ -178,6 +180,51 @@ const (
 	ScmUpdateStatusFailed
 )
 
+// TempK returns controller temperature in degrees Kelvin.
+func (nch *NvmeControllerHealth) TempK() uint32 {
+	return uint32(nch.Temperature)
+}
+
+// TempC returns controller temperature in degrees Celsius.
+func (nch *NvmeControllerHealth) TempC() float32 {
+	return float32(nch.Temperature) - 273.15
+}
+
+// TempF returns controller temperature in degrees Fahrenheit.
+func (nch *NvmeControllerHealth) TempF() float32 {
+	return nch.TempC()*(9/5) + 32
+}
+
+// genAltKey verifies non-null model and serial identifiers exist and return the
+// concatenated identifier (new key) and error if either is empty.
+func genAltKey(model, serial string) (string, error) {
+	var empty string
+	m := strings.TrimSpace(model)
+	s := strings.TrimSpace(serial)
+
+	if m == "" {
+		empty = "model"
+	} else if s == "" {
+		empty = "serial"
+	}
+	if empty != "" {
+		return "", errors.Errorf("missing %s identifier", empty)
+	}
+
+	return m + s, nil
+}
+
+// GenAltKey generates an alternative key identifier for an NVMe Controller
+// from its returned health statistics.
+func (nch *NvmeControllerHealth) GenAltKey() (string, error) {
+	return genAltKey(nch.Model, nch.Serial)
+}
+
+// GenAltKey generates an alternative key identifier for an NVMe Controller.
+func (nc *NvmeController) GenAltKey() (string, error) {
+	return genAltKey(nc.Model, nc.Serial)
+}
+
 // String translates the update status to a string
 func (s ScmFirmwareUpdateStatus) String() string {
 	switch s {
@@ -189,21 +236,6 @@ func (s ScmFirmwareUpdateStatus) String() string {
 		return "Failed"
 	}
 	return "Unknown"
-}
-
-// TempK returns controller temperature in degrees Kelvin.
-func (ndh *NvmeControllerHealth) TempK() uint32 {
-	return uint32(ndh.Temperature)
-}
-
-// TempC returns controller temperature in degrees Celsius.
-func (ndh *NvmeControllerHealth) TempC() float32 {
-	return float32(ndh.Temperature) - 273.15
-}
-
-// TempF returns controller temperature in degrees Fahrenheit.
-func (ndh *NvmeControllerHealth) TempF() float32 {
-	return ndh.TempC()*(9/5) + 32
 }
 
 func (sm *ScmModule) String() string {

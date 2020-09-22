@@ -25,7 +25,6 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -129,44 +128,23 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.S
 	return resp, nil
 }
 
-// checkModelSerial verifies we have non-null model and serial identifiers.
-// Returns the concatenated identifier along with name of first empty field
-// and boolean indicating whether both are populated or not.
-func checkModelSerial(m string, s string) (ms, empty string, ok bool) {
-	m = strings.TrimSpace(m)
-	s = strings.TrimSpace(s)
-
-	if m == "" {
-		empty = "model"
-	} else if s == "" {
-		empty = "serial"
-	}
-	if empty != "" {
-		return
-	}
-	ms = m + s
-	ok = true
-
-	return
-}
-
-// mapCtrlrsByModelSerial maps controllers to model+serial key.
-func mapCtrlrsByModelSerial(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
-	ctrlrMap := make(map[string]*storage.NvmeController) // ctrlr model+serial key
+// mapCtrlrs maps controllers to an alternate (as opposed to PCI address) key.
+func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
+	ctrlrMap := make(map[string]*storage.NvmeController)
 
 	for _, ctrlr := range ctrlrs {
-		modelSerial, emptyField, ok := checkModelSerial(ctrlr.Model, ctrlr.Serial)
-		if !ok {
-			return nil, errors.Errorf("input controller %s is missing %s identifier",
-				ctrlr.PciAddr, emptyField)
+		key, err := ctrlr.GenAltKey()
+		if err != nil {
+			return nil, errors.Wrapf(err, "generate alternate key for controller %s",
+				ctrlr.PciAddr)
 		}
 
-		if _, exists := ctrlrMap[modelSerial]; exists {
+		if _, exists := ctrlrMap[key]; exists {
 			return nil, errors.Errorf("duplicate entries for controller %s, key %s",
-				ctrlr.PciAddr, modelSerial)
+				ctrlr.PciAddr, key)
 		}
 
-		ctrlrMap[modelSerial] = ctrlr
+		ctrlrMap[key] = ctrlr
 	}
 
 	return ctrlrMap, nil
@@ -205,7 +183,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (storage.NvmeCon
 			continue
 		}
 
-		ctrlrMap, err := mapCtrlrsByModelSerial(bsr.Controllers)
+		ctrlrMap, err := mapCtrlrs(bsr.Controllers)
 		if err != nil {
 			return nil, errors.Wrap(err, "mapCtrlrsByModelSerial()")
 		}

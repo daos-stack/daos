@@ -210,24 +210,28 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 	}
 
 	for _, dev := range smdDevs.Devices {
-		health, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
+		healthPB, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
 			DevUuid: dev.Uuid,
 		})
 		if err != nil {
 			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
 		}
-
-		modelSerial, emptyField, ok := checkModelSerial(health.Model, health.Serial)
-		if !ok {
-			srv.log.Debugf("instance %d: skipping health stats for uuid %s, %s id empty",
-				srv.Index(), health.DevUuid, emptyField)
-			continue
+		health := new(storage.NvmeControllerHealth)
+		if err := convert.Types(healthPB, health); err != nil {
+			return errors.Wrapf(err, "converting health stats from smd device %s", dev.Uuid)
 		}
 
-		msg := fmt.Sprintf("instance %d: stats received for ctrlr model/serial %s from smd uuid %s",
-			srv.Index(), modelSerial, dev.GetUuid())
+		key, err := health.GenAltKey()
+		if err != nil {
+			return errors.Wrapf(err,
+				"generate alt key for controller from health stats from smd device %s",
+				dev.Uuid)
+		}
 
-		ctrlr, exists := ctrlrMap[modelSerial]
+		msg := fmt.Sprintf("instance %d: stats received for ctrlr key %s from smd uuid %s",
+			srv.Index(), key, dev.GetUuid())
+
+		ctrlr, exists := ctrlrMap[key]
 		if !exists {
 			srv.log.Debug(msg + " didn't match any known controllers")
 			continue
@@ -238,20 +242,17 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		// multiple updates for the same key expected when
 		// more than one controller namespaces (and resident
 		// blobstores) exist, stats will be the same for each
-		if err := convert.Types(health, ctrlr.HealthStats); err != nil {
-			return errors.Wrapf(err, "converting health for controller %s %s",
-				modelSerial, ctrlr.PciAddr)
-		}
+		ctrlr.HealthStats = health
 
 		smdDev := new(storage.SmdDevice)
 		if err := convert.Types(dev, smdDev); err != nil {
 			return errors.Wrapf(err, "converting smd info for controller %s %s",
-				modelSerial, ctrlr.PciAddr)
+				key, ctrlr.PciAddr)
 		}
 		srvRank, err := srv.GetRank()
 		if err != nil {
 			return errors.Wrapf(err, "adding rank to smd info for controller %s %s",
-				modelSerial, ctrlr.PciAddr)
+				key, ctrlr.PciAddr)
 		}
 		smdDev.Rank = srvRank
 

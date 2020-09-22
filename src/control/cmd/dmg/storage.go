@@ -145,14 +145,9 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 	if cmd.jsonOutputEnabled() {
 		if cmd.Verbose {
-			cmd.log.Debug("--verbose flag ignored if --json specified")
+			cmd.log.Info("--verbose flag ignored if --json specified")
 		}
-		if cmd.NvmeHealth {
-			cmd.log.Debug("--nvme-health flag ignored if --json specified")
-		}
-		if cmd.NvmeMeta {
-			cmd.log.Debug("--nvme-meta flag ignored if --json specified")
-		}
+
 		return cmd.outputJSON(resp, err)
 	}
 
@@ -167,7 +162,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 	if cmd.NvmeHealth {
 		if cmd.Verbose {
-			cmd.log.Debug("--verbose flag ignored if --nvme-health specified")
+			cmd.log.Info("--verbose flag ignored if --nvme-health specified")
 		}
 		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
 			return err
@@ -178,7 +173,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 	if cmd.NvmeMeta {
 		if cmd.Verbose {
-			cmd.log.Debug("--verbose flag ignored if --nvme-meta specified")
+			cmd.log.Info("--verbose flag ignored if --nvme-meta specified")
 		}
 		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &bld); err != nil {
 			return err
