@@ -283,6 +283,8 @@ nvme_recov_3(void **state)
 	struct ioreq	req;
 	char		*ow_buf;
 	char		*fbuf;
+	char		*write_errors;
+	char		*read_errors;
 	const char		dkey[] = "dkey";
 	const char		akey[] = "akey";
 	daos_size_t		size = 4 * 4096; /* record size */
@@ -294,6 +296,10 @@ nvme_recov_3(void **state)
 		skip();
 	}
 
+	//D_ALLOC_ARRAY(write_errors, 64);
+	//D_ALLOC_ARRAY(read_errors, 64);
+	write_errors = strdup("write_errors");
+	read_errors = strdup("read_errors");
 	/**
 	*Get the Total number of NVMe devices from all the servers.
 	*/
@@ -311,8 +317,15 @@ nvme_recov_3(void **state)
 		print_message("Rank=%d UUID=%s state=%s host=%s\n",
 			      devices[i].rank, DP_UUID(devices[i].device_id),
 			devices[i].state, devices[i].host);
-		if (devices[i].rank == 1)
-			dmg_storage_query_device_health(dmg_config_file);
+		if (devices[i].rank == 1) {
+			//strcpy(stats, "read_errors");
+			dmg_storage_query_device_health(dmg_config_file, devices[i].host, 
+				write_errors);
+			print_message("---write_error = %s\n", write_errors);
+			dmg_storage_query_device_health(dmg_config_file, devices[i].host, 
+				read_errors);
+			print_message("---read_errors = %s\n", read_errors);
+		}
 	}
 
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
@@ -347,6 +360,10 @@ nvme_recov_3(void **state)
 	assert_memory_equal(ow_buf, fbuf, size);
 
 	D_FREE(ow_buf);
+	D_FREE(devices);
+	D_FREE(write_errors);
+	D_FREE(read_errors);
+
 	ioreq_fini(&req);
 }
 

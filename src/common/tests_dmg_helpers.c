@@ -733,7 +733,8 @@ out:
 }
 
 int
-dmg_storage_query_device_health(const char *dmg_config_file)
+dmg_storage_query_device_health(const char *dmg_config_file, char *host,
+	char *stats)
 {
 	struct json_object	*dmg_out = NULL;
 	struct json_object	*storage_map = NULL;
@@ -748,11 +749,11 @@ dmg_storage_query_device_health(const char *dmg_config_file)
 	int			rc = 0;
 	//uuid_unparse_lower(uuid, uuid_str);
 
-	args = cmd_push_arg(args, &argcount, " --uuid=a82fdc3b-171c-48db-b750-cc5290ada44a ");
+	args = cmd_push_arg(args, &argcount, " --uuid=2fbc0d92-2130-4a48-a160-012ea51e89a1 ");
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	args = cmd_push_arg(args, &argcount, " --host-list=wolf-154 ");
+	args = cmd_push_arg(args, &argcount, " --host-list=%s ", host);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -789,9 +790,8 @@ dmg_storage_query_device_health(const char *dmg_config_file)
 			dev = json_object_array_get_idx(val1, 0);
 			json_object_object_get_ex(dev, "health", &health_info);
 			if (health_info != NULL) {
-				printf("health_info=%s\n", json_object_get_string(health_info));
-				json_object_object_get_ex(health_info, "write_errors", &tmp);
-				printf("write_errors=%s\n", json_object_get_string(tmp));
+				json_object_object_get_ex(health_info, stats, &tmp);
+				strcpy(stats, json_object_to_json_string(tmp));
 			}
 		}
 	}

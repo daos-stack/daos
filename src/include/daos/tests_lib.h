@@ -350,5 +350,6 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
   *				[in] \a health stats.
  *				[out] health status result.
  */
-int dmg_storage_query_device_health(const char *dmg_config_file);
+int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
+	char *stats);
 #endif /* __DAOS_TESTS_LIB_H__ */
