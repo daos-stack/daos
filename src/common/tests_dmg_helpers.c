@@ -734,7 +734,7 @@ out:
 
 int
 dmg_storage_query_device_health(const char *dmg_config_file, char *host,
-	char *stats)
+	char *stats, const uuid_t uuid)
 {
 	struct json_object	*dmg_out = NULL;
 	struct json_object	*storage_map = NULL;
@@ -743,13 +743,13 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	struct json_object	*health_info = NULL;
 	struct json_object	*dev = NULL;
 	struct json_object	*tmp = NULL;
-	//char			uuid_str[DAOS_UUID_STR_SIZE];
+	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
 	char			**args = NULL;
 	int			rc = 0;
-	//uuid_unparse_lower(uuid, uuid_str);
-
-	args = cmd_push_arg(args, &argcount, " --uuid=2fbc0d92-2130-4a48-a160-012ea51e89a1 ");
+	
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, " --uuid=%s ", uuid_str);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

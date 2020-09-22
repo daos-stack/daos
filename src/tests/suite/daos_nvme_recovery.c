@@ -318,12 +318,11 @@ nvme_recov_3(void **state)
 			      devices[i].rank, DP_UUID(devices[i].device_id),
 			devices[i].state, devices[i].host);
 		if (devices[i].rank == 1) {
-			//strcpy(stats, "read_errors");
 			dmg_storage_query_device_health(dmg_config_file, devices[i].host, 
-				write_errors);
+				write_errors, devices[i].device_id);
 			print_message("---write_error = %s\n", write_errors);
 			dmg_storage_query_device_health(dmg_config_file, devices[i].host, 
-				read_errors);
+				read_errors, devices[i].device_id);
 			print_message("---read_errors = %s\n", read_errors);
 		}
 	}
