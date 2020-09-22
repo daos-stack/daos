@@ -29,6 +29,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -81,7 +82,7 @@ func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) er
 // management service on MS replicas immediately so other instances can join.
 // I/O server modules are then loaded.
 func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) error {
-	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), DataPlaneName)
+	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), build.DataPlaneName)
 
 	select {
 	case <-ctx.Done(): // propagated harness exit
