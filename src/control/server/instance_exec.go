@@ -111,12 +111,12 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 	srv.setTargetCount(int(ready.GetNtgts()))
 
 	if srv.isMSReplica() {
-		if err := srv.startMgmtSvc(); err != nil {
+		if err := srv.startMgmtSvc(ctx); err != nil {
 			return errors.Wrap(err, "failed to start management service")
 		}
 	}
 
-	if err := srv.loadModules(); err != nil {
+	if err := srv.loadModules(ctx); err != nil {
 		return errors.Wrap(err, "failed to load I/O server modules")
 	}
 

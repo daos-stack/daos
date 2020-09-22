@@ -37,9 +37,9 @@ import (
 
 func TestProvider_QueryFirmware(t *testing.T) {
 	defaultModules := storage.ScmModules{
-		&storage.ScmModule{UID: "Device1"},
-		&storage.ScmModule{UID: "Device2"},
-		&storage.ScmModule{UID: "Device3"},
+		storage.MockScmModule(1),
+		storage.MockScmModule(2),
+		storage.MockScmModule(3),
 	}
 
 	fwInfo := &storage.ScmFirmwareInfo{
@@ -50,21 +50,24 @@ func TestProvider_QueryFirmware(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		inputDevices []string
-		backendCfg   *MockBackendConfig
-		expErr       error
-		expRes       *FirmwareQueryResponse
+		input      FirmwareQueryRequest
+		backendCfg *MockBackendConfig
+		expErr     error
+		expRes     *FirmwareQueryResponse
 	}{
 		"discovery failed": {
+			input:      FirmwareQueryRequest{},
 			backendCfg: &MockBackendConfig{DiscoverErr: errors.New("mock discovery")},
 			expErr:     errors.New("mock discovery"),
 		},
 		"no modules": {
+			input: FirmwareQueryRequest{},
 			expRes: &FirmwareQueryResponse{
 				Results: []ModuleFirmware{},
 			},
 		},
 		"success": {
+			input: FirmwareQueryRequest{},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes:          defaultModules,
 				GetFirmwareStatusRes: fwInfo,
@@ -87,6 +90,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 			},
 		},
 		"get status failed": {
+			input: FirmwareQueryRequest{},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes:          defaultModules,
 				GetFirmwareStatusErr: errors.New("mock query"),
@@ -108,16 +112,27 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				},
 			},
 		},
-		"request nonexistent": {
-			inputDevices: []string{"Device1", "NotReal"},
+		"request nonexistent is ignored": {
+			input: FirmwareQueryRequest{
+				DeviceUIDs: []string{"Device1", "NotReal"},
+			},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes:          defaultModules,
 				GetFirmwareStatusRes: fwInfo,
 			},
-			expErr: errors.New("no module found with UID \"NotReal\""),
+			expRes: &FirmwareQueryResponse{
+				Results: []ModuleFirmware{
+					{
+						Module: *defaultModules[0],
+						Info:   fwInfo,
+					},
+				},
+			},
 		},
 		"request device subset": {
-			inputDevices: []string{"Device1", "Device3"},
+			input: FirmwareQueryRequest{
+				DeviceUIDs: []string{"Device1", "Device3"},
+			},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes:          defaultModules,
 				GetFirmwareStatusRes: fwInfo,
@@ -135,8 +150,20 @@ func TestProvider_QueryFirmware(t *testing.T) {
 				},
 			},
 		},
-		"ignore duplicates": {
-			inputDevices: []string{"Device1", "Device3", "Device1"},
+		"request duplicate devices": {
+			input: FirmwareQueryRequest{
+				DeviceUIDs: []string{"Device1", "Device3", "Device1"},
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes:          defaultModules,
+				GetFirmwareStatusRes: fwInfo,
+			},
+			expErr: FaultDuplicateDevices,
+		},
+		"filter by FW rev": {
+			input: FirmwareQueryRequest{
+				FirmwareRev: "FWRev1",
+			},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes:          defaultModules,
 				GetFirmwareStatusRes: fwInfo,
@@ -147,11 +174,69 @@ func TestProvider_QueryFirmware(t *testing.T) {
 						Module: *defaultModules[0],
 						Info:   fwInfo,
 					},
+				},
+			},
+		},
+		"filter by model ID": {
+			input: FirmwareQueryRequest{
+				ModelID: "PartNumber2",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes:          defaultModules,
+				GetFirmwareStatusRes: fwInfo,
+			},
+			expRes: &FirmwareQueryResponse{
+				Results: []ModuleFirmware{
 					{
-						Module: *defaultModules[2],
+						Module: *defaultModules[1],
 						Info:   fwInfo,
 					},
 				},
+			},
+		},
+		"nothing matches both filters": {
+			input: FirmwareQueryRequest{
+				FirmwareRev: "FWRev1",
+				ModelID:     "PartNumber2",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes:          defaultModules,
+				GetFirmwareStatusRes: fwInfo,
+			},
+			expRes: &FirmwareQueryResponse{
+				Results: []ModuleFirmware{},
+			},
+		},
+		"filter is case insensitive": {
+			input: FirmwareQueryRequest{
+				ModelID:     "PARTNUMBER2",
+				FirmwareRev: "FWREV2",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes:          defaultModules,
+				GetFirmwareStatusRes: fwInfo,
+			},
+			expRes: &FirmwareQueryResponse{
+				Results: []ModuleFirmware{
+					{
+						Module: *defaultModules[1],
+						Info:   fwInfo,
+					},
+				},
+			},
+		},
+		"nothing in device list matches filters": {
+			input: FirmwareQueryRequest{
+				DeviceUIDs:  []string{"Device2", "Device3"},
+				FirmwareRev: "FWRev1",
+				ModelID:     "PartNumber1",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes:          defaultModules,
+				GetFirmwareStatusRes: fwInfo,
+			},
+			expRes: &FirmwareQueryResponse{
+				Results: []ModuleFirmware{},
 			},
 		},
 	} {
@@ -161,9 +246,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 
 			p := NewMockProvider(log, tc.backendCfg, nil)
 
-			res, err := p.QueryFirmware(FirmwareQueryRequest{
-				Devices: tc.inputDevices,
-			})
+			res, err := p.QueryFirmware(tc.input)
 
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expRes, res); diff != "" {
@@ -175,54 +258,61 @@ func TestProvider_QueryFirmware(t *testing.T) {
 
 func TestProvider_UpdateFirmware(t *testing.T) {
 	defaultModules := storage.ScmModules{
-		&storage.ScmModule{UID: "Device1"},
-		&storage.ScmModule{UID: "Device2"},
-		&storage.ScmModule{UID: "Device3"},
+		storage.MockScmModule(1),
+		storage.MockScmModule(2),
+		storage.MockScmModule(3),
 	}
 
 	testErr := errors.New("test error")
 	testPath := "/some/path/file.bin"
 
 	for name, tc := range map[string]struct {
-		inputDevices []string
-		inputPath    string
-		backendCfg   *MockBackendConfig
-		expErr       error
-		expRes       *FirmwareUpdateResponse
+		input      FirmwareUpdateRequest
+		backendCfg *MockBackendConfig
+		expErr     error
+		expRes     *FirmwareUpdateResponse
 	}{
 		"empty path": {
 			expErr: errors.New("missing path to firmware file"),
 		},
 		"discovery failed": {
-			inputPath:  testPath,
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+			},
 			backendCfg: &MockBackendConfig{DiscoverErr: errors.New("mock discovery")},
 			expErr:     errors.New("mock discovery"),
 		},
 		"no modules": {
-			inputPath: testPath,
-			expErr:    errors.New("no SCM modules"),
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+			},
+			expErr: errors.New("no SCM modules"),
 		},
 		"success": {
-			inputPath: testPath,
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+			},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes: defaultModules,
 			},
 			expRes: &FirmwareUpdateResponse{
 				Results: []ModuleFirmwareUpdateResult{
 					{
-						Module: storage.ScmModule{UID: "Device1"},
+						Module: *defaultModules[0],
 					},
 					{
-						Module: storage.ScmModule{UID: "Device2"},
+						Module: *defaultModules[1],
 					},
 					{
-						Module: storage.ScmModule{UID: "Device3"},
+						Module: *defaultModules[2],
 					},
 				},
 			},
 		},
 		"update failed": {
-			inputPath: testPath,
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+			},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes:       defaultModules,
 				UpdateFirmwareErr: testErr,
@@ -230,44 +320,130 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			expRes: &FirmwareUpdateResponse{
 				Results: []ModuleFirmwareUpdateResult{
 					{
-						Module: storage.ScmModule{UID: "Device1"},
+						Module: *defaultModules[0],
 						Error:  testErr.Error(),
 					},
 					{
-						Module: storage.ScmModule{UID: "Device2"},
+						Module: *defaultModules[1],
 						Error:  testErr.Error(),
 					},
 					{
-						Module: storage.ScmModule{UID: "Device3"},
+						Module: *defaultModules[2],
 						Error:  testErr.Error(),
 					},
 				},
 			},
 		},
 		"request device subset": {
-			inputPath:    testPath,
-			inputDevices: []string{"Device3", "Device2"},
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				DeviceUIDs:   []string{"Device3", "Device2"},
+			},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes: defaultModules,
 			},
 			expRes: &FirmwareUpdateResponse{
 				Results: []ModuleFirmwareUpdateResult{
 					{
-						Module: storage.ScmModule{UID: "Device2"},
+						Module: *defaultModules[1],
 					},
 					{
-						Module: storage.ScmModule{UID: "Device3"},
+						Module: *defaultModules[2],
 					},
 				},
 			},
 		},
 		"request nonexistent device": {
-			inputPath:    testPath,
-			inputDevices: []string{"Device3", "NotReal"},
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				DeviceUIDs:   []string{"Device3", "NotReal"},
+			},
 			backendCfg: &MockBackendConfig{
 				DiscoverRes: defaultModules,
 			},
 			expErr: errors.New("no module found with UID \"NotReal\""),
+		},
+		"request duplicate devices": {
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				DeviceUIDs:   []string{"Device3", "Device3"},
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes: defaultModules,
+			},
+			expErr: FaultDuplicateDevices,
+		},
+		"filter by FW rev": {
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				FirmwareRev:  "FWRev1",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes: defaultModules,
+			},
+			expRes: &FirmwareUpdateResponse{
+				Results: []ModuleFirmwareUpdateResult{
+					{
+						Module: *defaultModules[0],
+					},
+				},
+			},
+		},
+		"filter by model ID": {
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				ModelID:      "PartNumber2",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes: defaultModules,
+			},
+			expRes: &FirmwareUpdateResponse{
+				Results: []ModuleFirmwareUpdateResult{
+					{
+						Module: *defaultModules[1],
+					},
+				},
+			},
+		},
+		"nothing matches both filters": {
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				FirmwareRev:  "FWRev1",
+				ModelID:      "PartNumber2",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes: defaultModules,
+			},
+			expErr: FaultNoFilterMatch,
+		},
+		"filter is case insensitive": {
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				ModelID:      "PARTNUMBER2",
+				FirmwareRev:  "FWREV2",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes: defaultModules,
+			},
+			expRes: &FirmwareUpdateResponse{
+				Results: []ModuleFirmwareUpdateResult{
+					{
+						Module: *defaultModules[1],
+					},
+				},
+			},
+		},
+		"nothing in device list matches filters": {
+			input: FirmwareUpdateRequest{
+				FirmwarePath: testPath,
+				DeviceUIDs:   []string{"Device2", "Device3"},
+				FirmwareRev:  "FWRev1",
+				ModelID:      "PartNumber1",
+			},
+			backendCfg: &MockBackendConfig{
+				DiscoverRes: defaultModules,
+			},
+			expErr: FaultNoFilterMatch,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -276,10 +452,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 
 			p := NewMockProvider(log, tc.backendCfg, nil)
 
-			res, err := p.UpdateFirmware(FirmwareUpdateRequest{
-				Devices:      tc.inputDevices,
-				FirmwarePath: tc.inputPath,
-			})
+			res, err := p.UpdateFirmware(tc.input)
 
 			common.CmpErr(t, tc.expErr, err)
 
