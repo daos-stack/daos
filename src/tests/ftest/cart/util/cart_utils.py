@@ -129,6 +129,8 @@ class CartUtils():
 
         return procrtn
 
+    # What is special about pylint's 15 variable limit?
+    # pylint: disable=too-many-locals
     def get_env(self, cartobj):
         """ return basic env setting in yaml """
         env_CCSA = cartobj.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
@@ -155,7 +157,9 @@ class CartUtils():
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        env = " --output-filename {!s}".format(os.path.join(log_path, log_dir, test_name + "_" + env_CCSA + "_output.orterun_log"))
+        log_filename = test_name + "_" + env_CCSA + "_output.orterun_log"
+        output_filename_path = os.path.join(log_path, log_dir, log_filename)
+        env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
         env += " -x D_LOG_FILE_APPEND_PID=1"
 
@@ -191,6 +195,7 @@ class CartUtils():
 
         return env
 
+    # pylint: enable=too-many-locals
     @staticmethod
     def get_srv_cnt(cartobj, host):
         """ get server count """
@@ -202,6 +207,7 @@ class CartUtils():
 
         return srvcnt
 
+    # pylint: disable=too-many-locals
     def build_cmd(self, cartobj, env, host):
         """ build command """
         tst_cmd = ""
@@ -217,9 +223,10 @@ class CartUtils():
 
         self.init_mpi("openmpi")
 
-        orterun_bin = find_executable("orterun",
-                        os.environ["PATH"] +
-                        ":/usr/lib64/openmpi3/bin:/usr/lib64/mpi/gcc/openmpi3/bin")
+        openmpi_path = os.environ["PATH"]
+        openmpi_path += ":/usr/lib64/openmpi3/bin"
+        openmpi_path += "/usr/lib64/mpi/gcc/openmpi3/bin"
+        orterun_bin = find_executable("orterun", openmpi_path)
 
         if orterun_bin is None:
             orterun_bin = "orterun_not_installed"
@@ -275,6 +282,7 @@ class CartUtils():
 
         return tst_cmd
 
+    # pylint: enable=too-many-locals
     def launch_srv_cli_test(self, cartobj, srvcmd, clicmd):
         """ launches sever in the background and client in the foreground """
 
