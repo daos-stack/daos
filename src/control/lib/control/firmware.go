@@ -43,8 +43,11 @@ type (
 	// devices.
 	FirmwareQueryReq struct {
 		unaryRequest
-		SCM  bool // Query SCM devices
-		NVMe bool // Query NVMe devices
+		SCM         bool     // Query SCM devices
+		NVMe        bool     // Query NVMe devices
+		Devices     []string // Specific devices to query
+		ModelID     string   // Filter by model ID
+		FirmwareRev string   // Filter by current FW revision
 	}
 
 	// FirmwareQueryResp returns storage device firmware information.
@@ -180,8 +183,11 @@ func FirmwareQuery(ctx context.Context, rpcClient UnaryInvoker, req *FirmwareQue
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewMgmtCtlClient(conn).FirmwareQuery(ctx, &ctlpb.FirmwareQueryReq{
-			QueryScm:  req.SCM,
-			QueryNvme: req.NVMe,
+			QueryScm:    req.SCM,
+			QueryNvme:   req.NVMe,
+			DeviceIDs:   req.Devices,
+			ModelID:     req.ModelID,
+			FirmwareRev: req.FirmwareRev,
 		})
 	})
 
@@ -217,6 +223,10 @@ type (
 		unaryRequest
 		FirmwarePath string
 		Type         DeviceType
+		Devices      []string // Specific devices to update
+		ModelID      string   // Update only devices of specific model
+		FirmwareRev  string   // Update only devices with a specific current firmware
+
 	}
 
 	// HostSCMUpdateMap maps a host name to a slice of SCM update results.
@@ -368,6 +378,9 @@ func FirmwareUpdate(ctx context.Context, rpcClient UnaryInvoker, req *FirmwareUp
 		return ctlpb.NewMgmtCtlClient(conn).FirmwareUpdate(ctx, &ctlpb.FirmwareUpdateReq{
 			FirmwarePath: req.FirmwarePath,
 			Type:         pbType,
+			DeviceIDs:    req.Devices,
+			ModelID:      req.ModelID,
+			FirmwareRev:  req.FirmwareRev,
 		})
 	})
 

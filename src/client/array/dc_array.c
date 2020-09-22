@@ -43,7 +43,7 @@
 struct dc_array {
 	/** link chain in the global handle hash table */
 	struct d_hlink		hlink;
-	/** DAOS KV object handle */
+	/** DAOS object handle */
 	daos_handle_t		daos_oh;
 	/** Array cell size of each element */
 	daos_size_t		cell_size;
@@ -774,7 +774,7 @@ dc_array_open(tse_task_t *task)
 		rc = tse_task_register_deps(task, 1, &open_task);
 		if (rc != 0) {
 			D_ERROR("Failed to register dependency\n");
-			D_GOTO(err_put2, rc);
+			D_GOTO(err_put1, rc);
 		}
 
 		rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
