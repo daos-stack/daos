@@ -130,13 +130,15 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 	idx := uint32(common.GetIndex(varIdx...))
 
 	return &ScmModule{
-		ChannelID:       idx,
-		ChannelPosition: idx,
-		ControllerID:    idx,
-		SocketID:        idx,
-		PhysicalID:      idx,
-		Capacity:        uint64(idx),
-		UID:             fmt.Sprintf("Device%d", idx),
+		ChannelID:        idx,
+		ChannelPosition:  idx,
+		ControllerID:     idx,
+		SocketID:         idx,
+		PhysicalID:       idx,
+		Capacity:         uint64(idx),
+		UID:              fmt.Sprintf("Device%d", idx),
+		PartNumber:       fmt.Sprintf("PartNumber%d", idx),
+		FirmwareRevision: fmt.Sprintf("FWRev%d", idx),
 	}
 }
 

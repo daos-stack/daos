@@ -952,7 +952,7 @@ obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
 }
 
 /** Filter and prepare for the sing value EC update/fetch */
-static int
+int
 obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 		       daos_epoch_t epoch, uint32_t flags, uint32_t start_shard,
 		       uint32_t nr, bool for_update, bool deg_fetch,
@@ -984,7 +984,8 @@ obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
 		if (!obj_ec_singv_one_tgt(iod, NULL, oca)) {
 			obj_ec_singv_local_sz(iod->iod_size, oca, tgt_idx,
 					      &loc);
-			offs[i] = loc.esl_off;
+			if (offs != NULL)
+				offs[i] = loc.esl_off;
 			if (for_update)
 				iod->iod_size = loc.esl_size;
 			if (deg_fetch)
@@ -1186,8 +1187,9 @@ obj_fetch_shadow(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	obj_iod_idx_vos2parity(iod_nr, iods);
-	rc = vos_fetch_begin(coh, oid, epoch, cond_flags, dkey, iod_nr, iods,
-			     VOS_FETCH_RECX_LIST, NULL, &ioh, NULL);
+	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods,
+			     cond_flags | VOS_OF_FETCH_RECX_LIST, NULL, &ioh,
+			     NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
@@ -1373,9 +1375,9 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
 			if (orw->orw_flags & DRF_CHECK_EXISTENCE)
-				fetch_flags = VOS_FETCH_CHECK_EXISTENCE;
+				fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
 			else
-				fetch_flags = VOS_FETCH_SIZE_ONLY;
+				fetch_flags = VOS_OF_FETCH_SIZE_ONLY;
 		}
 
 		ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
@@ -1392,9 +1394,9 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_coc->sc_hdl, orw->orw_oid,
-				     orw->orw_epoch,
-				     cond_flags, dkey, orw->orw_nr, iods,
-				     fetch_flags, shadows, &ioh, dth);
+				     orw->orw_epoch, dkey, orw->orw_nr, iods,
+				     cond_flags | fetch_flags, shadows, &ioh,
+				     dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
@@ -3205,10 +3207,10 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_idx;
 		rc = vos_fetch_begin(ioc->ioc_coc->sc_hdl, dcsr->dcsr_oid,
-				     dcsh->dcsh_epoch.oe_value, 0,
+				     dcsh->dcsh_epoch.oe_value,
 				     &dcsr->dcsr_dkey, dcsr->dcsr_nr,
 				     dcsr->dcsr_read.dcr_iods,
-				     VOS_FETCH_SET_TS_ONLY, NULL, &ioh, dth);
+				     VOS_OF_FETCH_SET_TS_ONLY, NULL, &ioh, dth);
 		if (rc == 0)
 			rc = vos_fetch_end(ioh, 0);
 		else if (rc == -DER_NONEXIST)
