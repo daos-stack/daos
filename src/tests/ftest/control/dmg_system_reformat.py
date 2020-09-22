@@ -71,7 +71,7 @@ class DmgSystemReformatTest(TestWithServers):
             self.fail("The percent value provided cannot be used: %s percent",
                       percentage * 100)
         # Convert info from dmg's human readable to bytes
-        scm_size = percentage * int(human_to_bytes(self.scm_cap))
+        scm_size = int(percentage * human_to_bytes(self.scm_cap))
 
         # Update size value with unit and create, create pool object.
         self.log.info("Create pool at %s percent capacity.", percentage * 100)
