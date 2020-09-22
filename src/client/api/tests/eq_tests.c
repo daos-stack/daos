@@ -980,6 +980,68 @@ out_free:
 	return rc;
 }
 
+static int
+eq_test_8()
+{
+	struct daos_event	*eps[EQT_EV_COUNT + 1] = { 0 };
+	struct daos_event	*events[EQT_EV_COUNT + 1] = { 0 };
+	daos_handle_t		eqh;
+	int			i;
+	int			rc;
+
+	DAOS_TEST_ENTRY("8", "daos_eq_create/destroy");
+
+	print_message("Create EQ\n");
+	rc = daos_eq_create(&eqh);
+	if (rc != 0) {
+		print_error("Failed to create EQ: %d\n", rc);
+		goto out;
+	}
+
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		events[i] = malloc(sizeof(*events[i]));
+		if (events[i] == NULL) {
+			rc = -ENOMEM;
+			goto out;
+		}
+
+		rc = daos_event_init(events[i], eqh, NULL);
+		if (rc != 0)
+			goto out;
+
+		rc = daos_event_launch(events[i]);
+		if (rc != 0) {
+			print_error("Failed to launch event %d: %d\n", i, rc);
+			goto out;
+		}
+	}
+
+	rc = daos_eq_query(eqh, DAOS_EQR_WAITING, EQT_EV_COUNT, eps);
+	if (rc != EQT_EV_COUNT) {
+		print_error("Unexpected result from query: %d %d\n",
+			    rc, EQT_EV_COUNT);
+		rc = -1;
+		goto out;
+	}
+
+	for (i = 0; i < EQT_EV_COUNT; i++)
+		daos_event_complete(eps[i], 0);
+
+	for (i = 0; i < EQT_EV_COUNT; i++)
+		daos_event_fini(events[i]);
+
+	print_message("Destroy empty EQ\n");
+	rc = daos_eq_destroy(eqh, 0);
+	if (rc != 0) {
+		print_error("Failed to destroy empty EQ: %d\n", rc);
+		goto out;
+	}
+
+out:
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1053,6 +1115,12 @@ main(int argc, char **argv)
 	rc = eq_test_7();
 	if (rc != 0) {
 		print_error("EQ TEST 7 failed: %d\n", rc);
+		test_fail++;
+	}
+
+	rc = eq_test_8();
+	if (rc != 0) {
+		print_error("EQ TEST 8 failed: %d\n", rc);
 		test_fail++;
 	}
 
