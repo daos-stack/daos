@@ -141,12 +141,6 @@ def set_test_environment(args):
     usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
-    covfile_env = os.environ.get("COVFILE")
-    print("SCHAN15 - What is COVFILE_ENV={}".format(covfile_env))
-    shared_env = os.environ.get("DAOS_TEST_SHARED_DIR")
-    print("SCHAN15 - What is DAOS_TEST_SHARED_DIR={}".format(shared_env))
-    print("SCHAN15 - Using COVFILE={}".format(covfile_env))
-
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
     if interface is None:
@@ -211,6 +205,23 @@ def set_test_environment(args):
     test_hosts.update(args.test_servers)
     spawn_commands(
         test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
+
+    ##SCHAN15
+    covfile_env = os.environ.get("COVFILE")
+
+    commands = [
+        "set -eu",
+        "rc=0",
+        "echo SCHAN15 - Copy covfile to daostestlogdir",
+        "cp {} {}".format(covfile_env, os.environ["DAOS_TEST_LOG_DIR"]),
+        "ls {}".format(os.environ["DAOS_TEST_LOG_DIR"]),
+        "cp ~/.bashrc ~/.bashrcbak",
+        "echo 'export COVFILE={}/test.cov' \
+            >> ~/.bashrc".format(os.environ["DAOS_TEST_LOG_DIR"]),
+        "cat ~/.bashrc",
+        "exit $rc",
+    ]
+    spawn_commands(test_hosts, "; ".join(commands), 900)
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -798,6 +809,8 @@ def run_tests(test_files, tag_filter, args):
             # in the yaml file.  Treat this like a failed avocado command.
             return_code |= 4
 
+    archive_covs(avocado_logs_dir, args)
+
     return return_code
 
 
@@ -910,6 +923,28 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     archive_files(destination, host_list, "{}/*.log".format(logs_dir))
 
 
+def archive_covs(avocado_logs_dir, args):
+    """Copy all of the host test log files to the avocado results directory.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+        args (argparse.Namespace): command line arguments for this program
+    """
+    # Create a subdirectory in the avocado logs directory for this test
+    destination = os.path.join(avocado_logs_dir, "daos_cov")
+
+    test_hosts = NodeSet(socket.gethostname().split(".")[0])
+    test_hosts.update(args.test_clients)
+    test_hosts.update(args.test_servers)
+    print("Archiving host covs from {} in {}".format(test_hosts, destination))
+
+    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+    archive_files(destination, test_hosts, "{}/*.cov".format(logs_dir))
+
+    spawn_commands(
+        test_hosts, "echo SCHAN15 restore bashrc; mv ~/.bashrcbak ~/.bashrc")
+
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
 
@@ -951,8 +986,6 @@ def archive_files(destination, host_list, source_files):
     print("Current disk space usage of {}".format(destination))
     print(get_output(["df", "-h", destination]))
 
-    covfile_env = os.environ.get("COVFILE")
-
     # Copy any source files that exist on the remote hosts and remove them from
     # the remote host if the copy is successful.  Attempt all of the commands
     # and report status at the end of the loop.  Include a listing of the file
@@ -974,9 +1007,6 @@ def archive_files(destination, host_list, source_files):
         "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
-        "echo SCHAN15 covfile on $(hostname -s) {}".format(covfile_env),
-        "ls {}".format(covfile_env),
-        "echo covfile = \$COVFILE",
         "exit $rc",
     ]
     spawn_commands(host_list, "; ".join(commands), 900)
