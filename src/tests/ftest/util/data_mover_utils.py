@@ -48,12 +48,10 @@ class DataMoverCommand(ExecutableCommand):
         self.daos_src_cont = FormattedParameter("--daos-src-cont {}")
         # DAOS destination container
         self.daos_dst_cont = FormattedParameter("--daos-dst-cont {}")
-        # DAOS service level
-        self.daos_svcl = FormattedParameter("--daos-svcl {}", 0)
         # Source service level
-#        self.daos_src_svcl = FormattedParameter("--daos-src-svcl {}", 0)
+        self.daos_src_svcl = FormattedParameter("--daos-src-svcl {}")
         # Destination service level
-#        self.daos_dst_svcl = FormattedParameter("--daos-dst-svcl {}", 0)
+        self.daos_dst_svcl = FormattedParameter("--daos-dst-svcl {}")
         # DAOS prefix for unified namespace path
         self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # read source list from file
@@ -63,7 +61,7 @@ class DataMoverCommand(ExecutableCommand):
         # preserve permissions, ownership, timestamps, extended attributes
         self.preserve = FormattedParameter("--preserve", False)
         # use synchronous read/write calls (O_DIRECT)
-        self.synchronous = FormattedParameter("--synchronous", False)
+        self.direct = FormattedParameter("--direct", False)
         # create sparse files when possible
         self.sparse = FormattedParameter("--sparse", False)
         # print progress every N seconds
@@ -110,18 +108,17 @@ class DataMoverCommand(ExecutableCommand):
                 [str(item) for item in [
                     int(src_pool.pool.svc.rl_ranks[index])
                     for index in range(src_pool.pool.svc.rl_nr)]])
-            self.daos_svcl.update(src_svcl, "svcl" if display else None)
-#            self.daos_src_svcl.update(src_svcl, "svcl" if display else None)
+            self.daos_src_svcl.update(src_svcl, "svcl" if display else None)
 
         if dst_pool:
             self.daos_dst_pool.update(dst_pool.uuid,
                                       "daos_dst_pool" if display else None)
             # setting destination service level
-#            dst_svcl = ":".join(
-#                [str(item) for item in [
-#                    int(dst_pool.pool.svc.rl_ranks[index])
-#                    for index in range(dst_pool.pool.svc.rl_nr)]])
-#            self.daos_dst_svcl.update(dst_svcl, "svcl" if display else None)
+            dst_svcl = ":".join(
+                [str(item) for item in [
+                    int(dst_pool.pool.svc.rl_ranks[index])
+                    for index in range(dst_pool.pool.svc.rl_nr)]])
+            self.daos_dst_svcl.update(dst_svcl, "svcl" if display else None)
 
         if src_cont:
             self.daos_src_cont.update(src_cont.uuid,
