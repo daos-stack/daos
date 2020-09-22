@@ -21,9 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-# pylint: disable=too-many-lines
-# pylint: disable=bad-continuation
-# pylint: disable=bad-indentation
+
 from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
@@ -252,7 +250,6 @@ def get_output(cmd, check=True):
 
     """
     print("Running {}".format(" ".join(cmd)))
-
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     stdout, _ = process.communicate()
@@ -905,11 +902,6 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
 
-    # Caution: the glob expression "_output.log" must match the
-    #   --output-filename specified in # cart_utils.py:get_env()
-
-    # Plain files need not be tar'd, then can simply be scp'd to the archive
-    # destination
     archive_files(destination, host_list, "{}/*.log*".format(logs_dir))
 
 def archive_config_files(avocado_logs_dir):
@@ -945,7 +937,7 @@ def archive_files(destination, host_list, source_files):
 
     # Create the destination directory
     if not os.path.exists(destination):
-      get_output(["mkdir", destination])
+        get_output(["mkdir", destination])
 
     # Display available disk space prior to copy.  Allow commands to fail w/o
     # exiting this program.  Any disk space issues preventing the creation of a
@@ -957,6 +949,11 @@ def archive_files(destination, host_list, source_files):
     # the remote host if the copy is successful.  Attempt all of the commands
     # and report status at the end of the loop.  Include a listing of the file
     # related to any failed command.
+
+    # Disable pylint's whitespace rules to improve readability for this one
+    # list.
+    #
+    # pylint: disable=bad-continuation
     commands = [
         "set -eu",
         "rc=0",
@@ -965,17 +962,18 @@ def archive_files(destination, host_list, source_files):
         "do ls -sh $file",
         "/lib/daos/TESTING/ftest/cart/util/cart_logtest.py $file",
         "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, destination),
-          "then copied+=($file)",
-          "if ! sudo rm -fr $file",
-            "then ((rc++))",
-            "ls -al $file",
-          "fi",
+              this_host, destination),
+            "then copied+=($file)",
+            "if ! sudo rm -fr $file",
+                "then ((rc++))",
+                "ls -al $file",
+            "fi",
         "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
+    # pylint: enable=bad-continuation
 
     spawn_commands(host_list, "; ".join(commands), timeout=900)
 
