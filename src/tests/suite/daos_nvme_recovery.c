@@ -312,7 +312,6 @@ nvme_recov_3(void **state)
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_int_equal(rc, 0);
-
 	/*Get the rank 1 position from array devices*/
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank == 1)
@@ -320,14 +319,16 @@ nvme_recov_3(void **state)
 	}
 
 	/*Get the Initial write error*/
-	dmg_storage_query_device_health(dmg_config_file, devices[rank].host,
-		write_errors, devices[rank].device_id);
-	print_message("---write_error = %s\n", write_errors);
+	rc = dmg_storage_query_device_health(dmg_config_file,
+		devices[rank].host, write_errors, devices[rank].device_id);
+	assert_int_equal(rc, 0);
+	print_message("Initial write_errors = %s\n", write_errors);
 
 	/*Get the Initial read error*/
-	dmg_storage_query_device_health(dmg_config_file, devices[rank].host,
-		read_errors, devices[rank].device_id);
-	print_message("---read_errors = %s\n", read_errors);
+	rc = dmg_storage_query_device_health(dmg_config_file,
+		devices[rank].host, read_errors, devices[rank].device_id);
+	assert_int_equal(rc, 0);
+	print_message("Initial read_errors = %s\n", read_errors);
 
 	/* Allocate and set buffer to be a string*/
 	D_ALLOC(ow_buf, size);
@@ -339,7 +340,7 @@ nvme_recov_3(void **state)
 	memset(fbuf, 0, size);
 
 	/* Inject BIO Write Errors on Rank1 device*/
-	print_message("Inject BIO Write Error.\n");
+	print_message("----Inject BIO Write Error----\n");
 	set_fail_loc(arg, rank, DAOS_NVME_BIO_WRITE_ERR);
 
 	/* Prepare records */
@@ -353,7 +354,7 @@ nvme_recov_3(void **state)
 				rx_nr, DAOS_TX_NONE, &req);
 
 	/* Inject BIO Read Errors on Rank1 device*/
-	print_message("Inject BIO Read Error.\n");
+	print_message("----Inject BIO Read Error----\n");
 	set_fail_loc(arg, rank, DAOS_NVME_BIO_READ_ERR);
 
 	/*Read and verify the data */
@@ -363,22 +364,24 @@ nvme_recov_3(void **state)
 
 	/*Get the write error count after Injecting BIO write error*/
 	strcpy(write_errors, "write_errors");
-	dmg_storage_query_device_health(dmg_config_file, devices[rank].host,
-		write_errors, devices[rank].device_id);
-	print_message("---write_error = %s\n", write_errors);
+	rc = dmg_storage_query_device_health(dmg_config_file,
+		devices[rank].host, write_errors, devices[rank].device_id);
+	assert_int_equal(rc, 0);
+	print_message("Final write_error = %s\n", write_errors);
 
 	/*Get the read error count after Injecting BIO read error*/
 	strcpy(read_errors, "read_errors");
-	dmg_storage_query_device_health(dmg_config_file, devices[rank].host,
-		read_errors, devices[rank].device_id);
-	print_message("---read_errors = %s\n", read_errors);
+	rc = dmg_storage_query_device_health(dmg_config_file,
+		devices[rank].host, read_errors, devices[rank].device_id);
+	assert_int_equal(rc, 0);
+	print_message("Final read_errors = %s\n", read_errors);
 
+	/* Tear down */
 	D_FREE(ow_buf);
 	D_FREE(fbuf);
 	D_FREE(devices);
 	D_FREE(write_errors);
 	D_FREE(read_errors);
-
 	ioreq_fini(&req);
 }
 
