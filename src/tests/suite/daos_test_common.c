@@ -1037,7 +1037,7 @@ get_server_config(char *host, char *server_config_file)
 	char	*pch;
 
 	snprintf(command, sizeof(command),
-		 "ssh %s ps ux -A | grep daos_server | grep start", host);
+		 "ssh %s ps ux | grep daos_server | grep start", host);
 	FILE *fp = popen(command, "r");
 
 	print_message("Command %s\n", command);
@@ -1103,8 +1103,8 @@ int verify_server_log_mask(char *host, char *server_config_file,
 	return 0;
 }
 
-int get_server_log_file(char *host, char *server_config_file,
-			char *log_file)
+int get_log_file(char *host, char *server_config_file,
+			char *key_name, char *log_file)
 {
 	char	command[256];
 	size_t	len = 0;
@@ -1120,7 +1120,7 @@ int get_server_log_file(char *host, char *server_config_file,
 		return -DER_INVAL;
 
 	while ((read = getline(&line, &len, fp)) != -1) {
-		if (strstr(line, " log_file") != NULL)
+		if (strstr(line, key_name) != NULL)
 			strcat(log_file, strrchr(line, ':') + 1);
 	}
 
@@ -1154,7 +1154,7 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 		fp = popen(command, "r");
 		while ((read = getline(&line, &len, fp)) != -1) {
 			if (strstr(line, state) != NULL) {
-				print_message("Found state %s in Log file %s\n",
+				print_message("Found %s in Log file %s\n",
 					      state, pch);
 				goto out;
 			}

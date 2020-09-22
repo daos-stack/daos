@@ -174,8 +174,8 @@ nvme_recov_2(void **state)
 			print_message("server_config_file = %s\n",
 				      server_config_file);
 
-			get_server_log_file(devices[i].host,
-					    server_config_file, log_file);
+			get_log_file(devices[i].host,
+				server_config_file, " log_file", log_file);
 			rc = verify_server_log_mask(devices[i].host,
 						    server_config_file,
 						    "DEBUG");
@@ -275,19 +275,22 @@ nvme_recov_2(void **state)
 
 /* Verify NVMe I/O error and notification*/
 static void
-nvme_recov_3(void **state)
+nvme_test_simulate_IO_error(void **state)
 {
 	test_arg_t	*arg = *state;
 	device_list	*devices = NULL;
 	daos_obj_id_t	oid;
 	struct ioreq	req;
+	const char		dkey[] = "dkey";
+	const char		akey[] = "akey";
+	daos_size_t		size = 4 * 4096; /* record size */
 	char		*ow_buf;
 	char		*fbuf;
 	char		*write_errors;
 	char		*read_errors;
-	const char		dkey[] = "dkey";
-	const char		akey[] = "akey";
-	daos_size_t		size = 4 * 4096; /* record size */
+	char		*check_errors;
+	char		*control_log_file;
+	char		*server_config_file;
 	int		rx_nr; /* number of record extents */
 	int		rank = 1;
 	int		ndisks, rc, i;
@@ -297,84 +300,149 @@ nvme_recov_3(void **state)
 		skip();
 	}
 
-	write_errors = strdup("write_errors");
-	read_errors = strdup("read_errors");
 	/*
-	*Get the Total number of NVMe devices from all the servers.
-	*/
+	 *  Get the Total number of NVMe devices from all the servers.
+	 */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Total Disks = %d\n", ndisks);
 
 	/*
-	*Get the Device info of all NVMe devices.
-	*/
+	 * Get the Device info of all NVMe devices
+	 */
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_int_equal(rc, 0);
-	/*Get the rank 1 position from array devices*/
+
+	/*
+	 * Get the rank 1 position from array devices
+	 */
 	for (i = 0; i < ndisks; i++) {
-		if (devices[i].rank == 1)
+		if (devices[i].rank == 1) {
 			rank = i;
+			break;
+		}
 	}
 
-	/*Get the Initial write error*/
+	/*
+	 * Get DAOS server file
+	 */
+	D_ALLOC(control_log_file, 1024);
+	D_ALLOC(server_config_file, 512);
+	rc = get_server_config(devices[rank].host, server_config_file);
+	assert_int_equal(rc, 0);
+	print_message("server_config_file = %s\n", server_config_file);
+
+	/*
+	 * Get DAOS control log file
+	 */
+	get_log_file(devices[rank].host,
+		server_config_file, "control_log_file", control_log_file);
+	print_message("Control Log File = %s\n", control_log_file);
+	D_FREE(server_config_file);
+
+	/*
+	 * Get the Initial write error
+	 */
+	write_errors = strdup("write_errors");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 		devices[rank].host, write_errors, devices[rank].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Initial write_errors = %s\n", write_errors);
 
-	/*Get the Initial read error*/
+	/*
+	 * Get the Initial read error
+	 */
+	read_errors = strdup("read_errors");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 		devices[rank].host, read_errors, devices[rank].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Initial read_errors = %s\n", read_errors);
 
-	/* Allocate and set buffer to be a string*/
+	/*
+	 * Allocate and set write buffer with data
+	 */
 	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render(ow_buf, size);
-	/* Alloc the fetch buffer */
+	/*
+	 * Allocate and set fetch buffer
+	 */
 	D_ALLOC(fbuf, size);
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
-	/* Inject BIO Write Errors on Rank1 device*/
+	/*
+	 * Inject BIO Write Errors on Rank1 device
+	 */
 	print_message("----Inject BIO Write Error----\n");
 	set_fail_loc(arg, rank, DAOS_NVME_BIO_WRITE_ERR);
 
-	/* Prepare records */
+	/*
+	 * Prepare records
+	 */
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, 1);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	/* Insert the initial 4K record which will go through NVMe */
+	/*
+	 * Insert the initial 4K record which will go through NVMe
+	 */
 	rx_nr = size / OW_IOD_SIZE;
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
 				rx_nr, DAOS_TX_NONE, &req);
 
-	/* Inject BIO Read Errors on Rank1 device*/
+	/*
+	 * Inject BIO Read Errors on Rank1 device
+	 */
 	print_message("----Inject BIO Read Error----\n");
 	set_fail_loc(arg, rank, DAOS_NVME_BIO_READ_ERR);
 
-	/*Read and verify the data */
+	/*
+	 * Read and verify the data
+	 */
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
 			OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
 	assert_memory_equal(ow_buf, fbuf, size);
 
-	/*Get the write error count after Injecting BIO write error*/
-	strcpy(write_errors, "write_errors");
+	/*
+	 * Get the write error count after Injecting BIO write error.
+	 * Verify the recent write err count is > the initial err count.
+	 */
+	check_errors = strdup("write_errors");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank].host, write_errors, devices[rank].device_id);
+		devices[rank].host, check_errors, devices[rank].device_id);
 	assert_int_equal(rc, 0);
-	print_message("Final write_error = %s\n", write_errors);
+	print_message("Final write_error = %s\n", check_errors);
+	assert_true(atoi(check_errors) > atoi(write_errors));
 
-	/*Get the read error count after Injecting BIO read error*/
-	strcpy(read_errors, "read_errors");
+	/*
+	 * Get the read error count after Injecting BIO read error
+	 * Verify the recent read err count is > the initial err count.
+	 */
+	strcpy(check_errors, "read_errors");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank].host, read_errors, devices[rank].device_id);
+		devices[rank].host, check_errors, devices[rank].device_id);
 	assert_int_equal(rc, 0);
-	print_message("Final read_errors = %s\n", read_errors);
+	print_message("Final read_errors = %s\n", check_errors);
+	assert_true(atoi(check_errors) > atoi(read_errors));
+
+	/*
+	 * Verify writeErr=true and readErr:true available in control log
+	 */
+	char control_err[][50] = {
+		"detected blob I/O error! writeErr:true",
+		"detected blob I/O error! readErr:true"};
+	for (i = 0; control_err[i][0] != '\0'; i++) {
+		rc = verify_state_in_log(devices[rank].host,
+			control_log_file, control_err[i]);
+		if (rc != 0) {
+			print_message(
+				" %s not found in log %s\n", control_err[i],
+				control_log_file);
+			assert_int_equal(rc, 0);
+		}
+	}
 
 	/* Tear down */
 	D_FREE(ow_buf);
@@ -382,6 +450,8 @@ nvme_recov_3(void **state)
 	D_FREE(devices);
 	D_FREE(write_errors);
 	D_FREE(read_errors);
+	D_FREE(check_errors);
+	D_FREE(control_log_file);
 	ioreq_fini(&req);
 }
 
@@ -391,7 +461,7 @@ static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 2: Verify device states after NVMe set to Faulty",
 	 nvme_recov_2, NULL, test_case_teardown},
 	{"NVMe Recovery 3: Verify NVMe IO error and notification",
-	 nvme_recov_3, NULL, test_case_teardown},
+	 nvme_test_simulate_IO_error, NULL, test_case_teardown},
 };
 
 static int
