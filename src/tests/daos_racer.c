@@ -122,10 +122,11 @@ racer_oid_gen(int random)
 	return oid;
 }
 
-void
+static void
 pack_dkey_iod_sgl(char *dkey, d_iov_t *dkey_iov, char akeys[][MAX_KEY_SIZE],
 		  daos_iod_t *iods, daos_recx_t *recxs, d_sg_list_t *sgls,
-		  d_iov_t *iovs, char sgl_bufs[][MAX_REC_SIZE], int iod_nr)
+		  d_iov_t *iovs, char sgl_bufs[][MAX_REC_SIZE], int iod_nr,
+		  uint64_t flags)
 {
 	int i;
 
@@ -134,23 +135,40 @@ pack_dkey_iod_sgl(char *dkey, d_iov_t *dkey_iov, char akeys[][MAX_KEY_SIZE],
 
 	for (i = 0; i < iod_nr; i++) {
 		unsigned size;
-		unsigned val = rand() % 8;
+		unsigned base = rand() % max_akey_per_dkey;
+		unsigned val;
 
-		sprintf(akeys[i], "%d", rand() % max_akey_per_dkey);
+		sprintf(akeys[i], "%d", base);
 		d_iov_set(&iods[i].iod_name, akeys[i], strlen(akeys[i]));
 
 		iods[i].iod_nr = 1;
-		if (val % 2 == 1) {
+		if (base % 2 == 1) {
+			if (rand() % 20 == 1 &&
+			    flags == DAOS_COND_AKEY_UPDATE)
+				iods[i].iod_type = DAOS_IOD_SINGLE;
+			else
+				iods[i].iod_type = DAOS_IOD_ARRAY;
+		} else {
+			if (rand() % 20 == 1 &&
+			    flags == DAOS_COND_AKEY_UPDATE)
+				iods[i].iod_type = DAOS_IOD_ARRAY;
+			else
+				iods[i].iod_type = DAOS_IOD_SINGLE;
+		}
+
+		val = rand() % 10;
+		if (val == 0)
+			val = 1;
+
+		if (iods[i].iod_type == DAOS_IOD_ARRAY) {
 			recxs[i].rx_idx = rand() % (MAX_REC_SIZE / val);
 			recxs[i].rx_nr = rand() % (MAX_REC_SIZE / val);
 			iods[i].iod_recxs = &recxs[i];
 			iods[i].iod_size = 1;
 			size = recxs[i].rx_nr;
-			iods[i].iod_type = DAOS_IOD_ARRAY;
 		} else {
-			iods[i].iod_size = rand() % (MAX_REC_SIZE / (val + 1));
+			iods[i].iod_size = rand() % (MAX_REC_SIZE / val);
 			size = iods[i].iod_size;
-			iods[i].iod_type = DAOS_IOD_SINGLE;
 		}
 
 		sgls[i].sg_nr = 1;
@@ -189,8 +207,6 @@ update_or_fetch(bool update)
 		uint64_t flags = 0;
 
 		memset(iods, 0, max_akey_per_dkey * sizeof(daos_iod_t));
-		pack_dkey_iod_sgl(dkey, &dkey_iov, akeys, iods, recxs, sgls,
-				  sgl_iovs, sgl_bufs, iod_nr);
 		if (update) {
 			if ((cond_rand % 100) < cond_pct) {
 				switch (cond_rand % 4) {
@@ -209,6 +225,9 @@ update_or_fetch(bool update)
 				}
 			}
 
+			pack_dkey_iod_sgl(dkey, &dkey_iov, akeys, iods,
+					  recxs, sgls, sgl_iovs, sgl_bufs,
+					  iod_nr, flags);
 			daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey_iov,
 					iod_nr, iods, sgls, NULL);
 		} else {
@@ -223,6 +242,9 @@ update_or_fetch(bool update)
 				}
 			}
 
+			pack_dkey_iod_sgl(dkey, &dkey_iov, akeys, iods,
+					  recxs, sgls, sgl_iovs, sgl_bufs,
+					  iod_nr, flags);
 			daos_obj_fetch(oh, DAOS_TX_NONE, flags, &dkey_iov,
 				       iod_nr, iods, sgls, NULL, NULL);
 		}
