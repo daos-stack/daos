@@ -475,6 +475,61 @@ out:
 	return tls;
 }
 
+static void
+mrone_recx_daos_vos_internal(struct migrate_one *mrone,
+			     struct daos_oclass_attr *oca,
+			     bool daos2vos, int shard)
+{
+	daos_iod_t *iod;
+	int cell_nr;
+	int stripe_nr;
+	int j;
+	int k;
+
+	D_ASSERT(DAOS_OC_IS_EC(oca));
+
+	cell_nr = obj_ec_cell_rec_nr(oca);
+	stripe_nr = obj_ec_stripe_rec_nr(oca);
+	/* Convert the DAOS to VOS EC offset */
+	for (j = 0; j < mrone->mo_iod_num; j++) {
+		iod = &mrone->mo_iods[j];
+		if (iod->iod_type == DAOS_IOD_SINGLE)
+			continue;
+		for (k = 0; k < iod->iod_nr; k++) {
+			daos_recx_t *recx;
+
+			recx = &iod->iod_recxs[k];
+			D_ASSERT(recx->rx_nr <= cell_nr);
+			if (daos2vos)
+				recx->rx_idx = obj_ec_idx_daos2vos(recx->rx_idx,
+								   stripe_nr,
+								   cell_nr);
+			else
+				recx->rx_idx = obj_ec_idx_vos2daos(recx->rx_idx,
+								   stripe_nr,
+								   cell_nr,
+								   shard);
+			D_DEBUG(DB_REBUILD, "j %d k %d "DF_U64"/"DF_U64"\n",
+				j, k, recx->rx_idx, recx->rx_nr);
+		}
+	}
+}
+
+static void
+mrone_recx_daos2_vos(struct migrate_one *mrone, struct daos_oclass_attr *oca)
+{
+	mrone_recx_daos_vos_internal(mrone, oca, true, -1);
+}
+
+static void
+mrone_recx_vos2_daos(struct migrate_one *mrone, struct daos_oclass_attr *oca,
+		     int shard)
+{
+	shard = shard % obj_ec_tgt_nr(oca);
+	D_ASSERT(shard < obj_ec_data_tgt_nr(oca));
+	mrone_recx_daos_vos_internal(mrone, oca, false, shard);
+}
+
 #define MIGRATE_STACK_SIZE	131072
 #define MAX_BUF_SIZE		2048
 
@@ -491,6 +546,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	bool			 fetch = false;
 	int			 i;
 	int			 rc = 0;
+	struct daos_oclass_attr	*oca;
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -529,6 +585,10 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
 		return -DER_INVAL;
 
+	if (daos_oclass_is_ec(mrone->mo_oid.id_pub, &oca) &&
+	    !obj_shard_is_ec_parity(mrone->mo_oid, &oca))
+		mrone_recx_daos2_vos(mrone, oca);
+
 	for (i = 0, start = 0; i < mrone->mo_iod_num; i++) {
 		if (mrone->mo_iods[i].iod_size > 0) {
 			iod_cnt++;
@@ -539,6 +599,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				D_DEBUG(DB_TRACE, "i %d iod_size = 0\n", i);
 				continue;
 			}
+
 
 			iod_csums = mrone->mo_iods_csums == NULL ? NULL
 					: &mrone->mo_iods_csums[start];
@@ -634,7 +695,9 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 			if (rc)
 				D_GOTO(out, rc);
 			tmp_recx.rx_idx = obj_ec_idx_daos2vos(offset,
-						stride_bytes, cell_bytes);
+							      stride_bytes,
+							      cell_bytes);
+			tmp_recx.rx_idx |= PARITY_INDICATOR;
 			tmp_recx.rx_nr = cell_bytes;
 			d_iov_set(&tmp_iov, p_bufs[shard], cell_bytes);
 			D_DEBUG(DB_IO, "parity "DF_U64"/"DF_U64"\n",
@@ -666,8 +729,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont,
 			    struct daos_oclass_attr *oca)
 {
-	d_sg_list_t	 sgl;
-	d_iov_t		 iov;
+	d_sg_list_t	 sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	d_iov_t		 iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
 	char		 *data;
 	daos_size_t	 size;
 	unsigned int	 p = obj_ec_parity_tgt_nr(oca);
@@ -676,16 +739,19 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	int		 i;
 	int		 rc;
 
-	size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
-	D_ALLOC(data, size);
-	if (data == NULL)
-		return -DER_NOMEM;
+	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
+	for (i = 0; i < mrone->mo_iod_num; i++) {
+		size = daos_iods_len(&mrone->mo_iods[i], 1);
+		D_ALLOC(data, size);
+		if (data == NULL)
+			D_GOTO(out, rc =-DER_NOMEM);
 
-	memset(p_bufs, 0, p * sizeof(p_bufs));
-	d_iov_set(&iov, data, size);
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
+		memset(p_bufs, 0, p * sizeof(p_bufs));
+		d_iov_set(&iov[i], data, size);
+		sgls[i].sg_nr = 1;
+		sgls[i].sg_nr_out = 1;
+		sgls[i].sg_iovs = &iov[i];
+	}
 
 	D_DEBUG(DB_REBUILD,
 		DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64"\n",
@@ -693,14 +759,13 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_iod_num, mrone->mo_epoch);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, &sgl, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
 		D_GOTO(out, rc);
 	}
 
-	ptr = iov.iov_buf;
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		daos_iod_t	*iod;
 		int		j;
@@ -711,6 +776,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		offset = iod->iod_recxs[0].rx_idx;
 		size = iod->iod_recxs[0].rx_nr;
 		tmp_iod = *iod;
+		ptr = iov[i].iov_buf;
 		for (j = 1; j < iod->iod_nr; j++) {
 			daos_recx_t	*recx = &iod->iod_recxs[j];
 
@@ -724,7 +790,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 						   size, oca, &tmp_iod, p_bufs);
 			if (rc)
 				D_GOTO(out, rc);
-			ptr += size;
+			ptr += size * iod->iod_size;
 			offset = recx->rx_idx;
 			size = recx->rx_nr;
 		}
@@ -734,12 +800,113 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 						   size, oca, &tmp_iod, p_bufs);
 	}
 out:
-	if (data)
-		D_FREE(data);
+	for (i = 0; i < mrone->mo_iod_num; i++) {
+		if (iov[i].iov_buf)
+			D_FREE(iov[i].iov_buf);
+	}
 
 	for (i = 0; i < p; i++) {
 		if (p_bufs[i] != NULL)
 			D_FREE(p_bufs[i]);
+	}
+
+	return rc;
+}
+
+static int
+migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
+			    struct ds_cont_child *ds_cont)
+{
+	struct daos_oclass_attr	*oca;
+	d_sg_list_t	 	sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	d_iov_t		 	iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	char		 	*data;
+	daos_size_t	 	size;
+	int		 	i;
+	int		 	rc;
+
+	oca = daos_oclass_attr_find(mrone->mo_oid.id_pub);
+	D_ASSERT(oca != NULL);
+	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
+	for (i = 0; i < mrone->mo_iod_num; i++) {
+		D_ASSERT(mrone->mo_iods[i].iod_type == DAOS_IOD_SINGLE);
+
+		size = daos_iods_len(&mrone->mo_iods[i], 1);
+		D_ALLOC(data, size);
+		if (data == NULL)
+			D_GOTO(out, rc =-DER_NOMEM);
+
+		d_iov_set(&iov[i], data, size);
+		sgls[i].sg_nr = 1;
+		sgls[i].sg_nr_out = 1;
+		sgls[i].sg_iovs = &iov[i];
+	}
+
+	D_DEBUG(DB_REBUILD,
+		DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64"\n",
+		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
+		mrone->mo_iod_num, mrone->mo_epoch);
+
+	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+	if (rc) {
+		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
+			DP_KEY(&mrone->mo_dkey), rc);
+		D_GOTO(out, rc);
+	}
+
+	for (i = 0; i < mrone->mo_iod_num && DAOS_OC_IS_EC(oca); i++) {
+		daos_iod_t	*iod = &mrone->mo_iods[i];
+		uint32_t	start_shard;
+
+		start_shard = rounddown(mrone->mo_oid.id_shard,
+					obj_ec_tgt_nr(oca));
+		if (obj_ec_singv_one_tgt(iod, &sgls[i], oca)) {
+			D_DEBUG(DB_REBUILD, DF_UOID" one tgt.\n",
+				DP_UOID(mrone->mo_oid));
+			continue;
+		}
+
+		if (obj_shard_is_ec_parity(mrone->mo_oid, NULL)) {
+			d_iov_t e_iov = { 0 };
+
+			rc = obj_ec_singv_encode_buf(mrone->mo_oid.id_pub,
+						     iod, oca, &sgls[i],
+						     &e_iov);
+			if (rc)
+				return rc;
+			D_ASSERT(e_iov.iov_len <= sgls[i].sg_iovs[0].iov_len);
+			memcpy(sgls[i].sg_iovs[i].iov_buf, e_iov.iov_buf,
+			       e_iov.iov_len);
+			daos_iov_free(&e_iov);
+		} else {
+			rc = obj_ec_singv_split(mrone->mo_oid.id_pub,
+						mrone->mo_oid.id_shard,
+						iod->iod_size, oca, &sgls[i]);
+			if (rc)
+				D_GOTO(out, rc);
+		}
+
+		obj_singv_ec_rw_filter(&mrone->mo_oid, iod, NULL,
+				       mrone->mo_epoch, ORF_EC,
+				       start_shard, 1,
+				       true, false, NULL);
+	}
+
+	rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
+			    mrone->mo_epoch, mrone->mo_version,
+			    0, &mrone->mo_dkey, mrone->mo_iod_num,
+			    mrone->mo_iods, mrone->mo_iods_csums, sgls);
+out:
+	for (i = 0; i < mrone->mo_iod_num; i++) {
+		if (iov[i].iov_buf)
+			D_FREE(iov[i].iov_buf);
+
+		/* since iod_recxs is being used by single value update somehow,
+		 * let's reset it after update.
+		 */ 
+		if (mrone->mo_iods[i].iod_type == DAOS_IOD_SINGLE)
+			mrone->mo_iods[i].iod_recxs = NULL;
 	}
 
 	return rc;
@@ -756,6 +923,9 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 
 	if (obj_shard_is_ec_parity(mrone->mo_oid, &oca))
 		return migrate_fetch_update_parity(mrone, oh, ds_cont, oca);
+
+	if (DAOS_OC_IS_EC(oca))
+		mrone_recx_daos2_vos(mrone, oca);
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, mrone->mo_epoch,
@@ -793,6 +963,9 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 		mrone->mo_iod_num, mrone->mo_epoch);
 
+	if (DAOS_OC_IS_EC(oca))
+		mrone_recx_vos2_daos(mrone, oca, mrone->mo_oid.id_shard);
+
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
 	if (rc)
@@ -803,6 +976,9 @@ post:
 		sgl = &sgls[i];
 		daos_sgl_fini(sgl, false);
 	}
+
+	if (DAOS_OC_IS_EC(oca))
+		mrone_recx_daos2_vos(mrone, oca);
 
 	ret = bio_iod_post(vos_ioh2desc(ioh));
 	if (ret) {
@@ -923,21 +1099,29 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone)
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_TGT_NOSPACE))
 		D_GOTO(obj_close, rc = -DER_NOSPACE);
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_REBUILD)) {
+		D_DEBUG(DB_REBUILD, DF_UUID" disable rebuild\n",
+			DP_UUID(tls->mpt_pool_uuid));
+		D_GOTO(obj_close, rc);
+	}
+
 	rc = migrate_punch(tls, mrone, cont);
 	if (rc)
 		D_GOTO(obj_close, rc);
 
 	data_size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
-
 	D_DEBUG(DB_TRACE, "data size is "DF_U64"\n", data_size);
-	/* DAOS_REBUILD_TGT_NO_REBUILD are for testing purpose */
-	if ((data_size > 0 || data_size == (daos_size_t)(-1)) &&
-	    !DAOS_FAIL_CHECK(DAOS_REBUILD_NO_REBUILD)) {
-		if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
-			rc = migrate_fetch_update_inline(mrone, oh, cont);
-		else
-			rc = migrate_fetch_update_bulk(mrone, oh, cont);
+	if (data_size == 0) {
+		D_DEBUG(DB_REBUILD, "skipe empty iod\n");
+		D_GOTO(obj_close, rc);
 	}
+
+	if (mrone->mo_iods[0].iod_type == DAOS_IOD_SINGLE)
+		rc = migrate_fetch_update_single(mrone, oh, cont);
+	else if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
+		rc = migrate_fetch_update_inline(mrone, oh, cont);
+	else
+		rc = migrate_fetch_update_bulk(mrone, oh, cont);
 
 	tls->mpt_rec_count += mrone->mo_rec_num;
 	tls->mpt_size += mrone->mo_size;
@@ -1072,10 +1256,14 @@ rw_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, d_sg_list_t *sgls)
 			D_GOTO(out, rc);
 	}
 
+	if (iod->iod_type == DAOS_IOD_SINGLE)
+		mrone->mo_iods[idx].iod_recxs = NULL;
+	else
+		iod->iod_recxs = NULL;
+
 	mrone->mo_iod_num++;
 	mrone->mo_rec_num += rec_cnt;
 	mrone->mo_size += total_size;
-	iod->iod_recxs = NULL;
 
 out:
 	return 0;
@@ -1130,17 +1318,21 @@ migrate_one_iod_merge_recx(daos_unit_oid_t oid, daos_iod_t *dst_iod,
 		return -DER_NONEXIST;
 
 	D_INIT_LIST_HEAD(&merge_list);
-	recxs = src_iod->iod_recxs;
-	for (i = 0; i < dst_iod->iod_nr; i++) {
-		D_DEBUG(DB_REBUILD, "src merge "DF_U64"/"DF_U64"\n",
-			recxs[i].rx_idx, recxs[i].rx_nr);
-		rc = merge_recx(&merge_list, recxs[i].rx_idx, recxs[i].rx_nr);
-		if (rc)
-			D_GOTO(out, rc);
+	if (src_iod != NULL) {
+		recxs = src_iod->iod_recxs;
+		for (i = 0; i < src_iod->iod_nr; i++) {
+			D_DEBUG(DB_REBUILD, "src merge "DF_U64"/"DF_U64"\n",
+				recxs[i].rx_idx, recxs[i].rx_nr);
+			rc = merge_recx(&merge_list, recxs[i].rx_idx,
+					recxs[i].rx_nr);
+			if (rc)
+				D_GOTO(out, rc);
+		}
 	}
 
+	D_ASSERT(dst_iod != NULL);
 	recxs = dst_iod->iod_recxs;
-	for (i = 0; i < src_iod->iod_nr; i++) {
+	for (i = 0; i < dst_iod->iod_nr; i++) {
 		D_DEBUG(DB_REBUILD, "dst merge "DF_U64"/"DF_U64"\n",
 			recxs[i].rx_idx, recxs[i].rx_nr);
 		rc = merge_recx(&merge_list, recxs[i].rx_idx, recxs[i].rx_nr);
@@ -1206,16 +1398,18 @@ migrate_one_merge(struct migrate_one *mo, struct dss_enum_unpack_io *io)
 			if (!daos_iov_cmp(&mo->mo_iods[j].iod_name,
 					  &io->ui_iods[i].iod_name))
 				continue;
-			rc = migrate_one_iod_merge_recx(io->ui_oid,
+			if (mo->mo_iods[j].iod_type == DAOS_IOD_ARRAY) {
+				rc = migrate_one_iod_merge_recx(io->ui_oid,
 							&mo->mo_iods[j],
 							&io->ui_iods[i]);
-			if (rc)
-				D_GOTO(out, rc);
+				if (rc)
+					D_GOTO(out, rc);
 
-			/* If recxs can be merged to other iods, then
-			 * it do not need to be processed anymore
-			 */
-			io->ui_iods[i].iod_nr = 0;
+				/* If recxs can be merged to other iods, then
+				 * it do not need to be processed anymore
+				 */
+				io->ui_iods[i].iod_nr = 0;
+			}
 			break;
 		}
 		if (j == mo->mo_iod_num)
@@ -1348,6 +1542,7 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		D_GOTO(free, rc);
 
 	mrone->mo_oid = oid;
+	mrone->mo_oid.id_shard = iter_arg->shard;
 	uuid_copy(mrone->mo_cont_uuid, iter_arg->cont_uuid);
 	uuid_copy(mrone->mo_pool_uuid, tls->mpt_pool_uuid);
 	mrone->mo_pool_tls_version = tls->mpt_version;
@@ -1382,19 +1577,33 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 		/* Convert EC object offset to DAOS offset. */
 		for (i = 0; i <= io->ui_iods_top; i++) {
 			daos_iod_t *iod = &io->ui_iods[i];
-			daos_recx_t *recxs;
-			int nr = 0;
+
+			if (iod->iod_type == DAOS_IOD_SINGLE)
+				continue;
 
 			rc = obj_recx_ec2_daos(oca, io->ui_oid.id_shard,
-					       iod->iod_recxs, iod->iod_nr,
-					       &recxs, &nr);
+					       &iod->iod_recxs, &iod->iod_nr);
 			if (rc != 0)
 				return rc;
 
-			if (iod->iod_recxs != recxs) {
-				D_FREE(iod->iod_recxs);
-				iod->iod_recxs = recxs;
-				iod->iod_nr = nr;
+			/* After convert to DAOS offset, there might be
+			 * some duplicate recxs due to replication/parity
+			 * space. let's remove them.
+			 */
+			rc = migrate_one_iod_merge_recx(io->ui_oid,
+							iod, NULL);
+			if (rc)
+				return rc;
+
+			/* For data shard, convert to single shard offset */
+			if (arg->arg->shard < obj_ec_data_tgt_nr(oca)) {
+				/* data shard */
+				rc = obj_recx_ec_daos2shard(oca,
+							    arg->arg->shard,
+							    &iod->iod_recxs,
+							    &iod->iod_nr);
+				if (rc)
+					return rc;
 			}
 		}
 
@@ -2253,7 +2462,7 @@ migrate_check_one(void *data)
 	arg->obj_executed_ult += tls->mpt_obj_executed_ult;
 	arg->generated_ult += tls->mpt_generated_ult;
 	arg->executed_ult += tls->mpt_executed_ult;
-	if (arg->dms.dm_status)
+	if (arg->dms.dm_status == 0)
 		arg->dms.dm_status = tls->mpt_status;
 
 	ABT_mutex_unlock(arg->status_lock);

@@ -164,12 +164,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodGetAttachInfo, req)
+	dresp, err := svc.harness.CallDrpc(drpc.MethodGetAttachInfo, req)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +219,8 @@ func (svc *mgmtSvc) getBioHealth(ctx context.Context, srv *IOServerInstance, req
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
 	}
+
+	svc.log.Debugf("bio health response, model %s serial %s", resp.GetModel(), resp.GetSerial())
 
 	if resp.Status != 0 {
 		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")
@@ -491,12 +488,7 @@ func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgm
 func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq) (*mgmtpb.ListContResp, error) {
 	svc.log.Debugf("MgmtSvc.ListContainers dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodListContainers, req)
+	dresp, err := svc.harness.CallDrpc(drpc.MethodListContainers, req)
 	if err != nil {
 		return nil, err
 	}
@@ -515,12 +507,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq) (*mgmtpb.ContSetOwnerResp, error) {
 	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodContSetOwner, req)
+	dresp, err := svc.harness.CallDrpc(drpc.MethodContSetOwner, req)
 	if err != nil {
 		return nil, err
 	}

@@ -49,12 +49,13 @@ class NvmeHealth(ServerFillUp):
         no_of_pools = self.params.get("number_of_pools", '/run/pool/*')
         #Stop the servers to run SPDK too to get the server capacity
         self.stop_servers()
-        storage = self.get_server_capacity()
+        storage = self.get_nvme_max_capacity()
         self.start_servers()
 
+        #Create the pool from 80% of available of storage space
         single_pool_nvme_size = int((storage * 0.80)/no_of_pools)
 
-        pools = []
+        self.pool = []
         #Create the Large number of pools
         for _pool in range(no_of_pools):
             pool = TestPool(self.context, dmg_command=self.get_dmg_command())
@@ -63,7 +64,7 @@ class NvmeHealth(ServerFillUp):
             pool.scm_size.update('{}'.format(int(single_pool_nvme_size * 0.10)))
             pool.nvme_size.update('{}'.format(single_pool_nvme_size))
             pool.create()
-            pools.append(pool)
+            self.pool.append(pool)
 
         #initialize the dmg command
         self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
@@ -84,7 +85,7 @@ class NvmeHealth(ServerFillUp):
             except CommandFailure as error:
                 self.fail("dmg command failed: {}".format(error))
             #Verify all pools UUID listed as part of query
-            for pool in pools:
+            for pool in self.pool:
                 if pool.uuid.lower() not in result.stdout:
                     self.fail('Pool uuid {} not found in smd query'
                               .format(pool.uuid.lower()))
@@ -106,11 +107,6 @@ class NvmeHealth(ServerFillUp):
 
         # Get the nvme-health
         try:
-            self.dmg.storage_query_nvme_health()
+            self.dmg.storage_scan_nvme_health()
         except CommandFailure as error:
-            self.fail("dmg nvme-health failed {}".format(error))
-
-        # Destroy the pools
-        print('Pool Destroy')
-        for pool in pools:
-            pool.destroy()
+            self.fail("dmg storage scan --nvme-health failed {}".format(error))

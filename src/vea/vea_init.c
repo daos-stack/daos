@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,7 +162,6 @@ load_free_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 	if (rc != 0)
 		return rc;
 
-	vsi->vsi_stat[STAT_FREE_BLKS] += vfe->vfe_blk_cnt;
 	return 0;
 }
 

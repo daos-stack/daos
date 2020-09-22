@@ -13,6 +13,7 @@ timeout: 600
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
+  nvme_size: 16G
 server_config:
   servers_per_host: 2
   name: daos_server
@@ -69,9 +70,12 @@ daos_tests:
     test_e:
       daos_test: e
       test_name: DAOS epoch tests
-    test_X:
-      daos_test: X
-      test_name: DAOS DTX tests
+    test_t:
+      daos_test: t
+      test_name: Single RDG TX tests
+    test_T:
+      daos_test: T
+      test_name: Distributed TX tests
     test_V:
       daos_test: V
       test_name: DAOS verify consistency tests
@@ -116,4 +120,8 @@ daos_tests:
     test_z:
       daos_test: z
       test_name: Checksum tests
+      test_timeout: 900
+    test_S:
+      daos_test: S 
+      test_name: DAOS rebuild ec tests
       test_timeout: 900

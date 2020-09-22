@@ -21,8 +21,6 @@ timeout: 48H15M
 setup:
     start_servers: True
     start_agents: True
-dmg:
-    insecure: True
 server_config:
     name: daos_server
     provider: ofi+sockets
@@ -65,6 +63,7 @@ pool_reserved:
     control_method: dmg
 container:
     type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 container_reserved:
     akey_size: 5
@@ -74,6 +73,9 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: API
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -156,4 +158,5 @@ fio_stress:
         - 'randrw'
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
+  disable_direct_io: True
 

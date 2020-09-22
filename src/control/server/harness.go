@@ -28,8 +28,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -54,7 +56,7 @@ type IOServerHarness struct {
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
 		log:              log,
-		instances:        make([]*IOServerInstance, 0, maxIOServers),
+		instances:        make([]*IOServerInstance, 0),
 		started:          atm.NewBool(false),
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
@@ -83,7 +85,7 @@ func (h *IOServerHarness) FilterInstancesByRankSet(ranks string) ([]*IOServerIns
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*IOServerInstance, 0, maxIOServers)
+	out := make([]*IOServerInstance, 0)
 
 	for _, i := range h.instances {
 		r, err := i.GetRank()
@@ -112,9 +114,19 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	return nil
 }
 
-// GetMSLeaderInstance returns a managed IO Server instance to be used as a
+// CallDrpc calls the supplied dRPC method on a managed I/O server instance.
+func (h *IOServerHarness) CallDrpc(method drpc.Method, body proto.Message) (*drpc.Response, error) {
+	mi, err := h.getMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	return mi.CallDrpc(method, body)
+}
+
+// getMSLeaderInstance returns a managed IO Server instance to be used as a
 // management target and fails if selected instance is not MS Leader.
-func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
+func (h *IOServerHarness) getMSLeaderInstance() (*IOServerInstance, error) {
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
@@ -204,7 +216,7 @@ func (h *IOServerHarness) readyRanks() []system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]system.Rank, 0, maxIOServers)
+	ranks := make([]system.Rank, 0)
 	for _, srv := range h.instances {
 		if srv.hasSuperblock() && srv.isReady() {
 			ranks = append(ranks, *srv.getSuperblock().Rank)

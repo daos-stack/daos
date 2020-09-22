@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -349,7 +349,7 @@ pl_hop_key_hash(struct d_hash_table *htab, const void *key,
 		unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(uuid_t));
-	return d_hash_string_u32((const char *)key, ksize);
+	return *((const uint32_t *)key);
 }
 
 static bool

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,13 +47,14 @@
 struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
-	bool			sp_stopping;
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
-	ABT_mutex		sp_iv_refresh_lock;
+	ABT_mutex		sp_mutex;
+	ABT_cond		sp_fetch_hdls_cond;
+	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns	       *sp_iv_ns;
 	uint32_t		sp_dtx_resync_version;
 	/* Special pool/container handle uuid, which are
@@ -63,6 +64,8 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
+	uint32_t		sp_stopping:1,
+				sp_fetch_hdls:1;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);

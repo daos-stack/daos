@@ -153,6 +153,8 @@ struct vos_pool {
 	/** number of openers */
 	int			vp_opened:30;
 	int			vp_dying:1;
+	/** caller specifies pool is small (for sys space reservation) */
+	bool			vp_small;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */
@@ -403,7 +405,6 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
 /**
  * Check whether the record (to be accessible) is available to outside or not.
  *
- * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
  * \param entry		[IN]	DTX local id
  * \param epoch		[IN]	Epoch of update
@@ -421,9 +422,8 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  *		negative value	For error cases.
  */
 int
-vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   uint32_t entry, daos_epoch_t epoch,
-			   uint32_t intent, uint32_t type);
+vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -783,6 +783,7 @@ struct vos_iter_ops;
 struct vos_iterator {
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
+	struct vos_ts_set	*it_ts_set;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
@@ -826,7 +827,8 @@ struct vos_iter_info {
 struct vos_iter_ops {
 	/** prepare a new iterator with the specified type and parameters */
 	int	(*iop_prepare)(vos_iter_type_t type, vos_iter_param_t *param,
-			       struct vos_iterator **iter_pp);
+			       struct vos_iterator **iter_pp,
+			       struct vos_ts_set *ts_set);
 	/** fetch the record that the cursor points to and open the subtree
 	 *  corresponding to specified type, return info about the iterator
 	 *  and nested object.   If NULL, it isn't supported for the parent

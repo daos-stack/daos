@@ -31,6 +31,7 @@ from command_utils_base import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
+from ior_utils import IorCommand
 
 try:
     # python 3.x
@@ -86,8 +87,10 @@ class ServerFillUp(IorTestBase):
         self.no_of_drives = 1
         self.pool = None
         self.dmg = None
-        self.container_info = {}
         self.set_faulty_device = False
+        self.scm_fill = False
+        self.nvme_fill = False
+        self.ior_matrix = None
 
     def setUp(self):
         """Set up each test case."""
@@ -96,19 +99,24 @@ class ServerFillUp(IorTestBase):
         # Start the servers and agents
         super(ServerFillUp, self).setUp()
         self.hostfile_clients = None
-        self.ior_read_flags = self.params.get("ior_read_flags",
+        self.ior_default_flags = self.ior_cmd.flags.value
+        self.ior_scm_xfersize = self.ior_cmd.transfer_size.value
+        self.ior_read_flags = self.params.get("read_flags",
                                               '/run/ior/iorflags/*',
-                                              '-F -r -R -G 1')
+                                              '-r -R -k -G 1')
+        self.ior_nvme_xfersize = self.params.get(
+            "nvme_transfer_size", '/run/ior/transfersize_blocksize/*',
+            '16777216')
         #Get the number of daos_io_servers
         self.daos_io_servers = (self.server_managers[0].manager
                                 .job.yaml.server_params)
         self.out_queue = queue.Queue()
 
-    def get_max_capacity(self, drive_info):
-        """Get NVMe storage capacity based on NVMe disk from server yaml file.
+    def get_max_capacity(self, mem_size_info):
+        """Get storage capacity based on server yaml file.
 
         Args:
-            drive_info(list): List of disks from each daos_io_servers
+            mem_size_info(dict): List of NVMe/SCM size from each servers
 
         Returns:
             int: Maximum NVMe storage capacity.
@@ -118,16 +126,41 @@ class ServerFillUp(IorTestBase):
         drive_capa = []
         for server in self.hostlist_servers:
             for daos_io_server in range(len(self.daos_io_servers)):
-                drive_capa.append(sum(drive_info[server][daos_io_server]))
+                drive_capa.append(sum(mem_size_info[server][daos_io_server]))
         print('Maximum Storage space from the servers is {}'
-              .format(int(min(drive_capa) * 0.99)))
+              .format(int(min(drive_capa) * 0.96)))
 
-        #Return the 99% of storage space as it wont be used 100% for
+        #Return the 99% of storage space as it won't be used 100% for
         #pool creation.
-        return int(min(drive_capa) * 0.99)
+        return int(min(drive_capa) * 0.96)
+
+    def get_scm_lsblk(self):
+        """Get SCM size using lsblk from servers.
+
+        Returns:
+            dict: Dictionary of server mapping with disk ID and size
+                  'wolf-A': {'nvme2n1': '1600321314816'}.
+        """
+        scm_data = {}
+
+        task = run_task(self.hostlist_servers, "lsblk -b | grep pmem")
+        for _rc_code, _node in task.iter_retcodes():
+            if _rc_code == 1:
+                print("Failed to lsblk on {}".format(_node))
+                raise ValueError
+        #Get the drive size from each daos_io_servers
+        for buf, nodelist in task.iter_buffers():
+            for node in nodelist:
+                pcmem_data = {}
+                output = str(buf).split('\n')
+                for _tmp in output:
+                    pcmem_data[_tmp.split()[0]] = _tmp.split()[3]
+                scm_data['{}'.format(node)] = pcmem_data
+
+        return scm_data
 
     def get_nvme_lsblk(self):
-        """Get NVMe lsblk from servers.
+        """Get NVMe size using lsblk from servers.
 
         Returns:
             dict: Dictionary of server mapping with disk ID and size
@@ -183,8 +216,38 @@ class ServerFillUp(IorTestBase):
 
         return nvme_lsblk, nvme_readlink
 
-    def get_server_capacity(self):
-        """Get Server Pool NVMe storage capacity.
+    def get_scm_max_capacity(self):
+        """Check with server.yaml and return maximum SCM size allow to create.
+
+        Returns:
+            int: Maximum NVMe storage capacity for pool creation.
+
+        Note: Read the PCMEM sizes from the server using lsblk command.
+        This need to be replaced with dmg command when it's available.
+        """
+        scm_lsblk = self.get_scm_lsblk()
+
+        scm_size = {}
+        #Create the dictionary for Max SCM size for all the servers.
+        for server in scm_lsblk:
+            tmp_dict = {}
+            for daos_io_server in range(len(self.daos_io_servers)):
+                tmp_disk_list = []
+                for pcmem in (self.server_managers[0].manager.job.yaml.
+                              server_params[daos_io_server].scm_list.value):
+                    pcmem_num = pcmem.split('/')[-1]
+                    if pcmem_num in scm_lsblk[server].keys():
+                        tmp_disk_list.append(int(scm_lsblk[server][pcmem_num]))
+                    else:
+                        self.fail("PCMEM {} can not found on server {}"
+                                  .format(pcmem, server))
+                tmp_dict[daos_io_server] = tmp_disk_list
+            scm_size[server] = tmp_dict
+
+        return self.get_max_capacity(scm_size)
+
+    def get_nvme_max_capacity(self):
+        """Get Server NVMe storage maximum capacity.
 
         Returns:
             int: Maximum NVMe storage capacity for pool creation.
@@ -226,37 +289,24 @@ class ServerFillUp(IorTestBase):
                              set.
         """
         _create_cont = True
+        self.ior_cmd.flags.value = self.ior_default_flags
         #For IOR Read only operation, retrieve the stored container UUID
         if 'Read' in operation:
             _create_cont = False
             self.ior_cmd.flags.value = self.ior_read_flags
-            self.ior_cmd.daos_cont.value = self.container_info[
-                "{}{}{}".format(self.ior_cmd.dfs_oclass.value,
-                                self.ior_cmd.api.value,
-                                self.ior_cmd.transfer_size.value)][0]
-            self.ior_cmd.block_size.value = self.container_info[
-                "{}{}{}".format(self.ior_cmd.dfs_oclass.value,
-                                self.ior_cmd.api.value,
-                                self.ior_cmd.transfer_size.value)][1]
+
         #For IOR Other operation, calculate the block size based on server %
         #to fill up. Store the container UUID for future reading operation.
-        else:
-            block_size = self.calculate_ior_block_size()
-            self.ior_cmd.block_size.update('{}'.format(block_size))
+        block_size = self.calculate_ior_block_size()
+        self.ior_cmd.block_size.update('{}'.format(block_size))
 
         # run IOR Command
         try:
-            self.run_ior_with_pool(create_cont=_create_cont)
+            out = self.run_ior_with_pool(create_cont=_create_cont)
+            self.ior_matrix = IorCommand.get_ior_metrics(out)
             results.put("PASS")
         except (CommandFailure, TestFail) as _error:
             results.put("FAIL")
-
-        self.container_info["{}{}{}"
-                            .format(self.ior_cmd.dfs_oclass.value,
-                                    self.ior_cmd.api.value,
-                                    self.ior_cmd.transfer_size.value)] = [
-                                        self.ior_cmd.daos_cont.value,
-                                        self.ior_cmd.block_size.value]
 
     def calculate_ior_block_size(self):
         """
@@ -276,8 +326,14 @@ class ServerFillUp(IorTestBase):
             replica_server = _replica[0]
 
         print('Replica Server = {}'.format(replica_server))
-        # Get the NVMe Free size.
-        nvme_free_space = self.pool.get_pool_daos_space()["s_free"][1]
+        if self.scm_fill:
+            free_space = self.pool.get_pool_daos_space()["s_total"][0]
+            self.ior_cmd.transfer_size.value = self.ior_scm_xfersize
+        elif self.nvme_fill:
+            free_space = self.pool.get_pool_daos_space()["s_total"][1]
+            self.ior_cmd.transfer_size.value = self.ior_nvme_xfersize
+        else:
+            self.fail('Provide storage type (SCM/NVMe) to be filled')
 
         #Get the block size based on the capacity to be filled. For example
         #If nvme_free_space is 100G and to fill 50% of capacity.
@@ -288,7 +344,7 @@ class ServerFillUp(IorTestBase):
         #3.12G (Single process size)/2 (No of Replica) = 1.56G
         #To fill 50 % of 100GB pool with total 16 process and replica 2, IOR
         #single process size will be 1.56GB.
-        _tmp_block_size = (((nvme_free_space/100)*self.capacity)/self.processes)
+        _tmp_block_size = (((free_space/100)*self.capacity)/self.processes)
         _tmp_block_size = int(_tmp_block_size / int(replica_server))
         block_size = ((_tmp_block_size/int(self.ior_cmd.transfer_size.value))
                       *int(self.ior_cmd.transfer_size.value))
@@ -329,43 +385,78 @@ class ServerFillUp(IorTestBase):
             for disk_id in range(0, self.no_of_drives):
                 self.set_device_faulty(server, device_ids[server][disk_id])
 
-    def start_ior_load(self):
+    def create_pool_max_size(self, scm=False, nvme=False):
         """
-        Method to Fill up the server. It will get the maximum Storage space and
-        create the pool.Fill up the server based on % amount given using IOR.
+        Method to create the single pool with Maximum NVMe/SCM size available.
+
+        arg:
+            scm(bool): To create the pool with max SCM size or not.
+            nvme(bool): To create the pool with max NVMe size or not.
+
+        Note: Method to Fill up the server. It will get the maximum Storage
+              space and create the pool.
+              Replace with dmg options in future when it's available.
         """
-        #Method to get the storage capacity.Replace with dmg options in future
-        #when it's available. This is time consuming so store the size in
-        #file to avoid rerunning the same logic for future test cases.
-        #This will be only run for first test case.
-
-        avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
-        capacity_file = os.path.join(avocao_tmp_dir, 'storage_capacity')
-        if not os.path.exists(capacity_file):
-            #Stop server but do not reset.
-            self.stop_servers()
-            total_nvme_capacity = self.get_server_capacity()
-            with open(capacity_file,
-                      'w') as _file: _file.write('{}'
-                                                 .format(total_nvme_capacity))
-            #Start the server.
-            self.start_servers()
-        else:
-            total_nvme_capacity = open(capacity_file).readline().rstrip()
-
-        print("Server Stoarge capacity = {}".format(total_nvme_capacity))
         # Create a pool
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
-        self.pool.nvme_size.update('{}'.format(total_nvme_capacity))
+
+        #If NVMe is True get the max NVMe size from servers
+        if nvme:
+            avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
+            capacity_file = os.path.join(avocao_tmp_dir, 'storage_capacity')
+            if not os.path.exists(capacity_file):
+                #Stop servers.
+                self.stop_servers()
+                total_nvme_capacity = self.get_nvme_max_capacity()
+                with open(capacity_file,
+                          'w') as _file: _file.write(
+                              '{}'.format(total_nvme_capacity))
+                #Start the server.
+                self.start_servers()
+            else:
+                total_nvme_capacity = open(capacity_file).readline().rstrip()
+
+            print("Server NVMe Max Storage capacity = {}"
+                  .format(total_nvme_capacity))
+            self.pool.nvme_size.update('{}'.format(total_nvme_capacity))
+
+        #If SCM is True get the max SCM size from servers
+        if scm:
+            total_scm_capacity = self.get_scm_max_capacity()
+            print("Server SCM Max Storage capacity = {}"
+                  .format(total_scm_capacity))
+            self.pool.scm_size.update('{}'.format(total_scm_capacity))
+
+        #Create the Pool
         self.pool.create()
-        print("Pool Usage Percentage - Before - {}"
-              .format(self.pool.pool_percentage_used()))
+
+    def start_ior_load(self, storage='NVMe', operation="Write", percent=1):
+        """
+        Method to Fill up the server either SCM or NVMe.
+        Fill up based on percent amount given using IOR.
+
+        arg:
+            storage(string): SCM or NVMe, by default it will fill NVMe.
+            operation(string): Write/Read operation
+            percent(int): % of storage to be filled
+
+        Returns:
+            None
+        """
+        self.capacity = percent
+        # Fill up NVMe by default
+        self.nvme_fill = True if 'NVMe' in storage else False
+        self.scm_fill = True if 'SCM' in storage else False
+
+        if operation not in ['Read', 'Write']:
+            self.fail('Please provide the valid IO operation instead {}'
+                      .format(operation))
 
         # Create the IOR threads
         job = threading.Thread(target=self.start_ior_thread,
                                kwargs={"results":self.out_queue,
-                                       "operation": 'Write'})
+                                       "operation": operation})
         # Launch the IOR thread
         job.start()
 
@@ -382,13 +473,3 @@ class ServerFillUp(IorTestBase):
         while not self.out_queue.empty():
             if self.out_queue.get() == "FAIL":
                 self.fail("FAIL")
-
-        print("pool_percentage_used -- After -- {}"
-              .format(self.pool.pool_percentage_used()))
-
-        #Check nvme-health command works
-        try:
-            self.dmg.hostlist = self.hostlist_servers
-            self.dmg.storage_query_nvme_health()
-        except CommandFailure as _error:
-            self.fail("dmg nvme-health failed")

@@ -89,8 +89,8 @@ struct vos_io_context {
 	struct daos_recx_ep_list *ic_shadows;
 	/**
 	 * Output recx/epoch lists, one for each iod. To save the recx list when
-	 * vos_fetch_begin() with VOS_FETCH_RECX_LIST flag. User can get it by
-	 * vos_ioh2recx_list() and should free it by daos_recx_ep_list_free().
+	 * vos_fetch_begin() with VOS_OF_FETCH_RECX_LIST flag. User can get it
+	 * by vos_ioh2recx_list() and shall free it by daos_recx_ep_list_free().
 	 */
 	struct daos_recx_ep_list *ic_recx_lists;
 };
@@ -456,9 +456,9 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 
 static int
 vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
-	       daos_epoch_t epoch, uint64_t cond_flags, unsigned int iod_nr,
+	       daos_epoch_t epoch, unsigned int iod_nr,
 	       daos_iod_t *iods, struct dcs_iod_csums *iod_csums,
-	       uint32_t fetch_flags, struct daos_recx_ep_list *shadows,
+	       uint32_t vos_flags, struct daos_recx_ep_list *shadows,
 	       bool dedup, uint32_t dedup_th,
 	       struct dtx_handle *dth, struct vos_io_context **ioc_pp)
 {
@@ -468,7 +468,9 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	uint64_t		 cflags = 0;
 	int			 i, rc;
 
-	if (iod_nr == 0) {
+	if (iod_nr == 0 &&
+	    !(vos_flags &
+	      (VOS_OF_FETCH_SET_TS_ONLY | VOS_OF_FETCH_CHECK_EXISTENCE))) {
 		D_ERROR("Invalid iod_nr (0).\n");
 		rc = -DER_IO_INVAL;
 		goto error;
@@ -480,21 +482,21 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	ioc->ic_iod_nr = iod_nr;
 	ioc->ic_iods = iods;
-	ioc->ic_epr.epr_hi = epoch;
+	ioc->ic_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
 	ioc->ic_epr.epr_lo = 0;
 	ioc->ic_oid = oid;
 	ioc->ic_cont = vos_hdl2cont(coh);
 	vos_cont_addref(ioc->ic_cont);
 	ioc->ic_update = !read_only;
-	ioc->ic_size_fetch = ((fetch_flags & VOS_FETCH_SIZE_ONLY) != 0);
-	ioc->ic_save_recx = ((fetch_flags & VOS_FETCH_RECX_LIST) != 0);
+	ioc->ic_size_fetch = ((vos_flags & VOS_OF_FETCH_SIZE_ONLY) != 0);
+	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
 	ioc->ic_dedup = dedup;
 	ioc->ic_dedup_th = dedup_th;
-	ioc->ic_read_ts_only = ((fetch_flags & VOS_FETCH_SET_TS_ONLY) != 0);
+	ioc->ic_read_ts_only = ((vos_flags & VOS_OF_FETCH_SET_TS_ONLY) != 0);
 	ioc->ic_check_existence =
-		((fetch_flags & VOS_FETCH_CHECK_EXISTENCE) != 0);
+		((vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE) != 0);
 	ioc->ic_remove =
-		((cond_flags & VOS_OF_REMOVE) != 0);
+		((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
@@ -510,22 +512,27 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (dtx_is_valid_handle(dth)) {
 		if (read_only) {
 			cflags = VOS_TS_READ_AKEY;
-			if (cond_flags & VOS_OF_COND_DKEY_FETCH)
+			if (vos_flags & VOS_OF_COND_DKEY_FETCH)
 				cflags |= VOS_TS_READ_DKEY;
 		} else {
 			cflags = VOS_TS_WRITE_AKEY;
-			if (cond_flags & VOS_COND_AKEY_UPDATE_MASK)
+			if (vos_flags & VOS_COND_AKEY_UPDATE_MASK)
 				cflags |= VOS_TS_READ_AKEY;
-			if (cond_flags & VOS_COND_DKEY_UPDATE_MASK)
+			if (vos_flags & VOS_COND_DKEY_UPDATE_MASK)
 				cflags |= VOS_TS_READ_DKEY;
 		}
 	}
 
-	rc = vos_ts_set_allocate(&ioc->ic_ts_set, cond_flags, cflags, iod_nr,
+	rc = vos_ts_set_allocate(&ioc->ic_ts_set, vos_flags, cflags, iod_nr,
 				 dtx_is_valid_handle(dth) ?
 				 &dth->dth_xid : NULL);
 	if (rc != 0)
 		goto error;
+
+	if (ioc->ic_read_ts_only || ioc->ic_check_existence) {
+		*ioc_pp = ioc;
+		return 0;
+	}
 
 	cont = vos_hdl2cont(coh);
 
@@ -543,11 +550,6 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (ioc->ic_biov_csums == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
-	}
-
-	if (ioc->ic_read_ts_only || ioc->ic_check_existence) {
-		*ioc_pp = ioc;
-		return 0;
 	}
 
 	for (i = 0; i < iod_nr; i++) {
@@ -1203,8 +1205,8 @@ vos_fetch_end(daos_handle_t ioh, int err)
 
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t cond_flags, daos_key_t *dkey, unsigned int iod_nr,
-		daos_iod_t *iods, uint32_t fetch_flags,
+		daos_key_t *dkey, unsigned int iod_nr,
+		daos_iod_t *iods, uint32_t vos_flags,
 		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
 		struct dtx_handle *dth)
 {
@@ -1214,8 +1216,8 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
-	rc = vos_ioc_create(coh, oid, true, epoch, cond_flags, iod_nr, iods,
-			    NULL, fetch_flags, shadows, false, 0,
+	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods,
+			    NULL, vos_flags, shadows, false, 0,
 			    dth, &ioc);
 	if (rc != 0)
 		return rc;
@@ -2030,10 +2032,8 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		"\n", DP_UOID(oid), iod_nr,
 		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch);
 
-	rc = vos_ioc_create(coh, oid, false,
-			    dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch,
-			    flags, iod_nr, iods, iods_csums, 0, NULL, dedup,
-			    dedup_th, dth, &ioc);
+	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
+			    flags, NULL, dedup, dedup_th, dth, &ioc);
 	if (rc != 0)
 		return rc;
 
@@ -2311,11 +2311,12 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 {
 	daos_handle_t	ioh;
 	bool		size_fetch = (sgls == NULL);
-	uint32_t	fetch_flags = size_fetch ? VOS_FETCH_SIZE_ONLY : 0;
+	uint32_t	fetch_flags = size_fetch ? VOS_OF_FETCH_SIZE_ONLY : 0;
+	uint32_t	vos_flags = flags | fetch_flags;
 	int		rc;
 
-	rc = vos_fetch_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
-			     fetch_flags, NULL, &ioh, dth);
+	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods,
+			     vos_flags, NULL, &ioh, dth);
 	if (rc) {
 		VOS_TX_TRACE_FAIL(rc, "Cannot fetch "DF_UOID": "DF_RC"\n",
 				  DP_UOID(oid), DP_RC(rc));

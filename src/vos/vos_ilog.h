@@ -210,7 +210,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		   const daos_epoch_range_t *epr, bool discard,
 		   daos_epoch_t punched, struct vos_ilog_info *info);
 
-#define ILOG_TRACE
+/* #define ILOG_TRACE */
 #ifdef ILOG_TRACE
 #undef vos_ilog_fetch
 #undef vos_ilog_update

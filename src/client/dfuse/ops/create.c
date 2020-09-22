@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,8 +70,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_UP(ie, parent, "inode");
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	DFUSE_TRA_INFO(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
-		       mode);
+	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
+			mode);
 
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode, fi->flags, 0, 0, NULL, &ie->ie_obj);

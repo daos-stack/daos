@@ -34,10 +34,10 @@ pool:
     control_method: dmg
 container:
     type: POSIX
-    # Disabling checksum due to DAOS-4458
-    # properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 ior:
+    ior_timeout: 30
     client_processes:
         np_16:
             np: 16
@@ -52,6 +52,8 @@ ior:
             - DFS
             - MPIIO
             - POSIX
+            - HDF5
+            - HDF5-VOL
           transfer_block_size:
             - [256B, 2M]
             - [1M, 32M]
@@ -61,3 +63,5 @@ ior:
 #            - "RP_2GX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
+hdf5_vol:
+    plugin_path: /usr/lib64/mpich/lib

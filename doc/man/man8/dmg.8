@@ -1,4 +1,4 @@
-.TH dmg 1 "14 July 2020"
+.TH dmg 1 "28 August 2020"
 .SH NAME
 dmg \- Administrative tool for managing DAOS clusters
 .SH SYNOPSIS
@@ -105,9 +105,6 @@ Number of pool service replicas
 .TP
 \fB\fB\-S\fR, \fB\-\-sys\fR <default: \fI"daos_server"\fR>\fP
 DAOS system that pool is to be a part of
-.TP
-\fB\fB\-p\fR, \fB\-\-pool\fR\fP
-UUID to be used when creating the pool, randomly generated if not specified
 .SS pool delete-acl
 Delete an entry from a DAOS pool's Access Control List
 
@@ -319,12 +316,6 @@ Format SCM and NVMe storage attached to remote servers.
 \fBAliases\fP: f
 
 .TP
-\fB\fB\-r\fR, \fB\-\-ranks\fR\fP
-Comma separated ranges or individual system ranks to operate on
-.TP
-\fB\fB\-\-rank-hosts\fR\fP
-Hostlist representing hosts whose managed ranks are to be operated on
-.TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Show results of each SCM & NVMe device format operation
 .TP
@@ -409,11 +400,6 @@ Pool UUID (all pools if blank)
 .TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 Show more detail about pools
-.SS storage query nvme-health
-Query the health of a NVMe device
-
-\fBAliases\fP: n
-
 .SS storage query target-health
 Query the target health
 
@@ -439,6 +425,9 @@ Scan SCM and NVMe storage attached to remote servers.
 .TP
 \fB\fB\-v\fR, \fB\-\-verbose\fR\fP
 List SCM & NVMe device details
+.TP
+\fB\fB\-n\fR, \fB\-\-nvme-health\fR\fP
+Display NVMe device health statistics
 .SS storage set
 Manually set the device state.
 

@@ -131,6 +131,7 @@ type (
 	// StorageScanReq contains the parameters for a storage scan request.
 	StorageScanReq struct {
 		unaryRequest
+		ConfigDevicesOnly bool
 	}
 
 	// StorageScanResp contains the response from a storage scan request.
@@ -195,7 +196,9 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) (err error) {
 // containing results for all host scan operations.
 func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanReq) (*StorageScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{})
+		return ctlpb.NewMgmtCtlClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{
+			ConfigDevicesOnly: req.ConfigDevicesOnly,
+		})
 	})
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)

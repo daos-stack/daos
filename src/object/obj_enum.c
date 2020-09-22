@@ -315,7 +315,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 {
 	d_iov_t			*iovs = arg->sgl->sg_iovs;
 	struct obj_enum_rec	*rec;
-	daos_size_t		data_size, iod_size;
+	daos_size_t		data_size = 0, iod_size;
 	daos_size_t		size = sizeof(*rec);
 	bool			inline_data = false, bump_kds_len = false;
 	int			type;
@@ -325,13 +325,22 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	type = vos_iter_type_2pack_type(vos_type);
 
 	/* Client needs zero iod_size to tell a punched record */
-	if (bio_addr_is_hole(&key_ent->ie_biov.bi_addr))
+	if (bio_addr_is_hole(&key_ent->ie_biov.bi_addr)) {
 		iod_size = 0;
-	else
-		iod_size = key_ent->ie_rsize;
+	} else {
+		if (type == OBJ_ITER_SINGLE) {
+			iod_size = key_ent->ie_gsize;
+			if (iod_size == key_ent->ie_rsize)
+				data_size = iod_size;
+			else
+				data_size = 0;
+		} else {
+			iod_size = key_ent->ie_rsize;
+			data_size = iod_size * key_ent->ie_recx.rx_nr;
+		}
+	}
 
 	/* Inline the data? A 0 threshold disables this completely. */
-	data_size = iod_size * key_ent->ie_recx.rx_nr;
 	if (arg->inline_thres > 0 && data_size <= arg->inline_thres &&
 	    data_size > 0) {
 		inline_data = true;
@@ -347,6 +356,8 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		arg->kds_len--;
 		bump_kds_len = true;
 	}
+
+	fill_data_csum(&key_ent->ie_csum, &arg->csum_iov);
 
 	if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
@@ -384,8 +395,21 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	if (inline_data && data_size > 0) {
 		d_iov_t iov_out;
 
-		/* inline packing for the small recx located on SCM */
-		D_ASSERT(key_ent->ie_biov.bi_addr.ba_type == DAOS_MEDIA_SCM);
+		/* For SV case, inline data must be located on SCM.
+		 * For EV case, the inline data may be only part of
+		 * the original extent. The other part(s) of the EV
+		 * may be invisible to current enumeration. Then it
+		 * may be located on SCM or NVMe.
+		 */
+		if (type != OBJ_ITER_RECX)
+			D_ASSERTF(key_ent->ie_biov.bi_addr.ba_type ==
+				  DAOS_MEDIA_SCM,
+				  "Invalid storage media type %d, ba_off "
+				  DF_X64", thres %ld, data_size %ld, type %d, "
+				  "iod_size %ld\n",
+				  key_ent->ie_biov.bi_addr.ba_type,
+				  key_ent->ie_biov.bi_addr.ba_off,
+				  arg->inline_thres, data_size, type, iod_size);
 
 		d_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
 				       iovs[arg->sgl_idx].iov_len, data_size);
@@ -399,8 +423,6 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 			arg->kds[arg->kds_len].kd_key_len += data_size;
 		}
 	}
-
-	fill_data_csum(&key_ent->ie_csum, &arg->csum_iov);
 
 	D_DEBUG(DB_IO, "Pack rec "DF_U64"/"DF_U64
 		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d/%zd"
@@ -741,6 +763,7 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 	io->ui_dkey_punch_eph = 0;
 	io->ui_iods_top = -1;
 	io->ui_version = 0;
+	io->ui_is_array_exist = 0;
 }
 
 /**
@@ -1014,20 +1037,27 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 	 * moved to next.
 	 */
 	top_iod = &io->ui_iods[top];
-	if (top_iod->iod_nr > 0 &&
-	    (top_iod->iod_type == DAOS_IOD_SINGLE ||
-	     top_iod->iod_type != type || rec->rec_size == 0 ||
-	     top_iod->iod_size == 0)) {
-		D_DEBUG(DB_IO, "iod_type %d  type %d rec/iod "DF_U64"/%zd\n",
-			top_iod->iod_type, type, rec->rec_size,
-			top_iod->iod_size);
-		/* Complete the current IOD */
-		rc = next_iod(io, cb, cb_arg, &top_iod->iod_name);
-		if (rc)
-			D_GOTO(free, rc);
-	}
-	top = io->ui_iods_top;
+	if (type == DAOS_IOD_SINGLE) { 
+		/* Let's do not put single and array record in the same IO,
+		 * since single IOD record rebuild is a bit different.
+		 */
+		if (top_iod->iod_nr > 0) {
+			if (!io->ui_is_array_exist)
+				rc = next_iod(io, cb, cb_arg,
+					      &top_iod->iod_name);
+			else
+				rc = complete_io_init_iod(io, cb, cb_arg, NULL);
+			if (rc)
+				D_GOTO(free, rc);
+		}
+	} else {
+		if(top_iod->iod_nr > 0 && (rec->rec_size != top_iod->iod_size))
+			rc = next_iod(io, cb, cb_arg, &top_iod->iod_name);
 
+		io->ui_is_array_exist = 1;
+	}
+
+	top = io->ui_iods_top;
 	rc = unpack_recxs(&io->ui_iods[top], &io->ui_recxs_caps[top],
 			  &io->ui_rec_punch_ephs[top],
 			  io->ui_sgls == NULL ?  NULL : &io->ui_sgls[top],

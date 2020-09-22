@@ -423,9 +423,11 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 static inline void
 obj_io_desc_fini(struct obj_io_desc *oiod)
 {
-	if (oiod->oiod_siods != NULL)
-		D_FREE(oiod->oiod_siods);
-	memset(oiod, 0, sizeof(*oiod));
+	if (oiod != NULL) {
+		if (oiod->oiod_siods != NULL)
+			D_FREE(oiod->oiod_siods);
+		memset(oiod, 0, sizeof(*oiod));
+	}
 }
 
 /* translate the queried VOS shadow list to daos extents */
@@ -447,7 +449,7 @@ obj_shadow_list_vos2daos(uint32_t nr, struct daos_recx_ep_list *lists,
 		list = &lists[i];
 		for (j = 0; j < list->re_nr; j++) {
 			recx = &list->re_items[j].re_recx;
-			D_ASSERT(recx->rx_idx % cell_rec_nr == 0);
+			recx->rx_idx = rounddown(recx->rx_idx, cell_rec_nr);
 			stripe_nr = roundup(recx->rx_nr, cell_rec_nr) /
 				    cell_rec_nr;
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
@@ -487,7 +489,8 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 		for (j = 0; j < stripe_nr; j++) {
 			if (j == 0) {
 				new_recx[i].rx_idx = recx->rx_idx;
-				new_recx[i].rx_nr = cell_size - recx->rx_idx;
+				new_recx[i].rx_nr = cell_size -
+						    (recx->rx_idx % cell_size);
 				rec_nr -= new_recx[i].rx_nr;
 			} else {
 				new_recx[i + j].rx_idx =
@@ -504,7 +507,7 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 			}
 		}
 		for (j = i + 1; j < iod->iod_nr; j++)
-			new_recx[j + stripe_nr] = iod->iod_recxs[j];
+			new_recx[j + stripe_nr - 1] = iod->iod_recxs[j];
 		i += (stripe_nr - 1);
 		iod->iod_nr += (stripe_nr - 1);
 		D_FREE(iod->iod_recxs);
@@ -622,9 +625,10 @@ void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 
 /* cli_ec.c */
-int obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
+int obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 		     struct daos_oclass_attr *oca,
-		     struct obj_reasb_req *reasb_req, bool update);
+		     struct obj_reasb_req *reasb_req,
+		     uint32_t iod_nr, bool update);
 void obj_ec_recxs_fini(struct obj_ec_recx_array *recxs);
 void obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter);
 void obj_ec_tgt_oiod_fini(struct obj_tgt_oiod *tgt_oiods);

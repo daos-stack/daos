@@ -77,44 +77,10 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 
 // storageQueryCmd is the struct representing the storage query subcommand
 type storageQueryCmd struct {
-	NVMeHealth   nvmeHealthQueryCmd  `command:"nvme-health" alias:"n" description:"Query the health of a NVMe device"`
 	TargetHealth tgtHealthQueryCmd   `command:"target-health" alias:"t" description:"Query the target health"`
 	DeviceHealth devHealthQueryCmd   `command:"device-health" alias:"d" description:"Query the device health"`
 	ListPools    listPoolsQueryCmd   `command:"list-pools" alias:"p" description:"List pools on the server"`
 	ListDevices  listDevicesQueryCmd `command:"list-devices" alias:"d" description:"List storage devices on the server"`
-}
-
-type nvmeHealthQueryCmd struct {
-	logCmd
-	ctlInvokerCmd
-	hostListCmd
-	jsonOutputCmd
-}
-
-func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
-	ctx := context.Background()
-	req := &control.StorageScanReq{}
-	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
-		return err
-	}
-	if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
-
-	return resp.Errors()
 }
 
 type devHealthQueryCmd struct {

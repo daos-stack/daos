@@ -123,10 +123,8 @@ class OSAOnlineDrain(TestWithServers):
 
         # Define the job manager for the IOR command
         manager = Mpirun(ior_cmd, mpitype="mpich")
-        manager.job.daos_cont.update(container_info
-                                     ["{}{}{}".format(oclass,
-                                                      api,
-                                                      test[2])])
+        key = "".join([oclass, api, str(test[2])])
+        manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(manager))
         manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         manager.assign_processes(processes)

@@ -686,7 +686,7 @@ cont_iter_fini(struct vos_iterator *iter)
 
 int
 cont_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
-	       struct vos_iterator **iter_pp)
+	       struct vos_iterator **iter_pp, struct vos_ts_set *ts_set)
 {
 	struct cont_iterator	*co_iter = NULL;
 	struct vos_pool		*vpool = NULL;

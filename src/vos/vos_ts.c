@@ -280,15 +280,31 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 			lrua_lookup(parent->te_info->ti_array, neg_idx,
 				    &ts_source);
 		}
-		if (ts_source == NULL) /* for negative and uncached entries */
+		if (ts_source == NULL)
 			ts_source = parent;
 
+		if ((type & 1) != 0) {
+			/* This is a new negative entry. The low timestamp of
+			 * the parent should cover this case so copy it to
+			 * both timestamps.
+			 */
+			vos_ts_copy(&entry->te_ts.tp_ts_rh,
+				    &entry->te_ts.tp_tx_rh,
+				    ts_source->te_ts.tp_ts_rl,
+				    &ts_source->te_ts.tp_tx_rl);
+		} else {
+			/** It is either copying from a negative entry
+			 * or its parent was evicted so copy both timestamps
+			 */
+			vos_ts_copy(&entry->te_ts.tp_ts_rh,
+				    &entry->te_ts.tp_tx_rh,
+				    ts_source->te_ts.tp_ts_rh,
+				    &ts_source->te_ts.tp_tx_rh);
+		}
+		/** Low timestamp is always copied as is */
 		vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
 			    ts_source->te_ts.tp_ts_rl,
 			    &ts_source->te_ts.tp_tx_rl);
-		vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
-			    ts_source->te_ts.tp_ts_rh,
-			    &ts_source->te_ts.tp_tx_rh);
 	}
 
 	/** Set the lower bounds for the entry */
@@ -308,9 +324,10 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 {
 	uint32_t	size;
 	uint64_t	array_size;
+	uint64_t	cond_mask = VOS_COND_FETCH_MASK | VOS_COND_UPDATE_MASK;
 
 	*ts_set = NULL;
-	if (tx_id == NULL)
+	if (tx_id == NULL && (flags & cond_mask) == 0)
 		return 0;
 
 	size = 3 + akey_nr;
@@ -337,8 +354,11 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		break;
 	}
 	(*ts_set)->ts_set_size = size;
-	uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
-	(*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
+	if (tx_id != NULL) {
+		(*ts_set)->ts_in_tx = true;
+		uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
+		(*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
+	} /* ts_in_tx is false by default */
 
 	return 0;
 }
@@ -355,7 +375,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 	int			 i;
 	int			 parent_idx;
 
-	if (ts_set == NULL)
+	if (!vos_ts_in_tx(ts_set))
 		return;
 
 	ts_table = vos_ts_table_get();

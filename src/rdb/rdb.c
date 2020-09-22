@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,8 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0);
 	if (rc != 0)
 		goto out;
-	rc = vos_pool_open(path, (unsigned char *)uuid, &pool);
+	/* RDB pools specify small=true for basic system memory reservation */
+	rc = vos_pool_open(path, (unsigned char *)uuid, true, &pool);
 	if (rc != 0)
 		goto out_pool;
 
@@ -272,7 +273,8 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	if (rc != 0)
 		goto err_ref_cv;
 
-	rc = vos_pool_open(path, (unsigned char *)uuid, &db->d_pool);
+	/* RDB pools specify small=true for basic system memory reservation */
+	rc = vos_pool_open(path, (unsigned char *)uuid, true, &db->d_pool);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to open %s: "DF_RC"\n", DP_DB(db), path,
 			DP_RC(rc));

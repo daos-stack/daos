@@ -3855,64 +3855,6 @@ out:
 	return rc;
 }
 
-/* TODO: This entire RPC mechanism should eventually be replaced by IV fetch
- * retrieving the handles instead. Tracked by DAOS-5232
- *
- * This code is a bridge that allows a reintegrating node to be told about the
- * needed handles until that IV retrieval mechanism is built.
- */
-static int
-redist_open_hdls_send_rpcs(uuid_t pool_uuid, d_iov_t *handles,
-			   d_rank_list_t *ranks)
-{
-	crt_rpc_t			*tf_req;
-	struct pool_tgt_dist_hdls_in	*tf_in;
-	struct pool_tgt_dist_hdls_out	*tf_out;
-	crt_opcode_t			opc;
-	int				rc = DER_SUCCESS;
-	int				i;
-
-	/* Send an RPC to each rank with all of the open handles */
-	for (i = 0; i < ranks->rl_nr; i++) {
-		crt_endpoint_t svr_ep;
-
-		svr_ep.ep_grp = NULL;
-		svr_ep.ep_rank = ranks->rl_ranks[i];
-		svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_POOL, 0);
-		opc = DAOS_RPC_OPCODE(POOL_TGT_DIST_HDLS, DAOS_POOL_MODULE, 1);
-		rc = crt_req_create(dss_get_module_info()->dmi_ctx, &svr_ep,
-				    opc, &tf_req);
-		if (rc != 0) {
-			D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "
-				DF_RC".\n", DP_RC(rc));
-			return rc;
-		}
-
-		tf_in = crt_req_get(tf_req);
-		D_ASSERT(tf_in != NULL);
-		uuid_copy(tf_in->tfi_pool_uuid, pool_uuid);
-		d_iov_set(&tf_in->tfi_hdls, handles->iov_buf,
-			  handles->iov_buf_len);
-
-		rc = dss_rpc_send(tf_req);
-		if (rc != 0) {
-			crt_req_decref(tf_req);
-			return rc;
-		}
-
-		tf_out = crt_reply_get(tf_req);
-		rc = tf_out->tfo_rc;
-		if (rc != 0) {
-			crt_req_decref(tf_req);
-			D_ERROR(DF_UUID": failed to send handle uuids to ranks "
-				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
-			return rc;
-		}
-	}
-
-	return rc;
-}
-
 struct redist_open_hdls_arg {
 	/**
 	 * Pointer to pointer containing flattened array of output handles
@@ -4093,26 +4035,6 @@ out_svc:
 	return rc;
 }
 
-static int
-redist_open_hdls(uuid_t pool_uuid, d_rank_list_t *ranks)
-{
-	d_iov_t hdls;
-	int rc;
-
-	rc = ds_pool_get_open_handles(pool_uuid, &hdls);
-	if (rc != 0)
-		return rc;
-
-	rc = redist_open_hdls_send_rpcs(pool_uuid, &hdls, ranks);
-	if (rc != 0)
-		D_GOTO(out_free, rc);
-
-out_free:
-	D_FREE(hdls.iov_buf);
-
-	return rc;
-}
-
 int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
@@ -4132,36 +4054,6 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return ds_pool_update_internal(pool_uuid, list, POOL_ADD_IN,
 				       NULL, NULL, NULL, false);
-}
-
-/**
- * Allocates and returns a list of unique ranks based on the input target list.
- *
- * Caller must free output list
- *
- * \param in[IN]   Input list to synthesize
- * \param out[OUT] Unique output list. Will be set to NULL if allocation failed
- */
-static void
-addr_list_to_rank_list(struct pool_target_addr_list *in, d_rank_list_t **out)
-{
-	d_rank_list_t *tmplist;
-	int i;
-
-	*out = NULL;
-
-	tmplist = d_rank_list_alloc(in->pta_number);
-	if (tmplist == NULL)
-		return;
-
-	for (i = 0; i < in->pta_number; i++)
-		tmplist->rl_ranks[i] = in->pta_addrs[i].pta_rank;
-
-	/* Make sure the list is unique, some targets might share ranks */
-	d_rank_list_dup_sort_uniq(out, tmplist);
-
-	/* Free the intermediate list */
-	d_rank_list_free(tmplist);
 }
 
 /*
@@ -4197,25 +4089,6 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 
 	if (!updated)
 		D_GOTO(out, rc);
-
-	/* If adding or reintegrating a node, redistribute any existing open
-	 * handles to that node prior to starting the rebuild/migration process
-	 */
-	if (opc == POOL_ADD) {
-		d_rank_list_t *ranks;
-
-		addr_list_to_rank_list(list, &ranks);
-		if (ranks == NULL)
-			D_GOTO(out, rc);
-
-		rc = redist_open_hdls(pool_uuid, ranks);
-		d_rank_list_free(ranks);
-		if (rc) {
-			D_ERROR("redist_open_hdls fails rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-	}
 
 	switch (opc) {
 	case POOL_EXCLUDE:
@@ -4655,8 +4528,9 @@ ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
 	struct pool_evict_in	*in;
 	struct pool_evict_out	*out;
 
-	D_DEBUG(DB_MGMT, DF_UUID": Destroy pool, inspect/evict handles\n",
-		DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT,
+		DF_UUID": Destroy pool (force: %d), inspect/evict handles\n",
+		DP_UUID(pool_uuid), force);
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
@@ -4834,6 +4708,47 @@ out:
 	out->po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pasi_op.pi_uuid), rpc, DP_RC(rc));
+	crt_reply_send(rpc);
+}
+
+void
+ds_pool_attr_del_handler(crt_rpc_t *rpc)
+{
+	struct pool_attr_del_in  *in = crt_req_get(rpc);
+	struct pool_op_out	 *out = crt_reply_get(rpc);
+	struct pool_svc		 *svc;
+	struct rdb_tx		  tx;
+	int			  rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+		DP_UUID(in->padi_op.pi_uuid), rpc, DP_UUID(in->padi_op.pi_hdl));
+
+	rc = pool_svc_lookup_leader(in->padi_op.pi_uuid, &svc, &out->po_hint);
+	if (rc != 0)
+		goto out;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out_svc;
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+	rc = ds_rsvc_del_attr(&svc->ps_rsvc, &tx, &svc->ps_user,
+			      in->padi_bulk, rpc, in->padi_count);
+	if (rc != 0)
+		goto out_lock;
+
+	rc = rdb_tx_commit(&tx);
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->padi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -5116,6 +5031,7 @@ is_container_from_srv(uuid_t pool_uuid, uuid_t coh_uuid)
 	}
 
 	rc = ds_pool_iv_srv_hdl_fetch(pool, NULL, &hdl_uuid);
+	ds_pool_put(pool);
 	if (rc) {
 		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
 		return false;

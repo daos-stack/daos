@@ -452,25 +452,31 @@ dc_cont_alloc(const uuid_t uuid)
 }
 
 static void
-dc_cont_csum_init(struct dc_cont *cont, struct cont_props cont_props)
+dc_cont_props_init(struct dc_cont *cont)
 {
-	uint32_t	csum_type = cont_props.dcp_csum_type;
+	uint32_t	csum_type = cont->dc_props.dcp_csum_type;
+	uint32_t	compress_type = cont->dc_props.dcp_compress_type;
+	uint32_t	encrypt_type = cont->dc_props.dcp_encrypt_type;
 	bool		dedup_only = false;
+
+	cont->dc_props.dcp_compress_enabled =
+			daos_cont_compress_prop_is_enabled(compress_type);
+	cont->dc_props.dcp_encrypt_enabled =
+			daos_cont_encrypt_prop_is_enabled(encrypt_type);
 
 	if (csum_type == DAOS_PROP_CO_CSUM_OFF) {
 		dedup_only = true;
-		csum_type = dedup_get_csum_algo(&cont_props);
+		csum_type = dedup_get_csum_algo(&cont->dc_props);
 	}
 
 	if (!daos_cont_csum_prop_is_enabled(csum_type))
 		return;
 
-	daos_csummer_init_with_type(&cont->dc_csummer,
-			       csum_type,
-			       cont_props.dcp_chunksize, 0);
+	daos_csummer_init_with_type(&cont->dc_csummer, csum_type,
+				    cont->dc_props.dcp_chunksize, 0);
 
 	if (dedup_only)
-		dedup_configure_csummer(cont->dc_csummer, &cont_props);
+		dedup_configure_csummer(cont->dc_csummer, &cont->dc_props);
 }
 
 struct cont_open_args {
@@ -757,6 +763,7 @@ dc_cont_close(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	if (cont->dc_slave) {
+		daos_csummer_destroy(&cont->dc_csummer);
 		dc_cont_hdl_unlink(cont);
 		dc_cont_put(cont);
 
@@ -1598,21 +1605,24 @@ err:
 
 /* Structure of global buffer for dc_cont */
 struct dc_cont_glob {
-	/* magic number, DC_CONT_GLOB_MAGIC */
+	/** magic number, DC_CONT_GLOB_MAGIC */
 	uint32_t	dcg_magic;
 	uint32_t	dcg_padding;
-	/* pool connection handle */
+	/** pool connection handle */
 	uuid_t		dcg_pool_hdl;
-	/* container uuid and capas */
+	/** container uuid and capas */
 	uuid_t		dcg_uuid;
 	uuid_t		dcg_cont_hdl;
 	uint64_t	dcg_capas;
+	/** specific features */
 	uint16_t	dcg_csum_type;
+	uint16_t        dcg_encrypt_type;
+	uint32_t	dcg_compress_type;
 	uint32_t	dcg_csum_chunksize;
-	bool		dcg_csum_srv_verify;
-	bool		dcg_dedup;
-	bool		dcg_dedup_verify;
 	uint32_t        dcg_dedup_th;
+	uint32_t	dcg_csum_srv_verify:1,
+			dcg_dedup_enabled:1,
+			dcg_dedup_verify:1;
 };
 
 static inline daos_size_t
@@ -1667,7 +1677,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	if (pool == NULL)
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 
-	/* init global handle */
+	/** init global handle */
 	cont_glob = (struct dc_cont_glob *)glob->iov_buf;
 	cont_glob->dcg_magic = DC_CONT_GLOB_MAGIC;
 	uuid_copy(cont_glob->dcg_pool_hdl, pool->dp_pool_hdl);
@@ -1675,12 +1685,15 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
 	cont_glob->dcg_capas = cont->dc_capas;
 
-	cont_glob->dcg_csum_type = cont->dc_props.dcp_csum_type;
-	cont_glob->dcg_csum_chunksize = cont->dc_props.dcp_chunksize;
-	cont_glob->dcg_csum_srv_verify = cont->dc_props.dcp_srv_verify;
-	cont_glob->dcg_dedup = cont->dc_props.dcp_dedup;
-	cont_glob->dcg_dedup_verify = cont->dc_props.dcp_dedup_verify;
-	cont_glob->dcg_dedup_th = cont->dc_props.dcp_dedup_size;
+	/** transfer container properties */
+	cont_glob->dcg_csum_type	= cont->dc_props.dcp_csum_type;
+	cont_glob->dcg_csum_chunksize	= cont->dc_props.dcp_chunksize;
+	cont_glob->dcg_csum_srv_verify	= cont->dc_props.dcp_srv_verify;
+	cont_glob->dcg_dedup_enabled	= cont->dc_props.dcp_dedup_enabled;
+	cont_glob->dcg_dedup_verify	= cont->dc_props.dcp_dedup_verify;
+	cont_glob->dcg_dedup_th		= cont->dc_props.dcp_dedup_size;
+	cont_glob->dcg_compress_type	= cont->dc_props.dcp_compress_type;
+	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
 
 	dc_pool_put(pool);
 out_cont:
@@ -1755,13 +1768,16 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
-	cont->dc_props.dcp_dedup = cont_glob->dcg_dedup;
-	cont->dc_props.dcp_csum_type = cont_glob->dcg_csum_type;
-	cont->dc_props.dcp_srv_verify = cont_glob->dcg_csum_srv_verify;
-	cont->dc_props.dcp_chunksize = cont_glob->dcg_csum_chunksize;
-	cont->dc_props.dcp_dedup_size = cont_glob->dcg_dedup_th;
-	cont->dc_props.dcp_dedup_verify = cont_glob->dcg_dedup_verify;
-	dc_cont_csum_init(cont, cont->dc_props);
+	/** extract container properties */
+	cont->dc_props.dcp_dedup_enabled = cont_glob->dcg_dedup_enabled;
+	cont->dc_props.dcp_csum_type	 = cont_glob->dcg_csum_type;
+	cont->dc_props.dcp_srv_verify	 = cont_glob->dcg_csum_srv_verify;
+	cont->dc_props.dcp_chunksize	 = cont_glob->dcg_csum_chunksize;
+	cont->dc_props.dcp_dedup_size	 = cont_glob->dcg_dedup_th;
+	cont->dc_props.dcp_dedup_verify  = cont_glob->dcg_dedup_verify;
+	cont->dc_props.dcp_compress_type = cont_glob->dcg_compress_type;
+	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
+	dc_cont_props_init(cont);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
@@ -2030,12 +2046,20 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 	int		j;
 	d_sg_list_t	sgl;
 
-	/* Buffers = 'n' names + non-null values + 1 sizes */
+	/* Buffers = 'n' names */
 	sgl.sg_nr_out	= 0;
-	sgl.sg_nr	= n + 1;
-	for (j = 0; j < n; j++)
-		if (sizes[j] > 0)
-			++sgl.sg_nr;
+	sgl.sg_nr	= n;
+
+	/* + 1 sizes */
+	if (sizes != NULL)
+		++sgl.sg_nr;
+
+	/* + non-null values */
+	if (sizes != NULL && values != NULL) {
+		for (j = 0; j < n; j++)
+			if (sizes[j] > 0)
+				++sgl.sg_nr;
+	}
 
 	D_ALLOC_ARRAY(sgl.sg_iovs, sgl.sg_nr);
 	if (sgl.sg_iovs == NULL)
@@ -2047,14 +2071,18 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 			     strlen(names[j]) + 1 /* trailing '\0' */);
 
 	/* TODO: Add packing/unpacking of non-byte-arrays to rpc.[hc] ? */
+
 	/* sizes */
-	d_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
+	if (sizes != NULL)
+		d_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
 
 	/* values */
-	for (j = 0; j < n; ++j)
-		if (sizes[j] > 0)
-			d_iov_set(&sgl.sg_iovs[i++],
-				     values[j], sizes[j]);
+	if (sizes != NULL && values != NULL) {
+		for (j = 0; j < n; ++j)
+			if (sizes[j] > 0)
+				d_iov_set(&sgl.sg_iovs[i++],
+					  values[j], sizes[j]);
+	}
 
 	rc = crt_bulk_create(crt_ctx, &sgl, perm, bulk);
 	D_FREE(sgl.sg_iovs);
@@ -2073,8 +2101,8 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 {
 	int i;
 
-	if (n <= 0 || names == NULL || sizes == NULL
-	    || (values == NULL && !readonly)) {
+	if (n <= 0 || names == NULL || ((sizes == NULL
+	    || values == NULL) && !readonly)) {
 		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p"
 			", sizes = %p", n, names, values, sizes);
 		return -DER_INVAL;
@@ -2087,16 +2115,17 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 			return -DER_INVAL;
 		}
-		if (values == NULL)
-			sizes[i] = 0; /* executes only if 'readonly' is true */
-		else if (values[i] == NULL || sizes[i] == 0) {
-			if (!readonly) {
-				D_ERROR("Invalid Arguments: values[%d] = %p"
-					", sizes[%d] = %lu",
-					i, values[i], i, sizes[i]);
-				return -DER_INVAL;
+		if (sizes != NULL) {
+			if (values == NULL)
+				sizes[i] = 0;
+			else if (values[i] == NULL || sizes[i] == 0) {
+				if (!readonly) {
+					D_ERROR("Invalid Arguments: values[%d] = %p, sizes[%d] = %lu",
+						i, values[i], i, sizes[i]);
+					return -DER_INVAL;
+				}
+				sizes[i] = 0;
 			}
-			sizes[i] = 0;
 		}
 	}
 	return 0;
@@ -2221,6 +2250,59 @@ dc_cont_set_attr(tse_task_t *task)
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to set container attributes: "DF_RC"\n",
+		DP_RC(rc));
+	return rc;
+}
+
+int
+dc_cont_del_attr(tse_task_t *task)
+{
+	daos_cont_set_attr_t	*args;
+	struct cont_attr_del_in	*in;
+	struct cont_req_arg	 cb_args;
+	int			 rc;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	rc = attr_check_input(args->n, args->names, NULL, NULL, true);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = cont_req_prepare(args->coh, CONT_ATTR_DEL,
+			      daos_task2ctx(task), &cb_args);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DF_DSMC, DF_CONT": deleting attributes: hdl="DF_UUID"\n",
+		DP_CONT(cb_args.cra_pool->dp_pool_hdl,
+			cb_args.cra_cont->dc_uuid),
+		DP_UUID(cb_args.cra_cont->dc_cont_hdl));
+
+	in = crt_req_get(cb_args.cra_rpc);
+	in->cadi_count = args->n;
+	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
+			      daos_task2ctx(task), CRT_BULK_RO, &in->cadi_bulk);
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
+
+	cb_args.cra_bulk = in->cadi_bulk;
+	rc = tse_task_register_comp_cb(task, cont_req_complete,
+				       &cb_args, sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
+
+	crt_req_addref(cb_args.cra_rpc);
+	rc = daos_rpc_send(cb_args.cra_rpc, task);
+	if (rc != 0)
+		D_GOTO(cleanup, rc);
+
+	return rc;
+cleanup:
+	cont_req_cleanup(CLEANUP_BULK, &cb_args);
+out:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to del container attributes: "DF_RC"\n",
 		DP_RC(rc));
 	return rc;
 }

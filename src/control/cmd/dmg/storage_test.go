@@ -60,44 +60,23 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Format with invalid ranks filter",
-			"storage format --ranks 1-3",
-			strings.Join([]string{
-				printRequest(t, &control.StorageFormatReq{}),
-			}, " "),
-			errors.New("--ranks parameter invalid"),
-		},
-		{
-			"Format with invalid hosts filter",
-			"storage format --rank-hosts foo-[1-3]",
-			strings.Join([]string{
-				printRequest(t, &control.StorageFormatReq{}),
-			}, " "),
-			errors.New("--rank-hosts parameter invalid"),
-		},
-		{
-			"Non-system reformat with invalid ranks filter",
-			"storage format --reformat --ranks 0-4",
-			strings.Join([]string{
-				printRequest(t, &control.SystemQueryReq{}),
-				printRequest(t, &control.StorageFormatReq{Reformat: true}),
-			}, " "),
-			errors.New("--ranks parameter invalid"),
-		},
-		{
-			"Non-system reformat with invalid hosts filter",
-			"storage format --reformat --rank-hosts foo-[1-3]",
-			strings.Join([]string{
-				printRequest(t, &control.StorageFormatReq{}),
-			}, " "),
-			errors.New("--rank-hosts parameter invalid"),
-		},
-		{
 			"Scan",
 			"storage scan",
 			strings.Join([]string{
 				printRequest(t, &control.StorageScanReq{}),
 			}, " "),
+			nil,
+		},
+		{
+			"Scan NVMe health short",
+			"storage scan -n",
+			printRequest(t, &control.StorageScanReq{ConfigDevicesOnly: true}),
+			nil,
+		},
+		{
+			"Scan NVMe health long",
+			"storage scan --nvme-health",
+			printRequest(t, &control.StorageScanReq{ConfigDevicesOnly: true}),
 			nil,
 		},
 		{
@@ -199,19 +178,10 @@ func TestStorageCommands(t *testing.T) {
 func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 	for name, tc := range map[string]struct {
 		reformat, expSysReformat bool
-		hosts, ranks             string
 		uErr, expErr             error
 		members                  []*ctlpb.SystemMember
 	}{
-		"no reformat with rank-hosts": {
-			hosts:  "foo-[0-1]",
-			expErr: errors.New("--rank-hosts parameter invalid"),
-		},
-		"no reformat with rank list": {
-			ranks:  "0-1",
-			expErr: errors.New("--ranks parameter invalid"),
-		},
-		"no reformat without rank list": {},
+		"no reformat": {},
 		"failed member query": {
 			reformat: true,
 			uErr:     errors.New("system failed"),
@@ -263,8 +233,6 @@ func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
 			cmd.log = log
 			cmd.Reformat = tc.reformat
 			cmd.ctlInvoker = mi
-			cmd.Hosts = tc.hosts
-			cmd.Ranks = tc.ranks
 
 			sysReformat, err := cmd.shouldReformatSystem(context.Background())
 			common.CmpErr(t, tc.expErr, err)

@@ -341,14 +341,20 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			}
 			break;
 		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
-			/** Accepting anything right now */
+			/** Chunk size is encoded on 32 bits */
+			val = prop->dpp_entries[i].dpe_val;
+			if (val >= (1ULL << 32)) {
+				D_ERROR("invalid chunk size "
+					DF_U64". Should be < 2GiB\n", val);
+				return false;
+			}
 			break;
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_CSUM_SV_OFF &&
 			    val != DAOS_PROP_CO_CSUM_SV_ON) {
-				D_ERROR("invalid csum Server Verify Property"
-						DF_U64".\n", val);
+				D_ERROR("invalid csum server verify property "
+					DF_U64".\n", val);
 				return false;
 			}
 			break;
@@ -357,13 +363,19 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			if (val != DAOS_PROP_CO_DEDUP_OFF &&
 			    val != DAOS_PROP_CO_DEDUP_MEMCMP &&
 			    val != DAOS_PROP_CO_DEDUP_HASH) {
-				D_ERROR("invalid deduplication parameter"
-						DF_U64".\n", val);
+				D_ERROR("invalid deduplication parameter "
+					DF_U64".\n", val);
 				return false;
 			}
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
-			/** Accepting anything right now */
+			val = prop->dpp_entries[i].dpe_val;
+			if (val < 4096 || val >= (1ULL << 32)) {
+				D_ERROR("invalid deduplication threshold "DF_U64
+					". Should be >= 4KiB and < 4GiB\n",
+					val);
+				return false;
+			}
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
@@ -386,9 +398,40 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
-		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_COMPRESS:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_COMPRESS_OFF &&
+			    val != DAOS_PROP_CO_COMPRESS_LZ4 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP1 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP2 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP3 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP4 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP5 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP6 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP7 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP8 &&
+			    val != DAOS_PROP_CO_COMPRESS_GZIP9) {
+				D_ERROR("invalid compression parameter "
+					DF_U64".\n", val);
+				return false;
+			}
+			break;
 		case DAOS_PROP_CO_ENCRYPT:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_ENCRYPT_OFF &&
+			    val != DAOS_PROP_CO_ENCRYPT_AES_XTS128 &&
+			    val != DAOS_PROP_CO_ENCRYPT_AES_XTS256 &&
+			    val != DAOS_PROP_CO_ENCRYPT_AES_CBC128 &&
+			    val != DAOS_PROP_CO_ENCRYPT_AES_CBC192 &&
+			    val != DAOS_PROP_CO_ENCRYPT_AES_CBC256 &&
+			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM128 &&
+			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM256) {
+				D_ERROR("invalid encryption parameter "
+					DF_U64".\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_SNAPSHOT_MAX:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);

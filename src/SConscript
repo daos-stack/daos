@@ -10,7 +10,7 @@ HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
 HEADERS_SRV = ['vos.h', 'vos_types.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'heap.h', 'fault_inject.h', 'debug_setup.h',
-                'types.h', 'atomic.h', 'mem.h']
+                'types.h', 'atomic.h', 'mem.h', 'dtm.h']
 
 # Keep versioned libs for now to avoid any conflict with 1.0
 CART_VERSION = "4.8.0"
@@ -39,7 +39,7 @@ def scons():
                     'include/gurt/%s' % header)
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
-    env.AppendUnique(CPPPATH=[Dir('cart/src/utest').srcnode()])
+    env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
     Export('env', 'CART_VERSION')
 
     SConscript('gurt/SConscript')

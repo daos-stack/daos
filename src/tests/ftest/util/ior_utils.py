@@ -1,25 +1,25 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+(C) Copyright 2018-2020 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-     http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+The Government's rights to use, modify, reproduce, release, perform, display,
+or disclose this software are subject to the terms of the Apache License as
+provided in Contract No. B609815.
+Any reproduction of computer software, computer software documentation, or
+portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
 
@@ -58,7 +58,7 @@ class IorCommand(ExecutableCommand):
         self.flags = FormattedParameter("{}")
 
         # Optional arguments
-        #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DFS]
+        #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DFS|HDF5]
         #   -b=1048576      blockSize -- contiguous bytes to write per task
         #   -d=0            interTestDelay -- delay between reps in seconds
         #   -f=STRING       scriptFile -- test script name
@@ -114,6 +114,7 @@ class IorCommand(ExecutableCommand):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
 
         # A list of environment variable names to set and export with ior
@@ -151,7 +152,7 @@ class IorCommand(ExecutableCommand):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.set_daos_pool_params(pool, display)
-        if self.api.value in ["DFS", "MPIIO", "POSIX"]:
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_group.update(group, "dfs_group" if display else None)
             self.dfs_cont.update(
                 cont_uuid if cont_uuid else str(uuid.uuid4()),
@@ -164,7 +165,7 @@ class IorCommand(ExecutableCommand):
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        if self.api.value in ["DFS", "MPIIO", "POSIX"]:
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_pool.update(
                 pool.pool.get_uuid_str(), "dfs_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
@@ -180,7 +181,7 @@ class IorCommand(ExecutableCommand):
             [str(item) for item in [
                 int(pool.pool.svc.rl_ranks[index])
                 for index in range(pool.pool.svc.rl_nr)]])
-        if self.api.value in ["DFS", "MPIIO", "POSIX"]:
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_aggregate_total(self, processes):
@@ -299,10 +300,9 @@ class IorCommand(ExecutableCommand):
         """
         logger.info("\n")
         logger.info(message)
-        for message in metrics:
-            logger.info(message)
+        for metric in metrics:
+            logger.info(metric)
         logger.info("\n")
-
 
     def check_ior_subprocess_status(self, sub_process, command,
                                     pattern_timeout=10):
@@ -365,6 +365,7 @@ class IorCommand(ExecutableCommand):
                     "%s subprocess startup detected - %s", command, msg)
 
         return complete
+
 
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary."""

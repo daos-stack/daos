@@ -27,16 +27,19 @@ def scons():
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
                   'drpc.c', 'drpc.pb-c.c', 'proc.c',
                   'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
-                  'dedup.c', 'profile.c']
+                  'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
+                  'multihash.c', 'multihash_isal.c', 'cipher.c',
+                  'cipher_isal.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib64/', common)
 
     tenv = denv.Clone()
+    tenv.AppendUnique(LIBS=['json-c'])
 
     prereqs.require(tenv, 'argobots')
 
-    tests_lib_src = ['tests_lib.c']
+    tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']
     tests_lib = daos_build.library(tenv, 'libdaos_tests', tests_lib_src)
     tenv.Install('$PREFIX/lib64/', tests_lib)
 
