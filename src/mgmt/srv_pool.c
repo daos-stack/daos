@@ -510,6 +510,10 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	rc = crt_group_size(NULL, &pg_size);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	pg_ranks = d_rank_list_alloc(pg_size);
+	if (pg_ranks == NULL) {
+		rc = -DER_NOMEM;
+		D_GOTO(out, rc);
+	}
 	rc = d_rank_list_dup(&filtered_targets, targets);
 	if (rc) {
 		rc = -DER_NOMEM;
