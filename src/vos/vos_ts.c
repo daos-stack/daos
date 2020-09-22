@@ -334,7 +334,7 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 	size = VOS_TS_TYPE_AKEY / VOS_TS_PER_LEVEL + akey_nr;
 	array_size = size * sizeof((*ts_set)->ts_entries[0]);
 
-	D_ALLOC(*ts_set, sizeof(**ts_set) + array_size);
+	D_MM_ALLOC(*ts_set, sizeof(**ts_set) + array_size);
 	if (*ts_set == NULL)
 		return -DER_NOMEM;
 

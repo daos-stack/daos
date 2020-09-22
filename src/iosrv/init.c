@@ -469,6 +469,10 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
+	rc = d_mm_init(9);
+	if (rc && rc != -DER_ALREADY)
+		return rc;
+
 	rc = register_dbtree_classes();
 	if (rc != 0)
 		D_GOTO(exit_debug_init, rc);
@@ -640,6 +644,8 @@ server_fini(bool force)
 	D_INFO("dss_module_fini() done\n");
 	abt_fini();
 	D_INFO("abt_fini() done\n");
+	d_mm_fini();
+	D_INFO("d_mm_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
 }

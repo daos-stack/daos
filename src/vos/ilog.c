@@ -410,14 +410,14 @@ ilog_decref(struct ilog_context *lctx)
 {
 	lctx->ic_ref--;
 	if (lctx->ic_ref == 0)
-		D_FREE(lctx);
+		D_MM_FREE(lctx);
 }
 
 static int
 ilog_ctx_create(struct umem_instance *umm, struct ilog_root *root,
 		const struct ilog_desc_cbs *cbs, struct ilog_context **lctxp)
 {
-	D_ALLOC_PTR(*lctxp);
+	D_MM_ALLOC_PTR(*lctxp);
 	if (*lctxp == NULL) {
 		D_ERROR("Could not allocate memory for open incarnation log\n");
 		return -DER_NOMEM;

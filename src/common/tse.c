@@ -268,7 +268,7 @@ tse_task_decref(tse_task_t *task)
 	 * user also free it. This now requires task to be on the heap all the
 	 * time.
 	 */
-	D_FREE(task);
+	D_MM_FREE(task);
 }
 
 void
@@ -329,7 +329,7 @@ tse_sched_register_comp_cb(tse_sched_t *sched,
 	struct tse_sched_private	*dsp = tse_sched2priv(sched);
 	struct tse_sched_comp		*dsc;
 
-	D_ALLOC_PTR(dsc);
+	D_MM_ALLOC_PTR(dsc);
 	if (dsc == NULL)
 		return -DER_NOMEM;
 
@@ -357,7 +357,7 @@ tse_sched_complete_cb(tse_sched_t *sched)
 		rc = dsc->dsc_comp_cb(dsc->dsc_arg, sched->ds_result);
 		if (sched->ds_result == 0)
 			sched->ds_result = rc;
-		D_FREE(dsc);
+		D_MM_FREE(dsc);
 	}
 	return 0;
 }
@@ -391,7 +391,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 		return -DER_NO_PERM;
 	}
 
-	D_ALLOC(dtc, sizeof(*dtc) + arg_size);
+	D_MM_ALLOC(dtc, sizeof(*dtc) + arg_size);
 	if (dtc == NULL)
 		return -DER_NOMEM;
 
@@ -459,7 +459,7 @@ tse_task_prep_callback(tse_task_t *task)
 				task->dt_result = rc;
 		}
 
-		D_FREE(dtc);
+		D_MM_FREE(dtc);
 
 		/** Task was re-initialized; break */
 		if (!dtp->dtp_running && !dtp->dtp_completing)
@@ -492,7 +492,7 @@ tse_task_complete_callback(tse_task_t *task)
 		if (task->dt_result == 0)
 			task->dt_result = ret;
 
-		D_FREE(dtc);
+		D_MM_FREE(dtc);
 
 		/** Task was re-initialized; break */
 		if (!dtp->dtp_completing) {
@@ -598,7 +598,7 @@ tse_task_post_process(tse_task_t *task)
 		d_list_del(&tlink->tl_link);
 		task_tmp = tlink->tl_task;
 		dtp_tmp = tse_task2priv(task_tmp);
-		D_FREE(tlink);
+		D_MM_FREE(tlink);
 
 		/* propagate dep task's failure */
 		if (task_tmp->dt_result == 0)
@@ -861,7 +861,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	if (dep_dtp->dtp_completed)
 		return 0;
 
-	D_ALLOC_PTR(tlink);
+	D_MM_ALLOC_PTR(tlink);
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
@@ -903,7 +903,7 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	struct tse_task_private	 *dtp;
 	tse_task_t		 *task;
 
-	D_ALLOC_PTR(task);
+	D_MM_ALLOC_PTR(task);
 	if (task == NULL)
 		return -DER_NOMEM;
 

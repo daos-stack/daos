@@ -375,13 +375,13 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 {
 	if (ioc->ic_rsrvd_scm != NULL) {
 		D_ASSERT(ioc->ic_rsrvd_scm->rs_actv_at == 0);
-		D_FREE(ioc->ic_rsrvd_scm);
+		D_MM_FREE(ioc->ic_rsrvd_scm);
 	}
 
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	D_ASSERT(d_list_empty(&ioc->ic_dedup_entries));
 	if (ioc->ic_umoffs != NULL) {
-		D_FREE(ioc->ic_umoffs);
+		D_MM_FREE(ioc->ic_umoffs);
 		ioc->ic_umoffs = NULL;
 	}
 }
@@ -403,7 +403,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 		total_acts += iod->iod_nr;
 	}
 
-	D_ALLOC_ARRAY(ioc->ic_umoffs, total_acts);
+	D_MM_ALLOC_ARRAY(ioc->ic_umoffs, total_acts);
 	if (ioc->ic_umoffs == NULL)
 		return -DER_NOMEM;
 
@@ -412,7 +412,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 
 	size = sizeof(*ioc->ic_rsrvd_scm) +
 		sizeof(struct pobj_action) * total_acts;
-	D_ALLOC(ioc->ic_rsrvd_scm, size);
+	D_MM_ALLOC(ioc->ic_rsrvd_scm, size);
 	if (ioc->ic_rsrvd_scm == NULL)
 		return -DER_NOMEM;
 
@@ -424,7 +424,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 	/** Reserve enough space for any deferred actions */
 	D_ALLOC(scm, size);
 	if (scm == NULL) {
-		D_FREE(ioc->ic_rsrvd_scm);
+		D_MM_FREE(ioc->ic_rsrvd_scm);
 		return -DER_NOMEM;
 	}
 
@@ -441,7 +441,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 		bio_iod_free(ioc->ic_biod);
 
 	if (ioc->ic_biov_csums != NULL)
-		D_FREE(ioc->ic_biov_csums);
+		D_MM_FREE(ioc->ic_biov_csums);
 
 	if (ioc->ic_obj)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
@@ -451,7 +451,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	vos_ilog_fetch_finish(&ioc->ic_akey_info);
 	vos_cont_decref(ioc->ic_cont);
 	vos_ts_set_free(ioc->ic_ts_set);
-	D_FREE(ioc);
+	D_MM_FREE(ioc);
 }
 
 static int
@@ -476,7 +476,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		goto error;
 	}
 
-	D_ALLOC_PTR(ioc);
+	D_MM_ALLOC_PTR(ioc);
 	if (ioc == NULL)
 		return -DER_NOMEM;
 
@@ -552,7 +552,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	ioc->ic_biov_csums_nr = 1;
 	ioc->ic_biov_csums_at = 0;
-	D_ALLOC_ARRAY(ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
+	D_MM_ALLOC_ARRAY(ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
 	if (ioc->ic_biov_csums == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
@@ -635,7 +635,7 @@ bsgl_csums_resize(struct vos_io_context *ioc)
 		struct dcs_csum_info *new_infos;
 		uint32_t	 new_nr = dcb_nr * 2;
 
-		D_REALLOC_ARRAY(new_infos, csums, new_nr);
+		D_MM_REALLOC_ARRAY(new_infos, csums, new_nr);
 		if (new_infos == NULL)
 			return -DER_NOMEM;
 
@@ -765,7 +765,7 @@ save_recx(struct vos_io_context *ioc, uint64_t rx_idx, uint64_t rx_nr,
 	struct daos_recx_ep		 recx_ep;
 
 	if (ioc->ic_recx_lists == NULL) {
-		D_ALLOC_ARRAY(ioc->ic_recx_lists, ioc->ic_iod_nr);
+		D_MM_ALLOC_ARRAY(ioc->ic_recx_lists, ioc->ic_iod_nr);
 		if (ioc->ic_recx_lists == NULL)
 			return -DER_NOMEM;
 	}
@@ -1541,7 +1541,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 	    uint16_t minor_epc)
 {
 	struct vos_object	*obj = ioc->ic_obj;
-	daos_handle_t		 ak_toh;
+	daos_handle_t		 ak_toh = DAOS_HDL_INVAL;
 	struct vos_krec_df	*krec;
 	uint32_t		 update_cond = 0;
 	bool			 subtr_created = false;
@@ -1599,7 +1599,8 @@ out:
 		goto release;
 
 release:
-	key_tree_release(ak_toh, false);
+	if (!daos_handle_is_inval(ak_toh))
+		key_tree_release(ak_toh, false);
 
 	return rc;
 }

@@ -64,7 +64,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 	if (oiter->oit_cont != NULL)
 		vos_cont_decref(oiter->oit_cont);
 
-	D_FREE_PTR(oiter);
+	D_MM_FREE(oiter);
 	return rc;
 }
 
@@ -85,7 +85,7 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (cont == NULL)
 		return -DER_INVAL;
 
-	D_ALLOC_PTR(oiter);
+	D_MM_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
 

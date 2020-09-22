@@ -316,7 +316,7 @@ void
 evt_ent_array_fini(struct evt_entry_array *ent_array)
 {
 	if (ent_array->ea_size > EVT_EMBEDDED_NR)
-		D_FREE(ent_array->ea_ents);
+		D_MM_FREE(ent_array->ea_ents);
 
 	ent_array->ea_size = ent_array->ea_ent_nr = 0;
 }
@@ -330,14 +330,14 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 {
 	struct evt_list_entry	*ents;
 
-	D_ALLOC_ARRAY(ents, new_size);
+	D_MM_ALLOC_ARRAY(ents, new_size);
 	if (ents == NULL)
 		return -DER_NOMEM;
 
 	memcpy(ents, ent_array->ea_ents,
 	       sizeof(ents[0]) * ent_array->ea_ent_nr);
 	if (ent_array->ea_ents != ent_array->ea_embedded_ents)
-		D_FREE(ent_array->ea_ents);
+		D_MM_FREE(ent_array->ea_ents);
 	ent_array->ea_ents = ents;
 	ent_array->ea_size = new_size;
 
@@ -990,7 +990,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	D_ASSERT(root != NULL);
 
-	D_ALLOC_PTR(tcx);
+	D_MM_ALLOC_PTR(tcx);
 	if (tcx == NULL)
 		return -DER_NOMEM;
 

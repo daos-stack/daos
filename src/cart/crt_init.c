@@ -275,6 +275,12 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		D_GOTO(out, rc);
 	}
 
+	rc = d_mm_init(9);
+	if (rc && rc != -DER_ALREADY) {
+		D_ERROR("d_mm_init() "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
 	if (grpid != NULL) {
 		if (crt_validate_grpid(grpid) != 0) {
 			D_ERROR("grpid contains invalid characters "
@@ -570,6 +576,7 @@ crt_finalize(void)
 	}
 
 out:
+	d_mm_fini();
 	/* d_fault_inject_fini() is reference counted */
 	local_rc = d_fault_inject_fini();
 	if (local_rc != 0)

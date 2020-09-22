@@ -274,7 +274,7 @@ evt_tcx_decref(struct evt_context *tcx)
 		tcx->tc_magic = EVT_HDL_DEAD;
 		/* Free any memory allocated by embedded iterator */
 		evt_ent_array_fini(&tcx->tc_iter.it_entries);
-		D_FREE(tcx);
+		D_MM_FREE(tcx);
 	}
 }
 

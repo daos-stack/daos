@@ -429,7 +429,7 @@ daos_rank_list_parse(const char *str, const char *sep)
 	char		       *p;
 	int			n = 0;
 
-	D_ALLOC_ARRAY(buf, cap);
+	D_MM_ALLOC_ARRAY(buf, cap);
 	if (buf == NULL)
 		D_GOTO(out, ranks = NULL);
 	D_STRNDUP(s_saved, str, strlen(str));
@@ -444,11 +444,11 @@ daos_rank_list_parse(const char *str, const char *sep)
 
 			/* Double the buffer. */
 			cap_new = cap * 2;
-			D_ALLOC_ARRAY(buf_new, cap_new);
+			D_MM_ALLOC_ARRAY(buf_new, cap_new);
 			if (buf_new == NULL)
 				D_GOTO(out_s, ranks = NULL);
 			memcpy(buf_new, buf, sizeof(*buf_new) * n);
-			D_FREE(buf);
+			D_MM_FREE(buf);
 			buf = buf_new;
 			cap = cap_new;
 		}
@@ -466,7 +466,7 @@ daos_rank_list_parse(const char *str, const char *sep)
 out_s:
 	D_FREE(s_saved);
 out_buf:
-	D_FREE(buf);
+	D_MM_FREE(buf);
 out:
 	return ranks;
 }

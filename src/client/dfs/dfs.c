@@ -2014,13 +2014,13 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	if (rc)
 		return rc;
 
-	D_ALLOC_ARRAY(kds, *nr);
+	D_MM_ALLOC_ARRAY(kds, *nr);
 	if (kds == NULL)
 		return ENOMEM;
 
-	D_ALLOC_ARRAY(enum_buf, *nr * DFS_MAX_PATH);
+	D_MM_ALLOC_ARRAY(enum_buf, *nr * DFS_MAX_PATH);
 	if (enum_buf == NULL) {
-		D_FREE(kds);
+		D_MM_FREE(kds);
 		return ENOMEM;
 	}
 
@@ -2058,8 +2058,8 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 	*nr = key_nr;
 
 out:
-	D_FREE(enum_buf);
-	D_FREE(kds);
+	D_MM_FREE(enum_buf);
+	D_MM_FREE(kds);
 	return rc;
 }
 
@@ -2088,14 +2088,14 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 		return rc;
 
 	num = *nr;
-	D_ALLOC_ARRAY(kds, num);
+	D_MM_ALLOC_ARRAY(kds, num);
 	if (kds == NULL)
 		return ENOMEM;
 
 	/** Allocate a buffer to store the entry keys */
-	D_ALLOC_ARRAY(enum_buf, size);
+	D_MM_ALLOC_ARRAY(enum_buf, size);
 	if (enum_buf == NULL) {
-		D_FREE(kds);
+		D_MM_FREE(kds);
 		return ENOMEM;
 	}
 
@@ -2148,8 +2148,8 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 
 	*nr = keys_nr;
 out:
-	D_FREE(kds);
-	D_FREE(enum_buf);
+	D_MM_FREE(enum_buf);
+	D_MM_FREE(kds);
 	return rc;
 }
 

@@ -70,7 +70,7 @@ comb_sort_test(int num)
 	int		 i;
 	struct timeval	 tv;
 
-	arr = calloc(num, sizeof(int));
+	D_ALLOC_ARRAY(arr, num);
 	if (arr == NULL)
 		return -ENOMEM;
 

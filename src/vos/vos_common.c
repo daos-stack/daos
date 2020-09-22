@@ -135,7 +135,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
 		dru = &dth->dth_rsrvds[i];
 		rc = vos_publish_scm(cont, dru->dru_scm, publish);
-		D_FREE(dru->dru_scm);
+		D_MM_FREE(dru->dru_scm);
 
 		/* FIXME: Currently, vos_publish_blocks() will release
 		 *	  reserved information in 'dru_nvme_list' from

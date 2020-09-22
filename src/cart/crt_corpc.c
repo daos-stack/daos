@@ -42,14 +42,14 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(grp_priv != NULL);
 
-	D_ALLOC_PTR(co_info);
+	D_MM_ALLOC_PTR(co_info);
 	if (co_info == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = d_rank_list_dup_sort_uniq(&co_info->co_filter_ranks, filter_ranks);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
-		D_FREE_PTR(co_info);
+		D_MM_FREE(co_info);
 		D_GOTO(out, rc);
 	}
 	if (!grp_ref_taken)
@@ -100,7 +100,7 @@ crt_corpc_info_fini(struct crt_rpc_priv *rpc_priv)
 	d_rank_list_free(rpc_priv->crp_corpc_info->co_filter_ranks);
 	if (rpc_priv->crp_corpc_info->co_grp_ref_taken)
 		crt_grp_priv_decref(rpc_priv->crp_corpc_info->co_grp_priv);
-	D_FREE_PTR(rpc_priv->crp_corpc_info);
+	D_MM_FREE(rpc_priv->crp_corpc_info);
 }
 
 static int
@@ -225,7 +225,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_ERROR("bad zero seg_num.\n");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
-	D_ALLOC_ARRAY(iovs, seg_num);
+	D_MM_ALLOC_ARRAY(iovs, seg_num);
 	if (iovs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -245,8 +245,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_ERROR("crt_bulk_free failed, rc: %d.\n", rc);
 
 out:
-	if (iovs != NULL)
-		D_FREE(iovs);
+	D_MM_FREE(iovs);
 	return rc;
 }
 
@@ -284,7 +283,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc);
 		}
 
-		bulk_iov.iov_buf = calloc(1, bulk_len);
+		D_ALLOC(bulk_iov.iov_buf, bulk_len);
 		if (bulk_iov.iov_buf == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		bulk_iov.iov_buf_len = bulk_len;

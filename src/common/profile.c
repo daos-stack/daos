@@ -282,7 +282,7 @@ daos_profile_dump(struct daos_profile *dp)
 		unlink(path);
 out:
 	if (path != name)
-		free(path);
+		D_FREE(path);
 }
 
 int

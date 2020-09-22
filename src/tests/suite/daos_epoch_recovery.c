@@ -63,7 +63,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 		sprintf(akey[i], akey_fmt, i);
 		rec_size[i] = rsize;
 		rx_nr[i] = 1;
-		rec[i] = calloc(rec_size[i], 1);
+		D_ALLOC(rec[i], rec_size[i]);
 		assert_non_null(rec[i]);
 		offset[i] = i * 20;
 	}

@@ -181,7 +181,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 	D_ASSERT(ctxt != NULL && ctxt->bic_umem != NULL);
 	D_ASSERT(sgl_cnt != 0);
 
-	D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
+	D_MM_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
 	if (biod == NULL)
 		return NULL;
 
@@ -205,7 +205,7 @@ bio_iod_free(struct bio_desc *biod)
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
-	D_FREE(biod);
+	D_MM_FREE(biod);
 }
 
 static inline struct bio_dma_buffer *

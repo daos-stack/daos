@@ -73,6 +73,13 @@ extern "C" {
 
 /* memory allocating macros */
 
+int   d_mm_init(size_t n);
+void  d_mm_fini(void);
+void *d_mm_alloc(size_t size);
+void *d_mm_realloc(void *ptr, size_t size);
+void  d_mm_free(void *ptr);
+void  d_mm_flush(void);
+
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
 	do {								\
@@ -102,11 +109,47 @@ extern "C" {
 				(int)(size));				\
 	} while (0)
 
+#define D_MM_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
+			on_error)					\
+	do {								\
+		if (D_SHOULD_FAIL(d_fault_attr_mem)) {			\
+			d_mm_free(ptr);					\
+			ptr = NULL;					\
+		}							\
+		if ((cond) && (ptr) != NULL) {				\
+			if (count <= 1)					\
+				D_DEBUG(DB_MEM,				\
+					"alloc(" #func ") '" name "': %i at %p.\n", \
+					(int)(size), (ptr));		\
+			else						\
+				D_DEBUG(DB_MEM,				\
+					"alloc(" #func ") '" name "': %i * '" cname "':%i at %p.\n", \
+					(int)(size), (int)(count), (ptr)); \
+			break;						\
+		}							\
+		(void)(on_error);					\
+		if (count >= 1)						\
+			D_ERROR("out of memory (tried to "		\
+				#func " '" name "': %i)\n",		\
+				(int)((size) * (count)));		\
+		else							\
+			D_ERROR("out of memory (tried to "		\
+				#func " '" name "': %i)\n",		\
+				(int)(size));				\
+	} while (0)
+
 
 #define D_ALLOC_CORE(ptr, size, count)					\
 	do {								\
-		(ptr) = (__typeof__(ptr))calloc(count, (size));		\
+		(ptr) = (__typeof__(ptr))calloc((count), (size));	\
 		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
+			      count, #count, 0);			\
+	} while (0)
+
+#define D_MM_ALLOC_CORE(ptr, size, count)				\
+	do {								\
+		(ptr) = (__typeof__(ptr))d_mm_alloc((count) * (size));	\
+		D_MM_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
 			      count, #count, 0);			\
 	} while (0)
 
@@ -184,13 +227,61 @@ extern "C" {
 				_esz, (_cnt));				\
 	} while (0)
 
+#define D_MM_REALLOC_COMMON(newptr, oldptr, size, cnt)			\
+	do {								\
+		size_t _esz = (size_t)(size);				\
+		size_t _sz = (size_t)(size) * (cnt);			\
+		size_t _cnt = (size_t)(cnt);				\
+		/* Compiler check to ensure type match */		\
+		__typeof__(newptr) optr = oldptr;			\
+		D_ASSERT((void *)&(newptr) != &(oldptr));		\
+		/*							\
+		 * On Linux, realloc(p, 0) may return NULL after	\
+		 * freeing p. This behavior has proved tricky, as it is	\
+		 * easy to mistake the NULL return value for an error	\
+		 * and keep using the dangling p. We therefore allocate	\
+		 * a 1-byte object in this case, simulating the BSD	\
+		 * behavior.						\
+		 */							\
+		if (_sz == 0)						\
+			_sz = 1;					\
+		if (D_SHOULD_FAIL(d_fault_attr_mem))			\
+			newptr = NULL;					\
+		else							\
+			(newptr) = d_mm_realloc(optr, _sz);		\
+		if ((newptr) != NULL) {					\
+			if ((_cnt) <= 1)				\
+				D_DEBUG(DB_MEM,				\
+					"realloc '" #newptr "': %zu at %p (old '" #oldptr "':%p).\n", \
+					_esz, (newptr), (oldptr));	\
+			else						\
+				D_DEBUG(DB_MEM,				\
+					"realloc '" #newptr "': %zu * '" #cnt "':%zu at %p (old '" #oldptr "':%p).\n", \
+					_esz, (_cnt), (newptr), (oldptr));	\
+			(oldptr) = NULL;				\
+			break;						\
+		}							\
+		if ((_cnt) <= 1)					\
+			D_ERROR("out of memory (tried to realloc "	\
+				"'" #newptr "': size=%zu)\n",		\
+				_esz);					\
+		else							\
+			D_ERROR("out of memory (tried to realloc "	\
+				"'" #newptr "': size=%zu count=%zu)\n",	\
+				_esz, (_cnt));				\
+	} while (0)
 
 #define D_REALLOC(newptr, oldptr, size)	\
 	D_REALLOC_COMMON(newptr, oldptr, size, 1)
 
+#define D_MM_REALLOC(newptr, oldptr, size)	\
+	D_MM_REALLOC_COMMON(newptr, oldptr, size, 1)
+
 #define D_REALLOC_ARRAY(newptr, oldptr, count) \
 	D_REALLOC_COMMON(newptr, oldptr, sizeof(*(oldptr)), count)
 
+#define D_MM_REALLOC_ARRAY(newptr, oldptr, count) \
+	D_MM_REALLOC_COMMON(newptr, oldptr, sizeof(*(oldptr)), count)
 
 #define D_FREE(ptr)							\
 	do {								\
@@ -199,9 +290,19 @@ extern "C" {
 		(ptr) = NULL;						\
 	} while (0)
 
+#define D_MM_FREE(ptr)							\
+	do {								\
+		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
+		d_mm_free(ptr);						\
+		(ptr) = NULL;						\
+	} while (0)
+
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
 #define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
 #define D_ALLOC_ARRAY(ptr, count) D_ALLOC_CORE(ptr, sizeof(*ptr), count)
+#define D_MM_ALLOC(ptr, size)	D_MM_ALLOC_CORE(ptr, size, 1)
+#define D_MM_ALLOC_PTR(ptr)	D_MM_ALLOC(ptr, sizeof(*ptr))
+#define D_MM_ALLOC_ARRAY(ptr, count) D_MM_ALLOC_CORE(ptr, sizeof(*ptr), count)
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)			\
@@ -316,7 +417,6 @@ void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
 int d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void d_free_string(struct d_string_buffer_t *buf);
-
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually

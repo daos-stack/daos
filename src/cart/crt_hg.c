@@ -759,7 +759,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 	D_ASSERT(opc_info->coi_opc == opc);
 
-	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
+	D_MM_ALLOC(rpc_priv, opc_info->coi_rpc_size);
 	if (rpc_priv == NULL) {
 		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
 		crt_hg_unpack_cleanup(proc);
@@ -1293,7 +1293,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		buf_sizes = buf_sizes_stack;
 	} else {
 		allocate = true;
-		D_ALLOC_ARRAY(buf_sizes, sgl->sg_nr);
+		D_MM_ALLOC_ARRAY(buf_sizes, sgl->sg_nr);
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -1304,7 +1304,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		buf_ptrs = NULL;
 	} else {
 		if (allocate) {
-			D_ALLOC_ARRAY(buf_ptrs, sgl->sg_nr);
+			D_MM_ALLOC_ARRAY(buf_ptrs, sgl->sg_nr);
 			if (buf_ptrs == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		} else {
@@ -1327,8 +1327,8 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 out:
 	/* HG_Bulk_create copied the parameters, can free here */
 	if (allocate) {
-		D_FREE(buf_ptrs);
-		D_FREE(buf_sizes);
+		D_MM_FREE(buf_ptrs);
+		D_MM_FREE(buf_sizes);
 	}
 
 	return rc;
@@ -1385,13 +1385,13 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 		buf_sizes = buf_sizes_stack;
 		buf_ptrs = buf_ptrs_stack;
 	} else {
-		D_ALLOC_ARRAY(buf_sizes, bulk_sgnum);
+		D_MM_ALLOC_ARRAY(buf_sizes, bulk_sgnum);
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(buf_ptrs, bulk_sgnum);
+		D_MM_ALLOC_ARRAY(buf_ptrs, bulk_sgnum);
 		if (buf_ptrs == NULL) {
-			D_FREE(buf_sizes);
+			D_MM_FREE(buf_sizes);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		allocate = true;
@@ -1415,8 +1415,8 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 
 out:
 	if (allocate) {
-		D_FREE(buf_sizes);
-		D_FREE(buf_ptrs);
+		D_MM_FREE(buf_ptrs);
+		D_MM_FREE(buf_sizes);
 	}
 	return rc;
 }

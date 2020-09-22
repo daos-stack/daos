@@ -605,7 +605,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set);
 static inline void
 vos_ts_set_free(struct vos_ts_set *ts_set)
 {
-	D_FREE(ts_set);
+	D_MM_FREE(ts_set);
 }
 
 /** Internal API to copy timestamp */

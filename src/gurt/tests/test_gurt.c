@@ -282,7 +282,7 @@ static int
 fini_tests(void **state)
 {
 	rmdir(__root);
-	free(__root);
+	D_FREE(__root);
 	d_log_fini();
 
 	return 0;

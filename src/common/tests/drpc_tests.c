@@ -253,7 +253,7 @@ test_drpc_call_sends_call_as_mesg(void **state)
 
 	/* Packed message is the call struct updated by drpc_call */
 	expected_msg_size = drpc__call__get_packed_size(call);
-	expected_msg = calloc(1, expected_msg_size);
+	D_ALLOC(expected_msg, expected_msg_size);
 	drpc__call__pack(call, expected_msg);
 
 	/* Sent to the proper socket */
@@ -307,7 +307,7 @@ test_drpc_call_with_sync_flag_gets_socket_response(void **state)
 	/* Actual contents of the message are arbitrary - just needs to be
 	 * identifiable.
 	 */
-	expected_resp = calloc(1, sizeof(Drpc__Response));
+	D_ALLOC_PTR(expected_resp);
 	drpc__response__init(expected_resp);
 	expected_resp->sequence = 12345;
 	expected_resp->status = DRPC__STATUS__FAILURE;

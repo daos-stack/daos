@@ -464,7 +464,7 @@ add_object_class(daos_oclass_id_t cid)
 		return;
 
 	rank_list.rl_nr = NUM_TO_EXTEND;
-	rank_list.rl_ranks = malloc(sizeof(d_rank_t) * NUM_TO_EXTEND);
+	D_ALLOC_ARRAY(rank_list.rl_ranks, NUM_TO_EXTEND);
 	rank_list.rl_ranks[0] = DOM_NR + 1;
 	rank_list.rl_ranks[1] = DOM_NR + 2;
 

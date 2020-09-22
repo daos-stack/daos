@@ -307,7 +307,7 @@ comp_sorter_init(struct pool_comp_sorter *sorter, int nr,
 	D_DEBUG(DB_TRACE, "Initialize sorter for %s, nr %d\n",
 		pool_comp_type2str(type), nr);
 
-	D_ALLOC_ARRAY(sorter->cs_comps, nr);
+	D_MM_ALLOC_ARRAY(sorter->cs_comps, nr);
 	if (sorter->cs_comps == NULL)
 		return -DER_NOMEM;
 
@@ -323,7 +323,7 @@ comp_sorter_fini(struct pool_comp_sorter *sorter)
 		D_DEBUG(DB_TRACE, "Finalise sorter for %s\n",
 			pool_comp_type2str(sorter->cs_type));
 
-		D_FREE(sorter->cs_comps);
+		D_MM_FREE(sorter->cs_comps);
 		sorter->cs_nr = 0;
 	}
 }
@@ -910,14 +910,14 @@ pool_map_finalise(struct pool_map *map)
 	comp_sorter_fini(&map->po_target_sorter);
 
 	if (map->po_comp_fail_cnts != NULL)
-		D_FREE(map->po_comp_fail_cnts);
+		D_MM_FREE(map->po_comp_fail_cnts);
 
 	if (map->po_domain_sorters != NULL) {
 		D_ASSERT(map->po_domain_layers != 0);
 		for (i = 0; i < map->po_domain_layers; i++)
 			comp_sorter_fini(&map->po_domain_sorters[i]);
 
-		D_FREE(map->po_domain_sorters);
+		D_MM_FREE(map->po_domain_sorters);
 
 		map->po_domain_sorters = NULL;
 		map->po_domain_layers = 0;
@@ -964,13 +964,13 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 
 	map->po_domain_layers = cntr.cc_layers;
 
-	D_ALLOC_ARRAY(map->po_comp_fail_cnts, map->po_domain_layers);
+	D_MM_ALLOC_ARRAY(map->po_comp_fail_cnts, map->po_domain_layers);
 	if (map->po_comp_fail_cnts == NULL) {
 		rc = -DER_NOMEM;
 		goto failed;
 	}
 
-	D_ALLOC_ARRAY(map->po_domain_sorters, map->po_domain_layers);
+	D_MM_ALLOC_ARRAY(map->po_domain_sorters, map->po_domain_layers);
 	if (map->po_domain_sorters == NULL) {
 		rc = -DER_NOMEM;
 		goto failed;
@@ -1167,7 +1167,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	int			 rc;
 
 	/* create scratch map for merging */
-	D_ALLOC_PTR(src_map);
+	D_MM_ALLOC_PTR(src_map);
 	if (src_map == NULL)
 		return -DER_NOMEM;
 
@@ -1550,7 +1550,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 		goto failed;
 	}
 
-	D_ALLOC_PTR(map);
+	D_MM_ALLOC_PTR(map);
 	if (map == NULL) {
 		rc = -DER_NOMEM;
 		goto failed;
@@ -1580,7 +1580,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 	if (tree != NULL)
 		pool_tree_free(tree);
 	if (map != NULL)
-		D_FREE(map);
+		D_MM_FREE(map);
 	return rc;
 }
 
@@ -1591,7 +1591,7 @@ static void
 pool_map_destroy(struct pool_map *map)
 {
 	pool_map_finalise(map);
-	D_FREE(map);
+	D_MM_FREE(map);
 }
 
 /** Take a refcount on a pool map */
@@ -2364,7 +2364,7 @@ pool_target_id_list_append(struct pool_target_id_list *id_list,
 	if (pool_target_id_found(id_list, id))
 		return 0;
 
-	D_REALLOC_ARRAY(new_ids, id_list->pti_ids, id_list->pti_number + 1);
+	D_MM_REALLOC_ARRAY(new_ids, id_list->pti_ids, id_list->pti_number + 1);
 	if (new_ids == NULL)
 		return -DER_NOMEM;
 
@@ -2396,7 +2396,7 @@ int
 pool_target_id_list_alloc(unsigned int num,
 			  struct pool_target_id_list *id_list)
 {
-	D_ALLOC_ARRAY(id_list->pti_ids,	num);
+	D_MM_ALLOC_ARRAY(id_list->pti_ids, num);
 	if (id_list->pti_ids == NULL)
 		return -DER_NOMEM;
 
@@ -2411,6 +2411,5 @@ pool_target_id_list_free(struct pool_target_id_list *id_list)
 	if (id_list == NULL)
 		return;
 
-	if (id_list->pti_ids)
-		D_FREE(id_list->pti_ids);
+	D_MM_FREE(id_list->pti_ids);
 }

@@ -53,7 +53,7 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	D_ALLOC_ARRAY(rank_list->rl_ranks, rank_list->rl_nr);
 	if (rank_list->rl_ranks == NULL) {
-		D_FREE_PTR(rank_list);
+		D_FREE(rank_list);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -179,7 +179,7 @@ d_rank_list_alloc(uint32_t size)
 
 	D_ALLOC_ARRAY(rank_list->rl_ranks, size);
 	if (rank_list->rl_ranks == NULL) {
-		D_FREE_PTR(rank_list);
+		D_FREE(rank_list);
 		return NULL;
 	}
 
