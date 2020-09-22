@@ -1310,12 +1310,12 @@ def main():
         fatal_errors.add_result(run_il_test(server, conf))
     elif args.mode == 'kv':
         test_pydaos_kv(server, conf)
-    elif len(sys.argv) == 2 and sys.argv[1] == 'overlay':
+    elif args.mode == 'overlay':
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
-    elif len(sys.argv) == 2 and sys.argv[1] == 'readdir':
+    elif args.mode == 'readdir':
         fatal_errors.add_result(dfuse_wrapper(server, conf))
-    elif len(sys.argv) == 2 and sys.argv[1] == 'fi':
-        fatal_errors = test_alloc_fail(conf)
+    elif args.mode  == 'fi':
+        fatal_errors.add(test_alloc_fail(conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
