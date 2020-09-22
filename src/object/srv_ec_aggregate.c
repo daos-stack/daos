@@ -39,24 +39,20 @@
 #include "obj_internal.h"
 
 /* Pool/container info. */
+
 struct ec_agg_pool_info {
-	uuid_t		 api_pool_uuid;		/* open pool, check leader */
-	uuid_t		 api_poh_uuid;		/* pool handle uuid */
-	uuid_t		 api_cont_uuid;		/* container uuid */
-	uuid_t		 api_coh_uuid;		/* container handle uuid */
-	daos_handle_t	 api_cont_hdl;		/* container handle */
-	uint32_t	 api_pool_version;	/* pool vers,fo check leader*/
-	d_rank_list_t	*api_svc_list;		/* service list */
-	struct ds_pool	*api_pool;		/* Used for IV fetch */
+	uuid_t		 api_pool_uuid;		/* open pool, check leader    */
+	uuid_t		 api_cont_uuid;		/* container uuid             */
+	uint32_t	 api_pool_version;	/* pool ver, for check leader */
 };
 
 /* Parameters used to drive iterate all.
  */
 struct ec_agg_param {
+	d_sg_list_t		 ap_sgl;	 /* mem alloc-ed for I/O    */
+	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info          */
 	struct ec_agg_entry	*ap_agg_entry;	 /* entry used for each OID */
-	d_sg_list_t		 ap_sgl;	 /* mem alloc-ed for I/O */
-	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info */
-	daos_handle_t		 ap_cont_handle; /* container handle */
+	daos_handle_t		 ap_cont_handle; /* VOS container handle    */
 };
 
 /* Parity extent for the stripe undergoing aggregation.
@@ -69,51 +65,51 @@ struct ec_agg_par_extent {
 /* Represents the current stripe undergoing aggregation.
  */
 struct ec_agg_stripe {
-	daos_off_t	as_stripenum;   /* ord of the stripe, offset/(k*len) */
-	daos_epoch_t	as_hi_epoch;    /* highest epoch of extents in stripe */
-	d_list_t	as_dextents;    /* list of stripe's data extents */
-	daos_off_t	as_stripe_fill; /* amount of stripe covered by reps */
-	unsigned int	as_extent_cnt;  /* number of replica extents */
-	unsigned int	as_offset;     /* start offset in stripe */
+	daos_off_t	as_stripenum;   /* ordinal of stripe, offset/(k*len) */
+	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe          */
+	d_list_t	as_dextents;    /* list of stripe's data  extents    */
+	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
+	unsigned int	as_extent_cnt;  /* number of replica extents         */
+	unsigned int	as_offset;      /* start offset in stripe            */
 };
 
 /* Aggregation state for an object. (may need to restructure if
  * list of these is built from committed DTX table)
  */
 struct ec_agg_entry {
-	d_list_t		 ae_link;
-	daos_unit_oid_t		 ae_oid;
-	struct daos_oclass_attr	*ae_oca;
-	struct obj_ec_codec	*ae_codec;
-	d_sg_list_t		*ae_sgl;
-	daos_handle_t		 ae_cont_hdl;
-	daos_handle_t		 ae_chdl;
-	daos_handle_t		 ae_thdl;
-	daos_epoch_range_t	 ae_epr; /* hi/lo extent threshold */
-	daos_key_t		 ae_dkey;
-	daos_key_t		 ae_akey;
-	daos_size_t		 ae_rsize;
-	struct ec_agg_stripe	 ae_cur_stripe;
-	struct ec_agg_par_extent ae_par_extent;
-	daos_handle_t		 ae_obj_hdl;
+	d_list_t		 ae_link;	 /* List (of entries) link    */
+	daos_unit_oid_t		 ae_oid;	 /* OID of iteration entry    */
+	struct daos_oclass_attr	*ae_oca;	 /* Object class of object    */
+	struct obj_ec_codec	*ae_codec;	 /* Encode/decode for oclass  */
+	d_sg_list_t		*ae_sgl;	 /* Mem for entry processing  */
+	daos_handle_t		 ae_cont_hdl;    /* Container handle	      */
+	daos_handle_t		 ae_chdl;	 /* Vos container handle      */
+	daos_handle_t		 ae_thdl;	 /* Iterator handle           */
+	daos_epoch_range_t	 ae_epr;	 /* hi/lo extent threshold    */
+	daos_key_t		 ae_dkey;	 /* Current dkey              */
+	daos_key_t		 ae_akey;	 /* Current akey              */
+	daos_size_t		 ae_rsize;	 /* Record size of cur array  */
+	struct ec_agg_stripe	 ae_cur_stripe;  /* Struct for current stripe */
+	struct ec_agg_par_extent ae_par_extent;	 /* Parity extent             */
+	daos_handle_t		 ae_obj_hdl;	 /* Object handle for cur obj */
 };
 
 /* Struct used to drive offloaded stripe update.
  */
 struct ec_agg_stripe_ud {
-	struct ec_agg_entry	*asu_agg_entry;
-	uint8_t			*asu_bit_map;
-	unsigned int		 asu_cell_cnt;
-	bool			 asu_recalc;
-	//ABT_eventual		 asu_eventual;
+	struct ec_agg_entry	*asu_agg_entry; /* Associated entry     */
+	uint8_t			*asu_bit_map;   /* Bitmap of cells      */
+	unsigned int		 asu_cell_cnt;  /* Count of cells       */
+	bool			 asu_recalc;    /* Should recalc parity */
+	ABT_eventual		 asu_eventual;  /* Eventual for offload */
 };
 
 /* Represents an replicated data extent.
  */
 struct ec_agg_extent {
-	d_list_t	ae_link;
-	daos_recx_t	ae_recx;
-	daos_epoch_t	ae_epoch;
+	d_list_t	ae_link;  /* for extents list   */
+	daos_recx_t	ae_recx;  /* idx, nr for extent */
+	daos_epoch_t	ae_epoch; /* epoch for extent   */
 };
 
 /* Reset iterator state upon completion of iteration of a subtree.
@@ -380,12 +376,15 @@ out:
 	return rc;
 }
 
-/* Encodes a full stripe. Called when replicas form a full stripe.
+/* Xstream offload function for encoding new parity from full stripe of
+ * replicas.
  */
 static void
-agg_encode_full_stripe(void *arg)
+agg_encode_full_stripe_ult(void *arg)
 {
-	struct ec_agg_entry	*entry = (struct ec_agg_entry *)arg;
+	struct ec_agg_stripe_ud	*stripe_ud =
+					(struct ec_agg_stripe_ud *)arg;
+	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	unsigned int		 p = entry->ae_oca->u.ec.e_p;
@@ -393,21 +392,59 @@ agg_encode_full_stripe(void *arg)
 	unsigned char		*data[k];
 	unsigned char		*parity_bufs[p];
 	unsigned char		*buf;
-	int			 i;
+	int			 i, rc = 0;
 
 	buf = entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
 	for (i = 0; i < k; i++)
-		data[i] = &buf[i*cell_bytes];
+		data[i] = &buf[i * cell_bytes];
 
 	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
 	for (i = p - 1; i >= 0; i--)
-		parity_bufs[i] = &buf[i*cell_bytes];
+		parity_bufs[i] = &buf[i * cell_bytes];
 
 	if (entry->ae_codec == NULL)
 		entry->ae_codec =
 		obj_ec_codec_get(daos_obj_id2class(entry->ae_oid.id_pub));
 	ec_encode_data(cell_bytes, k, p, entry->ae_codec->ec_gftbls, data,
 		       parity_bufs);
+
+        ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+}
+
+/* Encodes a full stripe. Called when replicas form a full stripe.
+ */
+static int
+agg_encode_full_stripe(struct ec_agg_entry *entry)
+{
+	struct ec_agg_stripe_ud		stripe_ud = { 0 };
+	int				*status;
+	int				rc = 0;
+
+	stripe_ud.asu_agg_entry = entry;
+	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out;
+	}
+	rc = dss_ult_create(agg_encode_full_stripe_ult, &stripe_ud,
+			    DSS_ULT_EC, 0, 0, NULL);
+	if (rc)
+		goto ev_out;
+	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto ev_out;
+	}
+	if (*status != 0)
+		rc = *status;
+	else
+		rc = 0;
+
+ev_out:
+	ABT_eventual_free(&stripe_ud.asu_eventual);
+out:
+	return rc;
+
 }
 
 /* Driver function for full_stripe encode. Fetches the data and then invokes
@@ -709,8 +746,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 /* Initializes the struct holding the iteration state (ec_agg_entry).
  */
 static void
-agg_reset_entry(daos_handle_t lcoh, daos_handle_t gcoh,
-	       struct ec_agg_entry *agg_entry,
+agg_reset_entry(daos_handle_t lcoh, struct ec_agg_entry *agg_entry,
 	       vos_iter_entry_t *entry, struct daos_oclass_attr *oca,
 	       d_sg_list_t *sgl)
 {
@@ -719,7 +755,6 @@ agg_reset_entry(daos_handle_t lcoh, daos_handle_t gcoh,
 	agg_entry->ae_codec		= NULL;
 	agg_entry->ae_sgl		= sgl;
 	agg_entry->ae_chdl		= lcoh;
-	agg_entry->ae_cont_hdl		= gcoh;
 	agg_entry->ae_rsize		= 0UL;
 	agg_entry->ae_obj_hdl		= DAOS_HDL_INVAL;
 
@@ -795,7 +830,6 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 		}
 		agg_reset_entry(agg_param->ap_cont_handle,
-			       agg_param->ap_pool_info.api_cont_hdl,
 			       agg_param->ap_agg_entry, entry, oca,
 			       &agg_param->ap_sgl);
 		rc = agg_subtree_iterate(ih, &entry->ie_oid, agg_param);
@@ -824,12 +858,7 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	uuid_copy(agg_param.ap_pool_info.api_pool_uuid,
 		  cont->sc_pool->spc_uuid);
 	uuid_copy(agg_param.ap_pool_info.api_cont_uuid, cont->sc_uuid);
-
-	agg_param.ap_pool_info.api_pool_version =
-		cont->sc_pool->spc_pool->sp_map_version;
-	agg_param.ap_pool_info.api_pool = cont->sc_pool->spc_pool;
 	agg_param.ap_cont_handle	= cont->sc_hdl;
-
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= 0ULL;
 	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
@@ -837,7 +866,6 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 			 agg_iter_obj_pre_cb, NULL, &agg_param, NULL);
 	agg_sgl_fini(&agg_param.ap_sgl);
 	return rc;
-
 }
 
 /* Public API call. Invoked from aggregation ULT  (container/srv_target.c).
