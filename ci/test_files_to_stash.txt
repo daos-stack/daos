@@ -30,3 +30,4 @@ src/control/run_go_tests.sh,
 src/rdb/raft_tests/raft_tests.py,
 src/vos/tests/evt_ctl.sh
 src/control/lib/netdetect/netdetect.go
+src/include/**
