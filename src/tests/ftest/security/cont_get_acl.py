@@ -46,12 +46,13 @@ class GetContainerACLTest(ContSecurityTestBase):
         self.add_container(self.pool)
 
     @fail_on(CommandFailure)
-    def test_acl_get_valid(self):
+    def test_get_acl_valid(self):
         """
         JIRA ID: DAOS-3705
 
         Test Description: Test that container get-acl command performs as
-            expected with invalid inputs.
+            expected with valid inputs and verify that we can't overwrite
+            an already existing file when using the --outfile argument.
 
         :avocado: tags=all,pr,security,container_acl,cont_get_acl_inputs
         """
@@ -113,16 +114,13 @@ class GetContainerACLTest(ContSecurityTestBase):
         # Let's check that we can't run as root (or other user) and get
         # acl information if no permissions are set for that user.
         test_errs = []
-        for verbose in [True, False]:
-            for outfile in self.params.get("valid_out_filename", "/run/*"):
-                self.daos_cmd.container_get_acl(
-                    self.pool.uuid,
-                    self.pool.svc_ranks[0],
-                    self.container.uuid,
-                    verbose=verbose,
-                    outfile=outfile)
-                test_errs.extend(
-                    self.error_handling(self.daos_cmd.result, "-1001"))
+        self.daos_cmd.container_get_acl(
+            self.pool.uuid,
+            self.pool.svc_ranks[0],
+            self.container.uuid,
+            outfile="outfile.txt")
+        test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
+
         if test_errs:
             self.fail("container get-acl command expected to fail: \
                 {}".format("\n".join(test_errs)))
