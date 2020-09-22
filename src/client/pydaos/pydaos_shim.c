@@ -385,7 +385,7 @@ __shim_handle__obj_idroot(PyObject *self, PyObject *args)
 	oid.hi = 0;
 	oid.lo = 0;
 
-	daos_obj_generate_id(&oid, 0, cid, 0);
+	daos_obj_generate_id(&oid, DAOS_OF_KV_FLAT, cid, 0);
 
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
@@ -413,7 +413,7 @@ __shim_handle__obj_idgen(PyObject *self, PyObject *args)
 	oid.lo = rand();
 	oid.hi = 0;
 
-	daos_obj_generate_id(&oid, 0, cid, 0);
+	daos_obj_generate_id(&oid, DAOS_OF_KV_FLAT, cid, 0);
 
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
@@ -424,7 +424,7 @@ __shim_handle__obj_idgen(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-__shim_handle__obj_open(PyObject *self, PyObject *args)
+__shim_handle__kv_open(PyObject *self, PyObject *args)
 {
 	PyObject	*return_list;
 	daos_handle_t	 coh;
@@ -438,7 +438,7 @@ __shim_handle__obj_open(PyObject *self, PyObject *args)
 				       &oid.lo, &flags);
 
 	/** Open object */
-	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 
 	/* Populate return list */
 	return_list = PyList_New(2);
@@ -449,7 +449,7 @@ __shim_handle__obj_open(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-__shim_handle__obj_close(PyObject *self, PyObject *args)
+__shim_handle__kv_close(PyObject *self, PyObject *args)
 {
 	daos_handle_t	 oh;
 	int		 rc;
@@ -458,7 +458,7 @@ __shim_handle__obj_close(PyObject *self, PyObject *args)
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "L", &oh.cookie);
 
 	/** Close object */
-	rc = daos_obj_close(oh, NULL);
+	rc = daos_kv_close(oh, NULL);
 
 	return PyInt_FromLong(rc);
 }
@@ -994,10 +994,10 @@ static PyMethodDef daosMethods[] = {
 	/** Object operations */
 	EXPORT_PYTHON_METHOD(obj_idgen),
 	EXPORT_PYTHON_METHOD(obj_idroot),
-	EXPORT_PYTHON_METHOD(obj_open),
-	EXPORT_PYTHON_METHOD(obj_close),
 
 	/** KV operations */
+	EXPORT_PYTHON_METHOD(kv_open),
+	EXPORT_PYTHON_METHOD(kv_close),
 	EXPORT_PYTHON_METHOD(kv_get),
 	EXPORT_PYTHON_METHOD(kv_put),
 	EXPORT_PYTHON_METHOD(kv_iter),
@@ -1051,7 +1051,7 @@ initpydaos_shim_27(void)
 	module = Py_InitModule("pydaos_shim_27", daosMethods);
 #endif
 
-#define DEFINE_PY_RETURN_CODE(name, desc) \
+#define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
 	PyModule_AddIntConstant(module, ""#name, desc);
 
 	/** export return codes */

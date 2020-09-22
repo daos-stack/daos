@@ -30,8 +30,12 @@ type DeviceUID [22]byte
 
 // String converts the DeviceUID bytes to a string
 func (d DeviceUID) String() string {
-	n := bytes.IndexByte(d[:], 0)
-	return string(d[:n])
+	return bytes2String(d[:])
+}
+
+func bytes2String(b []byte) string {
+	n := bytes.IndexByte(b, 0)
+	return string(b[:n])
 }
 
 // Version represents the Go equivalent of an NVM_VERSION string buffer
@@ -39,8 +43,15 @@ type Version [25]byte
 
 // String converts the Version bytes to a string
 func (v Version) String() string {
-	n := bytes.IndexByte(v[:], 0)
-	return string(v[:n])
+	return bytes2String(v[:])
+}
+
+// PartNumber represents the part number string for an NVM device.
+type PartNumber [21]byte
+
+// String converts the PartNumber bytes to a string
+func (p PartNumber) String() string {
+	return bytes2String(p[:])
 }
 
 // DeviceDiscovery struct represents Go equivalent of C.struct_device_discovery
@@ -69,7 +80,7 @@ type DeviceDiscovery struct {
 	Manufacturing_info_valid uint8
 	Manufacturing_location   uint8
 	Manufacturing_date       uint16
-	Part_number              [21]int8
+	Part_number              PartNumber
 	Fw_revision              Version
 	Fw_api_version           Version
 	Pad_cgo_2                [5]byte
