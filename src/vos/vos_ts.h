@@ -74,8 +74,6 @@ struct vos_ts_entry {
 	struct vos_ts_pair	 te_ts;
 	/** Hash index in parent */
 	uint32_t		 te_hash_idx;
-	/** Entry punched due to empty subtree */
-	bool			 te_punch_propagated;
 };
 
 /** Check/update flags for a ts set entry */
@@ -766,11 +764,13 @@ vos_ts_set_punch_propagate(struct vos_ts_set *ts_set, uint32_t type)
 	if (ts_set == NULL)
 		return;
 
-	D_ASSERT(type == VOS_TS_TYPE_OBJ || type == VOS_TS_TYPE_DKEY);
-
 	ts_set->ts_flags |= VOS_OF_PUNCH_PROPAGATE;
-	entry = vos_ts_set_get_entry_type(ts_set, type, 0);
-	entry->te_punch_propagated = true;
+	if (type == VOS_TS_TYPE_OBJ)
+		ts_set->ts_cflags |= VOS_TS_READ_CONT;
+	else if (type == VOS_TS_TYPE_DKEY)
+		ts_set->ts_cflags |= VOS_TS_READ_OBJ;
+	else
+		ts_set->ts_cflags |= VOS_TS_READ_DKEY;
 }
 
 /** Restore previously saved state of the set

@@ -61,7 +61,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	int	rc;
 
 	rc = vos_iterate_key(obj, toh, type, epr, empty_tree_check, &empty,
-			     vos_dth_get());
+			     NULL);
 
 
 	if (rc < 0)
