@@ -49,11 +49,10 @@ class SnapshotAggregation(IorTestBase):
         self.pool.get_info()
 
         for index, name in enumerate(("scm", "nvme")):
-            data = {
+            self.free_space[name].append({
                 "dmg": data[name]["free"],
                 "api": int(self.pool.info.pi_space.ps_space.s_free[index])
-            }
-            self.free_space[name].append(data)
+            })
 
     def detect_aggregation_complete(self):
         """Detect that aggregation has started and completed."""
