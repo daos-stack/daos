@@ -197,7 +197,7 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_update_acl(
-            self.pool_uuid, self.container_uuid, self.pool_svc, entry=entry)
+            self.pool_uuid, self.pool_svc, self.container_uuid, entry=entry)
         return result
 
     def test_container_destroy(self, pool_uuid, pool_svc, container_uuid):
