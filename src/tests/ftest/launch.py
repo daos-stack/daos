@@ -141,6 +141,10 @@ def set_test_environment(args):
     usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
+    ##SCHAN15
+    covfile_env = os.environ.get("COVFILE")
+    print("covfile is {}".format(covfile_env))
+
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
     if interface is None:
@@ -207,8 +211,6 @@ def set_test_environment(args):
         test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
 
     ##SCHAN15
-    covfile_env = os.environ.get("COVFILE")
-
     commands = [
         "set -eu",
         "rc=0",
