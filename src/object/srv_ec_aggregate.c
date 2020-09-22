@@ -194,8 +194,11 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 	daos_off_t	end_stripe = stripe_size / (agg_extent->ae_recx.rx_idx
 						  + agg_extent->ae_recx.rx_nr);
 
+	if (end_stripe > start_stripe) {
+		D_ASSERT(end_stripe - start_stripe == 1);
+
 	/* What if an extent carries over, and the tail is the only extent in
-	 * the next stripe?
+	 * the next stripe?/
 	 */
 
 #endif
@@ -218,12 +221,12 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(agg_entry, agg_extent);
 		if (tail) {
+			agg_extent->ae_recx.rx_idx += tail;
+			agg_extent->ae_recx.rx_nr -= tail;
+		} else {
 			agg_entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_del(&agg_extent->ae_link);
 			D_FREE_PTR(agg_extent);
-		} else {
-			agg_extent->ae_recx.rx_idx += tail;
-			agg_extent->ae_recx.rx_nr -= tail;
 		}
 
 	}
@@ -406,6 +409,10 @@ out:
 	return rc;
 }
 
+
+/* Xstream offload function for encoding new parity from full stripe of
+ * replicas.
+ */
 static void
 agg_encode_full_stripe_ult(void *arg)
 {
@@ -439,7 +446,6 @@ agg_encode_full_stripe_ult(void *arg)
 }
 
 /* Encodes a full stripe. Called when replicas form a full stripe.
- * TBD: offload parity calculation to helper xstream.
  */
 static int
 agg_encode_full_stripe(struct ec_agg_entry *entry)
@@ -1150,6 +1156,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
 
+	/* Query the partiy */
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	if (rc != 0)
@@ -1162,8 +1169,8 @@ agg_process_stripe(struct ec_agg_entry *entry)
 
 	if (rc != 0)
 		goto out;
-
-	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch &&
+		/* change to >= to deal with retained extent */
+	if (entry->ae_par_extent.ape_epoch >= entry->ae_cur_stripe.as_hi_epoch &&
 		entry->ae_par_extent.ape_epoch != ~(0ULL)) {
 		/* Parity newer than data; nothing to do. */
 		update_vos = false;
@@ -1187,7 +1194,7 @@ out:
 	if (update_vos && rc == 0) {
 		rc = agg_update_vos(entry);
 		if (!rc && entry->ae_oca->u.ec.e_p > 1)
-			/* offload of ds_obj_update  to push remote parity */
+			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry);
 	}
 
