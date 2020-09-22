@@ -145,6 +145,62 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	mgmt__set_rank_req__free_unpacked(req, &alloc.alloc);
 }
 
+void
+ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__GroupUpdateReq	*req = NULL;
+	Mgmt__GroupUpdateResp	resp = MGMT__GROUP_UPDATE_RESP__INIT;
+	struct mgmt_grp_up_in	in = {};
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc, i;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__group_update_req__unpack(
+		&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (group_update)\n");
+		return;
+	}
+
+	D_INFO("Received request to update group map\n");
+
+	D_ALLOC_ARRAY(in.gui_servers, req->n_servers);
+	if (in.gui_servers == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	for (i = 0; i < req->n_servers; i++) {
+		in.gui_servers[i].se_rank = req->servers[i]->rank;
+		in.gui_servers[i].se_uri = req->servers[i]->uri;
+	}
+	in.gui_n_servers = req->n_servers;
+	in.gui_map_version = req->map_version;
+
+	rc = ds_mgmt_group_update_handler(&in);
+out:
+	if (in.gui_servers != NULL)
+		D_FREE(in.gui_servers);
+
+	resp.status = rc;
+	len = mgmt__group_update_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__group_update_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__group_update_req__free_unpacked(req, &alloc.alloc);
+}
+
 static int
 create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		  const char **ace_list, size_t ace_nr)
@@ -330,6 +386,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolDestroyReq	*req = NULL;
 	Mgmt__PoolDestroyResp	 resp = MGMT__POOL_DESTROY_RESP__INIT;
 	uuid_t			 uuid;
+	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
@@ -354,14 +411,19 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	/* Sys and force params are currently ignored in receiver. */
-	rc = ds_mgmt_destroy_pool(uuid, req->sys,
+	rc = ds_mgmt_destroy_pool(uuid, svc_ranks, req->sys,
 				  (req->force == true) ? 1 : 0);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-		goto out;
 	}
+
+	d_rank_list_free(svc_ranks);
 
 out:
 	resp.status = rc;
@@ -386,6 +448,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolEvictReq	*req = NULL;
 	Mgmt__PoolEvictResp	 resp = MGMT__POOL_EVICT_RESP__INIT;
 	uuid_t			 uuid;
+	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
@@ -410,12 +473,17 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_mgmt_evict_pool(uuid, req->sys);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_evict_pool(uuid, svc_ranks, req->sys);
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n",
 			req->uuid, DP_RC(rc));
-		goto out;
 	}
+
+	d_rank_list_free(svc_ranks);
 
 out:
 	resp.status = rc;
@@ -434,7 +502,8 @@ out:
 }
 
 static int
-pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
+pool_change_target_state(char *id, d_rank_list_t *svc_ranks,
+			 size_t n_targetidx, uint32_t *targetidx,
 			 uint32_t rank, pool_comp_state_t state)
 {
 	uuid_t				uuid;
@@ -461,8 +530,8 @@ pool_change_target_state(char *id, size_t n_targetidx, uint32_t *targetidx,
 		target_id_list.pti_ids[0].pti_id = -1;
 	}
 
-	rc = ds_mgmt_pool_target_update_state(uuid, rank, &target_id_list,
-					      state);
+	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, rank,
+					      &target_id_list, state);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", uuid,
 			DP_RC(rc));
@@ -478,6 +547,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolExcludeReq	*req = NULL;
 	Mgmt__PoolExcludeResp	resp;
+	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			len;
 	int			rc;
@@ -495,9 +565,17 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = pool_change_target_state(req->uuid, req->n_targetidx,
-			req->targetidx, req->rank, PO_COMP_ST_DOWN);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
+	rc = pool_change_target_state(req->uuid, svc_ranks,
+				      req->n_targetidx, req->targetidx,
+				      req->rank, PO_COMP_ST_DOWN);
+
+	d_rank_list_free(svc_ranks);
+
+out:
 	resp.status = rc;
 	len = mgmt__pool_exclude_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
@@ -519,6 +597,7 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolDrainReq	*req = NULL;
 	Mgmt__PoolDrainResp	resp;
+	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			len;
 	int			rc;
@@ -536,9 +615,16 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = pool_change_target_state(req->uuid, req->n_targetidx,
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = pool_change_target_state(req->uuid, svc_ranks, req->n_targetidx,
 			req->targetidx, req->rank, PO_COMP_ST_DRAIN);
 
+	d_rank_list_free(svc_ranks);
+
+out:
 	resp.status = rc;
 	len = mgmt__pool_drain_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
@@ -560,6 +646,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolExtendReq	*req = NULL;
 	Mgmt__PoolExtendResp	resp;
 	d_rank_list_t		*rank_list = NULL;
+	d_rank_list_t		*svc_ranks = NULL;
 	uuid_t			uuid;
 	uint8_t			*body;
 	size_t			len;
@@ -589,16 +676,22 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_pool_extend(uuid, rank_list, "pmem", req->scmbytes,
-				req->nvmebytes);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out_list, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
+				 req->scmbytes, req->nvmebytes);
 
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
 
+	d_rank_list_free(svc_ranks);
+
+out_list:
+	d_rank_list_free(rank_list);
 out:
-	if (rank_list != NULL)
-		d_rank_list_free(rank_list);
 	resp.status = rc;
 	len = mgmt__pool_extend_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
@@ -620,6 +713,7 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolReintegrateReq	*req = NULL;
 	Mgmt__PoolReintegrateResp	resp;
+	d_rank_list_t			*svc_ranks = NULL;
 	uint8_t				*body;
 	size_t				len;
 	int				rc;
@@ -637,9 +731,17 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = pool_change_target_state(req->uuid, req->n_targetidx,
-			req->targetidx, req->rank, PO_COMP_ST_UP);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
+	rc = pool_change_target_state(req->uuid, svc_ranks,
+				      req->n_targetidx, req->targetidx,
+				      req->rank, PO_COMP_ST_UP);
+
+	d_rank_list_free(svc_ranks);
+
+out:
 	resp.status = rc;
 	len = mgmt__pool_reintegrate_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
@@ -665,6 +767,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	char			*out_str_val = NULL;
 	struct daos_prop_entry	*entry;
 	uuid_t			 uuid;
+	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
@@ -679,13 +782,14 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set pool property on %s\n", req->uuid);
-
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
 		D_ERROR("Couldn't parse '%s' to UUID\n", req->uuid);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	D_INFO("Received request to set pool property on "DF_UUID"\n",
+	       DP_UUID(uuid));
 
 	new_prop = daos_prop_alloc(1);
 	if (new_prop == NULL) {
@@ -711,20 +815,24 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	default:
 		D_ERROR("Pool property request with no value (%d)\n",
-				req->value_case);
+			req->value_case);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_mgmt_pool_set_prop(uuid, new_prop, &result);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_set_prop(uuid, svc_ranks, new_prop, &result);
 	if (rc != 0) {
-		D_ERROR("Failed to set pool property on %s: %d\n",
-				req->uuid, rc);
-		goto out;
+		D_ERROR("Failed to set pool property on "DF_UUID": "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto out_ranks;
 	}
 
 	if (result == NULL) {
 		D_ERROR("Null set pool property response\n");
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_ranks, rc = -DER_NOMEM);
 	}
 
 	entry = daos_prop_entry_get(result, req->number);
@@ -747,8 +855,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
 		if (entry->dpe_str == NULL)
 			D_GOTO(out_result, rc = -DER_INVAL);
-		D_ASPRINTF(resp.strval, "%s",
-			   entry->dpe_str);
+		D_ASPRINTF(resp.strval, "%s", entry->dpe_str);
 		if (resp.strval == NULL)
 			D_GOTO(out_result, rc = -DER_NOMEM);
 		resp.value_case = MGMT__POOL_SET_PROP_RESP__VALUE_STRVAL;
@@ -759,13 +866,14 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	default:
 		D_ERROR("Pool property response with no value (%d)\n",
-				req->value_case);
+			req->value_case);
 		D_GOTO(out_result, rc = -DER_INVAL);
 	}
 
 out_result:
 	daos_prop_free(result);
-
+out_ranks:
+	d_rank_list_free(svc_ranks);
 out:
 	daos_prop_free(new_prop);
 	D_FREE(out_str_val);
@@ -884,6 +992,7 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			rc;
 	uuid_t			pool_uuid;
 	daos_prop_t		*access_prop = NULL;
+	d_rank_list_t		*svc_ranks = NULL;
 
 	req = mgmt__get_aclreq__unpack(&alloc.alloc, drpc_req->body.len,
 				       drpc_req->body.data);
@@ -900,10 +1009,14 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_mgmt_pool_get_acl(pool_uuid, &access_prop);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_get_acl(pool_uuid, svc_ranks, &access_prop);
 	if (rc != 0) {
 		D_ERROR("Couldn't get pool ACL, rc="DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		D_GOTO(out_ranks, rc);
 	}
 
 	rc = prop_to_acl_response(access_prop, &resp);
@@ -912,6 +1025,8 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out_acl:
 	daos_prop_free(access_prop);
+out_ranks:
+	d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
 
@@ -926,10 +1041,12 @@ out:
  */
 static int
 get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
+			       d_rank_list_t **svc_ranks_out,
 			       struct daos_acl **acl_out)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__ModifyACLReq	*req = NULL;
+	d_rank_list_t		*svc_ranks = NULL;
 	int			rc;
 
 	req = mgmt__modify_aclreq__unpack(&alloc.alloc, drpc_req->body.len,
@@ -951,6 +1068,11 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 		D_GOTO(out, rc);
 	}
 
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	*svc_ranks_out = svc_ranks;
+
 out:
 	mgmt__modify_aclreq__free_unpacked(req, &alloc.alloc);
 	return rc;
@@ -962,10 +1084,12 @@ ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
 	int		rc = 0;
 	uuid_t		pool_uuid;
+	d_rank_list_t	*svc_ranks = NULL;
 	struct daos_acl	*acl = NULL;
 	daos_prop_t	*result = NULL;
 
-	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
+	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid,
+					    &svc_ranks, &acl);
 	if (rc == -DER_PROTO) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
@@ -973,7 +1097,7 @@ ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = ds_mgmt_pool_overwrite_acl(pool_uuid, acl, &result);
+	rc = ds_mgmt_pool_overwrite_acl(pool_uuid, svc_ranks, acl, &result);
 	if (rc != 0) {
 		D_ERROR("Couldn't overwrite pool ACL, rc="DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_acl, rc);
@@ -983,6 +1107,7 @@ ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	daos_prop_free(result);
 
 out_acl:
+	d_rank_list_free(svc_ranks);
 	daos_acl_free(acl);
 out:
 	resp.status = rc;
@@ -997,10 +1122,12 @@ ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
 	int		rc = 0;
 	uuid_t		pool_uuid;
+	d_rank_list_t	*svc_ranks = NULL;
 	struct daos_acl	*acl = NULL;
 	daos_prop_t	*result = NULL;
 
-	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
+	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid,
+					    &svc_ranks, &acl);
 	if (rc == -DER_PROTO) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
@@ -1008,7 +1135,7 @@ ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = ds_mgmt_pool_update_acl(pool_uuid, acl, &result);
+	rc = ds_mgmt_pool_update_acl(pool_uuid, svc_ranks, acl, &result);
 	if (rc != 0) {
 		D_ERROR("Couldn't update pool ACL, rc=%d\n", rc);
 		D_GOTO(out_acl, rc);
@@ -1018,6 +1145,7 @@ ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	daos_prop_free(result);
 
 out_acl:
+	d_rank_list_free(svc_ranks);
 	daos_acl_free(acl);
 out:
 	resp.status = rc;
@@ -1034,6 +1162,7 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
 	int			rc = 0;
 	uuid_t			pool_uuid;
+	d_rank_list_t		*svc_ranks;
 	daos_prop_t		*result = NULL;
 
 	req = mgmt__delete_aclreq__unpack(&alloc.alloc, drpc_req->body.len,
@@ -1049,15 +1178,22 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_mgmt_pool_delete_acl(pool_uuid, req->principal, &result);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_delete_acl(pool_uuid, svc_ranks,
+				     req->principal, &result);
 	if (rc != 0) {
 		D_ERROR("Couldn't delete entry from pool ACL, rc=%d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_ranks, rc);
 	}
 
 	rc = prop_to_acl_response(result, &resp);
 	daos_prop_free(result);
 
+out_ranks:
+	d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
 
@@ -1091,6 +1227,7 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__ListContReq		*req = NULL;
 	Mgmt__ListContResp		 resp = MGMT__LIST_CONT_RESP__INIT;
 	uuid_t				 req_uuid;
+	d_rank_list_t			*svc_ranks;
 	uint8_t				*body;
 	size_t				 len;
 	struct daos_pool_cont_info	*containers = NULL;
@@ -1118,33 +1255,41 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_ERROR("Failed to parse pool uuid %s\n", req->uuid);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	rc = ds_mgmt_pool_list_cont(req_uuid, &containers, &containers_len);
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_list_cont(req_uuid, svc_ranks,
+				    &containers, &containers_len);
 	if (rc != 0) {
 		D_ERROR("Failed to list containers in pool %s :%d\n",
 			req->uuid, rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_ranks, rc);
 	}
 
 	if (containers) {
 		D_ALLOC_ARRAY(resp.containers, containers_len);
 		if (resp.containers == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_ranks, rc = -DER_NOMEM);
 	}
 	resp.n_containers = containers_len;
 
 	for (i = 0; i < containers_len; i++) {
 		D_ALLOC_PTR(resp.containers[i]);
 		if (resp.containers[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_ranks, rc = -DER_NOMEM);
 
 		mgmt__list_cont_resp__cont__init(resp.containers[i]);
 
 		D_ALLOC(resp.containers[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp.containers[i]->uuid == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_ranks, rc = -DER_NOMEM);
 		uuid_unparse(containers[i].pci_uuid, resp.containers[i]->uuid);
 	}
 
+out_ranks:
+	d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
 	len = mgmt__list_cont_resp__get_packed_size(&resp);
@@ -1217,6 +1362,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
 	uuid_t			uuid;
 	daos_pool_info_t	pool_info = {0};
+	d_rank_list_t		*svc_ranks;
 	size_t			len;
 	uint8_t			*body;
 
@@ -1235,11 +1381,15 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	pool_info.pi_bits = DPI_ALL;
-	rc = ds_mgmt_pool_query(uuid, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &pool_info);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_ranks, rc);
 	}
 
 	/* Populate the response */
@@ -1262,6 +1412,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
+out_ranks:
+	d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
 
@@ -1706,6 +1858,7 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint8_t			*body;
 	size_t			 len;
 	uuid_t			 pool_uuid, cont_uuid;
+	d_rank_list_t		*svc_ranks = NULL;
 	int			 rc = 0;
 
 	req = mgmt__cont_set_owner_req__unpack(&alloc.alloc, drpc_req->body.len,
@@ -1729,10 +1882,16 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_mgmt_cont_set_owner(pool_uuid, cont_uuid, req->owneruser,
-				    req->ownergroup);
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_cont_set_owner(pool_uuid, svc_ranks, cont_uuid,
+				    req->owneruser, req->ownergroup);
 	if (rc != 0)
 		D_ERROR("Set owner failed: %d\n", rc);
+
+	d_rank_list_free(svc_ranks);
 
 out:
 	resp.status = rc;
