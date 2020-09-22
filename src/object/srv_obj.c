@@ -185,7 +185,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 
 		daos_recx_ep_list_free(orwo->orw_rels.ca_arrays,
 				       orwo->orw_rels.ca_count);
-	
+
 		if (ioc->ioc_free_sgls) {
 			struct obj_rw_in *orw = crt_req_get(rpc);
 			d_sg_list_t *sgls = orwo->orw_sgls.ca_arrays;
@@ -896,10 +896,19 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0;
 
-	rc = daos_csummer_verify_key(csummer, dkey, dci);
-	if (rc != 0) {
-		D_ERROR("daos_csummer_verify_key error for dkey: %d", rc);
-		return rc;
+	if (!DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
+		/**
+		 * with DAOS_VC_DIFF_DKEY, the dkey will be corrupt on purpose
+		 * for object verification tests. Don't reject the
+		 * update in this case
+		 */
+		rc = daos_csummer_verify_key(csummer, dkey, dci);
+		if (rc != 0) {
+			D_ERROR("daos_csummer_verify_key error for dkey: %d",
+				rc);
+			return rc;
+		}
+
 	}
 
 	for (i = 0; i < oia->oia_iod_nr; i++) {
