@@ -265,6 +265,7 @@ if $TEST_RPMS; then
     logs_prefix=\"/var/tmp\"
     echo SCHAN15 - on node 0 ls covfile
     ls $COVFILE
+    export COVFILE
     #echo SCHAN15 - copy test.cov to shared dir
     #mv $COVFILE $DAOS_TEST_SHARED_DIR
     #ls $DAOS_TEST_SHARED_DIR
