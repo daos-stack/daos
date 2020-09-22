@@ -278,18 +278,41 @@ static void
 nvme_recov_3(void **state)
 {
 	test_arg_t	*arg = *state;
+	device_list	*devices = NULL;
 	daos_obj_id_t	oid;
 	struct ioreq	req;
 	char		*ow_buf;
-	char			*fbuf;
+	char		*fbuf;
 	const char		dkey[] = "dkey";
 	const char		akey[] = "akey";
 	daos_size_t		size = 4 * 4096; /* record size */
 	int		rx_nr; /* number of record extents */
+	int		ndisks, rc, i;
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
 		skip();
+	}
+
+	/**
+	*Get the Total number of NVMe devices from all the servers.
+	*/
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Total Disks = %d\n", ndisks);
+
+	/**
+	*Get the Device info of all NVMe devices.
+	*/
+	D_ALLOC_ARRAY(devices, ndisks);
+	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	assert_int_equal(rc, 0);
+	for (i = 0; i < ndisks; i++) {
+		print_message("Rank=%d UUID=%s state=%s host=%s\n",
+			      devices[i].rank, DP_UUID(devices[i].device_id),
+			devices[i].state, devices[i].host);
+		if (devices[i].rank == 1)
+			dmg_storage_query_device_health(dmg_config_file);
 	}
 
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);

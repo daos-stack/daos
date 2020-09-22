@@ -641,7 +641,6 @@ rw_completion(void *cb_arg, int err)
 	 */
 	if (DAOS_FAIL_CHECK(DAOS_NVME_BIO_WRITE_ERR)) {
 		D_ALLOC_PTR(mem);
-		D_ERROR("Inducing NVME_BIO_WRITE_ERR error\n");
 		mem->mem_err_type = MET_WRITE;
 		mem->mem_bs = xs_ctxt->bxc_blobstore;
 		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
@@ -653,7 +652,6 @@ rw_completion(void *cb_arg, int err)
 	 */
 	if (DAOS_FAIL_CHECK(DAOS_NVME_BIO_READ_ERR)) {
 		D_ALLOC_PTR(mem);
-		D_ERROR("Inducing NVME_BIO_READ_ERR error\n");
 		mem->mem_err_type = MET_READ;
 		mem->mem_bs = xs_ctxt->bxc_blobstore;
 		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
