@@ -1314,8 +1314,8 @@ def main():
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'readdir':
         fatal_errors.add_result(dfuse_wrapper(server, conf))
-    elif args.mode  == 'fi':
-        fatal_errors.add(test_alloc_fail(conf))
+    elif args.mode == 'fi':
+        fatal_errors.add_result(test_alloc_fail(conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
