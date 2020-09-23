@@ -35,50 +35,8 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/system"
 )
-
-func TestProto_FaultFromMeta(t *testing.T) {
-	for name, tc := range map[string]struct {
-		meta     map[string]string
-		expFault *fault.Fault
-		expErr   error
-	}{
-		"success": {
-			meta: map[string]string{
-				"Domain":      "Domain",
-				"Code":        "42",
-				"Description": "Description",
-				"Resolution":  "Resolution",
-			},
-			expFault: &fault.Fault{
-				Domain:      "Domain",
-				Code:        code.Code(42),
-				Description: "Description",
-				Resolution:  "Resolution",
-			},
-		},
-		"empty meta": {
-			expFault: &fault.Fault{},
-		},
-		"weird code": {
-			meta: map[string]string{
-				"Code": "bananas",
-			},
-			expErr: errors.New("strconv.Atoi"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotFault, gotErr := proto.FaultFromMeta(tc.meta)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-			if diff := cmp.Diff(tc.expFault, gotFault); diff != "" {
-				t.Fatalf("unexpected Fault (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
 
 func TestProto_MetaFromFault(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -128,16 +86,33 @@ func TestProto_AnnotateError(t *testing.T) {
 		Resolution:  "Resolution",
 	}
 	testStatus := drpc.DaosInvalidInput
+	testNotReplica := &system.ErrNotReplica{
+		Replicas: []string{"a", "b", "c"},
+	}
+	testNotLeader := &system.ErrNotLeader{
+		LeaderHint: "foo.bar.baz",
+		Replicas:   []string{"a", "b", "c"},
+	}
 
 	for name, tc := range map[string]struct {
 		err    error
 		expErr error
 	}{
 		"wrap/unwrap Fault": {
-			err: testFault,
+			err:    testFault,
+			expErr: testFault,
 		},
-		"wrap/unwrap DaoStatus": {
-			err: testStatus,
+		"wrap/unwrap DaosStatus": {
+			err:    testStatus,
+			expErr: testStatus,
+		},
+		"wrap/unwrap ErrNotReplica": {
+			err:    testNotReplica,
+			expErr: testNotReplica,
+		},
+		"wrap/unwrap ErrNotLeader": {
+			err:    testNotLeader,
+			expErr: testNotLeader,
 		},
 		"non-fault err": {
 			err:    errors.New("not a fault"),
@@ -148,27 +123,10 @@ func TestProto_AnnotateError(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			aErr := proto.AnnotateError(tc.err)
 
-			var gotErr error
-			switch tc.err.(type) {
-			case *fault.Fault:
-				var gotFault *fault.Fault
-				gotFault, gotErr = proto.UnwrapFault(status.Convert(aErr))
-				common.CmpErr(t, tc.expErr, gotErr)
-				if diff := cmp.Diff(testFault, gotFault); diff != "" {
-					t.Fatalf("unexpected fault: (-want, +got):\n%s\n", diff)
-				}
-			case drpc.DaosStatus:
-				var gotStatus drpc.DaosStatus
-				gotStatus, gotErr = proto.UnwrapDaosStatus(status.Convert(aErr))
-				common.CmpErr(t, tc.expErr, gotErr)
-				if gotStatus != testStatus {
-					t.Fatalf("unexpected status: %d != %d", testStatus, gotStatus)
-				}
-			default:
-				_, gotErr = proto.UnwrapFault(status.Convert(aErr))
-				common.CmpErr(t, tc.expErr, gotErr)
-				_, gotErr = proto.UnwrapDaosStatus(status.Convert(aErr))
-				common.CmpErr(t, tc.expErr, gotErr)
+			gotErr := proto.UnwrapError(status.Convert(aErr))
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr == nil {
+				return
 			}
 		})
 	}
