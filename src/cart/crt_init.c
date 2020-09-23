@@ -336,6 +336,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				addr_env);
 		}
 
+		if (strcmp(addr_env, "ofi+sockets") == 0) {
+			D_WARN("Overriding to use ofi+tcp;ofi_rxm\n");
+			addr_env = "ofi+tcp;ofi_rxm";
+		}
+
 		provider_found = false;
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
