@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+# pylint: disable=too-many-lines
 from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter

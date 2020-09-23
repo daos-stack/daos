@@ -50,6 +50,8 @@ from collections import OrderedDict, Counter
 
 import cart_logparse
 
+# pylint: disable=too-few-public-methods
+
 class LogCheckError(Exception):
     """Error in the log parsing code"""
     def __str__(self):
@@ -172,6 +174,7 @@ shown_logs = set()
 # freed by the function.
 # Typically this is where memory is allocated in one file, and freed in
 # another.
+# pylint: disable=line-too-long
 mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'crt_rpc_handler_common': ('rpc_priv'),
                      'crt_proc_d_iov_t': ('div->iov_buf'),
@@ -217,6 +220,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'auth_cred_to_iov': ('packed'),
                      'daos_csummer_alloc_iods_csums': ('buf'),
                      'daos_sgl_init': ('sgl->sg_iovs')}
+# pylint: enable=line-too-long
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
@@ -307,7 +311,6 @@ class hwm_counter():
 
 #pylint: disable=too-many-statements
 #pylint: disable=too-many-locals
-#pylint: disable=too-few-public-methods
 class LogTest():
     """Log testing"""
 
