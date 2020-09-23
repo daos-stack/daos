@@ -811,6 +811,11 @@ class PreReqComponent():
         """Set the JOBS_OPT variable for builds"""
         jobs_opt = GetOption('num_jobs')
         self.__env["JOBS_OPT"] = "-j %d" % jobs_opt
+        #Multiple go jobs can be running at once via the -j option so limit each
+        #to 1 proc.   This allows for compilation to continue on systems with
+        #limited processor resources where the number of go procs will be
+        #multiplied by jobs_opt.
+        self.__env["ENV"]["GOMAXPROCS"] = "1"
 
     def get_build_info(self):
         """Retrieve the BuildInfo"""
