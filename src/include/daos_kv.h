@@ -46,6 +46,61 @@ extern "C" {
 #define DAOS_COND_KEY_REMOVE	DAOS_COND_PUNCH
 
 /**
+ * Open a KV object. This is a local operation (no RPC involved).
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID. It is required that the feat for dkey type
+ *			be set to DAOS_OF_KV_FLAT.
+ * \param[in]	mode	Open mode: DAOS_OO_RO/RW
+ * \param[out]	oh	Returned kv object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_kv_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
+	     daos_handle_t *oh, daos_event_t *ev);
+
+/**
+ * Close an opened KV object.
+ *
+ * \param[in]	oh	KV object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ */
+int
+daos_kv_close(daos_handle_t oh, daos_event_t *ev);
+
+/**
+ * Destroy the kV object by punching all data (keys) in the kv object.
+ * daos_obj_punch() is called underneath. The oh still needs to be closed with a
+ * call to daos_kv_close().
+ *
+ * \param[in]	oh	KV object open handle.
+ * \param[in]	th	Transaction handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_kv_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
+
+/**
  * Insert or update a single object KV pair. The key specified will be mapped to
  * a dkey in DAOS. The object akey will be the same as the dkey. If a value
  * existed before it will be overwritten (punched first if not previously an

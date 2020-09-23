@@ -168,6 +168,19 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 			D_DEBUG(flag_false, __VA_ARGS__);	\
 	} while (0)
 
+/* Register a descriptor with a parent and a type */
+#define D_TRACE_UP(flag, ptr, parent, type)				\
+	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' from %p\n",	\
+		      type, parent)
+
+/* De-register a descriptor, including all aliases */
+#define D_TRACE_DOWN(flag, ptr)						\
+	D_TRACE_DEBUG(flag, ptr, "Deregistered\n")
+
+/** Register a root with type */
+#define D_TRACE_ROOT(flag, ptr, type)					\
+	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' as root\n", type)
+
 /** Helper macros to conditionally output logs conditionally based on
  *  the message priority and the current log level.  See D_DEBUG and
  *  D_TRACE_DEBUG

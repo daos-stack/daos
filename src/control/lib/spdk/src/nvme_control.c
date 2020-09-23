@@ -43,7 +43,7 @@ struct lba0_data {
 static void
 get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 {
-	struct dev_health_entry *entry = cb_arg;
+	struct health_entry *entry = cb_arg;
 
 	if (spdk_nvme_cpl_is_error(cpl))
 		fprintf(stderr, "Error with SPDK health log page\n");
@@ -52,34 +52,33 @@ get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 }
 
 static int
-get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
-		    struct dev_health_entry *entry)
+get_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct health_entry *health)
 {
-	struct spdk_nvme_health_information_page health_page;
+	struct spdk_nvme_health_information_page hp;
 	int					 rc = 0;
 
-	entry->inflight++;
+	health->inflight++;
 	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
 					      SPDK_NVME_LOG_HEALTH_INFORMATION,
 					      SPDK_NVME_GLOBAL_NS_TAG,
-					      &health_page,
-					      sizeof(health_page),
+					      &hp,
+					      sizeof(hp),
 					      0, get_spdk_log_page_completion,
-					      entry);
+					      health);
 	if (rc != 0)
 		return rc;
 
-	while (entry->inflight)
+	while (health->inflight)
 		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
 
-	entry->health_page = health_page;
+	health->page = hp;
 	return rc;
 }
 
 struct ret_t *
 nvme_discover(void)
 {
-	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs);
+	return _discover(&spdk_nvme_probe, true, &get_health_logs);
 }
 
 static void
