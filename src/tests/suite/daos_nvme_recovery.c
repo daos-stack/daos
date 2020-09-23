@@ -121,7 +121,7 @@ nvme_recov_1(void **state)
 
 /* Verify device states after NVMe set to faulty*/
 static void
-nvme_recov_2(void **state)
+nvme_test_verify_device_stats(void **state)
 {
 	test_arg_t	*arg = *state;
 	device_list	*devices = NULL;
@@ -233,6 +233,15 @@ nvme_recov_2(void **state)
 		if (devices[i].rank == 1) {
 			assert_string_equal(devices[i].state, "\"FAULTY\"");
 
+                        rc = verify_state_in_log(devices[i].host,
+                                                 log_file, "NORMAL -> FAULTY");
+                        if (rc != 0) {
+                                print_message(
+                                        "NORMAL -> FAULTY not found in log %s\n",
+                                        log_file);
+                                assert_int_equal(rc, 0);
+                        }
+
 			rc = verify_state_in_log(devices[i].host,
 						 log_file, "TEARDOWN -> OUT");
 			if (rc != 0) {
@@ -277,7 +286,7 @@ static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 1: Online faulty reaction",
 	 nvme_recov_1, NULL, test_case_teardown},
 	{"NVMe Recovery 2: Verify device states after NVMe set to Faulty",
-	 nvme_recov_2, NULL, test_case_teardown},
+	 nvme_test_verify_device_stats, NULL, test_case_teardown},
 };
 
 static int
