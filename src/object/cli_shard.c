@@ -116,7 +116,7 @@ struct rw_cb_args {
 	crt_rpc_t		*rpc;
 	daos_handle_t		*hdlp;
 	d_sg_list_t		*rwaa_sgls;
-	struct dc_obj_shard	*dobj;
+	daos_handle_t		coh;
 	unsigned int		*map_ver;
 	daos_iom_t		*maps;
 	struct shard_rw_args	*shard_args;
@@ -170,7 +170,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	int			 i;
 	int			 rc = 0;
 
-	csummer = dc_cont_hdl2csummer(rw_args->dobj->do_co_hdl);
+	csummer = dc_cont_hdl2csummer(rw_args->coh);
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		return 0;
 
@@ -335,10 +335,21 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		} else {
-			D_ERROR("rpc %p opc %d to rank %d tag %d failed: "
-				DF_RC"\n", rw_args->rpc, opc,
-				rw_args->rpc->cr_ep.ep_rank,
-				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			/*
+			 * don't log errors in-case of possible conditionals or
+			 * rec2big errors which can be expected.
+			 */
+			if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
+			    rc == -DER_EXIST)
+				D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
+					" failed: "DF_RC"\n", rw_args->rpc, opc,
+					rw_args->rpc->cr_ep.ep_rank,
+					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			else
+				D_ERROR("rpc %p opc %d to rank %d tag %d"
+					" failed: "DF_RC"\n", rw_args->rpc, opc,
+					rw_args->rpc->cr_ep.ep_rank,
+					rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 			if (rc == -DER_REC2BIG && opc == DAOS_OBJ_RPC_FETCH) {
 				/* update the sizes in iods */
 				iods = orw->orw_iod_array.oia_iods;
@@ -479,7 +490,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 out:
 	crt_req_decref(rw_args->rpc);
-	obj_shard_decref(rw_args->dobj);
 	dc_pool_put((struct dc_pool *)rw_args->hdlp);
 
 	if (ret == 0 || obj_retry_error(rc))
@@ -517,11 +527,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	crt_endpoint_t		 tgt_ep;
 	uuid_t			 cont_hdl_uuid;
 	uuid_t			 cont_uuid;
-	bool			 cb_registered = false;
 	uint32_t		 flags = 0;
 	int			 rc;
-
-	obj_shard_addref(shard);
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE)) {
 		if (auxi->shard == daos_fail_value_get()) {
@@ -537,7 +544,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			if (auxi->shard != daos_fail_value_get()) {
 				D_INFO("complete shard %d update as "
 				       "-DER_TIMEDOUT.\n", auxi->shard);
-				D_GOTO(out_obj, rc = -DER_TIMEDOUT);
+				D_GOTO(out, rc = -DER_TIMEDOUT);
 			}
 		} else {
 			flags = ORF_DTX_SYNC;
@@ -549,11 +556,11 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	rc = dc_cont_hdl2uuid(shard->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
 	if (rc != 0)
-		D_GOTO(out_obj, rc);
+		D_GOTO(out, rc);
 
 	pool = obj_shard_ptr2pool(shard);
 	if (pool == NULL)
-		D_GOTO(out_obj, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	tgt_ep.ep_grp = pool->dp_sys->sy_group;
 	tgt_ep.ep_tag = shard->do_target_idx;
@@ -646,7 +653,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.rpc = req;
 	rw_args.hdlp = (daos_handle_t *)pool;
 	rw_args.map_ver = &auxi->map_ver;
-	rw_args.dobj = shard;
+	rw_args.coh = shard->do_co_hdl;
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
@@ -662,7 +669,6 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 				       sizeof(rw_args));
 	if (rc != 0)
 		D_GOTO(out_args, rc);
-	cb_registered = true;
 
 	if (daos_io_bypass & IOBP_CLI_RPC) {
 		rc = daos_rpc_complete(req, task);
@@ -682,9 +688,7 @@ out_req:
 	crt_req_decref(req);
 out_pool:
 	dc_pool_put(pool);
-out_obj:
-	if (!cb_registered)
-		obj_shard_decref(shard);
+out:
 	tse_task_complete(task, rc);
 	return rc;
 }
