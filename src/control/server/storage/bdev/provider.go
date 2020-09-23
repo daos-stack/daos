@@ -41,7 +41,7 @@ type (
 		pbin.ForwardableRequest
 		DeviceList []string
 		DisableVMD bool
-		Rescan     bool
+		NoCache    bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -172,27 +172,39 @@ func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the
-// system. Results will be cached at the provider and updated if
-// "Rescan" is set in the request. Returned results will be filtered
-// by request "DeviceList" and empty filter implies allowing all.
-func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
+// system. Results will be cached at the provider and returned if
+// "NoCache" is set to "false" in the request. Returned results will be
+// filtered by request "DeviceList" and empty filter implies allowing all.
+func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 	if p.shouldForward(req) {
 		req.DisableVMD = p.IsVMDDisabled()
 
 		p.Lock()
 		defer p.Unlock()
-
-		if p.scanCache == nil || req.Rescan {
-			p.log.Debug("populating bdev scan cache")
-
-			resp, err := p.fwd.Scan(req)
-			if err != nil {
-				return nil, err
+		defer func() {
+			if resp == nil {
+				return
 			}
+			resp = resp.filter(req.DeviceList...)
+		}()
+
+		if req.NoCache {
+			resp, err = p.fwd.Scan(req)
+			return
+		}
+
+		if p.scanCache != nil {
+			resp = p.scanCache
+			return
+		}
+
+		resp, err = p.fwd.Scan(req)
+		if err == nil {
+			p.log.Debug("populating bdev scan cache")
 			p.scanCache = resp
 		}
 
-		return p.scanCache.filter(req.DeviceList...), nil
+		return
 	}
 
 	// set vmd state on remote provider in forwarded request

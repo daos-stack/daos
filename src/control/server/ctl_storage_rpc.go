@@ -166,11 +166,11 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (storage.NvmeCon
 		c.log.Debugf("instance %d storage scan: only show bdev devices in config %v",
 			srv.Index(), bdevReq.DeviceList)
 
-		// rescan through control-plane to get up-to-date stats if io
+		// scan through control-plane to get up-to-date stats if io
 		// server is not active (and therefore has not claimed the
-		// assigned devices)
+		// assigned devices), bypass cache to get fresh health stats
 		if !srv.isReady() {
-			bdevReq.Rescan = true
+			bdevReq.NoCache = true
 		}
 
 		bsr, err := c.NvmeScan(bdevReq)
@@ -178,7 +178,7 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (storage.NvmeCon
 			return nil, errors.Wrap(err, "NvmeScan()")
 		}
 
-		if bdevReq.Rescan {
+		if bdevReq.NoCache {
 			ctrlrs = append(ctrlrs, bsr.Controllers...)
 			continue
 		}
