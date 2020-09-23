@@ -351,27 +351,6 @@ class DaosCommand(DaosCommandBase):
             ("container", "query"), pool=pool, svc=svc, cont=cont,
             sys_name=sys_name)
 
-    def container_update_acl(self, pool, cont, entry, svc=None):
-        """Call daos container update-acl.
-        Args:
-            pool (str): Pool UUID.
-            cont (str): Container UUID.
-            entry (str): Container acl entry to be updated.
-            svc (str, optional): Pool service replicas, e.g., '1,2,3'. Defaults
-                to None.
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: if the daos container update-acl command fails.
-
-        """
-        return self._get_result(
-            ("container", "update-acl"),
-            pool=pool, svc=svc, cont=cont, entry=entry)
-
     def container_set_prop(self, pool, cont, prop, value, svc=None):
         """Call daos container set-prop.
 

@@ -37,6 +37,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/build"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -51,11 +52,6 @@ import (
 )
 
 const (
-	// ControlPlaneName defines a consistent name for the control plane server.
-	ControlPlaneName = "DAOS Control Server"
-	// DataPlaneName defines a consistent name for the ioserver.
-	DataPlaneName = "DAOS I/O Server"
-
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
 )
@@ -308,7 +304,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}()
 	defer grpcServer.GracefulStop()
 
-	log.Infof("%s (pid %d) listening on %s", ControlPlaneName, os.Getpid(), controlAddr)
+	log.Infof("%s (pid %d) listening on %s", build.ControlPlaneName, os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -321,5 +317,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		shutdown()
 	}()
 
-	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", build.DataPlaneName)
 }
