@@ -274,8 +274,7 @@ vos_ts_lookup(struct vos_ts_set *ts_set, uint32_t *idx, bool reset,
 
 	*entryp = NULL;
 
-	if (!vos_ts_in_tx(ts_set) ||
-	    (ts_set->ts_flags & VOS_OF_PUNCH_PROPAGATE))
+	if (!vos_ts_in_tx(ts_set))
 		return true;
 
 	if (reset)
@@ -456,6 +455,9 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 
 	if (idx == NULL)
 		goto calc_hash;
+
+	if (ts_set->ts_flags & VOS_OF_PUNCH_PROPAGATE)
+		return 0; /* Set already populated */
 
 	if (ts_set->ts_init_count == ts_set->ts_set_size)
 		return -DER_BUSY; /** No more room in the set */
@@ -677,6 +679,32 @@ vos_ts_set_check_conflict(struct vos_ts_set *ts_set, daos_epoch_t write_time)
 	return false;
 }
 
+/** Append VOS_OF flags to timestamp set
+ *  \param[in] ts_set		The timestamp set
+ *  \param[in] flags		VOS_OF flag(s) to add to set
+ */
+static inline void
+vos_ts_set_append_vflags(struct vos_ts_set *ts_set, uint64_t flags)
+{
+	if (!vos_ts_in_tx(ts_set))
+		return;
+
+	ts_set->ts_flags |= flags;
+}
+
+/** Append check/update flags to timestamp set
+ *  \param[in] ts_set		The timestamp set
+ *  \param[in] flags		flags
+ */
+static inline void
+vos_ts_set_append_cflags(struct vos_ts_set *ts_set, uint32_t flags)
+{
+	if (!vos_ts_in_tx(ts_set))
+		return;
+
+	ts_set->ts_cflags |= flags;
+}
+
 /** Update the read timestamps for the set after a successful operation
  *
  *  \param[in]	ts_set		The timestamp set
@@ -746,31 +774,6 @@ vos_ts_set_save(struct vos_ts_set *ts_set, int *statep)
 		return;
 
 	*statep = ts_set->ts_init_count;
-}
-
-/** Mark an entry as a propagated punch.  This has two purposes.   When we
- *  do lookups, we avoid adding a new entry to the set because it's already
- *  in the set.   And when we update timestamps, we update the high
- *  timestamp for all entities we punch when the punch is conditional.
- *
- *  \param	ts_set[in]	The timestamp set
- *  \param	flag[in]	The flag to set
- */
-static inline void
-vos_ts_set_punch_propagate(struct vos_ts_set *ts_set, uint32_t type)
-{
-	struct vos_ts_entry	*entry;
-
-	if (ts_set == NULL)
-		return;
-
-	ts_set->ts_flags |= VOS_OF_PUNCH_PROPAGATE;
-	if (type == VOS_TS_TYPE_OBJ)
-		ts_set->ts_cflags |= VOS_TS_READ_CONT;
-	else if (type == VOS_TS_TYPE_DKEY)
-		ts_set->ts_cflags |= VOS_TS_READ_OBJ;
-	else
-		ts_set->ts_cflags |= VOS_TS_READ_DKEY;
 }
 
 /** Restore previously saved state of the set

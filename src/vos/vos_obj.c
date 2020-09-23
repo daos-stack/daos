@@ -73,6 +73,60 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	return 0;
 }
 
+static int
+vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
+		    struct vos_ts_set *ts_set, const daos_epoch_range_t *epr,
+		    vos_iter_type_t type)
+{
+	int		rc = 0;
+	uint32_t	read_flag = 0;
+	uint32_t	write_flag = 0;
+	uint64_t	punch_flag = VOS_OF_PUNCH_PROPAGATE;
+	const char *	tree_name = "AKEY";
+
+	if (vos_ts_set_check_conflict(ts_set, epr->epr_hi)) {
+		D_DEBUG(DB_IO, "Failed to punch key: "DF_RC"\n",
+			DP_RC(-DER_TX_RESTART));
+		return -DER_TX_RESTART;
+	}
+
+	switch (type) {
+	case VOS_ITER_DKEY:
+		read_flag = VOS_TS_READ_OBJ;
+		write_flag = VOS_TS_WRITE_OBJ;
+		tree_name = "DKEY";
+		break;
+	case VOS_ITER_AKEY:
+		read_flag = VOS_TS_READ_DKEY;
+		write_flag = VOS_TS_WRITE_DKEY;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+
+	/** The check for propagation needs to update the read
+	 *  time on the object as it's iterating the dkey tree
+	 */
+	vos_ts_set_append_cflags(ts_set, read_flag);
+
+	rc = tree_is_empty(obj, toh, epr, type);
+	if (rc > 0) {
+		/** dkey tree is now empty, punch the object */
+		D_DEBUG(DB_TRACE, "%s tree empty, punching object\n",
+			tree_name);
+		vos_ts_set_append_vflags(ts_set, punch_flag);
+		vos_ts_set_append_cflags(ts_set, write_flag);
+
+		return 1;
+	}
+
+	if (rc != 0)
+		D_ERROR("Could not check emptiness on punch: "
+			DF_RC"\n", DP_RC(rc));
+
+	return rc;
+}
+
 /**
  * @} vos_tree_helper
  */
@@ -123,25 +177,14 @@ punch_dkey:
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		if (rc == 0 && ts_set) {
-			rc = tree_is_empty(obj, obj->obj_toh, &epr,
-					   VOS_ITER_DKEY);
-			if (rc > 0) {
-				/** dkey tree is now empty, punch the object */
+		if (rc == 0) {
+			rc = vos_propagate_check(obj, obj->obj_toh, ts_set,
+						 &epr, VOS_ITER_DKEY);
+			if (rc == 1) {
 				propagated = 1;
-				vos_ts_set_punch_propagate(ts_set,
-							   VOS_TS_TYPE_OBJ);
-				D_DEBUG(DB_TRACE,
-					"DKEY tree empty, punching object\n");
 				rc = 0;
 			}
-
-			if (rc != 0) {
-				D_ERROR("Could not check emptiness on punch: "
-					DF_RC"\n", DP_RC(rc));
-			}
 		}
-
 	} else {
 		daos_handle_t		 toh;
 		int			 i;
@@ -179,22 +222,13 @@ punch_dkey:
 			}
 		}
 
-		if (rc == 0 && ts_set) {
-			rc = tree_is_empty(obj, toh, &epr, VOS_ITER_AKEY);
-			if (rc > 0) {
-				/** akey tree is now empty, go punch the dkey */
-				key_tree_release(toh, 0);
-				vos_ts_set_punch_propagate(ts_set,
-							   VOS_TS_TYPE_DKEY);
+		if (rc == 0) {
+			rc = vos_propagate_check(obj, toh, ts_set, &epr,
+						 VOS_ITER_AKEY);
+			if (rc == 1) {
 				propagated = 1;
-				D_DEBUG(DB_TRACE,
-					"AKEY tree is empty, punching dkey\n");
+				key_tree_release(toh, 0);
 				goto punch_dkey;
-			}
-
-			if (rc != 0) {
-				D_ERROR("Could not check emptiness on punch: "
-					DF_RC"\n", DP_RC(rc));
 			}
 		}
 
@@ -254,6 +288,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	daos_epoch_range_t	 epr = { 0 };
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
+	bool			 exist = true;
 
 	if (dtx_is_valid_handle(dth))
 		epr.epr_hi = dth->dth_epoch;
@@ -331,7 +366,13 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (punch_obj)
 			rc = obj_punch(coh, obj, epr.epr_hi, flags, ts_set);
 	}
-
+	if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH) == 0) {
+		if (vos_ts_set_check_conflict(ts_set, epr.epr_hi))
+			rc = -DER_TX_RESTART;
+		rc = 0;
+		exist = false;
+		goto abort;
+	}
 abort:
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 
@@ -348,7 +389,7 @@ reset:
 
 	vos_dth_set(NULL);
 
-	if (rc == 0)
+	if (rc == 0 && exist)
 		vos_ts_set_upgrade(ts_set);
 
 	if (rc == -DER_NONEXIST || rc == 0)

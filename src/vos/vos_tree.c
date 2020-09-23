@@ -1099,12 +1099,6 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		if (rc == -DER_NONEXIST) {
 			if ((flags & VOS_OF_REPLAY_PC) != 0)
 				goto insert_entry;
-			if ((flags & VOS_OF_COND_PUNCH) == 0)
-				rc = 0;
-			goto done;
-		}
-		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
-			rc = -DER_NONEXIST;
 			goto done;
 		}
 	} else if (rc != 0) {
@@ -1138,8 +1132,6 @@ insert_entry:
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 
-	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
-		rc = -DER_TX_RESTART;
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 

@@ -42,6 +42,8 @@ struct tx_helper {
 	uint32_t		 th_nr_mods;
 	/** Current op number */
 	uint32_t		 th_op_seq;
+	/** Operation actually does a write */
+	bool			 th_change;
 };
 
 struct mvcc_arg {
