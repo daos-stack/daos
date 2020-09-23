@@ -214,7 +214,7 @@ def set_test_environment(args):
     ##SCHAN15
     covfile = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "test.cov")
     os.environ["COVFILE"] = covfile
-    print("SCHAN15 - in launch.py, COVFILE = {}".format(os.environ["COVFILE"])
+    print("SCHAN15 - in launch.py, COVFILE = {}".format(os.environ["COVFILE"]))
 
     commands = [
         "set -eu",
