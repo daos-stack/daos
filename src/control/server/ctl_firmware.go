@@ -47,7 +47,7 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 	pbResp := new(ctlpb.FirmwareQueryResp)
 
 	if pbReq.QueryScm {
-		scmResults, err := svc.querySCMFirmware()
+		scmResults, err := svc.querySCMFirmware(pbReq)
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +55,7 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 	}
 
 	if pbReq.QueryNvme {
-		nvmeResults, err := svc.queryNVMeFirmware()
+		nvmeResults, err := svc.queryNVMeFirmware(pbReq)
 		if err != nil {
 			return nil, err
 		}
@@ -66,8 +66,12 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 	return pbResp, nil
 }
 
-func (svc *ControlService) querySCMFirmware() ([]*ctlpb.ScmFirmwareQueryResp, error) {
-	queryResp, err := svc.scm.QueryFirmware(scm.FirmwareQueryRequest{})
+func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.ScmFirmwareQueryResp, error) {
+	queryResp, err := svc.scm.QueryFirmware(scm.FirmwareQueryRequest{
+		FirmwareRev: pbReq.FirmwareRev,
+		ModelID:     pbReq.ModelID,
+		DeviceUIDs:  pbReq.DeviceIDs,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -91,16 +95,20 @@ func (svc *ControlService) querySCMFirmware() ([]*ctlpb.ScmFirmwareQueryResp, er
 	return scmResults, nil
 }
 
-func (svc *ControlService) queryNVMeFirmware() ([]*ctlpb.NvmeFirmwareQueryResp, error) {
-	scanResp, err := svc.NvmeScan(bdev.ScanRequest{})
+func (svc *ControlService) queryNVMeFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.NvmeFirmwareQueryResp, error) {
+	queryResp, err := svc.bdev.QueryFirmware(bdev.FirmwareQueryRequest{
+		FirmwareRev: pbReq.FirmwareRev,
+		ModelID:     pbReq.ModelID,
+		DeviceAddrs: pbReq.DeviceIDs,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	nvmeResults := make([]*ctlpb.NvmeFirmwareQueryResp, 0, len(scanResp.Controllers))
-	for _, ctrlr := range scanResp.Controllers {
+	nvmeResults := make([]*ctlpb.NvmeFirmwareQueryResp, 0, len(queryResp.Results))
+	for _, res := range queryResp.Results {
 		pbResult := &ctlpb.NvmeFirmwareQueryResp{}
-		if err := convert.Types(ctrlr, &pbResult.Device); err != nil {
+		if err := convert.Types(res.Device, &pbResult.Device); err != nil {
 			return nil, errors.Wrap(err, "unable to convert NVMe controller")
 		}
 
@@ -150,6 +158,9 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
 	updateResp, err := svc.scm.UpdateFirmware(scm.FirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
+		FirmwareRev:  pbReq.FirmwareRev,
+		ModelID:      pbReq.ModelID,
+		DeviceUIDs:   pbReq.DeviceIDs,
 	})
 	if err != nil {
 		return err
@@ -170,6 +181,9 @@ func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctl
 func (svc *ControlService) updateNVMe(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
 	updateResp, err := svc.bdev.UpdateFirmware(bdev.FirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
+		FirmwareRev:  pbReq.FirmwareRev,
+		ModelID:      pbReq.ModelID,
+		DeviceAddrs:  pbReq.DeviceIDs,
 	})
 	if err != nil {
 		return err
