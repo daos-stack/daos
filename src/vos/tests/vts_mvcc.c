@@ -240,7 +240,7 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 		if (txh->th_nr_mods != 0) {
 			if (success) {
 				err = vos_dtx_commit(coh, &xid, 1, NULL);
-				assert_int_equal(err, 1);
+				assert(err >= 0);
 			}
 		}
 	}

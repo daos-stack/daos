@@ -31,39 +31,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/fault"
 )
-
-// unwrapFault takes a gRPC status object
-// and unwraps additional information, if available.
-func unwrapFault(st *status.Status) error {
-	if st == nil {
-		return nil
-	}
-
-	f, err := proto.UnwrapFault(st)
-	if f != nil {
-		return f
-	}
-
-	return err
-}
-
-// unwrapDaosStatus takes a gRPC status object
-// and unwraps additional information, if available.
-func unwrapDaosStatus(st *status.Status) error {
-	if st == nil {
-		return nil
-	}
-
-	s, err := proto.UnwrapDaosStatus(st)
-	if err == nil {
-		return s
-	}
-
-	return err
-}
 
 // connErrToFault attempts to resolve a network connection
 // error to a more informative Fault with resolution.
@@ -89,11 +57,9 @@ func streamErrorInterceptor() grpc.DialOption {
 		cs, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {
 			st := status.Convert(err)
-			if f, isFault := unwrapFault(st).(*fault.Fault); isFault {
-				return cs, f
-			}
-			if s, isStatus := unwrapDaosStatus(st).(drpc.DaosStatus); isStatus {
-				return cs, s
+			err = proto.UnwrapError(st)
+			if err.Error() != st.Err().Error() {
+				return cs, err
 			}
 			return cs, connErrToFault(st, cc.Target())
 		}
@@ -107,11 +73,9 @@ func unaryErrorInterceptor() grpc.DialOption {
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		if err != nil {
 			st := status.Convert(err)
-			if f, isFault := unwrapFault(st).(*fault.Fault); isFault {
-				return f
-			}
-			if s, isStatus := unwrapDaosStatus(st).(drpc.DaosStatus); isStatus {
-				return s
+			err = proto.UnwrapError(st)
+			if err.Error() != st.Err().Error() {
+				return err
 			}
 			return connErrToFault(st, cc.Target())
 		}

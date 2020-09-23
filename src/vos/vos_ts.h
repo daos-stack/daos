@@ -703,6 +703,21 @@ vos_ts_set_append_cflags(struct vos_ts_set *ts_set, uint32_t flags)
 		return;
 
 	ts_set->ts_cflags |= flags;
+
+	switch (ts_set->ts_cflags & VOS_TS_WRITE_MASK) {
+	case VOS_TS_WRITE_OBJ:
+		ts_set->ts_wr_level = VOS_TS_TYPE_OBJ;
+		break;
+	case VOS_TS_WRITE_DKEY:
+		ts_set->ts_wr_level = VOS_TS_TYPE_DKEY;
+		break;
+	case VOS_TS_WRITE_AKEY:
+		ts_set->ts_wr_level = VOS_TS_TYPE_AKEY;
+		break;
+	default:
+		/** Already zero */
+		break;
+	}
 }
 
 /** Update the read timestamps for the set after a successful operation
@@ -738,13 +753,17 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 		case VOS_TS_TYPE_OBJ:
 			high_mask = VOS_TS_READ_OBJ_CHILD;
 			low_mask = VOS_TS_READ_OBJ;
-			if (ts_set->ts_max_type > VOS_TS_TYPE_OBJ)
+			if (ts_set->ts_max_type > VOS_TS_TYPE_OBJ) {
+				low_mask |= high_mask;
 				break;
+			}
 		case VOS_TS_TYPE_DKEY:
 			high_mask |= VOS_TS_READ_DKEY_CHILD;
 			low_mask |= VOS_TS_READ_DKEY;
-			if (ts_set->ts_max_type > VOS_TS_TYPE_DKEY)
+			if (ts_set->ts_max_type > VOS_TS_TYPE_DKEY) {
+				low_mask |= high_mask;
 				break;
+			}
 		case VOS_TS_TYPE_AKEY:
 			high_mask |= VOS_TS_READ_AKEY;
 			low_mask |= VOS_TS_READ_AKEY;

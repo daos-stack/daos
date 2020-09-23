@@ -338,21 +338,7 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		return -DER_NOMEM;
 
 	(*ts_set)->ts_flags = flags;
-	(*ts_set)->ts_cflags = cflags;
-	switch (cflags & VOS_TS_WRITE_MASK) {
-	case VOS_TS_WRITE_OBJ:
-		(*ts_set)->ts_wr_level = VOS_TS_TYPE_OBJ;
-		break;
-	case VOS_TS_WRITE_DKEY:
-		(*ts_set)->ts_wr_level = VOS_TS_TYPE_DKEY;
-		break;
-	case VOS_TS_WRITE_AKEY:
-		(*ts_set)->ts_wr_level = VOS_TS_TYPE_AKEY;
-		break;
-	default:
-		/** Already zero */
-		break;
-	}
+	vos_ts_set_append_cflags(*ts_set, cflags);
 	(*ts_set)->ts_set_size = size;
 	if (tx_id != NULL) {
 		(*ts_set)->ts_in_tx = true;
@@ -430,14 +416,15 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 	se = &ts_set->ts_entries[idx];
 	entry = se->se_entry;
 
+	if (se->se_etype > ts_set->ts_wr_level)
+		return false; /** Check is redundant */
+
 	if (se->se_etype < ts_set->ts_wr_level) {
 		/* check the low time */
 		return vos_ts_check_conflict(entry->te_ts.tp_ts_rl,
 					     &entry->te_ts.tp_tx_rl,
 					     write_time, &ts_set->ts_tx_id);
 	}
-
-	D_ASSERT(se->se_etype == ts_set->ts_wr_level);
 
 	/* check the high time */
 	return vos_ts_check_conflict(entry->te_ts.tp_ts_rh,

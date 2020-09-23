@@ -349,8 +349,10 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
 			  (flags & VOS_OF_REPLAY_PC) ? false : true,
 			  DAOS_INTENT_PUNCH, true, &obj, ts_set);
+	printf("hold got %d\n", rc);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
+			printf("Attempt to punch key\n");
 			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
 
