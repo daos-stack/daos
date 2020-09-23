@@ -1310,33 +1310,37 @@ public class DaosObjectIT {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
     id.encode();
     DaosObject object = client.getObject(id);
-    int bufLen = 8000;
-    int reduces = 1;
-    int maps = 1;
-    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
-        null);
-//    IOSimpleDataDesc fetchDesc = object.createSimpleDataDesc(4, 1, bufLen,
+    int bufLen = 16000;
+    int reduces = 125;
+    int maps = 1000;
+//    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
 //        null);
     byte[] data = generateDataArray(bufLen);
-//    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, 1, bufLen);
-//    for (int i = 0; i < dq.getNbrOfEvents(); i++) {
-//      DaosEventQueue.Event e = dq.getEvent(i);
-//      IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
-//      ByteBuf buf = entry.reuseBuffer();
-//      buf.writeBytes(data);
-//    }
+    DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, 1, bufLen);
+    for (int i = 0; i < dq.getNbrOfEvents(); i++) {
+      DaosEventQueue.Event e = dq.getEvent(i);
+      IOSimpleDataDesc.SimpleEntry entry = e.getDesc().getEntry(0);
+      ByteBuf buf = entry.reuseBuffer();
+      buf.writeBytes(data);
+    }
+    IOSimpleDataDesc desc = null;
     try {
       object.open();
       // write
       DaosEventQueue.Event e;
-//      IOSimpleDataDesc desc;
+
+      List<IOSimpleDataDesc> compList = new LinkedList<>();
       IOSimpleDataDesc.SimpleEntry entry;
       ByteBuf buf;
       long start = System.nanoTime();
       for (int i = 0; i < reduces; i++) {
         for (int j = 0; j < maps; j++) {
-//          e = dq.acquireEventBlock(true, 1000, null);
-//          desc = e.reuseDesc();
+          compList.clear();
+          e = dq.acquireEventBlock(true, 1000, compList);
+          for (IOSimpleDataDesc d : compList) {
+            Assert.assertTrue(d.isSucceeded());
+          }
+          desc = e.reuseDesc();
           desc.setDkey(String.valueOf(i));
           entry = desc.getEntry(0);
           buf = entry.reuseBuffer();
@@ -1345,37 +1349,54 @@ public class DaosObjectIT {
           object.updateSimple(desc);
         }
       }
-//      dq.waitForCompletion(5000, null);
+      compList.clear();
+      dq.waitForCompletion(5000, compList);
+      for (IOSimpleDataDesc d : compList) {
+        Assert.assertTrue(d.isSucceeded());
+//        System.out.println("completed");
+      }
       System.out.println((System.nanoTime() - start) / 1000000);
       System.out.println("written");
       // fetch
-//      List<IOSimpleDataDesc> compList = new LinkedList<>();
-//      start = System.nanoTime();
-//      for (int i = 0; i < reduces; i++) {
-//        for (int j = 0; j < maps; j++) {
-//          compList.clear();
-//          e = dq.acquireEventBlock(false, 1000, compList);
-//          for (IOSimpleDataDesc d : compList) {
-//            Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
-//          }
-//          desc = e.reuseDesc();
-//          desc.setDkey(String.valueOf(i));
-//          entry = desc.getEntry(0);
-//          entry.setEntryForFetch(String.valueOf(j), 0, bufLen);
-//          object.fetchSimple(desc);
-//        }
-//      }
-////      System.out.println("waiting");
-//      dq.waitForCompletion(5000, compList);
-//      for (IOSimpleDataDesc d : compList) {
-//        Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
-//      }
-//      System.out.println((System.nanoTime() - start) / 1000000);
+//      desc = object.createSimpleDataDesc(4, 1, bufLen,
+//        null);
+//      desc.setUpdateOrFetch(false);
+      start = System.nanoTime();
+      for (int i = 0; i < reduces; i++) {
+        for (int j = 0; j < maps; j++) {
+//          System.out.println(i + "-" +j);
+          compList.clear();
+          e = dq.acquireEventBlock(false, 1000, compList);
+          for (IOSimpleDataDesc d : compList) {
+            Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
+          }
+          desc = e.reuseDesc();
+          desc.setDkey(String.valueOf(i));
+          entry = desc.getEntry(0);
+          entry.setEntryForFetch(String.valueOf(j), 0, bufLen);
+          object.fetchSimple(desc);
+//          Assert.assertEquals(bufLen, desc.getEntry(0).getActualSize());
+//          System.out.println(i + "-" +j);
+        }
+      }
+//      System.out.println("waiting");
+      compList.clear();
+      dq.waitForCompletion(5000, compList);
+      for (IOSimpleDataDesc d : compList) {
+        Assert.assertTrue(d.isSucceeded());
+        Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
+//        System.out.println("fetch completed");
+      }
+      System.out.println((System.nanoTime() - start) / 1000000);
     } catch (Exception e) {
       throw e;
     } finally {
-      desc.release();
-//      DaosEventQueue.destroyAll();
+//      if (desc != null) {
+//        desc.release();
+//      }
+      System.out.println(1);
+      DaosEventQueue.destroyAll();
+      System.out.println(2);
       if (object.isOpen()) {
         object.punch();
       }

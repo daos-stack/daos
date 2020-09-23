@@ -345,9 +345,7 @@ public class DaosObject {
     try {
       boolean async = desc.isAsync();
       client.fetchObjectSimple(objectPtr, 0, desc.getDescBuffer().memoryAddress(), async);
-      if (async) {
-        desc.succeed();
-      } else {
+      if (!async) {
         desc.parseResult();
       }
     } catch (DaosIOException e) {
@@ -398,7 +396,9 @@ public class DaosObject {
     }
     try {
       client.updateObjectSimple(objectPtr, 0, desc.getDescBuffer().memoryAddress(), desc.isAsync());
-      desc.succeed();
+      if (!desc.isAsync()) {
+        desc.succeed();
+      }
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
           desc.toString(MAX_EXCEPTION_SIZE), e);

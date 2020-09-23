@@ -200,7 +200,7 @@ Java_io_daos_obj_DaosObjClient_queryObjectAttribute(JNIEnv *env,
     int rc;
 
     memcpy(&oh, &objectHandle, sizeof(oh));
-    rc = daos_obj_query(oh, &attr, &ranks, NULL);
+    rc = daos_obj_query(oh, DAOS_TX_NONE, &attr, &ranks, NULL);
 
     if (rc) {
         char *msg = "Failed to query DAOS object attribute";
@@ -648,7 +648,9 @@ static void allocate_simple_desc(char *descBufAddress, data_desc_simple_t *desc,
         desc_buffer += 10;
     }
     // skip dkeylen and dkey
-    desc_buffer += 2 + desc->maxKeyLen;
+    desc_buffer += 2;
+    d_iov_set(&desc->dkey, desc_buffer, 0);
+    desc_buffer += desc->maxKeyLen;
     // skip akeys with request
     desc_buffer += 2;
     // entries
@@ -733,7 +735,6 @@ update_ret_code(void *udata, daos_event_t *ev, int ret)
 {
     data_desc_simple_t *desc = (data_desc_simple_t *)udata;
     char *desc_buffer = desc->ret_buf_address;
-
     memcpy(desc_buffer, &ret, 4);
 }
 
@@ -815,6 +816,7 @@ JNIEXPORT void JNICALL Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
         char *msg = "Failed to fetch DAOS object";
 
         throw_exception_const_msg_object(env, msg, rc);
+        return;
     }
     // actual data size
     if (!async) {

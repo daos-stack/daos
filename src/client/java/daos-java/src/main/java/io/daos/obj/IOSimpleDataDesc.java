@@ -77,7 +77,7 @@ public class IOSimpleDataDesc {
 
   private boolean released;
 
-  private int retCode;
+  private int retCode = Integer.MAX_VALUE;
 
   public static final int RET_CODE_SUCCEEDED = 0;
 
@@ -152,6 +152,10 @@ public class IOSimpleDataDesc {
     return totalRequestSize;
   }
 
+  public int getNbrOfAkeysToRequest() {
+    return nbrOfAkeysToRequest;
+  }
+
   public boolean isAsync() {
     return async;
   }
@@ -219,8 +223,9 @@ public class IOSimpleDataDesc {
       throw new IllegalArgumentException("at least one of entries should have data");
     }
     descBuffer.readerIndex(0);
-    descBuffer.writerIndex(20);
+    descBuffer.writerIndex(12);
     if (async) { // assuming same event queue
+      descBuffer.writerIndex(descBuffer.writerIndex() + 8);
       descBuffer.writeShort(event.id);
     }
     if (dkeyChanged) {
@@ -326,11 +331,13 @@ public class IOSimpleDataDesc {
       // update actual size
       int idx = totalRequestBufLen;
       descBuffer.writerIndex(descBuffer.capacity());
+      descBuffer.readerIndex(idx);
       retCode = descBuffer.readInt();
       if (retCode != RET_CODE_SUCCEEDED) {
         resultParsed = true;
         return;
       }
+      idx += 4;
       for (SimpleEntry entry : akeyEntries) {
         if (count < nbrOfReq) {
           descBuffer.readerIndex(idx);

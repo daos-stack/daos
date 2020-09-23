@@ -2,10 +2,10 @@ package io.daos.obj;
 
 import io.daos.DaosClient;
 import io.netty.buffer.ByteBuf;
-import org.junit.Assert;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 public class DescSimpleMain {
 
@@ -45,7 +45,7 @@ public class DescSimpleMain {
       object = openObject(objClient, oid);
       if ("generate".equalsIgnoreCase(op)) {
         generateData(object, totalBytes, maps, reduces);
-      } else if ("read".equalsIgnoreCase(op)) {
+      } else if (op.toLowerCase().startsWith("read")) {
         int sizeLimit = 2 * 1024 * 1024;
         int nbrOfDkeys = reduces;
         int offset = 0;
@@ -56,7 +56,12 @@ public class DescSimpleMain {
           offset = Integer.valueOf(args[9]);
           nbrOfDkeys = Integer.valueOf(args[10]);
         }
-        read(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys);
+        if (op.equalsIgnoreCase("read")) {
+          read(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys, true);
+        } else if (op.equalsIgnoreCase("read-threads")) {
+          readThreads(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys,
+            args.length >= 12 ? Integer.valueOf(args[11]) : 1);
+        }
       }
     } finally {
       if (objClient != null) {
@@ -95,11 +100,18 @@ public class DescSimpleMain {
     IOSimpleDataDesc desc;
     IOSimpleDataDesc.SimpleEntry entry;
     ByteBuf buf;
+    List<IOSimpleDataDesc> compList = new LinkedList<>();
     long start = System.nanoTime();
     try {
       for (int i = 0; i < reduces; i++) {
         for (int j = 0; j < maps; j++) {
-          e = dq.acquireEventBlock(true, 1000, null);
+          compList.clear();
+          e = dq.acquireEventBlock(true, 1000, compList);
+          for (IOSimpleDataDesc d : compList) {
+            if (!d.isSucceeded()) {
+              throw new IOException("failed " + d);
+            }
+          }
           desc = e.reuseDesc();
           desc.setDkey(String.valueOf(i));
           entry = desc.getEntry(0);
@@ -109,7 +121,13 @@ public class DescSimpleMain {
           object.updateSimple(desc);
         }
       }
-      dq.waitForCompletion(10000, null);
+      compList.clear();
+      dq.waitForCompletion(10000, compList);
+      for (IOSimpleDataDesc d : compList) {
+        if (!d.isSucceeded()) {
+          throw new IOException("failed " + d);
+        }
+      }
       float seconds = ((float)(System.nanoTime()-start))/1000000000;
       long expected = 1L*akeyValLen*reduces*maps;
       System.out.println("perf (MB/s): " + ((float)expected)/seconds/1024/1024);
@@ -132,8 +150,64 @@ public class DescSimpleMain {
     return sb.toString();
   }
 
-  private static void read(DaosObject object, long totalBytes, int maps, int reduces,
-                           int sizeLimit, int offset, int nbrOfDkeys) throws IOException, InterruptedException {
+  static class ReadTask implements Callable<Float> {
+
+    private DaosObject object;
+    private long totalBytes;
+    private final int maps;
+    private final int reduces;
+    private int sizeLimit;
+    private final int offset;
+    private final int nbrOfDkeys;
+
+    public ReadTask(DaosObject object, long totalBytes, int maps, int reduces,
+                    int sizeLimit, int offset, int nbrOfDkeys){
+      this.object = object;
+      this.totalBytes = totalBytes;
+      this.maps = maps;
+      this.reduces = reduces;
+
+      this.sizeLimit = sizeLimit;
+      this.offset = offset;
+      this.nbrOfDkeys = nbrOfDkeys;
+    }
+    @Override
+    public Float call() throws Exception {
+      return read(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys, false);
+    }
+  }
+
+  private static void readThreads(DaosObject object, long totalBytes, int maps, int reduces,
+                           int sizeLimit, int offset, int nbrOfDkeys, int threads) throws IOException, InterruptedException, ExecutionException {
+    int ext = nbrOfDkeys/threads;
+    if (nbrOfDkeys%threads != 0) {
+      throw new IOException("nbrOfDkeys: " + nbrOfDkeys +", should be a multiple of threads " + threads);
+    }
+    ExecutorService exe = Executors.newFixedThreadPool(threads);
+    List<ReadTask> tasks = new ArrayList<>();
+    for (int i = offset; i < offset + nbrOfDkeys; i+=ext) {
+      tasks.add(new ReadTask(object, totalBytes, maps, reduces, sizeLimit, i, ext));
+    }
+    try {
+      List<Future<Float>> rstList = new ArrayList<>();
+      for (int i = 0; i < threads; i++) {
+        rstList.add(exe.submit(tasks.get(i)));
+      }
+      float total = 0.0f;
+      for (Future<Float> f : rstList) {
+        total += f.get();
+      }
+      System.out.println("perf: " + total);
+      exe.shutdownNow();
+      exe.awaitTermination(2, TimeUnit.SECONDS);
+    } finally {
+      DaosEventQueue.destroyAll();
+    }
+
+  }
+
+  private static float read(DaosObject object, long totalBytes, int maps, int reduces,
+                           int sizeLimit, int offset, int nbrOfDkeys, boolean destroy) throws IOException, InterruptedException {
 //    Map<String, Integer> dkeyMap = readKeys(FILE_NAME_DKEY, offset, nbrOfDkeys);
 //    Map<String, Integer> akeyMap = readKeys(FILE_NAME_AKEY, 0, -1);
     int akeyValLen = (int)(totalBytes/maps/reduces);
@@ -155,61 +229,58 @@ public class DescSimpleMain {
     DaosEventQueue dq = DaosEventQueue.getInstance(128, 4, nbrOfEntries, akeyValLen);
 //    IODataDesc.Entry entry = desc.getEntry(0);
     DaosEventQueue.Event e;
-    IOSimpleDataDesc desc;
+    IOSimpleDataDesc desc = null;
     long start = System.nanoTime();
     try {
-      // acquire and check
-      compList.clear();
-      e = dq.acquireEventBlock(false, 1000, compList);
-      desc = e.reuseDesc();
-
       for (int i = offset; i < end; i++) {
         for (int j = 0; j < maps; j++) {
-          desc.getEntry(idx++).setEntryForFetch(String.valueOf(j), 0, akeyValLen);
-          if (idx == nbrOfEntries) {
-            // read
-            desc.setDkey(String.valueOf(i));
-            object.fetchSimple(desc);
-            idx = 0;
+          if (idx == 0) {
             // acquire and check
             compList.clear();
             e = dq.acquireEventBlock(false, 1000, compList);
             for (IOSimpleDataDesc d : compList) {
-              for (int k = 0; k < nbrOfEntries; k++) {
+              for (int k = 0; k < d.getNbrOfAkeysToRequest(); k++) {
                 totalRead += d.getEntry(k).getActualSize();
               }
             }
             desc = e.reuseDesc();
+            desc.setDkey(String.valueOf(i));
+          }
+          desc.getEntry(idx++).setEntryForFetch(String.valueOf(j), 0, akeyValLen);
+          if (idx == nbrOfEntries) {
+            // read
+            object.fetchSimple(desc);
+            idx = 0;
           }
         }
         if (idx > 0) {
           // read
           object.fetchSimple(desc);
           idx = 0;
-          // acquire and check
-          compList.clear();
-          e = dq.acquireEventBlock(false, 1000, compList);
-          for (IOSimpleDataDesc d : compList) {
-            for (int k = 0; k < idx; k++) {
-              totalRead += d.getEntry(k).getActualSize();
-            }
-          }
-          desc = e.reuseDesc();
         }
       }
-
+      compList.clear();
       dq.waitForCompletion(10000, compList);
+      for (IOSimpleDataDesc d : compList) {
+        for (int k = 0; k < d.getNbrOfAkeysToRequest(); k++) {
+          totalRead += d.getEntry(k).getActualSize();
+        }
+      }
       float seconds = ((float)(System.nanoTime()-start))/1000000000;
 
       long expected = 1L*akeyValLen*nbrOfDkeys*maps;
       if (totalRead != expected) {
         throw new IOException("expect totalRead: " + expected + ", actual: " + totalRead);
       }
-      System.out.println("perf (MB/s): " + ((float)totalRead)/seconds/1024/1024);
+      float rst = ((float)totalRead)/seconds/1024/1024;
+      System.out.println("perf (MB/s): " + rst);
       System.out.println("total read (MB): " + totalRead/1024/1024);
       System.out.println("seconds: " + seconds);
+      return rst;
     } finally {
-      DaosEventQueue.destroyAll();
+      if (destroy) {
+        DaosEventQueue.destroyAll();
+      }
     }
   }
 

@@ -59,7 +59,7 @@ public class DaosEventQueue {
 
   private int nextEventIdx;
 
-  private int nbrOfSubmitted;
+  private int nbrOfAcquired;
 
   private boolean released;
 
@@ -140,7 +140,7 @@ public class DaosEventQueue {
    */
   public Event acquireEvent(boolean updateOrFetch) {
     int idx = nextEventIdx;
-    if (nbrOfSubmitted == nbrOfEvents) {
+    if (nbrOfAcquired == nbrOfEvents) {
       return null;
     }
     while (!events[idx].available) {
@@ -159,7 +159,7 @@ public class DaosEventQueue {
     Event ret = events[idx];
     ret.desc.setUpdateOrFetch(updateOrFetch);
     ret.available = false;
-    nbrOfSubmitted++;
+    nbrOfAcquired++;
     return ret;
   }
 
@@ -189,23 +189,22 @@ public class DaosEventQueue {
   }
 
   public boolean hasPendingEvent() {
-    return nbrOfSubmitted > 0;
+    return nbrOfAcquired > 0;
   }
 
   public void waitForCompletion(int maxWaitMs, List<IOSimpleDataDesc> completedList)
       throws IOException, InterruptedException {
-    int count = 0;
     long start = System.currentTimeMillis();
-    while (nbrOfSubmitted > 0) {
-      if ((count % 100 == 0) && (System.currentTimeMillis() - start > maxWaitMs)) {
-        throw new IOException("no completion after waiting more than " + maxWaitMs);
-      }
-      int lastNbr = nbrOfSubmitted;
+    while (nbrOfAcquired > 0) {
+      int lastNbr = nbrOfAcquired;
       pollCompleted(completedList);
-      if (lastNbr == nbrOfSubmitted) {
+      if (lastNbr == nbrOfAcquired) {
         Thread.sleep(10);
       }
-      count++;
+      if (System.currentTimeMillis() - start > maxWaitMs) {
+        throw new IOException("no completion after waiting more than " + maxWaitMs +
+          ", nbrOfAcquired: " + nbrOfAcquired +", total: " + nbrOfEvents);
+      }
     }
   }
 
@@ -253,7 +252,7 @@ public class DaosEventQueue {
         completedDescList.add(event.desc);
       }
     }
-    nbrOfSubmitted -= nbr;
+    nbrOfAcquired -= nbr;
     return nbr;
   }
 
@@ -265,8 +264,8 @@ public class DaosEventQueue {
     }
   }
 
-  public int getNbrOfSubmitted() {
-    return nbrOfSubmitted;
+  public int getNbrOfAcquired() {
+    return nbrOfAcquired;
   }
 
   public long getEqWrapperHdl() {

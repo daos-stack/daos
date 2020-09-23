@@ -275,8 +275,6 @@ JNIEXPORT void JNICALL Java_io_daos_DaosClient_destroyEventQueue
     for (i = 0; i < rc; i++) {
         ev = eps[i];
         daos_event_complete(ev, 0);
-//        daos_event_test(ev, DAOS_EQ_NOWAIT, &ev_flag);
-//        ev->ev_debug = 32768;
     }
     if (eq->events) {
         for (i = 0; i < eq->nbrOfEvents; i++) {
