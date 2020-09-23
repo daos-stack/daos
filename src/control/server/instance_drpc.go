@@ -201,9 +201,10 @@ func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.Smd
 // updateInUseBdevs updates-in-place the input list of controllers with
 // new NVMe health stats and SMD metadata info.
 //
-// First map input controllers to their concatenated model+serial keys then
+// Query each SmdDevice on each IO server instance for health stats,
+// map input controllers to their concatenated model+serial keys then
 // retrieve metadata and health stats for each SMD device (blobstore) on
-// "this" IO server instance and update info in input controller list.
+// a given I/O server instance. Update input map with new stats/smd info.
 func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
 	smdDevs, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
 	if err != nil {
