@@ -225,6 +225,19 @@ func (nc *NvmeController) GenAltKey() (string, error) {
 	return genAltKey(nc.Model, nc.Serial)
 }
 
+// UpdateSmd adds or updates SMD device entry for an NVMe Controller.
+func (ctrlr *NvmeController) UpdateSmd(smdDev *SmdDevice) {
+	for idx := range ctrlr.SmdDevices {
+		if smdDev.UUID == ctrlr.SmdDevices[idx].UUID {
+			ctrlr.SmdDevices[idx] = smdDev
+
+			return
+		}
+	}
+
+	ctrlr.SmdDevices = append(ctrlr.SmdDevices, smdDev)
+}
+
 // String translates the update status to a string
 func (s ScmFirmwareUpdateStatus) String() string {
 	switch s {

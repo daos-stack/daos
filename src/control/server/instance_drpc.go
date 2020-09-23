@@ -258,7 +258,7 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		}
 		smdDev.Rank = srvRank
 
-		ctrlr.SmdDevices = append(ctrlr.SmdDevices, smdDev)
+		ctrlr.UpdateSmd(smdDev)
 	}
 
 	return nil
