@@ -85,7 +85,7 @@ class CSumErrorLog(DaosCoreBase):
         for v in resp['host_storage_map'].values():
             if v['storage']['smd_info']['devices']:
                 dev = v['storage']['smd_info']['devices'][0]
-                return dev['health']['checksum_errors']
+                return dev['health']['checksum_errs']
 
     def test_csum_error_logging(self):
         """

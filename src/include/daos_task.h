@@ -131,7 +131,10 @@ typedef enum {
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
 
-	/** HL APIs */
+	/** KV APIs */
+	DAOS_OPC_KV_OPEN,
+	DAOS_OPC_KV_CLOSE,
+	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
@@ -942,6 +945,32 @@ typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
 } daos_array_destroy_t;
+
+/** KV open args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** KV ID, */
+	daos_obj_id_t		oid;
+	/** Open mode. */
+	unsigned int		mode;
+	/** Returned KV open handle */
+	daos_handle_t		*oh;
+} daos_kv_open_t;
+
+/** KV close args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+} daos_kv_close_t;
+
+/** KV destroy args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+} daos_kv_destroy_t;
 
 /** KV get args */
 typedef struct {
