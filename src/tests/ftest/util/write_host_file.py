@@ -27,7 +27,7 @@ import os
 import random
 
 
-def write_host_file(hostlist, path='/tmp', slots=1, segment=" slots="):
+def write_host_file(hostlist, path='/tmp', slots=1):
     """Write out a hostfile suitable for orterun.
 
     Args:
@@ -35,9 +35,6 @@ def write_host_file(hostlist, path='/tmp', slots=1, segment=" slots="):
         path (str, optional): where to write the hostfile. Defaults to '/tmp'.
         slots (int, optional): slots per host to specify in the hostfile.
             Defaults to 1.
-        segment (str, optional): string used to identify the slot segment per
-            host. Defaults to " slots=" for openmpi. The ":" segment should be
-            used for mpich.
 
     Raises:
         ValueError: if no hosts have been specified
@@ -58,14 +55,13 @@ def write_host_file(hostlist, path='/tmp', slots=1, segment=" slots="):
 
     log.info(
         "Writing hostfile:\n  hosts: %s\n  slots: %s\n  file:  %s",
-        hostlist, slots if not slots else "".join([segment, str(slots)]),
-        hostfile)
+        hostlist, slots, hostfile)
     with open(hostfile, "w") as hostfile_handle:
         for host in hostlist:
             if slots is None:
                 hostfile_handle.write("{0}\n".format(host))
             else:
                 hostfile_handle.write(
-                    "{0}{1}{2}\n".format(host, segment, slots))
+                    "{0} slots={1}\n".format(host, slots))
 
     return hostfile

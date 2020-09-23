@@ -311,8 +311,6 @@ class Mpirun(JobManager):
         """
         self._hosts = hosts
         kwargs = {"hostlist": self._hosts, "slots": slots}
-        if self.mpitype == "mpich":
-            kwargs["segment"] = ":"
         if path is not None:
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
