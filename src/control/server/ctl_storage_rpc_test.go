@@ -387,6 +387,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		bmbc      *bdev.MockBackendConfig
 		smbc      *scm.MockBackendConfig
 		cfg       *Configuration
+		scanTwice bool
 		junkResp  bool
 		drpcResps map[int][]*mockDrpcResponse
 		expErr    error
@@ -525,6 +526,73 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					{Message: newBioHealthResp(1)},
 				},
 				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								newSmdDevRespDevice(2),
+							},
+						},
+					},
+					{Message: newBioHealthResp(2)},
+				},
+			},
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{
+						newCtrlrPBwMeta(1),
+						newCtrlrPBwMeta(2),
+					},
+					State: new(ResponseState),
+				},
+				Scm: &ScanScmResp{State: new(ResponseState)},
+			},
+		},
+		"scan twice bdev meta with multiple io servers up": {
+			req: &StorageScanReq{Nvme: &ScanNvmeReq{Meta: true}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{
+					Controllers: storage.NvmeControllers{
+						newCtrlr(1), newCtrlr(2),
+					},
+				},
+			},
+			cfg: newDefaultConfiguration(nil).WithServers(
+				ioserver.NewConfig().
+					WithBdevClass("nvme").
+					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
+				ioserver.NewConfig().
+					WithBdevClass("nvme").
+					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
+			),
+			scanTwice: true,
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								newSmdDevRespDevice(1),
+							},
+						},
+					},
+					{Message: newBioHealthResp(1)},
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								newSmdDevRespDevice(1),
+							},
+						},
+					},
+					{Message: newBioHealthResp(1)},
+				},
+				1: {
+					{
+						Message: &mgmtpb.SmdDevResp{
+							Devices: []*mgmtpb.SmdDevResp_Device{
+								newSmdDevRespDevice(2),
+							},
+						},
+					},
+					{Message: newBioHealthResp(2)},
 					{
 						Message: &mgmtpb.SmdDevResp{
 							Devices: []*mgmtpb.SmdDevResp_Device{
@@ -705,7 +773,14 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				}
 			}
 
-			// cs.StorageScan will never return err
+			if tc.scanTwice {
+				_, err := cs.StorageScan(context.TODO(), tc.req)
+				common.CmpErr(t, tc.expErr, err)
+				if err != nil {
+					return
+				}
+			}
+
 			resp, err := cs.StorageScan(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, err)
 			if err != nil {
