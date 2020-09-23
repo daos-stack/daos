@@ -292,7 +292,7 @@ nvme_test_simulate_IO_error(void **state)
 	char		*control_log_file;
 	char		*server_config_file;
 	int		rx_nr; /* number of record extents */
-	int		rank = 1;
+	int		rank_pos = 0, rank = 1;
 	int		ndisks, rc, i;
 
 	if (!is_nvme_enabled(arg)) {
@@ -319,7 +319,7 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank == 1) {
-			rank = i;
+			rank_pos = i;
 			break;
 		}
 	}
@@ -329,14 +329,14 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	D_ALLOC(control_log_file, 1024);
 	D_ALLOC(server_config_file, 512);
-	rc = get_server_config(devices[rank].host, server_config_file);
+	rc = get_server_config(devices[rank_pos].host, server_config_file);
 	assert_int_equal(rc, 0);
 	print_message("server_config_file = %s\n", server_config_file);
 
 	/*
 	 * Get DAOS control log file
 	 */
-	get_log_file(devices[rank].host,
+	get_log_file(devices[rank_pos].host,
 		server_config_file, "control_log_file", control_log_file);
 	print_message("Control Log File = %s\n", control_log_file);
 	D_FREE(server_config_file);
@@ -346,7 +346,8 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	write_errors = strdup("write_errors");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank].host, write_errors, devices[rank].device_id);
+		devices[rank_pos].host, write_errors,
+		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Initial write_errors = %s\n", write_errors);
 
@@ -355,7 +356,8 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	read_errors = strdup("read_errors");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank].host, read_errors, devices[rank].device_id);
+		devices[rank_pos].host, read_errors,
+		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Initial read_errors = %s\n", read_errors);
 
@@ -382,7 +384,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Prepare records
 	 */
 	oid = dts_oid_gen(DAOS_OC_R1S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, 1);
+	oid = dts_oid_set_rank(oid, rank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/*
@@ -411,7 +413,8 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	check_errors = strdup("write_errors");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank].host, check_errors, devices[rank].device_id);
+		devices[rank_pos].host, check_errors,
+		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Final write_error = %s\n", check_errors);
 	assert_true(atoi(check_errors) > atoi(write_errors));
@@ -422,7 +425,8 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	strcpy(check_errors, "read_errors");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank].host, check_errors, devices[rank].device_id);
+		devices[rank_pos].host, check_errors,
+		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Final read_errors = %s\n", check_errors);
 	assert_true(atoi(check_errors) > atoi(read_errors));
@@ -434,7 +438,7 @@ nvme_test_simulate_IO_error(void **state)
 		"detected blob I/O error! writeErr:true",
 		"detected blob I/O error! readErr:true"};
 	for (i = 0; control_err[i][0] != '\0'; i++) {
-		rc = verify_state_in_log(devices[rank].host,
+		rc = verify_state_in_log(devices[rank_pos].host,
 			control_log_file, control_err[i]);
 		if (rc != 0) {
 			print_message(
