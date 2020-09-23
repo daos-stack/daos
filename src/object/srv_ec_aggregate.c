@@ -80,6 +80,7 @@ struct ec_agg_stripe {
 	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
 	unsigned int	as_offset;      /* start offset in stripe            */
+	unsigned int	as_prefix_ext;  /* prefix range to delete            */
 };
 
 /* Aggregation state for an object. (may need to restructure if
@@ -181,58 +182,63 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 }
 
 /* Determines if the extent carries over into the next stripe.
- * TBD: deals with extents that span stripes.
  */
 static unsigned int
 agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 {
-#if 0
-	unsigned int	stripe_size = obj_ec_stripe_rec_nr(oca);
+	unsigned int	stripe_size = obj_ec_stripe_rec_nr(entry->ae_oca);
 
-	daos_off_t	start_stripe = agg_extent->ae_recx.rx_idx ?
-				stripe_size / agg_extent->ae_recx.rx_idx : 0;
-	daos_off_t	end_stripe = stripe_size / (agg_extent->ae_recx.rx_idx
-						  + agg_extent->ae_recx.rx_nr);
+	daos_off_t	start_stripe = agg_extent->ae_recx.rx_idx / stripe_size;
+	daos_off_t	end_stripe = (agg_extent->ae_recx.rx_idx +
+				agg_extent->ae_recx.rx_nr - 1) / stripe_size;
 
 	if (end_stripe > start_stripe) {
 		D_ASSERT(end_stripe - start_stripe == 1);
+		return agg_extent->ae_recx.rx_idx + agg_extent->ae_recx.rx_nr -
+			end_stripe * stripe_size;
 
 	/* What if an extent carries over, and the tail is the only extent in
-	 * the next stripe?/
+	 * the next stripe? (Answer: we leak it, for now.)
 	 */
-
-#endif
+	}
 	return 0;
 }
 
 /* Clears the extent list of all extents completed for the processed stripe.
  * Extents the carry over to the next stripe have the prior-stripe prefix
- * trimmed (TBD).
+ * trimmed.
  */
 static void
 agg_clear_extents(struct ec_agg_entry *agg_entry)
 {
 	struct ec_agg_extent *agg_extent, *ext_tmp;
-	unsigned int	      tail = 0;
+	unsigned int	      tail, ptail = 0U;
 
+	agg_entry->ae_cur_stripe.as_prefix_ext = 0U;
 	d_list_for_each_entry_safe(agg_extent, ext_tmp,
 				   &agg_entry->ae_cur_stripe.as_dextents,
 				   ae_link) {
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(agg_entry, agg_extent);
+		/* At most one extent should carry over.( */
 		if (tail) {
-			agg_extent->ae_recx.rx_idx += tail;
-			agg_extent->ae_recx.rx_nr -= tail;
+			D_ASSERT(ptail == 0U);
+			ptail = tail;
+			agg_entry->ae_cur_stripe.as_prefix_ext =
+					agg_extent->ae_recx.rx_nr - tail;
+			agg_extent->ae_recx.rx_idx +=
+					agg_extent->ae_recx.rx_nr - tail;
+			agg_extent->ae_recx.rx_nr = tail;
 		} else {
 			agg_entry->ae_cur_stripe.as_extent_cnt--;
 			d_list_del(&agg_extent->ae_link);
 			D_FREE_PTR(agg_extent);
 		}
-
 	}
+	agg_entry->ae_cur_stripe.as_offset = 0U;
 	agg_entry->ae_cur_stripe.as_hi_epoch = 0UL;
-	/* Should account for carry over. */
-	agg_entry->ae_cur_stripe.as_stripe_fill = 0U;
+	/* Account for carry over. */
+	agg_entry->ae_cur_stripe.as_stripe_fill = ptail;
 }
 
 /* Returns the stripe number for the stripe containing ex_lo.
@@ -533,6 +539,27 @@ agg_stripe_is_filled(struct ec_agg_entry *entry, bool has_parity)
 	return rc;
 }
 
+/* Determines if the extent carries over into the next stripe.
+ */
+static unsigned int
+agg_get_carry_under(struct ec_agg_entry *entry)
+{
+	struct ec_agg_extent *agg_extent, *ext_tmp;
+	unsigned int	      tail = 0U;
+
+	d_list_for_each_entry_safe(agg_extent, ext_tmp,
+				   &entry->ae_cur_stripe.as_dextents,
+				   ae_link) {
+		/* Check for -over extent. */
+		tail = agg_carry_over(entry, agg_extent);
+		/* At most one extent should carry over.( */
+		if (tail)
+			return agg_extent->ae_recx.rx_nr = tail;
+		/* At most one extent should carry over. */
+	}
+	return 0;
+}
+
 /* Writes updated parity to VOS, and removes replicas fully contained
  * in the processed stripe.
  */
@@ -552,8 +579,10 @@ agg_update_vos(struct ec_agg_entry *entry)
 	sgl.sg_iovs = iov;
 	sgl.sg_nr = 1;
 
-	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len;
-	recx.rx_nr = k * len;
+	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len -
+		entry->ae_cur_stripe.as_prefix_ext;
+	recx.rx_nr = k * len - agg_get_carry_under(entry) +
+		entry->ae_cur_stripe.as_prefix_ext;
 	epoch_range.epr_lo = 0ULL;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 	rc = vos_obj_array_remove(entry->ae_chdl, entry->ae_oid,
@@ -1170,8 +1199,8 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	if (rc != 0)
 		goto out;
 		/* change to >= to deal with retained extent */
-	if (entry->ae_par_extent.ape_epoch >= entry->ae_cur_stripe.as_hi_epoch &&
-		entry->ae_par_extent.ape_epoch != ~(0ULL)) {
+	if (entry->ae_par_extent.ape_epoch >= entry->ae_cur_stripe.as_hi_epoch
+	    && entry->ae_par_extent.ape_epoch != ~(0ULL)) {
 		/* Parity newer than data; nothing to do. */
 		update_vos = false;
 		goto out;
