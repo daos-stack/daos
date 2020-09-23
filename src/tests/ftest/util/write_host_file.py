@@ -61,7 +61,6 @@ def write_host_file(hostlist, path='/tmp', slots=1):
             if slots is None:
                 hostfile_handle.write("{0}\n".format(host))
             else:
-                hostfile_handle.write(
-                    "{0} slots={1}\n".format(host, slots))
+                hostfile_handle.write("{0} slots={1}\n".format(host, slots))
 
     return hostfile
