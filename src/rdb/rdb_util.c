@@ -333,8 +333,8 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
-	rc = vos_fetch_begin(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
-			     1 /* n */, &iod, 0 /* fetch_flags */, NULL, &io,
+	rc = vos_fetch_begin(cont, uoid, epoch, &rdb_dkey,
+			     1 /* n */, &iod, 0 /* vos_flags */, NULL, &io,
 			     NULL /* dth */);
 	if (rc != 0)
 		return rc;

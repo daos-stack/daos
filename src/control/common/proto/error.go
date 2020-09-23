@@ -33,6 +33,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -42,18 +43,38 @@ const (
 	// AnnotatedDaosStatusType defines an identifier for DaosStatus errors serialized
 	// as gRPC status metadata.
 	AnnotatedDaosStatusType = "proto.drpc.DaosStatus"
+	// AnnotatedSystemErrNotLeader defines an identifier for ErrNotLeader errors
+	// serialized as gRPC status metadata.
+	AnnotatedSystemErrNotLeader = "proto.system.ErrNotLeader"
+	// AnnotatedSystemErrNotReplica defines an identifier for ErrNotReplica errors
+	// serialized as gRPC status metadata.
+	AnnotatedSystemErrNotReplica = "proto.system.ErrNotReplica"
 )
 
-// FaultFromMeta converts a map of metadata into a *fault.Fault.
-func FaultFromMeta(meta map[string]string) (*fault.Fault, error) {
+// ErrFromMeta converts a map of metadata into an error.
+func ErrFromMeta(meta map[string]string, errType error) error {
 	jm, err := json.Marshal(meta)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	f := &fault.Fault{}
-	err = json.Unmarshal(jm, f)
-	return f, err
+	switch et := errType.(type) {
+	case *fault.Fault:
+		err = json.Unmarshal(jm, et)
+	case *system.ErrNotReplica:
+		err = json.Unmarshal([]byte(meta["Replicas"]), &et.Replicas)
+	case *system.ErrNotLeader:
+		et.LeaderHint = meta["LeaderHint"]
+		err = json.Unmarshal([]byte(meta["Replicas"]), &et.Replicas)
+	default:
+		err = errors.Errorf("unable to convert %+v into error", meta)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return errType
 }
 
 // MetaFromFault converts a *fault.Fault into a map of metadata.
@@ -67,75 +88,90 @@ func MetaFromFault(f *fault.Fault) map[string]string {
 	}
 }
 
-// AnnotateError adds more details to the gRPC error,
-// if available.
+// AnnotateError adds more details to the gRPC error, if available.
 func AnnotateError(in error) error {
-	if f, isFault := errors.Cause(in).(*fault.Fault); isFault {
-		out, attachErr := status.New(codes.Internal, f.Error()).
-			WithDetails(&errdetails.ErrorInfo{
-				Reason:   AnnotatedFaultType,
-				Domain:   f.Domain,
-				Metadata: MetaFromFault(f),
-			})
-		if attachErr == nil {
-			return out.Err()
+	var details *errdetails.ErrorInfo
+
+	cause := errors.Cause(in)
+	switch et := cause.(type) {
+	case *fault.Fault:
+		details = &errdetails.ErrorInfo{
+			Reason:   AnnotatedFaultType,
+			Domain:   et.Domain,
+			Metadata: MetaFromFault(et),
 		}
-	}
-	if s, isStatus := errors.Cause(in).(drpc.DaosStatus); isStatus {
-		out, attachErr := status.New(codes.Internal, s.Error()).
-			WithDetails(&errdetails.ErrorInfo{
-				Reason: AnnotatedDaosStatusType,
-				Domain: "DAOS",
-				Metadata: map[string]string{
-					"Status": strconv.Itoa(int(s)),
-				},
-			})
-		if attachErr == nil {
-			return out.Err()
+	case drpc.DaosStatus:
+		details = &errdetails.ErrorInfo{
+			Reason: AnnotatedDaosStatusType,
+			Domain: "DAOS",
+			Metadata: map[string]string{
+				"Status": strconv.Itoa(int(et)),
+			},
+		}
+	case *system.ErrNotReplica:
+		data, err := json.Marshal(et.Replicas)
+		if err != nil {
+			break
+		}
+		details = &errdetails.ErrorInfo{
+			Reason: AnnotatedSystemErrNotReplica,
+			Domain: "DAOS",
+			Metadata: map[string]string{
+				"Replicas": string(data),
+			},
+		}
+	case *system.ErrNotLeader:
+		data, err := json.Marshal(et.Replicas)
+		if err != nil {
+			break
+		}
+		details = &errdetails.ErrorInfo{
+			Reason: AnnotatedSystemErrNotLeader,
+			Domain: "DAOS",
+			Metadata: map[string]string{
+				"LeaderHint": et.LeaderHint,
+				"Replicas":   string(data),
+			},
 		}
 	}
 
-	return in
+	if details == nil {
+		return in
+	}
+
+	out, attachErr := status.New(codes.Internal, cause.Error()).WithDetails(details)
+	if attachErr != nil {
+		return in
+	}
+
+	return out.Err()
 }
 
-// UnwrapFault ranges through the status details, looking
-// for the first Fault it can successfully return. Returns
-// the original status as an error if no Fault is unwrapped.
-func UnwrapFault(st *status.Status) (*fault.Fault, error) {
+// UnwrapError reconstitutes the original error from the gRPC metadata.
+func UnwrapError(st *status.Status) error {
 	if st == nil {
-		return nil, nil
+		return nil
 	}
 
 	for _, detail := range st.Details() {
 		switch t := detail.(type) {
 		case *errdetails.ErrorInfo:
-			if t.Reason == AnnotatedFaultType {
-				return FaultFromMeta(t.Metadata)
-			}
-		}
-	}
-	return nil, st.Err()
-}
-
-// UnwrapDaosStatus ranges through the status details, looking
-// for the first DaosStatus it can successfully return. Returns
-// the original status as an error if no DaosStatus is unwrapped.
-func UnwrapDaosStatus(st *status.Status) (drpc.DaosStatus, error) {
-	if st == nil {
-		return drpc.DaosSuccess, nil
-	}
-
-	for _, detail := range st.Details() {
-		switch t := detail.(type) {
-		case *errdetails.ErrorInfo:
-			if t.Reason == AnnotatedDaosStatusType {
+			switch t.Reason {
+			case AnnotatedFaultType:
+				return ErrFromMeta(t.Metadata, new(fault.Fault))
+			case AnnotatedDaosStatusType:
 				i, err := strconv.Atoi(t.Metadata["Status"])
 				if err != nil {
-					return drpc.DaosMiscError, err
+					return err
 				}
-				return drpc.DaosStatus(i), nil
+				return drpc.DaosStatus(i)
+			case AnnotatedSystemErrNotReplica:
+				return ErrFromMeta(t.Metadata, new(system.ErrNotReplica))
+			case AnnotatedSystemErrNotLeader:
+				return ErrFromMeta(t.Metadata, new(system.ErrNotLeader))
 			}
 		}
 	}
-	return drpc.DaosMiscError, st.Err()
+
+	return st.Err()
 }

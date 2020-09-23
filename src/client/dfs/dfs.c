@@ -3423,7 +3423,7 @@ restart:
 		D_GOTO(out, rc);
 	}
 	if (exists == false)
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = ENOENT);
 
 	rc = fetch_entry(new_parent->oh, th, new_name, true, &exists,
 			 &new_entry);

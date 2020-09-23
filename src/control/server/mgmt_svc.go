@@ -160,16 +160,13 @@ func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *ClientNetworkCfg) *
 }
 
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
+
 	if svc.clientNetworkCfg == nil {
 		return nil, errors.New("clientNetworkCfg is missing")
 	}
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodGetAttachInfo, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodGetAttachInfo, req)
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +180,8 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
 	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
+
+	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v\n", *resp)
 	return resp, nil
 }
 
@@ -215,7 +214,7 @@ func queryRank(reqRank uint32, srvRank system.Rank) bool {
 }
 
 func (svc *mgmtSvc) getBioHealth(ctx context.Context, srv *IOServerInstance, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
-	dresp, err := srv.CallDrpc(drpc.MethodBioHealth, req)
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +251,7 @@ func (svc *mgmtSvc) querySmdDevices(ctx context.Context, req *mgmtpb.SmdQueryReq
 		rResp := new(mgmtpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		dresp, err := srv.CallDrpc(drpc.MethodSmdDevs, new(mgmtpb.SmdDevReq))
+		dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdDevs, new(mgmtpb.SmdDevReq))
 		if err != nil {
 			return err
 		}
@@ -338,7 +337,7 @@ func (svc *mgmtSvc) querySmdPools(ctx context.Context, req *mgmtpb.SmdQueryReq, 
 		rResp := new(mgmtpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		dresp, err := srv.CallDrpc(drpc.MethodSmdPools, new(mgmtpb.SmdPoolReq))
+		dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdPools, new(mgmtpb.SmdPoolReq))
 		if err != nil {
 			return err
 		}
@@ -421,7 +420,7 @@ func (svc *mgmtSvc) smdSetFaulty(ctx context.Context, req *mgmtpb.SmdQueryReq) (
 
 	svc.log.Debugf("calling set-faulty on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(drpc.MethodSetFaultyState, &mgmtpb.DevStateReq{
+	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodSetFaultyState, &mgmtpb.DevStateReq{
 		DevUuid: req.Uuid,
 	})
 	if err != nil {
@@ -493,12 +492,7 @@ func (svc *mgmtSvc) SmdQuery(ctx context.Context, req *mgmtpb.SmdQueryReq) (*mgm
 func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq) (*mgmtpb.ListContResp, error) {
 	svc.log.Debugf("MgmtSvc.ListContainers dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodListContainers, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodListContainers, req)
 	if err != nil {
 		return nil, err
 	}
@@ -517,12 +511,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq) (*mgmtpb.ContSetOwnerResp, error) {
 	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := mi.CallDrpc(drpc.MethodContSetOwner, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodContSetOwner, req)
 	if err != nil {
 		return nil, err
 	}
