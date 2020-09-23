@@ -46,11 +46,11 @@ static void
 list_keys(daos_handle_t oh, int *num_keys)
 {
 	char		*buf;
-	daos_key_desc_t  kds[ENUM_DESC_NR];
-	daos_anchor_t	 anchor = {0};
-	int		 key_nr = 0;
-	d_sg_list_t	 sgl;
-	d_iov_t       sg_iov;
+	daos_key_desc_t kds[ENUM_DESC_NR];
+	daos_anchor_t	anchor = {0};
+	int		key_nr = 0;
+	d_sg_list_t	sgl;
+	d_iov_t		sg_iov;
 
 	buf = malloc(ENUM_DESC_BUF);
 	d_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
@@ -117,7 +117,7 @@ simple_put_get(void **state)
 	}
 
 	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, NULL, buf_size, buf, NULL);
@@ -250,7 +250,11 @@ simple_put_get(void **state)
 	list_keys(oh, &num_keys);
 	assert_int_equal(num_keys, NUM_KEYS - 10);
 
-	rc = daos_obj_close(oh, NULL);
+	print_message("Destroying KV\n");
+	rc = daos_kv_destroy(oh, DAOS_TX_NONE, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_kv_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
 	D_FREE(buf_out);
@@ -276,7 +280,7 @@ kv_cond_ops(void **state)
 	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
 
 	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
 	val_out = 5;
@@ -319,6 +323,13 @@ kv_cond_ops(void **state)
 	print_message("Conditional Remove existing Key\n");
 	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key1",
 			    NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Destroying KV\n");
+	rc = daos_kv_destroy(oh, DAOS_TX_NONE, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_kv_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("all good\n");

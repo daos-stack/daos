@@ -442,6 +442,11 @@ class DaosServer():
                 os.kill(int(proc_id), signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+        # Workaround for DAOS-5648
+        if ret == 2:
+            ret = 0
+
         # Show errors from server logs bug suppress memory leaks as the server
         # often segfaults at shutdown.
         if os.path.exists(self._log_file):
