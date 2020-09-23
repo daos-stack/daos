@@ -28,6 +28,7 @@ class NLTestNoFunction(NLTestFail):
     """Used to indicate a function did not log anything"""
 
     def __init__(self, function):
+        super().__init__(self)
         self.function = function
 
 instance_num = 0
@@ -385,9 +386,13 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     assert ret.returncode == 0
 
     try:
-        log_test(dfuse.conf, log_file.name, check_read=check_read, check_write=check_write)
+        log_test(dfuse.conf,
+                 log_file.name,
+                 check_read=check_read,
+                 check_write=check_write)
     except NLTestNoFunction as error:
-        print("ERROR: command '{}' did not log via {}".format(' '.join(cmd), error.function))
+        print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
+                                                              error.function))
         ret.returncode = 1
 
     return ret
@@ -1098,7 +1103,8 @@ def run_il_test(server, conf):
     ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]], check_read=False)
     assert ret.returncode == 0
     # Read it from within a container
-    # TODO: This isn't performing a read for some reason.
+    # TODO: change this to something else, md5sum uses fread which isn't
+    # intercepted.
     ret = il_cmd(dfuse,
                  ['md5sum', os.path.join(dirs[-1], 'bash')],
                  check_read=False, check_write=False)
@@ -1299,9 +1305,9 @@ def main():
     elif args.mode == 'kv':
         test_pydaos_kv(server, conf)
     elif args.mode == 'overlay':
-        fatal_errors = run_duns_overlay_test(server, conf)
+        fatal_errors.add_result(run_duns_overlay_test(server, conf))
     elif args.mode == 'fi':
-        fatal_errors = test_alloc_fail(conf)
+        fatal_errors.add_result(test_alloc_fail(conf))
     elif args.mode == 'all':
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
