@@ -34,4 +34,5 @@ if [ -n "$arts" ]; then
   mv $(echo $arts | tr '\n' ' ') "Functional/"
 fi
 
-mv install/lib/daos/TESTING/ftest/avocado/job-results/daos_cov "Functional/"
+mv install/lib/daos/TESTING/ftest/avocado/job-results/daos_cov_vartmp "Functional/"
+mv install/lib/daos/TESTING/ftest/avocado/job-results/daos_cov_shared "Functional/"

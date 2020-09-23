@@ -70,8 +70,6 @@ class CartSelfTest(TestWithServers):
         self.cart_env = EnvironmentVariables()
         covfile = os.getenv("COVFILE", "")
         print("SCHAN15 - in selftest covfile = {}".format(covfile))
-        covfile = os.getenv("COVFILE", "/var/tmp/daos_testing/test.cov")
-        print("SCHAN15 - in selftest covfile = {}".format(covfile))
 
     def setUp(self):
         """Set up each test case."""
@@ -93,6 +91,7 @@ class CartSelfTest(TestWithServers):
             "Error updating daos_server 'crt_ctx_share_addr' config setting")
 
         # Setup additional environment variables for the server orterun command
+        self.cart_env["COVFILE"] = os.environ["COVFILE"]
         self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
         self.cart_env["CRT_PHY_ADDR_STR"] = \

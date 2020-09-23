@@ -142,8 +142,9 @@ def set_test_environment(args):
     path = os.environ.get("PATH")
 
     ##SCHAN15
-    covfile_env = os.environ.get("COVFILE")
-    print("covfile is {}".format(covfile_env))
+    covfile_shared = os.environ.get("COVFILE")
+    print("SCHAN15 - covfile shared is {}".format(covfile_shared))
+    os.environ["COVFILE_SHARED"] = covfile_shared
 
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
@@ -211,11 +212,15 @@ def set_test_environment(args):
         test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
 
     ##SCHAN15
+    covfile = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "test.cov")
+    os.environ["COVFILE"] = covfile
+    print("SCHAN15 - in launch.py, COVFILE = {}".format(os.environ["COVFILE"])
+
     commands = [
         "set -eu",
         "rc=0",
         "echo SCHAN15 - Copy covfile to daostestlogdir",
-        "cp {} {}".format(covfile_env, os.environ["DAOS_TEST_LOG_DIR"]),
+        "cp {} {}".format(covfile_shared, os.environ["DAOS_TEST_LOG_DIR"]),
         "ls {}".format(os.environ["DAOS_TEST_LOG_DIR"]),
         "cp ~/.bashrc ~/.bashrcbak",
         "echo 'export COVFILE={}/test.cov' \
@@ -933,16 +938,20 @@ def archive_covs(avocado_logs_dir, args):
         args (argparse.Namespace): command line arguments for this program
     """
     # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "daos_cov")
+    destination1 = os.path.join(avocado_logs_dir, "daos_cov_vartmp")
+    destination2 = os.path.join(avocado_logs_dir, "daos_cov_shared")
 
     test_hosts = NodeSet(socket.gethostname().split(".")[0])
     test_hosts.update(args.test_clients)
     test_hosts.update(args.test_servers)
-    print("Archiving host covs from {} in {}".format(test_hosts, destination))
+    print("Archiving host covs from {} in {}".format(test_hosts, destination1))
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    archive_files(destination, test_hosts, "{}/*.cov".format(logs_dir))
+    archive_files(destination1, test_hosts, "{}/*.cov".format(logs_dir))
+
+    print("Archiving host covs from {} in {}".format(test_hosts, destination2))
+    archive_files(destination2, test_hosts, "{}".format(os.environ["COVFILE_SHARED"]))
 
     spawn_commands(
         test_hosts, "echo SCHAN15 restore bashrc; mv ~/.bashrcbak ~/.bashrc")
