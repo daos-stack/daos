@@ -233,14 +233,14 @@ nvme_test_verify_device_stats(void **state)
 		if (devices[i].rank == 1) {
 			assert_string_equal(devices[i].state, "\"FAULTY\"");
 
-                        rc = verify_state_in_log(devices[i].host,
-                                                 log_file, "NORMAL -> FAULTY");
-                        if (rc != 0) {
-                                print_message(
-                                        "NORMAL -> FAULTY not found in log %s\n",
-                                        log_file);
-                                assert_int_equal(rc, 0);
-                        }
+			rc = verify_state_in_log(devices[i].host,
+						 log_file, "NORMAL -> FAULTY");
+			if (rc != 0) {
+				print_message(
+					"NORMAL -> FAULTY not found in log %s\n",
+					log_file);
+				assert_int_equal(rc, 0);
+			}
 
 			rc = verify_state_in_log(devices[i].host,
 						 log_file, "TEARDOWN -> OUT");
