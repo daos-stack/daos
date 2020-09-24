@@ -120,6 +120,7 @@ const (
 	ServerConfigNoServers
 	ServerScmUnmanaged
 	ServerBdevNotFound
+	ServerBioHealthNotReady
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount

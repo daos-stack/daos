@@ -25,7 +25,6 @@ package control
 
 import (
 	"context"
-	"fmt"
 	"sort"
 
 	"github.com/golang/protobuf/proto"
@@ -145,56 +144,39 @@ type (
 
 // addHostResponse is responsible for validating the given HostResponse
 // and adding it to the StorageScanResp.
-//
-// TODO: pass info field that is embedded in message to response receiver.
-func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
+func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) (err error) {
 	pbResp, ok := hr.Message.(*ctlpb.StorageScanResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
 
 	hs := new(HostStorage)
-
-	nvmeResp := pbResp.GetNvme()
-	nvmeState := nvmeResp.GetState()
-	switch nvmeState.GetStatus() {
+	switch pbResp.GetNvme().GetState().GetStatus() {
 	case ctlpb.ResponseStatus_CTL_SUCCESS:
-		if err := convert.Types(nvmeResp.GetCtrlrs(), &hs.NvmeDevices); err != nil {
-			return err
+		if err := convert.Types(pbResp.GetNvme().GetCtrlrs(), &hs.NvmeDevices); err != nil {
+			return ssp.addHostError(hr.Addr, err)
 		}
 	default:
-		pbErrMsg := nvmeState.GetError()
-		if pbErrMsg == "" {
-			pbErrMsg = "unknown error"
-		}
-		if nvmeState.GetInfo() != "" {
-			pbErrMsg += fmt.Sprintf(" (%s)", nvmeState.GetInfo())
-		}
-		if err := ssp.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
-			return err
+		if pbErr := pbResp.GetNvme().GetState().GetError(); pbErr != "" {
+			if err := ssp.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
+				return err
+			}
 		}
 	}
 
-	scmResp := pbResp.GetScm()
-	scmState := scmResp.GetState()
-	switch scmState.GetStatus() {
+	switch pbResp.GetScm().GetState().GetStatus() {
 	case ctlpb.ResponseStatus_CTL_SUCCESS:
-		if err := convert.Types(scmResp.GetModules(), &hs.ScmModules); err != nil {
-			return err
+		if err := convert.Types(pbResp.GetScm().GetModules(), &hs.ScmModules); err != nil {
+			return ssp.addHostError(hr.Addr, err)
 		}
-		if err := convert.Types(scmResp.GetNamespaces(), &hs.ScmNamespaces); err != nil {
-			return err
+		if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hs.ScmNamespaces); err != nil {
+			return ssp.addHostError(hr.Addr, err)
 		}
 	default:
-		pbErrMsg := scmState.GetError()
-		if pbErrMsg == "" {
-			pbErrMsg = "unknown error"
-		}
-		if scmState.GetInfo() != "" {
-			pbErrMsg += fmt.Sprintf(" (%s)", scmState.GetInfo())
-		}
-		if err := ssp.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
-			return err
+		if pbErr := pbResp.GetScm().GetState().GetError(); pbErr != "" {
+			if err := ssp.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -205,7 +187,7 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		return err
 	}
 
-	return nil
+	return
 }
 
 // StorageScan concurrently performs storage scans across all hosts

@@ -159,10 +159,9 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 func (c *ControlService) scanInstanceBdevs(ctx context.Context) (storage.NvmeControllers, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
+	bdevReq := bdev.ScanRequest{} // use cached controller details by default
 
 	for _, srv := range instances {
-		bdevReq := bdev.ScanRequest{} // use cached controller details by default
-
 		// only retrieve results for devices listed in server config
 		bdevReq.DeviceList = c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs()
 		c.log.Debugf("instance %d storage scan: only show bdev devices in config %v",
@@ -173,24 +172,21 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (storage.NvmeCon
 		// assigned devices), bypass cache to get fresh health stats
 		if !srv.isReady() {
 			bdevReq.NoCache = true
-
-			bsr, err := c.NvmeScan(bdevReq)
-			if err != nil {
-				return nil, errors.Wrap(err, "nvme scan")
-			}
-
-			ctrlrs = append(ctrlrs, bsr.Controllers...)
-			continue
 		}
 
 		bsr, err := c.NvmeScan(bdevReq)
 		if err != nil {
-			return nil, errors.Wrap(err, "nvme scan")
+			return nil, errors.Wrap(err, "NvmeScan()")
+		}
+
+		if bdevReq.NoCache {
+			ctrlrs = append(ctrlrs, bsr.Controllers...)
+			continue
 		}
 
 		ctrlrMap, err := mapCtrlrs(bsr.Controllers)
 		if err != nil {
-			return nil, errors.Wrap(err, "create controller map")
+			return nil, errors.Wrap(err, "mapCtrlrsByModelSerial()")
 		}
 
 		// if io servers are active and have claimed the assigned devices,
@@ -214,9 +210,7 @@ func (c *ControlService) setBdevScanResp(cs storage.NvmeControllers, inErr error
 	if inErr != nil {
 		state.Status = ctlpb.ResponseStatus_CTL_ERR_NVME
 		state.Error = inErr.Error()
-		if fault.HasResolution(inErr) {
-			state.Info = fault.ShowResolutionFor(inErr)
-		}
+		state.Info = fault.ShowResolutionFor(inErr)
 		resp.State = state
 
 		return nil
@@ -277,9 +271,7 @@ func (c *ControlService) scanScm(ctx context.Context, resp *ctlpb.ScanScmResp) e
 	if err != nil {
 		state.Status = ctlpb.ResponseStatus_CTL_ERR_SCM
 		state.Error = err.Error()
-		if fault.HasResolution(err) {
-			state.Info = fault.ShowResolutionFor(err)
-		}
+		state.Info = fault.ShowResolutionFor(err)
 		resp.State = state
 
 		return nil
