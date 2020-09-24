@@ -280,6 +280,7 @@ nvme_test_verify_device_stats(void **state)
 	D_FREE(server_config_file);
 	D_FREE(log_file);
 	D_FREE(devices);
+	ioreq_fini(&req);
 }
 
 static const struct CMUnitTest nvme_recov_tests[] = {
