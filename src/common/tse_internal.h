@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,7 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
-/* NB: tse_task_private is TSE_PRIV_SIZE = 1016 bytes for now */
-#define TSE_TASK_ARG_LEN		888
+#include <daos/tse.h>
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;

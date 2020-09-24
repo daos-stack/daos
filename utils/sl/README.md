@@ -73,4 +73,8 @@ TARGET_TYPE=default|dev|release|   Specify type of prerequisite build.
 EXCLUDE=<component>                Components that should not be built.
                                    Only option is psm2 at present.
 
+ALT_PREFIX=<path>[:<path2>...]     Prefix paths to search for already
+                                   installed components.
+
+
 ```

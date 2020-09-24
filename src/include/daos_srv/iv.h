@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -191,8 +191,8 @@ typedef int (*ds_iv_ent_destroy_t)(d_sg_list_t *sgl);
  *
  * \param entry [IN]	class entry.
  * \param key [IN]	key to locate the entry.
- * \param src [IN]	source buffer.
  * \param dst [OUT]	destination buffer.
+ * \param src [IN]	source buffer.
  * \param priv [OUT]	private buffer from IV callback.
  *
  * \return		0 if succeeds, error code otherwise.
@@ -290,6 +290,7 @@ enum iv_key {
 	IV_CONT_CAPA,
 	/* Container properties */
 	IV_CONT_PROP,
+	IV_POOL_HDL,
 };
 
 int ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,

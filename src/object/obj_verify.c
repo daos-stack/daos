@@ -65,7 +65,7 @@ again:
 					 &dova->size, &dova->num, dova->kds,
 					 &dova->list_sgl, &dova->anchor,
 					 &dova->dkey_anchor, &dova->akey_anchor,
-					 true, NULL, NULL, &task);
+					 true, NULL, NULL, NULL, &task);
 	if (rc != 0)
 		return rc;
 
@@ -106,6 +106,7 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 	struct dc_obj_verify_cursor	*cursor = &dova->cursor;
 	daos_iod_t			*iod = &cursor->iod;
 	tse_task_t			*task;
+	uint32_t			 shard;
 	size_t				 size;
 	int				 rc;
 
@@ -134,10 +135,10 @@ dc_obj_verify_fetch(struct dc_obj_verify_args *dova)
 	dova->fetch_sgl.sg_nr_out = 1;
 	dova->fetch_sgl.sg_iovs = &dova->fetch_iov;
 
-	rc = dc_obj_fetch_shard_task_create(dova->oh, dova->th,
-		DIOF_TO_SPEC_SHARD, dc_obj_anchor2shard(&dova->dkey_anchor),
-		&cursor->dkey, 1, iod, &dova->fetch_sgl, NULL, NULL, NULL,
-		&task);
+	shard = dc_obj_anchor2shard(&dova->dkey_anchor);
+	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &cursor->dkey, 1,
+				      DIOF_TO_SPEC_SHARD, iod, &dova->fetch_sgl,
+				      NULL, &shard, NULL, NULL, &task);
 	if (rc == 0)
 		rc = dc_task_schedule(task, true);
 
@@ -495,6 +496,7 @@ again:
 			break;
 		case OBJ_ITER_DKEY_EPOCH:
 		case OBJ_ITER_AKEY_EPOCH:
+		case OBJ_ITER_OBJ:
 			break;
 		default:
 			D_ERROR(DF_OID" invalid type %d\n",
@@ -545,11 +547,14 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->dkey, &cur_b->dkey)) {
+		/* TODO: There are many cases of %s in this file but this is the
+		 * only one that is triggered in testing
+		 */
 		D_INFO(DF_OID" (reps %u, inconsistent) "
-		       "shard %u has dkey %s, but shard %u has dkey %s.\n",
-		       DP_OID(oid), reps,
-		       shard_a, (char *)cur_a->dkey.iov_buf,
-		       shard_b, (char *)cur_b->dkey.iov_buf);
+			"shard %u has dkey "DF_KEY", but shard %u has dkey "DF_KEY".\n",
+			DP_OID(oid), reps,
+			shard_a, DP_KEY(&cur_a->dkey),
+			shard_b, DP_KEY(&cur_b->dkey));
 		return -DER_MISMATCH;
 	}
 
@@ -705,6 +710,11 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		for (i = 1; i < reps; i++) {
 			rc = dc_obj_verify_cmp(&dova[0], &dova[i],
 					       oid, reps, start, start + i);
+			if (rc == -DER_CSUM) {
+				D_ERROR("Failed to verify because of "
+					"data corruption");
+				D_GOTO(out, rc = -DER_MISMATCH);
+			}
 			if (rc != 0) {
 				D_ERROR("Failed to verify cmp: "DF_RC"\n",
 					DP_RC(rc));

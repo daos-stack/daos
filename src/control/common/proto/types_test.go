@@ -33,18 +33,13 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func TestProto_ConvertNvmeDeviceHealth(t *testing.T) {
-	pb := MockNvmeDeviceHealth()
-	native, err := (*NvmeDeviceHealth)(pb).ToNative()
+func TestProto_ConvertNvmeControllerHealth(t *testing.T) {
+	pb := MockNvmeControllerHealth(1)
+	native, err := (*NvmeControllerHealth)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
 	}
-	expNative := storage.MockNvmeDeviceHealth()
-	// set these manually, as the mock generators intentionally
-	// perturb these values
-	expNative.Temperature = pb.Temperature
-	expNative.PowerCycles = pb.PowerCycles
-	expNative.PowerOnHours = pb.PowerOnHours
+	expNative := storage.MockNvmeControllerHealth(1)
 
 	if diff := cmp.Diff(expNative, native); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)

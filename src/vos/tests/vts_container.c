@@ -180,7 +180,7 @@ setup(void **state)
 	vts_pool_fallocate(&test_arg->fname);
 	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0);
 	assert_int_equal(ret, 0);
-	ret = vos_pool_open(test_arg->fname, test_arg->pool_uuid,
+	ret = vos_pool_open(test_arg->fname, test_arg->pool_uuid, false,
 			    &test_arg->poh);
 	assert_int_equal(ret, 0);
 	*state = test_arg;
@@ -246,7 +246,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = arg->poh;
 
-	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &ih);
+	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &ih, NULL);
 	if (rc != 0) {
 		print_error("Failed to prepare co iterator\n");
 		return rc;

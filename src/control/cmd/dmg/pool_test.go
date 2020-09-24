@@ -246,6 +246,54 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
+		{
+			"Exclude a target with no idx given",
+			"pool exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			strings.Join([]string{
+				printRequest(t, &control.PoolExcludeReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Drain a target with single target idx",
+			"pool drain --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDrainReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Drain a target with multiple idx",
+			"pool drain --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDrainReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1, 2, 3},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Drain a target with no idx given",
+			"pool drain --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDrainReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{},
+				}),
+			}, " "),
+			nil,
+		},
 		/* TODO: Tests need to be fixed after pull pool info */
 		{
 			"Extend pool with missing arguments",
@@ -277,19 +325,6 @@ func TestPoolCommands(t *testing.T) {
 			}, " "),
 			nil,
 		},
-		{
-			"Exclude a target with no idx given",
-			"pool exclude --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
-			strings.Join([]string{
-				printRequest(t, &control.PoolExcludeReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Rank:      0,
-					Targetidx: []uint32{},
-				}),
-			}, " "),
-			nil,
-		},
-
 		{
 			"Reintegrate a target with single target idx",
 			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",

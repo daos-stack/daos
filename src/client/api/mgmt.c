@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,6 +147,31 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 		return -DER_INVAL;
 
 	rc = dc_task_create(dc_pool_add, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->grp	= grp;
+	args->svc	= (d_rank_list_t *)svc;
+	args->tgts	= tgts;
+	uuid_copy((unsigned char *)args->uuid, uuid);
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
+		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		  daos_event_t *ev)
+{
+	daos_pool_update_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
+	rc = dc_task_create(dc_pool_drain, NULL, ev, &task);
 	if (rc)
 		return rc;
 

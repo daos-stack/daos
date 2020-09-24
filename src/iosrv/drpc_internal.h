@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ void drpc_progress_context_close(struct drpc_progress_context *ctx);
  *		-DER_TIMEDOUT		No activity
  *		-DER_AGAIN		Couldn't process activity, try again
  *		-DER_NOMEM		Out of memory
- *		-DER_UNKNOWN		Unexpected error
+ *		-DER_MISC		Unexpected error
  */
 int drpc_progress(struct drpc_progress_context *ctx, int timeout);
 

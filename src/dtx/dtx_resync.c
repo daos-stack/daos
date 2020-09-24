@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -436,7 +436,7 @@ dtx_resync_one(void *data)
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 container_scan_cb, NULL, &cb_arg);
+			 container_scan_cb, NULL, &cb_arg, NULL);
 
 	ds_pool_child_put(child);
 out:

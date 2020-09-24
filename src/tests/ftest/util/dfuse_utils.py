@@ -45,6 +45,8 @@ class DfuseCommand(ExecutableCommand):
         self.sys_name = FormattedParameter("--sys-name {}")
         self.singlethreaded = FormattedParameter("--singlethreaded", False)
         self.foreground = FormattedParameter("--foreground", False)
+        self.disable_direct_io = FormattedParameter("--disable-direct-io",
+                                                    False)
 
         # Environment variable names to export when running dfuse
         self._env_names = ["D_LOG_FILE"]
@@ -236,13 +238,15 @@ class Dfuse(DfuseCommand):
                     error_hosts))
 
         if check:
+            # Dfuse will block in the command for the mount to complete, even
+            # if run in background mode so it should be possible to start using
+            # it immediately after the command returns.
             if not self.check_running(fail_on_error=False):
-                self.log.info('Waiting five seconds for dfuse to start')
-                time.sleep(5)
+                self.log.info('Waiting two seconds for dfuse to start')
+                time.sleep(2)
                 if not self.check_running(fail_on_error=False):
-                    self.log.info('Waiting twenty five seconds for dfuse \
-                        to start')
-                    time.sleep(25)
+                    self.log.info('Waiting five seconds for dfuse to start')
+                    time.sleep(5)
                     self.check_running()
 
     def check_running(self, fail_on_error=True):
@@ -292,7 +296,7 @@ class Dfuse(DfuseCommand):
         self.check_running()
         umount_cmd = [
             "if [ -x '$(command -v fusermount)' ]",
-            "then fusermount -u {0}",
+            "then fusermount -u {0}".format(self.mount_dir.value),
             "else fusermount3 -u {0}".format(self.mount_dir.value),
             "fi"
         ]

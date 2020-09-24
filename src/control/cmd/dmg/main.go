@@ -36,6 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -59,12 +60,14 @@ type (
 	}
 
 	jsonOutputter interface {
-		enableJsonOutput(bool)
+		enableJsonOutput(bool, io.Writer)
 		jsonOutputEnabled() bool
-		outputJSON(io.Writer, interface{}) error
+		outputJSON(interface{}, error) error
+		errorJSON(error) error
 	}
 
 	jsonOutputCmd struct {
+		writer         io.Writer
 		shouldEmitJSON bool
 	}
 )
@@ -77,23 +80,49 @@ func (cmd *hostListCmd) setHostList(hl []string) {
 	cmd.hostlist = hl
 }
 
-func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool) {
+func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool, w io.Writer) {
 	cmd.shouldEmitJSON = emitJson
+	cmd.writer = w
 }
 
 func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
 	return cmd.shouldEmitJSON
 }
 
-func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
-	data, err := json.MarshalIndent(in, "", "  ")
+func (cmd *jsonOutputCmd) outputJSON(in interface{}, cmdErr error) error {
+	status := 0
+	var errStr *string
+	if cmdErr != nil {
+		errStr = new(string)
+		*errStr = cmdErr.Error()
+		if s, ok := errors.Cause(cmdErr).(drpc.DaosStatus); ok {
+			status = int(s)
+		} else {
+			status = int(drpc.DaosMiscError)
+		}
+	}
+
+	data, err := json.MarshalIndent(struct {
+		Response interface{} `json:"response"`
+		Error    *string     `json:"error"`
+		Status   int         `json:"status"`
+	}{in, errStr, status}, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	_, err = out.Write(append(data, []byte("\n")...))
-	return err
+	if _, err = cmd.writer.Write(append(data, []byte("\n")...)); err != nil {
+		return err
+	}
+
+	return cmdErr
 }
+
+func (cmd *jsonOutputCmd) errorJSON(err error) error {
+	return cmd.outputJSON(nil, err)
+}
+
+var _ jsonOutputter = (*jsonOutputCmd)(nil)
 
 type cmdLogger interface {
 	setLog(*logging.LeveledLogger)
@@ -123,21 +152,20 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 }
 
 type cliOptions struct {
-	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList   string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
-	Insecure   bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
-	Debug      bool   `short:"d" long:"debug" description:"enable debug output"`
-	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs   bool   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	// TODO: implement host file parsing
-	HostFile   string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
-	ConfigPath string     `short:"o" long:"config-path" description:"Client config file path"`
-	Storage    storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
-	System     SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
-	Network    NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
-	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
-	Cont       ContCmd    `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
-	Version    versionCmd `command:"version" description:"Print dmg version"`
+	AllowProxy     bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	HostList       string     `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	Insecure       bool       `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
+	Debug          bool       `short:"d" long:"debug" description:"enable debug output"`
+	JSON           bool       `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs       bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath     string     `short:"o" long:"config-path" description:"Client config file path"`
+	Storage        storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
+	System         SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
+	Network        NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
+	Pool           PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
+	Cont           ContCmd    `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
+	Version        versionCmd `command:"version" description:"Print dmg version"`
+	firmwareOption            // build with tag "firmware" to enable
 }
 
 type versionCmd struct{}
@@ -179,10 +207,6 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			return nil
 		}
 
-		if opts.HostFile != "" {
-			return errors.New("hostfile option not implemented")
-		}
-
 		if !opts.AllowProxy {
 			common.ScrubProxyVariables()
 		}
@@ -197,7 +221,11 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 		}
 
 		if jsonCmd, ok := cmd.(jsonOutputter); ok {
-			jsonCmd.enableJsonOutput(opts.JSON)
+			jsonCmd.enableJsonOutput(opts.JSON, os.Stdout)
+			if opts.JSON {
+				// disable output on stdout other than JSON
+				log.SetLevel(logging.LogLevelError)
+			}
 		}
 
 		if logCmd, ok := cmd.(cmdLogger); ok {

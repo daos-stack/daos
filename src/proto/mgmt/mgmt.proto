@@ -33,8 +33,8 @@ import "acl.proto"; // ACL-related requests
 // Generic request indicating which ranks to operate on.
 // Used in gRPC fanout to operate on hosts with multiple ranks.
 message RanksReq {
-	repeated uint32 ranks = 1;
-	bool force = 3;
+	bool force = 3; // force operation
+	string ranks = 4; // rankset to operate over
 }
 
 // Generic response containing DER result from multiple ranks.
@@ -70,6 +70,8 @@ service MgmtSvc {
 	rpc PoolEvict(PoolEvictReq) returns (PoolEvictResp) {}
 	// Exclude a pool target.
 	rpc PoolExclude(PoolExcludeReq) returns (PoolExcludeResp) {}
+	// Drain a pool target.
+	rpc PoolDrain(PoolDrainReq) returns (PoolDrainResp) {}
 	// Extend a pool.
 	rpc PoolExtend(PoolExtendReq) returns (PoolExtendResp) {}
 	// Reintegrate a pool target.

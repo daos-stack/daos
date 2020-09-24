@@ -134,20 +134,21 @@ pack_dkey_iod_sgl(char *dkey, d_iov_t *dkey_iov, char akeys[][MAX_KEY_SIZE],
 
 	for (i = 0; i < iod_nr; i++) {
 		unsigned size;
+		unsigned val = rand() % 8;
 
 		sprintf(akeys[i], "%d", rand() % max_akey_per_dkey);
 		d_iov_set(&iods[i].iod_name, akeys[i], strlen(akeys[i]));
 
 		iods[i].iod_nr = 1;
-		if (rand() % 2 == 1) {
-			recxs[i].rx_idx = rand() % MAX_REC_SIZE;
-			recxs[i].rx_nr = rand() % MAX_REC_SIZE;
+		if (val % 2 == 1) {
+			recxs[i].rx_idx = rand() % (MAX_REC_SIZE / val);
+			recxs[i].rx_nr = rand() % (MAX_REC_SIZE / val);
 			iods[i].iod_recxs = &recxs[i];
 			iods[i].iod_size = 1;
 			size = recxs[i].rx_nr;
 			iods[i].iod_type = DAOS_IOD_ARRAY;
 		} else {
-			iods[i].iod_size = rand() % MAX_REC_SIZE;
+			iods[i].iod_size = rand() % (MAX_REC_SIZE / (val + 1));
 			size = iods[i].iod_size;
 			iods[i].iod_type = DAOS_IOD_SINGLE;
 		}
@@ -454,6 +455,7 @@ racer_valid_oid(daos_obj_id_t oid, daos_pool_info_t *pinfo)
 }
 
 static struct option ts_ops[] = {
+	{ "dmg_config",	required_argument,	NULL,	'n' },
 	{ "pool_uuid",	required_argument,	NULL,	'p' },
 	{ "cont_uuid",	required_argument,	NULL,	'c' },
 	{ "time",	required_argument,	NULL,	't' },
@@ -478,7 +480,7 @@ main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 	while ((rc = getopt_long(argc, argv,
-				 "p:c:t:",
+				 "n:p:c:t:",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -486,6 +488,9 @@ main(int argc, char **argv)
 		default:
 			fprintf(stderr, "Unknown option %c\n", rc);
 			return -1;
+		case 'n':
+			dmg_config_file = optarg;
+			break;
 		case 'p':
 			rc = uuid_parse(optarg, ts_ctx.tsc_pool_uuid);
 			if (rc)

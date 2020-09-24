@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -388,7 +388,7 @@ test_drpc_progress_listener_accept_failed(void **state)
 	accept_return = -1;
 
 	/* No clear reason why accept would fail if we got data on it */
-	assert_int_equal(drpc_progress(&ctx, 100), -DER_UNKNOWN);
+	assert_int_equal(drpc_progress(&ctx, 100), -DER_MISC);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -651,7 +651,7 @@ test_drpc_progress_session_cleanup_if_ult_fails(void **state)
 
 	poll_revents_return[num_sessions] = POLLIN; /* listener */
 
-	dss_ult_create_return = -DER_UNKNOWN;
+	dss_ult_create_return = -DER_MISC;
 
 	/* the error was handled by closing the sessions */
 	assert_int_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
@@ -687,7 +687,7 @@ test_drpc_progress_listener_fails_if_pollerr(void **state)
 	/* Listener has an error */
 	poll_revents_return[num_sessions] = POLLERR;
 
-	assert_int_equal(drpc_progress(&ctx, 1), -DER_UNKNOWN);
+	assert_int_equal(drpc_progress(&ctx, 1), -DER_MISC);
 
 	/* Tried all the sessions with data */
 	assert_int_equal(recvmsg_call_count, num_sessions);
@@ -720,7 +720,7 @@ test_drpc_progress_listener_fails_if_pollhup(void **state)
 	/* Unexpected event, in theory listener shouldn't get hangup */
 	poll_revents_return[num_sessions] = POLLIN | POLLHUP;
 
-	assert_int_equal(drpc_progress(&ctx, 1), -DER_UNKNOWN);
+	assert_int_equal(drpc_progress(&ctx, 1), -DER_MISC);
 
 	/* Tried all the sessions with data */
 	assert_int_equal(recvmsg_call_count, num_sessions);

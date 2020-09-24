@@ -107,13 +107,15 @@ func (r *cmdRunner) Discover() (storage.ScmModules, error) {
 	modules := make(storage.ScmModules, 0, len(discovery))
 	for _, d := range discovery {
 		modules = append(modules, &storage.ScmModule{
-			ChannelID:       uint32(d.Channel_id),
-			ChannelPosition: uint32(d.Channel_pos),
-			ControllerID:    uint32(d.Memory_controller_id),
-			SocketID:        uint32(d.Socket_id),
-			PhysicalID:      uint32(d.Physical_id),
-			Capacity:        d.Capacity,
-			UID:             d.Uid.String(),
+			ChannelID:        uint32(d.Channel_id),
+			ChannelPosition:  uint32(d.Channel_pos),
+			ControllerID:     uint32(d.Memory_controller_id),
+			SocketID:         uint32(d.Socket_id),
+			PhysicalID:       uint32(d.Physical_id),
+			Capacity:         d.Capacity,
+			UID:              d.Uid.String(),
+			PartNumber:       d.Part_number.String(),
+			FirmwareRevision: d.Fw_revision.String(),
 		})
 	}
 
@@ -141,6 +143,9 @@ func uidStringToIpmctl(uidStr string) (ipmctl.DeviceUID, error) {
 	return uid, nil
 }
 
+// noFirmwareVersion is the version string reported if there is no firmware version
+const noFirmwareVersion = "00.00.00.0000"
+
 // GetFirmwareStatus gets the current firmware status for a specific device.
 func (r *cmdRunner) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error) {
 	uid, err := uidStringToIpmctl(deviceUID)
@@ -152,10 +157,16 @@ func (r *cmdRunner) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInf
 		return nil, errors.Wrapf(err, "failed to get firmware info for device %q", deviceUID)
 	}
 
+	// Avoid displaying the staged version string if there is no staged version
+	stagedVersion := info.StagedFWVersion.String()
+	if stagedVersion == noFirmwareVersion {
+		stagedVersion = ""
+	}
+
 	return &storage.ScmFirmwareInfo{
 		ActiveVersion:     info.ActiveFWVersion.String(),
-		StagedVersion:     info.StagedFWVersion.String(),
-		ImageMaxSizeBytes: info.FWImageMaxSize,
+		StagedVersion:     stagedVersion,
+		ImageMaxSizeBytes: info.FWImageMaxSize * 4096,
 		UpdateStatus:      scmFirmwareUpdateStatusFromIpmctl(info.FWUpdateStatus),
 	}, nil
 }

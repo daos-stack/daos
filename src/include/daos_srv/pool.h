@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,15 +47,25 @@
 struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
-	bool			sp_stopping;
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
-	ABT_mutex		sp_iv_refresh_lock;
+	ABT_mutex		sp_mutex;
+	ABT_cond		sp_fetch_hdls_cond;
+	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns	       *sp_iv_ns;
 	uint32_t		sp_dtx_resync_version;
+	/* Special pool/container handle uuid, which are
+	 * created on the pool leader step up, and propagated
+	 * to all servers by IV. Then they will be used by server
+	 * to access the data on other servers.
+	 */
+	uuid_t			sp_srv_cont_hdl;
+	uuid_t			sp_srv_pool_hdl;
+	uint32_t		sp_stopping:1,
+				sp_fetch_hdls:1;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -89,11 +99,12 @@ void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
  * object I/Os do not need to access global, parent ds_pool objects.
  */
 struct ds_pool_child {
-	d_list_t	spc_list;
-	daos_handle_t	spc_hdl;	/* vos_pool handle */
-	struct ds_pool	*spc_pool;
-	uuid_t		spc_uuid;	/* pool UUID */
-	d_list_t	spc_cont_list;
+	d_list_t		spc_list;
+	daos_handle_t		spc_hdl;	/* vos_pool handle */
+	struct ds_pool		*spc_pool;
+	uuid_t			spc_uuid;	/* pool UUID */
+	struct sched_request	*spc_gc_req;	/* Track GC ULT */
+	d_list_t		spc_cont_list;
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
 	 * vos aggregation can not cross this epoch during rebuild to avoid
@@ -119,6 +130,7 @@ int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 d_rank_list_t *excluded_list);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
+int ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
@@ -136,6 +148,9 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
+int ds_pool_add(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
+		const d_rank_list_t *rank_list, int ndomains,
+		const int *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				uint32_t rank,
 				struct pool_target_id_list *target_list,
@@ -188,6 +203,9 @@ int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       uint32_t map_ver);
 int ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
 int ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
+
+int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
+			     uuid_t *cont_hdl_uuid);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 

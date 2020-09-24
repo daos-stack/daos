@@ -26,6 +26,7 @@ package main
 import (
 	"context"
 
+	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -40,6 +41,7 @@ type ContCmd struct {
 type ContSetOwnerCmd struct {
 	logCmd
 	ctlInvokerCmd
+	jsonOutputCmd
 	GroupName string `short:"g" long:"group" description:"New owner-group for the container, format name@domain"`
 	UserName  string `short:"u" long:"user" description:"New owner-user for the container, format name@domain"`
 	ContUUID  string `short:"c" long:"cont" required:"1" description:"UUID of the DAOS container"`
@@ -48,6 +50,12 @@ type ContSetOwnerCmd struct {
 
 // Execute runs the container set-owner command
 func (c *ContSetOwnerCmd) Execute(args []string) error {
+	if c.GroupName == "" && c.UserName == "" {
+		return &flags.Error{
+			Type:    flags.ErrRequired,
+			Message: "at least one of `--user' or `--group' must be supplied",
+		}
+	}
 	msg := "SUCCEEDED"
 	req := &control.ContSetOwnerReq{
 		ContUUID: c.ContUUID,
@@ -60,6 +68,10 @@ func (c *ContSetOwnerCmd) Execute(args []string) error {
 	err := control.ContSetOwner(ctx, c.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
+	}
+
+	if c.jsonOutputEnabled() {
+		return c.errorJSON(err)
 	}
 
 	c.log.Infof("Container-set-owner command %s\n", msg)

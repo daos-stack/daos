@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,19 +71,20 @@ request_credentials_via_drpc(Drpc__Response **response)
 		return -DER_UNINIT;
 	}
 
-	agent_socket = drpc_connect(dc_agent_sockpath);
-	if (agent_socket == NULL) {
-		D_ERROR("Can't connect to agent socket\n");
-		return -DER_BADPATH;
+	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Can't connect to agent socket " DF_RC "\n", DP_RC(rc));
+		return rc;
 	}
 
-	request = drpc_call_create(agent_socket,
-			DRPC_MODULE_SEC_AGENT,
-			DRPC_METHOD_SEC_AGENT_REQUEST_CREDS);
-	if (request == NULL) {
-		D_ERROR("Couldn't allocate dRPC call\n");
+	rc = drpc_call_create(agent_socket,
+			      DRPC_MODULE_SEC_AGENT,
+			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
+			      &request);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Couldn't allocate dRPC call " DF_RC "\n", DP_RC(rc));
 		drpc_close(agent_socket);
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	rc = drpc_call(agent_socket, R_SYNC, request, response);
@@ -131,11 +132,15 @@ auth_cred_to_iov(Auth__Credential *cred, d_iov_t *iov)
 static int
 get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int			rc = 0;
 	Auth__GetCredResp	*cred_resp = NULL;
 
-	cred_resp = auth__get_cred_resp__unpack(NULL, response->body.len,
+	cred_resp = auth__get_cred_resp__unpack(&alloc.alloc,
+						response->body.len,
 						response->body.data);
+	if (alloc.oom)
+		return -DER_NOMEM;
 	if (cred_resp == NULL) {
 		D_ERROR("Body was not a GetCredentialResp");
 		return -DER_PROTO;
@@ -159,6 +164,6 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 
 	rc = auth_cred_to_iov(cred_resp->cred, cred);
 out:
-	auth__get_cred_resp__free_unpacked(cred_resp, NULL);
+	auth__get_cred_resp__free_unpacked(cred_resp, &alloc.alloc);
 	return rc;
 }

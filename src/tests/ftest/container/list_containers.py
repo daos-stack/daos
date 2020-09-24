@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from apricot import TestWithServers
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 from daos_utils import DaosCommand
 
 
@@ -80,30 +79,25 @@ class ListContainerTest(TestWithServers):
         :avocado: tags=all,container,full_regression,list_containers
         """
         expected_uuids1 = []
-        stdoutput = self.get_dmg_command().pool_create(scm_size="150MB").stdout
-        uuid1, service_replicas1 = \
-            get_pool_uuid_service_replicas_from_stdout(stdoutput)
+        data1 = self.get_dmg_command().pool_create(scm_size="150MB")
         self.daos_cmd = DaosCommand(self.bin)
 
         # 1. Create 1 container and list.
-        self.create_list(1, uuid1, service_replicas1, expected_uuids1)
+        self.create_list(1, data1["uuid"], data1["svc"], expected_uuids1)
 
         # 2. Create 1 more container and list; 2 total.
-        self.create_list(1, uuid1, service_replicas1, expected_uuids1)
+        self.create_list(1, data1["uuid"], data1["svc"], expected_uuids1)
 
         # 3. Create 98 more containers and list; 100 total.
-        self.create_list(98, uuid1, service_replicas1, expected_uuids1)
+        self.create_list(98, data1["uuid"], data1["svc"], expected_uuids1)
 
         # 4. Create 2 additional pools and create 10 containers in each pool.
-        stdoutput = self.get_dmg_command().pool_create(scm_size="150MB").stdout
-        uuid2, service_replicas2 = \
-            get_pool_uuid_service_replicas_from_stdout(stdoutput)
-        stdoutput = self.get_dmg_command().pool_create(scm_size="150MB").stdout
-        uuid3, service_replicas3 = \
-            get_pool_uuid_service_replicas_from_stdout(stdoutput)
+        data2 = self.get_dmg_command().pool_create(scm_size="150MB")
+        data3 = self.get_dmg_command().pool_create(scm_size="150MB")
+
         # Create 10 containers in pool 2 and verify.
         expected_uuids2 = []
-        self.create_list(10, uuid2, service_replicas2, expected_uuids2)
+        self.create_list(10, data2["uuid"], data2["svc"], expected_uuids2)
         # Create 10 containers in pool 3 and verify.
         expected_uuids3 = []
-        self.create_list(10, uuid3, service_replicas3, expected_uuids3)
+        self.create_list(10, data3["uuid"], data3["svc"], expected_uuids3)

@@ -171,31 +171,6 @@ func (h *bdevHandler) setupProvider(log logging.Logger) {
 	}
 }
 
-// bdevInitHandler implements the BdevInit method.
-type bdevInitHandler struct {
-	bdevHandler
-}
-
-func (h *bdevInitHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
-	if req == nil {
-		return getNilRequestResp()
-	}
-
-	var iReq bdev.InitRequest
-	if err := json.Unmarshal(req.Payload, &iReq); err != nil {
-		return pbin.NewResponseWithError(err)
-	}
-
-	h.setupProvider(log)
-
-	err := h.bdevProvider.Init(iReq)
-	if err != nil {
-		return pbin.NewResponseWithError(err)
-	}
-
-	return pbin.NewResponseWithPayload(nil)
-}
-
 // bdevScanHandler implements the BdevScan method.
 type bdevScanHandler struct {
 	bdevHandler

@@ -53,6 +53,8 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 	}
 
 	_ = copy(result.Uid[:], m.Uid)
+	_ = copy(result.Part_number[:], m.PartNumber)
+	_ = copy(result.Fw_revision[:], m.FirmwareRevision)
 
 	return result
 }
@@ -66,13 +68,15 @@ func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
 	}
 
 	return storage.ScmModule{
-		PhysicalID:      uint32(d.Physical_id),
-		ChannelID:       uint32(d.Channel_id),
-		ChannelPosition: uint32(d.Channel_pos),
-		ControllerID:    uint32(d.Memory_controller_id),
-		SocketID:        uint32(d.Socket_id),
-		Capacity:        d.Capacity,
-		UID:             d.Uid.String(),
+		PhysicalID:       uint32(d.Physical_id),
+		ChannelID:        uint32(d.Channel_id),
+		ChannelPosition:  uint32(d.Channel_pos),
+		ControllerID:     uint32(d.Memory_controller_id),
+		SocketID:         uint32(d.Socket_id),
+		Capacity:         d.Capacity,
+		UID:              d.Uid.String(),
+		PartNumber:       d.Part_number.String(),
+		FirmwareRevision: d.Fw_revision.String(),
 	}
 }
 
@@ -453,6 +457,58 @@ func TestGetNamespaces(t *testing.T) {
 	}
 }
 
+func TestIpmctl_Discover(t *testing.T) {
+	testDevices := []ipmctl.DeviceDiscovery{
+		MockDiscovery(),
+		MockDiscovery(),
+		MockDiscovery(),
+	}
+
+	expModules := storage.ScmModules{}
+	for _, dev := range testDevices {
+		mod := MockModule(&dev)
+		expModules = append(expModules, &mod)
+	}
+
+	for name, tc := range map[string]struct {
+		cfg       *mockIpmctlCfg
+		expErr    error
+		expResult storage.ScmModules
+	}{
+		"ipmctl.Discovery failed": {
+			cfg: &mockIpmctlCfg{
+				discoverModulesRet: errors.New("mock Discover"),
+			},
+			expErr: errors.New("failed to discover SCM modules: mock Discover"),
+		},
+		"no modules": {
+			cfg:       &mockIpmctlCfg{},
+			expResult: storage.ScmModules{},
+		},
+		"success with modules": {
+			cfg: &mockIpmctlCfg{
+				modules: testDevices,
+			},
+			expResult: expModules,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockBinding := newMockIpmctl(tc.cfg)
+			cr := newCmdRunner(log, mockBinding, nil, nil)
+
+			result, err := cr.Discover()
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestIpmctl_fwInfoStatusToUpdateStatus(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input     uint32
@@ -492,11 +548,19 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 	testActiveVersion := "1.0.0.1"
 	testStagedVersion := "2.0.0.2"
 	fwInfo := ipmctl.DeviceFirmwareInfo{
-		FWImageMaxSize: 1024,
+		FWImageMaxSize: 65,
 		FWUpdateStatus: ipmctl.FWUpdateStatusStaged,
 	}
 	_ = copy(fwInfo.ActiveFWVersion[:], testActiveVersion)
 	_ = copy(fwInfo.StagedFWVersion[:], testStagedVersion)
+
+	// Representing a DIMM without a staged FW version
+	fwInfoUnstaged := ipmctl.DeviceFirmwareInfo{
+		FWImageMaxSize: 1,
+		FWUpdateStatus: ipmctl.FWUpdateStatusSuccess,
+	}
+	_ = copy(fwInfoUnstaged.ActiveFWVersion[:], testActiveVersion)
+	_ = copy(fwInfoUnstaged.StagedFWVersion[:], noFirmwareVersion)
 
 	for name, tc := range map[string]struct {
 		inputUID  string
@@ -522,8 +586,19 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 			expResult: &storage.ScmFirmwareInfo{
 				ActiveVersion:     testActiveVersion,
 				StagedVersion:     testStagedVersion,
-				ImageMaxSizeBytes: fwInfo.FWImageMaxSize,
+				ImageMaxSizeBytes: fwInfo.FWImageMaxSize * 4096,
 				UpdateStatus:      storage.ScmUpdateStatusStaged,
+			},
+		},
+		"nothing staged": {
+			inputUID: testUID,
+			cfg: &mockIpmctlCfg{
+				fwInfo: fwInfoUnstaged,
+			},
+			expResult: &storage.ScmFirmwareInfo{
+				ActiveVersion:     testActiveVersion,
+				ImageMaxSizeBytes: 4096,
+				UpdateStatus:      storage.ScmUpdateStatusSuccess,
 			},
 		},
 	} {

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,7 +116,7 @@ setup_listener_ctx(struct drpc_progress_context **new_ctx)
 	if (listener == NULL) {
 		D_ERROR("Failed to create listener socket at '%s'\n",
 			sockpath);
-		return -DER_UNKNOWN;
+		return -DER_MISC;
 	}
 
 	*new_ctx = drpc_progress_context_create(listener);

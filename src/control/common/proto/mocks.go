@@ -50,11 +50,11 @@ func MockNvmeNamespace(varIdx ...int32) *ctlpb.NvmeController_Namespace {
 	return pb.AsProto()
 }
 
-// MockNvmeDeviceHealth is a mock protobuf Health message used in tests for
+// MockNvmeControllerHealth is a mock protobuf Health message used in tests for
 // multiple packages.
-func MockNvmeDeviceHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
-	native := storage.MockNvmeDeviceHealth(varIdx...)
-	pb := new(NvmeDeviceHealth)
+func MockNvmeControllerHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
+	native := storage.MockNvmeControllerHealth(varIdx...)
+	pb := new(NvmeControllerHealth)
 
 	if err := pb.FromNative(native); err != nil {
 		panic(err)
@@ -176,6 +176,10 @@ func (m *MockMgmtSvcClient) PoolExclude(ctx context.Context, req *mgmtpb.PoolExc
 	// return successful pool Exclude results
 	// initialize with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolExcludeResp{}, nil
+}
+
+func (m *MockMgmtSvcClient) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq, o ...grpc.CallOption) (*mgmtpb.PoolDrainResp, error) {
+	return &mgmtpb.PoolDrainResp{}, nil
 }
 
 func (m *MockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq, _ ...grpc.CallOption) (*mgmtpb.PoolQueryResp, error) {
