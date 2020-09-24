@@ -1270,8 +1270,8 @@ dss_dump_ABT_state(FILE *fp)
 	ABT_pool		pools[DSS_POOL_CNT];
 
 	/* print Argobots config first */
-	fprintf(stderr, " == ABT config ==\n");
-	rc = ABT_info_print_config(stderr);
+	fprintf(fp, " == ABT config ==\n");
+	rc = ABT_info_print_config(fp);
 	if (rc != ABT_SUCCESS)
 		D_ERROR("ABT_info_print_config() error, rc = %d\n", rc);
 
