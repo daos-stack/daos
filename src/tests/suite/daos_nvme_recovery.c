@@ -344,7 +344,7 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Get the Initial write error
 	 */
-	write_errors = strdup("write_errors");
+	write_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 		devices[rank_pos].host, write_errors,
 		devices[rank_pos].device_id);
@@ -354,7 +354,7 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Get the Initial read error
 	 */
-	read_errors = strdup("read_errors");
+	read_errors = strdup("bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 		devices[rank_pos].host, read_errors,
 		devices[rank_pos].device_id);
@@ -411,7 +411,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get the write error count after Injecting BIO write error.
 	 * Verify the recent write err count is > the initial err count.
 	 */
-	check_errors = strdup("write_errors");
+	check_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 		devices[rank_pos].host, check_errors,
 		devices[rank_pos].device_id);
@@ -423,7 +423,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get the read error count after Injecting BIO read error
 	 * Verify the recent read err count is > the initial err count.
 	 */
-	strcpy(check_errors, "read_errors");
+	strcpy(check_errors, "bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 		devices[rank_pos].host, check_errors,
 		devices[rank_pos].device_id);
