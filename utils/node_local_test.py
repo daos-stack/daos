@@ -384,7 +384,7 @@ class DaosServer():
             if rc.returncode == 0:
                 for line in rc.stdout.decode('utf-8').splitlines():
                     if line.startswith('status'):
-                        if 'Ready' in line:
+                        if 'Ready' in line or 'Joined' in line:
                             ready = True
 
             if ready:
