@@ -327,3 +327,29 @@ daos_mgmt_add_mark(const char *mark)
 {
 	return dc_mgmt_add_mark(mark);
 }
+
+int
+daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
+		       int *blobstore_state, daos_event_t *ev)
+{
+	daos_mgmt_get_bs_state_t	*args;
+	tse_task_t			*task;
+	int				rc;
+
+	DAOS_API_ARG_ASSERT(*args, MGMT_GET_BS_STATE);
+
+	if (uuid_is_null(blobstore_uuid)) {
+		D_ERROR("Blobstore UUID must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_mgmt_get_bs_state, NULL, ev, &task);
+	if (rc)
+		return rc;
+	args = dc_task_get_args(task);
+	args->grp = group;
+	args->state = blobstore_state;
+	uuid_copy(args->uuid, blobstore_uuid);
+
+	return dc_task_schedule(task, true);
+}

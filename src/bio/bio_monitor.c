@@ -132,6 +132,15 @@ bio_get_dev_state(struct nvme_stats *state, struct bio_xs_context *xs)
 }
 
 /*
+ * Copy out the internal BIO blobstore device state.
+ */
+void
+bio_get_bs_state(int *bs_state, struct bio_xs_context *xs)
+{
+	*bs_state = xs->bxc_blobstore->bb_state;
+}
+
+/*
  * Call internal method to set BIO device state to FAULTY and trigger device
  * state transition. Called from the device owner xstream.
  */

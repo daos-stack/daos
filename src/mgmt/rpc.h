@@ -60,7 +60,10 @@
 		ds_mgmt_hdlr_list_pools, NULL),				\
 	X(MGMT_MARK,							\
 		0, &CQF_mgmt_mark,					\
-		ds_mgmt_mark_hdlr, NULL)
+		ds_mgmt_mark_hdlr, NULL),				\
+	X(MGMT_GET_BS_STATE,						\
+		0, &CQF_mgmt_get_bs_state,				\
+		ds_mgmt_hdlr_get_bs_state, NULL)
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
 		0, &CQF_mgmt_tgt_create,				\
@@ -240,5 +243,17 @@ CRT_RPC_DECLARE(mgmt_list_pools, DAOS_ISEQ_MGMT_LIST_POOLS,
 	((int32_t)		(m_rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(mgmt_mark, DAOS_ISEQ_MGMT_MARK, DAOS_OSEQ_MGMT_MARK)
+
+/* Get Blobstore State */
+#define DAOS_ISEQ_MGMT_GET_BS_STATE /* input fields */		 \
+	((uuid_t)		(bs_uuid)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_GET_BS_STATE /* output fields */		 \
+	((int32_t)		(bs_state)		CRT_VAR) \
+	((uuid_t)		(bs_uuid)		CRT_VAR) \
+	((int32_t)		(bs_rc)			CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_get_bs_state, DAOS_ISEQ_MGMT_GET_BS_STATE,
+		DAOS_OSEQ_MGMT_GET_BS_STATE)
 
 #endif /* __MGMT_RPC_H__ */
