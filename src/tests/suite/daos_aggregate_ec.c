@@ -174,7 +174,7 @@ static daos_oclass_id_t dts_ec_agg_oc = OC_EC_2P2G1;
 static int
 incremental_fill(void **statep)
 {
-	dts_ec_agg_oc = OC_EC_2P1G1;
+	dts_ec_agg_oc = DAOS_OC_EC_K2P1_SPEC_RANK_L32K;
 	return 0;
 }
 
