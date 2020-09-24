@@ -849,7 +849,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_iod_num, mrone->mo_epoch);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
