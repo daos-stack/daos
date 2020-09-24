@@ -31,6 +31,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -209,6 +210,7 @@ func (c *ControlService) setBdevScanResp(cs storage.NvmeControllers, inErr error
 	if inErr != nil {
 		state.Status = ctlpb.ResponseStatus_CTL_ERR_NVME
 		state.Error = inErr.Error()
+		state.Info = fault.ShowResolutionFor(inErr)
 		resp.State = state
 
 		return nil
@@ -269,6 +271,7 @@ func (c *ControlService) scanScm(ctx context.Context, resp *ctlpb.ScanScmResp) e
 	if err != nil {
 		state.Status = ctlpb.ResponseStatus_CTL_ERR_SCM
 		state.Error = err.Error()
+		state.Info = fault.ShowResolutionFor(err)
 		resp.State = state
 
 		return nil

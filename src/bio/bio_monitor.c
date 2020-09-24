@@ -276,8 +276,6 @@ populate_dev_health(struct nvme_health_stats *dev_state,
 		return -DER_TRUNC;
 	}
 
-	D_DEBUG(DB_MGMT, "populated health stats for ctrlr %s %s",
-		dev_state->model, dev_state->serial);
 	return 0;
 }
 
