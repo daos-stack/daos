@@ -47,6 +47,8 @@
 #include <daos_srv/iv.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include <daos/cont_props.h>
+#include <daos/dedup.h>
 
 /* Per VOS container aggregation ULT ***************************************/
 
@@ -69,7 +71,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	 * on ds_cont_child purging.
 	 */
 	D_ASSERT(cont->sc_agg_req != NULL);
-	if (sched_req_is_aborted(cont->sc_agg_req))
+	if (dss_ult_exiting(cont->sc_agg_req))
 		return 1;
 
 	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, dss_ult_yield,
@@ -79,11 +81,100 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	return rc;
 }
 
+int
+ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
+		  uuid_t cont_uuid)
+{
+	daos_prop_t	*props;
+	int		 rc;
+
+	props = daos_prop_alloc(7);
+	if (props == NULL)
+		return -DER_NOMEM;
+
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_DEDUP;
+	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	props->dpp_entries[5].dpe_type = DAOS_PROP_CO_COMPRESS;
+	props->dpp_entries[6].dpe_type = DAOS_PROP_CO_ENCRYPT;
+
+	rc = cont_iv_prop_fetch(pool_ns, cont_uuid, props);
+
+	if (rc == DER_SUCCESS)
+		daos_props_2cont_props(props, cont_props);
+
+	daos_prop_free(props);
+
+	return rc;
+}
+
+int
+ds_cont_csummer_init(struct ds_cont_child *cont)
+{
+	uint32_t		csum_val;
+	int			rc;
+	struct cont_props	*cont_props;
+	bool			dedup_only = false;
+
+	D_ASSERT(cont != NULL);
+	cont_props = &cont->sc_props;
+
+	if (cont->sc_props_fetched)
+		return 0;
+
+	/** Get the container csum related properties
+	 * Need the pool for the IV namespace
+	 */
+	D_ASSERT(cont->sc_csummer == NULL);
+	rc = ds_get_cont_props(cont_props, cont->sc_pool->spc_pool->sp_iv_ns,
+			       cont->sc_uuid);
+	if (rc != 0)
+		goto done;
+
+	/* Check again since IV fetch yield */
+	if (cont->sc_props_fetched)
+		goto done;
+	cont->sc_props_fetched = 1;
+
+	csum_val = cont_props->dcp_csum_type;
+	if (!daos_cont_csum_prop_is_enabled(csum_val)) {
+		dedup_only = true;
+		csum_val = dedup_get_csum_algo(cont_props);
+	}
+
+	/** If enabled, initialize the csummer for the container */
+	if (daos_cont_csum_prop_is_enabled(csum_val)) {
+		rc = daos_csummer_init_with_type(&cont->sc_csummer,
+					    daos_contprop2hashtype(csum_val),
+					    cont_props->dcp_chunksize,
+					    cont_props->dcp_srv_verify);
+		if (dedup_only)
+			dedup_configure_csummer(cont->sc_csummer, cont_props);
+	}
+done:
+	return rc;
+}
+
+
 static bool
 cont_aggregate_runnable(struct ds_cont_child *cont)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = cont->sc_agg_req;
+
+	if (!cont->sc_props_fetched)
+		ds_cont_csummer_init(cont);
+
+	if (cont->sc_props.dcp_dedup_enabled ||
+	    cont->sc_props.dcp_compress_enabled ||
+	    cont->sc_props.dcp_encrypt_enabled) {
+		D_DEBUG(DB_EPC, DF_CONT": skip aggregation for "
+			"deduped/compressed/encrypted container\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		return false;
+	}
 
 	/* snapshot list isn't fetched yet */
 	if (cont->sc_aggregation_max == 0) {
@@ -101,7 +192,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 	}
 
 	if (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy() &&
-	    sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
+	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
 		D_DEBUG(DB_EPC, "Pool reclaim strategy is lazy, service is "
 			"busy and no space pressure\n");
 		return false;
@@ -183,7 +274,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 	if (cont->sc_pool->spc_rebuild_fence != 0) {
 		uint64_t rebuild_fence = cont->sc_pool->spc_rebuild_fence;
 		int	j;
-		int	k;
+		int	insert_idx;
 
 		D_DEBUG(DB_EPC, "rebuild fence "DF_U64"\n", rebuild_fence);
 		/* Insert the rebuild_epoch into snapshots */
@@ -192,15 +283,15 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *msecs)
 		if (snapshots == NULL)
 			return -DER_NOMEM;
 
-		for (j = 0, k = 0; j < cont->sc_snapshots_nr; j++) {
-			if (cont->sc_snapshots[j] > rebuild_fence) {
+		for (j = 0, insert_idx = 0; j < cont->sc_snapshots_nr; j++) {
+			if (cont->sc_snapshots[j] < rebuild_fence) {
 				snapshots[j] = cont->sc_snapshots[j];
-				k++;
+				insert_idx++;
 			} else {
 				snapshots[j+1] = cont->sc_snapshots[j];
 			}
 		}
-		snapshots[k] = rebuild_fence;
+		snapshots[insert_idx] = rebuild_fence;
 		snapshots_nr = cont->sc_snapshots_nr + 1;
 	} else {
 		/* Since sc_snapshots might be freed by other ULT, let's
@@ -288,9 +379,11 @@ cont_aggregate_ult(void *arg)
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			D_ERROR(DF_CONT": VOS aggregate failed. %d\n",
+			D_ERROR(DF_CONT": VOS aggregate failed. "DF_RC"\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-				rc);
+				DP_RC(rc));
+			/* Sleep 2 seconds when last aggregation failed */
+			msecs = 2ULL * 1000;
 		}
 
 		if (dss_ult_exiting(cont->sc_agg_req))
@@ -316,7 +409,7 @@ cont_start_agg_ult(struct ds_cont_child *cont)
 	if (cont->sc_agg_req != NULL)
 		return 0;
 
-	rc = dss_ult_create(cont_aggregate_ult, cont, DSS_ULT_AGGREGATE,
+	rc = dss_ult_create(cont_aggregate_ult, cont, DSS_ULT_GC,
 			    DSS_TGT_SELF, 0, &agg_ult);
 	if (rc) {
 		D_ERROR(DF_CONT"[%d]: Failed to create aggregation ULT. %d\n",
@@ -509,6 +602,7 @@ cont_child_free_ref(struct daos_llink *llink)
 
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
+	daos_csummer_destroy(&cont->sc_csummer);
 
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_mutex_free(&cont->sc_mutex);
@@ -524,10 +618,19 @@ cont_child_cmp_keys(const void *key, unsigned int ksize,
 	return uuid_compare(key, cont->sc_uuid) == 0;
 }
 
+static uint32_t
+cont_child_rec_hash(struct daos_llink *llink)
+{
+	struct ds_cont_child *cont = cont_child_obj(llink);
+
+	return d_hash_string_u32((const char *)cont->sc_uuid, sizeof(uuid_t));
+}
+
 static struct daos_llink_ops cont_child_cache_ops = {
 	.lop_alloc_ref	= cont_child_alloc_ref,
 	.lop_free_ref	= cont_child_free_ref,
-	.lop_cmp_keys	= cont_child_cmp_keys
+	.lop_cmp_keys	= cont_child_cmp_keys,
+	.lop_rec_hash	= cont_child_rec_hash,
 };
 
 int
@@ -879,7 +982,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
 		DP_CONT(child->spc_uuid, co_uuid));
 
 	D_ASSERT(child != NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_IO, &child->spc_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_FETCH, &child->spc_uuid);
 	req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get sched req\n",
@@ -1029,35 +1132,6 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	return cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
 				 ds_cont);
-}
-
-/** initialize a csummer based on container properties */
-int ds_cont_csummer_init(struct daos_csummer **csummer,
-			 uuid_t pool_uuid, uuid_t cont_uuid)
-{
-	daos_prop_t	*props;
-	struct ds_pool	*pool;
-	int		 rc;
-
-	props = daos_prop_alloc(3);
-	if (props == NULL)
-		return -DER_NOMEM;
-
-	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
-	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
-	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
-		return -DER_NONEXIST;
-	rc = ds_cont_fetch_prop(pool->sp_iv_ns, cont_uuid, props);
-	if (rc == 0)
-		rc = daos_csummer_init_with_props(csummer, props);
-
-	daos_prop_free(props);
-	ds_pool_put(pool);
-
-	return rc;
 }
 
 /**
@@ -1266,7 +1340,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		hdl->sch_cont->sc_open++;
 
 		if (hdl->sch_cont->sc_open > 1)
-			goto csummer;
+			goto opened;
 
 		rc = cont_start_dtx_reindex_ult(hdl->sch_cont);
 		if (rc != 0) {
@@ -1298,17 +1372,14 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_register, rc);
 		}
 
-csummer:
 		D_ASSERT(hdl->sch_cont != NULL);
 		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
-		rc = ds_cont_csummer_init(&hdl->sch_csummer,
-					  hdl->sch_cont->sc_pool->spc_uuid,
-					  hdl->sch_cont->sc_uuid);
+		rc = ds_cont_csummer_init(hdl->sch_cont);
 
 		if (rc != 0)
 			D_GOTO(err_register, rc);
 	}
-
+opened:
 	if (cont_hdl != NULL) {
 		cont_hdl_get_internal(&tls->dt_cont_hdl_hash, hdl);
 		*cont_hdl = hdl;
@@ -1433,8 +1504,6 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 	/* Remove the handle from hash first, following steps may yield */
 	ds_cont_local_close(cont_hdl_uuid);
 
-	daos_csummer_destroy(&hdl->sch_csummer);
-
 	cont_child = hdl->sch_cont;
 	if (cont_child != NULL) {
 		D_DEBUG(DF_DSMS, DF_CONT": closing (%d): hdl="DF_UUID"\n",
@@ -1518,7 +1587,7 @@ ds_cont_tgt_force_close(uuid_t cont_uuid)
 
 	D_DEBUG(DF_DSMS, DF_CONT": Force closing all handles for container "
 		DF_UUID"\n", DP_CONT(NULL, NULL), cont_uuid);
- 
+
 	rc = dss_thread_collective(cont_close_all, &cont_uuid, 0, DSS_ULT_IO);
 	if (rc != 0)
 		D_ERROR("dss_thread_collective failed: rc="DF_RC, DP_RC(rc));

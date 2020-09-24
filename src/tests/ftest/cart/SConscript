@@ -1,0 +1,92 @@
+#!python
+# (C) Copyright 2016-2020 Intel Corporation.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+# The Government's rights to use, modify, reproduce, release, perform, display,
+# or disclose this software are subject to the terms of the Apache License as
+# provided in Contract No. 8F-30005.
+# Any reproduction of computer software, computer software documentation, or
+# portions thereof marked with this legend must also reproduce the markings.
+#
+"""Build crt tests"""
+
+import os
+import daos_build
+
+SIMPLE_TEST_SRC = ['threaded_client.c',
+                   'no_pmix_multi_ctx.c', 'threaded_server.c',
+                   'test_corpc_prefwd.c',
+                   'test_corpc_exclusive.c',
+                   'test_proto_server.c', 'test_proto_client.c',
+                   'test_no_timeout.c', 'test_ep_cred_server.c',
+                   'test_ep_cred_client.c', 'no_pmix_launcher_server.c',
+                   'no_pmix_launcher_client.c', 'no_pmix_group_test.c',
+                   'test_rpc_to_ghost_rank.c', 'no_pmix_corpc_errors.c']
+BASIC_SRC = ['crt_basic.c']
+TEST_GROUP_SRC = 'test_group.c'
+IV_TESTS = ['iv_client.c', 'iv_server.c']
+#TEST_RPC_ERR_SRC = 'test_rpc_error.c'
+#CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
+SWIM_TESTS = ['test_swim.c', 'test_swim_net.c']
+HLC_TESTS = ['test_hlc_net.c']
+TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
+                       'no_pmix_group_version.c']
+
+def scons():
+    """scons function"""
+
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
+
+    tenv = env.Clone()
+
+    tenv.AppendUnique(CPPPATH=['#/src/cart'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
+    prereqs.require(tenv, 'crypto', 'mercury')
+
+    tests_dir = os.path.join("$PREFIX", 'lib', 'cart', 'TESTING', 'tests')
+    # Compile all of the tests
+    for test in SIMPLE_TEST_SRC:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    for test in IV_TESTS:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    for test in SWIM_TESTS:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    for test in HLC_TESTS:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    for test in TEST_GROUP_NP_TESTS:
+        target = daos_build.test(tenv, test, install_off='../../../../')
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(tests_dir, target)
+
+    benv = tenv.Clone()
+
+    benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
+    basic_target = daos_build.test(tenv, BASIC_SRC)
+    benv.Requires(basic_target, [cart_lib, gurt_lib])
+
+if __name__ == "SCons.Script":
+    scons()

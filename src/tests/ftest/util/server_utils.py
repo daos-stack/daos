@@ -22,11 +22,12 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import getpass
+import socket
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import pcmd
+from general_utils import pcmd, get_log_file
 from dmg_utils import DmgCommand
 
 
@@ -75,7 +76,8 @@ class DaosServerCommand(YamlCommand):
         # Used to override the sub_command.value parameter value
         self.sub_command_override = None
 
-        # Include the daos_io_server command launched by the daos_server command.
+        # Include the daos_io_server command launched by the daos_server
+        # command.
         self._exe_names.append("daos_io_server")
 
     def get_sub_command_class(self):
@@ -312,6 +314,18 @@ class DaosServerManager(SubprocessManager):
         # to access the doas_servers when they are started
         self.dmg = DmgCommand(self.manager.job.command_path, dmg_cfg)
 
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Use the yaml file parameter values to assign the server command and
+        orterun command parameters.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosServerManager, self).get_params(test)
+        # Get the values for the dmg parameters
+        self.dmg.get_params(test)
 
     def prepare(self, storage=True):
         """Prepare to start daos_server.
@@ -326,6 +340,13 @@ class DaosServerManager(SubprocessManager):
 
         # Create the daos_server yaml file
         self.manager.job.create_yaml_file()
+
+        # Copy certificates
+        self.manager.job.copy_certificates(
+            get_log_file("daosCA/certs"), self._hosts)
+        local_host = socket.gethostname().split('.', 1)[0]
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), local_host.split())
 
         # Prepare dmg for running storage format on all server hosts
         self.dmg.hostlist = self._hosts

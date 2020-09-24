@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -99,7 +100,8 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 				instance.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			_, err := instance.CallDrpc(drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+			_, err := instance.CallDrpc(context.TODO(),
+				drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}

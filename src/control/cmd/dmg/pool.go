@@ -79,7 +79,6 @@ type PoolCreateCmd struct {
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
 	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
-	UUID       string `short:"p" long:"pool" description:"UUID to be used when creating the pool, randomly generated if not specified"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -134,14 +133,13 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, Ranks: ranks,
 		NumSvcReps: c.NumSvcReps, Sys: c.Sys,
 		User: c.UserName, UserGroup: c.GroupName, ACL: acl,
-		UUID: c.UUID,
 	}
 
 	ctx := context.Background()
 	resp, err := control.PoolCreate(ctx, c.ctlInvoker, req)
 
 	if c.jsonOutputEnabled() {
-		return c.outputJSON(os.Stdout, resp)
+		return c.outputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -160,6 +158,7 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 type PoolDestroyCmd struct {
 	logCmd
 	ctlInvokerCmd
+	jsonOutputCmd
 	// TODO: implement --sys & --svc options (currently unsupported server side)
 	UUID  string `long:"pool" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
@@ -173,6 +172,11 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolDestroy(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.errorJSON(err)
+	}
+
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -186,6 +190,7 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 type PoolEvictCmd struct {
 	logCmd
 	ctlInvokerCmd
+	jsonOutputCmd
 	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to evict connection to"`
 	Sys  string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that the pools connections be evicted from."`
 }
@@ -198,6 +203,11 @@ func (d *PoolEvictCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolEvict(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.errorJSON(err)
+	}
+
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -211,6 +221,7 @@ func (d *PoolEvictCmd) Execute(args []string) error {
 type PoolExcludeCmd struct {
 	logCmd
 	ctlInvokerCmd
+	jsonOutputCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to exclude a target from"`
 	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be excluded"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
@@ -229,6 +240,11 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	err := control.PoolExclude(ctx, r.ctlInvoker, req)
+
+	if r.jsonOutputEnabled() {
+		return r.errorJSON(err)
+	}
+
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -242,6 +258,7 @@ func (r *PoolExcludeCmd) Execute(args []string) error {
 type PoolDrainCmd struct {
 	logCmd
 	ctlInvokerCmd
+	jsonOutputCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to drain a target in"`
 	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be drained"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
@@ -253,13 +270,22 @@ func (r *PoolDrainCmd) Execute(args []string) error {
 
 	var idxlist []uint32
 	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
-		return errors.WithMessage(err, "parsing rank list")
+		err = errors.WithMessage(err, "parsing rank list")
+		if r.jsonOutputEnabled() {
+			return r.errorJSON(err)
+		}
+		return err
 	}
 
 	req := &control.PoolDrainReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
 
 	ctx := context.Background()
 	err := control.PoolDrain(ctx, r.ctlInvoker, req)
+
+	if r.jsonOutputEnabled() {
+		return r.errorJSON(err)
+	}
+
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -273,6 +299,7 @@ func (r *PoolDrainCmd) Execute(args []string) error {
 type PoolExtendCmd struct {
 	logCmd
 	ctlInvokerCmd
+	jsonOutputCmd
 	UUID     string `long:"pool" required:"1" description:"UUID of the DAOS pool to extend"`
 	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 	// Everything after this needs to be removed when pool info can be fetched
@@ -287,7 +314,11 @@ func (e *PoolExtendCmd) Execute(args []string) error {
 
 	ranks, err := system.ParseRanks(e.RankList)
 	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
+		err = errors.Wrap(err, "parsing rank list")
+		if e.jsonOutputEnabled() {
+			return e.errorJSON(err)
+		}
+		return err
 	}
 
 	// Everything below this needs to be removed once Pool Info can be fetched
@@ -314,6 +345,10 @@ func (e *PoolExtendCmd) Execute(args []string) error {
 	ctx := context.Background()
 	err = control.PoolExtend(ctx, e.ctlInvoker, req)
 
+	if e.jsonOutputEnabled() {
+		return e.errorJSON(err)
+	}
+
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -327,6 +362,7 @@ func (e *PoolExtendCmd) Execute(args []string) error {
 type PoolReintegrateCmd struct {
 	logCmd
 	ctlInvokerCmd
+	jsonOutputCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
 	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
@@ -338,13 +374,22 @@ func (r *PoolReintegrateCmd) Execute(args []string) error {
 
 	var idxlist []uint32
 	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
-		return errors.WithMessage(err, "parsing rank list")
+		err = errors.WithMessage(err, "parsing rank list")
+		if r.jsonOutputEnabled() {
+			return r.errorJSON(err)
+		}
+		return err
 	}
 
 	req := &control.PoolReintegrateReq{UUID: r.UUID, Rank: system.Rank(r.Rank), Targetidx: idxlist}
 
 	ctx := context.Background()
 	err := control.PoolReintegrate(ctx, r.ctlInvoker, req)
+
+	if r.jsonOutputEnabled() {
+		return r.errorJSON(err)
+	}
+
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -370,12 +415,13 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	resp, err := control.PoolQuery(ctx, c.ctlInvoker, req)
-	if err != nil {
-		return errors.Wrap(err, "pool query failed")
-	}
 
 	if c.jsonOutputEnabled() {
-		return c.outputJSON(os.Stdout, resp)
+		return c.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "pool query failed")
 	}
 
 	var bld strings.Builder
@@ -410,12 +456,13 @@ func (c *PoolSetPropCmd) Execute(_ []string) error {
 
 	ctx := context.Background()
 	resp, err := control.PoolSetProp(ctx, c.ctlInvoker, req)
-	if err != nil {
-		return errors.Wrap(err, "pool set-prop failed")
-	}
 
 	if c.jsonOutputEnabled() {
-		return c.outputJSON(os.Stdout, resp)
+		return c.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "pool set-prop failed")
 	}
 
 	c.log.Infof("pool set-prop succeeded (%s=%q)", resp.Property, resp.Value)
@@ -440,15 +487,16 @@ func (d *PoolGetACLCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	resp, err := control.PoolGetACL(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(resp.ACL, err)
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "Pool-get-ACL command failed")
 	}
 
 	d.log.Debugf("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
-
-	if d.jsonOutputEnabled() {
-		return d.outputJSON(os.Stdout, resp.ACL)
-	}
 
 	acl := control.FormatACL(resp.ACL, d.Verbose)
 
@@ -504,6 +552,9 @@ type PoolOverwriteACLCmd struct {
 func (d *PoolOverwriteACLCmd) Execute(args []string) error {
 	acl, err := control.ReadACLFile(d.ACLFile)
 	if err != nil {
+		if d.jsonOutputEnabled() {
+			return d.errorJSON(err)
+		}
 		return err
 	}
 
@@ -514,15 +565,16 @@ func (d *PoolOverwriteACLCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	resp, err := control.PoolOverwriteACL(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(resp.ACL, err)
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "Pool-overwrite-ACL command failed")
 	}
 
 	d.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", d.UUID)
-
-	if d.jsonOutputEnabled() {
-		return d.outputJSON(os.Stdout, resp.ACL)
-	}
 
 	d.log.Info(control.FormatACLDefault(resp.ACL))
 
@@ -550,6 +602,9 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 	if d.ACLFile != "" {
 		aclFileResult, err := control.ReadACLFile(d.ACLFile)
 		if err != nil {
+			if d.jsonOutputEnabled() {
+				return d.errorJSON(err)
+			}
 			return err
 		}
 		acl = aclFileResult
@@ -566,15 +621,16 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	resp, err := control.PoolUpdateACL(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(resp.ACL, err)
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "Pool-update-ACL command failed")
 	}
 
 	d.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", d.UUID)
-
-	if d.jsonOutputEnabled() {
-		return d.outputJSON(os.Stdout, resp.ACL)
-	}
 
 	d.log.Info(control.FormatACLDefault(resp.ACL))
 
@@ -600,15 +656,16 @@ func (d *PoolDeleteACLCmd) Execute(args []string) error {
 
 	ctx := context.Background()
 	resp, err := control.PoolDeleteACL(ctx, d.ctlInvoker, req)
+
+	if d.jsonOutputEnabled() {
+		return d.outputJSON(resp.ACL, err)
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "Pool-delete-ACL command failed")
 	}
 
 	d.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", d.UUID)
-
-	if d.jsonOutputEnabled() {
-		return d.outputJSON(os.Stdout, resp.ACL)
-	}
 
 	d.log.Info(control.FormatACLDefault(resp.ACL))
 

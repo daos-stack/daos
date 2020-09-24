@@ -24,25 +24,31 @@
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
 from command_utils import ExecutableCommand
-from general_utils import pcmd
+from general_utils import pcmd, get_log_file
 
 
 class DaosRacerCommand(ExecutableCommand):
     """Defines a object representing a daos_racer command."""
 
-    def __init__(self, path, host):
+    def __init__(self, path, host, dmg=None):
         """Create a daos_racer command object.
 
         Args:
             path (str): path of the daos_racer command
             host (str): host on which to run the daos_racer command
+            dmg (DmgCommand): a DmgCommand object used to obtain the
+                configuration file and certificate
         """
         super(DaosRacerCommand, self).__init__(
-            "/run/daos_racer", "daos_racer", path)
+            "/run/daos_racer/*", "daos_racer", path)
         self.host = host
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
+
+        if dmg:
+            self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
+            dmg.copy_certificates(get_log_file("daosCA/certs"), [self.host])
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the
@@ -88,6 +94,16 @@ class DaosRacerCommand(ExecutableCommand):
         env["OMPI_MCA_oob"] = "tcp"
         env["OMPI_MCA_pml"] = "ob1"
         return env
+
+    def set_environment(self, env):
+        """Set the environment variables to export prior to running daos_racer.
+
+        Args:
+            env (EnvironmentVariables): a dictionary of environment variable
+                names and values to export prior to running daos_racer
+        """
+        # Include exports prior to the daos_racer command
+        self._pre_command = env.get_export_str()
 
     def run(self):
         """Run the daos_racer command remotely.

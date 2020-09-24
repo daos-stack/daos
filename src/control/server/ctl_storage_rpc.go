@@ -26,6 +26,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
@@ -111,9 +112,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 
 // StoragePrepare configures SSDs for user specific access with SPDK and
 // groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
-func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (
-	*ctlpb.StoragePrepareResp, error) {
-
+func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
 	c.log.Debug("received StoragePrepare RPC; proceeding to instance storage preparation")
 
 	resp := &ctlpb.StoragePrepareResp{}
@@ -135,15 +134,26 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	msg := "Storage Scan "
 	resp := new(ctlpb.StorageScanResp)
 
-	bsr, err := c.bdev.Scan(bdev.ScanRequest{})
-	if err != nil {
+	bdevReq := bdev.ScanRequest{Rescan: true}
+	if req.ConfigDevicesOnly {
+		for _, storageCfg := range c.instanceStorage {
+			bdevReq.DeviceList = append(bdevReq.DeviceList,
+				storageCfg.Bdev.GetNvmeDevs()...)
+		}
+		c.log.Debugf("%s only show bdev devices specified in config %v",
+			msg, bdevReq.DeviceList)
+	}
+
+	bsr, scanErr := c.NvmeScan(bdevReq)
+	if scanErr != nil {
 		resp.Nvme = &ctlpb.ScanNvmeResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_NVME, err.Error(), "", msg+"NVMe"),
+			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_NVME,
+				scanErr.Error(), "", msg+"NVMe"),
 		}
 	} else {
 		pbCtrlrs := make(proto.NvmeControllers, 0, len(bsr.Controllers))
 		if err := pbCtrlrs.FromNative(bsr.Controllers); err != nil {
-			c.log.Errorf("failed to cleanly convert %#v to protobuf: %s", bsr.Controllers, err)
+			return nil, errors.Wrapf(err, "failed to cleanly convert %#v to protobuf", bsr.Controllers)
 		}
 		resp.Nvme = &ctlpb.ScanNvmeResp{
 			State:  newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg+"NVMe"),
@@ -151,7 +161,17 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	ssr, err := c.scm.Scan(scm.ScanRequest{Rescan: true})
+	scmReq := scm.ScanRequest{Rescan: true}
+	if req.ConfigDevicesOnly {
+		for _, storageCfg := range c.instanceStorage {
+			scmReq.DeviceList = append(scmReq.DeviceList,
+				storageCfg.SCM.DeviceList...)
+		}
+		c.log.Debugf("%s only show scm devices specified in config %v",
+			msg, scmReq.DeviceList)
+	}
+
+	ssr, err := c.ScmScan(scmReq)
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg+"SCM"),

@@ -45,8 +45,8 @@ DAOS server configuration and how to start it on all the storage nodes.
 
 The `daos_server` configuration file is parsed when starting the
 `daos_server` process. The configuration file location can be specified
-on the command line (`daos_server -h` for usage) or default location
-(`install/etc/daos_server.yml`).
+on the command line (`daos_server -h` for usage) or it will be read from
+the default location (`/etc/daos/daos_server.yml`).
 
 Parameter descriptions are specified in [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 and example configuration files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
@@ -67,7 +67,7 @@ available at
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the `daos_server` command
-line. Otherwise, /etc/daos_server.conf is used.
+line. Otherwise, /etc/daos/daos_server.yml is used.
 
 Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
 for latest information and examples.
@@ -250,13 +250,15 @@ $ journalctl --unit daos_server.service
 ```
 
 After RPM install, `daos_server` service starts automatically running as user
-"daos". Server config is read from `/etc/daos` and certificates from `/etc/daos/certs`.
+"daos". The server config is read from `/etc/daos/daos_server.yml` and 
+certificates are read from `/etc/daos/certs`.
 With no other admin intervention other than the loading of certificates,
 `daos_server` will enter a listening state enabling discovery of storage and
 network hardware through the `dmg` tool without any I/O Servers specified in the
 configuration file. After device discovery and provisioning, an updated
-configuration with a populated per-server section can be provided and the service
-restarted ready for DAOS servers to be formatted.
+configuration file with a populated per-server section can be stored in
+`/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service 
+it is then ready for the storage to be formatted.
 
 #### Kubernetes Pod
 
@@ -290,7 +292,7 @@ storage nodes via the dmg utility.
 
 This section addresses how to verify that Optane DC Persistent Memory
 Module (DCPMM) is correctly installed on the storage nodes, and how to configure
-it in interleaved mode to be used by DAOS in AppDirect mode.
+it in Appdirect interleaved mode to be used by DAOS.
 Instructions for other types of SCM may be covered in the future.
 
 Provisioning the SCM occurs by configuring DCPM modules in AppDirect memory regions
@@ -432,10 +434,10 @@ section of the server configuration file for best performance.
 Note that other storage query commands are also available,
 `dmg storage --help` for listings.
 
-SSD health state can be verified via `dmg storage query nvme-health`:
+SSD health state can be verified via `dmg storage scan --nvme-health`:
 
 ```bash
-$ dmg -l wolf-71 storage query nvme-health
+$ dmg -l wolf-71 storage scan --nvme-health
 wolf-71:10001: connected
 wolf-71:10001
         NVMe controllers and namespaces detail with health statistics:
@@ -610,6 +612,15 @@ optional `pinned_numa_node`. The interfaces and NUMA Sockets listed in the scan
 results map to the daos_server.yml `fabric_iface` and `pinned_numa_node`
 respectively. The use of `pinned_numa_node` is optional, but recommended for best performance. When specified with the value that matches the network interface, the IO server will bind itself to that NUMA node and to cores purely within that NUMA node. This configuration yields the fastest access to that network device.
 
+### Changing Network Providers
+
+Information about the network configuration is stored as metadata on the DAOS
+storage.
+
+If, after initial deployment, the provider must be changed, it is necessary to
+reformat the storage devices using `dmg storage format` after the configuration
+file has been updated with the new provider.
+
 ## Network Scanning All DAOS Server Nodes
 While the `daos_server network scan` is useful for scanning the localhost, it does not provide results for any other daos_server instance on the network.  The DAOS Management tool, `dmg`, is used for that purpose. The network scan operates the same way as the daos_server network scan, however, to use the dmg tool, at least one known daos_server instance must be running.
 
@@ -756,7 +767,7 @@ The `daos_agent` configuration file is parsed when starting the
 `daos_agent` process. The configuration file location can be specified
 on the command line (`daos_agent -h` for usage) or default location
 (`install/etc/daos_agent.yml`). If installed from rpms the default location is
-(`/usr/etc/daos_agent.yml`).
+(`/etc/daos/daos_agent.yml`).
 
 Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
@@ -776,9 +787,9 @@ available at
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the daos_agent command
-line. Otherwise, /etc/daos_agent.conf is used.
+line. Otherwise, /etc/daos/daos_agent.yml is used.
 
-Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
+Refer to the example configuration file ([daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml))
 for latest information and examples.
 
 ### Agent Startup
@@ -797,7 +808,10 @@ $ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
 ```
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
-unit file is installed in the correct location when installing from RPMs.
+unit file is installed in the correct location when installing from RPMs. 
+If you want to run the DAOS Agent without certificates (not recommended in production
+deployments), you need to add the `-i` option to the systemd `ExecStart` invocation
+(see below).
 
 If you wish to use systemd with a development build, you must copy the service
 file from `utils/systemd` to `/usr/lib/systemd/system`. Once the file is copied
@@ -809,6 +823,7 @@ Once the service file is installed, you can start `daos_agent`
 with the following commands:
 
 ```bash
+$ sudo systemctl daemon-reload
 $ sudo systemctl enable daos_agent.service
 $ sudo systemctl start daos_agent.service
 ```

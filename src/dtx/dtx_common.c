@@ -201,8 +201,8 @@ dtx_batched_commit(void *arg)
 				DTX_AGG_THRESHOLD_AGE_UPPER))) {
 			ds_cont_child_get(cont);
 			cont->sc_dtx_aggregating = 1;
-			rc = dss_ult_create(dtx_aggregate, cont,
-				DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
+			rc = dss_ult_create(dtx_aggregate, cont, DSS_ULT_GC,
+					    DSS_TGT_SELF, 0, NULL);
 			if (rc != 0) {
 				cont->sc_dtx_aggregating = 0;
 				ds_cont_child_put(cont);
@@ -224,62 +224,87 @@ check:
 
 /* Return the epoch uncertainty upper bound. */
 static daos_epoch_t
-dtx_epoch_bound(daos_epoch_t epoch, daos_epoch_t epoch_orig, bool uncertain)
+dtx_epoch_bound(struct dtx_epoch *epoch)
 {
 	daos_epoch_t limit;
 
-	if (!uncertain)
+	if (!(epoch->oe_flags & DTX_EPOCH_UNCERTAIN))
 		/*
 		 * We are told that the epoch has no uncertainty, even if it's
 		 * still within the potential uncertainty window.
 		 */
-		return epoch;
+		return epoch->oe_value;
 
-	limit = epoch_orig + crt_hlc_epsilon_get();
-	if (epoch >= limit)
+	limit = crt_hlc_epsilon_get_bound(epoch->oe_first);
+	if (epoch->oe_value >= limit)
 		/*
 		 * The epoch is already out of the potential uncertainty
 		 * window.
 		 */
-		return epoch;
+		return epoch->oe_value;
 
 	return limit;
 }
+
+/** VOS reserves highest two minor epoch values for internal use so we must
+ *  limit the number of dtx sub modifications to avoid conflict.
+ */
+#define DTX_SUB_MOD_MAX	(((uint16_t)-1) - 2)
 
 /**
  * Init local dth handle.
  */
 static int
-dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, daos_epoch_t epoch,
-		bool epoch_uncertain, uint16_t sub_modification_cnt,
-		uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-		struct dtx_id *dti_cos, int dti_cos_cnt,
-		struct dtx_memberships *mbs, bool leader,
-		bool solo, struct dtx_handle *dth)
+dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
+		uint16_t sub_modification_cnt, uint32_t pm_ver,
+		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
+		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
+		bool solo, bool sync, struct dtx_handle *dth)
 {
+	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
+		D_ERROR("Too many modifications in a single transaction:"
+			"%u > %u\n", sub_modification_cnt, DTX_SUB_MOD_MAX);
+		return -DER_OVERFLOW;
+	}
+
 	dth->dth_xid = *dti;
 	dth->dth_coh = coh;
-	dth->dth_epoch = epoch;
-	dth->dth_epoch_bound = dtx_epoch_bound(epoch, dti->dti_hlc,
-					       epoch_uncertain);
+
+	if (!dtx_epoch_chosen(epoch)) {
+		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
+			DF_U64" first="DF_U64" flags=%x\n",
+			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
+			epoch->oe_flags);
+		return -DER_INVAL;
+	}
+	dth->dth_epoch = epoch->oe_value;
+	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 
 	dth->dth_leader_oid = *leader_oid;
 	dth->dth_ver = pm_ver;
 	dth->dth_refs = 1;
 	dth->dth_mbs = mbs;
 
-	dth->dth_sync = 0;
 	dth->dth_resent = 0;
 	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
+	dth->dth_local_retry = 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
 	dth->dth_ent = NULL;
 	dth->dth_flags = leader ? DTE_LEADER : 0;
+
+	if (sync) {
+		dth->dth_flags |= DTE_BLOCK;
+		dth->dth_sync = 1;
+	} else {
+		dth->dth_sync = 0;
+	}
+
 	dth->dth_modification_cnt = sub_modification_cnt;
 
 	dth->dth_op_seq = 0;
@@ -289,16 +314,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, daos_epoch_t epoch,
 
 	dth->dth_dkey_hash = 0;
 
-	if (sub_modification_cnt <= 1) {
-		dth->dth_rsrvds = &dth->dth_rsrvd_inline;
-		return 0;
-	}
-
-	D_ALLOC_ARRAY(dth->dth_rsrvds, sub_modification_cnt);
-	if (dth->dth_rsrvds == NULL)
-		return -DER_NOMEM;
-
-	return 0;
+	return vos_dtx_rsrvd_init(dth);
 }
 
 static int
@@ -457,8 +473,6 @@ out:
  * \param cont		[IN]	Pointer to the container.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
- * \param epoch_uncertain
- *			[IN]	Epoch is uncertain.
  * \param sub_modification_cnt
  *			[IN]	Sub modifications count
  * \param pm_ver	[IN]	Pool map version for the DTX.
@@ -467,6 +481,8 @@ out:
  * \param dti_cos_cnt	[IN]	The @dti_cos array size.
  * \param tgts		[IN]	targets for distribute transaction.
  * \param tgt_cnt	[IN]	number of targets.
+ * \param solo		[IN]	single operand or not.
+ * \param sync		[IN]	sync mode or not.
  * \param mbs		[IN]	DTX participants information.
  * \param dth		[OUT]	Pointer to the DTX handle.
  *
@@ -474,10 +490,10 @@ out:
  */
 int
 dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
-		 daos_epoch_t epoch, bool epoch_uncertain,
-		 uint16_t sub_modification_cnt, uint32_t pm_ver,
-		 daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
-		 int dti_cos_cnt, struct daos_shard_tgt *tgts, int tgt_cnt,
+		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
+		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+		 struct dtx_id *dti_cos, int dti_cos_cnt,
+		 struct daos_shard_tgt *tgts, int tgt_cnt, bool solo, bool sync,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
@@ -507,15 +523,14 @@ dtx_leader_begin(struct ds_cont_child *cont, struct dtx_id *dti,
 		return 0;
 
 init:
-	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, epoch_uncertain,
-			     sub_modification_cnt, pm_ver, leader_oid,
-			     dti_cos, dti_cos_cnt, mbs, true,
-			     tgt_cnt == 0 ? true : false, dth);
+	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
+			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
+			     true, solo, sync, dth);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
-		"dti_cos_cnt %d: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, dti_cos_cnt, DP_RC(rc));
+	D_DEBUG(DB_IO, "Start %s DTX "DF_DTI" sub_reqs %d, ver %u, leader "
+		DF_UOID", dti_cos_cnt %d: "DF_RC"\n",
+		sync ? "sync" : "async", DP_DTI(dti), sub_modification_cnt,
+		dth->dth_ver, DP_UOID(*leader_oid), dti_cos_cnt, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dlh->dlh_subs);
@@ -557,16 +572,16 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	int				 saved = result;
 	int				 rc = 0;
 
-	if (dlh->dlh_sub_cnt == 0)
-		goto out;
-
 	D_ASSERT(cont != NULL);
 
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
 
-	rc = dtx_leader_wait(dlh);
+	if (dlh->dlh_sub_cnt != 0)
+		rc = dtx_leader_wait(dlh);
+	else if (dth->dth_modification_cnt <= 1)
+		goto out;
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
@@ -623,13 +638,6 @@ again:
 
 			dth->dth_sync = 1;
 		}
-
-		/* FIXME: For the DTX across multiple modification groups,
-		 *	  commit it synchronously. That will be changed in
-		 *	  next phase.
-		 */
-		if (dth->dth_mbs->dm_grp_cnt > 1)
-			dth->dth_sync = 1;
 
 		/* For synchronous DTX, do not add it into CoS cache, otherwise,
 		 * we may have no way to remove it from the cache.
@@ -719,6 +727,7 @@ abort:
 			  dth->dth_epoch, &dte, 1);
 	}
 
+	vos_dtx_rsrvd_fini(dth);
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid))
 		D_DEBUG(DB_IO,
@@ -743,9 +752,6 @@ out:
 	D_FREE(dlh->dlh_subs);
 	D_FREE(dth->dth_oid_array);
 
-	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
-		D_FREE(dth->dth_rsrvds);
-
 	return result;
 }
 
@@ -755,8 +761,6 @@ out:
  * \param cont		[IN]	Pointer to the container.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
- * \param epoch_uncertain
- *			[IN]	Epoch is uncertain.
  * \param sub_modification_cnt
  *			[IN]	Sub modifications count.
  * \param pm_ver	[IN]	Pool map version for the DTX.
@@ -771,8 +775,8 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t epoch,
-	  bool epoch_uncertain, uint16_t sub_modification_cnt,
+dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti,
+	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt,
 	  struct dtx_memberships *mbs, struct dtx_handle *dth)
@@ -786,9 +790,9 @@ dtx_begin(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t epoch,
 		return 0;
 	}
 
-	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, epoch_uncertain,
-			     sub_modification_cnt, pm_ver, leader_oid,
-			     dti_cos, dti_cos_cnt, mbs, false, false, dth);
+	rc = dtx_handle_init(dti, cont->sc_hdl, epoch, sub_modification_cnt,
+			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
+			     false, false, false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub_reqs %d, ver %u, "
 		"dti_cos_cnt %d: "DF_RC"\n",
@@ -836,8 +840,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 
 	D_FREE(dth->dth_oid_array);
 
-	if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
-		D_FREE(dth->dth_rsrvds);
+	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }
@@ -943,7 +946,8 @@ int
 dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		  daos_epoch_t *epoch, uint32_t *pm_ver)
 {
-	int	rc;
+	uint64_t	age;
+	int		rc;
 
 	if (daos_is_zero_dti(dti))
 		/* If DTX is disabled, then means that the application does
@@ -966,11 +970,12 @@ again:
 	case DTX_ST_COMMITTED:
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
-		if (dtx_hlc_age2sec(dti->dti_hlc) >
-		    DTX_AGG_THRESHOLD_AGE_LOWER ||
+		age = dtx_hlc_age2sec(dti->dti_hlc);
+		if (age > DTX_AGG_THRESHOLD_AGE_LOWER ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
-			D_DEBUG(DB_IO, "Not sure about whether the old RPC "
-				DF_DTI" is resent or not.\n", DP_DTI(dti));
+			D_ERROR("Not sure about whether the old RPC "DF_DTI
+				" is resent or not. Age="DF_U64" s.\n",
+				DP_DTI(dti), age);
 			rc = -DER_EP_OLD;
 		}
 		return rc;

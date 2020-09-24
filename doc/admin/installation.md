@@ -3,6 +3,8 @@
 DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
 on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 20.04 distributions.
 
+The majority of testing has been performed on Centos 7.7 and SLES 15, with Centos being used in the majority of the test cycles.
+
 ## Software Dependencies
 
 DAOS requires a C99-capable compiler, a Go compiler, and the scons build tool.
@@ -40,9 +42,30 @@ dependencies automatically.
 
 ## Distribution Packages
 
-DAOS RPM and deb packaging is under development and will be available for DAOS
-v1.0. Integration with the [Spack](https://spack.io/) package manager is also
+DAOS RPM packaging is currently available, and DEB packaging is under development and will be available in a future DAOS release. Integration with the [Spack](https://spack.io/) package manager is also
 under consideration.
+
+### Installing DAOS from RPMs
+
+DAOS RPMs are available from the Intel&copy; Registration Center.
+Clicking the [Intel&copy; Registration Center](https://registrationcenter.intel.com/forms/?productid=3412) link will take you to the registration center, where you will create an account. After creating an account, the following files can be downloaded:
+
+- daos_debug.tar - _debuginfo_ packages
+- daos_packages.tar - client and server main packages
+- daos_source.tar - source RPMs
+
+**Recommended steps after download:**
+
+	sudo tar -C / -xf daos_packages.tar 
+	sudo cp /opt/intel/daos_rpms/packages/daos_packages.repo /etc/yum.repos.d
+	rm /opt/intel/daos_rpms/packages/libabt*
+	(cd /opt/intel/daos_rpms/packages/ && createrepo .)
+	sudo yum install epel-release
+	sudo yum install daos-server
+	sudo yum install daos-client
+
+**Note:** *Only daos-client OR daos-server needs to be specified on the yum command line.*
+
 
 ## DAOS from Scratch
 
@@ -68,7 +91,7 @@ maintained in the Docker files:
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
+Check the [utils/docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
 directory for different Linux distribution versions.
 
 Some DAOS tests use MPI.   The DAOS build process

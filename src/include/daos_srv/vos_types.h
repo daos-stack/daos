@@ -51,6 +51,13 @@ enum dtx_entry_flags {
 	DTE_LEADER		= (1 << 0),
 	/* The DTX entry is invalid. */
 	DTE_INVALID		= (1 << 1),
+	/* If the DTX with this flag is non-committed, then others
+	 * will be blocked (retry again and again) when access the
+	 * data being modified via this DTX. Currently, it is used
+	 * for distributed transaction. It also can be used for EC
+	 * object modification via standalone update/punch.
+	 */
+	DTE_BLOCK		= (1 << 2),
 };
 
 struct dtx_entry {
@@ -200,29 +207,35 @@ typedef enum {
 
 enum {
 	/** Conditional Op: Punch key if it exists, fail otherwise */
-	VOS_OF_COND_PUNCH	= DAOS_COND_PUNCH,
+	VOS_OF_COND_PUNCH		= DAOS_COND_PUNCH,
 	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_DKEY_INSERT	= DAOS_COND_DKEY_INSERT,
+	VOS_OF_COND_DKEY_INSERT		= DAOS_COND_DKEY_INSERT,
 	/** Conditional Op: Update dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_UPDATE	= DAOS_COND_DKEY_UPDATE,
+	VOS_OF_COND_DKEY_UPDATE		= DAOS_COND_DKEY_UPDATE,
 	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_FETCH	= DAOS_COND_DKEY_FETCH,
+	VOS_OF_COND_DKEY_FETCH		= DAOS_COND_DKEY_FETCH,
 	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_AKEY_INSERT	= DAOS_COND_AKEY_INSERT,
+	VOS_OF_COND_AKEY_INSERT		= DAOS_COND_AKEY_INSERT,
 	/** Conditional Op: Update akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
+	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
-	/** Indicates the operation should check mvcc timestamps */
-	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
+	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 8),
+	VOS_OF_REPLAY_PC		= (1 << 7),
 	/* critical update - skip checks on SCM system/held space */
-	VOS_OF_CRIT		= (1 << 9),
+	VOS_OF_CRIT			= (1 << 8),
 	/** Instead of update or punch of extents, remove all extents
 	 * under the specified range. Intended for internal use only.
 	 */
-	VOS_OF_REMOVE		= (1 << 10),
+	VOS_OF_REMOVE			= (1 << 9),
+	/* only query iod_size */
+	VOS_OF_FETCH_SIZE_ONLY		= (1 << 10),
+	/* query recx list */
+	VOS_OF_FETCH_RECX_LIST		= (1 << 11),
+	/* only set read TS */
+	VOS_OF_FETCH_SET_TS_ONLY		= (1 << 12),
+	/* check the target (obj/dkey/akey) existence */
+	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -246,7 +259,6 @@ enum {
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
-D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */
 enum {
@@ -354,6 +366,8 @@ typedef struct {
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
+			/** record size for the whole global single record */
+			daos_size_t		ie_gsize;
 			/** record extent */
 			daos_recx_t		ie_recx;
 			/* original in-tree extent */
@@ -433,7 +447,7 @@ struct vos_iter_anchors {
 			ia_reprobe_ev:1;
 };
 
-/* Ignores DTX as they are transient records.   Add VEA overheads later */
+/* Ignores DTX as they are transient records */
 enum VOS_TREE_CLASS {
 	VOS_TC_CONTAINER,
 	VOS_TC_OBJECT,
@@ -441,6 +455,7 @@ enum VOS_TREE_CLASS {
 	VOS_TC_AKEY,
 	VOS_TC_SV,
 	VOS_TC_ARRAY,
+	VOS_TC_VEA,
 };
 
 #endif /* __VOS_TYPES_H__ */

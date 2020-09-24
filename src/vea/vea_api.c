@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -364,7 +364,9 @@ done:
 	D_ASSERT(resrvd->vre_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(resrvd->vre_blk_cnt == blk_cnt);
 
-	D_ASSERT(vsi->vsi_stat[STAT_FREE_BLKS] >= blk_cnt);
+	D_ASSERTF(vsi->vsi_stat[STAT_FREE_BLKS] >= blk_cnt,
+		  "free:"DF_U64" < rsrvd:%u\n",
+		  vsi->vsi_stat[STAT_FREE_BLKS], blk_cnt);
 	vsi->vsi_stat[STAT_FREE_BLKS] -= blk_cnt;
 
 	/* Update hint offset */

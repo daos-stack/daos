@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 
 class ListPoolsTest(TestWithServers):
@@ -49,12 +48,10 @@ class ListPoolsTest(TestWithServers):
         # Iterate rank lists to create pools. Store the returned UUID and
         # service replicas in the expected lists.
         for rank_list in rank_lists:
-            stdoutput = self.get_dmg_command().pool_create(
-                scm_size="1G", target_list=rank_list, svcn=sr).stdout
-            uuid, service_replicas = \
-                get_pool_uuid_service_replicas_from_stdout(stdoutput)
-            expected_uuids.append(uuid)
-            expected_service_replicas.append(service_replicas.split(","))
+            data = self.get_dmg_command().pool_create(
+                scm_size="1G", target_list=rank_list, svcn=sr)
+            expected_uuids.append(data["uuid"])
+            expected_service_replicas.append(data["svc"].split(","))
 
         # Sample dmg pool list output.
         # wolf-3:10001: connected

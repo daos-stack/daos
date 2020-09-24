@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,6 @@ sched_ult2pool(int ult_type)
 		return DSS_POOL_IO;
 	case DSS_ULT_REBUILD:
 		return DSS_POOL_REBUILD;
-	case DSS_ULT_AGGREGATE:
 	case DSS_ULT_GC:
 		return DSS_POOL_GC;
 	default:
@@ -398,7 +397,6 @@ sched_ult2xs(int ult_type, int tgt_id)
 	case DSS_ULT_DRPC_LISTENER:
 		return 1;
 	case DSS_ULT_REBUILD:
-	case DSS_ULT_AGGREGATE:
 	case DSS_ULT_GC:
 		return DSS_MAIN_XS_ID(tgt_id);
 	default:

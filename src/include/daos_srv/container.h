@@ -36,6 +36,8 @@
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/evtree.h>
+#include <daos/container.h>
+#include <daos/cont_props.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -69,6 +71,8 @@ struct ds_cont_child {
 	uuid_t			 sc_uuid;	/* container UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
+	struct daos_csummer	*sc_csummer;
+	struct cont_props	 sc_props;
 
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
@@ -76,6 +80,9 @@ struct ds_cont_child {
 				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_vos_aggregating:1,
+				 sc_abort_vos_aggregating:1,
+				 sc_props_fetched:1,
 				 sc_stopping:1;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -127,7 +134,6 @@ struct ds_cont_hdl {
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
-	struct daos_csummer	*sch_csummer;
 	int			sch_ref;
 };
 
@@ -151,8 +157,9 @@ int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
  */
-int ds_cont_csummer_init(struct daos_csummer **csummer,
-			 uuid_t pool_uuid, uuid_t cont_uuid);
+int ds_cont_csummer_init(struct ds_cont_child *cont);
+int ds_get_cont_props(struct cont_props *cont_props, struct ds_iv_ns *pool_ns,
+		      uuid_t cont_uuid);
 
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);

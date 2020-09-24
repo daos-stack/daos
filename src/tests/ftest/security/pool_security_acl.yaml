@@ -5,24 +5,25 @@ hosts:
     - server-A
   test_clients:
     - server-B   #server client different host
-  transport_config:
-    - allow_insecure: False
-    - ca_cert: ~/.daos/daosCA.crt
-    - cert: ~/.daos/daos_agent.crt
-    - key: ~/.daos/daos_agent.key
-    - server_name: server
-timeout: 1200
+timeout: 600
 server_config:
   name: daos_server
   port: 10001
-daos_server:
-  start:
-     insecure: False
+# Uncomment following to force the use of certificates
+# regardless of the launch.py --insecure setting.
+#   transport_config:
+#     allow_insecure: False
+#agent_config:
+#   transport_config:
+#     allow_insecure: False
+#dmg:
+#   transport_config:
+#     allow_insecure: False
 pool_acl:
   scm_size: 134217728
   user_prefix: daos_ci
-  num_user: 5
-  num_group: 5
+  num_user: 1
+  num_group: 1
   test_users: !mux
     user_type1:
       user:
@@ -60,3 +61,4 @@ pool_acl:
          - rw
          - pass
          - pass
+

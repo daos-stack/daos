@@ -25,6 +25,7 @@ package pbin
 import (
 	"context"
 	"encoding/json"
+	"os"
 
 	"github.com/pkg/errors"
 
@@ -74,6 +75,16 @@ func NewForwarder(log logging.Logger, pbinName string) *Forwarder {
 // GetBinaryName returns the name of the binary requests will be forwarded to.
 func (f *Forwarder) GetBinaryName() string {
 	return f.pbinName
+}
+
+// CanForward indicates whether commands can be forwarded to the forwarder's
+// designated binary.
+func (f *Forwarder) CanForward() bool {
+	if _, err := common.FindBinary(f.GetBinaryName()); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
 }
 
 // SendReq is responsible for marshaling the forwarded request into a message

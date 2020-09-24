@@ -45,6 +45,8 @@ class DfuseCommand(ExecutableCommand):
         self.sys_name = FormattedParameter("--sys-name {}")
         self.singlethreaded = FormattedParameter("--singlethreaded", False)
         self.foreground = FormattedParameter("--foreground", False)
+        self.disable_direct_io = FormattedParameter("--disable-direct-io",
+                                                    False)
 
         # Environment variable names to export when running dfuse
         self._env_names = ["D_LOG_FILE"]
@@ -294,7 +296,7 @@ class Dfuse(DfuseCommand):
         self.check_running()
         umount_cmd = [
             "if [ -x '$(command -v fusermount)' ]",
-            "then fusermount -u {0}",
+            "then fusermount -u {0}".format(self.mount_dir.value),
             "else fusermount3 -u {0}".format(self.mount_dir.value),
             "fi"
         ]
