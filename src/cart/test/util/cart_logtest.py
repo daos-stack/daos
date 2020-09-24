@@ -449,6 +449,15 @@ class LogTest():
                             show = False
                             self.fi_location = line
                         elif '-1009' in line.get_msg():
+
+                            src_offset = line.lineno - self.fi_location.lineno
+                            if line.filename == self.fi_location.filename:
+                                src_offset = line.lineno - self.fi_location.lineno
+                                if src_offset > 0 and src_offset < 5:
+                                    show_line(line, 'NORMAL', 'Logging allocation failure')
+
+                            if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
+                                show_line(line, 'LOW', 'Error does not use DF_RC')
                             # For the fault injection test do not report
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which
