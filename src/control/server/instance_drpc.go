@@ -219,26 +219,25 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
 		}
 
+		msg := fmt.Sprintf("instance %d: health stats from smd uuid %s", srv.Index(),
+			dev.GetUuid())
+
 		health := new(storage.NvmeControllerHealth)
 		if err := convert.Types(healthPB, health); err != nil {
-			return errors.Wrapf(err, "converting health stats from smd device %s",
-				dev.Uuid)
+			return errors.Wrapf(err, msg)
 		}
 
 		key, err := health.GenAltKey()
 		if err != nil {
-			srv.log.Debugf("gen alt nvme ctrlr key from health stats (smd %s): %s",
-				err.Error())
-
-			return FaultBioHealthNotReady(dev.Uuid)
+			srv.log.Infof("%s: data not yet available", msg)
+			continue
 		}
 
-		msg := fmt.Sprintf("instance %d: stats received for ctrlr key %s from smd uuid %s",
-			srv.Index(), key, dev.GetUuid())
+		msg += fmt.Sprintf(" with key %s", key)
 
 		ctrlr, exists := ctrlrMap[key]
 		if !exists {
-			srv.log.Debug(msg + " didn't match any known controllers")
+			srv.log.Debugf("%s didn't match any known controllers", msg)
 			continue
 		}
 
@@ -251,13 +250,11 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 
 		smdDev := new(storage.SmdDevice)
 		if err := convert.Types(dev, smdDev); err != nil {
-			return errors.Wrapf(err, "converting smd info for controller %s %s",
-				key, ctrlr.PciAddr)
+			return errors.Wrapf(err, "convert smd for ctrlr %s", ctrlr.PciAddr)
 		}
 		srvRank, err := srv.GetRank()
 		if err != nil {
-			return errors.Wrapf(err, "adding rank to smd info for controller %s %s",
-				key, ctrlr.PciAddr)
+			return errors.Wrapf(err, "get rank")
 		}
 		smdDev.Rank = srvRank
 
