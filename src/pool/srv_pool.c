@@ -4145,7 +4145,7 @@ ds_pool_extend_internal(struct rdb_tx *tx, struct pool_svc *svc,
 		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
 		struct rsvc_hint *hint)
 {
-	struct pool_buf		*map_buf;
+	struct pool_buf		*map_buf = NULL;
 	struct pool_map		*map = NULL;
 	uint32_t		map_version;
 	bool			updated = false;
@@ -4528,8 +4528,9 @@ ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
 	struct pool_evict_in	*in;
 	struct pool_evict_out	*out;
 
-	D_DEBUG(DB_MGMT, DF_UUID": Destroy pool, inspect/evict handles\n",
-		DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT,
+		DF_UUID": Destroy pool (force: %d), inspect/evict handles\n",
+		DP_UUID(pool_uuid), force);
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)

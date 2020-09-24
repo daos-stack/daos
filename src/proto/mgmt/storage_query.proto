@@ -33,21 +33,35 @@ message BioHealthReq {
 	string tgt_id = 2;
 }
 
+// BioHealthResp mirrors nvme_health_stats structure.
 message BioHealthResp {
-	int32 status = 1; // DAOS error code
-	string dev_uuid = 2; // UUID of blobstore
-	uint64 error_count = 3;
-	uint32 temperature = 4;
-	uint64 media_errors = 5;
-	uint32 read_errors = 6;
-	uint32 write_errors = 7;
-	uint32 unmap_errors = 8;
-	uint32 checksum_errors = 9;
-	bool temp_warn = 10;
-	bool spare_warn = 11;
-	bool readonly_warn = 12;
-	bool device_reliability_warn = 13;
-	bool volatile_memory_warn = 14;
+	string model = 1;
+	string serial = 2;
+	uint64 timestamp = 3;
+	uint64 err_count = 4;
+	// Device health details
+	uint32 warn_temp_time = 5;
+	uint32 crit_temp_time = 6;
+	uint64 ctrl_busy_time = 7;
+	uint64 power_cycles = 8;
+	uint64 power_on_hours = 9;
+	uint64 unsafe_shutdowns = 10;
+	uint64 media_errs = 11;
+	uint64 err_log_entries = 12;
+	// I/O error counters
+	uint32 bio_read_errs = 13;
+	uint32 bio_write_errs = 14;
+	uint32 bio_unmap_errs = 15;
+	uint32 checksum_errs = 16;
+	uint32 temperature = 17; // in Kelvin
+	// Critical warnings
+	bool temp_warn = 18;
+	bool avail_spare_warn = 19;
+	bool dev_reliability_warn = 20;
+	bool read_only_warn = 21;
+	bool volatile_mem_warn = 22; // volatile memory backup
+	int32 status = 23; // DAOS err code
+	string dev_uuid = 24; // UUID of blobstore
 }
 
 message SmdDevReq {
