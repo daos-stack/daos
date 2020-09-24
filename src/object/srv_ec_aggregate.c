@@ -392,7 +392,7 @@ agg_fetch_data_stripe(struct ec_agg_entry *entry)
 
 	rc = vos_obj_fetch(entry->ae_chdl, entry->ae_oid,
 			   entry->ae_cur_stripe.as_hi_epoch,
-			   VOS_FETCH_RECX_LIST, &entry->ae_dkey, 1, &iod,
+			   VOS_OF_FETCH_RECX_LIST, &entry->ae_dkey, 1, &iod,
 			   entry->ae_sgl);
 	if (rc)
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
