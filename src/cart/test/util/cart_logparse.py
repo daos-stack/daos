@@ -42,6 +42,8 @@ LogLine class definition.
 This provides a way of querying CaRT logfiles for processing.
 """
 
+from collections import OrderedDict
+import bz2
 import os
 import re
 
@@ -61,6 +63,11 @@ LOG_LEVELS = {'FATAL' :1,
               'NOTE'  :6,
               'INFO'  :7,
               'DBUG'  :8}
+
+# Make a reverse lookup from log level to name.
+LOG_NAMES = {}
+for name in LOG_LEVELS:
+    LOG_NAMES[LOG_LEVELS[name]] = name
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -88,10 +95,21 @@ class LogLine():
 
     It allows for queries such as 'string in line' which will match against
     the message only, and != which will match the entire line.
-
-    index is the line in the file, starting at 1.
     """
-    def __init__(self, line, index):
+
+    # Match an address range, a region in memory.
+    re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
+    # Match a pointer, with optional ) or . suffix.
+    re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.)?)")
+    # Match a pid marker
+    re_pid = re.compile(r"pid=(\d+)")
+
+    # Match a truncated uuid from DF_UUID
+    re_uuid = re.compile(r"[0-9a-f]{8}(:?)")
+    # Match a truncated uuid[rank] from DF_DB
+    re_uuid_rank = re.compile(r"[0-9,a-f]{8}\[\d+\](:?)")
+
+    def __init__(self, line):
         fields = line.split()
         # Work out the end of the fixed-width portion, and the beginning of the
         # message.  The hostname and pid fields are both variable width
@@ -100,25 +118,29 @@ class LogLine():
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
-        self.index = index
-        self.mask = fields[3]
+        self.fac = fields[3]
         try:
             self.level = LOG_LEVELS[fields[4]]
         except KeyError:
             raise InvalidLogFile(fields[4])
 
+        self.ts = fields[0]
         self._fields = fields[5:]
-        if self._fields[1][-2:] == '()':
-            self.trace = False
-            self.function = self._fields[1][:-2]
-        elif self._fields[1][-1:] == ')':
-            self.trace = True
-        else:
+        try:
+            if self._fields[1][-2:] == '()':
+                self.trace = False
+                self.function = self._fields[1][:-2]
+            elif self._fields[1][-1:] == ')':
+                self.trace = True
+            else:
+                self.trace = False
+        except IndexError:
+            # Catch truncated log lines.
             self.trace = False
 
         if self.trace:
             if self.level == 7 or self.level == 3:
-                if self.mask == 'rpc' or self.mask == 'hg':
+                if self.fac == 'rpc' or self.fac == 'hg':
                     del self._fields[2:5]
 
         if self.trace:
@@ -134,7 +156,6 @@ class LogLine():
 
     def to_str(self, mark=False):
         """Convert the object to a string"""
-#        pre = self._preamble.split(' ', maxsplit=3)
         pre = self._preamble.split(' ', 3)
         preamble = ' '.join([pre[0], pre[3]])
         if mark:
@@ -185,24 +206,27 @@ class LogLine():
         fields = []
         for entry in self._fields[2:]:
             field = None
-            # TODO: This should match a file offset range
-            if entry.startswith('0x') and len(entry) > 5:
-                if entry.endswith(')'):
-                    field = '0x...)'
-                else:
-                    field = '0x...'
+
+            r = self.re_region.fullmatch(entry)
+            if r:
+                field = '0x...-0x...'
+
             if not field:
-                r = re.search("^[0-9,a-f]{8}$", entry)
+                r = self.re_pointer.fullmatch(entry)
                 if r:
-                    field = 'uuid'
+                    field = '0x...{}'.format(r.group(1))
             if not field:
-                r = re.search("^[0-9,a-f]{8}\[\d+\]\:$", entry)
+                r = self.re_pid.fullmatch(entry)
                 if r:
-                    field = 'uuid/rank'
+                    field = 'pid=<pid>'
             if not field:
-                r = re.search("^\d+.\d+.\d+\:*$", entry)
+                r = self.re_uuid.fullmatch(entry)
                 if r:
-                    field = 'low/high/shard'
+                    field = 'uuid{}'.format(r.group(1))
+            if not field:
+                r = self.re_uuid_rank.fullmatch(entry)
+                if r:
+                    field = 'uuid/rank{}'.format(r.group(1))
             if field:
                 fields.append(field)
             else:
@@ -222,7 +246,7 @@ class LogLine():
         """Return a specific field from the line"""
         return self._fields[idx]
 
-    def _is_type(self, text, trace=True):
+    def _is_type(self, text, trace=True, base=2):
         """Checks for text in a log message
 
         Returns True if the line starts with the text provided
@@ -232,7 +256,7 @@ class LogLine():
 
         # Check that the contents of two arrays are equal, using text as is and
         # selecting only the correct entries of the fields array.
-        return text == self._fields[2:2+len(text)]
+        return text == self._fields[base:base+len(text)]
 
     def is_new(self):
         """Returns True if line is new descriptor"""
@@ -271,10 +295,10 @@ class LogLine():
     def is_callback(self):
         """Returns true if line is RPC callback"""
 
-        # TODO: This is broken for now but the RPCtrace has not been ported yet
-        # so there are no current users of it.
+        if self.function != 'crt_hg_req_send_cb':
+            return False
 
-        return self._is_type(['Invoking', 'RPC', 'callback'])
+        return self._is_type(['Invoking', 'RPC', 'callback'], base=5)
 
     def is_link(self):
         """Returns True if line is Link descriptor"""
@@ -282,9 +306,11 @@ class LogLine():
         return self._is_type(['Link'])
 
     def is_fi_site(self):
+        """Return True if line is record of fault injection"""
         return self._is_type(['fault_id'], trace=False)
 
     def is_fi_alloc_fail(self):
+        """Return True if line is showing failed memory allocation"""
         return self._is_type(['out', 'of', 'memory'], trace=False)
 
     def is_calloc(self):
@@ -377,7 +403,6 @@ class StateIter():
                 line.pdesc = line.descriptor
                 line.rpc = False
 
-
             if (line.is_dereg() or line.is_dereg_rpc()) and \
                line.descriptor in self.active_desc:
                 del self.active_desc[line.descriptor]
@@ -399,7 +424,7 @@ class LogIter():
     is rewindable, and there are options for automatically skipping lines.
     """
 
-    def __init__(self, fname):
+    def __init__(self, fname, check_encoding=False):
         """Load a file, and check how many processes have written to it"""
 
         # Depending on file size either pre-read entire file into memory,
@@ -411,43 +436,46 @@ class LogIter():
         # find and report the error, then continue with the file open as
         # latin-1
         self._fd = None
-        try:
-            self._fd = open(fname, 'r', encoding='utf-8')
-            self._fd.read()
-        except UnicodeDecodeError as err:
-            print('ERROR: Invalid data in server.log on following line')
-            self._fd = open(fname, 'r', encoding='latin-1')
-            self._fd.read(err.start - 200)
-            data = self._fd.read(199)
-            lines = data.splitlines()
-            print(lines[-1])
 
-        self._fd.seek(0)
+        self.bz2 = False
+
+        # Force check encoding for smaller files.
+        i = os.stat(fname)
+        if i.st_size < (1024*1024*20):
+            check_encoding = True
+
+        if fname.endswith('.bz2'):
+            # Allow direct operation on bz2 files.  Supports multiple pids
+            # per file as normal, however does not try and seek to file
+            # positions, rather walks the entire file for each pid.
+            self._fd = bz2.open(fname, 'rt')
+            self.bz2 = True
+        else:
+            if check_encoding:
+                try:
+                    self._fd = open(fname, 'r', encoding='utf-8')
+                    self._fd.read()
+                except UnicodeDecodeError as err:
+                    print('ERROR: Invalid data in server.log on following line')
+                    self._fd = open(fname, 'r', encoding='latin-1')
+                    self._fd.read(err.start - 200)
+                    data = self._fd.read(199)
+                    lines = data.splitlines()
+                    print(lines[-1])
+                self._fd.seek(0)
+            else:
+                self._fd = open(fname, 'r', encoding='utf-8')
+
         self.fname = fname
         self._data = []
-        index = 0
-        pids = set()
 
         i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*20))
-        self.__index = 0
+        self.__from_file = bool(i.st_size > (1024*1024*20)) or self.bz2
 
-        for line in self._fd:
- #           fields = line.split(maxsplit=8)
-            fields = line.split(' ', 8)
-            index += 1
-            if self.__from_file:
-                if len(fields) < 6 or len(fields[0]) != 17:
-                    continue
-                l_obj = LogLine(line, index)
-                pids.add(l_obj.pid)
-            else:
-                if len(fields) < 6 or len(fields[0]) != 17:
-                    self._data.append(LogRaw(line))
-                else:
-                    l_obj = LogLine(line, index)
-                    pids.add(l_obj.pid)
-                    self._data.append(l_obj)
+        if self.__from_file:
+            self._load_pids()
+        else:
+            self._load_data()
 
         # Offset into the file when iterating.  This is an array index, and is
         # based from zero, as opposed to line index which is based from 1.
@@ -456,11 +484,61 @@ class LogIter():
         self._pid = None
         self._trace_only = False
         self._raw = False
-        self._pids = sorted(pids)
+        self._iter_index = 0
+        self._iter_count = 0
+        self._iter_pid = None
+        self._iter_last_index = 0
 
-    def __del__(self):
-        if self._fd:
-            self._fd.close()
+    def _load_data(self):
+        """Load all data into memory"""
+
+        pids = OrderedDict()
+
+        index = 0
+        for line in self._fd:
+            fields = line.split(' ', 8)
+            index += 1
+            l_pid = None
+            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
+                self._data.append(LogRaw(line))
+            else:
+                l_obj = LogLine(line)
+                l_pid = l_obj.pid
+                self._data.append(l_obj)
+                if l_pid in pids:
+                    pids[l_pid]['line_count'] += 1
+                else:
+                    pids[l_pid] = {'line_count': 1,
+                                   'first_index': index}
+                pids[l_pid]['last_index'] = index
+        self._pids = pids
+
+    def _load_pids(self):
+        """Iterate through the file, loading data on pids"""
+
+        pids = OrderedDict()
+
+        index = 0
+        position = 0
+        for line in self._fd:
+            fields = line.split(' ', 8)
+            index += 1
+            l_pid = None
+            if len(fields) < 6 or len(fields[0]) != 17:
+                position += len(line)
+                continue
+            pidtid = fields[2][5:-1]
+            pid = pidtid.split("/")
+            l_pid = int(pid[0])
+            if l_pid in pids:
+                pids[l_pid]['line_count'] += 1
+            else:
+                pids[l_pid] = {'line_count': 1,
+                               'file_pos': position,
+                               'first_index': index}
+            pids[l_pid]['last_index'] = index
+            position += len(line)
+        self._pids = pids
 
     def new_iter(self,
                  pid=None,
@@ -476,11 +554,25 @@ class LogIter():
         """
 
         if pid is not None:
-            if pid not in self._pids:
+            try:
+                self._iter_pid = self._pids[pid]
+            except KeyError:
                 raise InvalidPid
+
+            if self.__from_file:
+                if self.bz2:
+                    self._iter_last_index = self._iter_pid['last_index']
+                else:
+                    self._iter_last_index = self._iter_pid['last_index'] - \
+                                            self._iter_pid['first_index'] + 1
+            else:
+                self._iter_last_index = self._iter_pid['last_index']
+
             self._pid = pid
         else:
             self._pid = None
+            self._iter_pid = None
+            self._iter_last_index = 0
         self._trace_only = trace_only
         self._raw = raw
 
@@ -491,10 +583,14 @@ class LogIter():
 
         return self
 
-    def __iter__(self, pid=None):
+    def __iter__(self):
+        self._iter_index = 0
+        self._iter_count = 0
         if self.__from_file:
-            self._fd.seek(0)
-            self.__index = 0
+            if not self._pid or self.bz2:
+                self._fd.seek(0)
+            else:
+                self._fd.seek(self._iter_pid['file_pos'])
         else:
             self._offset = 0
         return self
@@ -506,12 +602,10 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            self.__index += 1
- #           fields = line.split(maxsplit=8)
             fields = line.split(' ', 8)
             if len(fields) < 6 or len(fields[0]) != 17:
                 return LogRaw(line)
-            return LogLine(line, self.__index)
+            return LogLine(line)
 
         try:
             line = self._data[self._offset]
@@ -523,6 +617,12 @@ class LogIter():
     def __next__(self):
 
         while True:
+            self._iter_index += 1
+
+            if self._pid and self._iter_index > self._iter_last_index:
+                assert self._iter_count == self._iter_pid['line_count']
+                raise StopIteration
+
             line = self.__lnext()
 
             if not self._raw and isinstance(line, LogRaw):
@@ -531,12 +631,14 @@ class LogIter():
             if self._trace_only and not line.trace:
                 continue
 
-            if isinstance(line, LogRaw) and self._pid:
-                continue
+            if self._pid:
+                if line.pid != self._pid:
+                    continue
 
-            if self._pid and line.pid != self._pid:
-                continue
+                if isinstance(line, LogRaw):
+                    continue
 
+            self._iter_count += 1
             return line
 
     def next(self):
@@ -545,5 +647,5 @@ class LogIter():
 
     def get_pids(self):
         """Return an array of pids appearing in the file"""
-        return self._pids
+        return self._pids.keys()
 # pylint: enable=too-many-instance-attributes

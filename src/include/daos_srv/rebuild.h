@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +47,6 @@ typedef enum {
 			  (rb_op) == RB_OP_DRAIN ? "RB_OP_DRAIN" : \
 			  (rb_op) == RB_OP_ADD ? "RB_OP_ADD" : \
 			  "RB_OP_UNKNOWN")
-
-bool is_rebuild_container(uuid_t pool_uuid, uuid_t coh_uuid);
-bool is_rebuild_pool(uuid_t pool_uuid, uuid_t poh_uuid);
 
 int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 			struct pool_target_id_list *tgts,

@@ -58,6 +58,7 @@ typedef struct {
 	 * read.
 	 */
 	daos_size_t		arr_nr_short_read;
+	daos_size_t		arr_nr_read;
 } daos_array_iod_t;
 
 /**

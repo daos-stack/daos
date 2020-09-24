@@ -85,7 +85,8 @@
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */
 #define VOS_SVT_ORDER		5	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
-#define DTX_BTREE_ORDER		23	/* Order for DTX tree */
+#define DTX_BTREE_ORDER	23	/* Order for DTX tree */
+#define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
 #define DAOS_VOS_VERSION 1
 
@@ -111,8 +112,6 @@ enum {
 	DTX_LID_RESERVED,
 };
 
-/** hash seed for murmur hash */
-#define VOS_BTR_MUR_SEED	0xC0FFEE
 /*
  * When aggregate merge window reaches this size threshold, it will stop
  * growing and trigger window flush immediately.
@@ -154,6 +153,8 @@ struct vos_pool {
 	/** number of openers */
 	int			vp_opened:30;
 	int			vp_dying:1;
+	/** caller specifies pool is small (for sys space reservation) */
+	bool			vp_small;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */
@@ -176,6 +177,8 @@ struct vos_pool {
 	daos_size_t		vp_space_sys[DAOS_MEDIA_MAX];
 	/** Held space by inflight updates. In bytes */
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
+	/** Dedup hash */
+	struct d_hash_table	*vp_dedup_hash;
 };
 
 /**
@@ -243,7 +246,6 @@ struct vos_dtx_act_ent {
 
 extern struct vos_tls	*standalone_tls;
 #ifdef VOS_STANDALONE
-unsigned int tmp_count;
 #define VOS_TIME_START(start, op)		\
 do {						\
 	if (standalone_tls->vtl_dp == NULL)	\
@@ -276,7 +278,6 @@ do {						\
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
-#define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
@@ -284,8 +285,12 @@ do {						\
 #define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
 #define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
 #define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
+#define DAE_OID_CNT(dae)	((dae)->dae_base.dae_oid_cnt)
+#define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
+#define DAE_OID_INLINE(dae)	((dae)->dae_base.dae_oid_inline)
+#define DAE_OID_OFF(dae)	((dae)->dae_base.dae_oid_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
@@ -299,9 +304,11 @@ struct vos_dtx_cmt_ent {
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
+#define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
+#define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
 /* in-memory structures standalone instance */
-struct bio_xs_context		*vsa_xsctxt_inst;
+extern struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
 
 static inline struct bio_xs_context *
@@ -391,10 +398,13 @@ vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 int
 vos_dtx_table_register(void);
 
+/** Cleanup the dtx handle when aborting a transaction. */
+void
+vos_dtx_cleanup_internal(struct dtx_handle *dth);
+
 /**
  * Check whether the record (to be accessible) is available to outside or not.
  *
- * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
  * \param entry		[IN]	DTX local id
  * \param epoch		[IN]	Epoch of update
@@ -412,9 +422,8 @@ vos_dtx_table_register(void);
  *		negative value	For error cases.
  */
 int
-vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   uint32_t entry, daos_epoch_t epoch,
-			   uint32_t intent, uint32_t type);
+vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -431,12 +440,6 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, uint32_t *tx_id);
-
-/**
- * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
- */
-void
-vos_dtx_cleanup_dth(struct dtx_handle *dth);
 
 /** Return the already active dtx id, if any */
 uint32_t
@@ -558,7 +561,7 @@ struct vos_rec_bundle {
  * Inline data structure for embedding the key bundle and key into an anchor
  * for serialization.
  */
-#define	EMBEDDED_KEY_MAX	96
+#define	EMBEDDED_KEY_MAX	80
 struct vos_embedded_key {
 	/** Inlined iov key references */
 	d_iov_t		ek_kiov;
@@ -780,6 +783,7 @@ struct vos_iter_ops;
 struct vos_iterator {
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
+	struct vos_ts_set	*it_ts_set;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
@@ -811,7 +815,7 @@ struct vos_iter_info {
 	d_iov_t			*ii_akey; /* conditional akey */
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
-	daos_epoch_t		 ii_punched;
+	struct vos_punch_record	 ii_punched;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -823,7 +827,8 @@ struct vos_iter_info {
 struct vos_iter_ops {
 	/** prepare a new iterator with the specified type and parameters */
 	int	(*iop_prepare)(vos_iter_type_t type, vos_iter_param_t *param,
-			       struct vos_iterator **iter_pp);
+			       struct vos_iterator **iter_pp,
+			       struct vos_ts_set *ts_set);
 	/** fetch the record that the cursor points to and open the subtree
 	 *  corresponding to specified type, return info about the iterator
 	 *  and nested object.   If NULL, it isn't supported for the parent
@@ -889,7 +894,7 @@ struct vos_obj_iter {
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** highest epoch where parent obj/key was punched */
-	daos_epoch_t		 it_punched;
+	struct vos_punch_record	 it_punched;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
 	/* reference on the object */
@@ -925,12 +930,42 @@ enum {
 	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
 };
 
+/* vos_common.c */
 int
 vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob);
 
 void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh);
+
+/* Reserve SCM through umem_reserve() for a PMDK transaction */
+struct vos_rsrvd_scm {
+	unsigned int		rs_actv_cnt;
+	unsigned int		rs_actv_at;
+	struct pobj_action	rs_actv[0];
+};
+
+int
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
+
+/** Finish the transaction and publish or cancel the reservations or
+ *  return if err == 0 and it's a multi-modification transaction that
+ *  isn't complete.
+ *
+ * \param[in]	cont		the VOS container
+ * \param[in]	dth_in		The dtx handle, if applicable
+ * \param[in]	rsrvd_scmp	Pointer to reserved scm, will be consumed
+ * \param[in]	nvme_exts	List of resreved nvme extents
+ * \param[in]	started		Only applies when dth_in is invalid,
+ *				indicates if vos_tx_begin was successful
+ * \param[in]	err		the error code
+ *
+ * \return	err if non-zero, otherwise 0 or appropriate error
+ */
+int
+vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
+	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, bool started,
+	   int err);
 
 /* vos_obj.c */
 int
@@ -963,12 +998,12 @@ vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
 }
 
-/* Reserve SCM through umem_reserve() for a PMDK transaction */
-struct vos_rsrvd_scm {
-	unsigned int		 rs_actv_cnt;
-	unsigned int		 rs_actv_at;
-	struct pobj_action	*rs_actv;
-};
+int
+vos_dedup_init(struct vos_pool *pool);
+void
+vos_dedup_fini(struct vos_pool *pool);
+void
+vos_dedup_invalidate(struct vos_pool *pool);
 
 umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
@@ -979,6 +1014,7 @@ vos_publish_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 int
 vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 		   daos_size_t size, enum vos_io_stream ios, uint64_t *off);
+
 int
 vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 		   enum vos_io_stream ios);
@@ -1018,18 +1054,11 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 	    uint64_t args);
+int
+vos_gc_pool(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(daos_size_t *rsrvd);
 
-
-static inline uint64_t
-vos_hash_get(void *buf, uint64_t len)
-{
-	if (buf == NULL)
-		return vos_kh_get();
-
-	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
-}
 
 /**
  * Aggregate the creation/punch records in the current entry of the object
@@ -1072,7 +1101,8 @@ enum {
 	VOS_SLAB_EVT_NODE	= 3,
 	VOS_SLAB_EVT_DESC	= 4,
 	VOS_SLAB_OBJ_DF		= 5,
-	VOS_SLAB_MAX		= 6
+	VOS_SLAB_EVT_NODE_SM	= 6,
+	VOS_SLAB_MAX		= 7
 };
 D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
 
@@ -1103,5 +1133,22 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld);
 void
 vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld);
+
+static inline bool
+vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
+		const struct vos_punch_record *punch)
+{
+	if (punch->pr_epc < epc)
+		return false;
+
+	if (punch->pr_epc > epc)
+		return true;
+
+	if (punch->pr_minor_epc >= minor_epc)
+		return true;
+
+	return false;
+}
+
 
 #endif /* __VOS_INTERNAL_H__ */

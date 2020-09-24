@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,10 +121,16 @@ struct dss_module_key obj_module_key = {
 static int
 obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 {
-	if (obj_rpc_is_update(rpc) || obj_rpc_is_fetch(rpc)) {
+	if (obj_rpc_is_update(rpc)) {
 		struct obj_rw_in	*orw = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_IO, &orw->orw_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE,
+				    &orw->orw_pool_uuid);
+	} else if (obj_rpc_is_fetch(rpc)) {
+		struct obj_rw_in	*orw = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_FETCH,
+				    &orw->orw_pool_uuid);
 	} else if (obj_rpc_is_migrate(rpc)) {
 		struct obj_migrate_in	*omi = crt_req_get(rpc);
 

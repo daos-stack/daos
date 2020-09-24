@@ -369,12 +369,16 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		shards = shard_array;
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_FAIL
-	    || rpt->rt_rebuild_op == RB_OP_DRAIN) {
+	if (rpt->rt_rebuild_op == RB_OP_FAIL) {
 		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
 						 rpt->rt_rebuild_ver,
 						 tgts, shards,
 						 rpt->rt_tgts_num, myrank);
+	} else if (rpt->rt_rebuild_op == RB_OP_DRAIN) {
+		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
+						 rpt->rt_rebuild_ver,
+						 tgts, shards,
+						 rpt->rt_tgts_num, -1);
 	} else if (rpt->rt_rebuild_op == RB_OP_ADD) {
 		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
 					       rpt->rt_rebuild_ver,
@@ -465,7 +469,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg);
+			 rebuild_obj_scan_cb, NULL, arg, NULL);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
@@ -488,14 +492,18 @@ rebuild_scanner(void *data)
 	struct umem_attr		uma;
 	int				rc;
 
-	if (is_current_tgt_unavail(rpt)) {
+	if (is_current_tgt_unavail(rpt) ||
+	   (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
+	    rpt->rt_rebuild_op == RB_OP_DRAIN)) {
 		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n",
 			DP_UUID(rpt->rt_pool_uuid));
 		return 0;
 	}
 
-	if (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
-		dss_sleep(daos_fail_value_get() * 1000000);
+	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
+		D_DEBUG(DB_REBUILD, "sleep 2 seconds then retry\n");
+		dss_sleep(2 * 1000);
+	}
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
@@ -529,7 +537,7 @@ rebuild_scanner(void *data)
 	arg.yield_freq = DEFAULT_YIELD_FREQ;
 	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-				 rebuild_container_scan_cb, NULL, &arg);
+				 rebuild_container_scan_cb, NULL, &arg, NULL);
 	}
 
 	ds_pool_child_put(child);

@@ -27,6 +27,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
@@ -74,14 +75,19 @@ var (
 		"no IOMMU detected while running as non-root user with NVMe devices",
 		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
 	)
+	FaultVfioDisabled = serverFault(
+		code.ServerVfioDisabled,
+		"disable_vfio: true in config while running as non-root user with NVMe devices",
+		"set disable_vfio: false or run daos_server as root",
+	)
 	FaultHarnessNotStarted = serverFault(
 		code.ServerHarnessNotStarted,
-		fmt.Sprintf("%s harness not started", DataPlaneName),
+		fmt.Sprintf("%s harness not started", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
 	FaultDataPlaneNotStarted = serverFault(
 		code.ServerDataPlaneNotStarted,
-		fmt.Sprintf("%s instance not started or not responding on dRPC", DataPlaneName),
+		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
 )

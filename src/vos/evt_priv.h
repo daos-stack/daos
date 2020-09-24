@@ -24,6 +24,7 @@
 #define __EVT_PRIV_H__
 
 #include <daos_srv/evtree.h>
+#include "vos_internal.h"
 
 /**
  * Tree node types.
@@ -113,7 +114,7 @@ struct evt_context {
 #define evt_off2ptr(tcx, offset)			\
 	umem_off2ptr(evt_umm(tcx), offset)
 
-#define EVT_NODE_MAGIC 0xfefef00d
+#define EVT_NODE_MAGIC 0xf00d
 #define EVT_DESC_MAGIC 0xbeefdead
 
 /** Convert an offset to a evtree node descriptor
@@ -215,7 +216,8 @@ evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size);
 void
 evt_entry_csum_update(const struct evt_extent *const ext,
 		      const struct evt_extent *const sel,
-		      struct dcs_csum_info *csum_info);
+		      struct dcs_csum_info *csum_info,
+		      daos_size_t rec_len);
 
 /* By definition, all rectangles overlap in the epoch range because all
  * are from start to infinity.  However, for common queries, we often only want
@@ -389,7 +391,8 @@ evt_hdl2tcx(daos_handle_t toh);
 bool
 evt_move_trace(struct evt_context *tcx);
 
-/** Get a pointer to the rectangle corresponding to an index in a tree node
+/** Read the durable format for the rectangle (or child MBR) at the specified
+ *  index.
  * \param[IN]	tcx	The evtree context
  * \param[IN]	node	The tree node
  * \param[IN]	at	The index in the node entry
@@ -398,10 +401,11 @@ evt_move_trace(struct evt_context *tcx);
  * Returns the rectangle at the index
  */
 void
-evt_node_read_rect_at(struct evt_context *tcx, struct evt_node *node,
+evt_node_rect_read_at(struct evt_context *tcx, struct evt_node *node,
 		      unsigned int at, struct evt_rect *rout);
 
-/** Get a pointer to the rectangle corresponding to an index in a tree node
+/** Read the durable format for the rectangle (or child MBR) at the specified
+ *  index.
  * \param[IN]	tcx	The evtree context
  * \param[IN]	nd_off	The offset of the tree node
  * \param[IN]	at	The index in the node entry
@@ -410,14 +414,14 @@ evt_node_read_rect_at(struct evt_context *tcx, struct evt_node *node,
  * Returns the rectangle at the index
  */
 static inline void
-evt_nd_off_read_rect_at(struct evt_context *tcx, umem_off_t nd_off,
+evt_nd_off_rect_read_at(struct evt_context *tcx, umem_off_t nd_off,
 			unsigned int at, struct evt_rect *rout)
 {
 	struct evt_node	*node;
 
 	node = evt_off2node(tcx, nd_off);
 
-	evt_node_read_rect_at(tcx, node, at, rout);
+	evt_node_rect_read_at(tcx, node, at, rout);
 }
 
 /** Fill an evt_entry from the record at an index in a tree node
@@ -482,6 +486,9 @@ static inline struct evt_node_entry *
 evt_node_entry_at(struct evt_context *tcx, struct evt_node *node,
 		  unsigned int at)
 {
+	/** Intermediate nodes have no entries */
+	D_ASSERT(evt_node_is_leaf(tcx, node));
+
 	return &node->tn_rec[at];
 }
 
@@ -495,6 +502,20 @@ evt_node_desc_at(struct evt_context *tcx, struct evt_node *node,
 	D_ASSERT(evt_node_is_leaf(tcx, node));
 
 	return evt_off2desc(tcx, ne->ne_child);
+}
+
+static inline bool
+evt_entry_punched(const struct evt_entry *ent, const struct evt_filter *filter)
+{
+	struct vos_punch_record	punch;
+
+	if (filter == NULL)
+		return false;
+
+	punch.pr_epc = filter->fr_punch_epc;
+	punch.pr_minor_epc = filter->fr_punch_minor_epc;
+
+	return vos_epc_punched(ent->en_epoch, ent->en_minor_epc, &punch);
 }
 
 #endif /* __EVT_PRIV_H__ */

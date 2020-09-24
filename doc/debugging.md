@@ -1,8 +1,8 @@
 # DAOS Debugging
 
 DAOS uses the debug system defined in [CaRT](https://github.com/daos-stack/cart)
-but more specifically the GURT library. Logging for both client and server are
-written to "/tmp/daos.log" unless otherwise set by `D_LOG_FILE`.
+but more specifically the GURT library. Default server log is "/tmp/daos.log"
+and client default log is stdout, unless otherwise set by `D_LOG_FILE`.
 
 ## Registered Subsystems/Facilities
 
@@ -86,5 +86,5 @@ basis (CaRT and DAOS). All debug streams are enabled by default ("DD_MASK=all").
 	$ D_LOG_MASK=DEBUG
 	$ DD_MASK=mgmt -> only logs DEBUG messages related to pool management
 
-**See [DAOS Environment Variables](./environ.md) documentation for more info
+**See the [DAOS Environment Variables](./admin/env_variables.md) documentation for more info
 about debug system environment.**

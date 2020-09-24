@@ -68,6 +68,7 @@ typedef enum {
 	DAOS_OPC_POOL_LIST_ATTR,
 	DAOS_OPC_POOL_GET_ATTR,
 	DAOS_OPC_POOL_SET_ATTR,
+	DAOS_OPC_POOL_DEL_ATTR,
 	DAOS_OPC_POOL_STOP_SVC,
 	DAOS_OPC_POOL_LIST_CONT,
 
@@ -86,6 +87,7 @@ typedef enum {
 	DAOS_OPC_CONT_LIST_ATTR,
 	DAOS_OPC_CONT_GET_ATTR,
 	DAOS_OPC_CONT_SET_ATTR,
+	DAOS_OPC_CONT_DEL_ATTR,
 	DAOS_OPC_CONT_ALLOC_OIDS,
 	DAOS_OPC_CONT_LIST_SNAP,
 	DAOS_OPC_CONT_CREATE_SNAP,
@@ -111,7 +113,6 @@ typedef enum {
 	DAOS_OPC_OBJ_QUERY,
 	DAOS_OPC_OBJ_QUERY_KEY,
 	DAOS_OPC_OBJ_SYNC,
-	DAOS_OPC_OBJ_FETCH_SHARD,
 	DAOS_OPC_OBJ_FETCH,
 	DAOS_OPC_OBJ_UPDATE,
 	DAOS_OPC_OBJ_LIST_DKEY,
@@ -130,7 +131,10 @@ typedef enum {
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
 
-	/** HL APIs */
+	/** KV APIs */
+	DAOS_OPC_KV_OPEN,
+	DAOS_OPC_KV_CLOSE,
+	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
@@ -327,6 +331,16 @@ typedef struct {
 	size_t const		*sizes;
 } daos_pool_set_attr_t;
 
+/** pool del attributes args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t		poh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_pool_del_attr_t;
+
 /** pool add/remove replicas args */
 typedef struct {
 	/** UUID of the pool. */
@@ -498,6 +512,16 @@ typedef struct {
 	size_t const		*sizes;
 } daos_cont_set_attr_t;
 
+/** Container attribute del args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_cont_del_attr_t;
+
 /** Container Object ID allocation args */
 typedef struct {
 	/** Container open handle. */
@@ -557,6 +581,8 @@ typedef struct {
 typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
+	/** Control commit behavior, such as retry. */
+	uint32_t		flags;
 } daos_tx_commit_t;
 
 /** Transaction abort args */
@@ -698,18 +724,20 @@ typedef struct {
 	daos_handle_t		th;
 	/** Object open handle */
 	daos_handle_t		oh;
-	/** Operation flags. */
+	/** API flags. */
 	uint64_t		flags;
 	/** Distribution Key. */
 	daos_key_t		*dkey;
 	/** Number of elements in \a iods and \a sgls. */
-	unsigned int		nr;
+	uint32_t		nr;
+	/** Internal flags. */
+	uint32_t		extra_flags;
 	/** IO descriptor describing IO layout in the object. */
 	daos_iod_t		*iods;
 	/** Scatter / gather list for a memory descriptor. */
 	d_sg_list_t		*sgls;
 	/** IO Map - only valid for fetch. */
-	daos_iom_t		*maps;
+	daos_iom_t		*ioms;
 	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
 	void			*extra_arg;
 } daos_obj_rw_t;
@@ -718,16 +746,6 @@ typedef struct {
 typedef daos_obj_rw_t		daos_obj_fetch_t;
 /** update args struct */
 typedef daos_obj_rw_t		daos_obj_update_t;
-
-/** Object shard fetch args */
-struct daos_obj_fetch_shard {
-	/** base. */
-	daos_obj_fetch_t	base;
-	/** Operation flags. */
-	unsigned int		flags;
-	/** shard. */
-	unsigned int		shard;
-};
 
 /** Object sync args */
 struct daos_obj_sync_args {
@@ -778,6 +796,10 @@ typedef struct {
 	daos_anchor_t		*akey_anchor;
 	/** versions. */
 	uint32_t		*versions;
+	/** Serialized checksum info for enumerated keys and data in sgl.
+	 * (for internal use only)
+	 */
+	d_iov_t			*csum;
 	/** order. */
 	bool			incr_order;
 } daos_obj_list_t;
@@ -923,6 +945,32 @@ typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
 } daos_array_destroy_t;
+
+/** KV open args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** KV ID, */
+	daos_obj_id_t		oid;
+	/** Open mode. */
+	unsigned int		mode;
+	/** Returned KV open handle */
+	daos_handle_t		*oh;
+} daos_kv_open_t;
+
+/** KV close args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+} daos_kv_close_t;
+
+/** KV destroy args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+} daos_kv_destroy_t;
 
 /** KV get args */
 typedef struct {

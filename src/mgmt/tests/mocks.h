@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,11 +134,11 @@ extern void		*ds_mgmt_pool_query_info_ptr;
 void mock_ds_mgmt_pool_query_setup(void);
 
 /*
- * Mock ds_mgmt_exclude
+ * Mock ds_mgmt_tgt_state_update
  */
 extern int		ds_mgmt_target_update_return;
 extern uuid_t		ds_mgmt_target_update_uuid;
-void mock_ds_mgmt_exclude_setup(void);
+void mock_ds_mgmt_tgt_update_setup(void);
 
 /*
  * Mock ds_mgmt_evict

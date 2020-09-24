@@ -204,6 +204,31 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 		  daos_event_t *ev);
 
 /**
+ * drain a set of storage targets from a pool.
+ *
+ * \param uuid	[IN]	UUID of the pool
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	list of pool service ranks
+ * \param tgts	[IN]	Target array to be added from the pool.  If
+ *			tl_tgts = -1, it means it will add all targets
+ *			on the rank.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ */
+int
+daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
+		  const d_rank_list_t *svc, struct d_tgt_list *tgts,
+		  daos_event_t *ev);
+
+
+/**
  * Exclude completely a set of storage targets from a pool. Compared with
  * daos_pool_tgt_exclude(), this API will mark the targets to be DOWNOUT, i.e.
  * the rebuilding for this target is done, while daos_pool_tgt_exclude() only

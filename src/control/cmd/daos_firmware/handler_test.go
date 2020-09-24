@@ -37,6 +37,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -48,7 +49,10 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 		t.Fatalf("couldn't unmarshal response payload")
 	}
 
-	if diff := cmp.Diff(expPayload, payload); diff != "" {
+	cmpOpts := []cmp.Option{
+		cmp.Comparer(common.CmpErrBool),
+	}
+	if diff := cmp.Diff(expPayload, payload, cmpOpts...); diff != "" {
 		t.Errorf("got wrong payload (-want, +got)\n%s\n", diff)
 	}
 }
@@ -61,9 +65,7 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testModules := storage.ScmModules{
-		&storage.ScmModule{UID: "DeviceUID"},
-	}
+	testModules := storage.MockScmModules(2)
 
 	testFWInfo := &storage.ScmFirmwareInfo{
 		ActiveVersion:     "A100",
@@ -83,13 +85,13 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 		},
 		"ScmQueryFirmware nil payload": {
 			req: &pbin.Request{
-				Method: "ScmQueryFirmware",
+				Method: scm.FirmwareQueryMethod,
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input"),
 		},
 		"ScmQueryFirmware success": {
 			req: &pbin.Request{
-				Method:  "ScmQueryFirmware",
+				Method:  scm.FirmwareQueryMethod,
 				Payload: scmQueryReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
@@ -97,21 +99,39 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expPayload: &scm.FirmwareQueryResponse{
-				FirmwareInfo: map[string]storage.ScmFirmwareInfo{
-					"DeviceUID": *testFWInfo,
+				Results: []scm.ModuleFirmware{
+					{
+						Module: *testModules[0],
+						Info:   testFWInfo,
+					},
+					{
+						Module: *testModules[1],
+						Info:   testFWInfo,
+					},
 				},
 			},
 		},
 		"ScmQueryFirmware failure": {
 			req: &pbin.Request{
-				Method:  "ScmQueryFirmware",
+				Method:  scm.FirmwareQueryMethod,
 				Payload: scmQueryReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes:          testModules,
 				GetFirmwareStatusErr: errors.New("mock failure"),
 			},
-			expErr: pbin.PrivilegedHelperRequestFailed("error getting firmware status for device DeviceUID: mock failure"),
+			expPayload: &scm.FirmwareQueryResponse{
+				Results: []scm.ModuleFirmware{
+					{
+						Module: *testModules[0],
+						Error:  "mock failure",
+					},
+					{
+						Module: *testModules[1],
+						Error:  "mock failure",
+					},
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -143,9 +163,7 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testModules := storage.ScmModules{
-		&storage.ScmModule{UID: "DeviceUID"},
-	}
+	testModules := storage.MockScmModules(3)
 
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
@@ -158,27 +176,29 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 		},
 		"ScmUpdateFirmware nil payload": {
 			req: &pbin.Request{
-				Method: "ScmUpdateFirmware",
+				Method: scm.FirmwareUpdateMethod,
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input"),
 		},
 		"ScmUpdateFirmware success": {
 			req: &pbin.Request{
-				Method:  "ScmUpdateFirmware",
+				Method:  scm.FirmwareUpdateMethod,
 				Payload: scmUpdateReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes: testModules,
 			},
 			expPayload: &scm.FirmwareUpdateResponse{
-				Results: map[string]string{
-					"DeviceUID": "OK",
+				Results: []scm.ModuleFirmwareUpdateResult{
+					{Module: *testModules[0]},
+					{Module: *testModules[1]},
+					{Module: *testModules[2]},
 				},
 			},
 		},
 		"ScmUpdateFirmware failure": {
 			req: &pbin.Request{
-				Method:  "ScmUpdateFirmware",
+				Method:  scm.FirmwareUpdateMethod,
 				Payload: scmUpdateReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
@@ -186,8 +206,19 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 				UpdateFirmwareErr: errors.New("mock failure"),
 			},
 			expPayload: &scm.FirmwareUpdateResponse{
-				Results: map[string]string{
-					"DeviceUID": "mock failure",
+				Results: []scm.ModuleFirmwareUpdateResult{
+					{
+						Module: *testModules[0],
+						Error:  "mock failure",
+					},
+					{
+						Module: *testModules[1],
+						Error:  "mock failure",
+					},
+					{
+						Module: *testModules[2],
+						Error:  "mock failure",
+					},
 				},
 			},
 		},
@@ -213,6 +244,99 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 
 			if tc.expPayload == nil {
 				tc.expPayload = &scm.FirmwareUpdateResponse{}
+			}
+			if diff := cmp.Diff(tc.expPayload, payload); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestDaosFirmware_NvmeUpdateHandler(t *testing.T) {
+	updateReqPayload, err := json.Marshal(bdev.FirmwareUpdateRequest{
+		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
+		FirmwarePath:       "/some/path",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDevices := storage.MockNvmeControllers(2)
+
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		nmbc       *bdev.MockBackendConfig
+		expPayload *bdev.FirmwareUpdateResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"NvmeFirmwareUpdate nil payload": {
+			req: &pbin.Request{
+				Method: bdev.FirmwareUpdateMethod,
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input"),
+		},
+		"NvmeFirmwareUpdate success": {
+			req: &pbin.Request{
+				Method:  bdev.FirmwareUpdateMethod,
+				Payload: updateReqPayload,
+			},
+			nmbc: &bdev.MockBackendConfig{
+				ScanRes: &bdev.ScanResponse{Controllers: testDevices},
+			},
+			expPayload: &bdev.FirmwareUpdateResponse{
+				Results: []bdev.DeviceFirmwareUpdateResult{
+					{Device: *testDevices[0]},
+					{Device: *testDevices[1]},
+				},
+			},
+		},
+		"NvmeFirmwareUpdate failure": {
+			req: &pbin.Request{
+				Method:  bdev.FirmwareUpdateMethod,
+				Payload: updateReqPayload,
+			},
+			nmbc: &bdev.MockBackendConfig{
+				ScanRes:   &bdev.ScanResponse{Controllers: testDevices},
+				UpdateErr: errors.New("mock failure"),
+			},
+			expPayload: &bdev.FirmwareUpdateResponse{
+				Results: []bdev.DeviceFirmwareUpdateResult{
+					{
+						Device: *testDevices[0],
+						Error:  "mock failure",
+					},
+					{
+						Device: *testDevices[1],
+						Error:  "mock failure",
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			bp := bdev.NewMockProvider(log, tc.nmbc)
+			handler := &nvmeUpdateHandler{bdevHandler: bdevHandler{bdevProvider: bp}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+
+			payload := &bdev.FirmwareUpdateResponse{}
+			err := json.Unmarshal(resp.Payload, payload)
+			if err != nil {
+				t.Fatalf("couldn't unmarshal response payload")
+			}
+
+			if tc.expPayload == nil {
+				tc.expPayload = &bdev.FirmwareUpdateResponse{}
 			}
 			if diff := cmp.Diff(tc.expPayload, payload); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)

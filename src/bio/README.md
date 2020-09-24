@@ -77,7 +77,7 @@ In-memory (DRAM) data maintained by the Device Owner Xstream consisting of the f
 
  Useful Admin Commands to Query Device Health Data:
   - <a href="#81">dmg storage query blobstore-health</a> [used to query in-memory blobstore health data]
-  - <a href="#82">dmg storage query nvme-health</a> [used to query raw SPDK SSD health stats]
+  - <a href="#82">dmg storage scan --nvme-health</a> [used to query raw SPDK SSD health stats]
 
 <a id="9"></a>
 ## Device Monitoring
@@ -121,9 +121,9 @@ The current NVMe monitoring period for event polling is set at 60 seconds.
 <a id="12"></a>
 ## Useful Admin DMG Commands:
 <a id="82"></a>
-- Query NVMe SSD Health Stats: **$dmg storage query nvme-health**
+- Query NVMe SSD Health Stats: **$dmg storage scan --nvme-health**
 ```
-$dmg storage query nvme-health -l=boro-11:10001
+$dmg storage scan --nvme-health -l=boro-11:10001
 boro-11:10001: connected
 boro-11:10001
         NVMe controllers and namespaces detail with health statistics:

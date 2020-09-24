@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,6 +114,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_EXCLUDE:
 		ds_mgmt_drpc_pool_exclude(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_DRAIN:
+		ds_mgmt_drpc_pool_drain(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_REINTEGRATE:
 		ds_mgmt_drpc_pool_reintegrate(drpc_req, drpc_resp);

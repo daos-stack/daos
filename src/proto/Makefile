@@ -53,6 +53,7 @@ GO_CONTROL_FILES = common/proto/mgmt/acl.pb.go\
 		   common/proto/ctl/system.pb.go\
 		   common/proto/ctl/control.pb.go\
  		   common/proto/ctl/network.pb.go\
+ 		   common/proto/ctl/firmware.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\

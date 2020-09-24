@@ -67,6 +67,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pool_list_attr, sizeof(daos_pool_list_attr_t)},
 	{dc_pool_get_attr, sizeof(daos_pool_get_attr_t)},
 	{dc_pool_set_attr, sizeof(daos_pool_set_attr_t)},
+	{dc_pool_del_attr, sizeof(daos_pool_del_attr_t)},
 	{dc_pool_stop_svc, sizeof(daos_pool_stop_svc_t)},
 	{dc_pool_list_cont, sizeof(daos_pool_list_cont_t)},
 
@@ -85,6 +86,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_list_attr, sizeof(daos_cont_list_attr_t)},
 	{dc_cont_get_attr, sizeof(daos_cont_get_attr_t)},
 	{dc_cont_set_attr, sizeof(daos_cont_set_attr_t)},
+	{dc_cont_del_attr, sizeof(daos_cont_del_attr_t)},
 	{dc_cont_alloc_oids, sizeof(daos_cont_alloc_oids_t)},
 	{dc_cont_list_snap, sizeof(daos_cont_list_snap_t)},
 	{dc_cont_create_snap, sizeof(daos_cont_create_snap_t)},
@@ -110,7 +112,6 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_query, sizeof(daos_obj_query_t)},
 	{dc_obj_query_key, sizeof(daos_obj_query_key_t)},
 	{dc_obj_sync, sizeof(struct daos_obj_sync_args)},
-	{dc_obj_fetch_shard_task,	sizeof(struct daos_obj_fetch_shard)},
 	{dc_obj_fetch_task,		sizeof(daos_obj_fetch_t)},
 	{dc_obj_update_task,		sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},

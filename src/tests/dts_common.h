@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,12 @@
  * - create and open container based on the input container uuid
  */
 int dts_ctx_init(struct dts_context *tsc);
+
+/**
+ * Check if the I/O test context is for asynchronous test.
+ */
+bool dts_is_async(struct dts_context *tsc);
+
 /**
  * Finalize I/O test context:
  * - close and destroy the test container

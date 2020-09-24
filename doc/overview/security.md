@@ -4,8 +4,8 @@ DAOS uses a flexible security model that separates authentication from
 authorization. It is designed to have a minimal impact on the I/O path.
 
 There are two areas of DAOS that require access control. At the user level,
-clients must be able to read and modify only pools and containers to which they
-have been granted access. At the system and administrative levels, only
+clients must be able to read and modify only _pools_ and _containers_ to which 
+they have been granted access. At the system and administrative levels, only
 authorized components must be able to access the DAOS management network.
 
 ## Authentication
@@ -15,15 +15,18 @@ accessing client resources or the DAOS management network.
 
 ### Client Library
 
-The client library is an untrusted component. A trusted process, the DAOS agent,
-runs on the client node and authenticates the user process.
+The client library `libdaos` is an untrusted component. The `daos` user-level 
+command that uses the client library is also an untrusted component. 
+A trusted process, the DAOS agent (`daos_agent`),
+runs on each client node and authenticates the user processes.
 
 The DAOS security model is designed to support different authentication methods
 for client processes. Currently, we support AUTH_SYS authentication only.
 
 ### DAOS Management Network
 
-Each trusted DAOS component (agent, server, and administrative tool) is
+Each trusted DAOS component (`daos_server`, `daos_agent`, 
+and the `dmg` administrative tool) is
 authenticated by means of a certificate generated for that component. These
 components identify one another over the DAOS management network via
 mutually-authenticated TLS.
@@ -31,10 +34,10 @@ mutually-authenticated TLS.
 ## Authorization
 
 Client authorization for resources is controlled by the Access Control List
-(ACL) on the resource, while authorization on the management network is
+(ACL) on the resource. Authorization on the management network is
 achieved by settings on the
 [certificates](https://daos-stack.github.io/admin/deployment/#certificate-configuration)
-generated while setting up the DAOS system.
+that are generated while setting up the DAOS system.
 
 ### Component Certificates
 
@@ -44,13 +47,13 @@ invoked by a component which connects with the correct certificate.
 
 ### Access Control Lists
 
-Client access to resources like pools and containers is controlled by
-DAOS Access Control Lists (ACL). These ACLs are derived in part from NFSv4 ACLs,
+Client access to resources like _pools_ and _containers_ is controlled by
+DAOS Access Control Lists (ACLs). These ACLs are derived in part from NFSv4 ACLs,
 and adapted for the unique needs of a distributed system.
 
 The client may request read-only or read-write access to the resource. If the
 resource ACL doesn't grant them the requested access level, they won't
-be able to connect. While connected, their handle to that resource grants their
+be able to connect. While connected, their handle to that resource grants 
 permissions for specific actions.
 
 The permissions of a handle last for the duration of its existence, similar to
@@ -59,28 +62,28 @@ an open file descriptor in a POSIX system. A handle cannot currently be revoked.
 
 #### Access Control Entries
 
-In the input and output of DAOS tools, an ACE is defined using a colon-separated
-string format:\
+In the input and output of DAOS tools, an Access Control Entry (ACE) is defined 
+using a colon-separated string with the following format: 
 `TYPE:FLAGS:PRINCIPAL:PERMISSIONS`
 
 The contents of all the fields are case-sensitive.
 
 ##### Type
 
-The type of entry. Only one type of ACE is supported at this time.
+The type of ACE entry (mandatory). Only one type of ACE is supported at this time.
 
 * A (Allow): Allow access to the specified principal for the given permissions.
 
 ##### Flags
 
-The flags provide additional information about how the ACE should be
+The (optional) flags provide additional information about how the ACE should be
 interpreted.
 
 * G (Group): The principal should be interpreted as a group.
 
 ##### Principal
 
-The principal (also called the identity) is specified in the name@domain format.
+The principal (also called the identity) is specified in the `name@domain` format.
 The domain should be left off if the name is a UNIX user/group on the local
 domain. Currently, this is the only case supported by DAOS.
 
@@ -92,27 +95,28 @@ also have the `G` (group) flag.
 
 ##### Permissions
 
-The permissions in a resource's ACL permit a certain type of user access to
-the resource.
+The permissions in a resource's ACE permit a certain type of user access to
+the resource. The order of the permission "bits" (characters) within the 
+`PERMISSIONS` field of the ACE is not significant.
 
-| Permission	| Pool Meaning		| Container Meaning		|
-| ------------- | --------------------- | ----------------------------- |
-| r (Read)	| Alias for 't'		| Read data and attributes	|
-| w (Write)	| Alias for 'c' + 'd'	| Write data and attributes	|
-| c (Create)	| Create containers	| N/A				|
-| d (Delete)	| Delete any container	| Delete this container		|
-| t (Get-Prop)	| Connect/query		| Get container properties	|
-| T (Set-Prop)	| N/A			| Change container properties	|
-| a (Get-ACL)	| N/A			| Get container ACL		|
-| A (Set-ACL)	| N/A			| Change container ACL		|
-| o (Set-Owner)	| N/A			| Change owner user and group	|
+| Permission	| Pool Meaning		| Container Meaning				|
+| ------------- | --------------------- | --------------------------------------------- |
+| r (Read)	| Alias for 't'		| Read container data and attributes		|
+| w (Write)	| Alias for 'c' + 'd'	| Write container data and attributes		|
+| c (Create)	| Create containers	| N/A						|
+| d (Delete)	| Delete any container	| Delete this container				|
+| t (Get-Prop)	| Connect/query		| Get container properties			|
+| T (Set-Prop)	| N/A			| Set/Change container properties		|
+| a (Get-ACL)	| N/A			| Get container ACL				|
+| A (Set-ACL)	| N/A			| Set/Change container ACL			|
+| o (Set-Owner)	| N/A			| Set/Change container's owner user and group	|
 
-ACLs containing permissions not applicable to the given resource are considered
+ACEs containing permissions not applicable to the given resource are considered
 invalid.
 
 To allow a user/group to connect to a resource, that principal's permissions
-must include at least some form of read access (for example, read or get-prop).
-A user with write-only permissions will be rejected when requesting RW access to
+must include at least some form of read access (for example, `read` or `get-prop`).
+A user with `write`-only permissions will be rejected when requesting RW access to
 a resource.
 
 ##### Denying Access
@@ -124,16 +128,16 @@ entry for them with no permissions. This is fundamentally different from
 removing a user's ACE, which allows other ACEs in the ACL to determine their
 access.
 
-It is not possible to deny access to a specific group in this way, due to
+It is _not_ possible to deny access to a specific group in this way, due to
 [the way group permissions are enforced](#enforcement).
 
 ##### ACE Examples
 
 * `A::daos_user@:rw`
-    * Allow the UNIX user named daos_user to have read-write access.
+    * Allow the UNIX user named `daos_user` to have read-write access.
 * `A:G:project_users@:tc`
-    * Allow anyone in the UNIX group project_users to access a pool's contents and
-    create containers.
+    * Allow anyone in the UNIX group `project_users` to access a pool's 
+      contents and create containers.
 * `A::OWNER@:rwdtTaAo`
     * Allow the UNIX user who owns the container to have full control.
 * `A:G:GROUP@:rwdtT`
@@ -142,7 +146,7 @@ It is not possible to deny access to a specific group in this way, due to
 * `A::EVERYONE@:r`
     * Allow any user not covered by other rules to have read-only access.
 * `A::daos_user@:`
-    * Deny the UNIX user named daos_user any access to the resource.
+    * Deny the UNIX user named `daos_user` any access to the resource.
 
 #### Enforcement
 
@@ -156,12 +160,12 @@ Access Control Entries (ACEs) will be enforced in the following order:
 In general, enforcement will be based on the first match, ignoring
 lower-priority entries.
 
-If the user is the owner of the resource and there is an OWNER@ entry, they
+If the user is the owner of the resource and there is an `OWNER@` entry, they
 will receive the owner permissions only. They will not receive any of the
 permissions in the named user/group entries, even if they would match those
 other entries.
 
-If the user isn't the owner, or there is no OWNER@ entry, but there is an ACE
+If the user isn't the owner, or there is no `OWNER@` entry, but there is an ACE
 for their user identity, they will receive the permissions for their user
 identity only. They will not receive the permissions for any of their
 groups, even if those group entries have broader permissions than the user entry
@@ -169,17 +173,17 @@ does. The user is expected to match at most one user entry.
 
 If no matching user entry is found, but entries match one or more of the user's
 groups, enforcement will be based on the union of the permissions of all
-matching groups, including the owner-group.
+matching groups, including the owner-group `GROUP@`.
 
-If no matching groups are found, the "Everyone" entry's permissions will be
+If no matching groups are found, the `EVERYONE@` entry's permissions will be
 used, if it exists.
 
-By default, if a user matches no ACEs in the list, access will be denied.
+By default, if a user matches no ACEs in the ACL list, access will be denied.
 
 #### ACL File
 
 Tools that accept an ACL file expect it to be a simple text file with one ACE
-on each line. A line may be marked as a comment by adding a `#` as the first
+on each line. A line may be marked as a comment by using a `#` as the first
 non-whitespace character on the line.
 
 For example:
@@ -194,7 +198,7 @@ A:G:my_great_project@:rw
 A::bob@:r
 ```
 
-That the permission bits and the ACEs themselves don't need to be in any
+The permission bits and the ACEs themselves don't need to be in any
 specific order. However the order may be different when the resulting ACL is
 parsed and displayed by DAOS.
 
@@ -205,8 +209,9 @@ The maximum size of the ACE list in a DAOS ACL internal data structure is 64KiB.
 To calculate the internal data size of an ACL, use the following formula for
 each ACE:
 
-* The base size of an ACE is 256 bytes.
+* The base size of an ACE is 256 Bytes.
 * If the ACE principal is *not* one of the special principals:
   * Add the length of the principal string + 1.
-  * If that value is not 64-byte aligned, round up to the nearest 64 byte
+  * If that value is not 64-Byte aligned, round up to the nearest 64-Byte
     boundary.
+

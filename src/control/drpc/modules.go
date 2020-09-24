@@ -109,7 +109,7 @@ func (m securityAgentMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%d:%d", m.Module(), m.ID())
+	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.
@@ -140,15 +140,25 @@ func (m mgmtMethod) ID() int32 {
 
 func (m mgmtMethod) String() string {
 	if s, ok := map[mgmtMethod]string{
-		MethodPrepShutdown: "prep shutdown",
-		MethodPingRank:     "ping",
-		MethodSetRank:      "set rank",
-		MethodSetUp:        "setup MS",
+		MethodPrepShutdown:    "PrepShutdown",
+		MethodPingRank:        "Ping",
+		MethodSetRank:         "SetRank",
+		MethodSetUp:           "SetUp",
+		MethodPoolCreate:      "PoolCreate",
+		MethodPoolDestroy:     "PoolDestroy",
+		MethodPoolEvict:       "PoolEvict",
+		MethodPoolExclude:     "PoolExclude",
+		MethodPoolDrain:       "PoolDrain",
+		MethodPoolExtend:      "PoolExtend",
+		MethodPoolReintegrate: "PoolReintegrate",
+		MethodPoolQuery:       "PoolQuery",
+		MethodPoolSetProp:     "PoolSetProp",
+		MethodListPools:       "ListPools",
 	}[m]; ok {
 		return s
 	}
 
-	return fmt.Sprintf("%d:%d", m.Module(), m.ID())
+	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.
@@ -185,6 +195,8 @@ const (
 	MethodPoolEvict mgmtMethod = C.DRPC_METHOD_MGMT_POOL_EVICT
 	// MethodPoolExclude is a ModuleMgmt method
 	MethodPoolExclude mgmtMethod = C.DRPC_METHOD_MGMT_EXCLUDE
+	// MethodPoolDrain is a ModuleMgmt method
+	MethodPoolDrain mgmtMethod = C.DRPC_METHOD_MGMT_DRAIN
 	// MethodPoolExtend is a ModuleMgmt method
 	MethodPoolExtend mgmtMethod = C.DRPC_METHOD_MGMT_EXTEND
 	// MethodPoolReintegrate is a ModuleMgmt method
@@ -239,7 +251,7 @@ func (m srvMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%d:%d", m.Module(), m.ID())
+	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.
@@ -277,7 +289,7 @@ func (m securityMethod) String() string {
 		return s
 	}
 
-	return fmt.Sprintf("%d:%d", m.Module(), m.ID())
+	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.

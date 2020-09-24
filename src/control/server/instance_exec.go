@@ -29,6 +29,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
@@ -43,31 +44,28 @@ type IOServerRunner interface {
 	GetConfig() *ioserver.Config
 }
 
-func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) (err error) {
+func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error {
 	idx := srv.Index()
 
 	srv.log.Debugf("instance %d: checking if storage is formatted", idx)
-	if err = srv.awaitStorageReady(ctx, recreateSBs); err != nil {
-		return
+	if err := srv.awaitStorageReady(ctx, recreateSBs); err != nil {
+		return err
 	}
-	if err = srv.createSuperblock(recreateSBs); err != nil {
-		return
+	if err := srv.createSuperblock(recreateSBs); err != nil {
+		return err
 	}
 
 	if !srv.hasSuperblock() {
 		return errors.Errorf("instance %d: no superblock after format", idx)
 	}
 
-	return
+	return nil
 }
 
 // start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
 func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) error {
-	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
-		return errors.Wrap(err, "start failed; unable to prepare NVMe device(s)")
-	}
 	if err := srv.bdevClassProvider.GenConfigFile(); err != nil {
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
@@ -84,7 +82,7 @@ func (srv *IOServerInstance) start(ctx context.Context, errChan chan<- error) er
 // management service on MS replicas immediately so other instances can join.
 // I/O server modules are then loaded.
 func (srv *IOServerInstance) waitReady(ctx context.Context, errChan chan error) error {
-	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), DataPlaneName)
+	srv.log.Debugf("instance %d: awaiting %s init", srv.Index(), build.DataPlaneName)
 
 	select {
 	case <-ctx.Done(): // propagated harness exit
@@ -114,12 +112,12 @@ func (srv *IOServerInstance) finishStartup(ctx context.Context, ready *srvpb.Not
 	srv.setTargetCount(int(ready.GetNtgts()))
 
 	if srv.isMSReplica() {
-		if err := srv.startMgmtSvc(); err != nil {
+		if err := srv.startMgmtSvc(ctx); err != nil {
 			return errors.Wrap(err, "failed to start management service")
 		}
 	}
 
-	if err := srv.loadModules(); err != nil {
+	if err := srv.loadModules(ctx); err != nil {
 		return errors.Wrap(err, "failed to load I/O server modules")
 	}
 

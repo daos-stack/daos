@@ -86,14 +86,17 @@ enum {
 				 * purpose.
 				 */
 	DAOS_OC_EC_K2P1_L32K,	/* Erasure code, 2 data cells, 1 parity cell,
-				 * cell size 32KB.
+				 * cell size 32K.
 				 */
 	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
-				 * cell size 32KB.
+				 * cell size 32K.
 				 */
-	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
-				 * cell size 1MB.
+	DAOS_OC_EC_K4P2_L32K,	/* Erasure code, 4 data cells, 2 parity cells,
+				 * cell size 32K.
 				 */
+
+	DAOS_OC_EC_K2P1_SPEC_RANK_L32K,
+	DAOS_OC_EC_K4P1_SPEC_RANK_L32K,
 };
 
 static inline bool
@@ -115,7 +118,9 @@ daos_obj_is_srank(daos_obj_id_t oid)
 	int	oc = daos_obj_id2class(oid);
 
 	return oc == DAOS_OC_R3S_SPEC_RANK || oc == DAOS_OC_R1S_SPEC_RANK ||
-	       oc == DAOS_OC_R2S_SPEC_RANK;
+	       oc == DAOS_OC_R2S_SPEC_RANK ||
+	       oc == DAOS_OC_EC_K2P1_SPEC_RANK_L32K ||
+	       oc == DAOS_OC_EC_K4P1_SPEC_RANK_L32K;
 }
 
 enum daos_io_mode {
@@ -342,7 +347,6 @@ int dc_obj_punch_akeys_task(tse_task_t *task);
 int dc_obj_query(tse_task_t *task);
 int dc_obj_query_key(tse_task_t *task);
 int dc_obj_sync(tse_task_t *task);
-int dc_obj_fetch_shard_task(tse_task_t *task);
 int dc_obj_fetch_task(tse_task_t *task);
 int dc_obj_update_task(tse_task_t *task);
 int dc_obj_list_dkey(tse_task_t *task);
@@ -389,6 +393,8 @@ enum daos_io_flags {
 	DIOF_WITH_SPEC_EPOCH	= 0x4,
 	/* The operation is for EC recovering. */
 	DIOF_EC_RECOV		= 0x8,
+	/* The key existence. */
+	DIOF_CHECK_EXISTENCE	= 0x10,
 };
 
 /**
@@ -430,6 +436,7 @@ enum daos_recx_type {
 struct daos_recx_ep {
 	daos_recx_t	re_recx;
 	daos_epoch_t	re_ep;
+	uint32_t	re_rec_size;
 	uint8_t		re_type;
 };
 

@@ -25,6 +25,7 @@ package main
 
 import (
 	"net"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -48,6 +49,8 @@ type mgmtModule struct {
 	ctlInvoker control.Invoker
 	aiCache    *attachInfoCache
 	numaAware  bool
+	netCtx     context.Context
+	mutex      sync.Mutex
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -95,12 +98,26 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	numaNode := mod.aiCache.defaultNumaNode
 
 	if mod.numaAware {
-		numaNode, err = netdetect.GetNUMASocketIDForPid(pid)
+		numaNode, err = netdetect.GetNUMASocketIDForPid(mod.netCtx, pid)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	// The flow is optimized for the case where isCached() is true.  In the normal case,
+	// caching is enabled, there's data in the info cache and the agent can quickly return
+	// a response without the overhead of a mutex.
+	if mod.aiCache.isCached() {
+		return mod.aiCache.getResponse(numaNode)
+	}
+
+	// If the cache was not initialized, protect cache initialization
+	// and check the initialization status once the mutex is obtained.
+	mod.mutex.Lock()
+	defer mod.mutex.Unlock()
+
+	// If another thread succeeded in initializing the cache while this thread waited
+	// to get the mutex, return the cached response instead of initializing the cache again.
 	if mod.aiCache.isCached() {
 		return mod.aiCache.getResponse(numaNode)
 	}
@@ -129,7 +146,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
-	scanResults, err := netdetect.ScanFabric(resp.Provider)
+	scanResults, err := netdetect.ScanFabric(mod.netCtx, resp.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +158,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte, pid int32) ([]byte, erro
 		return nil, errors.Wrap(err, "Failed to convert GetAttachInfo response")
 	}
 
-	err = mod.aiCache.initResponseCache(pbResp, scanResults)
+	err = mod.aiCache.initResponseCache(mod.netCtx, pbResp, scanResults)
 	if err != nil {
 		return nil, err
 	}
