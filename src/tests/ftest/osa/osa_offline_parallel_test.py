@@ -122,7 +122,7 @@ class OSAOfflineParallelTest(TestWithServers):
             results (queue) : dmg command output queue.
         """
         # dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        dmg = copy.deepcopy(self.dmg_command)
+        dmg = copy.copy(self.dmg_command)
         self.log.info("Action: {0}".format(action))
         try:
             if action == "exclude":
