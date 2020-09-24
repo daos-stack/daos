@@ -218,19 +218,19 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		if err != nil {
 			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
 		}
-		srv.log.Debugf("instance %d: bio health received for ctrlr (%+v)",
-			srv.Index(), healthPB)
 
 		health := new(storage.NvmeControllerHealth)
 		if err := convert.Types(healthPB, health); err != nil {
-			return errors.Wrapf(err, "converting health stats from smd device %s", dev.Uuid)
+			return errors.Wrapf(err, "converting health stats from smd device %s",
+				dev.Uuid)
 		}
 
 		key, err := health.GenAltKey()
 		if err != nil {
-			return errors.Wrapf(err,
-				"generate alt key for controller from health stats from smd device %s",
-				dev.Uuid)
+			srv.log.Debugf("gen alt nvme ctrlr key from health stats (smd %s): %s",
+				err.Error())
+
+			return FaultBioHealthNotReady(dev.Uuid)
 		}
 
 		msg := fmt.Sprintf("instance %d: stats received for ctrlr key %s from smd uuid %s",
