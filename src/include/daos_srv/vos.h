@@ -442,7 +442,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch.
- * \param flags	[IN]	Fetch flags
+ * \param flags	[IN]	VOS flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN/OUT]
@@ -628,16 +628,14 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. Ignored if a DTX handle
  *			is provided.
- * \param cond_flags [IN]
- *			conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a ios.
  * \param iods	[IN/OUT]
  *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
- * \param fetch_flags [IN]
- *			VOS fetch flags, VOS_OF_FETCH_SIZE_ONLY or
- *			VOS_OF_FETCH_RECX_LIST.
+ * \param vos_flags [IN]
+ *			VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY
+ *			or VOS_OF_FETCH_RECX_LIST.
  * \param shadows [IN]	Optional shadow recx/epoch lists, one for each iod.
  *			data of extents covered by these should not be returned
  *			by fetch function. Only used for EC obj degraded fetch.
@@ -649,7 +647,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		daos_key_t *dkey, unsigned int nr,
-		daos_iod_t *iods, uint32_t fetch_flags,
+		daos_iod_t *iods, uint32_t vos_flags,
 		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
 		struct dtx_handle *dth);
 
