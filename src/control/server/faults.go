@@ -146,13 +146,6 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 	)
 }
 
-func FaultBioHealthNotReady(uuid string) *fault.Fault {
-	return serverFault(
-		code.ServerBioHealthNotReady,
-		fmt.Sprintf("NVMe health stats could not be retrieved for SMD device %s", uuid),
-		"retry the operation after leaving some time for background polling to occur")
-}
-
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverFault(
 		code.ServerConfigDuplicateFabric,
