@@ -304,6 +304,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 
 		rpc_priv->crp_complete_cb(&cbinfo);
 	}
+
+	RPC_DECREF(rpc_priv);
 }
 
 /* Flag bits definition for crt_ctx_epi_abort */
@@ -363,8 +365,6 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		d_list_del_init(&rpc_priv->crp_epi_link);
 		epi->epi_req_wait_num--;
 		crt_rpc_complete(rpc_priv, -DER_CANCELED);
-		/* corresponds to ref taken when adding to waitq */
-		RPC_DECREF(rpc_priv);
 	}
 
 	/* abort RPCs in inflight queue */
@@ -735,7 +735,6 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
-		RPC_DECREF(rpc_priv);
 		break;
 	case RPC_STATE_FWD_UNREACH:
 		RPC_ERROR(rpc_priv,
@@ -745,7 +744,6 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
-		RPC_DECREF(rpc_priv);
 		break;
 	default:
 		if (rpc_priv->crp_on_wire) {
@@ -1053,7 +1051,6 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		crt_context_req_untrack(tmp_rpc);
 		/* for error case here */
 		crt_rpc_complete(tmp_rpc, rc);
-		RPC_DECREF(tmp_rpc);
 	}
 }
 
