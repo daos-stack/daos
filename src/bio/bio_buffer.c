@@ -637,22 +637,13 @@ rw_completion(void *cb_arg, int err)
 	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
 	xs_ctxt->bxc_blob_rw--;
 
-	/* Fault injection - Induce IO Write Error.
+	/* Fault injection - Induce IO Error.
 	 */
-	if (DAOS_FAIL_CHECK(DAOS_NVME_BIO_WRITE_ERR)) {
+	if (DAOS_FAIL_CHECK(DAOS_NVME_BIO_WRITE_ERR) ||
+		DAOS_FAIL_CHECK(DAOS_NVME_BIO_READ_ERR)) {
 		D_ALLOC_PTR(mem);
-		mem->mem_err_type = MET_WRITE;
-		mem->mem_bs = xs_ctxt->bxc_blobstore;
-		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
-		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
-				     mem);
-	}
-
-	/* Fault injection - Induce IO Read Error.
-	 */
-	if (DAOS_FAIL_CHECK(DAOS_NVME_BIO_READ_ERR)) {
-		D_ALLOC_PTR(mem);
-		mem->mem_err_type = MET_READ;
+		mem->mem_err_type = (DAOS_FAIL_CHECK(DAOS_NVME_BIO_WRITE_ERR) ? 
+			MET_WRITE : MET_READ);
 		mem->mem_bs = xs_ctxt->bxc_blobstore;
 		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
