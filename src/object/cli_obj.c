@@ -994,7 +994,7 @@ obj_pool_query_cb(tse_task_t *task, void *data)
 			task, task->dt_result);
 	} else {
 		D_ASSERT(args->info != NULL);
-		if (obj->cob_version < args->info->pi_map_ver) 
+		if (obj->cob_version < args->info->pi_map_ver)
 			obj_layout_refresh(obj);
 	}
 	obj_decref(obj);
