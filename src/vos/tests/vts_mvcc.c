@@ -44,6 +44,7 @@ struct tx_helper {
 	uint32_t		 th_op_seq;
 	/** Operation actually does a write */
 	bool			 th_change;
+	/** Added to have a code change */
 };
 
 struct mvcc_arg {
