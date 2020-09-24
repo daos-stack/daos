@@ -209,14 +209,14 @@ test_filled_stripe(void **statep)
 	unsigned int		 len, shard = 2; /* 2+1, 1 group leadeer */
 	int			 i, rc;
 
-	ec_setup_from_test_args(&ctx, (test_arg_t *) *statep);
+	ec_setup_from_test_args(&ctx, (test_arg_t *)*statep);
 	ec_setup_cont_obj(&ctx, dts_ec_agg_oc);
 	assert_int_equal(daos_oclass_is_ec(ctx.oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
 	len = oca->u.ec.e_len;
 	for (i = 0; i < 256; i++) {
 		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (len / 2),
-				       1 << 14);
+					  len / 2);
 		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey,
 				     1, &ctx.update_iod, &ctx.update_sgl, NULL);
 		assert_int_equal(rc, 0);
@@ -224,7 +224,7 @@ test_filled_stripe(void **statep)
 	sleep(30);
 	for (i = 0; i < 64; i++) {
 		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (2 * len),
-				       1 << 16);
+					  2 * len);
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,

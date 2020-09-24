@@ -243,7 +243,7 @@ agg_recx_iter_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		     vos_iter_type_t type, vos_iter_param_t *param,
 		     void *cb_arg, unsigned int *acts)
 {
-	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
+	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
 	int			 rc = 0;
 
 	D_ASSERT(type == VOS_ITER_RECX);
@@ -281,8 +281,7 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 		}
 	} else {
 		unsigned int *buf = NULL;
-		 D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf,
-			                     ent_buf_len);
+		D_REALLOC(buf, sgl->sg_iovs[iov_entry].iov_buf, ent_buf_len);
 		 if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -434,7 +433,7 @@ agg_encode_full_stripe_ult(void *arg)
 	ec_encode_data(cell_bytes, k, p, entry->ae_codec->ec_gftbls, data,
 		       parity_bufs);
 
-        ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
 /* Encodes a full stripe. Called when replicas form a full stripe.
@@ -622,15 +621,15 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		goto out;
 
 	if (entry->ae_par_extent.ape_epoch > entry->ae_cur_stripe.as_hi_epoch &&
-			entry->ae_par_extent.ape_epoch != ~(0ULL)) {
+		entry->ae_par_extent.ape_epoch != ~(0ULL)) {
 		/* Parity newer than data; nothing to do. */
 		update_vos = false;
 		goto out;
 	}
 
-	if ((entry->ae_par_extent.ape_epoch == ~(0ULL)
-				 && agg_stripe_is_filled(entry, false)) ||
-					agg_stripe_is_filled(entry, true)) {
+	if ((entry->ae_par_extent.ape_epoch == ~(0ULL) &&
+		agg_stripe_is_filled(entry, false)) ||
+		agg_stripe_is_filled(entry, true)) {
 		/* Replicas constitute a full stripe. */
 		rc = agg_encode_local_parity(entry);
 		goto out;
@@ -714,8 +713,7 @@ out:
 
 static int
 agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
-	 struct ec_agg_entry *agg_entry,
-	 unsigned int *acts)
+	      struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
 	int rc = 0;
 
@@ -729,7 +727,7 @@ agg_akey_post(daos_handle_t ih, vos_iter_entry_t *entry,
  */
 static int
 agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
-	struct ec_agg_entry *agg_entry, unsigned int *acts)
+       struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
 	int			rc = 0;
 
@@ -747,7 +745,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_type_t type, vos_iter_param_t *param,
 	void *cb_arg, unsigned int *acts)
 {
-	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
+	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
 	int			 rc = 0;
 
 	switch (type) {
@@ -774,7 +772,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_type_t type, vos_iter_param_t *param,
 	void *cb_arg, unsigned int *acts)
 {
-	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
+	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
 	int			 rc = 0;
 
 	switch (type) {
@@ -796,8 +794,8 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
  */
 static void
 agg_reset_entry(daos_handle_t lcoh, struct ec_agg_entry *agg_entry,
-	       vos_iter_entry_t *entry, struct daos_oclass_attr *oca,
-	       d_sg_list_t *sgl)
+		vos_iter_entry_t *entry, struct daos_oclass_attr *oca,
+		d_sg_list_t *sgl)
 {
 	agg_entry->ae_oid		= entry->ie_oid;
 	agg_entry->ae_oca		= oca;
@@ -849,10 +847,10 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
  */
 static int
 agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-	vos_iter_type_t type, vos_iter_param_t *param,
-	void *cb_arg, unsigned int *acts)
+		    vos_iter_type_t type, vos_iter_param_t *param,
+		    void *cb_arg, unsigned int *acts)
 {
-	struct ec_agg_param	*agg_param = (struct ec_agg_param *) cb_arg;
+	struct ec_agg_param	*agg_param = (struct ec_agg_param *)cb_arg;
 	struct daos_oclass_attr *oca;
 	int			 rc = 0;
 
@@ -871,16 +869,11 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			}
 			D_INIT_LIST_HEAD(&agg_param->ap_agg_entry->
 					 ae_cur_stripe.as_dextents);
-			/*
-			agg_param->ap_agg_entry->ae_pool_info =
-				&agg_param->ap_pool_info;
-			*/
 			agg_param->ap_agg_entry->ae_epr = param->ip_epr;
-
 		}
 		agg_reset_entry(agg_param->ap_cont_handle,
-			       agg_param->ap_agg_entry, entry, oca,
-			       &agg_param->ap_sgl);
+				agg_param->ap_agg_entry, entry, oca,
+				&agg_param->ap_sgl);
 		rc = agg_subtree_iterate(ih, &entry->ie_oid, agg_param);
 		if (rc)
 			D_ERROR("Subtred iterate failed "DF_RC"\n", DP_RC(rc));
