@@ -1421,20 +1421,23 @@ main(int argc, char **argv)
 		ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
 	}
 
-	tmp_oid = dts_oid_gen(ts_class, 0, 0);
-	oca = daos_oclass_attr_find(tmp_oid);
-	D_ASSERT(oca != NULL);
-	if (DAOS_OC_IS_EC(oca))
-		ec_vsize = oca->u.ec.e_len * oca->u.ec.e_k;
-	if (ec_vsize != 0 && vsize % ec_vsize != 0 && ts_ctx.tsc_mpi_rank == 0)
-		fprintf(stdout, "for EC obj perf test, vsize (-s) %d should be "
-			"multiple of %d (full-stripe size) to get better "
-			"performance.\n", vsize, ec_vsize);
+	if (ts_class != DAOS_OC_RAW) {
+		tmp_oid = dts_oid_gen(ts_class, 0, 0);
+		oca = daos_oclass_attr_find(tmp_oid);
+		D_ASSERT(oca != NULL);
+		if (DAOS_OC_IS_EC(oca))
+			ec_vsize = oca->u.ec.e_len * oca->u.ec.e_k;
+		if (ec_vsize != 0 && vsize % ec_vsize != 0 &&
+		    ts_ctx.tsc_mpi_rank == 0)
+			fprintf(stdout, "for EC obj perf test, vsize (-s) %d "
+				"should be multiple of %d (full-stripe size) "
+				"to get better performance.\n",
+				vsize, ec_vsize);
+	}
 
 	ts_ctx.tsc_cred_vsize	= vsize;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
-
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
