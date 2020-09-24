@@ -1095,14 +1095,19 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			rc = lrc;
 			goto done;
 		}
-
-		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
-			rc = -DER_NONEXIST;
-			goto done;
+		if (rc == -DER_NONEXIST) {
+			if (flags & VOS_OF_COND_PUNCH)
+				goto done;
 		}
+	} else if (rc != 0) {
+		/** Abort on any other error */
+		goto done;
 	}
 
 	if (rc != 0) {
+		/** If it's not a replay punch, we should not insert
+		 *  anything.   In such case, ts_set will be NULL
+		 */
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
@@ -1125,8 +1130,6 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 
-	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
-		rc = -DER_TX_RESTART;
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 

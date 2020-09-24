@@ -41,10 +41,95 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+static int
+empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
+		 vos_iter_type_t type, vos_iter_param_t *param, void *cb_arg,
+		 unsigned int *acts)
+{
+	bool	*empty = cb_arg;
+
+	*empty = false;
+
+	return 1; /* Return positive number to break iteration */
+}
+
+static int
+tree_is_empty(struct vos_object *obj, daos_handle_t toh,
+	      const daos_epoch_range_t *epr, vos_iter_type_t type)
+{
+	bool	empty = true;
+	int	rc;
+
+	rc = vos_iterate_key(obj, toh, type, epr, empty_tree_check, &empty,
+			     NULL);
+
+
+	if (rc < 0)
+		return rc;
+
+	if (empty)
+		return 1;
+
+	return 0;
+}
+
+static int
+vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
+		    struct vos_ts_set *ts_set, const daos_epoch_range_t *epr,
+		    vos_iter_type_t type)
+{
+	const char	*tree_name = "AKEY";
+	uint64_t	 punch_flag = VOS_OF_PUNCH_PROPAGATE;
+	int		 rc = 0;
+	uint32_t	 read_flag = 0;
+	uint32_t	 write_flag = 0;
+
+	if (vos_ts_set_check_conflict(ts_set, epr->epr_hi)) {
+		D_DEBUG(DB_IO, "Failed to punch key: "DF_RC"\n",
+			DP_RC(-DER_TX_RESTART));
+		return -DER_TX_RESTART;
+	}
+
+	switch (type) {
+	case VOS_ITER_DKEY:
+		read_flag = VOS_TS_READ_OBJ;
+		write_flag = VOS_TS_WRITE_OBJ;
+		tree_name = "DKEY";
+		break;
+	case VOS_ITER_AKEY:
+		read_flag = VOS_TS_READ_DKEY;
+		write_flag = VOS_TS_WRITE_DKEY;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+
+	/** The check for propagation needs to update the read
+	 *  time on the object as it's iterating the dkey tree
+	 */
+	vos_ts_set_append_cflags(ts_set, read_flag);
+
+	rc = tree_is_empty(obj, toh, epr, type);
+	if (rc > 0) {
+		/** dkey tree is now empty, punch the object */
+		D_DEBUG(DB_TRACE, "%s tree empty, punching object\n",
+			tree_name);
+		vos_ts_set_append_vflags(ts_set, punch_flag);
+		vos_ts_set_append_cflags(ts_set, write_flag);
+
+		return 1;
+	}
+
+	if (rc != 0)
+		D_ERROR("Could not check emptiness on punch: "
+			DF_RC"\n", DP_RC(rc));
+
+	return rc;
+}
+
 /**
  * @} vos_tree_helper
  */
-
 static int
 key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	  daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys,
@@ -59,6 +144,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
 	int			 rc;
+	int			 propagated = 0;
 
 	if (flags & VOS_OF_COND_PUNCH) {
 		vos_ilog_fetch_init(&obj_info);
@@ -81,6 +167,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	ci_set_null(&csum);
 
 	if (!akeys) {
+punch_dkey:
+		propagated = 0; /* Reset so we don't punch the object */
 		rbund.rb_iov = dkey;
 		rbund.rb_tclass	= VOS_BTR_DKEY;
 
@@ -89,6 +177,14 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		if (rc != 0)
 			D_GOTO(out, rc);
 
+		if (rc == 0) {
+			rc = vos_propagate_check(obj, obj->obj_toh, ts_set,
+						 &epr, VOS_ITER_DKEY);
+			if (rc == 1) {
+				propagated = 1;
+				rc = 0;
+			}
+		}
 	} else {
 		daos_handle_t		 toh;
 		int			 i;
@@ -125,6 +221,17 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 				break;
 			}
 		}
+
+		if (rc == 0) {
+			rc = vos_propagate_check(obj, toh, ts_set, &epr,
+						 VOS_ITER_AKEY);
+			if (rc == 1) {
+				propagated = 1;
+				key_tree_release(toh, 0);
+				goto punch_dkey;
+			}
+		}
+
 		key_tree_release(toh, 0);
 	}
  out:
@@ -133,6 +240,9 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		vos_ilog_fetch_finish(&dkey_info);
 		vos_ilog_fetch_finish(&akey_info);
 	}
+
+	if (rc == 0 && propagated)
+		rc = propagated;
 
 	return rc;
 }
@@ -153,7 +263,7 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	if (rc)
 		D_GOTO(failed, rc);
 
-	/* evict it from catch, because future fetch should only see empty
+	/* evict it from cache, because future fetch should only see empty
 	 * object (without obj_df)
 	 */
 	vos_obj_evict(occ, obj);
@@ -174,6 +284,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_ts_set	*ts_set;
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
+	bool			 punch_obj = false;
 	daos_epoch_range_t	 epr = { 0 };
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
@@ -235,22 +346,34 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
-			  false, DAOS_INTENT_PUNCH, true, &obj, ts_set);
+			  (flags & VOS_OF_COND_PUNCH) ? true : false,
+			  DAOS_INTENT_PUNCH, true, &obj, ts_set);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
 			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
-		} else { /* object punch */
-			rc = obj_punch(coh, obj, epr.epr_hi, flags, ts_set);
-		}
-	}
 
+			if (rc > 0) {
+				/** Punch the object too.  Uncomment with
+				 * DAOS-4698 is fixed.  Otherwise, it will
+				 * cause rebuild failures.
+				 *
+				 * punch_obj = true;
+				 */
+				rc = 0;
+			}
+		} else {
+			punch_obj = true;
+		}
+
+		if (punch_obj)
+			rc = obj_punch(coh, obj, epr.epr_hi, flags, ts_set);
+	}
 abort:
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
-
 reset:
 	if (rc != 0)
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
@@ -684,6 +807,12 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 failed:
 	D_ERROR("Could not prepare akey iterator "DF_RC"\n", DP_RC(rc));
 	return rc;
+}
+
+static int
+prepare_key_from_toh(struct vos_obj_iter *oiter, daos_handle_t toh)
+{
+	return dbtree_iter_prepare(toh, 0, &oiter->it_hdl);
 }
 
 /**
@@ -1132,6 +1261,15 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->it_iter.it_for_purge = 1;
 	if (param->ip_flags & VOS_IT_FOR_REBUILD)
 		oiter->it_iter.it_for_rebuild = 1;
+	if (param->ip_flags == VOS_IT_KEY_TREE) {
+		/** Prepare the iterator from an already open tree handle.   See
+		 *  vos_iterate_key
+		 */
+		D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
+		oiter->it_obj = param->ip_dkey.iov_buf;
+		rc = prepare_key_from_toh(oiter, param->ip_hdl);
+		goto done;
+	}
 
 	cont = vos_hdl2cont(param->ip_hdl);
 	rc = vos_ts_set_add(ts_set, cont->vc_ts_idx, NULL, 0);
@@ -1184,6 +1322,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 	}
 
+done:
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
@@ -1401,7 +1540,7 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	 * to ensure that a parent never gets removed before all nested
 	 * iterators are finalized
 	 */
-	if (oiter->it_obj != NULL &&
+	if (oiter->it_flags != VOS_IT_KEY_TREE && oiter->it_obj != NULL &&
 	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
 		vos_obj_release(vos_obj_cache_current(), oiter->it_obj, false);
 

@@ -1024,14 +1024,14 @@ copy_str(char *buf, const char *src, size_t *len)
 
 static void
 obj_punch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	     daos_epoch_t epoch)
+	     daos_epoch_t epoch, uint64_t flags)
 {
 	struct dtx_handle	*dth;
 	struct dtx_id		 xid;
 	int			 rc;
 
 	vts_dtx_begin(&oid, coh, epoch, 0, &dth);
-	rc = vos_obj_punch(coh, oid, epoch, 0, 0, NULL, 0, NULL, dth);
+	rc = vos_obj_punch(coh, oid, epoch, 0, flags, NULL, 0, NULL, dth);
 	xid = dth->dth_xid;
 	vts_dtx_end(dth);
 
@@ -1259,7 +1259,7 @@ cond_test(void **state)
 	/** Check the value before, should be empty */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch - 4, true, "a", "b",
 		      0, 0, sgl, "xxxx", 'x');
-	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++);
+	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, 0);
 	/** Non conditional fetch should not see data anymore */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "a", "b",
 		      0, 0, sgl, "xxxx", 'x');

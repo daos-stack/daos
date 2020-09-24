@@ -233,9 +233,11 @@ enum {
 	/* query recx list */
 	VOS_OF_FETCH_RECX_LIST		= (1 << 11),
 	/* only set read TS */
-	VOS_OF_FETCH_SET_TS_ONLY		= (1 << 12),
+	VOS_OF_FETCH_SET_TS_ONLY	= (1 << 12),
 	/* check the target (obj/dkey/akey) existence */
 	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
+	/** Set when propagating a punch that results in empty subtree */
+	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -259,6 +261,7 @@ enum {
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
 D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */
 enum {
@@ -299,6 +302,8 @@ enum {
 	VOS_IT_FOR_REBUILD	= (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
+	/** Mask for all flags */
+	VOS_IT_MASK		= (1 << 7) - 1,
 };
 
 /**

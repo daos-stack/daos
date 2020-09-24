@@ -1090,6 +1090,29 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
 
+/** Internal bit for initializing iterator from open tree handle */
+#define VOS_IT_KEY_TREE	(1 << 31)
+/** Ensure there is no overlap with public iterator flags (defined in
+ *  src/include/daos_srv/vos_types.h).
+ */
+D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
+
+/** Internal vos iterator API for iterating through keys using an
+ *  open tree handle to initialize the iterator
+ *
+ *  \param obj[IN]	VOS object
+ *  \param toh[IN]	Open key tree handle
+ *  \param type[IN]	Iterator type (VOS_ITER_AKEY/DKEY only)
+ *  \param epr[IN]	Valid epoch range for iteration
+ *  \param cb[IN]	Callback for key
+ *  \param arg[IN]	argument to pass to callback
+ *  \param dth[IN]	dtx handle
+ */
+int
+vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
+		const daos_epoch_range_t *epr, vos_iter_cb_t cb,
+		void *arg, struct dtx_handle *dth);
+
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
 
