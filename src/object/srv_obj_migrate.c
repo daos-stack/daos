@@ -570,9 +570,9 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_epoch, fetch ? "yes":"no");
 
 	if (fetch) {
-		rc = dsc_obj_fetch(oh, mrone->mo_epoch, DIOF_TO_LEADER, 0,
-				   &mrone->mo_dkey, mrone->mo_iod_num,
-				   mrone->mo_iods, sgls, NULL);
+		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+				   mrone->mo_iod_num, mrone->mo_iods, sgls,
+				   NULL, DIOF_TO_LEADER, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch %d\n", rc);
 			return rc;
@@ -759,7 +759,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_iod_num, mrone->mo_epoch);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -848,7 +849,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_iod_num, mrone->mo_epoch);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -966,8 +968,9 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (DAOS_OC_IS_EC(oca))
 		mrone_recx_vos2_daos(mrone, oca, mrone->mo_oid.id_shard);
 
-	rc = dsc_obj_fetch(oh, mrone->mo_epoch, DIOF_TO_LEADER, 0,
-			   &mrone->mo_dkey, mrone->mo_iod_num, mrone->mo_iods,
+	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc)
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);

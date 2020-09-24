@@ -142,9 +142,9 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 }
 
 int
-dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, unsigned int flags,
-	      unsigned int shard, daos_key_t *dkey, unsigned int nr,
-	      daos_iod_t *iods, d_sg_list_t *sgls, daos_iom_t *maps)
+dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+	      unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
+	      daos_iom_t *maps, uint32_t extra_flag, uint32_t *extra_arg)
 {
 	tse_task_t	*task;
 	daos_handle_t	coh, th;
@@ -155,9 +155,9 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, unsigned int flags,
 	if (rc)
 		return rc;
 
-	rc = dc_obj_fetch_shard_task_create(oh, th, flags, shard, dkey,
-					    nr, iods, sgls, maps, NULL,
-					    dsc_scheduler(), &task);
+	rc = dc_obj_fetch_task_create(oh, th, 0, dkey, nr, extra_flag,
+				      iods, sgls, maps, extra_arg, NULL,
+				      dsc_scheduler(), &task);
 	if (rc)
 		return rc;
 
