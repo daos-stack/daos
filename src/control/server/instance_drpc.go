@@ -218,8 +218,8 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		if err != nil {
 			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
 		}
-		srv.log.Debugf("instance %d: bio health received for ctrlr (%s %s)",
-			srv.Index(), healthPB.Model, healthPB.Serial)
+		srv.log.Debugf("instance %d: bio health received for ctrlr (%+v)",
+			srv.Index(), healthPB)
 
 		health := new(storage.NvmeControllerHealth)
 		if err := convert.Types(healthPB, health); err != nil {
