@@ -32,6 +32,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -123,7 +124,7 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 		return errors.Errorf("can't wait for storage: instance %d already started", idx)
 	}
 
-	srv.log.Infof("Checking %s instance %d storage ...", DataPlaneName, idx)
+	srv.log.Infof("Checking %s instance %d storage ...", build.DataPlaneName, idx)
 
 	needsScmFormat, err := srv.NeedsScmFormat()
 	if err != nil {
@@ -161,9 +162,9 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 
 	select {
 	case <-ctx.Done():
-		srv.log.Infof("%s instance %d storage not ready: %s", DataPlaneName, srv.Index(), ctx.Err())
+		srv.log.Infof("%s instance %d storage not ready: %s", build.DataPlaneName, srv.Index(), ctx.Err())
 	case <-srv.storageReady:
-		srv.log.Infof("%s instance %d storage ready", DataPlaneName, srv.Index())
+		srv.log.Infof("%s instance %d storage ready", build.DataPlaneName, srv.Index())
 	}
 
 	srv.waitFormat.SetFalse()

@@ -91,7 +91,6 @@ out_rpc:
 	crt_req_decref(td_req);
 
 fini_ranks:
-	map_ranks_fini(filter_ranks);
 	return rc;
 }
 
@@ -110,9 +109,10 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 
 	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, &excluded, false);
 	if (rc)
-		return rc;
-
-	return DER_SUCCESS;
+		D_GOTO(fini_ranks, rc);
+fini_ranks:
+	map_ranks_fini(&excluded);
+	return rc;
 }
 
 static int
@@ -492,7 +492,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp)
 {
 	struct mgmt_svc			*svc;
-	d_rank_list_t			*rank_list;
+	d_rank_list_t			*rank_list = NULL;
 	uuid_t				*tgt_uuids = NULL;
 	int				rc;
 	int				rc_cleanup;
@@ -557,6 +557,8 @@ out_preparation:
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
+	if (rank_list != NULL)
+		d_rank_list_free(rank_list);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
 	return rc;

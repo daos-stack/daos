@@ -4152,7 +4152,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 		int32_t *domains, bool *updated_p, uint32_t *map_version_p,
 		struct rsvc_hint *hint)
 {
-	struct pool_buf		*map_buf;
+	struct pool_buf		*map_buf = NULL;
 	struct pool_map		*map = NULL;
 	uint32_t		map_version;
 	bool			updated = false;

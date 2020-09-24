@@ -48,7 +48,7 @@ const (
 // Validate minimum SCM/NVMe pool size per VOS target, pool size request params
 // are per-ioserver so need to be larger than (minimum_target_allocation *
 // target_count).
-func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (*mgmtpb.PoolCreateResp, error) {
+func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -71,42 +71,19 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
 	}
 
-	try := 0
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		dresp, err := svc.harness.CallDrpc(drpc.MethodPoolCreate, req)
-		if err != nil {
-			return nil, err
-		}
-
-		resp := &mgmtpb.PoolCreateResp{}
-		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal PoolCreate response")
-		}
-
-		svc.log.Debugf("MgmtSvc.PoolCreate dispatch, try %d, resp:%+v\n", try, *resp)
-
-		ds := drpc.DaosStatus(resp.GetStatus())
-		switch ds {
-		// retryable errors
-		case drpc.DaosGroupVersionMismatch, drpc.DaosTimedOut:
-			svc.log.Infof("MgmtSvc.PoolCreate (try %d), retrying due to %s", try, ds)
-			try++
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(poolCreateRetryDelay):
-				continue
-			}
-		default:
-			return resp, nil
-		}
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
+	if err != nil {
+		return nil, err
 	}
+
+	resp = &mgmtpb.PoolCreateResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch resp:%+v\n", *resp)
+
+	return resp, nil
 }
 
 // PoolDestroy implements the method defined for the Management Service.
@@ -121,7 +98,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolDestroy, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +124,7 @@ func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*m
 
 	svc.log.Debugf("MgmtSvc.PoolEvict dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolEvict, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolEvict, req)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +151,7 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 
 	svc.log.Debugf("MgmtSvc.PoolExclude dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolExclude, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolExclude, req)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +178,7 @@ func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*m
 
 	svc.log.Debugf("MgmtSvc.PoolDrain dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolDrain, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDrain, req)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +204,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolExtend dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolExtend, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolExtend, req)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +231,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 
 	svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolReintegrate, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolReintegrate, req)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +254,7 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolQuery, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +309,7 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", *newReq)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolSetProp, newReq)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolSetProp, newReq)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +346,7 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.ACLResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolGetACL dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolGetACL, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolGetACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +365,7 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolOverwriteACL dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolOverwriteACL, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolOverwriteACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +385,7 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolUpdateACL dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolUpdateACL, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolUpdateACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +405,7 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq) (*mgmtpb.ACLResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolDeleteACL dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodPoolDeleteACL, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDeleteACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +425,7 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(drpc.MethodListPools, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodListPools, req)
 	if err != nil {
 		return nil, err
 	}

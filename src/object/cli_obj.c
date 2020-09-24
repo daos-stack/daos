@@ -4487,6 +4487,11 @@ shard_query_key_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->kqa_dkey_hash,
 				 sizeof(args->kqa_dkey_hash));
 	api_args = args->kqa_api_args;
+	/* let's set the current pool map version in the req to
+	 * avoid ESTALE.
+	 */
+	args->kqa_auxi.obj_auxi->map_ver_reply =
+			args->kqa_auxi.obj_auxi->map_ver_req;
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, args->kqa_coh_uuid,
