@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@
 #include <inttypes.h>
 
 #include <daos/common.h>
-
 #include <gurt/debug.h>
 
 /* Allow changing the default so these macros can be
@@ -85,16 +84,15 @@
 	DFUSE_TRA_HELPER(D_TRACE_INFO, ptr, "" __VA_ARGS__)
 
 /* Register a descriptor with a parent and a type */
-#define DFUSE_TRA_UP(ptr, parent, type)					\
-	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' from %p\n",	\
-		      type, parent)
+#define DFUSE_TRA_UP(ptr, parent, type)				\
+	D_TRACE_UP(DB_ANY, ptr, parent, type)
 
 /* De-register a descriptor, including all aliases */
 #define DFUSE_TRA_DOWN(ptr)					\
-	D_TRACE_DEBUG(DB_ANY, ptr, "Deregistered\n")
+	D_TRACE_DOWN(DB_ANY, ptr)
 
 /* Register as root of hierarchy, used in place of DFUSE_TRA_UP */
 #define DFUSE_TRA_ROOT(ptr, type)				\
-	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' as root\n", type)
+	D_TRACE_ROOT(DB_ANY, ptr, type)
 
 #endif /* __DFUSE_LOG_H__ */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,18 +43,28 @@
 #define KEY_NR	5
 static void
 write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
-{		
+{
 	char		key[32];
 	daos_recx_t	recx;
 	int		i;
+	char		single_data[8192];
 
 	for (i = 0; i < KEY_NR; i++) {
+		req->iod_type = DAOS_IOD_ARRAY;
 		sprintf(key, "dkey_%d", index);
 		recx.rx_nr = size;
 		recx.rx_idx = off + i * 10485760;
-
 		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, size, req);
+
+		req->iod_type = DAOS_IOD_SINGLE;
+		memset(single_data, 'a'+i, 8192);
+		sprintf(key, "dkey_single_small_%d_%d", index, i);
+		insert_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
+			      req);
+		sprintf(key, "dkey_single_large_%d_%d", index, i);
+		insert_single(key, "a_key", 0, single_data, 8192, DAOS_TX_NONE,
+			      req);
 	}
 }
 
@@ -64,19 +74,33 @@ verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
 {
 	char	key[32];
 	char	read_data[MAX_SIZE];
+	char	single_data[8192];
+	char	verify_single_data[8192];
 	int	i;
 
 	for (i = 0; i < KEY_NR; i++) {
 		uint64_t offset = off + i * 10485760;
 
+		req->iod_type = DAOS_IOD_ARRAY;
 		sprintf(key, "dkey_%d", index);
-
 		memset(read_data, 0, size);
-
 		lookup_single_with_rxnr(key, "a_key", offset, read_data,
 					1, size, DAOS_TX_NONE, req);
-		/** Verify data consistency */
 		assert_memory_equal(read_data, verify_data, size);
+
+		req->iod_type = DAOS_IOD_SINGLE;
+		memset(single_data, 0, 8192);	
+		memset(verify_single_data, 'a'+i, 8192);
+		sprintf(key, "dkey_single_small_%d_%d", index, i);
+		lookup_single(key, "a_key", 0, single_data, 32, DAOS_TX_NONE,
+			      req);
+		assert_memory_equal(single_data, verify_single_data, 32);
+
+		memset(single_data, 0, 8192);	
+		sprintf(key, "dkey_single_large_%d_%d", index, i);
+		lookup_single(key, "a_key", 0, single_data, 8192, DAOS_TX_NONE,
+			      req);
+		assert_memory_equal(single_data, verify_single_data, 8192);
 	}
 }
 

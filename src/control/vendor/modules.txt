@@ -1,3 +1,7 @@
+# github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
+github.com/armon/go-metrics
+# github.com/boltdb/bolt v1.3.1
+github.com/boltdb/bolt
 # github.com/dustin/go-humanize v1.0.0
 github.com/dustin/go-humanize
 github.com/dustin/go-humanize/english
@@ -16,6 +20,18 @@ github.com/google/go-cmp/cmp/internal/function
 github.com/google/go-cmp/cmp/internal/value
 # github.com/google/uuid v1.1.1
 github.com/google/uuid
+# github.com/hashicorp/go-hclog v0.9.1
+github.com/hashicorp/go-hclog
+# github.com/hashicorp/go-immutable-radix v1.0.0
+github.com/hashicorp/go-immutable-radix
+# github.com/hashicorp/go-msgpack v0.5.5
+github.com/hashicorp/go-msgpack/codec
+# github.com/hashicorp/golang-lru v0.5.0
+github.com/hashicorp/golang-lru/simplelru
+# github.com/hashicorp/raft v1.1.2
+github.com/hashicorp/raft
+# github.com/hashicorp/raft-boltdb v0.0.0-20191021154308-4207f1bf0617
+github.com/hashicorp/raft-boltdb
 # github.com/jessevdk/go-flags v1.4.0
 github.com/jessevdk/go-flags
 # github.com/mitchellh/hashstructure v1.0.0

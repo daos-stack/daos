@@ -38,23 +38,31 @@ message NvmeController {
 		string ctrlrpciaddr = 3;
 	}
 
+	// Health mirrors bio_dev_state structure.
 	message Health {
-		uint32 temperature = 1;
-		uint32 temp_warn_time = 2; // temperature warning duration
-		uint32 temp_crit_time = 3; // temperature critical duration
-		uint64 ctrl_busy_time = 4; // controller busy duration
-		uint64 power_cycles = 5;
-		uint64 power_on_hours = 6;
-		uint64 unsafe_shutdowns = 7;
-		uint64 media_errors = 8;
-		uint64 error_count = 9; // error log entries
-		// critical warnings
-		bool temp_warn = 10;
-		bool spare_warn = 11;
-		bool device_reliability_warn = 12;
-		bool readonly_warn = 13;
-		bool volatile_memory_warn = 14;
-		string ctrlr_pci_addr = 15;
+		uint64 timestamp = 1;
+		uint64 err_count = 2;
+		// Device health details
+		uint32 warn_temp_time = 3;
+		uint32 crit_temp_time = 4;
+		uint64 ctrl_busy_time = 5;
+		uint64 power_cycles = 6;
+		uint64 power_on_hours = 7;
+		uint64 unsafe_shutdowns = 8;
+		uint64 media_errs = 9;
+		uint64 err_log_entries = 10;
+		// I/O error counters
+		uint32 bio_read_errs = 11;
+		uint32 bio_write_errs = 12;
+		uint32 bio_unmap_errs = 13;
+		uint32 checksum_errs = 14;
+		uint32 temperature = 15; // in Kelvin
+		// Critical warnings
+		bool temp_warn = 16;
+		bool avail_spare_warn = 17;
+		bool dev_reliability_warn = 18;
+		bool read_only_warn = 19;
+		bool volatile_mem_warn = 20; // volatile memory backup
 	}
 
 	string model = 1;	// model name
