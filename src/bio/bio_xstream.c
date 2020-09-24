@@ -513,7 +513,7 @@ is_server_started(void)
 	return nvme_glb.bd_started;
 }
 
-static inline bool
+inline bool
 is_init_xstream(struct bio_xs_context *ctxt)
 {
 	D_ASSERT(ctxt != NULL);
@@ -662,7 +662,7 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	return cp_arg.cca_bs;
 }
 
-static int
+int
 unload_blobstore(struct bio_xs_context *ctxt, struct spdk_blob_store *bs)
 {
 	struct common_cp_arg cp_arg;
@@ -690,10 +690,11 @@ free_bio_blobstore(struct bio_blobstore *bb)
 	D_FREE(bb);
 }
 
-static void
+void
 destroy_bio_bdev(struct bio_bdev *d_bdev)
 {
 	D_ASSERT(d_list_empty(&d_bdev->bb_link));
+	D_ASSERT(!d_bdev->bb_replacing);
 
 	if (d_bdev->bb_desc != NULL) {
 		spdk_bdev_close(d_bdev->bb_desc);
@@ -711,7 +712,7 @@ destroy_bio_bdev(struct bio_bdev *d_bdev)
 	D_FREE(d_bdev);
 }
 
-static struct bio_bdev *
+struct bio_bdev *
 lookup_dev_by_id(uuid_t dev_id)
 {
 	struct bio_bdev	*d_bdev;
@@ -775,8 +776,8 @@ teardown_bio_bdev(void *arg)
 	case BIO_BS_STATE_TEARDOWN:
 	case BIO_BS_STATE_OUT:
 		D_DEBUG(DB_MGMT, "Device "DF_UUID"(%s) is already in "
-			"%d state\n", d_bdev->bb_uuid, d_bdev->bb_name,
-			bbs->bb_state);
+			"%s state\n", DP_UUID(d_bdev->bb_uuid),
+			d_bdev->bb_name, bio_state_enum_to_str(bbs->bb_state));
 		break;
 	default:
 		D_ERROR("Invalid BS state %d\n", bbs->bb_state);
@@ -791,14 +792,11 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	struct bio_bdev		*d_bdev = event_ctx;
 	struct bio_blobstore	*bbs;
 
-	if (d_bdev == NULL)
+	if (d_bdev == NULL || type != SPDK_BDEV_EVENT_REMOVE)
 		return;
 
 	D_DEBUG(DB_MGMT, "Got SPDK event(%d) for dev %s\n", type,
 		spdk_bdev_get_name(bdev));
-
-	if (type != SPDK_BDEV_EVENT_REMOVE)
-		return;
 
 	if (!is_server_started()) {
 		D_INFO("Skip device remove cb on server start/shutdown\n");
@@ -819,7 +817,7 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 
 	bbs = d_bdev->bb_blobstore;
 	/* A new device isn't used by DAOS yet */
-	if (bbs == NULL) {
+	if (bbs == NULL && !d_bdev->bb_replacing) {
 		D_DEBUG(DB_MGMT, "Removed device "DF_UUID"(%s)\n",
 			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name);
 
@@ -831,7 +829,7 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev, d_bdev);
 }
 
-static void
+void
 replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 {
 	old_dev->bb_removed = new_dev->bb_removed;
@@ -1559,7 +1557,7 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 	return rc;
 }
 
-static void
+void
 setup_bio_bdev(void *arg)
 {
 	struct smd_dev_info	*dev_info;
@@ -1663,7 +1661,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 
 		bbs = d_bdev->bb_blobstore;
 		/* Device not used by DAOS */
-		if (bbs == NULL) {
+		if (bbs == NULL && !d_bdev->bb_replacing) {
 			D_DEBUG(DB_MGMT, "Removed device "DF_UUID"(%s)\n",
 				DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name);
 			d_list_del_init(&d_bdev->bb_link);

@@ -56,13 +56,16 @@ on_faulty(struct bio_blobstore *bbs)
 	if (ract_ops == NULL || ract_ops->faulty_reaction == NULL)
 		return 0;
 
-	ABT_mutex_lock(bbs->bb_mutex);
+	/*
+	 * It's safe to access xs context array without locking when the
+	 * server is neither in start nor shutdown phase.
+	 */
+	D_ASSERT(is_server_started());
 	tgt_cnt = bbs->bb_ref;
 	D_ASSERT(tgt_cnt <= BIO_XS_CNT_MAX && tgt_cnt > 0);
 
 	for (i = 0; i < tgt_cnt; i++)
 		tgt_ids[i] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
-	ABT_mutex_unlock(bbs->bb_mutex);
 
 	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
@@ -388,20 +391,6 @@ bs_loaded:
 	return rc;
 }
 
-static char *
-bio_state_enum_to_str(enum bio_bs_state state)
-{
-	switch (state) {
-	case BIO_BS_STATE_NORMAL: return "NORMAL";
-	case BIO_BS_STATE_FAULTY: return "FAULTY";
-	case BIO_BS_STATE_TEARDOWN: return "TEARDOWN";
-	case BIO_BS_STATE_OUT: return "OUT";
-	case BIO_BS_STATE_SETUP: return "SETUP";
-	}
-
-	return "Undefined state";
-}
-
 int
 bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 {
@@ -477,6 +466,43 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	return rc;
 }
 
+static void
+on_normal(struct bio_blobstore *bbs)
+{
+	struct bio_bdev	*bdev = bbs->bb_dev;
+	int		 tgt_ids[BIO_XS_CNT_MAX];
+	int		 tgt_cnt, i, rc;
+
+	/*
+	 * Trigger auto reint only when faulty is replaced by new hot
+	 * plugged device. See comments in bio_replace_dev().
+	 */
+	D_ASSERT(bdev != NULL);
+	if (!bdev->bb_trigger_reint)
+		return;
+
+	/* don't trigger reint if reint reaction isn't registered */
+	if (ract_ops == NULL || ract_ops->reint_reaction == NULL)
+		return;
+
+	/*
+	 * It's safe to access xs context array without locking when the
+	 * server is neither in start nor shutdown phase.
+	 */
+	D_ASSERT(is_server_started());
+	tgt_cnt = bbs->bb_ref;
+	D_ASSERT(tgt_cnt <= BIO_XS_CNT_MAX && tgt_cnt > 0);
+
+	for (i = 0; i < tgt_cnt; i++)
+		tgt_ids[i] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
+
+	rc = ract_ops->reint_reaction(tgt_ids, tgt_cnt);
+	if (rc < 0)
+		D_ERROR("Reint reaction failed. "DF_RC"\n", DP_RC(rc));
+	else
+		bdev->bb_trigger_reint = false;
+}
+
 int
 bio_bs_state_transit(struct bio_blobstore *bbs)
 {
@@ -486,6 +512,8 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 
 	switch (bbs->bb_state) {
 	case BIO_BS_STATE_NORMAL:
+		on_normal(bbs);
+		/* fallthrough */
 	case BIO_BS_STATE_OUT:
 		rc = 0;
 		break;

@@ -419,7 +419,8 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 			ba->bca_id, xs_ctxt, DP_UUID(uuid),
 			bma.bma_opts.num_clusters);
 
-		rc = smd_pool_assign(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id);
+		rc = smd_pool_assign(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id,
+				     blob_sz);
 		if (rc != 0) {
 			D_ERROR("Failed to assign pool blob:"DF_U64" to pool: "
 				""DF_UUID":%d. %d\n", ba->bca_id, DP_UUID(uuid),

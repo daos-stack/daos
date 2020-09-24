@@ -114,6 +114,8 @@ struct bio_bdev {
 	/* count of target(VOS xstream) per device */
 	int			 bb_tgt_cnt;
 	bool			 bb_removed;
+	bool			 bb_replacing;
+	bool			 bb_trigger_reint;
 };
 
 /*
@@ -261,6 +263,20 @@ get_bdev_type(struct spdk_bdev *bdev)
 		return BDEV_CLASS_UNKNOWN;
 }
 
+static inline char *
+bio_state_enum_to_str(enum bio_bs_state state)
+{
+	switch (state) {
+	case BIO_BS_STATE_NORMAL: return "NORMAL";
+	case BIO_BS_STATE_FAULTY: return "FAULTY";
+	case BIO_BS_STATE_TEARDOWN: return "TEARDOWN";
+	case BIO_BS_STATE_OUT: return "OUT";
+	case BIO_BS_STATE_SETUP: return "SETUP";
+	}
+
+	return "Undefined state";
+}
+
 struct media_error_msg {
 	struct bio_blobstore	*mem_bs;
 	int			 mem_err_type;
@@ -282,6 +298,13 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	       bool create, bool async,
 	       void (*async_cb)(void *arg, struct spdk_blob_store *bs, int rc),
 	       void *async_arg);
+int
+unload_blobstore(struct bio_xs_context *ctxt, struct spdk_blob_store *bs);
+bool is_init_xstream(struct bio_xs_context *ctxt);
+struct bio_bdev *lookup_dev_by_id(uuid_t dev_id);
+void setup_bio_bdev(void *arg);
+void destroy_bio_bdev(struct bio_bdev *d_bdev);
+void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
