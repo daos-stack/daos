@@ -225,7 +225,7 @@ class CartUtils():
 
         openmpi_path = os.environ["PATH"]
         openmpi_path += ":/usr/lib64/openmpi3/bin"
-        openmpi_path += "/usr/lib64/mpi/gcc/openmpi3/bin"
+        openmpi_path += ":/usr/lib64/mpi/gcc/openmpi3/bin"
         orterun_bin = find_executable("orterun", openmpi_path)
 
         if orterun_bin is None:
