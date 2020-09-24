@@ -1095,29 +1095,27 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			rc = lrc;
 			goto done;
 		}
-
 		if (rc == -DER_NONEXIST) {
-			if ((flags & VOS_OF_REPLAY_PC) != 0)
-				goto insert_entry;
-			goto done;
+			if (flags & VOS_OF_COND_PUNCH)
+				goto done;
 		}
 	} else if (rc != 0) {
 		/** Abort on any other error */
 		goto done;
 	}
 
-insert_entry:
 	if (rc != 0) {
 		/** If it's not a replay punch, we should not insert
 		 *  anything.   In such case, ts_set will be NULL
 		 */
-		D_ASSERT(ts_set == NULL);
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
 				   key_iov, val_iov);
 		if (rc)
 			goto done;
+
+		mark = true;
 	}
 
 	/** Punch always adds a log entry */

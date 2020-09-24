@@ -288,7 +288,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	daos_epoch_range_t	 epr = { 0 };
 	int			 rc = 0;
 	uint64_t		 cflags = 0;
-	bool			 exist = true;
 
 	if (dtx_is_valid_handle(dth))
 		epr.epr_hi = dth->dth_epoch;
@@ -347,18 +346,20 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
-			  (flags & VOS_OF_REPLAY_PC) ? false : true,
+			  (flags & VOS_OF_COND_PUNCH) ? true : false,
 			  DAOS_INTENT_PUNCH, true, &obj, ts_set);
-	printf("hold got %d\n", rc);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
-			printf("Attempt to punch key\n");
 			rc = key_punch(obj, epr.epr_hi, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
 
 			if (rc > 0) {
-				/** Punch the object too */
-				punch_obj = true;
+				/** Punch the object too.  Uncomment with
+				 * DAOS-4698 is fixed.  Otherwise, it will
+				 * cause rebuild failures.
+				 *
+				 * punch_obj = true;
+				 */
 				rc = 0;
 			}
 		} else {
@@ -367,13 +368,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 		if (punch_obj)
 			rc = obj_punch(coh, obj, epr.epr_hi, flags, ts_set);
-	}
-	if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH) == 0) {
-		if (vos_ts_set_check_conflict(ts_set, epr.epr_hi))
-			rc = -DER_TX_RESTART;
-		rc = 0;
-		exist = false;
-		goto abort;
 	}
 abort:
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
@@ -391,7 +385,7 @@ reset:
 
 	vos_dth_set(NULL);
 
-	if (rc == 0 && exist)
+	if (rc == 0)
 		vos_ts_set_upgrade(ts_set);
 
 	if (rc == -DER_NONEXIST || rc == 0)

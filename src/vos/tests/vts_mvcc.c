@@ -42,9 +42,6 @@ struct tx_helper {
 	uint32_t		 th_nr_mods;
 	/** Current op number */
 	uint32_t		 th_op_seq;
-	/** Operation actually does a write */
-	bool			 th_change;
-	/** Added to have a code change */
 };
 
 struct mvcc_arg {
@@ -696,6 +693,16 @@ struct conflicting_rw_excluded_case {
 
 static struct conflicting_rw_excluded_case conflicting_rw_excluded_cases[] = {
 	/** Used to disable specific tests as necessary */
+	/** These specific tests can be enabled when DAOS-4698 is fixed
+	 *  and the line in vos_obj.c that references this ticket is
+	 *  uncommmented.
+	 */
+	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	0, false},
+	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	1, false},
+	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	0, false},
+	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	1, false},
+	{false, "puncha_ane",   "coda", "puncho_one",   "co",   0, true},
+	{false, "punchd_dne",   "cod",  "puncho_one",   "co",   0, true},
 };
 
 static int64_t

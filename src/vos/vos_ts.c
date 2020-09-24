@@ -319,7 +319,7 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry *parent,
 
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
-		    uint32_t cflags, uint32_t akey_nr,
+		    uint16_t cflags, uint32_t akey_nr,
 		    const struct dtx_id *tx_id)
 {
 	uint32_t	size;
@@ -338,13 +338,13 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		return -DER_NOMEM;
 
 	(*ts_set)->ts_flags = flags;
-	vos_ts_set_append_cflags(*ts_set, cflags);
 	(*ts_set)->ts_set_size = size;
 	if (tx_id != NULL) {
 		(*ts_set)->ts_in_tx = true;
 		uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
 		(*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
 	} /* ts_in_tx is false by default */
+	vos_ts_set_append_cflags(*ts_set, cflags);
 
 	return 0;
 }
@@ -410,16 +410,22 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 {
 	struct vos_ts_set_entry	*se;
 	struct vos_ts_entry	*entry;
+	int			 write_level;
 
 	D_ASSERT(ts_set != NULL);
 
 	se = &ts_set->ts_entries[idx];
 	entry = se->se_entry;
 
-	if (se->se_etype > ts_set->ts_wr_level)
+	if (ts_set->ts_wr_level > ts_set->ts_max_type)
+		write_level = ts_set->ts_max_type;
+	else
+		write_level = ts_set->ts_wr_level;
+
+	if (se->se_etype > write_level)
 		return false; /** Check is redundant */
 
-	if (se->se_etype < ts_set->ts_wr_level) {
+	if (se->se_etype < write_level) {
 		/* check the low time */
 		return vos_ts_check_conflict(entry->te_ts.tp_ts_rl,
 					     &entry->te_ts.tp_tx_rl,

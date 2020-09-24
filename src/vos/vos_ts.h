@@ -89,11 +89,6 @@ enum {
 	/** Read mask */
 	VOS_TS_READ_MASK	= (VOS_TS_READ_CONT | VOS_TS_READ_OBJ |
 				   VOS_TS_READ_DKEY | VOS_TS_READ_AKEY),
-	/** Child of object mask */
-	VOS_TS_READ_OBJ_CHILD	= (VOS_TS_READ_OBJ | VOS_TS_READ_DKEY |
-				   VOS_TS_READ_AKEY),
-	/** Child of dkey mask */
-	VOS_TS_READ_DKEY_CHILD	= (VOS_TS_READ_DKEY | VOS_TS_READ_AKEY),
 	/** Mark operation as OBJ write */
 	VOS_TS_WRITE_OBJ	= (1 << 4),
 	/** Mark operation as DKEY write */
@@ -125,9 +120,11 @@ struct vos_ts_set {
 	/** true if inside a transaction */
 	bool			 ts_in_tx;
 	/** The Check/update flags for the set */
-	uint32_t		 ts_cflags;
+	uint16_t		 ts_cflags;
 	/** Write level for the set */
 	uint16_t		 ts_wr_level;
+	/** Read level for the set */
+	uint16_t		 ts_rd_level;
 	/** Max type */
 	uint16_t		 ts_max_type;
 	/** Transaction that owns the set */
@@ -590,7 +587,7 @@ vos_ts_table_free(struct vos_ts_table **ts_table);
  */
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
-		    uint32_t cflags, uint32_t akey_nr,
+		    uint16_t cflags, uint32_t akey_nr,
 		    const struct dtx_id *tx_id);
 
 /** Upgrade any negative entries in the set now that the associated
@@ -697,27 +694,28 @@ vos_ts_set_append_vflags(struct vos_ts_set *ts_set, uint64_t flags)
  *  \param[in] flags		flags
  */
 static inline void
-vos_ts_set_append_cflags(struct vos_ts_set *ts_set, uint32_t flags)
+vos_ts_set_append_cflags(struct vos_ts_set *ts_set, uint16_t flags)
 {
 	if (!vos_ts_in_tx(ts_set))
 		return;
 
 	ts_set->ts_cflags |= flags;
 
-	switch (ts_set->ts_cflags & VOS_TS_WRITE_MASK) {
-	case VOS_TS_WRITE_OBJ:
+	if (ts_set->ts_cflags & VOS_TS_WRITE_OBJ)
 		ts_set->ts_wr_level = VOS_TS_TYPE_OBJ;
-		break;
-	case VOS_TS_WRITE_DKEY:
+	else if (ts_set->ts_cflags & VOS_TS_WRITE_DKEY)
 		ts_set->ts_wr_level = VOS_TS_TYPE_DKEY;
-		break;
-	case VOS_TS_WRITE_AKEY:
+	else if (ts_set->ts_cflags & VOS_TS_WRITE_AKEY)
 		ts_set->ts_wr_level = VOS_TS_TYPE_AKEY;
-		break;
-	default:
-		/** Already zero */
-		break;
-	}
+
+	if (ts_set->ts_cflags & VOS_TS_READ_CONT)
+		ts_set->ts_rd_level = VOS_TS_TYPE_CONT;
+	else if (ts_set->ts_cflags & VOS_TS_READ_OBJ)
+		ts_set->ts_rd_level = VOS_TS_TYPE_OBJ;
+	else if (ts_set->ts_cflags & VOS_TS_READ_DKEY)
+		ts_set->ts_rd_level = VOS_TS_TYPE_DKEY;
+	else if (ts_set->ts_cflags & VOS_TS_READ_AKEY)
+		ts_set->ts_rd_level = VOS_TS_TYPE_AKEY;
 }
 
 /** Update the read timestamps for the set after a successful operation
@@ -729,9 +727,8 @@ static inline void
 vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 {
 	struct vos_ts_set_entry	*se;
-	uint32_t		 high_mask = 0;
-	uint32_t		 low_mask = 0;
 	int			 i;
+	uint16_t		 read_level;
 
 	if (!vos_ts_in_tx(ts_set))
 		return;
@@ -742,42 +739,24 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 	if ((ts_set->ts_cflags & VOS_TS_READ_MASK) == 0)
 		return;
 
+	if (ts_set->ts_max_type < ts_set->ts_rd_level)
+		read_level = ts_set->ts_max_type;
+	else
+		read_level = ts_set->ts_rd_level;
+
 	for (i = 0; i < ts_set->ts_init_count; i++) {
 		se = &ts_set->ts_entries[i];
 
-		switch (se->se_etype) {
-		case VOS_TS_TYPE_CONT:
-			high_mask = VOS_TS_READ_MASK;
-			low_mask = VOS_TS_READ_CONT;
-			break;
-		case VOS_TS_TYPE_OBJ:
-			high_mask = VOS_TS_READ_OBJ_CHILD;
-			low_mask = VOS_TS_READ_OBJ;
-			if (ts_set->ts_max_type > VOS_TS_TYPE_OBJ) {
-				low_mask |= high_mask;
-				break;
-			}
-		case VOS_TS_TYPE_DKEY:
-			high_mask |= VOS_TS_READ_DKEY_CHILD;
-			low_mask |= VOS_TS_READ_DKEY;
-			if (ts_set->ts_max_type > VOS_TS_TYPE_DKEY) {
-				low_mask |= high_mask;
-				break;
-			}
-		case VOS_TS_TYPE_AKEY:
-			high_mask |= VOS_TS_READ_AKEY;
-			low_mask |= VOS_TS_READ_AKEY;
-			break;
-		default:
-			D_ASSERT(0);
-		}
+		if (se->se_etype > read_level)
+			continue; /** We would have updated the high
+				   *  timestamp at a higher level
+				   */
 
-		if (ts_set->ts_cflags & high_mask)
-			vos_ts_rh_update(se->se_entry, read_time,
-					 &ts_set->ts_tx_id);
-		if (ts_set->ts_cflags & low_mask)
+		if (se->se_etype == read_level)
 			vos_ts_rl_update(se->se_entry, read_time,
 					 &ts_set->ts_tx_id);
+		vos_ts_rh_update(se->se_entry, read_time,
+				 &ts_set->ts_tx_id);
 	}
 }
 
