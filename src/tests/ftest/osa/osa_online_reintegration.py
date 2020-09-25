@@ -275,7 +275,7 @@ class OSAOnlineReintegration(TestWithServers):
         """Test ID: DAOS-5075
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,hw,large,osa,online_reintegration
+        :avocado: tags=all,pr,hw,large,osa,online_reintegration,DAOS-5610
         """
         # Perform reintegration testing with 1 pool.
         for pool_num in range(1, 2):
