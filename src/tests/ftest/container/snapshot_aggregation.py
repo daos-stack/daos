@@ -105,12 +105,11 @@ class SnapshotAggregation(IorTestBase):
         self.assertLess(
             self.free_space["nvme"][1]["api"],
             self.free_space["nvme"][0]["api"],
-            "SCM free pool space was not reduced by the initial write")
+            "NVMe free pool space was not reduced by the initial write")
 
         # Create a snapshot of the container once the IOR job completes.
-        snapshot = daos.get_output(
-            "container_create_snap", pool=self.pool.uuid,
-            svc=self.pool.svc_ranks, cont=self.container.uuid)
+        self.container.create_snap()
+        self.log.info("Created container snapshot: %s", self.container.epoch)
 
         # Run the same IOR job to cause an overwrite.
         self.ior_cmd.signature.value += 333
@@ -134,12 +133,12 @@ class SnapshotAggregation(IorTestBase):
         self.assertLess(
             self.free_space["nvme"][2]["api"],
             self.free_space["nvme"][1]["api"],
-            "SCM free pool space was not reduced by the overwrite")
+            "NVMe free pool space was not reduced by the overwrite")
 
         # Delete the snapshot.
         daos.container_destroy_snap(
             pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont=self.container.uuid, snap_name=snapshot)
+            cont=self.container.uuid, snap_name=self.container.epoch)
 
         # Wait for aggregation to start and finish.
         self.detect_aggregation_complete()
@@ -156,4 +155,4 @@ class SnapshotAggregation(IorTestBase):
         self.assertEqual(
             self.free_space["nvme"][3]["api"],
             self.free_space["nvme"][1]["api"],
-            "SCM free pool space was not restored by the aggregation")
+            "NVMe free pool space was not restored by the aggregation")
