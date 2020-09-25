@@ -2576,7 +2576,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	/** Check container uuid mismatch */
 	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
 	if (rc != 0)
-		D_GOTO(out, daos_der2errno(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
 	if (uuid_compare(cont_uuid, obj_glob->cont_uuid) != 0) {
 		D_ERROR("Container uuid mismatch, in coh: "DF_UUID", "
 			"in obj_glob:" DF_UUID"\n", DP_UUID(cont_uuid),
