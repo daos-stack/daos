@@ -1,25 +1,25 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+(C) Copyright 2018-2020 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-     http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+The Government's rights to use, modify, reproduce, release, perform, display,
+or disclose this software are subject to the terms of the Apache License as
+provided in Contract No. B609815.
+Any reproduction of computer software, computer software documentation, or
+portions thereof marked with this legend must also reproduce the markings.
 """
 import os
 import threading
@@ -95,7 +95,8 @@ class IorTestBase(DfuseTestBase):
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
-                          create_cont=True, stop_dfuse=True):
+                          create_cont=True, stop_dfuse=True, plugin_path=None,
+                          timeout=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -113,6 +114,10 @@ class IorTestBase(DfuseTestBase):
             create_cont (bool, optional): Create new container. Default is True
             stop_dfuse (bool, optional): Stop dfuse after ior command is
                 finished. Default is True.
+            plugin_path (str, optional): HDF5 vol connector library path.
+                This will enable dfuse (xattr) working directory which is
+                needed to run vol connector for DAOS. Default is None.
+            timeout (int, optional): command timeout. Defaults to None.
 
         Returns:
             CmdResult: result of the ior command execution
@@ -121,20 +126,24 @@ class IorTestBase(DfuseTestBase):
         if create_pool:
             self.update_ior_cmd_with_pool(create_cont)
 
-        # start dfuse if api is POSIX
-        if self.ior_cmd.api.value == "POSIX":
+        # start dfuse if api is POSIX or HDF5 with vol connector
+        if self.ior_cmd.api.value == "POSIX" or plugin_path:
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self.start_dfuse(
                     self.hostlist_clients, self.pool, self.container)
+
+        # setup test file for POSIX or HDF5 with vol connector
+        if self.ior_cmd.api.value == "POSIX" or plugin_path:
             test_file = os.path.join(self.dfuse.mount_dir.value, "testfile")
         elif self.ior_cmd.api.value == "DFS":
             test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
-
-        out = self.run_ior(self.get_ior_job_manager_command(), self.processes,
-                           intercept)
+        job_manager = self.get_ior_job_manager_command()
+        job_manager.timeout = timeout
+        out = self.run_ior(job_manager, self.processes,
+                           intercept, plugin_path=plugin_path)
 
         if stop_dfuse:
             self.stop_dfuse()
@@ -168,7 +177,7 @@ class IorTestBase(DfuseTestBase):
 
         """
         # Initialize MpioUtils if IOR is running in MPIIO or DFS mode
-        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS"]:
+        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS", "HDF5"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
@@ -193,17 +202,25 @@ class IorTestBase(DfuseTestBase):
                 self.job_manager.process, self.ior_cmd):
             self.fail("Exiting Test: Subprocess not running")
 
-    def run_ior(self, manager, processes, intercept=None, display_space=True):
+    def run_ior(self, manager, processes, intercept=None, display_space=True,
+                plugin_path=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
             intercept (str): path to interception library.
+            plugin_path (str, optional): HDF5 vol connector library path.
+                This will enable dfuse (xattr) working directory which is
+                needed to run vol connector for DAOS. Default is None.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
+        if plugin_path:
+            env["HDF5_VOL_CONNECTOR"] = "daos"
+            env["HDF5_PLUGIN_PATH"] = str(plugin_path)
+            manager.working_dir.value = self.dfuse.mount_dir.value
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(processes)
@@ -368,12 +385,12 @@ class IorTestBase(DfuseTestBase):
         Args:
             cmd (str): String command to be executed
             fail_on_err (bool): Boolean for whether to fail the test if command
-                                execution returns non zero return code.
+                execution returns non zero return code.
             display_output (bool): Boolean for whether to display output.
 
         Returns:
             dict: a dictionary of return codes keys and accompanying NodeSet
-                  values indicating which hosts yielded the return code.
+                values indicating which hosts yielded the return code.
 
         """
         try:

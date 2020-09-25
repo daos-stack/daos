@@ -148,8 +148,13 @@ int
 daos_tx_close(daos_handle_t th, daos_event_t *ev);
 
 /**
- * Restart the transaction handle. It drops all the modifications that have
- * been issued via the handle. This is a local operation, no RPC involved.
+ * Restart the transaction handle after encountering a -DER_TX_RESTART error.
+ * It drops all the modifications that have been issued via the handle. Whether
+ * the restarted transaction observes any conflicting modifications committed
+ * after this transaction was originally opened is undefined. If callers would
+ * like to retry transactions for their own purposes, they shall open new
+ * transactions instead. This is a local operation, no RPC involved.
+ *
  *
  * \param[in]	th	Transaction handle to be restarted.
  * \param[in]	ev	Completion event, it is optional and can be NULL.

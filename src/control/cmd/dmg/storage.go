@@ -194,6 +194,11 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 	if cmd.Reformat {
 		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
 		if err != nil {
+			// If the AP hasn't been started, it will respond as if it
+			// is not a replica.
+			if system.IsNotReplica(err) {
+				return false, nil
+			}
 			return false, errors.Wrap(err, "System-Query command failed")
 		}
 

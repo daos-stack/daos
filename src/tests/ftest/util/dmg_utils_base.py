@@ -457,7 +457,7 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.StorageSubCommand.ScanSubCommand,
                     self).__init__(
                         "/run/dmg/storage/scan/*", "scan")
-                self.nvme_health = FormattedParameter("--nvme_health", False)
+                self.nvme_health = FormattedParameter("--nvme-health", False)
                 self.verbose = FormattedParameter("--verbose", False)
 
         class SetSubCommand(CommandWithSubCommand):
@@ -545,7 +545,7 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.SystemSubCommand.QuerySubCommand,
                     self).__init__(
                         "/run/dmg/system/query/*", "query")
-                self.rank = FormattedParameter("--rank={}")
+                self.ranks = FormattedParameter("--ranks={}")
                 self.verbose = FormattedParameter("--verbose", False)
 
         class StartSubCommand(CommandWithParameters):
@@ -568,3 +568,4 @@ class DmgCommandBase(YamlCommand):
                     self).__init__(
                         "/run/dmg/system/stop/*", "stop")
                 self.force = FormattedParameter("--force", False)
+                self.ranks = FormattedParameter("--ranks={}")
