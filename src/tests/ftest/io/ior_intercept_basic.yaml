@@ -8,16 +8,17 @@ server_config:
     name: daos_server
     servers:
         log_mask: INFO
-        bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+        #bdev_class: nvme                               #DM
+        #bdev_list: ["0000:81:00.0","0000:da:00.0"]     #DM
+        #scm_class: dcpm                                #DM
+        #scm_list: ["/dev/pmem0"]                       #DM
+        scm_size: 59                                    #DM
 pool:
     mode: 146 # 146 is RW
     name: daos_server
     # 300 G
     scm_size: 30000000000
-    nvme_size: 320000000000
+    #nvme_size: 320000000000                            #DM
     svcn: 1
     control_method: dmg
 container:
@@ -40,7 +41,8 @@ ior:
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
-              block_size: '8G'
+              #block_size: '8G'                         #DM
+              block_size: '1G'                          #DM
               # Expected performance improvement
               # of write and read for the specific
               # transfer/block size when using

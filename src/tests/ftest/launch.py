@@ -459,7 +459,8 @@ def get_test_list(tags):
     # tags and no specific tests have been specified then all of the functional
     # tests will be added.
     if test_tags or not test_list:
-        command = ["avocado", "list", "--paginator=off"]
+        #command = ["avocado", "list", "--paginator=off"] #DM
+        command = ["avocado", "list"] #DM
         for test_tag in test_tags:
             command.append(str(test_tag))
         command.append("./")
@@ -755,7 +756,8 @@ def run_tests(test_files, tag_filter, args):
         "--tap-job-result", "off",
     ]
     if not args.sparse:
-        command_list.append("--show-job-log")
+        #command_list.append("--show-job-log") #DM
+        print("DM") #DM
     if tag_filter:
         command_list.extend(tag_filter)
 
