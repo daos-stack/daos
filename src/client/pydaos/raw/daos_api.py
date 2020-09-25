@@ -81,59 +81,6 @@ class DaosPool(object):
         """Set group given a string"""
         self.group = ctypes.create_string_buffer(group)
 
-    def create(self, mode, uid, gid, scm_size, group, target_list=None,
-               cb_func=None, svcn=1, nvme_size=0):
-        """Send a pool creation request to the daos server group."""
-        c_mode = ctypes.c_uint(mode)
-        c_uid = ctypes.c_uint(uid)
-        c_gid = ctypes.c_uint(gid)
-        c_scm_size = ctypes.c_longlong(scm_size)
-        c_nvme_size = ctypes.c_longlong(nvme_size)
-        if group:
-            self.set_group(group)
-        self.uuid = (ctypes.c_ubyte * 16)()
-        rank_t = ctypes.c_uint * svcn
-        # initializing with default values
-        rank = rank_t(*list([999999 for dummy_i in range(svcn)]))
-        rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-        c_whatever = ctypes.create_string_buffer(b"rubbish")
-        self.svc = daos_cref.RankList(rl_ranks, svcn)
-
-        # assuming for now target list is a server rank list
-        if target_list is not None:
-            tlist = DaosPool.__pylist_to_array(target_list)
-            c_tgts = daos_cref.RankList(tlist, len(tlist))
-            tgt_ptr = ctypes.byref(c_tgts)
-        else:
-            tgt_ptr = None
-
-        func = self.context.get_function('create-pool')
-        # the callback function is optional, if not supplied then run the
-        # create synchronously, if its there then run it in a thread
-        if cb_func is None:
-            ret = func(c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                       c_whatever, c_scm_size, c_nvme_size,
-                       None, ctypes.byref(self.svc),
-                       self.uuid, None)
-            if ret != 0:
-                self.uuid = (ctypes.c_ubyte * 1)(0)
-                raise DaosApiError("Pool create returned non-zero. RC: {0}"
-                                   .format(ret))
-            else:
-                self.attached = 1
-        else:
-            event = daos_cref.DaosEvent()
-            params = [c_mode, c_uid, c_gid, self.group, tgt_ptr,
-                      c_whatever, c_scm_size, c_nvme_size, None,
-                      ctypes.byref(self.svc), self.uuid, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
-
     def connect(self, flags, cb_func=None):
         """Connect to this pool."""
         # comment this out for now, so we can test bad data

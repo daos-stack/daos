@@ -2250,8 +2250,10 @@ shard_io_task(tse_task_t *task)
 	th = shard_auxi->obj_auxi->th;
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(&shard_auxi->epoch)) {
 		rc = dc_tx_get_epoch(task, th, &shard_auxi->epoch);
-		if (rc < 0)
+		if (rc < 0) {
+			tse_task_complete(task, rc);
 			return rc;
+		}
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
 	}
@@ -4467,8 +4469,10 @@ shard_query_key_task(tse_task_t *task)
 	/* See the similar shard_io_task. */
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
 		rc = dc_tx_get_epoch(task, th, epoch);
-		if (rc < 0)
+		if (rc < 0) {
+			tse_task_complete(task, rc);
 			return rc;
+		}
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
 	}
@@ -4487,6 +4491,11 @@ shard_query_key_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->kqa_dkey_hash,
 				 sizeof(args->kqa_dkey_hash));
 	api_args = args->kqa_api_args;
+	/* let's set the current pool map version in the req to
+	 * avoid ESTALE.
+	 */
+	args->kqa_auxi.obj_auxi->map_ver_reply =
+			args->kqa_auxi.obj_auxi->map_ver_req;
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, args->kqa_coh_uuid,
