@@ -551,11 +551,9 @@ dtx_13(void **state)
 	req.arg->expect_result = 0;
 	insert_single(dkey, akey, 0, write_buf, DTX_IO_SMALL, th, &req);
 
-	print_message("Restart the TX2...\n");
-	MUST(daos_tx_restart(th, NULL));
-
-	print_message("Restart the TX2 again...\n");
-	MUST(daos_tx_restart(th, NULL));
+	print_message("Restart the TX2, expect DER_NO_PERM\n");
+	rc = daos_tx_restart(th, NULL);
+	assert_int_equal(rc, -DER_NO_PERM);
 
 	print_message("Abort the TX2...\n");
 	MUST(daos_tx_abort(th, NULL));
