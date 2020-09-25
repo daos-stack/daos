@@ -138,9 +138,17 @@ The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \f
 .br
 				      \fBcksum\fR checksum type (can be {off,crc{16,32,64},sha1})
 .br
-				      \fBcksum_size\fR checksum chunk size (can be any value)
+				      \fBcksum_size\fR checksum chunk size (can be any value <2GiB)
 .br
 				      \fBsrv_cksum\fR checksum server verify (can be {on,off})
+.br
+				      \fBdedup\fR deduplication type (can be {off,memcmp,hash}). Preview feature.
+.br
+				      \fBdedup_th\fR deduplication threshold (can be any value between 4KiB and 2GiB). Preview feature.
+.br
+				      \fBcompression\fR compression type (can be {lz4,gzip,gzip[1-9]}). Preview feature.
+.br
+				      \fBencryption\fR encryption type (can be aes-{xts{129,256},cbc{128,192,256},gcm{128,256}). Preview feature.
 .br
 				      \fBrf\fR redundancy factor (can be {0,1,2,3,4})
 .br

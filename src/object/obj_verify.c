@@ -710,6 +710,11 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		for (i = 1; i < reps; i++) {
 			rc = dc_obj_verify_cmp(&dova[0], &dova[i],
 					       oid, reps, start, start + i);
+			if (rc == -DER_CSUM) {
+				D_ERROR("Failed to verify because of "
+					"data corruption");
+				D_GOTO(out, rc = -DER_MISMATCH);
+			}
 			if (rc != 0) {
 				D_ERROR("Failed to verify cmp: "DF_RC"\n",
 					DP_RC(rc));

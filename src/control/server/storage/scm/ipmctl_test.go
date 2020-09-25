@@ -53,6 +53,8 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 	}
 
 	_ = copy(result.Uid[:], m.Uid)
+	_ = copy(result.Part_number[:], m.PartNumber)
+	_ = copy(result.Fw_revision[:], m.FirmwareRevision)
 
 	return result
 }
@@ -66,13 +68,15 @@ func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
 	}
 
 	return storage.ScmModule{
-		PhysicalID:      uint32(d.Physical_id),
-		ChannelID:       uint32(d.Channel_id),
-		ChannelPosition: uint32(d.Channel_pos),
-		ControllerID:    uint32(d.Memory_controller_id),
-		SocketID:        uint32(d.Socket_id),
-		Capacity:        d.Capacity,
-		UID:             d.Uid.String(),
+		PhysicalID:       uint32(d.Physical_id),
+		ChannelID:        uint32(d.Channel_id),
+		ChannelPosition:  uint32(d.Channel_pos),
+		ControllerID:     uint32(d.Memory_controller_id),
+		SocketID:         uint32(d.Socket_id),
+		Capacity:         d.Capacity,
+		UID:              d.Uid.String(),
+		PartNumber:       d.Part_number.String(),
+		FirmwareRevision: d.Fw_revision.String(),
 	}
 }
 
@@ -449,6 +453,58 @@ func TestGetNamespaces(t *testing.T) {
 
 			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
 			AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
+		})
+	}
+}
+
+func TestIpmctl_Discover(t *testing.T) {
+	testDevices := []ipmctl.DeviceDiscovery{
+		MockDiscovery(),
+		MockDiscovery(),
+		MockDiscovery(),
+	}
+
+	expModules := storage.ScmModules{}
+	for _, dev := range testDevices {
+		mod := MockModule(&dev)
+		expModules = append(expModules, &mod)
+	}
+
+	for name, tc := range map[string]struct {
+		cfg       *mockIpmctlCfg
+		expErr    error
+		expResult storage.ScmModules
+	}{
+		"ipmctl.Discovery failed": {
+			cfg: &mockIpmctlCfg{
+				discoverModulesRet: errors.New("mock Discover"),
+			},
+			expErr: errors.New("failed to discover SCM modules: mock Discover"),
+		},
+		"no modules": {
+			cfg:       &mockIpmctlCfg{},
+			expResult: storage.ScmModules{},
+		},
+		"success with modules": {
+			cfg: &mockIpmctlCfg{
+				modules: testDevices,
+			},
+			expResult: expModules,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mockBinding := newMockIpmctl(tc.cfg)
+			cr := newCmdRunner(log, mockBinding, nil, nil)
+
+			result, err := cr.Discover()
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

@@ -51,32 +51,6 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         for entry in cont_acl:
             self.principals_table[entry.split(":")[2]] = entry
 
-    def error_handling(self, results, err_msg):
-        """Handle errors when test fails and when command unexpectedly passes.
-
-        Args:
-            results (CmdResult): object containing stdout, stderr and
-                exit status
-
-        Returns:
-            list: list of test errors encountered.
-        """
-        test_errs = []
-        if results.exit_status == 0:
-            test_errs.append("overwrite-acl passed unexpectedly: {}".format(
-                results.stdout))
-        elif results.exit_status == 1:
-            # REMOVE BELOW IF Once DAOS-5635 is resolved
-            if results.stdout and err_msg in results.stdout:
-                self.log.info("Found expected error %s", results.stdout)
-            # REMOVE ABOVE IF Once DAOS-5635 is resolved
-            elif results.stderr and err_msg in results.stderr:
-                self.log.info("Found expected error %s", results.stderr)
-            else:
-                self.fail("overwrite-acl seems to have failed with \
-                    unexpected error: {}".format(results))
-        return test_errs
-
     def test_acl_delete_invalid_inputs(self):
         """
         JIRA ID: DAOS-3714
@@ -84,7 +58,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command performs as
             expected with invalid inputs.
 
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl
+        :avocado: tags=all,pr,security,container_acl,cont_delete_acl_inputs
         """
         # Get list of invalid ACL principal values
         invalid_principals = self.params.get("invalid_principals", "/run/*")
@@ -133,7 +107,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command doesn't
             remove principal in ACL without permission.
 
-        :avocado: tags=all,pr,security,container_acl,cont_delete_acl
+        :avocado: tags=all,pr,security,container_acl,cont_delete_acl_noperms
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(
