@@ -269,7 +269,7 @@ class MacsioCommand(ExecutableCommand):
 
         #   --no_validate_read []
         #       Don't validate data on read.
-        self.no_validate_read = FormattedParameter("--no_validate_read {}")
+        self.no_validate_read = FormattedParameter("--no_validate_read", False)
 
         #   --read_mesh %s []
         #       Specify mesh name to read.
@@ -284,7 +284,7 @@ class MacsioCommand(ExecutableCommand):
         #   --time_randomize []
         #       Make randomness in MACSio vary from dump to dump and run to run
         #       by using PRNGs seeded by time.
-        self.time_randomize = FormattedParameter("--time_randomize {}")
+        self.time_randomize = FormattedParameter("--time_randomize", False)
 
         #   --plugin_args %n []
         #       All arguments after this sentinel are passed to the I/O plugin
@@ -333,7 +333,7 @@ class MacsioCommand(ExecutableCommand):
 
         #   --show_errors []
         #       Show low-level HDF5 errors
-        self.show_errors = FormattedParameter("--show_errors {}")
+        self.show_errors = FormattedParameter("--show_errors", False)
 
         #   --compression %s %s []
         #       The first string argument is the compression algorithm name. The
@@ -404,11 +404,11 @@ class MacsioCommand(ExecutableCommand):
 
         #   --no_collective []
         #       Use independent, not collective, I/O calls in SIF mode.
-        self.no_collective = FormattedParameter("--no_collective {}")
+        self.no_collective = FormattedParameter("--no_collective", False)
 
         #   --no_single_chunk []
         #       Do not single chunk the datasets (currently ignored).
-        self.no_single_chunk = FormattedParameter("--no_single_chunk {}")
+        self.no_single_chunk = FormattedParameter("--no_single_chunk", False)
 
         #   --sieve_buf_size %d []
         #       Specify sieve buffer size (see H5Pset_sieve_buf_size)
