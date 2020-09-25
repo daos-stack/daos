@@ -28,3 +28,7 @@ RUN grep use_nspawn || \
     echo "config_opts['use_nspawn'] = False" >> /etc/mock/site-defaults.cfg
 
 RUN chmod g+w /etc/mock/*
+
+RUN set -x;                                      \
+    cat /etc/mock/opensuse-leap-15.2-x86_64.cfg; \
+    cat /etc/mock/templates/epel-7.tpl
