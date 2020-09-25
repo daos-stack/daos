@@ -699,6 +699,7 @@ out:
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	ro->rso_stable_epoch = crt_hlc_get();
+	ro->rso_ranks_list = NULL;
 	if (rc) {
 		/* If it failed, tell the master the target can not
 		 * start the rebuild, so master will put the target
@@ -721,7 +722,6 @@ out:
 	}
 
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
-	d_rank_list_free(fail_list);
 }
 
 int

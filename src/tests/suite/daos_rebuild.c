@@ -949,6 +949,7 @@ rebuild_multiple_tgts(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+#if 0
 static int
 rebuild_io_cb(void *arg)
 {
@@ -961,7 +962,6 @@ rebuild_io_cb(void *arg)
 	return 0;
 }
 
-#if 0
 static int
 rebuild_io_post_cb(void *arg)
 {
@@ -1071,9 +1071,10 @@ rebuild_multiple_failures(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
+#if 0
+	/* Remove this inflight IO temporarily XXX */
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
-#if 0
 	/* Disable data validation because of DAOS-2915. */
 	arg->rebuild_post_cb = rebuild_io_post_cb;
 #else
