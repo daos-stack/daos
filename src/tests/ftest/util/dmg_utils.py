@@ -206,7 +206,7 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def storage_format(self, reformat=False, timeout=20):
+    def storage_format(self, reformat=False, timeout=30):
         """Get the result of the dmg storage format command.
 
         Args:
