@@ -308,6 +308,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	struct pl_obj_layout	*layout = NULL;
 	struct dc_pool		*pool;
 	struct pl_map		*map;
+	uint32_t		old;
 	int			i;
 	int			rc;
 
@@ -345,13 +346,14 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 	obj->cob_shards_nr = layout->ol_nr;
 	obj->cob_grp_size = layout->ol_grp_size;
+	old = obj->cob_grp_nr;
+	obj->cob_grp_nr = obj->cob_shards_nr / obj->cob_grp_size;
 
 	if (obj->cob_grp_size > 1 && srv_io_mode == DIM_DTX_FULL_ENABLED &&
-	    obj->cob_grp_nr < obj->cob_shards_nr / obj->cob_grp_size) {
+	    old < obj->cob_grp_nr) {
 		if (obj->cob_time_fetch_leader != NULL)
 			D_FREE(obj->cob_time_fetch_leader);
 
-		obj->cob_grp_nr = obj->cob_shards_nr / obj->cob_grp_size;
 		D_ALLOC_ARRAY(obj->cob_time_fetch_leader, obj->cob_grp_nr);
 		if (obj->cob_time_fetch_leader == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
