@@ -275,6 +275,9 @@ if $TEST_RPMS; then
     export COVFILE=\"$DAOS_TEST_SHARED_DIR/test.cov\"
     echo \$COVFILE
 else
+    echo SCHAN15 - on node 0 ls covfile
+    ls \$COVFILE
+    export COVFILE
     rm -rf $DAOS_BASE/install/tmp
     mkdir -p $DAOS_BASE/install/tmp
     logs_prefix=\"$DAOS_BASE/install/lib/daos/TESTING\"
