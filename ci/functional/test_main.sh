@@ -62,8 +62,9 @@ DAOS_BASE=${SL_PREFIX%/install*}
        FTEST_ARG=\"$FTEST_ARG\"                      \
        DAOS_BASE=\"$DAOS_BASE\"                      \
        HOSTNAME=\"$HOSTNAME\"                        \
-       HOSTPWD=\"$PWD\"                      \
+       HOSTPWD=\"$PWD\"                              \
        BULLSEYE=\"$BULLSEYE\"                        \
+       TEST_RPMS=\"$TEST_RPMS\"                      \
        $(cat ci/functional/test_main_node.sh)"
 #else
 #    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"

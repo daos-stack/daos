@@ -22,4 +22,10 @@ export DAOS_TEST_SHARED_DIR
 export TEST_RPMS=true
 export REMOTE_ACCT=jenkins
 
-/usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"
+if $TEST_RPMS; then
+  /usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"
+else
+  echo SCHAN15 $PWD
+  ls $DAOS_BASE
+  $DAOS_BASE/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"
+fi
