@@ -1523,7 +1523,7 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 					 inline_copy ? &sgls[i] : NULL);
 
 		if (rc != 0)
-			return rc;
+			goto free;
 
 		mrone->mo_iods_csums[i] = iods_csums[i];
 		/**

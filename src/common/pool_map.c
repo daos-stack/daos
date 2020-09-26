@@ -1384,7 +1384,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
 	struct pool_domain      *found_dom;
-	uuid_t		       *uuids;
+	uuid_t		        *uuids = NULL;
 	uint32_t		num_comps;
 	uint8_t			new_status;
 	bool			updated;
@@ -1425,7 +1425,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)
-			return rc;
+			goto out_map_buf;
 	}
 
 	if (map != NULL)
@@ -1458,11 +1458,11 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)
-			return rc;
+			goto out_map_buf;
 	}
 
 	if (!updated)
-		return -DER_ALREADY;
+		goto out_map_buf;
 
 	if (map != NULL)
 		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
@@ -1485,7 +1485,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
 			if (rc != 0)
-				return rc;
+				goto out_map_buf;
 		}
 	}
 	if (uuids_out)
@@ -1496,7 +1496,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 out_map_buf:
 	pool_buf_free(map_buf);
-
+	D_FREE(uuids);
 	return rc;
 }
 

@@ -309,6 +309,9 @@ int main(int argc, char **argv)
 
 	sprintf(str_rank, "%d", hostbuf->my_rank);
 	sprintf(str_port, "%d", hostbuf->ofi_port);
+        /* Set CRT_L_RANK and OFI_PORT */
+        setenv("CRT_L_RANK", str_rank, true);
+        setenv("OFI_PORT", str_port, true);
 exit:
 	if (hostbuf)
 		free(hostbuf);
@@ -317,10 +320,6 @@ exit:
 		free(recv_buf);
 
 	MPI_Finalize();
-
-	/* Set CRT_L_RANK and OFI_PORT */
-	setenv("CRT_L_RANK", str_rank, true);
-	setenv("OFI_PORT", str_port, true);
 
 	if (rc == 0) {
 		/* Exec passed application with rest of arguments */

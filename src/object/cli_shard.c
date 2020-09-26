@@ -188,11 +188,11 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	iods_csums = orwo->orw_iod_csums.ca_arrays;
 	maps = orwo->orw_maps.ca_arrays;
 
-	if (daos_obj_is_echo(orw->orw_oid.id_pub))
-		return 0; /** currently don't verify echo classes */
-
-	if (sgls == NULL)
-		return 0; /** no data to verify ... size only */
+	/** currently don't verify echo classes */
+	if ((daos_obj_is_echo(orw->orw_oid.id_pub)) || (sgls == NULL)) {
+		daos_csummer_destroy(&csummer_copy);
+		return 0;
+	}
 	D_ASSERTF(orwo->orw_maps.ca_count == orw->orw_iod_array.oia_iod_nr,
 		  "orwo->orw_maps.ca_count(%lu) == "
 		  "orw->orw_iod_array.oia_iod_nr(%d)",

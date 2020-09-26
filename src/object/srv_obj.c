@@ -1521,6 +1521,8 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		obj_log_csum_err();
 post:
 	err = bio_iod_post(biod);
+	rc = rc ? : err;
+out:
 	if (bsgls_dup != NULL) {
 		int	i;
 
@@ -1530,8 +1532,7 @@ post:
 		}
 		D_FREE(bsgls_dup);
 	}
-	rc = rc ? : err;
-out:
+
 	rc = obj_rw_complete(rpc, ioc->ioc_map_ver, ioh, rc, dth);
 	D_TIME_END(time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;

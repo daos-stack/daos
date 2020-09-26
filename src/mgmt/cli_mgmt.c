@@ -468,7 +468,7 @@ int dc_mgmt_net_cfg(const char *name)
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = get_attach_info(name, &npsrs, &psrs, &sy_info);
 	if (rc != 0)
-		return rc;
+		goto cleanup;
 
 	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", sy_info.provider, 1);
