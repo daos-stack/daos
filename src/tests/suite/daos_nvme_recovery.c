@@ -134,6 +134,9 @@ nvme_test_verify_device_stats(void **state)
 	char		*server_config_file;
 	char		*log_file;
 	int		obj_class;
+	int		rank_pos = 0;
+	bool    read_initial_data = false;
+	uint64_t		idx = 0;
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
@@ -158,6 +161,21 @@ nvme_test_verify_device_stats(void **state)
 			      devices[i].rank, DP_UUID(devices[i].device_id),
 			devices[i].state, devices[i].host);
 
+	if (ndisks <= 1) {
+		print_message("Need Minimum 2 disks for test\n");
+		skip();
+	}
+
+	/*
+	 * Get the rank 0 position from array devices.
+	 */
+	for (i = 0; i < ndisks; i++) {
+		if (devices[i].rank == 0)
+			rank_pos = i;
+		if (devices[i].rank == 1)
+			read_initial_data = true;
+	}
+
 	/*
 	 * Get the server config file from running process on server.
 	 * Verify log_mask in server.yaml file, It should be 'DEBUG' to verify
@@ -166,26 +184,21 @@ nvme_test_verify_device_stats(void **state)
 	 */
 	D_ALLOC(server_config_file, 512);
 	D_ALLOC(log_file, 1024);
-	for (i = 0; i < ndisks; i++) {
-		if (devices[i].rank == 1) {
-			rc = get_server_config(devices[i].host,
-					       server_config_file);
-			assert_int_equal(rc, 0);
-			print_message("server_config_file = %s\n",
-				      server_config_file);
+	rc = get_server_config(devices[rank_pos].host,
+		server_config_file);
+	assert_int_equal(rc, 0);
+	print_message("server_config_file = %s\n", server_config_file);
 
-			get_server_log_file(devices[i].host,
-					    server_config_file, log_file);
-			rc = verify_server_log_mask(devices[i].host,
-						    server_config_file,
-						    "DEBUG");
-			if (rc) {
-				print_message("Log Mask != DEBUG in %s.\n",
-					      server_config_file);
-				skip();
-			}
-		}
+	get_server_log_file(devices[rank_pos].host,
+		server_config_file, log_file);
+	rc = verify_server_log_mask(devices[rank_pos].host,
+		server_config_file, "DEBUG");
+	if (rc) {
+		print_message("Log Mask != DEBUG in %s.\n",
+			server_config_file);
+		skip();
 	}
+
 	print_message("LOG FILE = %s\n", log_file);
 
 	/** Prepare records **/
@@ -195,79 +208,74 @@ nvme_test_verify_device_stats(void **state)
 		obj_class = DAOS_OC_R2S_SPEC_RANK;
 
 	oid = dts_oid_gen(obj_class, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, 1);
+	oid = dts_oid_set_rank(oid, 0);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	memset(data_buf, 'a', 100);
 
 	/** Insert record **/
 	print_message("Insert single record with 100 extents\n");
-	insert_single_with_rxnr("dkey", "akey", 0, data_buf,
+	insert_single_with_rxnr("dkey", "akey", idx, data_buf,
 				1, 100, DAOS_TX_NONE, &req);
 
 	/**
-	*Set single device for rank1 to faulty.
+	*Set single device for rank0 to faulty.
 	*/
-	for (i = 0; i < ndisks; i++) {
-		if (devices[i].rank == 1) {
-			print_message(
-				"NVMe with UUID=%s on host=%s\" set to Faulty\n",
-				DP_UUID(devices[i].device_id),
-				devices[i].host);
-			rc = dmg_storage_set_nvme_fault(dmg_config_file,
-							devices[i].host,
-				devices[i].device_id, 1);
-			assert_int_equal(rc, 0);
-			break;
-		}
-	}
+	print_message("NVMe with UUID=%s on host=%s\" set to Faulty\n",
+		DP_UUID(devices[rank_pos].device_id),
+		devices[rank_pos].host);
+	rc = dmg_storage_set_nvme_fault(dmg_config_file,
+		devices[rank_pos].host,
+		devices[rank_pos].device_id, 1);
+	assert_int_equal(rc, 0);
 	sleep(60);
 
 	/**
-	* Verify Rank1 device state change from NORMAL to FAULTY.
+	* Verify Rank0 device state change from NORMAL to FAULTY.
 	* Verify "FAULTY -> TEARDOWN" and "TEARDOWN -> OUT" device states found
 	* in server log.
 	*/
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_int_equal(rc, 0);
-	for (i = 0; i < ndisks; i++) {
-		if (devices[i].rank == 1) {
-			assert_string_equal(devices[i].state, "\"FAULTY\"");
+	assert_string_equal(devices[rank_pos].state, "\"FAULTY\"");
 
-			rc = verify_state_in_log(devices[i].host,
-						 log_file, "NORMAL -> FAULTY");
-			if (rc != 0) {
-				print_message(
-					"NORMAL -> FAULTY not found in log %s\n",
-					log_file);
-				assert_int_equal(rc, 0);
-			}
+	rc = verify_state_in_log(devices[rank_pos].host, log_file,
+		"NORMAL -> FAULTY");
+	if (rc != 0) {
+		print_message("NORMAL -> FAULTY not found in log %s\n",
+			log_file);
+		assert_int_equal(rc, 0);
+	}
 
-			rc = verify_state_in_log(devices[i].host,
-						 log_file, "TEARDOWN -> OUT");
-			if (rc != 0) {
-				print_message(
-					"TEARDOWN -> OUT not found in log %s\n",
-					log_file);
-				assert_int_equal(rc, 0);
-			}
+	rc = verify_state_in_log(devices[rank_pos].host, log_file,
+		"FAULTY -> TEARDOWN");
+	if (rc != 0) {
+		print_message("FAULTY -> TEARDOWN not found in %s\n",
+			log_file);
+		assert_int_equal(rc, 0);
+	}
 
-			rc = verify_state_in_log(devices[i].host,
-						 log_file,
-						 "FAULTY -> TEARDOWN");
-			if (rc != 0) {
-				print_message(
-					"FAULTY -> TEARDOWN not found in %s\n",
-					log_file);
-				assert_int_equal(rc, 0);
-			}
-			break;
-		}
+	rc = verify_state_in_log(devices[rank_pos].host, log_file,
+		"TEARDOWN -> OUT");
+	if (rc != 0) {
+		print_message("TEARDOWN -> OUT not found in log %s\n",
+			log_file);
+		assert_int_equal(rc, 0);
+	}
 
+	/*
+	 *  Insert fresh record because total rank < 1 and disk fault will
+	 *  lost the data.
+	 */
+	if (read_initial_data != true) {
+		idx = 1;
+		print_message("Insert fresh record with 100 extents\n");
+		insert_single_with_rxnr("dkey", "akey", idx, data_buf,
+			1, 100, DAOS_TX_NONE, &req);
 	}
 
 	/** Lookup all the records and verify the content **/
-	print_message("Lookup and Verify all the records:\n");
-	lookup_single_with_rxnr("dkey", "akey", 0, fetch_buf,
+	print_message("Lookup and Verify records:\n");
+	lookup_single_with_rxnr("dkey", "akey", idx, fetch_buf,
 				1, 100, DAOS_TX_NONE, &req);
 	for (i = 0; i < 100; i++)
 		assert_memory_equal(&fetch_buf[i], "a", 1);
