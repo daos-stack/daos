@@ -185,17 +185,17 @@ nvme_test_verify_device_stats(void **state)
 	D_ALLOC(server_config_file, 512);
 	D_ALLOC(log_file, 1024);
 	rc = get_server_config(devices[rank_pos].host,
-		server_config_file);
+			       server_config_file);
 	assert_int_equal(rc, 0);
 	print_message("server_config_file = %s\n", server_config_file);
 
 	get_server_log_file(devices[rank_pos].host,
-		server_config_file, log_file);
+			    server_config_file, log_file);
 	rc = verify_server_log_mask(devices[rank_pos].host,
-		server_config_file, "DEBUG");
+				    server_config_file, "DEBUG");
 	if (rc) {
 		print_message("Log Mask != DEBUG in %s.\n",
-			server_config_file);
+			      server_config_file);
 		skip();
 	}
 
@@ -221,10 +221,10 @@ nvme_test_verify_device_stats(void **state)
 	*Set single device for rank0 to faulty.
 	*/
 	print_message("NVMe with UUID=%s on host=%s\" set to Faulty\n",
-		DP_UUID(devices[rank_pos].device_id),
+		      DP_UUID(devices[rank_pos].device_id),
 		devices[rank_pos].host);
 	rc = dmg_storage_set_nvme_fault(dmg_config_file,
-		devices[rank_pos].host,
+					devices[rank_pos].host,
 		devices[rank_pos].device_id, 1);
 	assert_int_equal(rc, 0);
 	sleep(60);
@@ -239,26 +239,26 @@ nvme_test_verify_device_stats(void **state)
 	assert_string_equal(devices[rank_pos].state, "\"FAULTY\"");
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
-		"NORMAL -> FAULTY");
+				 "NORMAL -> FAULTY");
 	if (rc != 0) {
 		print_message("NORMAL -> FAULTY not found in log %s\n",
-			log_file);
+			      log_file);
 		assert_int_equal(rc, 0);
 	}
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
-		"FAULTY -> TEARDOWN");
+				 "FAULTY -> TEARDOWN");
 	if (rc != 0) {
 		print_message("FAULTY -> TEARDOWN not found in %s\n",
-			log_file);
+			      log_file);
 		assert_int_equal(rc, 0);
 	}
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
-		"TEARDOWN -> OUT");
+				 "TEARDOWN -> OUT");
 	if (rc != 0) {
 		print_message("TEARDOWN -> OUT not found in log %s\n",
-			log_file);
+			      log_file);
 		assert_int_equal(rc, 0);
 	}
 
@@ -270,7 +270,7 @@ nvme_test_verify_device_stats(void **state)
 		idx = 1;
 		print_message("Insert fresh record with 100 extents\n");
 		insert_single_with_rxnr("dkey", "akey", idx, data_buf,
-			1, 100, DAOS_TX_NONE, &req);
+					1, 100, DAOS_TX_NONE, &req);
 	}
 
 	/** Lookup all the records and verify the content **/
