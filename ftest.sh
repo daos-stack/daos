@@ -197,7 +197,7 @@ mkdir /var/run/daos_{agent,server}
 chown \$current_username -R /var/run/daos_{agent,server}
 chmod 0755 /var/run/daos_{agent,server}
 if $TEST_RPMS || [ -f $DAOS_BASE/SConstruct ]; then
-    echo \\\"No need to NFS mount $DAOS_BASE\\\"
+    echo \\\"SCHAN15 - No need to NFS mount $DAOS_BASE\\\"
 else
     mkdir -p $DAOS_BASE
     ed <<EOF /etc/fstab
