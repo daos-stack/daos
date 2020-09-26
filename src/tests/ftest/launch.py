@@ -905,7 +905,8 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     print("\nENV : %s\n" % os.environ)
 
-    archive_files(destination, host_list, "{}/*.log*".format(logs_dir))
+    archive_files(destination, host_list, "{}/*".format(logs_dir))
+    archive_files(destination, host_list, "{}/*/*.log*".format(logs_dir))
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
@@ -965,7 +966,7 @@ def archive_files(destination, host_list, source_files):
         "for file in $(ls {})".format(source_files),
         "do ls -sh $file",
         "/usr/lib/daos/TESTING/ftest/cart/util/cart_logtest.py $file",
-        "if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+        "if scp -r $file {}:{}/${{file##*/}}-$(hostname -s)".format(
               this_host, destination),
             "then copied+=($file)",
             "if ! sudo rm -fr $file",
