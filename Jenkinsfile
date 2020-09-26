@@ -587,7 +587,8 @@ pipeline {
                         allOf {
                             not { environment name: 'NO_CI_TESTING',
                                   value: 'true' }
-                            expression { ! skip_stage('bullseye', true) }
+                            #SCHAN15 - setting to false temp to skip
+                            expression { ! skip_stage('bullseye', false) }
                         }
                     }
                     agent {
