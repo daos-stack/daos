@@ -26,6 +26,7 @@ if $TEST_RPMS; then
   /usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"
 else
   echo SCHAN15 $PWD
+  export DAOS_BASE
   ls $DAOS_BASE
   $DAOS_BASE/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"
 fi

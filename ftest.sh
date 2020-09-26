@@ -135,7 +135,10 @@ if ${TEST_RPMS:-false}; then
 else
     TEST_RPMS=false
     PREFIX=install
-    . .build_vars.sh
+    #. .build_vars.sh
+    echo SCHAN15 - in ftest.sh
+    ls -al $DAOS_BASE
+    source $DAOS_BASE/.build_vars.sh
 fi
 
 if ${TEARDOWN_ONLY:-false}; then
