@@ -252,7 +252,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	switch variant {
 	case "withSpaceUsage":
 		snss := make(storage.ScmNamespaces, 0)
-		for _, i := range []int{1, 2} {
+		for _, i := range []int{0, 1} {
 			sm := storage.MockScmMountPoint(int32(i))
 			sns := storage.MockScmNamespace(int32(i))
 			sns.Mount = sm
@@ -268,6 +268,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
 			nc := storage.MockNvmeController(int32(i))
 			nc.SmdDevices = append(nc.SmdDevices, sd)
+			nc.SocketID = int32(i % 2)
 			ncs = append(ncs, nc)
 		}
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
@@ -275,11 +276,28 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "withNamespace":
 		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(),
+			storage.MockScmNamespace(0),
 		}
 		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
+	case "withNamespaces":
+		scmNamespaces := storage.ScmNamespaces{
+			storage.MockScmNamespace(0),
+			storage.MockScmNamespace(1),
+		}
+		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "withSingleSSD":
+		scmNamespaces := storage.ScmNamespaces{
+			storage.MockScmNamespace(0),
+			storage.MockScmNamespace(1),
+		}
+		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ssr.Nvme.Ctrlrs[0].Socketid = 0
 	case "noNVME":
 		ssr.Nvme.Ctrlrs = nil
 	case "noSCM":

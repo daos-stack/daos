@@ -54,6 +54,7 @@ def scons():
 
     prereqs.require(denv, 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
+    denv.AppendUnique(OBJPREFIX='d_')
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
