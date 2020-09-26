@@ -209,7 +209,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
-						Devices: []*SmdDevice{
+						Devices: []*storage.SmdDevice{
 							{
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
@@ -269,7 +269,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
-						Devices: []*SmdDevice{
+						Devices: []*storage.SmdDevice{
 							{
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
