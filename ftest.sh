@@ -207,6 +207,7 @@ $NFS_SERVER:$PWD $DAOS_BASE nfs defaults,vers=3 0 0 # DAOS_BASE # added by ftest
 wq
 EOF
     mount \\\"$DAOS_BASE\\\"
+    ls -al \\\"$DAOS_BASE\\\"
 fi\"
 
 if ! $TEST_RPMS; then
