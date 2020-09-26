@@ -1425,7 +1425,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)
-			goto out_map_buf;
+			D_GOTO(out_map_buf, rc);
 	}
 
 	if (map != NULL)
@@ -1458,11 +1458,11 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0)
-			goto out_map_buf;
+			D_GOTO(out_map_buf, rc);
 	}
 
 	if (!updated)
-		goto out_map_buf;
+		D_GOTO(out_map_buf, rc = -DER_ALREADY);
 
 	if (map != NULL)
 		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
@@ -1485,7 +1485,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
 			if (rc != 0)
-				goto out_map_buf;
+				D_GOTO(out_map_buf, rc);
 		}
 	}
 	if (uuids_out)

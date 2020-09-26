@@ -127,24 +127,27 @@ type storageScanCmd struct {
 	jsonOutputCmd
 	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
+	NvmeMeta   bool `short:"m" long:"nvme-meta" description:"Display server meta data held on NVMe storage"`
 }
 
 // Execute is run when storageScanCmd activates.
 //
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
+	if cmd.NvmeHealth && cmd.NvmeMeta {
+		return errors.New("Cannot use --nvme-health and --nvme-meta together")
+	}
+
 	ctx := context.Background()
-	req := &control.StorageScanReq{ConfigDevicesOnly: cmd.NvmeHealth}
+	req := &control.StorageScanReq{NvmeHealth: cmd.NvmeHealth, NvmeMeta: cmd.NvmeMeta}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
 		if cmd.Verbose {
-			cmd.log.Debug("--verbose flag ignored if --json specified")
+			cmd.log.Info("--verbose flag ignored if --json specified")
 		}
-		if cmd.NvmeHealth {
-			cmd.log.Debug("--health flag ignored if --json specified")
-		}
+
 		return cmd.outputJSON(resp, err)
 	}
 
@@ -159,9 +162,20 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 	if cmd.NvmeHealth {
 		if cmd.Verbose {
-			cmd.log.Debug("--verbose flag ignored if --health specified")
+			cmd.log.Info("--verbose flag ignored if --nvme-health specified")
 		}
 		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
+			return err
+		}
+		cmd.log.Info(bld.String())
+
+		return resp.Errors()
+	}
+	if cmd.NvmeMeta {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --nvme-meta specified")
+		}
+		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &bld); err != nil {
 			return err
 		}
 		cmd.log.Info(bld.String())
@@ -194,6 +208,11 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 	if cmd.Reformat {
 		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
 		if err != nil {
+			// If the AP hasn't been started, it will respond as if it
+			// is not a replica.
+			if system.IsNotReplica(err) {
+				return false, nil
+			}
 			return false, errors.Wrap(err, "System-Query command failed")
 		}
 

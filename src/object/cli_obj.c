@@ -308,6 +308,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	struct pl_obj_layout	*layout = NULL;
 	struct dc_pool		*pool;
 	struct pl_map		*map;
+	uint32_t		old;
 	int			i;
 	int			rc;
 
@@ -345,13 +346,14 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 	obj->cob_shards_nr = layout->ol_nr;
 	obj->cob_grp_size = layout->ol_grp_size;
+	old = obj->cob_grp_nr;
+	obj->cob_grp_nr = obj->cob_shards_nr / obj->cob_grp_size;
 
 	if (obj->cob_grp_size > 1 && srv_io_mode == DIM_DTX_FULL_ENABLED &&
-	    obj->cob_grp_nr < obj->cob_shards_nr / obj->cob_grp_size) {
+	    old < obj->cob_grp_nr) {
 		if (obj->cob_time_fetch_leader != NULL)
 			D_FREE(obj->cob_time_fetch_leader);
 
-		obj->cob_grp_nr = obj->cob_shards_nr / obj->cob_grp_size;
 		D_ALLOC_ARRAY(obj->cob_time_fetch_leader, obj->cob_grp_nr);
 		if (obj->cob_time_fetch_leader == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -987,14 +989,18 @@ obj_pool_query_cb(tse_task_t *task, void *data)
 	struct dc_object	*obj = *((struct dc_object **)data);
 	daos_pool_query_t	*args;
 
-	if (task->dt_result != 0)
+	args = dc_task_get_args(task);
+
+	if (task->dt_result != 0) {
 		D_DEBUG(DB_IO, "obj_pool_query_cb task=%p result=%d\n",
 			task, task->dt_result);
-
-	obj_layout_refresh(obj);
+	} else {
+		D_ASSERT(args->info != NULL);
+		if (obj->cob_version < args->info->pi_map_ver)
+			obj_layout_refresh(obj);
+	}
 	obj_decref(obj);
 
-	args = dc_task_get_args(task);
 	D_FREE(args->info);
 	return 0;
 }
@@ -2250,8 +2256,10 @@ shard_io_task(tse_task_t *task)
 	th = shard_auxi->obj_auxi->th;
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(&shard_auxi->epoch)) {
 		rc = dc_tx_get_epoch(task, th, &shard_auxi->epoch);
-		if (rc < 0)
+		if (rc < 0) {
+			tse_task_complete(task, rc);
 			return rc;
+		}
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
 	}
@@ -4468,8 +4476,10 @@ shard_query_key_task(tse_task_t *task)
 	/* See the similar shard_io_task. */
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
 		rc = dc_tx_get_epoch(task, th, epoch);
-		if (rc < 0)
+		if (rc < 0) {
+			tse_task_complete(task, rc);
 			return rc;
+		}
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
 	}
@@ -4488,6 +4498,11 @@ shard_query_key_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->kqa_dkey_hash,
 				 sizeof(args->kqa_dkey_hash));
 	api_args = args->kqa_api_args;
+	/* let's set the current pool map version in the req to
+	 * avoid ESTALE.
+	 */
+	args->kqa_auxi.obj_auxi->map_ver_reply =
+			args->kqa_auxi.obj_auxi->map_ver_req;
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, args->kqa_coh_uuid,

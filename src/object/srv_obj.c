@@ -185,7 +185,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 
 		daos_recx_ep_list_free(orwo->orw_rels.ca_arrays,
 				       orwo->orw_rels.ca_count);
-	
+
 		if (ioc->ioc_free_sgls) {
 			struct obj_rw_in *orw = crt_req_get(rpc);
 			d_sg_list_t *sgls = orwo->orw_sgls.ca_arrays;
@@ -896,10 +896,19 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0;
 
-	rc = daos_csummer_verify_key(csummer, dkey, dci);
-	if (rc != 0) {
-		D_ERROR("daos_csummer_verify_key error for dkey: %d", rc);
-		return rc;
+	if (!DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
+		/**
+		 * with DAOS_VC_DIFF_DKEY, the dkey will be corrupt on purpose
+		 * for object verification tests. Don't reject the
+		 * update in this case
+		 */
+		rc = daos_csummer_verify_key(csummer, dkey, dci);
+		if (rc != 0) {
+			D_ERROR("daos_csummer_verify_key error for dkey: %d",
+				rc);
+			return rc;
+		}
+
 	}
 
 	for (i = 0; i < oia->oia_iod_nr; i++) {
@@ -1699,9 +1708,7 @@ do_obj_ioc_begin(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		if (opc == DAOS_OBJ_RPC_CPD)
 			D_GOTO(out, rc = -DER_TX_RESTART);
 
-		if (obj_is_modification_opc(opc))
-			D_GOTO(out, rc = -DER_STALE);
-		/* It is harmless if fetch with old pool map version. */
+		D_GOTO(out, rc = -DER_STALE);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
 		D_GOTO(out, rc = -DER_STALE);
 	}
@@ -3458,9 +3465,14 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			if (rc != 0)
 				goto out;
 		} else {
-			if (dcsr->dcsr_opc != DCSO_PUNCH_OBJ &&
-			    dcsr->dcsr_opc != DCSO_PUNCH_DKEY &&
-			    dcsr->dcsr_opc != DCSO_PUNCH_AKEY) {
+			daos_key_t	*dkey;
+
+			if (dcsr->dcsr_opc == DCSO_PUNCH_OBJ) {
+				dkey = NULL;
+			} else if (dcsr->dcsr_opc == DCSO_PUNCH_DKEY ||
+				   dcsr->dcsr_opc == DCSO_PUNCH_AKEY) {
+				dkey = &dcsr->dcsr_dkey;
+			} else {
 				D_ERROR("Unknown sub request opc %u for obj "
 					DF_UOID", DTX "DF_DTI":\n",
 					dcsr->dcsr_opc, DP_UOID(dcsr->dcsr_oid),
@@ -3476,8 +3488,9 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 			rc = vos_obj_punch(ioc->ioc_coc->sc_hdl, dcsr->dcsr_oid,
 				dcsh->dcsh_epoch.oe_value, dth->dth_ver,
-				dcsr->dcsr_api_flags, &dcsr->dcsr_dkey,
-				dcsr->dcsr_nr, dcsr->dcsr_punch.dcp_akeys, dth);
+				dcsr->dcsr_api_flags, dkey,
+				dkey != NULL ? dcsr->dcsr_nr : 0, dkey != NULL ?
+				dcsr->dcsr_punch.dcp_akeys : NULL, dth);
 			if (rc != 0)
 				goto out;
 		}
