@@ -962,7 +962,8 @@ def archive_files(destination, host_list, source_files):
         "set -eu",
         "rc=0",
         "copied=()",
-        "find /var/tmp/ /mnt/share/tmp* ",
+        # Careful of permissions errors here?
+        # "find /var/tmp/daos_testing /mnt/share/tmp* ",
         "for file in $(ls {})".format(source_files),
         "do ls -sh $file",
         "/usr/lib/daos/TESTING/ftest/cart/util/cart_logtest.py $file",
