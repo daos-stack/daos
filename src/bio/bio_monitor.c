@@ -172,23 +172,23 @@ static int
 populate_health_cdata(struct nvme_health_stats *dev_state,
 		      const struct spdk_nvme_ctrlr_data *cdata)
 {
-	int	written;
+	int	written, rc = 0;
 
 	written = snprintf(dev_state->model, sizeof(dev_state->model),
 			   "%-20.20s", cdata->mn);
 	if (written >= sizeof(dev_state->model)) {
-		D_ERROR("writing model to dev_state");
-		return -DER_TRUNC;
+		D_WARN("data truncated when writing model to health state");
+		rc = -DER_TRUNC;
 	}
 
 	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
 			   "%-20.20s", cdata->sn);
 	if (written >= sizeof(dev_state->serial)) {
-		D_ERROR("writing serial to dev_state");
-		return -DER_TRUNC;
+		D_WARN("data truncated when writing model to health state");
+		rc = -DER_TRUNC;
 	}
 
-	return 0;
+	return rc;
 }
 
 static void
