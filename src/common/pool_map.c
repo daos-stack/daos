@@ -1875,7 +1875,8 @@ activate_new_target(struct pool_domain *domain, uint32_t id)
 	/*
 	 * Check the targets in this domain to see if they match
 	 *
-	 * If they do, activate them and activate the current domain */
+	 * If they do, activate them and activate the current domain
+	 */
 	for (i = 0; i < domain->do_target_nr; i++) {
 		struct pool_component *comp = &domain->do_targets[i].ta_comp;
 
