@@ -989,14 +989,18 @@ obj_pool_query_cb(tse_task_t *task, void *data)
 	struct dc_object	*obj = *((struct dc_object **)data);
 	daos_pool_query_t	*args;
 
-	if (task->dt_result != 0)
+	args = dc_task_get_args(task);
+
+	if (task->dt_result != 0) {
 		D_DEBUG(DB_IO, "obj_pool_query_cb task=%p result=%d\n",
 			task, task->dt_result);
-
-	obj_layout_refresh(obj);
+	} else {
+		D_ASSERT(args->info != NULL);
+		if (obj->cob_version < args->info->pi_map_ver)
+			obj_layout_refresh(obj);
+	}
 	obj_decref(obj);
 
-	args = dc_task_get_args(task);
 	D_FREE(args->info);
 	return 0;
 }
