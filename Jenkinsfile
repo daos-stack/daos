@@ -587,8 +587,7 @@ pipeline {
                         allOf {
                             not { environment name: 'NO_CI_TESTING',
                                   value: 'true' }
-                            //SCHAN15 - setting to false temp to skip
-                            expression { ! skip_stage('bullseye', false) }
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
@@ -1019,6 +1018,8 @@ pipeline {
                 stage('Unit Test Bullseye') {
                     when {
                       beforeAgent true
+		      //SCHAN15 - temp disable unit cov
+  		      expression { ! skip_stage('run_test') }
                       expression { ! skip_stage('bullseye', true) }
                     }
                     agent {
