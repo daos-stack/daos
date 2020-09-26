@@ -308,6 +308,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	struct pl_obj_layout	*layout = NULL;
 	struct dc_pool		*pool;
 	struct pl_map		*map;
+	uint32_t		old;
 	int			i;
 	int			rc;
 
@@ -345,13 +346,14 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 	obj->cob_shards_nr = layout->ol_nr;
 	obj->cob_grp_size = layout->ol_grp_size;
+	old = obj->cob_grp_nr;
+	obj->cob_grp_nr = obj->cob_shards_nr / obj->cob_grp_size;
 
 	if (obj->cob_grp_size > 1 && srv_io_mode == DIM_DTX_FULL_ENABLED &&
-	    obj->cob_grp_nr < obj->cob_shards_nr / obj->cob_grp_size) {
+	    old < obj->cob_grp_nr) {
 		if (obj->cob_time_fetch_leader != NULL)
 			D_FREE(obj->cob_time_fetch_leader);
 
-		obj->cob_grp_nr = obj->cob_shards_nr / obj->cob_grp_size;
 		D_ALLOC_ARRAY(obj->cob_time_fetch_leader, obj->cob_grp_nr);
 		if (obj->cob_time_fetch_leader == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -2250,8 +2252,10 @@ shard_io_task(tse_task_t *task)
 	th = shard_auxi->obj_auxi->th;
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(&shard_auxi->epoch)) {
 		rc = dc_tx_get_epoch(task, th, &shard_auxi->epoch);
-		if (rc < 0)
+		if (rc < 0) {
+			tse_task_complete(task, rc);
 			return rc;
+		}
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
 	}
@@ -4467,8 +4471,10 @@ shard_query_key_task(tse_task_t *task)
 	/* See the similar shard_io_task. */
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
 		rc = dc_tx_get_epoch(task, th, epoch);
-		if (rc < 0)
+		if (rc < 0) {
+			tse_task_complete(task, rc);
 			return rc;
+		}
 		if (rc == DC_TX_GE_REINIT)
 			return tse_task_reinit(task);
 	}
