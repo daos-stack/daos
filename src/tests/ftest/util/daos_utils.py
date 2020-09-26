@@ -605,7 +605,7 @@ class DaosCommand(DaosCommandBase):
                 Each row of replica nums is a tuple and stored top->bottom.
 
         Raises:
-            CommandFailure: if the doas object query command fails.
+            CommandFailure: if the daos object query command fails.
         """
         self._get_result(
             ("object", "query"), pool=pool, svc=svc, cont=cont,

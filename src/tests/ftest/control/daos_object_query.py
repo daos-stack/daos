@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from test_utils_container import TestContainer
 from daos_utils import DaosCommand
 
 
