@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@schan_fn_cov") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -1110,6 +1110,26 @@ pipeline {
                         }
                     }
                 }
+                stage('Functional on CentOS 7 Bullseye') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('bullseye', true) }
+                        }
+                    }
+                    agent {
+                        label 'ci_vm9'
+                    }
+                    steps {
+                        fnCovTest inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                    }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    }
+                }
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
@@ -1278,7 +1298,7 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish(
-                                   coverage_stashes: ['centos7-covc-unit-cov'],
+                                   coverage_stashes: ['centos7-covc-fnvm-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
