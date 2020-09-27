@@ -34,7 +34,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -128,17 +127,6 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 	return b.binding.vmdDisabled
 }
 
-func filterControllers(in storage.NvmeControllers, pciFilter ...string) (out storage.NvmeControllers) {
-	for _, c := range in {
-		if len(pciFilter) > 0 && !common.Includes(pciFilter, c.PciAddr) {
-			continue
-		}
-		out = append(out, c)
-	}
-
-	return
-}
-
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
@@ -154,9 +142,7 @@ func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 		return nil, errors.Wrap(err, "failed to discover nvme")
 	}
 
-	return &ScanResponse{
-		Controllers: filterControllers(cs, req.DeviceList...),
-	}, nil
+	return &ScanResponse{Controllers: cs}, nil
 }
 
 func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*FormatResponse, error) {
