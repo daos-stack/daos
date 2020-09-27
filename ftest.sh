@@ -405,12 +405,21 @@ else
 fi
 # now run it!
 # DAOS-5622: Temporarily disable certs in CI
+
+echo SCHAN15 - mv test.cov 1
+mv $DAOS_BASE/test.cov $DAOS_BASE/install/lib/daos/TESTING/ftest
+ls -al $DAOS_BASE/install/lib/daos/TESTING/ftest
+
 if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} -ins \\
                  ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
 fi
+
+echo SCHAN15 - mv test.cov 2
+mv $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov $DAOS_BASE/
+ls -al $DAOS_BASE
 
 exit \$rc"; then
     rc=${PIPESTATUS[0]}
