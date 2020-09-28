@@ -1051,9 +1051,13 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 				D_GOTO(free, rc);
 		}
 	} else {
-		if(top_iod->iod_nr > 0 && (rec->rec_size != top_iod->iod_size))
-			rc = next_iod(io, cb, cb_arg, &top_iod->iod_name);
-
+		if (top_iod->iod_nr > 0) {
+			if (top_iod->iod_type != DAOS_IOD_ARRAY)
+				rc = complete_io_init_iod(io, cb, cb_arg, NULL);
+			else if (rec->rec_size != top_iod->iod_size)
+				rc = next_iod(io, cb, cb_arg,
+					      &top_iod->iod_name);
+		}
 		io->ui_is_array_exist = 1;
 	}
 
