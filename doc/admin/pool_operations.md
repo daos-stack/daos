@@ -374,3 +374,27 @@ Meanwhile, PMDK provides a recovery tool (i.e., pmempool check) to verify
 and possibly repair a pmemobj file. As discussed in the previous section, the
 rebuild status can be consulted via the pool query and will be expanded
 with more information.
+
+## Recovering Ownership of a Pool's Container
+
+Typically users are expected to manage their containers. However, in the event
+that a container is orphaned and no users have the privileges to change the
+ownership, an administrator can transfer ownership of the container to a new
+user and/or group.
+
+To change the owner user:
+
+```bash
+$ dmg cont set-owner --pool <UUID> --cont <UUID> --user <owner-user>
+```
+To change the owner group:
+
+```bash
+$ dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
+```
+
+The user and group names are case sensitive and must be formatted as
+[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+
+Because this is an administrative action, it does not require the administrator
+to have any privileges assigned in the container ACL.

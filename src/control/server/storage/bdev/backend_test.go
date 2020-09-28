@@ -125,26 +125,6 @@ func TestBdevBackendScan(t *testing.T) {
 				Controllers: storage.NvmeControllers{ctrlr1},
 			},
 		},
-		"binding scan filtered in": {
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
-			},
-			req: ScanRequest{
-				DeviceList: []string{ctrlr1.PciAddr},
-			},
-			expResp: &ScanResponse{
-				Controllers: storage.NvmeControllers{ctrlr1},
-			},
-		},
-		"binding scan filtered out": {
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
-			},
-			req: ScanRequest{
-				DeviceList: []string{"0000:ff:ff.f"},
-			},
-			expResp: &ScanResponse{},
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
