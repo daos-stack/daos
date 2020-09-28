@@ -57,6 +57,7 @@ pool:
   createsize:
     scm_size: 1073741824
     nvme_size: 8589934592
+  control_method: dmg
 ior:
     clientslots:
       slots: 1
