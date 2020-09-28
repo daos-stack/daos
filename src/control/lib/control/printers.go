@@ -28,6 +28,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -158,10 +159,12 @@ func PrintResponseErrors(resp hostErrorsGetter, out io.Writer, opts ...PrintConf
 	return nil
 }
 
-func printNvmeControllers(controllers storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
 	if len(controllers) == 0 {
 		fmt.Fprintln(out, "\tNo NVMe devices found")
-		return nil
+		return w.Err
 	}
 
 	pciTitle := "NVMe PCI"
@@ -189,13 +192,100 @@ func printNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 	}
 
 	formatter.Format(table)
-	return nil
+	return w.Err
 }
 
-func printScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintConfigOption) error {
+func PrintNvmeControllerSummary(nvme *storage.NvmeController, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
+	if _, err := fmt.Fprintf(out, "PCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
+		nvme.PciAddr, nvme.Model, nvme.FwRev, nvme.SocketID, humanize.Bytes(nvme.Capacity())); err != nil {
+		return err
+	}
+
+	return w.Err
+}
+
+func PrintNvmeControllerHealth(stat *storage.NvmeControllerHealth, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
+	if stat == nil {
+		fmt.Fprintln(out, "Health Stats Unavailable")
+		return w.Err
+	}
+
+	fmt.Fprintln(out, "Health Stats:")
+
+	iw := txtfmt.NewIndentWriter(out)
+
+	if stat.Timestamp > 0 {
+		fmt.Fprintf(iw, "Timestamp:%s\n", time.Time(time.Unix(int64(stat.Timestamp), 0)))
+	}
+
+	fmt.Fprintf(iw, "Temperature:%dK(%.02fC)\n", stat.TempK(), stat.TempC())
+
+	if stat.TempWarnTime > 0 {
+		fmt.Fprintf(iw, "Temperature Warning Duration:%s\n",
+			time.Duration(stat.TempWarnTime)*time.Minute)
+	}
+	if stat.TempCritTime > 0 {
+		fmt.Fprintf(iw, "Temperature Critical Duration:%s\n",
+			time.Duration(stat.TempCritTime)*time.Minute)
+	}
+
+	fmt.Fprintf(iw, "Controller Busy Time:%s\n", time.Duration(stat.CtrlBusyTime)*time.Minute)
+	fmt.Fprintf(iw, "Power Cycles:%d\n", uint64(stat.PowerCycles))
+	fmt.Fprintf(iw, "Power On Duration:%s\n", time.Duration(stat.PowerOnHours)*time.Hour)
+	fmt.Fprintf(iw, "Unsafe Shutdowns:%d\n", uint64(stat.UnsafeShutdowns))
+	fmt.Fprintf(iw, "Error Count:%d\n", uint64(stat.ErrorCount))
+	fmt.Fprintf(iw, "Media Errors:%d\n", uint64(stat.MediaErrors))
+	fmt.Fprintf(iw, "Read Errors:%d\n", uint64(stat.ReadErrors))
+	fmt.Fprintf(iw, "Write Errors:%d\n", uint64(stat.WriteErrors))
+	fmt.Fprintf(iw, "Unmap Errors:%d\n", uint64(stat.UnmapErrors))
+	fmt.Fprintf(iw, "Checksum Errors:%d\n", uint64(stat.ChecksumErrors))
+	fmt.Fprintf(iw, "Error Log Entries:%d\n", uint64(stat.ErrorLogEntries))
+
+	fmt.Fprintf(out, "Critical Warnings:\n")
+	fmt.Fprintf(iw, "Temperature: ")
+	if stat.TempWarn {
+		fmt.Fprintf(iw, "WARNING\n")
+	} else {
+		fmt.Fprintf(iw, "OK\n")
+	}
+	fmt.Fprintf(iw, "Available Spare: ")
+	if stat.AvailSpareWarn {
+		fmt.Fprintf(iw, "WARNING\n")
+	} else {
+		fmt.Fprintf(iw, "OK\n")
+	}
+	fmt.Fprintf(iw, "Device Reliability: ")
+	if stat.ReliabilityWarn {
+		fmt.Fprintf(iw, "WARNING\n")
+	} else {
+		fmt.Fprintf(iw, "OK\n")
+	}
+	fmt.Fprintf(iw, "Read Only: ")
+	if stat.ReadOnlyWarn {
+		fmt.Fprintf(iw, "WARNING\n")
+	} else {
+		fmt.Fprintf(iw, "OK\n")
+	}
+	fmt.Fprintf(iw, "Volatile Memory Backup: ")
+	if stat.VolatileWarn {
+		fmt.Fprintf(iw, "WARNING\n")
+	} else {
+		fmt.Fprintf(iw, "OK\n")
+	}
+
+	return w.Err
+}
+
+func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
 	if len(modules) == 0 {
 		fmt.Fprintln(out, "\tNo SCM modules found")
-		return nil
+		return w.Err
 	}
 
 	physicalIdTitle := "SCM Module ID"
@@ -225,13 +315,15 @@ func printScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintCon
 	}
 
 	formatter.Format(table)
-	return nil
+	return w.Err
 }
 
-func printScmNamespaces(namespaces storage.ScmNamespaces, out io.Writer, opts ...PrintConfigOption) error {
+func PrintScmNamespaces(namespaces storage.ScmNamespaces, out io.Writer, opts ...PrintConfigOption) error {
+	w := txtfmt.NewErrWriter(out)
+
 	if len(namespaces) == 0 {
 		fmt.Fprintln(out, "\tNo SCM namespaces found")
-		return nil
+		return w.Err
 	}
 
 	deviceTitle := "SCM Namespace"
@@ -253,7 +345,7 @@ func printScmNamespaces(namespaces storage.ScmNamespaces, out io.Writer, opts ..
 	}
 
 	formatter.Format(table)
-	return nil
+	return w.Err
 }
 
 func printScmMountPoints(mountpoints storage.ScmMountPoints, out io.Writer, opts ...PrintConfigOption) error {
@@ -291,16 +383,16 @@ func printHostStorageMapVerbose(hsm HostStorageMap, out io.Writer, opts ...Print
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
 		if len(hss.HostStorage.ScmNamespaces) == 0 {
-			if err := printScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
+			if err := PrintScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
 				return err
 			}
 		} else {
-			if err := printScmNamespaces(hss.HostStorage.ScmNamespaces, out, opts...); err != nil {
+			if err := PrintScmNamespaces(hss.HostStorage.ScmNamespaces, out, opts...); err != nil {
 				return err
 			}
 		}
 		fmt.Fprintln(out)
-		if err := printNvmeControllers(hss.HostStorage.NvmeDevices, out, opts...); err != nil {
+		if err := PrintNvmeControllers(hss.HostStorage.NvmeDevices, out, opts...); err != nil {
 			return err
 		}
 		fmt.Fprintln(out)

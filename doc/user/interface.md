@@ -3,18 +3,19 @@
 ## Building against the DAOS library
 
 To build application or I/O middleware against the native DAOS API, include
-the daos.h header file in your program and link with `-Ldaos`. Examples are
-available under src/tests.
+the `daos.h` header file in your program and link with `-Ldaos`. Examples are
+available under `src/tests`.
 
 ## DAOS API Reference
 
-libdaos is written in C and uses Doxygen comments that are added to C header
-files. The Doxygen documentation is available [here](api/index.html).
+`libdaos` is written in C and uses Doxygen comments that are added to C header
+files. The Doxygen documentation is available 
+[here](https://github.com/daos-stack/daos/blob/master/src/client/api/README.md).
 
 ## Python Bindings
 
 A python module called [PyDAOS](https://github.com/daos-stack/daos/blob/master/src/client/pydaos)
-provides the DAOS python to python users.
+provides the DAOS API to python users.
 
 ### pydaos
 
@@ -23,12 +24,12 @@ provides a native DAOS python interface exported by a C module. It integrates
 the DAOS key-value store API with python dictionaries. Only strings are
 supported for both the key and value for now.
 
-Key-value pair can be inserted/looked up once at a time (see put/get) or
+Key-value pairs can be inserted/looked up one at a time (see put/get) or
 in bulk (see bput/bget) taking a python dict as an input. The bulk
 operations are issued in parallel (up to 16 operations in flight) to
 maximize the operation rate.
 
-Key-value pair are deleted via the put/bput operations by setting the value
+Key-value pairs are deleted via the put/bput operations by setting the value
 to either None or the empty string. Once deleted, the key won't be reported
 during iteration. It also supports the del operation via 'del dkv.key'.
 The DAOS KV objects behave like a python dictionary and supports:
@@ -43,14 +44,14 @@ The DAOS KV objects behave like a python dictionary and supports:
 - 'if key is in dkv:' allows to test whether a give key is present in the
   DAOS KV store.
 
-- 'len(dkv)' returns the number of key-value pairs
+- 'len(dkv)' returns the number of key-value pairs.
 
 - 'bool(dkv)' reports 'False' if there is no key-value pairs in the DAOS KV
   and 'True' otherwise.
 
 Python iterators are supported, which means that "for key in kvobj:" will
 allow you to walk through the key space.
-For each method, a PyDError exception is raised with proper DAOS error code
+For each method, a PyDError exception is raised with a proper DAOS error code
 (in string format) if the operation cannot be completed.
 
 Both python 2.7 and 3.x are supported.

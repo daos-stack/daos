@@ -26,11 +26,14 @@ package server
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -111,9 +114,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 
 // StoragePrepare configures SSDs for user specific access with SPDK and
 // groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
-func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (
-	*ctlpb.StoragePrepareResp, error) {
-
+func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (*ctlpb.StoragePrepareResp, error) {
 	c.log.Debug("received StoragePrepare RPC; proceeding to instance storage preparation")
 
 	resp := &ctlpb.StoragePrepareResp{}
@@ -128,70 +129,196 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.S
 	return resp, nil
 }
 
+// mapCtrlrs maps controllers to an alternate (as opposed to PCI address) key.
+func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
+	ctrlrMap := make(map[string]*storage.NvmeController)
+
+	for _, ctrlr := range ctrlrs {
+		key, err := ctrlr.GenAltKey()
+		if err != nil {
+			return nil, errors.Wrapf(err, "generate alternate key for controller %s",
+				ctrlr.PciAddr)
+		}
+
+		if _, exists := ctrlrMap[key]; exists {
+			return nil, errors.Errorf("duplicate entries for controller %s, key %s",
+				ctrlr.PciAddr, key)
+		}
+
+		ctrlrMap[key] = ctrlr
+	}
+
+	return ctrlrMap, nil
+}
+
+// scanInstanceBdevs retrieves up-to-date NVMe controller info including
+// health statistics and stored server meta-data. If I/O servers are running
+// then query is issued over dRPC as go-spdk bindings cannot be used to access
+// controller claimed by another process. Only update info for controllers
+// assigned to I/O servers.
+func (c *ControlService) scanInstanceBdevs(ctx context.Context) (storage.NvmeControllers, error) {
+	var ctrlrs storage.NvmeControllers
+	instances := c.harness.Instances()
+
+	for _, srv := range instances {
+		bdevReq := bdev.ScanRequest{} // use cached controller details by default
+
+		// only retrieve results for devices listed in server config
+		bdevReq.DeviceList = c.instanceStorage[srv.Index()].Bdev.GetNvmeDevs()
+		c.log.Debugf("instance %d storage scan: only show bdev devices in config %v",
+			srv.Index(), bdevReq.DeviceList)
+
+		// scan through control-plane to get up-to-date stats if io
+		// server is not active (and therefore has not claimed the
+		// assigned devices), bypass cache to get fresh health stats
+		if !srv.isReady() {
+			bdevReq.NoCache = true
+
+			bsr, err := c.NvmeScan(bdevReq)
+			if err != nil {
+				return nil, errors.Wrap(err, "nvme scan")
+			}
+
+			ctrlrs = append(ctrlrs, bsr.Controllers...)
+			continue
+		}
+
+		bsr, err := c.NvmeScan(bdevReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "nvme scan")
+		}
+
+		ctrlrMap, err := mapCtrlrs(bsr.Controllers)
+		if err != nil {
+			return nil, errors.Wrap(err, "create controller map")
+		}
+
+		// if io servers are active and have claimed the assigned devices,
+		// query over drpc to update controller details with current health
+		// stats and smd info
+		if err := srv.updateInUseBdevs(ctx, ctrlrMap); err != nil {
+			return nil, errors.Wrap(err, "updating bdev health and smd info")
+		}
+
+		ctrlrs = append(ctrlrs, bsr.Controllers...)
+	}
+
+	return ctrlrs, nil
+}
+
+// setBdevScanResp populates protobuf NVMe scan response with controller info
+// including health statistics or metadata if requested.
+func (c *ControlService) setBdevScanResp(cs storage.NvmeControllers, inErr error, req *ctlpb.ScanNvmeReq, resp *ctlpb.ScanNvmeResp) error {
+	state := newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", "Scan NVMe Storage")
+
+	if inErr != nil {
+		state.Status = ctlpb.ResponseStatus_CTL_ERR_NVME
+		state.Error = inErr.Error()
+		if fault.HasResolution(inErr) {
+			state.Info = fault.ShowResolutionFor(inErr)
+		}
+		resp.State = state
+
+		return nil
+	}
+
+	pbCtrlrs := make(proto.NvmeControllers, 0, len(cs))
+	if err := pbCtrlrs.FromNative(cs); err != nil {
+		return errors.Wrapf(err, "convert %#v to protobuf format", cs)
+	}
+
+	// trim unwanted fields so responses can be coalesced from hash map
+	for _, pbc := range pbCtrlrs {
+		if !req.Health {
+			pbc.Healthstats = nil
+		}
+		if !req.Meta {
+			pbc.Smddevices = nil
+		}
+	}
+
+	resp.State = state
+	resp.Ctrlrs = pbCtrlrs
+
+	return nil
+}
+
+// scanBdevs updates transient details if health statistics or server metadata
+// is requested otherwise just retrieves cached static controller details.
+func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq, resp *ctlpb.ScanNvmeResp) error {
+	if req.Health || req.Meta {
+		// filter results based on config file bdev_list contents
+		ctrlrs, err := c.scanInstanceBdevs(ctx)
+
+		return c.setBdevScanResp(ctrlrs, err, req, resp)
+	}
+
+	// return cached results for all bdevs
+	bsr, scanErr := c.NvmeScan(bdev.ScanRequest{})
+
+	return c.setBdevScanResp(bsr.Controllers, errors.Wrap(scanErr, "NvmeScan()"), req, resp)
+}
+
+func (c *ControlService) scanInstanceScm(ctx context.Context) (storage.ScmNamespaces, storage.ScmModules, error) {
+	// rescan scm storage details by default
+	scmReq := scm.ScanRequest{Rescan: true}
+	ssr, err := c.ScmScan(scmReq)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "ScmScan()")
+	}
+
+	return ssr.Namespaces, ssr.Modules, nil
+}
+
+func (c *ControlService) scanScm(ctx context.Context, resp *ctlpb.ScanScmResp) error {
+	state := newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", "Scan SCM Storage")
+
+	namespaces, modules, err := c.scanInstanceScm(ctx)
+	if err != nil {
+		state.Status = ctlpb.ResponseStatus_CTL_ERR_SCM
+		state.Error = err.Error()
+		if fault.HasResolution(err) {
+			state.Info = fault.ShowResolutionFor(err)
+		}
+		resp.State = state
+
+		return nil
+	}
+
+	if len(namespaces) > 0 {
+		resp.Namespaces = make(proto.ScmNamespaces, 0, len(namespaces))
+		err := (*proto.ScmNamespaces)(&resp.Namespaces).FromNative(namespaces)
+		if err != nil {
+			return errors.Wrapf(err, "convert %#v to protobuf format", namespaces)
+		}
+		resp.State = state
+
+		return nil
+	}
+
+	resp.Modules = make(proto.ScmModules, 0, len(modules))
+	if err := (*proto.ScmModules)(&resp.Modules).FromNative(modules); err != nil {
+		return errors.Wrapf(err, "convert %#v to protobuf format", modules)
+	}
+	resp.State = state
+
+	return nil
+}
+
 // StorageScan discovers non-volatile storage hardware on node.
-func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
+func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	c.log.Debug("received StorageScan RPC")
 
-	msg := "Storage Scan "
 	resp := new(ctlpb.StorageScanResp)
+	resp.Nvme = new(ctlpb.ScanNvmeResp)
+	resp.Scm = new(ctlpb.ScanScmResp)
 
-	bdevReq := bdev.ScanRequest{}
-	if req.ConfigDevicesOnly {
-		for _, storageCfg := range c.instanceStorage {
-			bdevReq.DeviceList = append(bdevReq.DeviceList,
-				storageCfg.Bdev.GetNvmeDevs()...)
-		}
+	if err := c.scanBdevs(ctx, req.Nvme, resp.Nvme); err != nil {
+		return nil, err
 	}
 
-	bsr, err := c.bdev.Scan(bdevReq)
-	if err != nil {
-		resp.Nvme = &ctlpb.ScanNvmeResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_NVME, err.Error(), "", msg+"NVMe"),
-		}
-	} else {
-		pbCtrlrs := make(proto.NvmeControllers, 0, len(bsr.Controllers))
-		if err := pbCtrlrs.FromNative(bsr.Controllers); err != nil {
-			c.log.Errorf("failed to cleanly convert %#v to protobuf: %s", bsr.Controllers, err)
-		}
-		resp.Nvme = &ctlpb.ScanNvmeResp{
-			State:  newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg+"NVMe"),
-			Ctrlrs: pbCtrlrs,
-		}
-	}
-
-	scmReq := scm.ScanRequest{Rescan: true}
-	if req.ConfigDevicesOnly {
-		for _, storageCfg := range c.instanceStorage {
-			scmReq.DeviceList = append(scmReq.DeviceList,
-				storageCfg.SCM.DeviceList...)
-		}
-	}
-
-	ssr, err := c.scm.Scan(scmReq)
-	if err != nil {
-		resp.Scm = &ctlpb.ScanScmResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg+"SCM"),
-		}
-	} else {
-		msg += fmt.Sprintf("SCM (%s)", ssr.State)
-		resp.Scm = &ctlpb.ScanScmResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg),
-		}
-		if len(ssr.Namespaces) > 0 {
-			resp.Scm.Namespaces = make(proto.ScmNamespaces, 0, len(ssr.Namespaces))
-			err := (*proto.ScmNamespaces)(&resp.Scm.Namespaces).FromNative(ssr.Namespaces)
-			if err != nil {
-				resp.Scm.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM,
-					err.Error(), "", msg+"SCM")
-			}
-		} else {
-			resp.Scm.Modules = make(proto.ScmModules, 0, len(ssr.Modules))
-			err := (*proto.ScmModules)(&resp.Scm.Modules).FromNative(ssr.Modules)
-			if err != nil {
-				resp.Scm.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM,
-					err.Error(), "", msg+"SCM")
-			}
-		}
+	if err := c.scanScm(ctx, resp.Scm); err != nil {
+		return nil, err
 	}
 
 	c.log.Debug("responding to StorageScan RPC")

@@ -278,14 +278,25 @@ update:
 	/* if member is suspected, remove from suspect list */
 	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
 		if (item->si_id == id) {
+			uint64_t timeout = swim_ping_timeout_get();
+
 			/* remove this member from suspect list */
 			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
-			if (swim_ping_timeout_get() < swim_period_get()) {
-				swim_ping_timeout_set(swim_ping_timeout_get() +
-						      SWIM_PING_TIMEOUT);
-				SWIM_INFO("%lu: increase ping timeout to %lu\n",
-					 ctx->sc_self, swim_ping_timeout_get());
+
+			timeout += timeout / 2;
+			swim_ping_timeout_set(timeout);
+			SWIM_ERROR("%lu: increase ping timeout to %lu ms\n",
+				   ctx->sc_self, timeout);
+
+			/* according protocol period requirement */
+			timeout *= 3;
+			if (timeout > swim_period_get()) {
+				swim_period_set(timeout);
+				/* according protocol requirement */
+				timeout *= 3;
+				swim_suspect_timeout_set(timeout);
 			}
+
 			D_FREE(item);
 			break;
 		}
@@ -390,7 +401,8 @@ out:
 }
 
 static int
-swim_member_update_suspected(struct swim_context *ctx, uint64_t now)
+swim_member_update_suspected(struct swim_context *ctx, uint64_t now,
+			     uint64_t net_glitch_delay)
 {
 	TAILQ_HEAD(, swim_item)  targets;
 	struct swim_member_state id_state;
@@ -406,6 +418,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now)
 	item = TAILQ_FIRST(&ctx->sc_suspects);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
+		item->u.si_deadline += net_glitch_delay;
 		if (now > item->u.si_deadline) {
 			SWIM_INFO("%lu: suspect timeout %lu\n",
 				  self_id, item->si_id);
@@ -467,7 +480,8 @@ next_item:
 }
 
 static int
-swim_ipings_update(struct swim_context *ctx, uint64_t now)
+swim_ipings_update(struct swim_context *ctx, uint64_t now,
+		   uint64_t net_glitch_delay)
 {
 	struct swim_item *next, *item;
 	int rc = 0;
@@ -476,6 +490,7 @@ swim_ipings_update(struct swim_context *ctx, uint64_t now)
 	item = TAILQ_FIRST(&ctx->sc_ipings);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
+		item->u.si_deadline += net_glitch_delay;
 		if (now > item->u.si_deadline) {
 			TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
 			D_FREE(item);
@@ -629,12 +644,51 @@ swim_fini(struct swim_context *ctx)
 }
 
 int
+swim_net_glitch_update(struct swim_context *ctx, uint64_t net_glitch_delay)
+{
+	struct swim_item *item;
+	int rc = 0;
+
+	swim_ctx_lock(ctx);
+
+	/* update expire time of suspected members */
+	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
+		item->u.si_deadline += net_glitch_delay;
+	}
+	/* update expire time of ipinged members */
+	TAILQ_FOREACH(item, &ctx->sc_ipings, si_link) {
+		item->u.si_deadline += net_glitch_delay;
+	}
+
+	switch (swim_state_get(ctx)) {
+	case SCS_BEGIN:
+		ctx->sc_next_tick_time += net_glitch_delay;
+		break;
+	case SCS_DPINGED:
+		ctx->sc_dping_deadline += net_glitch_delay;
+		break;
+	case SCS_IPINGED:
+		ctx->sc_iping_deadline += net_glitch_delay;
+		break;
+	default:
+		break;
+	}
+
+	swim_ctx_unlock(ctx);
+
+	SWIM_ERROR("Network glitch delay for %lu ms is detected.\n",
+		   net_glitch_delay);
+	return rc;
+}
+
+int
 swim_progress(struct swim_context *ctx, int64_t timeout)
 {
 	enum swim_context_state ctx_state = SCS_TIMEDOUT;
 	struct swim_member_state target_state;
 	struct swim_item *item;
 	uint64_t now, end = 0;
+	uint64_t net_glitch_delay = 0UL;
 	swim_id_t id_target, id_sendto;
 	bool send_updates = false;
 	int rc;
@@ -654,20 +708,20 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 
 	if (now > ctx->sc_expect_progress_time &&
 	    0  != ctx->sc_expect_progress_time) {
+		net_glitch_delay = now - ctx->sc_expect_progress_time;
 		SWIM_ERROR("The progress callback was not called for too long: "
-			   "%lu ms after expected.\n",
-			   now - ctx->sc_expect_progress_time);
+			   "%lu ms after expected.\n", net_glitch_delay);
 	}
 
 	for (; now <= end || ctx_state == SCS_TIMEDOUT; now = swim_now_ms()) {
-		rc = swim_member_update_suspected(ctx, now);
+		rc = swim_member_update_suspected(ctx, now, net_glitch_delay);
 		if (rc) {
 			SWIM_ERROR("swim_member_update_suspected() failed "
 				   "rc=%d\n", rc);
 			D_GOTO(out, rc);
 		}
 
-		rc = swim_ipings_update(ctx, now);
+		rc = swim_ipings_update(ctx, now, net_glitch_delay);
 		if (rc) {
 			SWIM_ERROR("swim_ipings_update() failed rc=%d\n", rc);
 			D_GOTO(out, rc);
@@ -717,6 +771,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			 * protocol tick ever successfully acked a direct
 			 * ping request
 			 */
+			ctx->sc_dping_deadline += net_glitch_delay;
 			if (now > ctx->sc_dping_deadline) {
 				/* no response from direct ping */
 				if (target_state.sms_status != SWIM_MEMBER_INACTIVE) {
@@ -738,6 +793,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			 * protocol tick ever successfully acked a indirect
 			 * ping request
 			 */
+			ctx->sc_iping_deadline += net_glitch_delay;
 			if (now > ctx->sc_iping_deadline) {
 				/* no response from indirect pings,
 				 * dead this member
@@ -807,6 +863,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			break;
 		}
 
+		net_glitch_delay = 0UL;
 		swim_state_set(ctx, ctx_state);
 		swim_ctx_unlock(ctx);
 

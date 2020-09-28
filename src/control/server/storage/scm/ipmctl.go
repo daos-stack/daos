@@ -107,13 +107,15 @@ func (r *cmdRunner) Discover() (storage.ScmModules, error) {
 	modules := make(storage.ScmModules, 0, len(discovery))
 	for _, d := range discovery {
 		modules = append(modules, &storage.ScmModule{
-			ChannelID:       uint32(d.Channel_id),
-			ChannelPosition: uint32(d.Channel_pos),
-			ControllerID:    uint32(d.Memory_controller_id),
-			SocketID:        uint32(d.Socket_id),
-			PhysicalID:      uint32(d.Physical_id),
-			Capacity:        d.Capacity,
-			UID:             d.Uid.String(),
+			ChannelID:        uint32(d.Channel_id),
+			ChannelPosition:  uint32(d.Channel_pos),
+			ControllerID:     uint32(d.Memory_controller_id),
+			SocketID:         uint32(d.Socket_id),
+			PhysicalID:       uint32(d.Physical_id),
+			Capacity:         d.Capacity,
+			UID:              d.Uid.String(),
+			PartNumber:       d.Part_number.String(),
+			FirmwareRevision: d.Fw_revision.String(),
 		})
 	}
 

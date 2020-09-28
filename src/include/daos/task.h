@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2018 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,10 @@ struct daos_task_args {
 		daos_array_get_size_t	array_get_size;
 		daos_array_set_size_t	array_set_size;
 
-		/** HL */
+		/** KV */
+		daos_kv_open_t		kv_open;
+		daos_kv_close_t		kv_close;
+		daos_kv_destroy_t	kv_destroy;
 		daos_kv_get_t		kv_get;
 		daos_kv_put_t		kv_put;
 		daos_kv_remove_t	kv_remove;
