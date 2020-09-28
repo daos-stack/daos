@@ -455,7 +455,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to create pool\n");
+	D_INFO("Received request to create pool on %zu ranks\n", req->n_ranks);
 
 	if (req->n_ranks > 0) {
 		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
