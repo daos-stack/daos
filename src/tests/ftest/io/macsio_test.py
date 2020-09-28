@@ -51,7 +51,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         Use case:
             Six clients and two servers.
 
-        :avocado: tags=all,pr,hw,large,io,macsio
+        :avocado: tags=all,pr,hw,large,io,macsio,DAOS-5610
         """
         # Create a pool
         self.add_pool()
@@ -80,7 +80,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         Use case:
             Six clients and two servers.
 
-        :avocado: tags=all,pr,hw,large,io,macsio_daos_vol
+        :avocado: tags=all,pr,hw,large,io,macsio_daos_vol,DAOS-5610
         """
         plugin_path = self.params.get("plugin_path")
 

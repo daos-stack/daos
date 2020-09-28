@@ -21,7 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+
 import os
+import write_host_file
 
 from avocado import fail_on
 from avocado.utils import process
@@ -29,6 +31,7 @@ from apricot import TestWithServers
 from env_modules import load_mpi
 from general_utils import get_log_file
 from command_utils import CommandFailure
+from agent_utils import include_local_host
 
 
 class DaosCoreBase(TestWithServers):
@@ -57,6 +60,13 @@ class DaosCoreBase(TestWithServers):
         self.update_log_file_names(self.subtest_name)
 
         super(DaosCoreBase, self).setUp()
+
+        # if no client specified update self.hostlist_clients to local host
+        # and create a new self.hostfile_clients.
+        if self.hostlist_clients is None:
+            self.hostlist_clients = include_local_host(self.hostlist_clients)
+            self.hostfile_clients = write_host_file.write_host_file(
+                self.hostlist_clients, self.workdir, None)
 
     @fail_on(CommandFailure)
     def start_server_managers(self):
@@ -98,24 +108,23 @@ class DaosCoreBase(TestWithServers):
         subtest = self.params.get("daos_test", self.TEST_PATH)
         num_clients = self.params.get("num_clients",
                                       '/run/daos_tests/num_clients/*')
-        num_replicas = self.params.get("num_replicas",
-                                       '/run/daos_tests/num_replicas/*')
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
         args = self.params.get("args", self.TEST_PATH, "")
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
+        self.client_mca += " --mca btl_tcp_if_include eth0"
 
         cmd = " ".join(
             [
                 self.orterun,
                 self.client_mca,
                 "-n", str(num_clients),
+                "--hostfile", self.hostfile_clients,
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
-                "-x", "D_LOG_MASK=DEBUG",
+                "--map-by node", "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
                 self.daos_test,
-                "-s", str(num_replicas),
                 "-n", dmg_config_file,
                 "".join(["-", subtest]),
                 str(args)
