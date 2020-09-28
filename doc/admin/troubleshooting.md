@@ -16,10 +16,11 @@ errors are documented in the table below.
 |DER_ENOENT|2003|Entry not found
 |DER_KEY2BIG|2012|Key is too large
 |DER_IO_INVAL|2014|IO buffers can't match object extents
+|DER_AGENT_INCOMPAT|2029|Agent is incompatible with libdaos
 
 When an operation fails, DAOS returns a negative DER error. For a full
 list of errors, please check
-<https://github.com/daos-stack/cart/blob/master/src/include/gurt/errno.h>
+<https://github.com/daos-stack/cart/blob/master/src/include/daos_errno.h>
 (DER_ERR_GURT_BASE is equal to 1000 and DER_ERR_DAOS_BASE is equal
 to 2000).
 
@@ -178,7 +179,7 @@ are enabled by default ("DD_MASK=all").
 
 -   Disable a noisy debug logging subsystem
 
-        $ D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by 
+        $ D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
         restricting all logs from that facility to ERROR or higher priority only
 
 -   Enable a subset of facilities of interest
@@ -198,7 +199,12 @@ more information about the debug system environment.
 
 ## Common DAOS Problems
 
-This section to be updated in a future revision.
+When DER_AGENT_INCOMPAT is received, it means that the client library libdaos.so
+is likely mismatched with the DAOS Agent.  The libdaos.so, DAOS Agent and DAOS
+Server must be built from compatible sources so that the GetAttachInfo protocol
+is the same between each component.  Depending on your situation, you will need
+to either update the DAOS Agent or the libdaos.so to the newer version in order
+to maintain compatibility with each other.
 
 ## Bug Report
 
