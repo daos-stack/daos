@@ -25,6 +25,7 @@
  * APIs/handling.
  */
 
+
 #include <malloc.h>
 #include <sys/mman.h>
 #include "crt_internal.h"
@@ -390,7 +391,7 @@ do_init:
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init failed, "
-					"rc: %d.\n", rc);
+					DF_RC "\n", DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 		}

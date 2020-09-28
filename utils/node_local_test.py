@@ -761,7 +761,12 @@ def run_daos_cmd(conf, cmd, valgrind=True, fi_file=None, fi_valgrind=False):
 
     rc = subprocess.run(exec_cmd,
                         stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         env=cmd_env)
+
+    if rc.stderr != '':
+        print('Stderr from command')
+        print(rc.stderr.decode('utf-8').strip())
 
     show_memleaks = True
     skip_fi = False
@@ -1322,6 +1327,11 @@ def test_alloc_fail(conf):
                                   fi_file=fi_file.name,
                                   fi_valgrind=True)
                 fatal_errors = True
+
+            stderr = rc.stderr.decode('utf-8').strip()
+            if not stderr.endswith("DER_NOMEM(-1009): 'Out of memory'"):
+                # TODO: Need to report this against fault-injection location.
+                print('Command did not log error on stderr correctly')
         except DFTestNoFi:
             print('Fault injection did not trigger, returning')
             break

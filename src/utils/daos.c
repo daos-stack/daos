@@ -981,7 +981,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		fprintf(stderr, "failed to connect to pool: " DF_RC "\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1128,7 +1129,7 @@ obj_op_hdlr(struct cmd_args_s *ap)
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		fprintf(stderr, "failed to connect to pool: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1454,7 +1455,7 @@ main(int argc, char *argv[])
 
 	rc = daos_init();
 	if (rc != 0) {
-		fprintf(stderr, "failed to initialize daos: %d\n", rc);
+		fprintf(stderr, "failed to initialize daos: " DF_RC "\n", DP_RC(rc));
 		return 1;
 	}
 
