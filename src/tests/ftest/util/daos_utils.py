@@ -626,7 +626,7 @@ class DaosCommand(DaosCommandBase):
             r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"\
             r"grp:\s+(\d+)\s+|"\
             r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout)
-        
+
         try:
             oid_vals = vals[0][0]
             oid_list = oid_vals.split(".")
@@ -643,7 +643,8 @@ class DaosCommand(DaosCommandBase):
                         data["layout"][-1]["replica"].append(
                             (vals[i][4], vals[i][5]))
                     else:
-                        data["layout"][-1]["replica"] = [(vals[i][4], vals[i][5])]
+                        data["layout"][-1]["replica"] = [(
+                            vals[i][4], vals[i][5])]
                 else:
                     data["layout"].append({"grp": vals[i][3]})
         except IndexError:
