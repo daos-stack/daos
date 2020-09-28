@@ -21,8 +21,10 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from daos_utils_base import DaosCommandBase
 import re
+import traceback
+
+from daos_utils_base import DaosCommandBase
 
 
 class DaosCommand(DaosCommandBase):
@@ -586,7 +588,7 @@ class DaosCommand(DaosCommandBase):
         return data
 
     def object_query(self, pool, svc, cont, oid, sys_name=None):
-        """Call dmg object query and return its output with a dictionary.
+        """Call daos object query and return its output with a dictionary.
 
         Args:
             pool (str): Pool UUID
@@ -624,23 +626,29 @@ class DaosCommand(DaosCommandBase):
             r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"\
             r"grp:\s+(\d+)\s+|"\
             r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout)
-        oid_vals = vals[0][0]
-        oid_list = oid_vals.split(".")
-        oid_hi = oid_list[0]
-        oid_lo = oid_list[1]
-        data["oid"] = (oid_hi, oid_lo)
-        data["ver"] = vals[0][1]
-        data["grp_nr"] = vals[0][2]
+        
+        try:
+            oid_vals = vals[0][0]
+            oid_list = oid_vals.split(".")
+            oid_hi = oid_list[0]
+            oid_lo = oid_list[1]
+            data["oid"] = (oid_hi, oid_lo)
+            data["ver"] = vals[0][1]
+            data["grp_nr"] = vals[0][2]
 
-        data["layout"] = []
-        for i in range(1, len(vals)):
-            if vals[i][3] == "":
-                if "replica" in data["layout"][-1]:
-                    data["layout"][-1]["replica"].append(
-                        (vals[i][4], vals[i][5]))
+            data["layout"] = []
+            for i in range(1, len(vals)):
+                if vals[i][3] == "":
+                    if "replica" in data["layout"][-1]:
+                        data["layout"][-1]["replica"].append(
+                            (vals[i][4], vals[i][5]))
+                    else:
+                        data["layout"][-1]["replica"] = [(vals[i][4], vals[i][5])]
                 else:
-                    data["layout"][-1]["replica"] = [(vals[i][4], vals[i][5])]
-            else:
-                data["layout"].append({"grp": vals[i][3]})
+                    data["layout"].append({"grp": vals[i][3]})
+        except IndexError:
+            traceback.print_exc()
+            self.log.error("--- re.findall output ---")
+            self.log.error(vals)
 
         return data
