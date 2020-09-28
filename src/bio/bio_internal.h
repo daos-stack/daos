@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,12 +96,35 @@ struct bio_dev_health {
 };
 
 /*
+ * 'Init' xstream is the first started VOS xstream, it calls
+ * spdk_bdev_initialize() on server start to initialize SPDK bdev and scan all
+ * the available devices, and the SPDK hotplug poller is registered then.
+ *
+ * Given the SPDK bdev remove callback is called on 'init' xstream, 'init'
+ * xstream is the one responsible for initiating BIO hot plug/remove event,
+ * and managing the list of 'bio_bdev'.
+ */
+struct bio_bdev {
+	d_list_t		 bb_link;
+	uuid_t			 bb_uuid;
+	char			*bb_name;
+	/* Prevent the SPDK bdev being freed by device hot remove */
+	struct spdk_bdev_desc	*bb_desc;
+	struct bio_blobstore	*bb_blobstore;
+	/* count of target(VOS xstream) per device */
+	int			 bb_tgt_cnt;
+	bool			 bb_removed;
+};
+
+/*
  * SPDK blobstore isn't thread safe and there can be only one SPDK
  * blobstore for certain NVMe device.
  */
 struct bio_blobstore {
 	ABT_mutex		 bb_mutex;
 	ABT_cond		 bb_barrier;
+	/* Back pointer to bio_bdev */
+	struct bio_bdev		*bb_dev;
 	struct spdk_blob_store	*bb_bs;
 	/*
 	 * The xstream responsible for blobstore load/unload, monitor
@@ -120,6 +143,9 @@ struct bio_blobstore {
 	 * layer, teardown procedure needs be postponed.
 	 */
 	int			 bb_holdings;
+	/* Flags indicating blobstore load/unload is in-progress */
+	unsigned		 bb_loading:1,
+				 bb_unloading:1;
 };
 
 /* Per-xstream NVMe context */
@@ -144,6 +170,7 @@ struct bio_io_context {
 	struct bio_xs_context	*bic_xs_ctxt;
 	uint32_t		 bic_inflight_dmas;
 	uint32_t		 bic_io_unit;
+	uuid_t			 bic_pool_id;
 	unsigned int		 bic_opening:1,
 				 bic_closing:1;
 };
@@ -221,6 +248,19 @@ enum {
 	BDEV_CLASS_UNKNOWN
 };
 
+static inline int
+get_bdev_type(struct spdk_bdev *bdev)
+{
+	if (strcmp(spdk_bdev_get_product_name(bdev), "NVMe disk") == 0)
+		return BDEV_CLASS_NVME;
+	else if (strcmp(spdk_bdev_get_product_name(bdev), "Malloc disk") == 0)
+		return BDEV_CLASS_MALLOC;
+	else if (strcmp(spdk_bdev_get_product_name(bdev), "AIO disk") == 0)
+		return BDEV_CLASS_AIO;
+	else
+		return BDEV_CLASS_UNKNOWN;
+}
+
 struct media_error_msg {
 	struct bio_blobstore	*mem_bs;
 	int			 mem_err_type;
@@ -232,9 +272,16 @@ extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern uint64_t		io_stat_period;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
-int get_bdev_type(struct spdk_bdev *bdev);
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		       void *event_ctx);
+struct spdk_thread *init_thread(void);
+void bio_release_bdev(void *arg);
+bool is_server_started(void);
+struct spdk_blob_store *
+load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
+	       bool create, bool async,
+	       void (*async_cb)(void *arg, struct spdk_blob_store *bs, int rc),
+	       void *async_arg);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
@@ -251,6 +298,7 @@ void bio_media_error(void *msg_arg);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
+int bio_blob_open(struct bio_io_context *ctxt, bool async);
 
 /* bio_recovery.c */
 int bio_bs_state_transit(struct bio_blobstore *bbs);
