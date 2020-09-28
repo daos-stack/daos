@@ -694,8 +694,8 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 
 	/** XXX possible re-order/merge for both replica and EC */
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE ||
-		args->extra_flags & DIOF_TO_SPEC_SHARD ||
-		!daos_oclass_is_ec(oid, &oca))
+	    args->extra_flags & DIOF_TO_SPEC_SHARD ||
+	    !daos_oclass_is_ec(oid, &oca))
 		return 0;
 
 	if (!obj_auxi->req_reasbed) {
