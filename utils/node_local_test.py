@@ -865,7 +865,7 @@ def dfuse_wrapper(server, conf):
 
     pools = get_pool_list()
     while len(pools) < 1:
-        pools = make_pool(daos, conf)
+        pools = make_pool(daos)
 
     pool = pools[0]
 
