@@ -63,7 +63,7 @@ except ImportError:
             """Destroy a TemporaryDirectory object."""
             rmtree(self.name)
 
-DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
+DEFAULT_DAOS_TEST_LOG_DIR = "/tmp"
 YAML_KEYS = {
     "test_servers": "test_servers",
     "test_clients": "test_clients",
