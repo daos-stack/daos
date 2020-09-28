@@ -959,7 +959,7 @@ def archive_files(destination, host_list, source_files):
     #
     # pylint: disable=bad-continuation
     commands = [
-        "set -eu",
+        "set -eux",
         "rc=0",
         "copied=()",
         "find /var/tmp/ftest /var/tmp/daos_testing /mnt/share/tmp* ",
