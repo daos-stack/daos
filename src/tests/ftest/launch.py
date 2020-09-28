@@ -956,7 +956,7 @@ def archive_files(destination, host_list, source_files):
     #
     # pylint: disable=bad-continuation
     commands = [
-        "set -eux",
+        "set -ux",
         "rc=0",
         "copied=()",
         "find /var/tmp/* ",
