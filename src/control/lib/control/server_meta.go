@@ -37,16 +37,6 @@ import (
 )
 
 type (
-	// SmdDevice contains DAOS storage device information, including
-	// health details if requested.
-	SmdDevice struct {
-		UUID      string                        `json:"uuid"`
-		TargetIDs []int32                       `hash:"set" json:"tgt_ids"`
-		State     string                        `json:"state"`
-		Rank      system.Rank                   `json:"rank"`
-		Health    *storage.NvmeControllerHealth `json:"health"`
-	}
-
 	// SmdPool contains the per-server components of a DAOS pool.
 	SmdPool struct {
 		UUID      string      `json:"uuid"`
@@ -60,8 +50,8 @@ type (
 
 	// SmdInfo encapsulates SMD-specific information.
 	SmdInfo struct {
-		Devices []*SmdDevice `hash:"set" json:"devices"`
-		Pools   SmdPoolMap   `json:"pools"`
+		Devices []*storage.SmdDevice `hash:"set" json:"devices"`
+		Pools   SmdPoolMap           `json:"pools"`
 	}
 
 	// SmdQueryReq contains the request parameters for a SMD query
@@ -109,7 +99,7 @@ func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
 	for _, rResp := range pbResp.GetRanks() {
 		rank := system.Rank(rResp.Rank)
 
-		rDevices := make([]*SmdDevice, len(rResp.GetDevices()))
+		rDevices := make([]*storage.SmdDevice, len(rResp.GetDevices()))
 		if err = convert.Types(rResp.GetDevices(), &rDevices); err != nil {
 			return
 		}
