@@ -1019,7 +1019,7 @@ pipeline {
                     when {
                       beforeAgent true
 		      //SCHAN15 - temp disable unit cov
-  		      expression { ! skip_stage('run_test') }
+  		      //expression { ! skip_stage('run_test') }
                       expression { ! skip_stage('bullseye', true) }
                     }
                     agent {
@@ -1298,7 +1298,8 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish(
-                                   coverage_stashes: ['centos7-covc-fnvm-cov'],
+                                   coverage_stashes: ['centos7-covc-fnvm-cov',
+                                                     'centos7-covc-unit-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
