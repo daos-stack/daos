@@ -102,7 +102,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	}
 
 	h.started.SetTrue()
-	mi, err := h.GetMSLeaderInstance()
+	mi, err := h.getMSLeaderInstance()
 	if err != nil {
 		t.Fatal(err)
 	}

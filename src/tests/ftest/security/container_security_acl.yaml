@@ -1,0 +1,49 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - server-A
+timeout: 210
+server_config:
+  name: daos_server
+  port: 10001
+pool:
+  name: daos_server
+  scm_size: 138374182
+  control_method: dmg
+container:
+  control_method: daos
+container_acl:
+  user_type: user
+  acl_file_name: cont_test_acl1.txt
+  new_user: daos_ci_tester_1
+  new_group: daos_ci_test_grp_1
+  attribute:
+    - container_name
+    - Container1
+  property:
+    - label
+    - HappyTesting
+  permissions: !mux
+    no_permission:
+      perm_expect:
+         - ""     #container read/write permission
+         - deny   #expecting read
+         - deny   #expectingsg write
+    read_only:
+      perm_expect:
+         - r
+         - pass
+         - deny
+    write_only:
+      perm_expect:
+         - w
+         - deny
+         - pass
+    read_write:
+      perm_expect:
+         - rw
+         - pass
+         - pass
