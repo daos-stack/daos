@@ -772,9 +772,11 @@ teardown_bio_bdev(void *arg)
 		rc = bio_bs_state_set(bbs, BIO_BS_STATE_TEARDOWN);
 		D_ASSERT(rc == 0);
 		break;
+	case BIO_BS_STATE_OUT:
+		bio_release_bdev(d_bdev);
+		/* fallthrough */
 	case BIO_BS_STATE_FAULTY:
 	case BIO_BS_STATE_TEARDOWN:
-	case BIO_BS_STATE_OUT:
 		D_DEBUG(DB_MGMT, "Device "DF_UUID"(%s) is already in "
 			"%s state\n", DP_UUID(d_bdev->bb_uuid),
 			d_bdev->bb_name, bio_state_enum_to_str(bbs->bb_state));
@@ -832,14 +834,18 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 void
 replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 {
-	old_dev->bb_removed = new_dev->bb_removed;
+	D_ASSERT(old_dev->bb_removed);
+	D_ASSERT(old_dev->bb_blobstore != NULL);
 
-	old_dev->bb_desc = new_dev->bb_desc;
-	new_dev->bb_desc = NULL;
+	new_dev->bb_blobstore = old_dev->bb_blobstore;
+	new_dev->bb_blobstore->bb_dev = new_dev;
+	old_dev->bb_blobstore = NULL;
 
-	D_FREE(old_dev->bb_name);
-	old_dev->bb_name = new_dev->bb_name;
-	new_dev->bb_name = NULL;
+	new_dev->bb_tgt_cnt = old_dev->bb_tgt_cnt;
+	old_dev->bb_tgt_cnt = 0;
+
+	d_list_del_init(&old_dev->bb_link);
+	destroy_bio_bdev(old_dev);
 }
 
 /*
@@ -939,6 +945,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		goto error;
 	}
 
+	uuid_copy(d_bdev->bb_uuid, bs_uuid);
 	/* Verify if any duplicated device ID */
 	old_dev = lookup_dev_by_id(bs_uuid);
 	if (old_dev != NULL) {
@@ -955,14 +962,15 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		if (old_dev->bb_desc != NULL) {
 			D_INFO("Device "DF_UUID"(%s) isn't torndown\n",
 			       DP_UUID(old_dev->bb_uuid), old_dev->bb_name);
+			destroy_bio_bdev(d_bdev);
 		} else {
 			replace_bio_bdev(old_dev, d_bdev);
+			d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 			/* Inform caller to trigger device setup */
 			D_ASSERT(dev_out != NULL);
-			*dev_out = old_dev;
+			*dev_out = d_bdev;
 		}
 
-		destroy_bio_bdev(d_bdev);
 		return 0;
 	}
 
@@ -993,7 +1001,6 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	D_DEBUG(DB_MGMT, "Initial target count for "DF_UUID" set at %d\n",
 		DP_UUID(bs_uuid), d_bdev->bb_tgt_cnt);
 
-	uuid_copy(d_bdev->bb_uuid, bs_uuid);
 	d_list_add(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 
 	return 0;

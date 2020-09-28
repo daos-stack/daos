@@ -490,6 +490,7 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 	bma->bma_bs = bbs->bb_bs;
 	bma->bma_blob_id = blob_id;
 	bma->bma_async = async;
+	bma->bma_ioc = ctxt;
 	spdk_thread_send_msg(owner_thread(bbs), blob_msg_open, bma);
 
 	if (async)

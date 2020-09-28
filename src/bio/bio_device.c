@@ -353,8 +353,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	/* Replace in-memory bio_bdev */
 	replace_bio_bdev(old_dev, new_dev);
 	new_dev->bb_replacing = false;
-	d_list_del_init(&new_dev->bb_link);
-	destroy_bio_bdev(new_dev);
+	old_dev = new_dev;
 	new_dev = NULL;
 
 	/*

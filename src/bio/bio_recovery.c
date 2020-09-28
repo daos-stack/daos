@@ -518,8 +518,6 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		rc = 0;
 		break;
 	case BIO_BS_STATE_FAULTY:
-		/* reduce monitor period after faulty state has occurred */
-		bbs->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_SHORT_PERIOD;
 		rc = on_faulty(bbs);
 		if (rc == 0)
 			rc = bio_bs_state_set(bbs, BIO_BS_STATE_TEARDOWN);
