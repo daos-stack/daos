@@ -25,7 +25,6 @@
  * APIs/handling.
  */
 
-
 #include <malloc.h>
 #include <sys/mman.h>
 #include "crt_internal.h"
