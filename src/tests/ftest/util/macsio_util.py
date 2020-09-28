@@ -252,7 +252,7 @@ class MacsioCommand(ExecutableCommand):
 
         #   --filebase %s [macsio]
         #       Basename of generated file(s).
-        self.filebase = FormattedParameter("--filebase {}")
+        # self.filebase = FormattedParameter("--filebase {}")
 
         #   --fileext %s []
         #       Extension of generated file(s).
@@ -301,7 +301,7 @@ class MacsioCommand(ExecutableCommand):
         #       performance. For debug level 3, MACSio will generate ascii json
         #       files from each processor for the main dump object prior to
         #       starting dumps.
-        self.debug_level = FormattedParameter("--debug_level {}")
+        # self.debug_level = FormattedParameter("--debug_level {}")
 
         #
         # Log File Options to control size and shape of log file:
@@ -315,11 +315,11 @@ class MacsioCommand(ExecutableCommand):
         #   --log_line_cnt %d %d [64 0]
         #       Set number of lines per rank in the log file and number of extra
         #       lines for rank 0.
-        self.log_line_cnt = FormattedParameter("--log_line_cnt {}")
+        # self.log_line_cnt = FormattedParameter("--log_line_cnt {}")
 
         #   --log_line_length %d [128]
         #       Set log file line length.
-        self.log_line_length = FormattedParameter("--log_line_length {}")
+        # self.log_line_length = FormattedParameter("--log_line_length {}")
 
         #   --timings_file_name %s [macsio-timings.log]
         #       Specify the name of the timings file. Passing an empty string,
@@ -330,10 +330,6 @@ class MacsioCommand(ExecutableCommand):
         #
         # Options specific to the "hdf5" I/O plugin
         #
-
-        #   --show_errors []
-        #       Show low-level HDF5 errors
-        self.show_errors = FormattedParameter("--show_errors", False)
 
         #   --compression %s %s []
         #       The first string argument is the compression algorithm name. The

@@ -29,13 +29,11 @@ container:
 macsio:
   interface: hdf5
   parallel_file_mode: SIF 1
-  filebase: daos
-  units_prefix_system: decimal
   part_size: 10M
   avg_num_parts: 2.5
-  num_dumps: 2
-  debug_level: 1
-  show_errors: true
+  num_dumps: 1
+  log_file_name: /tmp/macsio-log.log
+  timings_file_name: /tmp/macsio-timings.log
 macsio_timeout:
   test_macsio: 20
   test_macsio_daos_vol: 90
