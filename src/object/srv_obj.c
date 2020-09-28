@@ -3490,9 +3490,14 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			if (rc != 0)
 				goto out;
 		} else {
-			if (dcsr->dcsr_opc != DCSO_PUNCH_OBJ &&
-			    dcsr->dcsr_opc != DCSO_PUNCH_DKEY &&
-			    dcsr->dcsr_opc != DCSO_PUNCH_AKEY) {
+			daos_key_t	*dkey;
+
+			if (dcsr->dcsr_opc == DCSO_PUNCH_OBJ) {
+				dkey = NULL;
+			} else if (dcsr->dcsr_opc == DCSO_PUNCH_DKEY ||
+				   dcsr->dcsr_opc == DCSO_PUNCH_AKEY) {
+				dkey = &dcsr->dcsr_dkey;
+			} else {
 				D_ERROR("Unknown sub request opc %u for obj "
 					DF_UOID", DTX "DF_DTI":\n",
 					dcsr->dcsr_opc, DP_UOID(dcsr->dcsr_oid),
@@ -3508,8 +3513,9 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 			rc = vos_obj_punch(ioc->ioc_coc->sc_hdl, dcsr->dcsr_oid,
 				dcsh->dcsh_epoch.oe_value, dth->dth_ver,
-				dcsr->dcsr_api_flags, &dcsr->dcsr_dkey,
-				dcsr->dcsr_nr, dcsr->dcsr_punch.dcp_akeys, dth);
+				dcsr->dcsr_api_flags, dkey,
+				dkey != NULL ? dcsr->dcsr_nr : 0, dkey != NULL ?
+				dcsr->dcsr_punch.dcp_akeys : NULL, dth);
 			if (rc != 0)
 				goto out;
 		}

@@ -65,6 +65,25 @@ func (pb *NvmeNamespace) AsProto() *ctlpb.NvmeController_Namespace {
 // representing namespaces existing on a NVMe SSD.
 type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 
+type SmdDevice ctlpb.NvmeController_SmdDevice
+
+func (pb *SmdDevice) FromNative(native *storage.SmdDevice) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *SmdDevice) ToNative() (*storage.SmdDevice, error) {
+	native := new(storage.SmdDevice)
+	return native, convert.Types(pb, native)
+}
+
+func (pb *SmdDevice) AsProto() *ctlpb.NvmeController_SmdDevice {
+	return (*ctlpb.NvmeController_SmdDevice)(pb)
+}
+
+// SmdDevices is an alias for protobuf NvmeController_SmdDevice message slice
+// representing namespaces existing on a NVMe SSD.
+type SmdDevices []*ctlpb.NvmeController_SmdDevice
+
 type NvmeController ctlpb.NvmeController
 
 func (pb *NvmeController) FromNative(native *storage.NvmeController) error {

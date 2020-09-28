@@ -9,7 +9,9 @@ control plane and will be documented in a future revision.
 
 Useful admin dmg commands to query NVMe SSD health:
 
-- Query Per-Server Metadata: `dmg storage query (list-devices|list-pools)`
+- Query Per-Server Metadata:
+  - `dmg storage query (list-devices|list-pools)`
+  - `dmg storage scan --nvme-meta` shows mapping of metadata to NVMe controllers
 
 Queries persistently stored device and pool metadata tables. The device table maps
 the internal device UUID to attached VOS target IDs. The rank number of the server
@@ -48,7 +50,9 @@ boro-11
 
 ```
 
-- Query Storage Device Health Data: `dmg storage query (device-health|target-health)`
+- Query Storage Device Health Data:
+  - `dmg storage query (device-health|target-health)`
+  - `dmg storage scan --nvme-health` shows NVMe controller health stats
 
 Queries device health data, including NVMe SSD health stats and in-memory I/O error
 and checksum error counters. The server rank and device state are also listed.
@@ -135,9 +139,11 @@ specified when starting `daos_server` instances.
 
 The system membership can be queried using the command:
 
-`$ dmg system query [--verbose] [--ranks <rankset>]`
+`$ dmg system query [--verbose] [--ranks <rankset>|--host-ranks <hostset>]`
 
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `<hostset>` is a pattern describing host ranges e.g.
+storagehost[0,5-10],10.8.1.[20-100]
 - `--verbose` flag gives more information on each rank
 
 Output table will provide system rank mappings to host address and instance
@@ -147,9 +153,11 @@ UUID, in addition to rank state.
 
 When up and running, the entire system can be shutdown with the command:
 
-`$ dmg system stop [--ranks <rankset>]`
+`$ dmg system stop [--force] [--ranks <rankset>|--host-ranks <hostset>]`
 
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `<hostset>` is a pattern describing host ranges e.g.
+storagehost[0,5-10],10.8.1.[20-100]
 
 Output table will indicate action and result.
 
@@ -160,9 +168,11 @@ network.
 
 To start the system after a controlled shutdown run the command:
 
-`$ dmg system start [--ranks <rankset>]`
+`$ dmg system start [--ranks <rankset>|--host-ranks <hostset>]`
 
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `<hostset>` is a pattern describing host ranges e.g.
+storagehost[0,5-10],10.8.1.[20-100]
 
 Output table will indicate action and result.
 
@@ -172,11 +182,14 @@ DAOS I/O Servers will be started.
 
 To reformat the system after a controlled shutdown run the command:
 
-`$ dmg storage format --system [--ranks <rankset>]`
+`$ dmg storage format --reformat`
 
-- `--system` flag indicates that the format operation should be performed on
-  provided set of system ranks or all ranks if `--ranks` is omitted.
-- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `--reformat` flag indicates that a reformat operation should be
+performed disregarding existing filesystems
+- if no record of previously running ranks can be found, reformat is
+performed on hosts in dmg config file hostlist
+- if system membership has records of previously running ranks, storage
+allocated to those ranks will be formatted
 
 Output table will indicate action and result.
 

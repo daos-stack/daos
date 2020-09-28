@@ -50,9 +50,9 @@ pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 
 	len = mgmt__daos_resp__get_packed_size(daos_resp);
 	D_ALLOC(body, len);
-	if (body == NULL)
+	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-	else {
+	} else {
 		mgmt__daos_resp__pack(daos_resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
@@ -1562,9 +1562,9 @@ out:
 
 	len = mgmt__pool_query_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
-	if (body == NULL)
+	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-	else {
+	} else {
 		mgmt__pool_query_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
