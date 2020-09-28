@@ -229,8 +229,7 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 
 		key, err := health.GenAltKey()
 		if err != nil {
-			srv.log.Infof("%s: data not yet available", msg)
-			continue
+			return errors.Wrapf(err, msg)
 		}
 
 		msg += fmt.Sprintf(" with key %s", key)
