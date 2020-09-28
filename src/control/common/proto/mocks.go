@@ -50,6 +50,19 @@ func MockNvmeNamespace(varIdx ...int32) *ctlpb.NvmeController_Namespace {
 	return pb.AsProto()
 }
 
+// MockSmdDevice is a mock protobuf SmdDevice message used in tests for
+// multiple packages.
+func MockSmdDevice(varIdx ...int32) *ctlpb.NvmeController_SmdDevice {
+	native := storage.MockSmdDevice(varIdx...)
+	pb := new(SmdDevice)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
+	}
+
+	return pb.AsProto()
+}
+
 // MockNvmeControllerHealth is a mock protobuf Health message used in tests for
 // multiple packages.
 func MockNvmeControllerHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
@@ -74,21 +87,6 @@ func MockNvmeController(varIdx ...int32) *ctlpb.NvmeController {
 	}
 
 	return pb.AsProto()
-}
-
-// NewMockNvmeController generates specific protobuf controller message.
-func NewMockNvmeController(
-	pciAddr string, fwRev string, model string, serial string,
-	nss []*ctlpb.NvmeController_Namespace, hs *ctlpb.NvmeController_Health) *ctlpb.NvmeController {
-
-	return &ctlpb.NvmeController{
-		Model:       model,
-		Serial:      serial,
-		Pciaddr:     pciAddr,
-		Fwrev:       fwRev,
-		Namespaces:  nss,
-		Healthstats: hs,
-	}
 }
 
 // MockScmModule generates specific protobuf SCM module message used in tests
@@ -123,6 +121,8 @@ func MockScmMount() *ctlpb.ScmMount {
 	return &ctlpb.ScmMount{Mntpoint: "/mnt/daos"}
 }
 
+// MockPoolList returns a slice of mock protobuf Pool messages used in tests for
+// multiple packages.
 var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
 	{Uuid: "12345678-1234-1234-1234-123456789abc", Svcreps: []uint32{1, 2}},
 	{Uuid: "12345678-1234-1234-1234-cba987654321", Svcreps: []uint32{0}},
