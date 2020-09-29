@@ -1028,6 +1028,31 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 }
 
 int
+get_pid_of_process(char *host, char *dpid, char *proc)
+{
+	char    command[256];
+	size_t  len = 0;
+	size_t  read;
+	char    *line = NULL;
+
+	snprintf(command, sizeof(command),
+		"ssh %s pgrep %s", host, proc);
+	FILE *fp1 = popen(command, "r");
+
+	print_message("Command= %s\n", command);
+	if (fp1 == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp1)) != -1) {
+		print_message("%s pid = %s", proc, line);
+		strcat(dpid, line);
+	}
+
+	pclose(fp1);
+	return 0;
+}
+
+int
 get_server_config(char *host, char *server_config_file)
 {
 	char	command[256];
@@ -1035,17 +1060,24 @@ get_server_config(char *host, char *server_config_file)
 	size_t	read;
 	char	*line = NULL;
 	char	*pch;
+	char    *dpid;
+	int	rc;
+	char    daos_proc[16] = "daos_server";
+
+	D_ALLOC(dpid, 16);
+	rc = get_pid_of_process(host, dpid, daos_proc);
+	assert_int_equal(rc, 0);
 
 	snprintf(command, sizeof(command),
-		 "ssh %s ps ux -A | grep daos_server | grep start", host);
+		 "ssh %s ps ux -A | grep %s", host, dpid);
 	FILE *fp = popen(command, "r");
 
-	print_message("Command %s\n", command);
+	print_message("Command %s", command);
 	if (fp == NULL)
 		return -DER_INVAL;
 
 	while ((read = getline(&line, &len, fp)) != -1) {
-		print_message("line %s\n", line);
+		print_message("line %s", line);
 		if (strstr(line, "--config") != NULL ||
 		    strstr(line, "-o") != NULL)
 			break;
@@ -1064,7 +1096,8 @@ get_server_config(char *host, char *server_config_file)
 			break;
 		}
 
-		if (strstr(pch, "yaml") != NULL) {
+		if (strstr(pch, "-o") != NULL) {
+			pch = strtok(NULL, " ");
 			strcpy(server_config_file, pch);
 			break;
 		}
@@ -1073,6 +1106,7 @@ get_server_config(char *host, char *server_config_file)
 
 	pclose(fp);
 
+	D_FREE(dpid);
 	D_FREE(line);
 	return 0;
 }
