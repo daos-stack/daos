@@ -960,7 +960,7 @@ def archive_files(destination, host_list, source_files):
         "set -ux",
         "rc=0",
         "copied=()",
-        "for file in $(ls {})".format(source_files),
+        "for file in $(ls -d {})".format(source_files),
         "do ls -sh $file",
         "/lib/daos/TESTING/ftest/cart/cart_logtest.py $file",
         "if scp -r $file {}:{}/${{file##*/}}-$(hostname -s)".format(
