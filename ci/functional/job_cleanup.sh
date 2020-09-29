@@ -37,9 +37,8 @@ fi
 #SCHAN15
 echo SCHAN15 - archive fn covs
 ls $PWD
-echo SCHAN15 stage name $STAGE_NAME
 if [ -e test.cov* ]; then
-  mkdir -p "Functional/covs_$STAGE_NAME"
-  mv test.cov* "Functional/covs_$STAGE_NAME"
+  mkdir -p "Functional/covs"
+  mv test.cov* "Functional/covs"
 fi
 
