@@ -1176,6 +1176,28 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Small')
+                stage('Functional_Hardware_Small Bullseye') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('bullseye', true) }
+                        }
+                    }
+                    agent {
+                        // 2 node cluster with 1 IB/node + 1 test control node
+                        label 'ci_nvme3'
+                    }
+                    steps {
+                        fnCovTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                    }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    }
+                } // stage('Functional_Hardware_Small Bullseye')
                 stage('Functional_Hardware_Medium') {
                     when {
                         beforeAgent true
@@ -1298,8 +1320,8 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish(
-                                   coverage_stashes: ['centos7-covc-fnvm-cov',
-                                                     'centos7-covc-unit-cov'],
+                                   coverage_stashes: ['centos7-covc-cov',
+                                                     'centos7-covc-hw-small-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
