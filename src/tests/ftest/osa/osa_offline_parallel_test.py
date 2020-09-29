@@ -56,10 +56,7 @@ class OSAOfflineParallelTest(TestWithServers):
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')[0]
-        self.out_queue = []
-        for _ in range(0, 4):
-            tmp = queue.Queue()
-            self.out_queue.append(tmp)
+        self.out_queue
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -135,7 +132,7 @@ class OSAOfflineParallelTest(TestWithServers):
             else:
                 self.fail("Invalid action for dmg thread")
         except CommandFailure as _error:
-            results.put("FAIL")
+            results.put("{} failed".format(action))
             # elif action == "extend":
             #    dmg.pool_extend(puuid, (rank + 2))
 
@@ -194,7 +191,7 @@ class OSAOfflineParallelTest(TestWithServers):
                                                    "target": t_string,
                                                    "action": action,
                                                    "results":
-                                                   self.out_queue[i]})
+                                                   self.out_queue})
                 process.start()
                 threads.append(process)
                 i = i + 1
@@ -204,10 +201,11 @@ class OSAOfflineParallelTest(TestWithServers):
             thrd.join()
             time.sleep(5)
 
-        for i in range(0, 3):
-            for failure in self.out_queue[i]:
-                if CommandFailure in failure:
-                    self.fail("Test failed : {0}".format(failure))
+        # Check the queue for any failure.
+        tmp_list = list(self.out_queue.queue)
+        for failure in tmp_list:
+            if "FAIL" in failure:
+                self.fail("Test failed : {0}".format(failure))
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
