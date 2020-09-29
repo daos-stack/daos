@@ -83,7 +83,7 @@ file.
 The hardware design of a DAOS storage server balances the network
 bandwidth of the fabric with the aggregate storage bandwidth of the NVMe
 storage devices.  This relationship sets the number of NVMe drives.
-For example, 8 PCIe gen4 x4 NVMe SSDs balance two 200Gbps PCIe gen4 x16 
+For example, 8 PCIe gen4 x4 NVMe SSDs balance two 200Gbps PCIe gen4 x16
 network adapters.
 The capacity of the SSDs will determine the minimum capacity of the
 Optane PMem DIMMs needed to provide the 6% ratio for DAOS metadata.

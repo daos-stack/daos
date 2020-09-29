@@ -34,7 +34,7 @@ This includes:
   and monitor a DAOS system.
 * [User Guide](https://daos-stack.github.io/user/container/) documenting the
   DAOS native API, as well as the integration with POSIX, MPI-IO, HDF5, and Spark.
-* [Release Notes](https://daos-stack.github.io/release/releaseNote_v1_0/) 
+* [Release Notes](https://daos-stack.github.io/release/releaseNote_v1_0/)
   for the 1.0 release.
 * [Developer documentation](https://daos-stack.github.io/dev/development/)
   to learn more about DAOS internals and contribute to the development effort.

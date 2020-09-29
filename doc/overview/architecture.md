@@ -147,7 +147,7 @@ orchestration frameworks. The `dmg` CLI tool is built over the DAOS management
 API. On the other hand, the DAOS library (`libdaos`) implements the
 DAOS storage model. It is primarily targeted at application and I/O
 middleware developers who want to store datasets in a DAOS system. User
-utilities like the `daos` command are also built over the API to allow 
+utilities like the `daos` command are also built over the API to allow
 users to manage datasets from a CLI.
 
 Applications can access datasets stored in DAOS either directly through
