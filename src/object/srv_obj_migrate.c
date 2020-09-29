@@ -203,7 +203,7 @@ int
 obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 		d_iov_t *val_iov)
 {
-	struct tree_cache_root	*cont_root;
+	struct tree_cache_root	*cont_root = NULL;
 	d_iov_t			key_iov;
 	d_iov_t			tmp_iov;
 	int			rc;
@@ -906,7 +906,7 @@ out:
 
 		/* since iod_recxs is being used by single value update somehow,
 		 * let's reset it after update.
-		 */ 
+		 */
 		if (mrone->mo_iods[i].iod_type == DAOS_IOD_SINGLE)
 			mrone->mo_iods[i].iod_recxs = NULL;
 	}
