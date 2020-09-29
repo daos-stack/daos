@@ -991,30 +991,6 @@ pipeline {
                 }
             }
             parallel {
-                stage('Unit Test') {
-                    when {
-                      beforeAgent true
-                      allOf {
-                          expression { ! skip_stage('unit-test')}
-                          expression { ! skip_stage('run_test') }
-                      }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        unitTest timeout_time: 60,
-                                 inst_repos: pr_repos(),
-                                 inst_rpms: unit_packages()
-                    }
-                    post {
-                      always {
-                            unitTestPost artifacts: ['unit_test_logs/*',
-                                                     'unit_vm_test/**'],
-                                         valgrind_stash: 'centos7-gcc-unit-valg'
-                        }
-                    }
-                }
                 stage('Unit Test Bullseye') {
                     when {
                       beforeAgent true
