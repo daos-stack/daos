@@ -3474,6 +3474,7 @@ obj_task_init(tse_task_t *task, int opc, uint32_t map_ver, daos_handle_t th,
 	      struct obj_auxi_args **auxi, struct dc_object *obj)
 {
 	struct obj_auxi_args	*obj_auxi;
+	int			 rc;
 
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
 	obj_auxi->opc = opc;
@@ -3483,7 +3484,13 @@ obj_task_init(tse_task_t *task, int opc, uint32_t map_ver, daos_handle_t th,
 	obj_auxi->obj = obj;
 	shard_task_list_init(obj_auxi);
 	*auxi = obj_auxi;
-	return tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
+
+	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
+	if (rc) {
+		D_ERROR("task %p, register_comp_cb "DF_RC"\n", task, DP_RC(rc));
+		tse_task_stack_pop(task, sizeof(*obj_auxi));
+	}
+	return rc;
 }
 
 static int
