@@ -1066,9 +1066,17 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, rpc_priv,
 			    &rpc_priv->crp_pub.cr_input);
 	if (hg_ret != HG_SUCCESS) {
+		char *rank0_uri;
+
+		crt_rank_uri_get(NULL, 0, 0, &rank0_uri);
+
 		RPC_ERROR(rpc_priv,
-			  "HG_Forward failed, hg_ret: %d\n",
-			  hg_ret);
+			  "HG_Forward failed, hg_ret: %d  rank0_uri='%s'\n",
+			  hg_ret,
+			  rank0_uri);
+
+		D_FREE(rank0_uri);
+
 	} else {
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "sent to rank %d uri: %s\n",
