@@ -1036,7 +1036,7 @@ get_pid_of_process(char *host, char *dpid, char *proc)
 	char    *line = NULL;
 
 	snprintf(command, sizeof(command),
-		"ssh %s pgrep %s", host, proc);
+		 "ssh %s pgrep %s", host, proc);
 	FILE *fp1 = popen(command, "r");
 
 	print_message("Command= %s\n", command);
