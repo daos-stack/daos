@@ -139,7 +139,7 @@ struct cache_entry {
  */
 struct d_log_xstate d_log_xst;
 
-static struct d_log_state mst;
+static struct d_log_state mst = { .log_fd = -1, .log_old_fd = -1 };
 static d_list_t	d_log_caches;
 
 
@@ -932,6 +932,14 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.stderr_isatty = isatty(fileno(stderr));
 	d_log_xst.tag = newtag;
 	clog_unlock();
+
+	/* ensure buffer+log flush upon exit in case fini routine not
+	 * being called
+	 */
+	rc = atexit(d_log_sync);
+	if (rc != 0)
+		fprintf(stderr, "unable to register flush of log, potential risk to miss last lines if fini method not invoked upon exit\n");
+
 	if (buffer)
 		free(buffer);
 	return 0;
