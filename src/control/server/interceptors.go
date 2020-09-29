@@ -55,6 +55,7 @@ func checkAccess(ctx context.Context, FullMethod string) error {
 
 	return nil
 }
+
 func componentFromContext(ctx context.Context) (comp *security.Component, err error) {
 	clientPeer, ok := peer.FromContext(ctx)
 	if !ok {

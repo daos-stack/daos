@@ -429,7 +429,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// config without servers is valid when initially discovering hardware
 	// prior to adding per-server sections with device allocations
 	if len(c.Servers) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", DataPlaneName, ControlPlaneName)
+		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
 		c.Servers = nil
 		return nil
 	}

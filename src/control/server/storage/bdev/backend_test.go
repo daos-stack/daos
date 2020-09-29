@@ -53,10 +53,10 @@ func convertTypes(in interface{}, out interface{}) error {
 	return json.Unmarshal(data, out)
 }
 
-func mockSpdkController(varIdx ...int32) spdk.Controller {
+func mockSpdkController(varIdx ...int32) storage.NvmeController {
 	native := storage.MockNvmeController(varIdx...)
 
-	s := new(spdk.Controller)
+	s := new(storage.NvmeController)
 	if err := convertTypes(native, s); err != nil {
 		panic(err)
 	}
@@ -64,10 +64,10 @@ func mockSpdkController(varIdx ...int32) spdk.Controller {
 	return *s
 }
 
-func mockSpdkNamespace(varIdx ...int32) spdk.Namespace {
+func mockSpdkNamespace(varIdx ...int32) storage.NvmeNamespace {
 	native := storage.MockNvmeNamespace(varIdx...)
 
-	s := new(spdk.Namespace)
+	s := new(storage.NvmeNamespace)
 	if err := convertTypes(native, s); err != nil {
 		panic(err)
 	}
@@ -75,86 +75,15 @@ func mockSpdkNamespace(varIdx ...int32) spdk.Namespace {
 	return *s
 }
 
-func mockSpdkDeviceHealth(varIdx ...int32) spdk.DeviceHealth {
-	native := storage.MockNvmeDeviceHealth(varIdx...)
+func mockSpdkDeviceHealth(varIdx ...int32) storage.NvmeControllerHealth {
+	native := storage.MockNvmeControllerHealth(varIdx...)
 
-	s := new(spdk.DeviceHealth)
+	s := new(storage.NvmeControllerHealth)
 	if err := convertTypes(native, s); err != nil {
 		panic(err)
 	}
 
 	return *s
-}
-
-func TestBdevBackendGetController(t *testing.T) {
-	type input struct {
-		pciAddr         string
-		spdkControllers []spdk.Controller
-	}
-
-	spdkNormalNoHealth := mockSpdkController()
-	spdkNormalNoHealth.HealthStats = nil
-	scNormalNoHealth := storage.MockNvmeController()
-	scNormalNoHealth.HealthStats = nil
-
-	for name, tc := range map[string]struct {
-		input  input
-		expSc  *storage.NvmeController
-		expErr error
-	}{
-		"empty input": {
-			input:  input{},
-			expErr: FaultBadPCIAddr(""),
-		},
-		"wrong pciAddr": {
-			input: input{
-				pciAddr:         "abc123",
-				spdkControllers: []spdk.Controller{mockSpdkController()},
-			},
-			expErr: FaultPCIAddrNotFound("abc123"),
-		},
-		"correct pciAddr": {
-			input: input{
-				pciAddr:         mockSpdkController().PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController()},
-			},
-			expSc: storage.MockNvmeController(),
-		},
-		"missing health stats": {
-			input: input{
-				pciAddr:         spdkNormalNoHealth.PCIAddr,
-				spdkControllers: []spdk.Controller{spdkNormalNoHealth},
-			},
-			expSc: scNormalNoHealth,
-		},
-		"two controllers select first": {
-			input: input{
-				pciAddr:         mockSpdkController(1).PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController(1), mockSpdkController(2)},
-			},
-			expSc: storage.MockNvmeController(1),
-		},
-		"two controllers select second": {
-			input: input{
-				pciAddr:         mockSpdkController(2).PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController(1), mockSpdkController(2)},
-			},
-			expSc: storage.MockNvmeController(2),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotSc, gotErr := getController(tc.input.pciAddr, tc.input.spdkControllers)
-
-			common.CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
-
-			if diff := cmp.Diff(tc.expSc, gotSc, defCmpOpts()...); diff != "" {
-				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
 }
 
 func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.MockNvmeCfg) *spdkBackend {
@@ -169,10 +98,6 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 
 func TestBdevBackendScan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
-	nativeCtrlr1 := new(spdk.Controller)
-	if err := convert(ctrlr1, nativeCtrlr1); err != nil {
-		t.Fatal(err)
-	}
 
 	for name, tc := range map[string]struct {
 		req     ScanRequest
@@ -189,36 +114,16 @@ func TestBdevBackendScan(t *testing.T) {
 		},
 		"empty results from binding": {
 			req:     ScanRequest{},
-			expResp: &ScanResponse{Controllers: storage.NvmeControllers{}},
+			expResp: &ScanResponse{},
 		},
 		"binding scan success": {
 			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
+				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
 			},
 			req: ScanRequest{},
 			expResp: &ScanResponse{
-				Controllers: storage.NvmeControllers{
-					ctrlr1,
-				},
+				Controllers: storage.NvmeControllers{ctrlr1},
 			},
-		},
-		"binding scan filtered in": {
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
-			},
-			req: ScanRequest{DeviceList: []string{ctrlr1.PciAddr}},
-			expResp: &ScanResponse{
-				Controllers: storage.NvmeControllers{
-					ctrlr1,
-				},
-			},
-		},
-		"binding scan filtered out": {
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
-			},
-			req:     ScanRequest{DeviceList: []string{"0000:ff:ff.f"}},
-			expResp: &ScanResponse{Controllers: storage.NvmeControllers{}},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -484,10 +389,10 @@ func TestBdevBackendFormat(t *testing.T) {
 
 func TestBdevBackendUpdate(t *testing.T) {
 	numCtrlrs := 4
-	controllers := make([]spdk.Controller, 0, numCtrlrs)
+	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
 	for i := 0; i < numCtrlrs; i++ {
 		c := mockSpdkController(int32(i))
-		controllers = append(controllers, c)
+		controllers = append(controllers, &c)
 	}
 
 	for name, tc := range map[string]struct {
@@ -497,7 +402,7 @@ func TestBdevBackendUpdate(t *testing.T) {
 		expErr  error
 	}{
 		"init failed": {
-			pciAddr: controllers[0].PCIAddr,
+			pciAddr: controllers[0].PciAddr,
 			mec: spdk.MockEnvCfg{
 				InitErr: errors.New("spdk init says no"),
 			},
@@ -514,7 +419,7 @@ func TestBdevBackendUpdate(t *testing.T) {
 			expErr: FaultPCIAddrNotFound("NotReal"),
 		},
 		"binding update fail": {
-			pciAddr: controllers[0].PCIAddr,
+			pciAddr: controllers[0].PciAddr,
 			mnc: spdk.MockNvmeCfg{
 				DiscoverCtrlrs: controllers,
 				UpdateErr:      errors.New("spdk says no"),
@@ -522,7 +427,7 @@ func TestBdevBackendUpdate(t *testing.T) {
 			expErr: errors.New("spdk says no"),
 		},
 		"binding update success": {
-			pciAddr: controllers[0].PCIAddr,
+			pciAddr: controllers[0].PciAddr,
 			mnc: spdk.MockNvmeCfg{
 				DiscoverCtrlrs: controllers,
 			},

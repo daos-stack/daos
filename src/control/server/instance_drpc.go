@@ -25,13 +25,17 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -53,7 +57,7 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 // NotifyDrpcReady receives a ready message from the running IOServer
 // instance.
 func (srv *IOServerInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
-	srv.log.Debugf("%s instance %d drpc ready: %v", DataPlaneName, srv.Index(), msg)
+	srv.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, srv.Index(), msg)
 
 	// Activate the dRPC client connection to this iosrv
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
@@ -71,13 +75,13 @@ func (srv *IOServerInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 }
 
 // CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (srv *IOServerInstance) CallDrpc(method drpc.Method, body proto.Message) (*drpc.Response, error) {
+func (srv *IOServerInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
 	dc, err := srv.getDrpcClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return makeDrpcCall(dc, method, body)
+	return makeDrpcCall(ctx, srv.log, dc, method, body)
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.
@@ -140,7 +144,7 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *s
 
 	resChan := make(chan *system.MemberResult)
 	go func() {
-		dresp, err := srv.CallDrpc(method, nil)
+		dresp, err := srv.CallDrpc(ctx, method, nil)
 		resChan <- drespToMemberResult(rank, dresp, err, targetState)
 	}()
 
@@ -156,4 +160,105 @@ func (srv *IOServerInstance) TryDrpc(ctx context.Context, method drpc.Method) *s
 	case result := <-resChan:
 		return result
 	}
+}
+
+func (srv *IOServerInstance) getBioHealth(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodBioHealth, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.BioHealthResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
+	}
+
+	if resp.Status != 0 {
+		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")
+	}
+
+	return resp, nil
+}
+
+func (srv *IOServerInstance) listSmdDevices(ctx context.Context, req *mgmtpb.SmdDevReq) (*mgmtpb.SmdDevResp, error) {
+	dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdDevs, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.SmdDevResp)
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
+	}
+
+	if resp.Status != 0 {
+		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "listSmdDevices failed")
+	}
+
+	return resp, nil
+}
+
+// updateInUseBdevs updates-in-place the input list of controllers with
+// new NVMe health stats and SMD metadata info.
+//
+// Query each SmdDevice on each IO server instance for health stats,
+// map input controllers to their concatenated model+serial keys then
+// retrieve metadata and health stats for each SMD device (blobstore) on
+// a given I/O server instance. Update input map with new stats/smd info.
+func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
+	smdDevs, err := srv.listSmdDevices(ctx, new(mgmtpb.SmdDevReq))
+	if err != nil {
+		return errors.Wrapf(err, "instance %d listSmdDevices()", srv.Index())
+	}
+
+	for _, dev := range smdDevs.Devices {
+		healthPB, err := srv.getBioHealth(ctx, &mgmtpb.BioHealthReq{
+			DevUuid: dev.Uuid,
+		})
+		if err != nil {
+			return errors.Wrapf(err, "instance %d getBioHealth()", srv.Index())
+		}
+
+		msg := fmt.Sprintf("instance %d: health stats from smd uuid %s", srv.Index(),
+			dev.GetUuid())
+
+		health := new(storage.NvmeControllerHealth)
+		if err := convert.Types(healthPB, health); err != nil {
+			return errors.Wrapf(err, msg)
+		}
+
+		key, err := health.GenAltKey()
+		if err != nil {
+			return errors.Wrapf(err, msg)
+		}
+
+		msg += fmt.Sprintf(" with key %s", key)
+
+		ctrlr, exists := ctrlrMap[key]
+		if !exists {
+			srv.log.Debugf("%s didn't match any known controllers", msg)
+			continue
+		}
+
+		srv.log.Debugf("%s->%s", msg, ctrlr.PciAddr)
+
+		// multiple updates for the same key expected when
+		// more than one controller namespaces (and resident
+		// blobstores) exist, stats will be the same for each
+		ctrlr.HealthStats = health
+
+		smdDev := new(storage.SmdDevice)
+		if err := convert.Types(dev, smdDev); err != nil {
+			return errors.Wrapf(err, "convert smd for ctrlr %s", ctrlr.PciAddr)
+		}
+		srvRank, err := srv.GetRank()
+		if err != nil {
+			return errors.Wrapf(err, "get rank")
+		}
+		smdDev.Rank = srvRank
+
+		ctrlr.UpdateSmd(smdDev)
+	}
+
+	return nil
 }

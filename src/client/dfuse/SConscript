@@ -5,8 +5,7 @@ import daos_build
 HEADERS = ['ioil_io.h', 'ioil_defines.h',
            'ioil_api.h', 'ioil_preload.h',
            'ioil.h']
-COMMON_SRC = ['dfuse_da.c',
-              'dfuse_obj_da.c',
+COMMON_SRC = ['dfuse_obj_da.c',
               'dfuse_vector.c']
 DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',

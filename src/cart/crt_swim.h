@@ -46,9 +46,11 @@ struct crt_swim_membs {
 	D_CIRCLEQ_HEAD(, crt_swim_target) csm_head;
 	struct crt_swim_target		*csm_target;
 	struct swim_context		*csm_ctx;
+	uint64_t			 csm_hlc;
+	uint64_t			 csm_avg_delay;
+	uint64_t			 csm_msg_count;
 	int				 csm_crt_ctx_idx;
 };
-
 
 int  crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
 int  crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
