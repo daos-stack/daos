@@ -26,7 +26,7 @@ container:
   control_method: daos
   type: POSIX
 ior:
-  flags: "-w -E -k"
+  flags: "-w -k"
   api: DFS
   block_size: 10G
   transfer_size: 1M
