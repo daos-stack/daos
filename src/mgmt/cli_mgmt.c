@@ -394,32 +394,48 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	if (sy_info) {
 		if (strnlen(resp->provider, sizeof(sy_info->provider)) == 0) {
-			D_ERROR("GetAttachInfo provider string is empty\n");
-			D_GOTO(out_resp, rc = -DER_INVAL);
+			D_ERROR("GetAttachInfo failed: %d. "
+				"provider is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
 		}
 
 		if (strnlen(resp->interface, sizeof(sy_info->interface)) == 0) {
-			D_ERROR("GetAttachInfo interface string is empty\n");
-			D_GOTO(out_resp, rc = -DER_INVAL);
+			D_ERROR("GetAttachInfo failed: %d. "
+				"interface is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
 		}
 
 		if (strnlen(resp->domain, sizeof(sy_info->domain)) == 0) {
-			D_ERROR("GetAttachInfo domain string is empty\n");
-			D_GOTO(out_resp, rc = -DER_INVAL);
+			D_ERROR("GetAttachInfo failed: %d. "
+				"domain string is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
 		}
 
 		if (copy_str(sy_info->provider, resp->provider)) {
-			D_ERROR("GetAttachInfo provider string too long\n");
+			D_ERROR("GetAttachInfo failed: %d. "
+				"provider string too long.\n",
+				resp->status);
+
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
 
 		if (copy_str(sy_info->interface, resp->interface)) {
-			D_ERROR("GetAttachInfo interface string too long\n");
+			D_ERROR("GetAttachInfo failed: %d. "
+				"interface string too long\n",
+				resp->status);
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
 
 		if (copy_str(sy_info->domain, resp->domain)) {
-			D_ERROR("GetAttachInfo domain string too long\n");
+			D_ERROR("GetAttachInfo failed: %d. "
+				"domain string too long\n",
+				resp->status);
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
 
@@ -431,6 +447,11 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
 			sy_info->provider, sy_info->interface, sy_info->domain,
 			sy_info->crt_ctx_share_addr, sy_info->crt_timeout);
+	} else {
+		D_ERROR("GetAttachInfo failed: %d. "
+			"libdaos.so is incompatible with DAOS Agent.\n",
+			resp->status);
+		D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
 	}
 
 out_resp:

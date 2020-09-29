@@ -57,6 +57,7 @@ class DaosAggregationBasic(IorTestBase):
             reclaimed the overwritten capacity.
 
         :avocado: tags=all,pr,hw,large,aggregate,daosio,aggregatebasic
+        :avocado: tags=DAOS_5610
         """
 
         # Create pool and container
