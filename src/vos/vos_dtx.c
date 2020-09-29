@@ -2238,6 +2238,9 @@ void
 vos_dtx_cleanup(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
+	daos_unit_oid_t		*oids;
+	int			 max;
+	int			 i;
 
 	if (!dtx_is_valid_handle(dth) || !dth->dth_active)
 		return;
@@ -2247,6 +2250,20 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 	 *  vos_dtx_cleanup_internal
 	 */
 	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, -DER_CANCELED);
+
+	if (dth->dth_oid_array != NULL) {
+		oids = dth->dth_oid_array;
+		max = dth->dth_oid_cnt;
+	} else if (dth->dth_touched_leader_oid) {
+		oids = &dth->dth_leader_oid;
+		max = 1;
+	} else {
+		oids = NULL;
+		max = 0;
+	}
+
+	for (i = 0; i < max; i++)
+		vos_obj_evict_by_oid(vos_obj_cache_current(), cont, oids[i]);
 }
 
 /** Allocate space for saving the vos reservations and deferred actions */
