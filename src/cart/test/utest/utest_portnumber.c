@@ -57,8 +57,8 @@
 static void
 run_test_fork(void **state)
 {
-	int	result1;
-	int	result2;
+	int	result1=0;
+	int	result2=0;
 	int	status;
 	int	rc = 0;
 	int	child_result;
