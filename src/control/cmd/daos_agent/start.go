@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	agentSockName = "agent.sock"
+	agentSockName = "daos_agent.sock"
 )
 
 type startCmd struct {
