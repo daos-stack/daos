@@ -207,6 +207,7 @@ $NFS_SERVER:$PWD $DAOS_BASE nfs defaults,vers=3 0 0 # DAOS_BASE # added by ftest
 wq
 EOF
     mount \\\"$DAOS_BASE\\\"
+    ls -al \\\"$DAOS_BASE\\\"
 fi\"
 
 if ! $TEST_RPMS; then
@@ -395,6 +396,7 @@ if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
     fi
 fi
 
+
 # can only process cores on EL7 currently
 if [ $(lsb_release -s -i) = CentOS ]; then
     process_cores=\"p\"
@@ -402,12 +404,18 @@ else
     process_cores=\"\"
 fi
 # now run it!
-if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} \\
+# DAOS-5622: Temporarily disable certs in CI
+
+mv $DAOS_BASE/test.cov $DAOS_BASE/install/lib/daos/TESTING/ftest
+
+if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} -ins \\
                  ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
 fi
+
+mv $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov $DAOS_BASE/
 
 exit \$rc"; then
     rc=${PIPESTATUS[0]}

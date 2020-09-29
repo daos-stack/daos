@@ -9,9 +9,10 @@ fi
 export COVFILE="$WORKSPACE/test.cov"
 export PATH="/opt/BullseyeCoverage/bin:$PATH"
 
-mv "$WORKSPACE/test.cov_1" "$COVFILE"
 if [ -e "$WORKSPACE/test.cov_2" ]; then
-  covmerge --no-banner --file "$COVFILE" "$WORKSPACE"/test.cov_*
+  covmerge --no-banner -c -f "$COVFILE" "$WORKSPACE"/test.cov_*
+else
+  mv "$WORKSPACE/test.cov_1" "$COVFILE"
 fi
 
 if [ -e "$COVFILE" ]; then
