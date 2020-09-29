@@ -1,9 +1,11 @@
 # Software Installation
 
-DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
+DAOS runs on both Intel x86_64 and ARM64 platforms,
+ and has been successfully tested
 on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 20.04 distributions.
 
-The majority of testing has been performed on Centos 7.7 and SLES 15, with Centos being used in the majority of the test cycles.
+The majority of testing has been performed on Centos 7.7 and SLES 15, 
+with Centos being used in the majority of the test cycles.
 
 ## Software Dependencies
 
