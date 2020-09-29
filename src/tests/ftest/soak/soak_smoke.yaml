@@ -119,6 +119,8 @@ ior_smoke:
     api:
         - DFS
         - MPIIO
+        - HDF5
+        - HDF5-VOL
     test_file: daos:testFile
     flags: -v -w -W -r -R
     block_size:
@@ -131,6 +133,7 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
+    dfs_destroy: True
 fio_smoke:
   names:
       - global
@@ -154,6 +157,7 @@ fio_smoke:
         - 'rw'
         - 'randrw'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
-  disable_direct_io: True
-
+    mount_dir: "/tmp/daos_dfuse"
+    disable_direct_io: True
+hdf5_vol:
+    plugin_path: "/usr/lib64/mpich/lib"
