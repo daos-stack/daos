@@ -31,6 +31,7 @@ pool:
     nvme_size: 400000000000 # large nvme_size for mdtest 1M file creation
   createsvc:
     svcn: 1
+  control_method: daos
 container:
   type: POSIX
   control_method: daos

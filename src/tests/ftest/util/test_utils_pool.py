@@ -125,12 +125,7 @@ class TestPool(TestDaosApiBase):
             if value is not None:
                 kwargs[key] = value
 
-        if self.control_method.value == self.USE_API:
-            # Create a pool with the API method
-            kwargs["mode"] = self.mode.value
-            self._call_method(self.pool.create, kwargs)
-
-        elif self.control_method.value == self.USE_DMG and self.dmg:
+        if self.control_method.value == self.USE_DMG and self.dmg:
             # Create a pool with the dmg command
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
