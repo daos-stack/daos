@@ -118,6 +118,7 @@ ior_harasser:
     segment_count: 1
     dfs_oclass:
         - 'SX'
+    dfs_destroy: True
 rebuild:
     rebuild_timeout: 30
     ranks_to_kill:
