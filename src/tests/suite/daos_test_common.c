@@ -1053,9 +1053,14 @@ get_server_config(char *host, char *server_config_file)
 
 	pch = strtok(line, " ");
 	while (pch != NULL) {
-		if (strstr(pch, "yaml") != NULL &&
-		    strstr(pch, "--config") != NULL) {
-			strcpy(server_config_file, strchr(pch, '=') + 1);
+		if (strstr(pch, "--config") != NULL) {
+			if (strchr(pch, '=') != NULL)
+				strcpy(server_config_file,
+					strchr(pch, '=') + 1);
+			else {
+				pch = strtok(NULL, " ");
+				strcpy(server_config_file, pch);
+			}
 			break;
 		}
 

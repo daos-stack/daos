@@ -125,18 +125,11 @@ nvme_test_verify_device_stats(void **state)
 {
 	test_arg_t	*arg = *state;
 	device_list	*devices = NULL;
-	daos_obj_id_t	oid;
-	char		data_buf[100];
-	char		fetch_buf[100] = { 0 };
-	struct ioreq	req;
 	int		ndisks;
 	int		rc, i;
 	char		*server_config_file;
 	char		*log_file;
-	int		obj_class;
 	int		rank_pos = 0;
-	bool    read_initial_data = false;
-	uint64_t		idx = 0;
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
@@ -172,8 +165,6 @@ nvme_test_verify_device_stats(void **state)
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank == 0)
 			rank_pos = i;
-		if (devices[i].rank == 1)
-			read_initial_data = true;
 	}
 
 	/*
@@ -201,22 +192,6 @@ nvme_test_verify_device_stats(void **state)
 
 	print_message("LOG FILE = %s\n", log_file);
 
-	/** Prepare records **/
-	if (arg->pool.pool_info.pi_nnodes < 2)
-		obj_class = DAOS_OC_R1S_SPEC_RANK;
-	else
-		obj_class = DAOS_OC_R2S_SPEC_RANK;
-
-	oid = dts_oid_gen(obj_class, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, 0);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	memset(data_buf, 'a', 100);
-
-	/** Insert record **/
-	print_message("Insert single record with 100 extents\n");
-	insert_single_with_rxnr("dkey", "akey", idx, data_buf,
-				1, 100, DAOS_TX_NONE, &req);
-
 	/**
 	*Set single device for rank0 to faulty.
 	*/
@@ -236,6 +211,13 @@ nvme_test_verify_device_stats(void **state)
 	*/
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_int_equal(rc, 0);
+	/*
+	 * Get the rank 0 position from array devices.
+	 */
+	for (i = 0; i < ndisks; i++) {
+		if (devices[i].rank == 0)
+			rank_pos = i;
+	}
 	assert_string_equal(devices[rank_pos].state, "\"FAULTY\"");
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
@@ -263,24 +245,6 @@ nvme_test_verify_device_stats(void **state)
 	}
 
 	/*
-	 *  Insert fresh record because total rank < 1 and disk fault will
-	 *  lost the data.
-	 */
-	if (read_initial_data != true) {
-		idx = 1;
-		print_message("Insert fresh record with 100 extents\n");
-		insert_single_with_rxnr("dkey", "akey", idx, data_buf,
-					1, 100, DAOS_TX_NONE, &req);
-	}
-
-	/** Lookup all the records and verify the content **/
-	print_message("Lookup and Verify records:\n");
-	lookup_single_with_rxnr("dkey", "akey", idx, fetch_buf,
-				1, 100, DAOS_TX_NONE, &req);
-	for (i = 0; i < 100; i++)
-		assert_memory_equal(&fetch_buf[i], "a", 1);
-
-	/*
 	 * FIXME: Add FAULTY disks back to the system, when feature available.
 	 */
 
@@ -288,7 +252,6 @@ nvme_test_verify_device_stats(void **state)
 	D_FREE(server_config_file);
 	D_FREE(log_file);
 	D_FREE(devices);
-	ioreq_fini(&req);
 }
 
 static const struct CMUnitTest nvme_recov_tests[] = {
