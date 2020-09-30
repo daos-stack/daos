@@ -116,7 +116,6 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) *Database {
 			Pools: &PoolDatabase{
 				Ranks: make(PoolRankMap),
 				Uuids: make(PoolUuidMap),
-				Addrs: make(PoolAddrMap),
 			},
 			SchemaVersion: CurrentSchemaVersion,
 		},
@@ -561,14 +560,14 @@ func (db *Database) FindMemberByUUID(uuid uuid.UUID) (*Member, error) {
 // FindMembersByAddr searches the member database by control address. If no
 // members are found, an error is returned. This search may return multiple
 // members, as a given address may be associated with more than one rank.
-func (db *Database) FindMembersByAddr(addr net.Addr) ([]*Member, error) {
+func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error) {
 	if err := db.checkLeader(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	if m, found := db.data.Members.Addrs[addr]; found {
+	if m, found := db.data.Members.Addrs[addr.String()]; found {
 		return m, nil
 	}
 

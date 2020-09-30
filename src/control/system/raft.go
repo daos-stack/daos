@@ -84,54 +84,63 @@ func (ro raftOp) String() string {
 	}[ro]
 }
 
+// createRaftUpdate serializes the inner payload and then wraps
+// it with a *raftUpdate that is submitted to the raft service.
+func createRaftUpdate(op raftOp, inner interface{}) ([]byte, error) {
+	data, err := json.Marshal(inner)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(&raftUpdate{
+		Time: time.Now(),
+		Op:   op,
+		Data: data,
+	})
+}
+
 // submitMemberUpdate submits the given member update operation to
 // the raft service.
 func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
-	data, err := json.Marshal(m)
+	data, err := createRaftUpdate(op, m)
 	if err != nil {
 		return err
 	}
-	return db.submitRaftUpdate(op, data)
+	return db.submitRaftUpdate(data)
 }
 
 // submitPoolUpdate submits the given pool service update operation to
 // the raft service.
 func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
-	data, err := json.Marshal(ps)
+	data, err := createRaftUpdate(op, ps)
 	if err != nil {
 		return err
 	}
-	return db.submitRaftUpdate(op, data)
+	return db.submitRaftUpdate(data)
 }
 
 // submitRaftUpdate submits the serialized operation to the raft service.
-func (db *Database) submitRaftUpdate(op raftOp, data []byte) error {
-	data, err := json.Marshal(&raftUpdate{
-		Time: time.Now(),
-		Op:   op,
-		Data: data,
-	})
-	if err != nil {
-		return err
-	}
-
+func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.Apply(data, raftTimeout).Error()
 }
 
 // Everything above here happens on the current leader.
 //
-// Everthing below here happens on N replicas.
+// Everything below here happens on N replicas.
 
 // NB: This type alias allows us to use a Database object as a raft.FSM.
 type fsm Database
 
 // Apply is called after the log entry has been committed. This is the
 // only place that direct modification of the data should occur.
+//
+// NB: Per Hashicorp (https://github.com/hashicorp/raft/issues/307),
+// the only reasonable response to an Apply() failure is to panic,
+// because the Raft algorithm does not specify a recovery mechanism
+// for this scenario.
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	c := new(raftUpdate)
 	if err := json.Unmarshal(l.Data, c); err != nil {
-		f.log.Errorf("failed to unmarshal %+v: %s", l.Data, err)
-		return nil
+		panic(errors.Wrapf(err, "failed to unmarshal %+v", l.Data))
 	}
 
 	switch c.Op {
@@ -140,7 +149,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	case raftOpAddPoolService, raftOpUpdatePoolService, raftOpRemovePoolService:
 		f.data.applyPoolUpdate(c.Op, c.Data)
 	default:
-		f.log.Errorf("unhandled Apply operation: %d", c.Op)
+		panic(errors.Errorf("unhandled Apply operation: %d", c.Op))
 	}
 
 	return nil
@@ -151,8 +160,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 	m := new(memberUpdate)
 	if err := json.Unmarshal(data, m); err != nil {
-		d.log.Errorf("failed to decode member update: %s", err)
-		return
+		panic(errors.Wrap(err, "failed to decode member update"))
 	}
 
 	d.Lock()
@@ -164,15 +172,14 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 	case raftOpUpdateMember:
 		cur, found := d.Members.Uuids[m.Member.UUID]
 		if !found {
-			d.log.Errorf("member update for unknown member %+v", m)
+			panic(errors.Errorf("member update for unknown member %+v", m))
 		}
 		cur.state = m.Member.state
 		cur.Info = m.Member.Info
 	case raftOpRemoveMember:
 		d.Members.removeMember(m.Member)
 	default:
-		d.log.Errorf("unhandled Member Apply operation: %d", op)
-		return
+		panic(errors.Errorf("unhandled Member Apply operation: %d", op))
 	}
 
 	if m.NextRank {
@@ -186,8 +193,7 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte) {
 func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
 	ps := new(PoolService)
 	if err := json.Unmarshal(data, ps); err != nil {
-		d.log.Errorf("failed to decode pool service update: %s", err)
-		return
+		panic(errors.Wrap(err, "failed to decode pool service update"))
 	}
 
 	d.Lock()
@@ -199,15 +205,14 @@ func (d *dbData) applyPoolUpdate(op raftOp, data []byte) {
 	case raftOpUpdatePoolService:
 		cur, found := d.Pools.Uuids[ps.PoolUUID]
 		if !found {
-			d.log.Errorf("pool service update for unknown pool %+v", ps)
+			panic(errors.Errorf("pool service update for unknown pool %+v", ps))
 		}
 		cur.State = ps.State
 		cur.Replicas = ps.Replicas
 	case raftOpRemovePoolService:
 		d.Pools.removeService(ps)
 	default:
-		d.log.Errorf("unhandled Pool Service Apply operation: %d", op)
-		return
+		panic(errors.Errorf("unhandled Pool Service Apply operation: %d", op))
 	}
 
 	d.MapVersion++

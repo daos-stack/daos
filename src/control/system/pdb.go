@@ -25,7 +25,6 @@ package system
 
 import (
 	"encoding/json"
-	"net"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -56,15 +55,12 @@ type (
 	PoolRankMap map[Rank][]*PoolService
 	// PoolUuidMap provides a map of UUID->*PoolService.
 	PoolUuidMap map[uuid.UUID]*PoolService
-	// PoolAddrMap provides a map of net.Addr->[]*PoolService.
-	PoolAddrMap map[net.Addr][]*PoolService
 
 	// PoolDatabase contains a set of maps for looking up DAOS Pool
 	// Service instances and methods for managing the pool membership.
 	PoolDatabase struct {
 		Ranks PoolRankMap
 		Uuids PoolUuidMap
-		Addrs PoolAddrMap
 	}
 )
 
@@ -92,23 +88,6 @@ func (prm PoolRankMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jm)
 }
 
-// MarshalJSON creates a serialized representation of the PoolAddrMap.
-// The pool's UUID is used to represent the pool service in order to
-// avoid duplicating pool service details in the serialized format.
-func (pam PoolAddrMap) MarshalJSON() ([]byte, error) {
-	jm := make(map[string][]uuid.UUID)
-	for addr, svcList := range pam {
-		addrStr := addr.String()
-		if _, exists := jm[addrStr]; !exists {
-			jm[addrStr] = []uuid.UUID{}
-		}
-		for _, svc := range svcList {
-			jm[addrStr] = append(jm[addrStr], svc.PoolUUID)
-		}
-	}
-	return json.Marshal(jm)
-}
-
 // UnmarshalJSON "inflates" the PoolDatabase from a compressed and
 // serialized representation. The PoolUuidMap contains a full representation
 // of each PoolService, whereas the other serialized maps simply use the
@@ -121,11 +100,9 @@ func (pdb *PoolDatabase) UnmarshalJSON(data []byte) error {
 	type fromJSON PoolDatabase
 	from := &struct {
 		Ranks map[Rank][]uuid.UUID
-		Addrs map[string][]uuid.UUID
 		*fromJSON
 	}{
 		Ranks:    make(map[Rank][]uuid.UUID),
-		Addrs:    make(map[string][]uuid.UUID),
 		fromJSON: (*fromJSON)(pdb),
 	}
 
@@ -144,24 +121,6 @@ func (pdb *PoolDatabase) UnmarshalJSON(data []byte) error {
 				pdb.Ranks[rank] = []*PoolService{}
 			}
 			pdb.Ranks[rank] = append(pdb.Ranks[rank], svc)
-		}
-	}
-
-	for addrStr, uuids := range from.Addrs {
-		for _, uuid := range uuids {
-			svc, found := pdb.Uuids[uuid]
-			if !found {
-				return errors.Errorf("addr %s missing UUID", addrStr)
-			}
-
-			addr, err := net.ResolveTCPAddr("tcp", addrStr)
-			if err != nil {
-				return err
-			}
-			if _, exists := pdb.Addrs[addr]; !exists {
-				pdb.Addrs[addr] = []*PoolService{}
-			}
-			pdb.Addrs[addr] = append(pdb.Addrs[addr], svc)
 		}
 	}
 

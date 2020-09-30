@@ -36,8 +36,8 @@ type (
 	MemberRankMap map[Rank]*Member
 	// MemberUuidMap provides a map of UUID->*Member.
 	MemberUuidMap map[uuid.UUID]*Member
-	// MemberAddrMap provides a map of net.Addr->[]*Member.
-	MemberAddrMap map[net.Addr][]*Member
+	// MemberAddrMap provides a map of string->[]*Member.
+	MemberAddrMap map[string][]*Member
 
 	// MemberDatabase contains a set of maps for looking
 	// up members and provides methods for managing the
@@ -60,11 +60,11 @@ func (srm MemberRankMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jm)
 }
 
-func (sam MemberAddrMap) addMember(addr net.Addr, m *Member) {
-	if _, exists := sam[addr]; !exists {
-		sam[addr] = []*Member{}
+func (sam MemberAddrMap) addMember(addr *net.TCPAddr, m *Member) {
+	if _, exists := sam[addr.String()]; !exists {
+		sam[addr.String()] = []*Member{}
 	}
-	sam[addr] = append(sam[addr], m)
+	sam[addr.String()] = append(sam[addr.String()], m)
 }
 
 // MarshalJSON creates a serialized representation of the MemberAddrMap.
@@ -73,12 +73,11 @@ func (sam MemberAddrMap) addMember(addr net.Addr, m *Member) {
 func (sam MemberAddrMap) MarshalJSON() ([]byte, error) {
 	jm := make(map[string][]uuid.UUID)
 	for addr, members := range sam {
-		addrStr := addr.String()
-		if _, exists := jm[addrStr]; !exists {
-			jm[addrStr] = []uuid.UUID{}
+		if _, exists := jm[addr]; !exists {
+			jm[addr] = []uuid.UUID{}
 		}
 		for _, member := range members {
-			jm[addrStr] = append(jm[addrStr], member.UUID)
+			jm[addr] = append(jm[addr], member.UUID)
 		}
 	}
 	return json.Marshal(jm)
@@ -147,5 +146,5 @@ func (mdb *MemberDatabase) addMember(m *Member) {
 func (mdb *MemberDatabase) removeMember(m *Member) {
 	delete(mdb.Ranks, m.Rank)
 	delete(mdb.Uuids, m.UUID)
-	delete(mdb.Addrs, m.Addr)
+	delete(mdb.Addrs, m.Addr.String())
 }
