@@ -57,9 +57,9 @@
 static void
 run_test_fork(void **state)
 {
-	int	result1=0;
-	int	result2=0;
-	int	status;
+	int	result1 = -1;
+	int	result2 = -1;
+	int	status = -1;
 	int	rc = 0;
 	int	child_result;
 	pid_t	pid1 = 0;
@@ -112,11 +112,12 @@ run_test_fork(void **state)
 		result2 = WEXITSTATUS(status);
 	}
 
-	/* Test results.  first child should should succed. */
+	/* Test results.  first child should should succeed. */
 	assert_true(result1 == 0);
 	assert_true(result2 != 0);
 	assert_true(rc == 0);    /* prevents compile issue */
 }
+
 static void
 test_port_tcp(void **state)
 {
@@ -180,5 +181,6 @@ int main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests(tests, init_tests, fini_tests);
+	return cmocka_run_group_tests_name("utest_portnumber", tests,
+				init_tests, fini_tests);
 }
