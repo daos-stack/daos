@@ -30,6 +30,7 @@ from apricot import TestWithServers
 from server_utils import ServerFailed
 from command_utils import CommandFailure
 from general_utils import human_to_bytes
+from avocado.utils import process
 
 
 class DmgSystemReformatTest(TestWithServers):
@@ -93,16 +94,12 @@ class DmgSystemReformatTest(TestWithServers):
         """
         self.create_pool_at_capacity(0.7)
 
-        self.log.info("Disable raising an exception to check for DER_NOSPACE \
-                       error on pool create")
-        self.get_dmg_command().exit_status_exception = False
-
-        # Try to create second pool and check that it fails with DER_NOSPACE
-        self.create_pool_at_capacity(0.7)
-        if self.get_dmg_command().result.exit_status != 0:
-            self.log.info("Pool create failed: %s",
-                          self.get_dmg_command().result.stderr)
-            if "DER_NOSPACE" not in self.get_dmg_command().result.stderr:
+        self.log.info("Check that new pool will fail with DER_NOSPACE")
+        try:
+            self.create_pool_at_capacity(0.7)
+        except process.CmdError as error:
+            self.log.info("Pool create failed: %s", error.result.stderr)
+            if "DER_NOSPACE" not in error.result.stderr:
                 self.fail("Pool create did not fail do to DER_NOSPACE!")
 
         self.log.info("Re-enable raising exceptions for dmg.")
