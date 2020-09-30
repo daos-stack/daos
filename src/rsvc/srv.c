@@ -667,7 +667,7 @@ static int
 start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
       size_t size, d_rank_list_t *replicas, void *arg, struct ds_rsvc **svcp)
 {
-	struct ds_rsvc *svc;
+	struct ds_rsvc *svc = NULL;
 	int		rc;
 
 	rc = alloc_init(class, id, db_uuid, &svc);
@@ -730,7 +730,7 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	      bool create, size_t size, d_rank_list_t *replicas, void *arg)
 {
 	uuid_t			 db_uuid_buf;
-	struct ds_rsvc		*svc;
+	struct ds_rsvc		*svc = NULL;
 	struct ds_rsvc_class	*impl;
 	d_list_t		*entry;
 	int			 rc;
