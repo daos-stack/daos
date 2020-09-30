@@ -42,26 +42,25 @@
 usage() {
     echo -n "get_remote_files.sh [OPTION]...
 
-This script will clush to provided servers and print to stdout the files on
-the provided remote directory path. Files that  exceed the provided user set
-threshold value will have a BIG_FILE tag at the beginning of the line.
+This script has 3 modes that can be executed independently if needed.
 
-Example:
-    3903 /path/to/1.log
-    BIG_FILE 9991 /path/to/big/2.log
-    2298 /path/to/small/3.log
-    BIG_FILE 6523 /path/to/another/big/4.log
+ 1. Display big files specified by threshold value i.e. -t 5mb. This option
+    will list files within provided local path with -d option and will prepend
+    each file with a \"Y\" if file exceeds threshold value and with \"N\" if
+    it does not.
 
-Once the big files have been tagged to stdout, the script will check if local
-server is a on HW or a VM, if VM=True, then compression will be skipped and the
-script will continue to scping the files from the remote directory to local test
-runner server. Otherwise, if HW=True, then files will be compressed remotely and
-afterwards scp'd to local test runner server.
+ 2. Compress files specified in provided local path with -d option that exceed
+    1M in size. This script will check if current local system is a VM host, if
+    so, compression will not be executed.
+
+ 3. Archive files specified in provided local path with -d option to provided
+    remote path destination.
 
  Options:
-      -s        Comma-separated list of hosts to get remote files from
-      -d        Local path to copy remote files to
-      -r        Remote path to get files from
+      -a        Archive files
+      -c        Compress files
+      -d        Local path to files for achiving/compressing/size checking
+      -r        Remote path to scp files to i.e. server-A:/path/to/file
       -t        Threshold value to determine classification of big logs
       -v        Display commands being executed
       -h        Display this help and exit
@@ -73,74 +72,93 @@ afterwards scp'd to local test runner server.
 #######################################
 display_set_vars() {
     echo "Set Variables:
-    SERVERS = ${SERVERS}
-    REMOTE_SRC = ${REMOTE_SRC}
+    ARCHIVE = ${ARCHIVE}
+    COMPRESS = ${COMPRESS}
+    REMOTE_DEST = ${REMOTE_DEST}
     LOCAL_SRC = ${LOCAL_SRC}
     THRESHOLD = ${THRESHOLD}
     VERBOSE = ${VERBOSE}"
 }
 
 #######################################
-# Clush in remote host to access .log files, print
-# the size of the files and conditionally compress
-# log files remotely depending on check_hw output.
+# Convert human readable size values to respective byte value.
 # Arguments:
-#   hosts: list of hosts to remotely access
-#   rlogs_dir: path to remote .log files
-#   logs_dir: path to local logs dir where to store files.
-#   threshold: value to use as threhold to classify BIG_FILEs
-#   hw_flag: bool value
+#   size: size value to convert to bytes. i.e. 5mb, 40gb, 6k, 10g
 # Returns:
-#   stdout output specifying the files
+#   converted byte value.
 #######################################
-get_remote_files() {
-    awk_cmd="
-    {if (${4} <= \$1) {
-        print \"BIG_FILE\",hostname,\$1,\$2
-    }
-    else {
-        print \$1,\$2
-    }}"
+human_to_bytes() {
+    h_size=${1,,}
 
-    check_hw="
-    dmesg | grep \"Hypervisor detected\";
-    echo $?"
-
-    comp_cmd="
-    find ${2} -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2"
-
-    copy_cmds="set -eu;
-    rc=0;
-    copied=();
-    for file in \$(ls ${2});
-    do ls -sh \$file;
-    if scp -p \$file ${THIS_HOST}:${3}/\${file##*/}-\$(hostname -s);
-    then copied+=(\$file);
-    if ! sudo rm -fr \$file;
-    then ((rc++));
-    ls -al \$file;
-    fi;
-    fi;
-    done;
-    echo Copied \${copied[@]:-no files};
-    exit \$rc;"
-
-    list_cmd="
-    du -ab -d 1 ${2} | awk -v hostname=\"$(hostname)\" '${awk_cmd}'"
-
-    clush_cmd="
-    if [ ${4} -gt 0 ]; then
-        echo \"LISTING FILES\";${list_cmd};
-    fi;
-    if [ \$(${check_hw}) -eq 0 ]; then
-        echo \"COMPRESSING\"; ${comp_cmd};
-    fi;
-    echo \"COPYING FILES\";${copy_cmds}"
-
-    if [[ "${VERBOSE}"  == "true" ]]; then
-        echo "Running: clush -B -w ${1}  ${clush_cmd}";
+    declare -A units=(
+        [b]=1
+        [kb]=$(python -c "print (2**10)")
+        [k]=$(python -c "print (2**10)")
+        [mb]=$(python -c "print (2**20)")
+        [m]=$(python -c "print (2**20)")
+        [gb]=$(python -c "print (2**30)")
+        [g]=$(python -c "print (2**30)")
+    )
+    if [[ "${h_size,,}" =~ ([0-9.]+)([kbmgt]+) ]]; then
+        val="${BASH_REMATCH[1]}"
+        unit="${BASH_REMATCH[2]}"
+        (( val = val*${units[${unit}]} ))
+        echo "${val}"
+    else
+        echo "Invalid value provided: ${1}"
+        return 1
     fi
-    clush -B -l jenkins -R ssh -S -w ${1} "${clush_cmd}"
+}
+
+#######################################
+# List and tag files with a 'Y' or 'N' to classify
+# big files based on the threshold provided.
+# Arguments:
+#   logs_dir: path to local logs
+#   threshold: value to use as threhold to classify big files
+# Returns:
+#   stdout output listing the files prepended with a 'Y' or 'N' tag
+#######################################
+list_tag_files() {
+    # shellcheck disable=SC2016,SC1004
+    awk_cmd='{ \
+    if (th <= $1){ \
+        print "Y:",hostname,$1,$2} \
+    else { \
+        print "N:",hostname,$1,$2}\
+    }'
+
+    # Convert to bytes and run
+    bytes=$(human_to_bytes "${2}")
+    du -ab -d 1 ${1} | awk -v hostname="$(hostname)" -v th="${bytes}" "${awk_cmd}"
+}
+
+check_hw() {
+    dmesg | grep "Hypervisor detected"
+    return $?
+}
+
+compress_files() {
+    find ${1} -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2 -v
+}
+
+scp_files() {
+    set -eu
+    rc=0
+    copied=()
+    for file in ${1}
+    do
+        ls -sh "${file}"
+        if scp -p "${file}" "${2}"/"${file##*/}"-"$(hostname -s)"; then
+            copied+=("${file}")
+            if ! sudo rm -fr "${file}"; then
+                ((rc++))
+                ls -al "${file}"
+            fi
+        fi
+    done
+    echo Copied "${copied[@]:-no files}"
+    exit "$rc"
 }
 
 ####### MAIN #######
@@ -150,23 +168,28 @@ if [[ $# -eq 0 ]] ; then
 fi
 
 # Setup defaults
+COMPRESS="false"
+ARCHIVE="false"
 VERBOSE="false"
-THRESHOLD=0
+THRESHOLD=""
 
 # Step through arguments
-while getopts "vhs:r:d:t:" opt; do
+while getopts "vhcal:r:d:t:" opt; do
     case ${opt} in
-        s )
-            SERVERS=$OPTARG
-            ;;
         r )
-            REMOTE_SRC=$OPTARG
+            REMOTE_DEST=$OPTARG
             ;;
         d )
             LOCAL_SRC=$OPTARG
             ;;
         t )
             THRESHOLD=$OPTARG
+            ;;
+        c )
+            COMPRESS="true"
+            ;;
+        a )
+            ARCHIVE="true"
             ;;
         v )
             VERBOSE="true"
@@ -182,9 +205,33 @@ while getopts "vhs:r:d:t:" opt; do
             ;;
     esac
 done
-shift "$(($OPTIND -1))"
+shift "$((OPTIND -1))"
 
 # Run
-THIS_HOST=$(hostname -s)
 display_set_vars
-get_remote_files ${SERVERS} "${REMOTE_SRC}" "${LOCAL_SRC}" ${THRESHOLD}
+
+# Display big files to stdout
+if [ -n "${THRESHOLD}" ]; then
+    list_tag_files "${LOCAL_SRC}" "${THRESHOLD}"
+fi
+
+# Compress files in LOCAL_SRC if not running on VM host.
+if check_hw; then
+    echo "Running on VM system, compression not available."
+    COMPRESS="false"
+fi
+
+if [ "${COMPRESS}" == "true" ]; then
+    echo "Compressing files..."
+    compressed_out=$(compress_files "${LOCAL_SRC}" 2>&1)
+
+    if [ -n "${compressed_out}" ] && [ "${VERBOSE}" == "true" ]; then
+        echo "${compressed_out}"
+    fi
+fi
+
+# Scp files specified in LOCAL_SRC to REMOTE_DEST
+if [ "${ARCHIVE}" == "true" ]; then
+    echo "Archiving logs in ${LOCAL_SRC} to ${REMOTE_DEST}"
+    scp_files "${LOCAL_SRC}" "${REMOTE_DEST}"
+fi
