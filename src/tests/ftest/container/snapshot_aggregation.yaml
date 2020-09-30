@@ -20,7 +20,7 @@ server_config:
 pool:
   control_method: dmg
   scm_size: 80G
-  nvme_size: 80G
+  nvme_size: 100G
   target_list: [0, 1]
 container:
   control_method: daos
@@ -28,7 +28,7 @@ container:
 ior:
   flags: "-w -k"
   api: DFS
-  block_size: 10G
+  block_size: 8G
   transfer_size: 1M
   repetitions: 1
   test_file: "/test_file"
