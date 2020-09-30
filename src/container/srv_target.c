@@ -1900,7 +1900,7 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 	struct cont_snap_args	*args;
 	int			 rc;
 
-	D_ALLOC(args, sizeof(*args));
+	D_ALLOC_PTR(args);
 	if (args == NULL)
 		return -DER_NOMEM;
 	uuid_copy(args->pool_uuid, pool_uuid);
