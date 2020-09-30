@@ -82,7 +82,6 @@ class DmgSystemReformatTest(TestWithServers):
 
         return pool
 
-    @fail_on(CommandFailure)
     @fail_on(ServerFailed)
     def test_dmg_system_reformat(self):
         """
