@@ -20,8 +20,6 @@ post_provision_config_nodes() {
         zypper --non-interactive mr --gpgcheck-allow-unsigned-repo \
                daos-stack-group-repo
         rpm --import 'https://download.opensuse.org/repositories/science:/HPC/openSUSE_Leap_15.2/repodata/repomd.xml.key'
-        zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref \
-               daos-stack-group-repo
     fi
 
     if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
@@ -45,6 +43,8 @@ post_provision_config_nodes() {
             zypper --non-interactive ar --gpgcheck-allow-unsigned "${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/leap15/ "$repo"
         done
     fi
+
+    zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref
 
     # TODO: port this to zypper, but do we even need it any more?
     #if [ -n "$INST_RPMS" ]; then
