@@ -6,7 +6,7 @@ hosts:
     - server-D
 server_config:
    name: daos_server
-timeout: 400
+timeout: 60
 pool:
    mode: 146
    name: daos_server

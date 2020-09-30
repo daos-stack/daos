@@ -263,7 +263,7 @@ main(int argc, char **argv)
 	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
 	struct dfuse_dfs	*dfsn;
-	struct duns_attr_t	duns_attr;
+	struct duns_attr_t	duns_attr = {};
 	uuid_t			tmp_uuid;
 	char			c;
 	int			ret = -DER_SUCCESS;
