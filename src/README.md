@@ -41,11 +41,12 @@ be used as the management network.
 
 A DAOS server is a multi-tenant daemon running on a Linux instance
 (i.e. physical node, VM or container) and managing the locally-attached
-NVM storage allocated to DAOS. It listens to a management port, addressed
+SCM and NVM storage allocated to DAOS. It listens to a management port, addressed
 by an IP address and a TCP port number, plus one or more fabric endpoints,
-addressed by network URIs.  The DAOS server is configured through a YAML
-file (i.e. /etc/daos_server.yml or different path provided on the
-command line) and can be integrated with different daemon management or
+addressed by network URIs. The DAOS server is configured through a YAML
+file (`/etc/daos/daos_server.yml`, or a different path provided on the
+command line). Starting and stopping the DAOS server
+can be integrated with different daemon management or
 orchestration frameworks (e.g. a systemd script, a Kubernetes service or
 even via a parallel launcher like pdsh or srun).
 
@@ -56,15 +57,15 @@ DAOS pools cannot span across multiple systems.
 
 Internally, a DAOS server is composed of multiple daemon processes. The first
 one to be started is the <a href="control/README.md">control plane</a>
-(binary named daos_server for convenience) which is responsible for parsing
+(binary named `daos_server`) which is responsible for parsing
 the configuration file, provisionning storage and eventually starting and
 monitoring one or multiple instances of the <a href="iosrv/README.md">data plane</a>
-(i.e. daos_io_server binary).
+(binary named `daos_io_server`).
 The control plane is written in Go and implements the DAOS management API
 over the gRPC framework that provides a secured out-of-band channel to
 administrate a DAOS system. The number of data plane instances to be started
 by each server as well as the storage, CPU and fabric interface affinity can
-be configured through the YAML configuration file.
+be configured through the `daos_server.yml` YAML configuration file.
 
 The data plane is a multi-threaded process written in C that runs the DAOS
 storage engine. It processes incoming metadata and I/O requests though the
@@ -93,29 +94,29 @@ out-of-band management channel. This API is reserved for the DAOS system
 administrators who are authenticated through a specific certificate.
 The DAOS management API is intended to be integrated with different
 vendor-specific storage management or open-source orchestration frameworks.
-A CLI tool called dmg is built over the DAOS management API.
-For further reading on the management API and the dmg tool:
+A CLI tool called `dmg` is built over the DAOS management API.
+For further reading on the management API and the `dmg` tool:
 - <a href="https://godoc.org/github.com/daos-stack/daos/src/control/client">DAOS management Go package</a>
 - <a href="control/cmd/dmg/README.md">DAOS Management tool (aka dmg)</a>
 
-The DAOS library (i.e. libdaos) implements the DAOS storage model and is
+The DAOS library (`libdaos`) implements the DAOS storage model and is
 primarily targeted at application and I/O middleware developers who want
 to store datasets into DAOS containers. It can be used from any nodes
 connected to the fabric used by the targeted DAOS system. The application
 process is authenticated via the DAOS agent (see next section).
-The API exported by libdaos is commonly called the DAOS API (in opposition
+The API exported by `libdaos` is commonly called the DAOS API (in contrast
 to the DAOS management API) and allows to manage containers and access DAOS
 objects through different interfaces (e.g. key-value store or array API).
-The libdfs library emulates POSIX file and directory abstractions over
-libdaos and provides a smooth migration path for applications that require
-a POSIX namespace. For further reading on libdaos, bindings for different
-programming languages and libdfs:
-- <a href="client/api/README.md">DAOS Library (libdaos)</a> and <a href="client/array/README.md">array interface</a> and <a href="client/kv/README.md">KV interface</a> built on top of the native DAOS API</a>
+The `libdfs` library emulates POSIX file and directory abstractions over
+`libdaos` and provides a smooth migration path for applications that require
+a POSIX namespace. For further reading on `libdaos`, bindings for different
+programming languages and `libdfs`:
+- <a href="client/api/README.md">DAOS Library (`libdaos`)</a> and <a href="client/array/README.md">array interface</a> and <a href="client/kv/README.md">KV interface</a> built on top of the native DAOS API</a>
 - <a href="src/client/pydaos/raw/README.md">Python API bindings</a>
 - <a href="https://github.com/daos-stack/go-daos">Go bindings</a> and <a href="https://godoc.org/github.com/daos-stack/go-daos/pkg/daos">API documentation</a>
-- <a href="client/dfs/README.md">POSIX File & Directory Emulation (libdfs)</a>
+- <a href="client/dfs/README.md">POSIX File & Directory Emulation (`libdfs`)</a>
 
-The libdaos and libdfs libraries provide the foundation to support
+The `libdaos` and `libdfs` libraries provide the foundation to support
 domain-specific data formats like HDF5 and Apache Arrow. For further reading
 on I/O middleware integration, please check the following external references:
 - <a href="https://bitbucket.hdfgroup.org/projects/HDFFV/repos/hdf5/browse?at=refs%2Fheads%2Fhdf5_daosm">DAOS VOL connector for HDF5</a>
@@ -125,10 +126,10 @@ on I/O middleware integration, please check the following external references:
 ### Agent
 
 The <a href="control/cmd/daos_agent/README.md">DAOS agent</a> is a daemon
-residing on the client node and interacts with the DAOS client library
+residing on the client nodes. It interacts with the DAOS client library
 through dRPC to authenticate the application process. It is a trusted entity
 that can sign the DAOS Client credentials using local certificates.
-The agent can support different authentication frameworks and uses a
+The DAOS agent can support different authentication frameworks and uses a
 Unix Domain Socket to communicate with the client library.
 The DAOS agent is written in Go and communicates through gRPC with the
 control plane component of each DAOS server to provide DAOS system
@@ -155,8 +156,8 @@ dRPC is communication channel built over Unix Domain Socket that is used
 for inter-process communications.
 It provides both a [C](common/README.md#dRPC-C-API) and [Go](control/drpc/README.md)
 interface to support interactions between:
-- the agent and libdaos for application process authentication
-- the daos_server (control plane) and the daos_io_server (data plane) daemons
+- the `daos_agent` and `libdaos` for application process authentication
+- the `daos_server` (control plane) and the `daos_io_server` (data plane) daemons
 Like gRPC, RPC are serialized via protocol buffers.
 
 <a id="23"></a>
@@ -168,7 +169,7 @@ data plane. It supports RDMA capabilities and scalable collective operations.
 CART is built over [Mercury](https://github.com/mercury-hpc/mercury) and
 [libfabric](https://ofiwg.github.io/libfabric/).
 The CART library is used for all communications between
-libdaos and daos_io_server instances.
+`libdaos` and `daos_io_server` instances.
 
 <a id="3"></a>
 ## DAOS Layering and Services
@@ -203,30 +204,30 @@ accessible to all the DAOS services.
 ### Source Code Structure
 
 Each infrastructure library and service is allocated a dedicated directory
-under src/. The client and server components of a service are stored in
+under `src/`. The client and server components of a service are stored in
 separate files. Functions that are part of the client component are prefixed
-with dc\_ (stands for DAOS Client) whereas server-side functions use the
-ds\_ prefix (stands for DAOS Server).
+with `dc\_` (stands for DAOS Client) whereas server-side functions use the
+`ds\_` prefix (stands for DAOS Server).
 The protocol and RPC format used between the client and server components
-is usually defined in a header file named rpc.h.
+is usually defined in a header file named `rpc.h`.
 
 All the Go code executed in context of the control plane is located under
-src/control. Management and security are the services spread across the
+`src/control`. Management and security are the services spread across the
 control (Go language) and data (C language) planes and communicating
 internally through dRPC.
 
 Headers for the official DAOS API exposed to the end user (i.e. I/O
-middleware or application developers) are under src/include and use the
-daos\_ prefix. Each infrastructure library exports an API that is
-available under src/include/daos and can be used by any services.
-The client-side API (with dc\_ prefix) exported by a given service
-is also stored under src/include/daos whereas the server-side
-interfaces (with ds\_ prefix) are under src/include/daos_srv.
+middleware or application developers) are under `src/include` and use the
+`daos\_` prefix. Each infrastructure library exports an API that is
+available under `src/include/daos` and can be used by any services.
+The client-side API (with `dc\_` prefix) exported by a given service
+is also stored under `src/include/daos` whereas the server-side
+interfaces (with `ds\_` prefix) are under `src/include/daos_srv`.
 
 <a id="33"></a>
 ### Infrastructure Libraries
 
-The GURT and common DAOS (i.e. libdaos_common) libraries provide logging,
+The GURT and common DAOS (i.e. `libdaos\_common`) libraries provide logging,
 debugging and common data structures (e.g. hash table, btree, ...)
 to the DAOS services.
 
