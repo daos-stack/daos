@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -40,7 +41,7 @@ type (
 		pbin.ForwardableRequest
 		DeviceList []string
 		DisableVMD bool
-		Rescan     bool
+		NoCache    bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -153,26 +154,59 @@ func (p *Provider) IsVMDDisabled() bool {
 	return p.backend.IsVMDDisabled()
 }
 
-// Scan attempts to perform a scan to discover NVMe components in the system.
-func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
+func (resp *ScanResponse) filter(pciFilter ...string) *ScanResponse {
+	out := make(storage.NvmeControllers, 0)
+
+	if len(pciFilter) == 0 {
+		return &ScanResponse{Controllers: resp.Controllers}
+	}
+
+	for _, c := range resp.Controllers {
+		if !common.Includes(pciFilter, c.PciAddr) {
+			continue
+		}
+		out = append(out, c)
+	}
+
+	return &ScanResponse{Controllers: out}
+}
+
+// Scan attempts to perform a scan to discover NVMe components in the
+// system. Results will be cached at the provider and returned if
+// "NoCache" is set to "false" in the request. Returned results will be
+// filtered by request "DeviceList" and empty filter implies allowing all.
+func (p *Provider) Scan(req ScanRequest) (resp *ScanResponse, err error) {
 	if p.shouldForward(req) {
 		req.DisableVMD = p.IsVMDDisabled()
 
 		p.Lock()
 		defer p.Unlock()
-
-		if p.scanCache == nil || req.Rescan {
-			p.log.Debug("bdev provider rescan requested")
-
-			resp, err := p.fwd.Scan(req)
-			if err != nil {
-				return nil, err
+		defer func() {
+			if resp == nil {
+				return
 			}
+			resp = resp.filter(req.DeviceList...)
+		}()
+
+		if req.NoCache {
+			resp, err = p.fwd.Scan(req)
+			return
+		}
+
+		if p.scanCache != nil {
+			resp = p.scanCache
+			return
+		}
+
+		resp, err = p.fwd.Scan(req)
+		if err == nil {
+			p.log.Debug("populating bdev scan cache")
 			p.scanCache = resp
 		}
 
-		return p.scanCache, nil
+		return
 	}
+
 	// set vmd state on remote provider in forwarded request
 	if req.IsForwarded() && req.DisableVMD {
 		p.disableVMD()
@@ -181,8 +215,8 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	return p.backend.Scan(req)
 }
 
-// Prepare attempts to perform all actions necessary to make NVMe components available for
-// use by DAOS.
+// Prepare attempts to perform all actions necessary to make NVMe
+// components available for use by DAOS.
 func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	if p.shouldForward(req) {
 		resp, err := p.fwd.Prepare(req)
@@ -208,7 +242,8 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	return p.backend.Prepare(req)
 }
 
-// Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).
+// Format attempts to initialize NVMe devices for use by DAOS.
+// Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	if len(req.DeviceList) == 0 {
 		return nil, errors.New("empty DeviceList in FormatRequest")

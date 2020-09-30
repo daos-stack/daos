@@ -457,7 +457,7 @@ class DmgCommandBase(YamlCommand):
                     DmgCommandBase.StorageSubCommand.ScanSubCommand,
                     self).__init__(
                         "/run/dmg/storage/scan/*", "scan")
-                self.nvme_health = FormattedParameter("--nvme_health", False)
+                self.nvme_health = FormattedParameter("--nvme-health", False)
                 self.verbose = FormattedParameter("--verbose", False)
 
         class SetSubCommand(CommandWithSubCommand):

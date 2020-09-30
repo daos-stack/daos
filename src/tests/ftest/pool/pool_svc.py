@@ -43,7 +43,7 @@ class PoolSvc(TestWithServers):
         """
         Test svc arg during pool create.
 
-        :avocado: tags=all,pool,pr,medium,svc
+        :avocado: tags=all,pool,pr,medium,svc,DAOS_5610
         """
         # parameter used in pool create
         createsvc = self.params.get("svc", '/run/createtests/createsvc/*/')

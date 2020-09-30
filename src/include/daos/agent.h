@@ -54,7 +54,7 @@ extern char *dc_agent_sockpath;
 /**
  * Socket name used to craft path from environment variable
  */
-#define DAOS_AGENT_DRPC_SOCK_NAME "agent.sock"
+#define DAOS_AGENT_DRPC_SOCK_NAME "daos_agent.sock"
 
 /**
  * Default Unix Domain Socket path for the DAOS agent dRPC connection

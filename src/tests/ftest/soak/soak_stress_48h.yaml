@@ -117,6 +117,8 @@ ior_stress:
     api:
         - DFS
         - MPIIO
+        - HDF5
+        - HDF5-VOL
     test_file: daos:testFile
     flags: -v -w -W -r -R
     block_size:
@@ -132,6 +134,7 @@ ior_stress:
         - '64k'
     dfs_oclass:
         - "SX"
+    dfs_destroy: True
 fio_stress:
   names:
     - global
@@ -157,6 +160,7 @@ fio_stress:
         - 'rw'
         - 'randrw'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
-  disable_direct_io: True
-
+    mount_dir: "/tmp/daos_dfuse"
+    disable_direct_io: True
+hdf5_vol:
+    plugin_path: "/usr/lib64/mpich/lib"
