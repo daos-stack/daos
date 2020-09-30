@@ -903,7 +903,7 @@ def clean_logs(test_yaml, args):
     return True
 
 
-def check_big_files(avocado_logs_dir, test_name, task, threshold):
+def check_big_files(avocado_logs_dir, task, test_name, threshold):
     """Wrapper function that will execute get_remote_files.sh script.
 
     """
@@ -1029,7 +1029,7 @@ def archive_files(destination, host_list, source_files, threshold=None):
         get_build_environment()["PREFIX"], "lib", "daos", "TESTING", "ftest")
     command = [
         "/bin/bash", "{}/get_remote_files.sh".format(script_path),
-        "-c", "-v"
+        "-c", "-v",
         "-r \"{}:{}\"".format(this_host, destination),
         "-d \"{}\"".format(source_files),
     ]

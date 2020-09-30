@@ -129,8 +129,8 @@ list_tag_files() {
     }'
 
     # Convert to bytes and run
-    bytes=$(human_to_bytes "${2}")
-    du -ab -d 1 ${1} | awk -v hostname="$(hostname)" -v th="${bytes}" "${awk_cmd}"
+    bts=$(human_to_bytes "${2}")
+    du -ab -d 1 ${1} | awk -v hostname="$(hostname)" -v th="${bts}" "${awk_cmd}"
 }
 
 check_hw() {
