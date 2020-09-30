@@ -26,11 +26,11 @@ package netdetect
 import (
 	"context"
 	"fmt"
-	"os"
-	"testing"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
+	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
 )
