@@ -286,9 +286,11 @@ put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
 {
 	int i;
 
-	for (i = 0; i < npsrs; i++)
-		D_FREE(psrs[i].uri);
-	D_FREE(psrs);
+	if (psrs != NULL) {
+		for (i = 0; i < npsrs; i++)
+			D_FREE(psrs[i].uri);
+		D_FREE(psrs);
+	}
 }
 
 /*
@@ -454,13 +456,13 @@ out:
 int dc_mgmt_net_cfg(const char *name)
 {
 	int rc;
-	int npsrs;
+	int npsrs = 0;
 	char buf[SYS_INFO_BUF_SIZE];
 	char *crt_timeout;
 	char *ofi_interface;
 	char *ofi_domain;
 	struct sys_info sy_info;
-	struct dc_mgmt_psr *psrs;
+	struct dc_mgmt_psr *psrsi = NULL;
 
 	if (name == NULL)
 		name = DAOS_DEFAULT_SYS_NAME;
