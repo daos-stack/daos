@@ -127,7 +127,7 @@ class IorTestBase(TestWithServers):
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
-                          timeout=None):
+                          timeout=None, fail_on_warning=False):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -149,6 +149,8 @@ class IorTestBase(TestWithServers):
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
             timeout (int, optional): command timeout. Defaults to None.
+            fail_on_warning (bool, optional): Controls whether the test
+                should fail if a 'WARNING' is found. Default is False.
 
         Returns:
             CmdResult: result of the ior command execution
@@ -173,7 +175,8 @@ class IorTestBase(TestWithServers):
         job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
         out = self.run_ior(job_manager, self.processes,
-                           intercept, plugin_path=plugin_path)
+                           intercept, plugin_path=plugin_path,
+                           fail_on_warning=fail_on_warning)
 
         if stop_dfuse and self.dfuse:
             self.dfuse.stop()
@@ -232,7 +235,7 @@ class IorTestBase(TestWithServers):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
-                plugin_path=None):
+                plugin_path=None, fail_on_warning=None):
         """Run the IOR command.
 
         Args:
@@ -242,6 +245,8 @@ class IorTestBase(TestWithServers):
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
+            fail_on_warning (bool): Controls whether the test should
+                fail if a 'WARNING' is found.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
@@ -263,7 +268,10 @@ class IorTestBase(TestWithServers):
             if not self.subprocess:
                 for line in out.stdout.splitlines():
                     if 'WARNING' in line:
-                        self.fail("IOR command issued warnings.\n")
+                        if fail_on_warning:
+                            self.fail("IOR command issued warnings.\n")
+                        else:
+                            self.log.warning("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
