@@ -127,6 +127,7 @@ Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.8.0
+Obsoletes: cart
 %systemd_requires
 
 %description server
@@ -138,6 +139,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
 Requires: fuse3 >= 3.4.2
+Obsoletes: cart
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
