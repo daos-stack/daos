@@ -942,7 +942,7 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 		swap_pool_glob(pool_glob);
 		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
 	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
-		D_ERROR("Bad dpg_magic: 0x%x.\n", pool_glob->dpg_magic);
+		D_ERROR("Bad dpg_magic: %#x.\n", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

@@ -114,7 +114,7 @@ static void test_srv_cb(crt_rpc_t *rpc)
 	rpc_output->src = rpc_input->src;
 	rpc_output->dst = rpc_input->dst;
 
-	dbg("HLC=0x%lx recv RPC %02u.%03lu %02u send HLC=0x%lx\n", hlc,
+	dbg("HLC=%#lx recv RPC %02u.%03lu %02u send HLC=%#lx\n", hlc,
 	    rpc_input->src, rpc_input->seq, rpc_input->dst, rpc_input->hlc);
 
 	rc = crt_reply_send(rpc);
@@ -137,8 +137,8 @@ static void test_cli_cb(const struct crt_cb_info *cb_info)
 		rpc_output = crt_reply_get(rpc);
 		D_ASSERT(rpc_output != NULL);
 
-		dbg("HLC=0x%lx send RPC %02u.%03lu %02u repl HLC=0x%lx "
-		    "current HLC=0x%lx\n", rpc_input->hlc,
+		dbg("HLC=%#lx send RPC %02u.%03lu %02u repl HLC=%#lx "
+		    "current HLC=%#lx\n", rpc_input->hlc,
 		    rpc_input->src, rpc_input->seq, rpc_input->dst,
 		    rpc_output->hlc, hlc);
 

@@ -842,7 +842,7 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 		dts_append_config(dmg_cmd, " -o %s", dmg_config);
 
 	rc = system(dmg_cmd);
-	print_message("%s rc 0x%x\n", dmg_cmd, rc);
+	print_message("%s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 
@@ -936,7 +936,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
 
 	rc = system(dmg_cmd);
-	print_message(" %s rc 0x%x\n", dmg_cmd, rc);
+	print_message(" %s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
 }
 

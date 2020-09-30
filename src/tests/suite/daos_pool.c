@@ -406,7 +406,7 @@ ace_has_permissions(struct daos_ace *ace, uint64_t perms)
 	}
 
 	if (ace->dae_allow_perms != perms) {
-		print_message("Expected allow perms 0x%lx for ACE\n", perms);
+		print_message("Expected allow perms %#lx for ACE\n", perms);
 		daos_ace_dump(ace, 0);
 		return false;
 	}

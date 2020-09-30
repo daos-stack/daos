@@ -1408,7 +1408,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 		D_ASSERT(dfs_params->magic == DFS_GLOB_MAGIC);
 
 	} else if (dfs_params->magic != DFS_GLOB_MAGIC) {
-		D_ERROR("Bad magic value: 0x%x.\n", dfs_params->magic);
+		D_ERROR("Bad magic value: %#x.\n", dfs_params->magic);
 		return EINVAL;
 	}
 
@@ -2569,7 +2569,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 		swap_obj_glob(obj_glob);
 		D_ASSERT(obj_glob->magic == DFS_OBJ_GLOB_MAGIC);
 	} else if (obj_glob->magic != DFS_OBJ_GLOB_MAGIC) {
-		D_ERROR("Bad magic value: 0x%x.\n", obj_glob->magic);
+		D_ERROR("Bad magic value: %#x.\n", obj_glob->magic);
 		return EINVAL;
 	}
 

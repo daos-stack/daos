@@ -993,7 +993,7 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 	}
 	D_PRINT("\n");
 
-	D_PRINT("\noiod, oiod_nr %d, oiod_flags 0x%x\n",
+	D_PRINT("\noiod, oiod_nr %d, oiod_flags %#x\n",
 		oiod->oiod_nr, oiod->oiod_flags);
 	D_PRINT("siods [siod_tgt_idx, (siod_idx, siod_nr), siod_off]:\n");
 	for (j = 0; oiod->oiod_siods != NULL && j < oiod->oiod_nr; j++) {

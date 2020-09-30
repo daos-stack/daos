@@ -1827,7 +1827,7 @@ dc_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
 
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
+		D_ERROR("Bad hgh_magic: %#x.\n", cont_glob->dcg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

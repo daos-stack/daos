@@ -229,7 +229,7 @@ ace_has_permissions(struct daos_ace *ace, uint64_t exp_perms)
 	}
 
 	if (ace->dae_allow_perms != exp_perms) {
-		print_message("ACE had perms: 0x%lx (expected: 0x%lx)\n",
+		print_message("ACE had perms: %#lx (expected: %#lx)\n",
 			      ace->dae_allow_perms, exp_perms);
 		daos_ace_dump(ace, 0);
 		return false;

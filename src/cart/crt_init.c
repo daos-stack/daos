@@ -120,7 +120,7 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	crt_gdata.cg_rpcid = start_rpcid;
 
-	D_DEBUG(DB_ALL, "Starting RPCID 0x%lx\n", start_rpcid);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx\n", start_rpcid);
 
 	/* Apply CART-890 workaround for server side only */
 	if (server) {

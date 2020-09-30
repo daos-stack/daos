@@ -459,7 +459,7 @@ dc_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 		D_ASSERT(array_glob->magic == DC_ARRAY_GLOB_MAGIC);
 
 	} else if (array_glob->magic != DC_ARRAY_GLOB_MAGIC) {
-		D_ERROR("Bad magic value: 0x%x.\n", array_glob->magic);
+		D_ERROR("Bad magic value: %#x.\n", array_glob->magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
