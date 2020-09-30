@@ -115,7 +115,6 @@ run_test_fork(void **state)
 	/* Test results.  first child should should succeed. */
 	assert_true(result1 == 0);
 	assert_true(result2 != 0);
-	assert_true(rc == 0);    /* prevents compile issue */
 }
 
 static void
