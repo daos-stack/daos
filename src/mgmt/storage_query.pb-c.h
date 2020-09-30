@@ -57,7 +57,6 @@ struct  _Mgmt__BioHealthResp
   char *model;
   char *serial;
   uint64_t timestamp;
-  uint64_t err_count;
   /*
    * Device health details
    */
@@ -102,7 +101,7 @@ struct  _Mgmt__BioHealthResp
 };
 #define MGMT__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__bio_health_resp__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__SmdDevReq
