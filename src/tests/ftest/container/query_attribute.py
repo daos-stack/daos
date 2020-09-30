@@ -129,13 +129,13 @@ class ContainerQueryAttributeTest(TestWithServers):
         errors = []
         expected_attrs = []
         for attr_value in attr_values:
-            _ = self.daos_cmd.container_set_attr(
+            self.daos_cmd.container_set_attr(
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
                 attr=attr_value[0], val=attr_value[1],
                 svc=self.pool.svc_ranks[0])
             kwargs["attr"] = attr_value[0]
-            actual_val = self.daos_cmd.get_output(
-                "container_get_attr", **kwargs)[0]
+            output = self.daos_cmd.container_get_attr(**kwargs)
+            actual_val = output["value"]
             if attr_value[1] in escape_to_not:
                 # Special character string.
                 if actual_val != escape_to_not[attr_value[1]]:
@@ -162,8 +162,8 @@ class ContainerQueryAttributeTest(TestWithServers):
             "svc": self.pool.svc_ranks[0],
             "cont": actual_cont_uuid
         }
-        actual_attrs = self.daos_cmd.get_output(
-            "container_list_attrs", **kwargs)
+        data = self.daos_cmd.container_list_attrs(**kwargs)
+        actual_attrs = data["attrs"]
         actual_attrs.sort()
         self.log.debug(str(actual_attrs))
         self.assertEqual(actual_attrs, expected_attrs)
@@ -195,8 +195,8 @@ class ContainerQueryAttributeTest(TestWithServers):
             "svc": self.pool.svc_ranks[0],
             "cont": self.expected_cont_uuid
         }
-        actual_attrs = self.daos_cmd.get_output(
-            "container_list_attrs", **kwargs)
+        data = self.daos_cmd.container_list_attrs(**kwargs)
+        actual_attrs = data["attrs"]
         actual_attrs.sort()
         self.assertEqual(
             expected_attrs, actual_attrs, "Unexpected output from list_attrs")

@@ -1976,6 +1976,12 @@ out_tx:
 	return rc;
 }
 
+static inline daos_obj_id_t
+dc_tx_dcsr2oid(struct daos_cpd_sub_req *dcsr)
+{
+	return ((struct dc_object *)(dcsr->dcsr_obj))->cob_md.omd_id;
+}
+
 static int
 dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 		 daos_key_t *dkey, uint32_t nr, daos_iod_t *iods,
@@ -2052,6 +2058,11 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 	tx->tx_write_cnt++;
 
+	D_DEBUG(DB_TRACE, "Cache update: DTI "DF_DTI", obj "DF_OID", dkey "
+		DF_KEY", flags %lx, nr = %d, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+		DP_KEY(dkey), flags, nr, tx->tx_write_cnt);
+
 	return 0;
 
 fail:
@@ -2098,6 +2109,11 @@ dc_tx_add_punch_obj(struct dc_tx *tx, daos_handle_t oh, uint64_t flags)
 
 	tx->tx_write_cnt++;
 
+	D_DEBUG(DB_TRACE, "Cache punch obj: DTI "DF_DTI", obj "DF_OID
+		", flags %lx, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+		flags, tx->tx_write_cnt);
+
 	return 0;
 }
 
@@ -2127,6 +2143,11 @@ dc_tx_add_punch_dkey(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 	dcsr->dcsr_api_flags = flags;
 
 	tx->tx_write_cnt++;
+
+	D_DEBUG(DB_TRACE, "Cache punch dkey: DTI "DF_DTI", obj "DF_OID", dkey "
+		DF_KEY", flags %lx, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+		DP_KEY(dkey), flags, tx->tx_write_cnt);
 
 	return 0;
 }
@@ -2172,6 +2193,11 @@ dc_tx_add_punch_akeys(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 	tx->tx_write_cnt++;
 
+	D_DEBUG(DB_TRACE, "Cache punch akey: DTI "DF_DTI", obj "DF_OID", dkey "
+		DF_KEY", flags %lx, nr %d, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+		DP_KEY(dkey), flags, nr, tx->tx_write_cnt);
+
 	return 0;
 
 fail:
@@ -2189,7 +2215,7 @@ fail:
 }
 
 static int
-dc_tx_add_read(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
+dc_tx_add_read(struct dc_tx *tx, int opc, daos_handle_t oh, uint64_t flags,
 	       daos_key_t *dkey, uint32_t nr, void *iods_or_akey)
 {
 	struct daos_cpd_sub_req	*dcsr = NULL;
@@ -2254,6 +2280,17 @@ done:
 	dcsr->dcsr_api_flags = flags;
 
 	tx->tx_read_cnt++;
+
+	if (dkey != NULL)
+		D_DEBUG(DB_TRACE, "Cache read opc %d: DTI "DF_DTI", obj "DF_OID
+			", dkey "DF_KEY", flags %lx, nr %d, read cnt %d\n",
+			opc, DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+			DP_KEY(dkey), flags, nr, tx->tx_read_cnt);
+	else
+		D_DEBUG(DB_TRACE, "Cache enum obj: DTI "DF_DTI", obj "DF_OID
+			", flags %lx, nr %d, read cnt %d\n",
+			DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
+			flags, nr, tx->tx_read_cnt);
 
 	return 0;
 
@@ -2527,8 +2564,8 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 	case DAOS_OBJ_RPC_FETCH: {
 		daos_obj_fetch_t	*fe = dc_task_get_args(task);
 
-		rc = dc_tx_add_read(tx, fe->oh, fe->flags, fe->dkey, fe->nr,
-				    fe->nr != 1 ? fe->iods :
+		rc = dc_tx_add_read(tx, opc, fe->oh, fe->flags, fe->dkey,
+				    fe->nr, fe->nr != 1 ? fe->iods :
 				    (void *)&fe->iods[0].iod_name);
 		break;
 	}
@@ -2548,25 +2585,25 @@ dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task)
 			nr = 1;
 		}
 
-		rc = dc_tx_add_read(tx, qu->oh, 0, dkey, nr, qu->akey);
+		rc = dc_tx_add_read(tx, opc, qu->oh, 0, dkey, nr, qu->akey);
 		break;
 	}
 	case DAOS_OBJ_RECX_RPC_ENUMERATE: {
 		daos_obj_list_recx_t	*lr = dc_task_get_args(task);
 
-		rc = dc_tx_add_read(tx, lr->oh, 0, lr->dkey, 1, lr->akey);
+		rc = dc_tx_add_read(tx, opc, lr->oh, 0, lr->dkey, 1, lr->akey);
 		break;
 	}
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE: {
 		daos_obj_list_akey_t	*la = dc_task_get_args(task);
 
-		rc = dc_tx_add_read(tx, la->oh, 0, la->dkey, 0, NULL);
+		rc = dc_tx_add_read(tx, opc, la->oh, 0, la->dkey, 0, NULL);
 		break;
 	}
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE: {
 		daos_obj_list_dkey_t	*ld = dc_task_get_args(task);
 
-		rc = dc_tx_add_read(tx, ld->oh, 0, NULL, 0, NULL);
+		rc = dc_tx_add_read(tx, opc, ld->oh, 0, NULL, 0, NULL);
 		break;
 	}
 	default:

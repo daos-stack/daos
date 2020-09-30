@@ -100,39 +100,6 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 }
 
 /**
- * Commit \a tx. If successful, then all updates in \a tx are revealed to
- * queries. If an error occurs, then \a tx is aborted.
- *
- * \param[in]	tx	transaction
- *
- * \retval -DER_NOTLEADER	this replica not current leader
- */
-int
-rdb_tx_commit(struct rdb_tx *tx)
-{
-	int		result;
-	int		rc;
-
-	/* Don't fail query-only TXs for leader checks. */
-	if (tx->dt_entry == NULL)
-		return 0;
-
-	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
-	rc = rdb_tx_leader_check(tx);
-	if (rc != 0) {
-		ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
-		return rc;
-	}
-
-	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
-				   &result);
-	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
-	if (rc != 0)
-		return rc;
-	return result;
-}
-
-/**
  * End and finalize \a tx. If \a tx is not committed, then all updates in \a tx
  * are discarded.
  *
@@ -229,6 +196,23 @@ rdb_tx_hdr_decode(const void *buf, size_t len, struct rdb_tx_hdr *hdr)
 
 	*hdr = out;
 	return p - buf;
+}
+
+static bool
+rdb_tx_is_critical(struct rdb_tx *tx)
+{
+	struct rdb_tx_hdr	hdr;
+	bool			crit = true;
+
+	D_ASSERT(tx != NULL);
+	if (tx->dt_entry) {
+		ssize_t		nb;
+
+		nb = rdb_tx_hdr_decode(tx->dt_entry, tx->dt_entry_len, &hdr);
+		D_ASSERT(nb == sizeof(struct rdb_tx_hdr));
+		crit = hdr.critical;
+	}
+	return crit;
 }
 
 /* If buf is NULL, then just calculate and return the length required. */
@@ -396,6 +380,64 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	tx->dt_entry_len += op_len;
 	return 0;
 }
+
+/**
+ * Commit \a tx. If successful, then all updates in \a tx are revealed to
+ * queries. If an error occurs, then \a tx is aborted.
+ *
+ * \param[in]	tx	transaction
+ *
+ * \retval -DER_NOTLEADER	this replica not current leader
+ */
+int
+rdb_tx_commit(struct rdb_tx *tx)
+{
+	int		result = 0;
+	int		rc;
+
+	/* Don't fail query-only TXs for leader checks. */
+	if (tx->dt_entry == NULL)
+		return 0;
+
+	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
+	rc = rdb_tx_leader_check(tx);
+	if (rc != 0) {
+		D_ERROR(DF_DB": leader check: "DF_RC"\n", DP_DB(tx->dt_db),
+			DP_RC(rc));
+		goto out_lock;
+	}
+
+	/* If tx is not critical, and almost out of space, do not append.
+	 * TODO: decide if an official free space amount should be in lc
+	 *       and possibly adjusted based on differences across replicas.
+	 */
+	if (!rdb_tx_is_critical(tx)) {
+		daos_size_t	scm_remaining = 0;
+
+		rc = rdb_scm_left(tx->dt_db, &scm_remaining);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to query free space\n",
+				DP_DB(tx->dt_db));
+			goto out_lock;
+		}
+
+		if (scm_remaining < RDB_NOAPPEND_FREE_SPACE) {
+			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not "
+			       "append! scm_left="DF_U64"\n", DP_DB(tx->dt_db),
+			       scm_remaining);
+			D_GOTO(out_lock, rc = -DER_NOSPACE);
+		}
+	}
+
+	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
+				   &result);
+out_lock:
+	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
+	if (rc != 0)
+		return rc;
+	return result;
+}
+
 
 /**
  * Create the root KVS.
@@ -812,10 +854,15 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	const void	       *p = buf;
 	ssize_t			n;
 	bool			crit = true;
+	daos_size_t		scm_remaining = 0;
 	int			rc = 0;
 
-	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
-		" crit=%d\n", DP_DB(db), index, buf, len, crit);
+	rc = rdb_scm_left(db, &scm_remaining);
+	if (rc != 0) {
+		D_ERROR(DF_DB": could not query free space: "DF_RC"\n",
+			DP_DB(db), DP_RC(rc));
+		goto err_checks;
+	}
 
 	if (buf) {
 		struct rdb_tx_hdr	hdr;
@@ -829,7 +876,21 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		}
 		p += n;
 		crit = hdr.critical;
+
+		/* scm_remaining < RDB_NOAPPEND_FREE_SPACE can happen on
+		 * on follower after leader compacts log first.
+		 * Warn only when critically low on space.
+		 */
+		if (!crit && (scm_remaining < RDB_CRITICAL_FREE_SPACE)) {
+			D_WARN(DF_DB": space is tight! index "DF_U64" buf=%p "
+			       "len="DF_U64" crit=%d scm_left="DF_U64"\n",
+			       DP_DB(db), index, buf, len, crit, scm_remaining);
+		}
 	}
+
+	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
+		" crit=%d, scm_left="DF_U64"\n", DP_DB(db), index, buf, len,
+		crit, scm_remaining);
 
 	while (p < buf + len) {
 		struct rdb_tx_op	op;
