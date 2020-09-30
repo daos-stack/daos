@@ -81,6 +81,7 @@ struct ec_agg_stripe {
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
 	unsigned int	as_offset;      /* start offset in stripe            */
 	unsigned int	as_prefix_ext;  /* prefix range to delete            */
+	bool		as_has_holes;   /* stripe includes holes             */
 };
 
 /* Aggregation state for an object. (may need to restructure if
@@ -122,6 +123,7 @@ struct ec_agg_extent {
 	d_list_t	ae_link;  /* for extents list   */
 	daos_recx_t	ae_recx;  /* idx, nr for extent */
 	daos_epoch_t	ae_epoch; /* epoch for extent   */
+	bool		ae_hole;  /* extent is a hole   */
 };
 
 /* Reset iterator state upon completion of iteration of a subtree.
@@ -158,14 +160,12 @@ static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	int rc = 0;
-
 	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
 		agg_entry->ae_dkey = entry->ie_key;
 		reset_agg_pos(VOS_ITER_AKEY, agg_entry);
 	}
 	agg_entry->ae_dkey	= entry->ie_key;
-	return rc;
+	return 0;
 }
 
 /* Handles akeys returned by the per-object nested iteratior.
@@ -174,11 +174,9 @@ static int
 agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	int rc = 0;
-
 	agg_entry->ae_akey	= entry->ie_key;
 	agg_entry->ae_thdl	= ih;
-	return rc;
+	return 0;
 }
 
 /* Determines if the extent carries over into the next stripe.
@@ -220,7 +218,7 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 				   ae_link) {
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(agg_entry, agg_extent);
-		/* At most one extent should carry over.( */
+		/* At most one extent should carry over. */
 		if (tail) {
 			D_ASSERT(ptail == 0U);
 			ptail = tail;
@@ -1001,6 +999,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	d_list_for_each_entry(agg_extent,
 			      &entry->ae_cur_stripe.as_dextents,
 			      ae_link) {
+		D_ASSERT(agg_extent->ae_hole);
 		if (estart == agg_extent->ae_recx.rx_idx) {
 			elen = agg_extent->ae_recx.rx_nr;
 			continue;
@@ -1028,6 +1027,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 			d_list_for_each_entry(agg_extent,
 					      &entry->ae_cur_stripe.as_dextents,
 					      ae_link) {
+				D_ASSERT(agg_extent->ae_hole);
 				if (agg_overlap(&agg_extent->ae_recx, i, k, len,
 					entry->ae_cur_stripe.as_stripenum)) {
 					setbit(bit_map, i);
@@ -1134,9 +1134,9 @@ agg_peer_update(struct ec_agg_entry *entry)
 	ec_agg_in->ea_prior_len = 0;
 	ec_agg_in->ea_after_len = 0;
 	buf = (unsigned char *)&entry->ae_sgl->sg_iovs[AGG_IOV_PARITY];
-	iov.iov_buf = &buf[entry->ae_oca->u.ec.e_len * entry->ae_rsize];
-	iov.iov_len = entry->ae_oca->u.ec.e_len * entry->ae_rsize;
-	iov.iov_buf_len = entry->ae_oca->u.ec.e_len * entry->ae_rsize;
+	d_iov_set(iov.iov_buf,
+		  &buf[entry->ae_oca->u.ec.e_len * entry->ae_rsize],
+		  entry->ae_oca->u.ec.e_len * entry->ae_rsize);
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr = 1;
 	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &sgl, CRT_BULK_RW,
@@ -1159,6 +1159,12 @@ out:
 	if (rpc)
 		crt_req_decref(rpc);
 	return rc;
+}
+
+static int
+agg_process_holes(struct ec_agg_entry *entry)
+{
+	return 0;
 }
 
 /* Process the prior stripe. Invoked when the iterator has moved to the first
@@ -1202,7 +1208,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		/* change to >= to deal with retained extent */
 	if (entry->ae_par_extent.ape_epoch >= entry->ae_cur_stripe.as_hi_epoch
 	    && entry->ae_par_extent.ape_epoch != ~(0ULL)) {
-		/* Parity newer than data; nothing to do. */
+		/* Parity newer than data and holes; nothing to do. */
 		update_vos = false;
 		goto out;
 	}
@@ -1218,8 +1224,12 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		update_vos = false;
 		goto out;
 	}
-	/* Parity, some later replicas, not full stripe. */
-	rc = agg_process_partial_stripe(entry);
+	/* Parity, some later replicas, possibly holes, not full stripe. */
+	if (entry->ae_cur_stripe. as_has_holes)
+		rc = agg_process_holes(entry);
+	else
+		rc = agg_process_partial_stripe(entry);
+
 out:
 	if (update_vos && rc == 0) {
 		rc = agg_update_vos(entry);
@@ -1283,16 +1293,21 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 			agg_entry->ae_oca->u.ec.e_len *
 			agg_entry->ae_oca->u.ec.e_k;
 	agg_entry->ae_cur_stripe.as_extent_cnt++;
-	agg_entry->ae_cur_stripe.as_stripe_fill +=
-		agg_in_stripe(agg_entry, &entry->ie_recx);
+	if (entry->ie_biov.bi_addr.ba_hole) {
+		extent->ae_hole = true;
+		agg_entry->ae_cur_stripe.as_has_holes = true;
+	} else
+		agg_entry->ae_cur_stripe.as_stripe_fill +=
+			agg_in_stripe(agg_entry, &entry->ie_recx);
 
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
-	D_DEBUG(DB_TRACE, "adding extent %lu,%lu, to stripe  %lu, shard: %u\n",
+	D_DEBUG(DB_TRACE,
+		"adding extent %lu,%lu, to stripe  %lu, hole: %d: shard: %u\n",
 		extent->ae_recx.rx_idx, extent->ae_recx.rx_nr,
 		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
-		agg_entry->ae_oid.id_shard);
+		extent->ae_hole, agg_entry->ae_oid.id_shard);
 out:
 	return rc;
 }
