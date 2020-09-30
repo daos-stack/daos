@@ -139,7 +139,7 @@ struct cache_entry {
  */
 struct d_log_xstate d_log_xst;
 
-static struct d_log_state mst = { .log_fd = -1, .log_old_fd = -1 };
+static struct d_log_state mst;
 static d_list_t	d_log_caches;
 
 
@@ -367,7 +367,11 @@ static void dlog_cleanout(void)
 		free(ce);
 	clog_unlock();
 #ifdef DLOG_MUTEX
-	D_MUTEX_DESTROY(&mst.clogmux);
+	/* XXX
+	 * do not destroy mutex to allow correct execution of dlog_sync()
+	 * which as been registered using atexit() and to be run upon exit()
+	 */
+	 /* D_MUTEX_DESTROY(&mst.clogmux); */
 #endif
 }
 
