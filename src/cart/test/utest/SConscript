@@ -25,7 +25,8 @@
 import os
 import daos_build
 
-TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c']
+TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c',
+	    'utest_portnumber.c']
 LIBPATH = [Dir('../../'), Dir('../../../gurt')]
 
 def scons():
