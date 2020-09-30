@@ -462,7 +462,7 @@ int dc_mgmt_net_cfg(const char *name)
 	char *ofi_interface;
 	char *ofi_domain;
 	struct sys_info sy_info;
-	struct dc_mgmt_psr *psrsi = NULL;
+	struct dc_mgmt_psr *psrs = NULL;
 
 	if (name == NULL)
 		name = DAOS_DEFAULT_SYS_NAME;
