@@ -8,18 +8,18 @@ The DAOS CART layer can validate and benchmark network communications in the
 same context as an application and using the same networks/tuning options as
 regular DAOS.
 
-The CART self_test can run against the DAOS servers in a production environment
-in a non-destructive manner. CART self_test supports different message sizes,
+The CART `self_test` can run against the DAOS servers in a production environment
+in a non-destructive manner. CART `self_test` supports different message sizes,
 bulk transfers, multiple targets, and the following test scenarios:
 
--   **Selftest client to servers** - where self_test issues RPCs directly
+-   **Selftest client to servers** - where `self_test` issues RPCs directly
     to a list of servers
 
--   **Cross-servers** - where self_test sends instructions to the different
+-   **Cross-servers** - where `self_test` sends instructions to the different
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
-Instructions to run CaRT self_test with test_group as the target server are as follows.
+Instructions to run CaRT `self_test` with test_group as the target server are as follows.
 
 ```bash
 $ git clone https://github.com/daos-stack/daos.git
@@ -34,18 +34,18 @@ $ cd install/TESTING
 
 -   srvhostfile contains a list of nodes from which servers will launch
 
--   clihostfile contains node from which self_test will launch
+-   clihostfile contains node from which `self_test` will launch
 
-The example below uses Ethernet interface and Sockets provider.
-In the self_test commands:
+The example below uses an Ethernet interface and Sockets provider.
+In the `self_test` commands:
 
--   (client-to-servers) Replace the argument for "--endpoint" accordingly.
+-   (client-to-servers) Replace the argument for `--endpoint` accordingly.
 
--   (cross-servers)     Replace the argument for "--endpoint" and "--master-endpoint" accordingly.
+-   (cross-servers)     Replace the argument for `--endpoint` and `--master-endpoint` accordingly.
 
--   For example, if you have 8 servers, you would specify "--endpoint 0-7:0" (and --master-endpoint 0-7:0)
+-   For example, if you have 8 servers, you would specify `--endpoint 0-7:0` (and `--master-endpoint 0-7:0`)
 
-The commands below will run self_test benchmark using the following message sizes:
+The commands below will run `self_test` benchmark using the following message sizes:
 ```bash
 b1048576     1Mb bulk transfer Get and Put
 b1048576 0   1Mb bulk transfer Get only
@@ -55,29 +55,54 @@ i2048 0      2Kb iovec Input only
 0 i2048      2Kb iovec Output only
 ```
 
-For full description of self_test usage, run:
+For a full description of `self_test` usage, run:
 ```bash
 $ ../bin/self_test --help
 ```
 
 **To start test_group server:**
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile srvhostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/test_group_srv.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/crt_launch -e tests/test_group_np_srv --name self_test_srv_grp --cfg_path=. &
+$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
+  --hostfile srvhostfile --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/test_group_srv.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
+  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 \
+  ../bin/crt_launch -e tests/test_group_np_srv --name self_test_srv_grp --cfg_path=. &
 ```
 
 **To run self_test in client-to-servers mode:**
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
+  --hostfile clihostfile --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
+  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
+  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 \
+    --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
+    --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
 ```
 
 **To run self_test in cross-servers mode:**
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --master-endpoint 0-<MAX_SERVER-1>:0 --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
+  --hostfile clihostfile --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
+  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
+  ../bin/self_test --group-name self_test_srv_grp --endpoint 0-<MAX_SERVER-1>:0 --master-endpoint 0-<MAX_SERVER-1>:0 \
+    --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
+    --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
 ```
 
 **To shutdown test_group server:**
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 --hostfile clihostfile --output-filename testLogs/ -x D_LOG_FILE=testLogs/test_group_cli.log -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 -x CRT_CTX_SHARE_ADDR=0  tests/test_group_np_cli --name client-group --attach_to self_test_srv_grp --shut_only --cfg_path=.
+$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp  -N 1 \
+  --hostfile clihostfile --output-filename testLogs/ \
+  -x D_LOG_FILE=testLogs/test_group_cli.log \
+  -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_MASK=WARN \
+  -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
+  -x CRT_CTX_SHARE_ADDR=0 \
+  tests/test_group_np_cli --name client-group --attach_to self_test_srv_grp --shut_only --cfg_path=.
 ```
 
 ## Benchmarking DAOS
@@ -125,13 +150,13 @@ automatically assign a network interface with a matching NUMA node.  The network
 interface provided in the GetAttachInfo response is used to initialize CaRT.
 
 To override the automatically assigned interface, the client should set the
-environment variable ```OFI_INTERFACE``` to match the desired network
+environment variable `OFI_INTERFACE` to match the desired network
 interface.
 
 The DAOS Agent scans the client machine on the first GetAttachInfo request to
 determine the set of network interfaces available that support the DAOS Server's
 OFI provider.  This request occurs as part of the initialization sequence in the
-```libdaos daos_init()``` performed by each client.
+`libdaos daos_init()` performed by each client.
 
 Upon receipt, the Agent populates a cache of responses indexed by NUMA affinity.
 Provided a client application has bound itself to a specific NUMA node and that
@@ -167,13 +192,13 @@ No network devices detected in fabric scan; default AttachInfo response may be i
 ```
 
 In either situation, the admin may execute the command
-```'daos_agent net-scan'``` with appropriate debug flags to gain more insight
+`daos_agent net-scan` with appropriate debug flags to gain more insight
 into the configuration problem.
 
 **Disabling the GetAttachInfo cache:**
 
 The default configuration enables the Agent GetAttachInfo cache.  If it is
 desired, the cache may be disabled prior to DAOS Agent startup by setting the
-Agent's environment variable ```DAOS_AGENT_DISABLE_CACHE=true```.  The cache is
+Agent's environment variable `DAOS_AGENT_DISABLE_CACHE=true`.  The cache is
 loaded only at Agent startup.  If the network configuration changes while the
 Agent is running, it must be restarted to gain visibility to these changes.
