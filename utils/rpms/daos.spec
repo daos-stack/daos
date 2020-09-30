@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       33%{?relval}%{?dist}
+Release:       34%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -388,6 +388,9 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Wed Sep 30 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-34
+- Obsoletes: cart now that it's included in daos
+
 * Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
 - Update OFI to v1.11.0
 
