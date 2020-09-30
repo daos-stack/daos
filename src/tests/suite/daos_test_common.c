@@ -1107,7 +1107,7 @@ get_server_config(char *host, char *server_config_file)
 	pclose(fp);
 
 	D_FREE(dpid);
-	D_FREE(line);
+	free(line);
 	return 0;
 }
 
@@ -1138,7 +1138,7 @@ int verify_server_log_mask(char *host, char *server_config_file,
 	}
 
 	pclose(fp);
-	D_FREE(line);
+	free(line);
 	return 0;
 }
 
@@ -1164,7 +1164,7 @@ int get_server_log_file(char *host, char *server_config_file,
 	}
 
 	pclose(fp);
-	D_FREE(line);
+	free(line);
 	return 0;
 }
 
@@ -1200,7 +1200,7 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 		}
 		pch = strtok(NULL, " ");
 		pclose(fp);
-		D_FREE(line);
+		free(line);
 	}
 
 	D_FREE(tmp);

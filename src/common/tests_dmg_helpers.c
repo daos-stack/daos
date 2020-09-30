@@ -590,7 +590,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		strcpy(devices[*disks].host, strtok(host, ":") + 1);
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
 			D_ERROR("unable to extract uuid from JSON\n");
-		return -DER_INVAL;
+			return -DER_INVAL;
 		}
 		uuid_parse(json_object_get_string(tmp),
 			   devices[*disks].device_id);
@@ -603,7 +603,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
-		return -DER_INVAL;
+			return -DER_INVAL;
 		}
 		devices[*disks].rank = atoi(json_object_to_json_string(tmp));
 		*disks = *disks + 1;
@@ -629,7 +629,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 	if (ndisks != NULL)
 		*ndisks = 0;
 
-	disk = (int *)calloc(1, sizeof(int));
+	D_ALLOC_PTR(disk);
 	rc = daos_dmg_json_pipe("storage query list-devices", dmg_config_file,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
