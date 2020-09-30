@@ -1311,8 +1311,8 @@ public class DaosObjectIT {
     id.encode();
     DaosObject object = client.getObject(id);
     int bufLen = 16000;
-    int reduces = 125;
-    int maps = 1000;
+    int reduces = 1;
+    int maps = 1;
 //    IOSimpleDataDesc desc = object.createSimpleDataDesc(4, 1, bufLen,
 //        null);
     byte[] data = generateDataArray(bufLen);
@@ -1349,8 +1349,8 @@ public class DaosObjectIT {
           object.updateSimple(desc);
         }
       }
-      compList.clear();
-      dq.waitForCompletion(5000, compList);
+//      compList.clear();
+//      dq.waitForCompletion(5000, compList);
       for (IOSimpleDataDesc d : compList) {
         Assert.assertTrue(d.isSucceeded());
 //        System.out.println("completed");
@@ -1361,39 +1361,39 @@ public class DaosObjectIT {
 //      desc = object.createSimpleDataDesc(4, 1, bufLen,
 //        null);
 //      desc.setUpdateOrFetch(false);
-      start = System.nanoTime();
-      for (int i = 0; i < reduces; i++) {
-        for (int j = 0; j < maps; j++) {
-//          System.out.println(i + "-" +j);
-          compList.clear();
-          e = dq.acquireEventBlock(false, 1000, compList);
-          for (IOSimpleDataDesc d : compList) {
-            Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
-          }
-          desc = e.reuseDesc();
-          desc.setDkey(String.valueOf(i));
-          entry = desc.getEntry(0);
-          entry.setEntryForFetch(String.valueOf(j), 0, bufLen);
-          object.fetchSimple(desc);
-//          Assert.assertEquals(bufLen, desc.getEntry(0).getActualSize());
-//          System.out.println(i + "-" +j);
-        }
-      }
-//      System.out.println("waiting");
-      compList.clear();
-      dq.waitForCompletion(5000, compList);
-      for (IOSimpleDataDesc d : compList) {
-        Assert.assertTrue(d.isSucceeded());
-        Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
-//        System.out.println("fetch completed");
-      }
-      System.out.println((System.nanoTime() - start) / 1000000);
+//      start = System.nanoTime();
+//      for (int i = 0; i < reduces; i++) {
+//        for (int j = 0; j < maps; j++) {
+////          System.out.println(i + "-" +j);
+//          compList.clear();
+//          e = dq.acquireEventBlock(false, 1000, compList);
+//          for (IOSimpleDataDesc d : compList) {
+//            Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
+//          }
+//          desc = e.reuseDesc();
+//          desc.setDkey(String.valueOf(i));
+//          entry = desc.getEntry(0);
+//          entry.setEntryForFetch(String.valueOf(j), 0, bufLen);
+//          object.fetchSimple(desc);
+////          Assert.assertEquals(bufLen, desc.getEntry(0).getActualSize());
+////          System.out.println(i + "-" +j);
+//        }
+//      }
+////      System.out.println("waiting");
+//      compList.clear();
+//      dq.waitForCompletion(5000, compList);
+//      for (IOSimpleDataDesc d : compList) {
+//        Assert.assertTrue(d.isSucceeded());
+//        Assert.assertEquals(bufLen, d.getEntry(0).getActualSize());
+////        System.out.println("fetch completed");
+//      }
+//      System.out.println((System.nanoTime() - start) / 1000000);
     } catch (Exception e) {
       throw e;
     } finally {
-//      if (desc != null) {
-//        desc.release();
-//      }
+      if (desc != null) {
+        desc.release();
+      }
       System.out.println(1);
       DaosEventQueue.destroyAll();
       System.out.println(2);

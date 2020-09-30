@@ -80,7 +80,7 @@ public class DaosClient implements ForceCloseable {
           daosSafeFinalize();
           log.info("daos finalized");
           ShutdownHookManager.removeHook(this);
-        } catch (IOException e) {
+        } catch (Throwable e) {
           log.error("failed to finalize DAOS", e);
         }
       }
