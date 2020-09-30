@@ -131,6 +131,7 @@ Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.8.0
 %{?systemd_requires}
+Obsoletes: cart
 
 %description server
 This is the package needed to run a DAOS server
@@ -141,6 +142,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
 Requires: fuse3 >= 3.4.2
+Obsoletes: cart
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
@@ -394,6 +396,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 * Wed Sep 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-34
 - Use %%autosetup
 - Only use systemd_requires if it exists
+- Obsoletes: cart now that it's included in daos
 
 * Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
 - Update OFI to v1.11.0
