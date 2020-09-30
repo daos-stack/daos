@@ -284,14 +284,30 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	fs_handle->dpi_max_read = 1024 * 1024 * 4;
 	fs_handle->dpi_max_write = 1024 * 1024 * 4;
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK | D_HASH_FT_EPHEMERAL,
-					 3, fs_handle, &ie_hops,
+	/* This is a hash table of all currently known files, mainly driven by
+	 * lookups which could benefit from RW locking, however it also has
+	 * calls to find_insert() on create.
+	 *
+	 * A hybrid RW/LRU model might work here where LRU would only be
+	 * updated on find_insert() but not on find() although that isn't
+	 * currently supported by the hash table code.
+	 */
+	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
+					 5, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK, 3, fs_handle,
-					 &ir_hops, &fs_handle->dpi_irt);
+	/* This is a very large hash table, in which lookups will mostly fail,
+	 * in addition most calls are with find_insert() which needs a write
+	 * lock, so there's no advantage to using RW_LOCKS, and spinlocks will
+	 * consume CPU.
+	 * There's no real downside to using LRU here and it'll make successful
+	 * lookups much faster so use that.
+	 */
+	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU, 10,
+					 fs_handle, &ir_hops,
+					 &fs_handle->dpi_irt);
 	if (rc != 0)
 		D_GOTO(err_iet, 0);
 
