@@ -25,10 +25,18 @@ package netdetect
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
+	"io/ioutil"
+	"strconv"
+	"strings"
 
 	. "github.com/daos-stack/daos/src/control/common"
+)
+
+const (
+	sampleDevClass = 32
 )
 
 // TestParseTopology uses XML topology data to simulate real systems.
@@ -548,5 +556,55 @@ func TestValidateProviderSm(t *testing.T) {
 	for _, sf := range results {
 		err := ValidateProviderConfig(netCtx, sf.DeviceName, "sm")
 		AssertEqual(t, err, nil, "Network device configuration is invalid - provider not supported")
+	}
+}
+
+func GetDeviceClassStub(netdev string) (uint32, error) {
+	err := os.Mkdir(fmt.Sprintf("/tmp/%s", netdev), 0755)
+	if err != nil {
+		return 0, err
+	}
+	defer os.RemoveAll(fmt.Sprintf("/tmp/%s", netdev))
+
+	filePath := fmt.Sprintf("/tmp/%s/type", netdev)
+	deviceClass := []byte(strconv.Itoa(sampleDevClass))
+	err = ioutil.WriteFile(filePath, deviceClass, 0644)
+	if err != nil {
+		return 0, err
+	}
+
+	devClass, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := strconv.Atoi(strings.TrimSpace(string(devClass)))
+	return uint32(res), err
+}
+
+func TestDeviceClass(t *testing.T) {
+	for name, tc := range map[string]struct {
+		netdev string
+	}{
+		"eth0": {
+			netdev: "eth0",
+		},
+		"eth1": {
+			netdev: "eth1",
+		},
+		"ib0": {
+			netdev: "ib0",
+		},
+		"ib1": {
+			netdev: "ib1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			res, err := GetDeviceClassStub(tc.netdev)
+			AssertEqual(t, err, nil, "Error in GetDeviceClassStub!")
+			AssertEqual(
+				t, res, uint32(sampleDevClass),
+				fmt.Sprintf("Device class is not %d!\n", sampleDevClass))
+		})
 	}
 }
