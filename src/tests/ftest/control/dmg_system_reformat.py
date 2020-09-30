@@ -26,11 +26,10 @@ from __future__ import print_function
 import os
 
 from avocado import fail_on
+from avocado.utils import process
 from apricot import TestWithServers
 from server_utils import ServerFailed
-from command_utils import CommandFailure
 from general_utils import human_to_bytes
-from avocado.utils import process
 
 
 class DmgSystemReformatTest(TestWithServers):
