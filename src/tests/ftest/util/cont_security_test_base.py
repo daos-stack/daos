@@ -246,13 +246,12 @@ class ContSecurityTestBase(TestWithServers):
             attr (str): container attribute.
 
         Return:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            result (str): daos_tool.container_get_attr result.
         """
         self.daos_tool.exit_status_exception = False
-        self.daos_tool.container_get_attr(
+        result = self.daos_tool.container_get_attr(
             pool_uuid, container_uuid, attr, pool_svc)
-        return self.daos_tool.result
+        return result
 
     def list_container_attribute(
             self, pool_uuid, pool_svc, container_uuid):

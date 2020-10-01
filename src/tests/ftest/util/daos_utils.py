@@ -71,6 +71,15 @@ class DaosCommand(DaosCommandBase):
             r"Number of snapshots:\s+(\d+)\n" +
             r"Latest Persistent Snapshot:\s+(\d+)\n" +
             r"Highest Aggregated Epoch:\s+(\d+)",
+        # Sample get-attr output - no line break.
+        # 04/20-17:47:07.86 wolf-3 Container's attr1 attribute value:  04
+        # /20-17:47:07.86 wolf-3 val1
+        "container_get_attr": r"value:  \S+ \S+ (.+)$",
+        # Sample list output.
+        #  04/20-17:52:33.63 wolf-3 Container attributes:
+        #  04/20-17:52:33.63 wolf-3 attr1
+        #  04/20-17:52:33.63 wolf-3 attr2
+        "container_list_attrs": r"\n \S+ \S+ (.+)"
     }
 
     def pool_query(self, pool, sys_name=None, svc=None, sys=None):
@@ -448,27 +457,16 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            dict: Dictionary that stores the attribute and value in "attr" and
-                "value" key.
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
 
         Raises:
             CommandFailure: if the daos get-attr command fails.
 
         """
-        self._get_result(
+        return self._get_result(
             ("container", "get-attr"), pool=pool, svc=svc, cont=cont,
             sys_name=sys_name, attr=attr)
-
-        # Sample output.
-        # Container's `&()\;'"!<> attribute value: attr12
-        match = re.findall(
-            r"Container's\s+([\S ]+)\s+attribute\s+value:\s+(.+)$",
-            self.result.stdout)[0]
-        data = {}
-        data["attr"] = match[0]
-        data["value"] = match[1]
-
-        return data
 
     def container_list_attrs(self, pool, cont, svc=None, sys_name=None):
         """Call daos container list-attrs.
@@ -482,24 +480,16 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            dict: Dictionary that stores the attribute values in the key "attrs"
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
 
         Raises:
             CommandFailure: if the daos container list-attrs command fails.
 
         """
-        self._get_result(
+        return self._get_result(
             ("container", "list-attrs"), pool=pool, svc=svc, cont=cont,
             sys_name=sys_name)
-
-        # Sample output.
-        # Container attributes:
-        # attr0
-        # ~@#$%^*-=_+[]{}:/?,.
-        # aa bb
-        # attr48
-        match = re.findall(r"\n([\S ]+)", self.result.stdout)
-        return {"attrs": match}
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
                               svc=None, sys_name=None):
@@ -533,7 +523,6 @@ class DaosCommand(DaosCommandBase):
             r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout)
         if match:
             data["epoch"] = match[0]
-
         return data
 
     def container_destroy_snap(self, pool, cont, snap_name=None, epc=None,
