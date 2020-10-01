@@ -128,6 +128,12 @@ def set_defaults(env):
               default=False,
               help='Disable rpath')
 
+    AddOption('--with-fault-injection',
+              dest='fault-injection',
+              action='store_true',
+              default=False,
+              help='Enable fault injection framework in this build')
+
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
@@ -140,7 +146,9 @@ def set_defaults(env):
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
         if env.get('BUILD_TYPE') == 'release':
-            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE', '-DFAULT_INJECTION=0'])
+            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE', '-DFAULT_INJECTION=1'])
+        else:
+            env.Append(CCFLAGS=['-DFAULT_INJECTION=0'])
         env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
@@ -149,8 +157,8 @@ def set_defaults(env):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
-    if env.get('BUILD_TYPE') != 'release':
-        env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
+    if GetOption("fault-injection"):
+        env.Append(CCFLAGS=['-DFAULT_INJECTION=1']
 
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
