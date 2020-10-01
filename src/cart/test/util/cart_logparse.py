@@ -99,8 +99,8 @@ class LogLine():
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
-    # Match a pointer, with optional ) or . suffix.
-    re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.)?)")
+    # Match a pointer, with optional ) . or , suffix.
+    re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.|\,)?)")
     # Match a pid marker
     re_pid = re.compile(r"pid=(\d+)")
 
