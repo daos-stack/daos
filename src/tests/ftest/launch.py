@@ -903,6 +903,7 @@ def clean_logs(test_yaml, args):
 
 
 def check_big_files(avocado_logs_dir, task, test_name, threshold):
+    # pylint: disable=bad-continuation
     """Check the contents of the task object, tag big files, create junit xml.
 
     Args:
@@ -947,7 +948,10 @@ def compress_log_files(avocado_logs_dir):
     """
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
-    command = [get_remote_file_command(), "-c", "-d \"{}\"".format(logs_dir)]
+    command = [
+        "/bin/bash", get_remote_file_command(),
+        "-c", "-d \"{}\"".format(logs_dir)
+    ]
     print(get_output(command, check=False))
 
 
@@ -1081,7 +1085,7 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
     display_disk_space(destination)
 
     command = [
-        get_remote_file_command(),
+        "/bin/bash", get_remote_file_command(),
         "-c",
         "-r \"{}:{}\"".format(this_host, destination),
         "-d \"{}\"".format(source_files),

@@ -64,7 +64,7 @@ This script has 4 modes that can be executed independently if needed.
       -c        Compress files
       -t        Threshold value to determine classification of big logs
       -r        Remote path to scp files to i.e. server-A:/path/to/file
-      -d        Local path to files for achiving/compressing/size checking
+      -d        Local path to files for archiving/compressing/size checking
       -s        Enable running cart_logtest.py
       -v        Display commands being executed
       -h        Display this help and exit
@@ -124,12 +124,12 @@ human_to_bytes() {
 # big files based on the threshold provided.
 # Arguments:
 #   logs_dir: path to local logs
-#   threshold: value to use as threhold to classify big files
+#   threshold: value to use as threshold to classify big files
 # Returns:
 #   stdout output listing the files prepended with a 'Y' or 'N' tag
 #######################################
 list_tag_files() {
-    # shellcheck disable=SC2016,SC1004
+    # shellcheck disable=SC2016,SC1004,SC2086
     awk_cmd='{ \
     if (th <= $1){ \
         print "Y:",$1,$2} \
@@ -139,6 +139,7 @@ list_tag_files() {
 
     # Convert to bytes and run
     bts=$(human_to_bytes "${2}")
+    # shellcheck disable=SC2086
     du -ab -d 1 ${1} | awk -v th="${bts}" "${awk_cmd}"
 }
 
@@ -148,6 +149,7 @@ check_hw() {
 }
 
 compress_files() {
+    # shellcheck disable=SC2086
     find ${1} -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2 -v
 }
 
@@ -172,6 +174,7 @@ scp_files() {
 
 get_cartlogtest_files() {
     set -ux
+    # shellcheck disable=SC2045,SC2086
     for file in $(ls -d ${1})
     do
         ls -sh "${file}"
