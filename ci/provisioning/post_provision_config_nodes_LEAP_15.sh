@@ -20,6 +20,8 @@ post_provision_config_nodes() {
         zypper --non-interactive mr --gpgcheck-allow-unsigned-repo \
                daos-stack-group-repo
         rpm --import 'https://download.opensuse.org/repositories/science:/HPC/openSUSE_Leap_15.2/repodata/repomd.xml.key'
+	# AMP: Avoid dodgy mirror.
+        rpm --import 'https://provo-mirror.opensuse.org/repositories/science:/HPC/openSUSE_Leap_15.2/repodata/repomd.xml.key'
         zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref \
                daos-stack-group-repo
     fi
