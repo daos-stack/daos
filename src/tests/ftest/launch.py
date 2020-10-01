@@ -948,7 +948,7 @@ def compress_log_files(avocado_logs_dir):
     """
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log")
     command = [
-        "/bin/bash", get_remote_files_path, "-c", "-d \"{}\"".format(logs_dir),
+        "/bin/bash", get_remote_files_path(), "-c", "-d \"{}\"".format(logs_dir),
     ]
     get_output(command, check=False)
 
@@ -1084,7 +1084,7 @@ def archive_files(destination, hosts, source_files, cart=None, threshold=None):
     display_disk_space(destination)
 
     command = [
-        "/bin/bash", get_remote_files_path,
+        "/bin/bash", get_remote_files_path(),
         "-c",
         "-r \"{}:{}\"".format(this_host, destination),
         "-d \"{}\"".format(source_files),
