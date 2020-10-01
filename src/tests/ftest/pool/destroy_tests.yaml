@@ -10,7 +10,7 @@ hosts:
     - client-G
 server_config:
   name: daos_server
-timeout: 60
+timeout: 400
 pool:
   mode: 146
   name: daos_server

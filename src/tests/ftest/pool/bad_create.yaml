@@ -5,7 +5,7 @@ hosts:
     - server-A
 server_config:
    name: daos_server
-timeout: 60
+timeout: 50
 pool:
    control_method: dmg
 createtests:

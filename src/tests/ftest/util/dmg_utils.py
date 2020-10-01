@@ -222,7 +222,7 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def storage_format(self, reformat=False, timeout=30):
+    def storage_format(self, reformat=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -230,8 +230,6 @@ class DmgCommand(DmgCommandBase):
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
                 formattable.
-            timeout: seconds after which the format is considered a failure and
-                times out.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -241,11 +239,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg storage format command fails.
 
         """
-        saved_timeout = self.timeout
-        self.timeout = timeout
-        result = self._get_result(("storage", "format"), reformat=reformat)
-        self.timeout = saved_timeout
-        return result
+        return self._get_result(("storage", "format"), reformat=reformat)
 
     def storage_prepare(self, user=None, hugepages="4096", nvme=False,
                         scm=False, reset=False, force=True):
