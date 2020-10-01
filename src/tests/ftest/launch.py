@@ -948,10 +948,7 @@ def compress_log_files(avocado_logs_dir):
     """
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
-    command = [
-        "/bin/bash", get_remote_file_command(),
-        "-c", "-d \"{}\"".format(logs_dir)
-    ]
+    command = [get_remote_file_command(), "-c", "-d \"{}\"".format(logs_dir)]
     print(get_output(command, check=False))
 
 
@@ -1004,7 +1001,7 @@ def archive_cart_logs(avocado_logs_dir, test_files, args):
 
     """
     # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "cart_logs")
+    destination = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
     # Copy any DAOS logs created on any host under test
     hosts = get_hosts_from_yaml(test_files["yaml"], args)
@@ -1085,7 +1082,7 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
     display_disk_space(destination)
 
     command = [
-        "/bin/bash", get_remote_file_command(),
+        get_remote_file_command(),
         "-c",
         "-r \"{}:{}\"".format(this_host, destination),
         "-d \"{}\"".format(source_files),
