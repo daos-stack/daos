@@ -26,6 +26,16 @@ import os
 import daos_build
 
 SELF_TEST = 'self_test.c'
+LIB_CONFIG_INI = 'src/configini.c'
+
+# Function to filter out gcc flags from this compilation env
+def remove_certain_gcc_flags(str): 
+    import re
+    r = re.compile("\-Wframe\-larger\-than\=")
+    if r.match(str):
+        return False
+    else: 
+        return True
 
 def scons():
     """scons function"""
@@ -40,9 +50,20 @@ def scons():
     tenv.AppendUnique(LIBPATH=['#/src/cart'])
     tenv.AppendUnique(FLAGS='-pthread')
 
-    self_test = daos_build.program(tenv, SELF_TEST)
-    tenv.Requires(self_test, [cart_lib, gurt_lib])
-    tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
+    # Allow large stack size for config file parsing
+    #lib_config_ini = Library(LIB_CONFIG_INI)
+    #self_test = daos_build.program(tenv, [SELF_TEST, LIB_CONFIG_INI], LIBS=lib_config_ini)
+    #self_test = daos_build.program(tenv, SELF_TEST)
+
+    print tenv.Dump()
+    self_test_tenv = tenv.Clone()
+    new_CCFLAGS = filter(remove_certain_gcc_flags, self_test_tenv['CCFLAGS'])
+    self_test_tenv['CCFLAGS'] = new_CCFLAGS
+    print self_test_tenv.Dump()
+
+    self_test = daos_build.program(self_test_tenv, [SELF_TEST, LIB_CONFIG_INI])
+    self_test_tenv.Requires(self_test, [cart_lib, gurt_lib])
+    self_test_tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
 
 if __name__ == "SCons.Script":
     scons()

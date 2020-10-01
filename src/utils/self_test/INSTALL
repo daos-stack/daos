@@ -1,0 +1,19 @@
+
+$ make clean install
+
+	Builds and installs static library to /usr/local/lib and headers to /usr/local/include
+
+
+$ make clean installdir=<DIR> install
+
+	Builds and installs static library to <DIR>/lib and headers to <DIR>/include
+
+
+$ make test
+    
+    Run tests
+
+
+$ make doc
+	
+	Generate doxygen based documentation.

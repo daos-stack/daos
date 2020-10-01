@@ -30,7 +30,10 @@
 #include <math.h>
 
 #include "tests_common.h"
+#include "configini.h"
 #include "daos_errno.h"
+
+//#include "./src/utils/self_test/src/configini.h"
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
@@ -1617,8 +1620,65 @@ int parse_message_sizes_string(const char *pch,
 	return 0;
 }
 
+/*
+ *********************************
+ * START: Add libconfigini macros
+ *********************************
+ */
+
+
+#define LOG_ERR(fmt, ...)	\
+	fprintf(stderr, "[ERROR] <%s:%d> : " fmt "\n", __FUNCTION__, __LINE__, __VA_ARGS__)
+
+#define LOG_INFO(fmt, ...)	\
+	fprintf(stderr, "[INFO] : " fmt "\n", __VA_ARGS__)
+
+
+#define CONFIGREADFILE		"../etc/config.cnf"
+#define CONFIGSAVEFILE		"../etc/new-config.cnf"
+
+#define ENTER_TEST_FUNC														\
+	do {																	\
+		LOG_INFO("%s", "\n-----------------------------------------------");\
+		LOG_INFO("<TEST: %s>\n", __FUNCTION__);								\
+	} while (0)
+
+/*
+ ******************************
+ * END: Add libconfigini macros
+ ******************************
+ */
+
+
+/*
+ * Read Config file
+ */
+static void Test1()
+{
+	Config *cfg = NULL;
+
+	ENTER_TEST_FUNC;
+
+	if (ConfigReadFile(CONFIGREADFILE, &cfg) != CONFIG_OK) {
+		LOG_ERR("ConfigOpenFile failed for %s", CONFIGREADFILE);
+		return;
+	}
+
+	ConfigPrintSettings(cfg, stdout);
+	ConfigPrint(cfg, stdout);
+
+	ConfigFree(cfg);
+}
+
 int main(int argc, char *argv[])
 {
+
+  D_ERROR("");
+
+  // DEBUGGING
+  // FIXME: Remove this line
+  Test1();
+
 	/* Default parameters */
 	char				 default_msg_sizes_str[] =
 		 "b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
@@ -1644,9 +1704,13 @@ int main(int argc, char *argv[])
 	uint32_t			 num_endpts = 0;
 	uint32_t			 num_ms_endpts = 0;
 	int				 output_megabits = 0;
+	int				 output_megabits_dummy_change = 0;
 	int16_t				 buf_alignment =
 		CRT_ST_BUF_ALIGN_DEFAULT;
 	char				*attach_info_path = NULL;
+
+  // Remove this to disable gcc warning
+  ret = output_megabits_dummy_change;
 
 	ret = d_log_init();
 	if (ret != 0) {
@@ -1667,6 +1731,7 @@ int main(int argc, char *argv[])
 			{"singleton", no_argument, 0, 't'},
 			{"path", required_argument, 0, 'p'},
 			{"nopmix", no_argument, 0, 'n'},
+			{"config", required_argument, 0, 'c'},
 			{0, 0, 0, 0}
 		};
 
@@ -1708,6 +1773,20 @@ int main(int argc, char *argv[])
 			}
 			break;
 		case 'a':
+			ret = sscanf(optarg, "%" SCNd16, &buf_alignment);
+			if (ret != 1 || buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+			    buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
+				printf("Warning: Invalid align value %d;"
+				       " Expected value in range [%d:%d]\n",
+				       buf_alignment, CRT_ST_BUF_ALIGN_MIN,
+				       CRT_ST_BUF_ALIGN_MAX);
+				buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
+			}
+			break;
+		case 'c':
+      /* read in and parse --config file option, and wire up to 
+       * the command line options
+       */
 			ret = sscanf(optarg, "%" SCNd16, &buf_alignment);
 			if (ret != 1 || buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 			    buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
