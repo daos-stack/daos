@@ -934,7 +934,7 @@ def check_big_files(avocado_logs_dir, task, test_name, threshold):
     return status
 
 
-def get_remote_files_path():
+def get_remote_file_command():
     """Get path to get_remote_files.sh script."""
     return "{}/get_remote_files.sh".format(os.path.abspath(os.getcwd()))
 
@@ -945,11 +945,10 @@ def compress_log_files(avocado_logs_dir):
     Args:
         avocado_logs_dir (str): path to the avocado log files
     """
+    print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log")
-    command = [
-        "/bin/bash", get_remote_files_path(), "-c", "-d \"{}\"".format(logs_dir),
-    ]
-    get_output(command, check=False)
+    command = [get_remote_file_command(), "-c", "-d \"{}\"".format(logs_dir)]
+    print(get_output(command, check=False))
 
 
 def archive_daos_logs(avocado_logs_dir, test_files, args):
@@ -975,7 +974,7 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     threshold = args.logs_threshold if args.logs_threshold else None
     task = archive_files(
-        destination, hosts, "{}/*.log".format(logs_dir), None, threshold)
+        destination, hosts, "{}/*.log*".format(logs_dir), True, threshold)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1081,7 +1080,7 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
     display_disk_space(destination)
 
     command = [
-        "/bin/bash", get_remote_files_path(),
+        get_remote_file_command(),
         "-c",
         "-r \"{}:{}\"".format(this_host, destination),
         "-d \"{}\"".format(source_files),

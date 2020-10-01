@@ -61,12 +61,11 @@ This script has 4 modes that can be executed independently if needed.
     files.
 
  Options:
-      -a        Archive files
       -c        Compress files
       -t        Threshold value to determine classification of big logs
       -r        Remote path to scp files to i.e. server-A:/path/to/file
       -d        Local path to files for achiving/compressing/size checking
-      -s        Path to cart_logtest.py
+      -s        Enable running cart_logtest.py
       -v        Display commands being executed
       -h        Display this help and exit
 "
@@ -77,7 +76,6 @@ This script has 4 modes that can be executed independently if needed.
 #######################################
 display_set_vars() {
     echo "Set Variables:
-    ARCHIVE = ${ARCHIVE}
     COMPRESS = ${COMPRESS}
     THRESHOLD = ${THRESHOLD}
     REMOTE_DEST = ${REMOTE_DEST}
@@ -155,7 +153,7 @@ scp_files() {
     for file in ${1}
     do
         ls -sh "${file}"
-        if scp -r "${file}" "${2}"/"${file##*/}"-"$(hostname -s)"; then
+        if scp -r "${file}" "${2}"/"$(hostname -s)"-"${file##*/}"; then
             copied+=("${file}")
             if ! sudo rm -fr "${file}"; then
                 ((rc++))
@@ -173,7 +171,7 @@ get_cartlogtest_files() {
     do
         ls -sh "${file}"
         ../../../cart/TESTING/util/cart_logtest.py "${file}" |& \
-        tee "${file}"_ctestlog.log
+        tee "${file}"_ctestlog
     done
 }
 
@@ -185,7 +183,6 @@ fi
 
 # Setup defaults
 COMPRESS="false"
-ARCHIVE="false"
 VERBOSE="false"
 CART_LOGTEST="false"
 THRESHOLD=""
@@ -208,9 +205,6 @@ while getopts "vhcas:r:d:t:" opt; do
         c )
             COMPRESS="true"
             ;;
-        a )
-            ARCHIVE="true"
-            ;;
         v )
             VERBOSE="true"
             ;;
@@ -231,21 +225,21 @@ if [ "${VERBOSE}" == "true" ]; then
     display_set_vars
 fi
 
-# Run cart_logtest.py on LOCAL_SRC
-if [ "${CART_LOGTEST}" == "true" ]; then
-    echo "Running cart_logtest.py on ${LOCAL_SRC}"
-    get_cartlogtest_files "${LOCAL_SRC}"
-fi
-
 # Display big files to stdout
 if [ -n "${THRESHOLD}" ]; then
     echo "Checking if files exceed ${THRESHOLD} threshold ..."
     list_tag_files "${LOCAL_SRC}" "${THRESHOLD}"
 fi
 
+# Run cart_logtest.py on LOCAL_SRC
+if [ "${CART_LOGTEST}" == "true" ]; then
+    echo "Running cart_logtest.py on ${LOCAL_SRC}"
+    get_cartlogtest_files "${LOCAL_SRC}"
+fi
+
 # Compress files in LOCAL_SRC if not running on VM host.
 if check_hw; then
-    echo "Running on VM system, compression not available ..."
+    echo "Running on VM system, skipping compression ..."
     COMPRESS="false"
 fi
 
@@ -259,7 +253,7 @@ if [ "${COMPRESS}" == "true" ]; then
 fi
 
 # Scp files specified in LOCAL_SRC to REMOTE_DEST
-if [ "${ARCHIVE}" == "true" ]; then
+if [ -n "${REMOTE_DEST}" ]; then
     echo "Archiving logs in ${LOCAL_SRC} to ${REMOTE_DEST}"
     scp_files "${LOCAL_SRC}" "${REMOTE_DEST}"
 fi
