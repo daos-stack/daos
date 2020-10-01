@@ -80,6 +80,7 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     echo "Running Cmocka tests"
+    VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
         # Tests that do not run valgrind
         run_test src/rdb/raft_tests/raft_tests.py
@@ -94,13 +95,13 @@ if [ -d "/mnt/daos" ]; then
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
+            VALGRIND_XML_PATH="test_results/unit-test-%p.memcheck.xml"
             VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
-                          --error-limit=no --suppressions=${VALGRIND_SUPP} \
-                          --xml=yes \
-                          --xml-file=memcheck-results-%p.xml"
+                                   --error-limit=no \
+                                   --suppressions=${VALGRIND_SUPP} \
+                                   --xml=yes --xml-file=${VALGRIND_XML_PATH}"
         else
             VALGRIND_SUPP=""
-            VALGRIND_CMD=""
         fi
     fi
 
