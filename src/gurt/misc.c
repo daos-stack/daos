@@ -564,7 +564,7 @@ void d_getenv_int(const char *env, unsigned *int_val)
 	}
 
 	value = atoi(env_val);
-	D_DEBUG(DB_TRACE, "d_getenv_int(), get ENV %s as %d.\n", env, value);
+	D_DEBUG(DB_TRACE, "get ENV %s as %d.\n", env, value);
 	*int_val = value;
 }
 

@@ -438,6 +438,12 @@ class LogTest():
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             self.save_log_line(line)
+            try:
+                msg = ''.join(line._fields[2:])
+                if line.function in msg:
+                    show_line(line, 'NORMAL', 'Logging references function name')
+            except AttributeError:
+                pass
             if abort_on_warning:
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True

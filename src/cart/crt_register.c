@@ -130,7 +130,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 
 	/* map = crt_gdata.cg_opc_map; */
 	D_ASSERT(map != NULL);
-	D_DEBUG(DB_TRACE, "inside crt_opc_map_destroy\n");
+
 	if (map->com_map == NULL) {
 		D_DEBUG(DB_TRACE, "opc map empty, skipping.\n");
 		D_GOTO(skip, 0);

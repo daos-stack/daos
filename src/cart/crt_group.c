@@ -1665,7 +1665,6 @@ crt_grp_init(crt_group_id_t grpid)
 
 out:
 	if (rc != 0) {
-		D_ERROR("crt_grp_init failed, rc: %d.\n", rc);
 		D_FREE(grp_gdata);
 		crt_gdata.cg_grp = NULL;
 	}
