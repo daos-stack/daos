@@ -601,7 +601,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			 */
 			rc = rebuild_iv_update(pool->sp_iv_ns,
 					       &iv, CRT_IV_SHORTCUT_NONE,
-					       CRT_IV_SYNC_LAZY);
+					       CRT_IV_SYNC_LAZY, false);
 			if (rc) {
 				D_WARN("rebuild master iv update failed: %d\n",
 				       rc);
@@ -823,10 +823,17 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	rsi->rsi_tgts_num = tgts_failed->pti_number;
 	rsi->rsi_rebuild_op = rebuild_op;
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
+
+retry:
 	rc = dss_rpc_send(rpc);
 	rso = crt_reply_get(rpc);
 	if (rc == 0)
 		rc = rso->rso_status;
+	if (rc == -DER_BUSY) {
+		D_DEBUG(DB_REBUILD, "retry broadcast scan "DF_UUID"\n",
+			DP_UUID(pool->sp_uuid));
+		goto retry;
+	}
 
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
@@ -1043,8 +1050,8 @@ rebuild_task_ult(void *arg)
 	struct rebuild_task			*task = arg;
 	struct ds_pool				*pool;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
-	struct rebuild_iv			iv = { 0 };
-	int					 rc;
+	struct rebuild_iv                       iv = { 0 };
+	int					rc;
 
 	pool = ds_pool_lookup(task->dst_pool_uuid);
 	if (pool == NULL) {
@@ -1164,8 +1171,8 @@ iv_stop:
 		iv.riv_size		= rgt->rgt_status.rs_size;
 		iv.riv_seconds          = rgt->rgt_status.rs_seconds;
 
-		rc = rebuild_iv_update(pool->sp_iv_ns, &iv,
-				       CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY);
+		rc = rebuild_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
+				       CRT_IV_SYNC_LAZY, true);
 		if (rc)
 			D_ERROR("iv final update fails"DF_UUID":rc %d\n",
 				DP_UUID(task->dst_pool_uuid), rc);
@@ -1286,6 +1293,7 @@ ds_rebuild_abort(uuid_t pool_uuid, unsigned int version)
 	D_ASSERT(rpt->rt_refcount > 1);
 	rpt_put(rpt);
 
+	rpt->rt_abort = 1;
 	/* Since the rpt will be destroyed after signal rt_done_cond,
 	 * so we have to use another lock here.
 	 */
@@ -1625,7 +1633,6 @@ rebuild_tgt_status_check_ult(void *arg)
 				status.status = rc;
 			if (rpt->rt_errno == 0)
 				rpt->rt_errno = status.status;
-			rpt->rt_abort = 1;
 		}
 
 		memset(&iv, 0, sizeof(iv));
@@ -1658,7 +1665,8 @@ rebuild_tgt_status_check_ult(void *arg)
 					   rpt->rt_reported_size;
 		}
 		iv.riv_status = status.status;
-		if (status.scanning == 0 || rpt->rt_abort) {
+		if (status.scanning == 0 || rpt->rt_abort ||
+		    status.status != 0) {
 			iv.riv_scan_done = 1;
 			rpt->rt_scan_done = 1;
 		}
@@ -1687,7 +1695,7 @@ rebuild_tgt_status_check_ult(void *arg)
 			else
 				rc = rebuild_iv_update(rpt->rt_pool->sp_iv_ns,
 						   &iv, CRT_IV_SHORTCUT_TO_ROOT,
-						   CRT_IV_SYNC_NONE);
+						   CRT_IV_SYNC_NONE, false);
 			if (rc == 0) {
 				if (rpt->rt_re_report) {
 					rpt->rt_reported_toberb_objs =
@@ -1703,6 +1711,13 @@ rebuild_tgt_status_check_ult(void *arg)
 			} else {
 				D_WARN("rebuild tgt iv update failed: %d\n",
 					rc);
+				/* Already finish rebuilt, but it can not
+				 * its rebuild status on the leader, i.e.
+				 * it can not find the IV see crt_iv_hdlr_xx().
+				 * let's just stop the rebuild.
+				 */
+				if (rc == -DER_NONEXIST && !status.rebuilding)
+					rpt->rt_global_done = 1;
 			}
 		}
 
@@ -1714,7 +1729,7 @@ rebuild_tgt_status_check_ult(void *arg)
 			iv.riv_pull_done, rpt->rt_global_scan_done,
 			rpt->rt_global_done, iv.riv_status);
 
-		if (rpt->rt_global_done)
+		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
 		dss_ult_sleep(rpt->rt_ult, RBLD_CHECK_INTV);

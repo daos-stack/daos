@@ -65,7 +65,7 @@ class NvmeFault(ServerFillUp):
         self.create_pool_max_size(nvme=True)
 
         #Start the IOR Command and generate the NVMe fault.
-        self.start_ior_load(precent=self.capacity)
+        self.start_ior_load(percent=self.capacity)
 
         print("pool_percentage_used -- After -- {}"
               .format(self.pool.pool_percentage_used()))
@@ -73,6 +73,6 @@ class NvmeFault(ServerFillUp):
         #Check nvme-health command works
         try:
             self.dmg.hostlist = self.hostlist_servers
-            self.dmg.storage_query_nvme_health()
+            self.dmg.storage_scan_nvme_health()
         except CommandFailure as _error:
-            self.fail("dmg nvme-health failed")
+            self.fail("dmg storage scan --nvme-health failed")

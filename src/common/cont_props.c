@@ -30,27 +30,39 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 	if (props == NULL || cont_prop == NULL)
 		return;
 
-	cont_prop->dcp_dedup = daos_cont_prop2dedup(props);
-	cont_prop->dcp_dedup_size = daos_cont_prop2dedupsize(props);
-	cont_prop->dcp_dedup_verify = daos_cont_prop2dedupverify(props);
-	cont_prop->dcp_srv_verify = daos_cont_prop2serververify(props);
-	cont_prop->dcp_csum_type = daos_cont_prop2csum(props);
+	/** deduplication */
+	cont_prop->dcp_dedup_enabled	= daos_cont_prop2dedup(props);
+	cont_prop->dcp_dedup_size	= daos_cont_prop2dedupsize(props);
+	cont_prop->dcp_dedup_verify	= daos_cont_prop2dedupverify(props);
+
+	/** checksum */
+	cont_prop->dcp_srv_verify	= daos_cont_prop2serververify(props);
+	cont_prop->dcp_csum_type	= daos_cont_prop2csum(props);
 	cont_prop->dcp_csum_enabled =
 		daos_cont_csum_prop_is_enabled(cont_prop->dcp_csum_type);
-	cont_prop->dcp_chunksize = daos_cont_prop2chunksize(props);
+	cont_prop->dcp_chunksize	= daos_cont_prop2chunksize(props);
+
+	/** compression */
+	cont_prop->dcp_compress_type	= daos_cont_prop2compress(props);
+	cont_prop->dcp_compress_enabled	=
+	       daos_cont_compress_prop_is_enabled(cont_prop->dcp_compress_type);
+
+	/** encryption */
+	cont_prop->dcp_encrypt_type	= daos_cont_prop2encrypt(props);
+	cont_prop->dcp_encrypt_enabled	=
+		daos_cont_encrypt_prop_is_enabled(cont_prop->dcp_encrypt_type);
 }
 
-
-uint32_t
+uint16_t
 daos_cont_prop2csum(daos_prop_t *props)
 {
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_CSUM);
 
-	return prop == NULL ? DAOS_PROP_CO_CSUM_OFF : (uint32_t)prop->dpe_val;
+	return prop == NULL ? DAOS_PROP_CO_CSUM_OFF : prop->dpe_val;
 }
 
-uint64_t
+uint32_t
 daos_cont_prop2chunksize(daos_prop_t *props)
 {
 	struct daos_prop_entry *prop =
@@ -108,11 +120,61 @@ daos_cont_prop2dedupverify(daos_prop_t *props)
 			    : prop->dpe_val == DAOS_PROP_CO_DEDUP_MEMCMP;
 }
 
-uint64_t
+uint32_t
 daos_cont_prop2dedupsize(daos_prop_t *props)
 {
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP_THRESHOLD);
 
 	return prop == NULL ? 0 : prop->dpe_val;
+}
+
+bool
+daos_cont_compress_prop_is_enabled(uint16_t val)
+{
+	if (val != DAOS_PROP_CO_COMPRESS_LZ4 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP1 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP2 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP3 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP4 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP5 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP6 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP7 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP8 &&
+	    val != DAOS_PROP_CO_COMPRESS_GZIP9)
+		return false;
+	return true;
+}
+
+uint32_t
+daos_cont_prop2compress(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_COMPRESS);
+
+	return prop == NULL ? DAOS_PROP_CO_COMPRESS_OFF
+			    : (uint32_t)prop->dpe_val;
+}
+
+bool
+daos_cont_encrypt_prop_is_enabled(uint16_t val)
+{
+	if (val != DAOS_PROP_CO_ENCRYPT_AES_XTS128 &&
+	    val != DAOS_PROP_CO_ENCRYPT_AES_XTS256 &&
+	    val != DAOS_PROP_CO_ENCRYPT_AES_CBC128 &&
+	    val != DAOS_PROP_CO_ENCRYPT_AES_CBC192 &&
+	    val != DAOS_PROP_CO_ENCRYPT_AES_CBC256 &&
+	    val != DAOS_PROP_CO_ENCRYPT_AES_GCM128 &&
+	    val != DAOS_PROP_CO_ENCRYPT_AES_GCM256)
+		return false;
+	return true;
+}
+
+uint16_t
+daos_cont_prop2encrypt(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_ENCRYPT);
+
+	return prop == NULL ? false : prop->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF;
 }

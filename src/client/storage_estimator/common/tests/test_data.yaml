@@ -1,5 +1,19 @@
 ---
 # Sample conflig file DFS files and directories
+#
+# Chunk size = 1MiB
+# I/O size   = 128KiB
+#
+# .
+# +-- data
+# |   +-- deploy
+# |   |   +-- [5767168] driver.bin
+# |   |   +-- [34] my_file -> ../../specs/very_importan_file.txt
+# |   +-- [3670016] secret_plan.txt
+# +-- specs
+#     +-- [1572864] readme.txt
+#     +-- [2621440] very_importan_file.txt
+
 num_shards: 1000
 
 # A-Key
@@ -119,7 +133,7 @@ data_obj: &data_obj
   count: 1
   dkeys: [*deploy_dkey, *secret_plan_dkey]
 
-# data/driver.bin D-Key
+# data/deploy/driver.bin D-Key
 driver_dkey: &driver_dkey
   count: 1
   type: hashed
@@ -127,7 +141,7 @@ driver_dkey: &driver_dkey
   overhead: user
   akeys: [*dfs_inode]
 
-# data/my_file A-Key
+# data/deploy/my_file -> ../../specs/very_importan_file.txt A-Key
 my_file_akey: &my_file_akey
   count: 1
   type: hashed
@@ -136,7 +150,7 @@ my_file_akey: &my_file_akey
   value_type: array
   values: [{"count": 1, "size": 64, "aligned": "Yes"},{"count": 1, "size": 34, "aligned": "Yes"}]
 
-# data/my_file -> ../../specs/very_importan_file.txt D-Key
+# data/deploy/my_file -> ../../specs/very_importan_file.txt D-Key
 my_file_dkey: &my_file_dkey
   count: 1
   type: hashed
@@ -191,7 +205,7 @@ secret_plan_akey1: &secret_plan_akey1
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 1048576, "aligned": "Yes"}]
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
 
 # data/secret_plan.txt D-Key 1
 secret_plan_dkey1: &secret_plan_dkey1
@@ -206,7 +220,7 @@ secret_plan_akey4: &secret_plan_akey4
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 524288, "aligned": "Yes"}]
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}]
 
 # data/secret_plan.txt D-Key 4
 secret_plan_dkey4: &secret_plan_dkey4
@@ -241,9 +255,9 @@ driver_akey1: &driver_akey1
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 1048576}]
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
 
-# data/deploy/driver.bint D-Key 1
+# data/deploy/driver.bin D-Key 1
 driver_dkey1: &driver_dkey1
   count: 5
   type: integer
@@ -256,7 +270,7 @@ driver_akey6: &driver_akey6
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 524288, "aligned": "Yes"}]
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}]
 
 # data/deploy/driver.bin D-Key 6
 driver_dkey6: &driver_dkey6
@@ -276,39 +290,39 @@ readme_akey0: &readme_akey0
   type: integer
   overhead: meta
   value_type: single_value
-  values: [{"count": 3, "size": 64}]
+  values: [{"count": 3, "size": 64, "aligned": "Yes"}]
 
-# data/readme.txt D-Key 0
+# specs/readme.txt D-Key 0
 readme_dkey0: &readme_dkey0
   count: 1
   type: integer
   overhead: meta
   akeys: [*readme_akey0]
 
-# data/readme.txt A-Key 1
+# specs/readme.txt A-Key 1
 readme_akey1: &readme_akey1
   count: 1
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 1048576, "aligned": "Yes"}]
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
 
-# data/readme.txt D-Key 1
+# specs/readme.txt D-Key 1
 readme_dkey1: &readme_dkey1
   count: 1
   type: integer
   overhead: user
   akeys: [*readme_akey1]
 
-# data/readme.txt A-Key 2
+# specs/readme.txt A-Key 2
 readme_akey2: &readme_akey2
   count: 1
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 524288, "aligned": "Yes"}]
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}]
 
-# data/readme.txt D-Key 2
+# specs/readme.txt D-Key 2
 readme_dkey2: &readme_dkey2
   count: 1
   type: integer
@@ -341,7 +355,7 @@ very_important_akey1: &very_important_akey1
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 1048576, "aligned": "Yes"}]
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
 
 # specs/very_importan_file.txt D-Key 1
 very_important_dkey1: &very_important_dkey1
@@ -356,7 +370,7 @@ very_important_akey3: &very_important_akey3
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 524288, "aligned": "Yes"}]
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}]
 
 # specs/very_importan_file.txt D-Key 3
 very_important_dkey3: &very_important_dkey3

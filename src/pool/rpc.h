@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +94,9 @@
 	X(POOL_ATTR_SET,						\
 		0, &CQF_pool_attr_set,					\
 		ds_pool_attr_set_handler, NULL),			\
+	X(POOL_ATTR_DEL,						\
+		0, &CQF_pool_attr_del,					\
+		ds_pool_attr_del_handler, NULL),			\
 	X(POOL_REPLICAS_ADD,						\
 		0, &CQF_pool_replicas_add,				\
 		ds_pool_replicas_update_handler, NULL),			\
@@ -237,6 +240,13 @@ CRT_RPC_DECLARE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
 	((crt_bulk_t)		(pasi_bulk)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
+
+#define DAOS_ISEQ_POOL_ATTR_DEL	/* input fields */		 \
+	((struct pool_op_in)	(padi_op)		CRT_VAR) \
+	((uint64_t)		(padi_count)		CRT_VAR) \
+	((crt_bulk_t)		(padi_bulk)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_attr_del, DAOS_ISEQ_POOL_ATTR_DEL, DAOS_OSEQ_POOL_OP)
 
 #define DAOS_ISEQ_POOL_MEMBERSHIP /* input fields */		 \
 	((uuid_t)		(pmi_uuid)		CRT_VAR) \

@@ -72,6 +72,11 @@ This script has 4 modes that can be executed independently if needed.
 }
 
 #######################################
+# CONSTANT variables.
+#######################################
+CART_TESTLOG="./cart/util/cart_logtest.py"
+
+#######################################
 # Print set GLOBAL variables.
 #######################################
 display_set_vars() {
@@ -170,8 +175,7 @@ get_cartlogtest_files() {
     for file in $(ls -d ${1})
     do
         ls -sh "${file}"
-        ../../../cart/TESTING/util/cart_logtest.py "${file}" |& \
-        tee "${file}"_ctestlog
+        "${CART_TESTLOG}" "${file}" |& tee "${file}"_ctestlog
     done
 }
 
@@ -188,7 +192,7 @@ CART_LOGTEST="false"
 THRESHOLD=""
 
 # Step through arguments
-while getopts "vhcas:r:d:t:" opt; do
+while getopts "vhcs:r:d:t:" opt; do
     case ${opt} in
         r )
             REMOTE_DEST=$OPTARG

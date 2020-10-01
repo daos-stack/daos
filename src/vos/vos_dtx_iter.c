@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 
 static int
 dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
-	      struct vos_iterator **iter_pp)
+	      struct vos_iterator **iter_pp, struct vos_ts_set *ts_set)
 {
 	struct vos_dtx_iter	*oiter;
 	struct vos_container	*cont;

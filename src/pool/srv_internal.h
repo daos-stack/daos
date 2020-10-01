@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,6 +134,7 @@ void ds_pool_svc_stop_handler(crt_rpc_t *rpc);
 void ds_pool_attr_list_handler(crt_rpc_t *rpc);
 void ds_pool_attr_get_handler(crt_rpc_t *rpc);
 void ds_pool_attr_set_handler(crt_rpc_t *rpc);
+void ds_pool_attr_del_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
 int ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank);
 

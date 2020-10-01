@@ -579,6 +579,58 @@ rebuild_pool_destroy(test_arg_t *arg)
 	sleep(1);
 }
 
+d_rank_t
+get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
+		      uint32_t shard)
+{
+	struct daos_obj_layout	*layout;
+	uint32_t		grp_idx;
+	uint32_t		idx;
+	d_rank_t		rank;
+
+	daos_obj_layout_get(arg->coh, oid, &layout);
+	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
+	idx = shard % layout->ol_shards[0]->os_replica_nr;
+	rank = layout->ol_shards[grp_idx]->os_ranks[idx];
+
+	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
+	daos_obj_layout_free(layout);
+	return rank;
+}
+
+void
+get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
+			int parity_nr, d_rank_t *ranks, int *ranks_num)
+{
+	struct daos_oclass_attr *oca;
+	uint32_t		shard = 0;
+	int			idx = 0;
+	int			data_idx;
+
+	oca = daos_oclass_attr_find(oid);
+	if (oca->ca_resil == DAOS_RES_REPL) {
+		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
+		*ranks_num = 1;
+		return;
+	}
+
+	/* for EC object */
+	assert_true(data_nr <= oca->u.ec.e_k);
+	assert_true(parity_nr <= oca->u.ec.e_p);
+	while (parity_nr-- > 0) {
+		shard = oca->u.ec.e_k + oca->u.ec.e_p - 1 - idx;
+		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
+	}
+
+	data_idx = 0;
+	while (data_nr-- > 0) {
+		shard = data_idx++;
+		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
+	}
+
+	*ranks_num = idx;
+}
+
 static void
 save_group_state(void **state)
 {

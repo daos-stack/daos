@@ -47,7 +47,7 @@ class DaosVol(VolTestBase):
 
         Test Description:
             Run HDF5 testphdf5 and t_shapesame provided in HDF5 package with
-            doas vol connector. Testing various I/O functions provided in HDF5
+            daos vol connector. Testing various I/O functions provided in HDF5
             test suite such as:
               h5_test_testhdf5
               h5vl_test
@@ -59,6 +59,6 @@ class DaosVol(VolTestBase):
               h5daos_test_map_parallel
               h5daos_test_oclass
 
-        :avocado: tags=all,pr,hw,small,hdf5,vol
+        :avocado: tags=all,pr,hw,small,hdf5,vol,DAOS_5610
         """
         self.run_test()

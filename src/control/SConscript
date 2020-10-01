@@ -180,6 +180,7 @@ def scons():
     SConscript('lib/spdk/SConscript', exports='denv')
 
     senv = denv.Clone()
+    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "

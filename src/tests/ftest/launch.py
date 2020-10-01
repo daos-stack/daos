@@ -224,6 +224,7 @@ def set_test_environment(args):
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
+        os.path.abspath("cart/util"),
         os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
@@ -791,9 +792,8 @@ def run_tests(test_files, tag_filter, args):
                 return_code |= archive_config_files(avocado_logs_dir)
                 return_code |= archive_daos_logs(
                     avocado_logs_dir, test_file, args)
-                # Uncomment below to archive cart logs.
-                # return_code |= archive_cart_logs(
-                #     avocado_logs_dir, test_file, args)
+                return_code |= archive_cart_logs(
+                    avocado_logs_dir, test_file, args)
 
                 # Compress any log file that haven't been remotely compressed.
                 compress_log_files(avocado_logs_dir)
@@ -946,7 +946,7 @@ def compress_log_files(avocado_logs_dir):
         avocado_logs_dir (str): path to the avocado log files
     """
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
-    logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log")
+    logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
     command = [get_remote_file_command(), "-c", "-d \"{}\"".format(logs_dir)]
     print(get_output(command, check=False))
 
@@ -1072,7 +1072,8 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
     this_host = socket.gethostname().split(".")[0]
 
     # Create the destination directory
-    get_output(["mkdir", destination])
+    if not os.path.exists(destination):
+        get_output(["mkdir", destination])
 
     # Display available disk space prior to copy.  Allow commands to fail w/o
     # exiting this program.  Any disk space issues preventing the creation of a
@@ -1089,7 +1090,6 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
         command.append("-s")
     if threshold:
         command.append("-t {}".format(threshold))
-
     return get_remote_output(hosts, " ".join(command), 900)
 
 
