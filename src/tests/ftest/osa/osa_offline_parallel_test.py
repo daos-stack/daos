@@ -56,7 +56,7 @@ class OSAOfflineParallelTest(TestWithServers):
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')[0]
-        self.out_queue
+        self.out_queue = queue.Queue()
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -210,6 +210,10 @@ class OSAOfflineParallelTest(TestWithServers):
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
+            pver_end = self.get_pool_version()
+            self.log.info("Pool Version at the End %s", pver_end)
+            self.assertTrue(pver_end == 25,
+                            "Pool Version Error:  at the end")
             pool[val].destroy()
 
     def test_osa_offline_drain(self):
