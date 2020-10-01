@@ -25,7 +25,6 @@
 import traceback
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
-from ior_utils import IorCommand
 
 
 class IorFailOnWarning(IorTestBase):
