@@ -58,7 +58,7 @@ nav:
         - 'Native Programming Interface': 'user/interface.md'
         - 'POSIX Namespace': 'user/posix.md'
         - 'HPC I/O Middleware': 'user/hpc.md'
-        - 'Spark': 'user/spark.md'
+        - 'Spark and Hadoop': 'user/spark.md'
     - Releases:
         - 'Release Notes': 'release/releaseNote_v1_0.md'
     - Developer Zone:
