@@ -45,12 +45,9 @@ class SnapshotAggregation(IorTestBase):
 
     def update_free_space(self):
         """Append the free space list with the current pool capacities."""
-        data = self.dmg.pool_query(self.pool.uuid)
-        self.pool.get_info()
-
         for index, name in enumerate(("scm", "nvme")):
             self.free_space[name].append({
-                "dmg": data[name]["free"],
+                "dmg": self.pool.query_data[name]["free"],
                 "api": int(self.pool.info.pi_space.ps_space.s_free[index])
             })
 
@@ -80,6 +77,8 @@ class SnapshotAggregation(IorTestBase):
 
         # Create a pool and a container that spans the 2 servers.
         self.update_ior_cmd_with_pool()
+        self.pool.get_info()
+        self.pool.set_query_data()
         self.update_free_space()
         self.log.info(
             "Pool free space before writes:\n  SCM:  %s\n  NVMe: %s",
@@ -138,12 +137,14 @@ class SnapshotAggregation(IorTestBase):
         # Delete the snapshot.
         daos.container_destroy_snap(
             pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont=self.container.uuid, snap_name=self.container.epoch)
+            cont=self.container.uuid, epc=self.container.epoch)
 
         # Wait for aggregation to start and finish.
         self.detect_aggregation_complete()
 
         # Verify that the utilized capacity of the pool has been halved.
+        self.pool.get_info()
+        self.pool.set_query_data()
         self.update_free_space()
         self.log.info(
             "Pool free space after deleting snapshot:\n  SCM:  %s\n  NVMe: %s",
