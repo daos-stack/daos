@@ -441,7 +441,8 @@ class LogTest():
             try:
                 msg = ''.join(line._fields[2:])
                 if line.function in msg:
-                    show_line(line, 'NORMAL', 'Logging references function name')
+                    show_line(line, 'NORMAL',
+                              'Logging references function name')
             except AttributeError:
                 pass
             if abort_on_warning:
@@ -460,10 +461,12 @@ class LogTest():
                             if line.filename == self.fi_location.filename:
                                 src_offset = line.lineno - self.fi_location.lineno
                                 if src_offset > 0 and src_offset < 5:
-                                    show_line(line, 'NORMAL', 'Logging allocation failure')
+                                    show_line(line, 'NORMAL',
+                                              'Logging allocation failure')
 
                             if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
-                                show_line(line, 'LOW', 'Error does not use DF_RC')
+                                show_line(line, 'LOW',
+                                          'Error does not use DF_RC')
                             # For the fault injection test do not report
                             # errors for lines that print -DER_NOMEM, as
                             # this highlights other errors and lines which

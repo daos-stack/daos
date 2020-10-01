@@ -1390,7 +1390,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 
 	rc = crt_grp_priv_create(&grp_priv, pri_grpid, true);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_create failed, " DF_RC "\n", DP(rc));
+		D_ERROR("crt_grp_priv_create failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(grp_priv != NULL);
@@ -1405,7 +1405,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
-		D_ERROR("grp_priv_init_membs() failed, " DF_RC "\n", DP(rc));
+		D_ERROR("grp_priv_init_membs() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1424,7 +1424,7 @@ out:
 			grp_priv->gp_pub.cg_grpid, grp_priv->gp_size,
 			grp_priv->gp_self);
 	} else {
-		D_ERROR("crt_primary_grp_init failed, " DF_RC "\n", DP(rc));
+		D_ERROR("crt_primary_grp_init failed, " DF_RC "\n", DP_RC(rc));
 		if (grp_priv != NULL)
 			crt_grp_priv_decref(grp_priv);
 	}
