@@ -39,9 +39,13 @@
 This provides consistency checking for CaRT log files.
 """
 
-import sys
-import pprint
-import tabulate
+import time
+import argparse
+HAVE_TABULATE = True
+try:
+    import tabulate
+except ImportError:
+    HAVE_TABULATE = False
 from collections import OrderedDict, Counter
 
 import cart_logparse
@@ -66,6 +70,93 @@ class ActiveDescriptors(LogCheckError):
 class LogError(LogCheckError):
     """Errors detected in log file"""
 
+class RegionContig():
+    """Class to represent a memory region"""
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def len(self):
+        """Return the length of the region"""
+        return self.end - self.start + 1
+
+    def __str__(self):
+        return '0x{:x}-0x{:x}'.format(self.start, self.end)
+
+    def __eq__(self, other):
+        if not isinstance(other, RegionContig):
+            return False
+        return self.start == other.start and self.end == other.end
+
+def _ts_to_float(ts):
+    int_part = time.mktime(time.strptime(ts[:-3], '%m/%d-%H:%M:%S'))
+    float_part = int(ts[-2:])/100
+    return int_part + float_part
+
+class RegionCounter():
+    """Class to represent regions read/written to a file"""
+    def __init__(self, start, end, ts):
+        self.start = start
+        self.end = end
+        self.reads = 1
+        self.first_ts = ts
+        self.last_ts = ts
+        self.regions = []
+
+    def add(self, start, end, ts):
+        """Record a new I/O operation"""
+        self.reads += 1
+        if start == self.end + 1:
+            self.end = end
+        else:
+            self.regions.append(RegionContig(self.start, self.end))
+            self.start = start
+            self.end = end
+        self.last_ts = ts
+
+    def __str__(self):
+        bytes_count = 0
+
+        # Make a list of the current regions, being careful not to
+        # modify them.
+        all_regions = list(self.regions)
+        all_regions.append(RegionContig(self.start, self.end))
+
+        regions = []
+        prev_region = None
+        rep_count = 0
+        region = None
+        for region in all_regions:
+            bytes_count += region.len()
+            if not prev_region or region == prev_region:
+                rep_count += 1
+                prev_region = region
+                continue
+            if rep_count > 0:
+                regions.append('{}x{}'.format(str(region), rep_count))
+            else:
+                regions.append(str(region))
+            rep_count = 1
+            prev_region = region
+        if rep_count > 0:
+            regions.append('{}x{}'.format(str(region), rep_count))
+
+        data = ','.join(regions)
+
+        start_time = _ts_to_float(self.first_ts)
+        end_time = _ts_to_float(self.last_ts)
+
+        mb = int(bytes_count / (1024*1024))
+        if mb * 1024 * 1024 == bytes_count:
+            bytes_str = '{}Mb'.format(mb)
+        else:
+            bytes_str = '{:.1f}Mb'.format(bytes_count / (1024*1024))
+
+        return '{} reads, {} {:.1f}Seconds {}'.format(self.reads,
+                                                      bytes_str,
+                                                      end_time - start_time,
+                                                      data)
+
 # CaRT Error numbers to convert to strings.
 C_ERRNOS = {0: '-DER_SUCCESS',
             -1006: 'DER_UNREACH',
@@ -88,9 +179,12 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'grp_regen_linear_list': ('tmp_ptr'),
                      'crt_proc_d_string_t': ('*data'),
                      'crt_hg_init': ('*addr'),
+                     'create_pool_props': ('out_owner',
+                                           'out_owner_grp'),
                      'crt_proc_d_rank_list_t': ('rank_list',
                                                 'rank_list->rl_ranks'),
                      'path_gen': ('*fpath'),
+                     'gen_pool_buf': ('uuids'),
                      'ds_pool_tgt_map_update': ('arg'),
                      'get_attach_info': ('reqb'),
                      'iod_fetch': ('biovs'),
@@ -98,6 +192,7 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'process_credential_response': ('bytes'),
                      'pool_map_find_tgts': ('*tgt_pp'),
                      'daos_acl_dup': ('acl_copy'),
+                     'cont_iv_ent_init': ('entry->iv_value.sg_iovs[0].iov_buf'),
                      'dfuse_pool_lookup': ('ie', 'dfs', 'dfp'),
                      'pool_prop_read': ('prop->dpp_entries[idx].dpe_str',
                                         'prop->dpp_entries[idx].dpe_val_ptr'),
@@ -109,10 +204,12 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'obj_enum_prep_sgls': ('dst_sgls[i].sg_iovs',
                                             'dst_sgls[i].sg_iovs[j].iov_buf'),
                      'notify_ready': ('reqb'),
+                     'oid_iv_ent_init': ('oid_entry'),
                      'pool_svc_name_cb': ('s'),
                      'local_name_to_principal_name': ('*name'),
                      'pack_daos_response': ('body'),
                      'ds_mgmt_drpc_get_attach_info': ('body'),
+                     'ds_mgmt_drpc_pool_create': ('body'),
                      'mgmt_svc_locate_cb': ('s'),
                      'mgmt_svc_name_cb': ('s'),
                      'pool_prop_default_copy': ('entry_def->dpe_str'),
@@ -120,7 +217,9 @@ mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
                      'pool_iv_value_alloc_internal': ('sgl->sg_iovs[0].iov_buf'),
                      'daos_prop_entry_copy': ('entry_dup->dpe_str'),
                      'daos_prop_dup': ('entry_dup->dpe_str'),
-                     'auth_cred_to_iov': ('packed')}
+                     'auth_cred_to_iov': ('packed'),
+                     'daos_csummer_alloc_iods_csums': ('buf'),
+                     'daos_sgl_init': ('sgl->sg_iovs')}
 
 mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'crt_group_psr_set': ('uri'),
@@ -130,6 +229,7 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'cont_prop_default_copy': ('entry_def->dpe_str'),
                     'ds_pool_list_cont_handler': ('cont_buf'),
                     'dtx_resync_ult': ('arg'),
+                    'init_pool_metadata': ('uuids'),
                     'fini_free': ('svc->s_name',
                                   'svc->s_db_path'),
                     'daos_sgl_fini': ('sgl->sg_iovs[i].iov_buf',
@@ -152,16 +252,9 @@ mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
                     'pool_svc_load_uuid_cb': ('path'),
                     'ie_sclose': ('ie', 'dfs', 'dfp'),
                     'notify_ready': ('req.uri'),
-                    'get_tgt_rank': ('tgts')}
-
-EFILES = ['src/common/misc.c',
-          'src/common/prop.c',
-          'src/cart/crt_hg_proc.c',
-          'src/security/cli_security.c',
-          'src/client/dfuse/dfuse_core.c']
-
-mismatch_alloc_seen = {}
-mismatch_free_seen = {}
+                    'get_tgt_rank': ('tgts'),
+                    'obj_rw_reply': ('orwo->orw_iod_csums.ca_arrays'),
+                    'ds_csum_agg_recalc': ('sgl.sg_iovs')}
 
 wf = None
 
@@ -181,18 +274,6 @@ def show_line(line, sev, msg):
     if wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
-
-def add_line_count_to_dict(line, target):
-    """Add entry for a output line into a dict"""
-
-    # This is used for keeping tabs on how many allocations/frees there
-    # have been.
-    if line.function not in target:
-        target[line.function] = {}
-    var = line.get_field(3).strip("':")
-    if var not in target[line.function]:
-        target[line.function][var] = 0
-    target[line.function][var] += 1
 
 class hwm_counter():
     """Class to track integer values, with high-water mark"""
@@ -239,13 +320,93 @@ class LogTest():
         self.fi_triggered = False
         self.fi_location = None
 
+        # Records on number, type and frequency of logging.
+        self.log_locs = Counter()
+        self.log_fac = Counter()
+        self.log_levels = Counter()
+        self.log_count = 0
+
+    def __del__(self):
+        self.show_common_logs()
+
+    def save_log_line(self, line):
+        """Record a single line of logging"""
+        self.log_count += 1
+        function = getattr(line, 'filename', None)
+        if function:
+            loc = '{}:{}'.format(line.filename, line.lineno)
+        else:
+            loc = 'Unknown'
+        self.log_locs[loc] += 1
+        self.log_fac[line.fac] += 1
+        self.log_levels[line.level] += 1
+
+    def show_common_logs(self):
+        """Report to stdout the most common logging locations"""
+        if self.log_count == 0:
+            return
+        print('Parsed {} lines of logs'.format(self.log_count))
+        print('Most common logging locations')
+        for (loc, count) in self.log_locs.most_common(10):
+            if count < 10:
+                break
+            print('Logging used {} times at {} ({:.1f}%)'.format(count,
+                                                                 loc,
+                                                                 100*count/self.log_count))
+        print('Most common facilities')
+        for (fac, count) in self.log_fac.most_common(10):
+            if count < 10:
+                break
+            print('{}: {} ({:.1f}%)'.format(fac, count,
+                                            100*count/self.log_count))
+
+        print('Most common levels')
+        for (level, count) in self.log_levels.most_common(10):
+            if count < 10:
+                break
+            print('{}: {} ({:.1f}%)'.format(cart_logparse.LOG_NAMES[level],
+                                            count,
+                                            100*count/self.log_count))
+
     def check_log_file(self, abort_on_warning, show_memleaks=True):
         """Check a single log file for consistency"""
 
         for pid in self._li.get_pids():
+            if wf:
+                wf.reset_pending()
             self.rpc_reporting(pid)
+            if wf:
+                wf.reset_pending()
             self._check_pid_from_log_file(pid, abort_on_warning,
                                           show_memleaks=show_memleaks)
+
+    def check_dfuse_io(self):
+        """Parse dfuse i/o"""
+
+        for pid in self._li.get_pids():
+
+            client_pids = OrderedDict()
+            for line in self._li.new_iter(pid=pid):
+                self.save_log_line(line)
+                if line.filename != 'src/client/dfuse/ops/read.c':
+                    continue
+                if line.get_field(3) != 'requested':
+                    show_line(line, line.mask, "Extra output")
+                    continue
+                reg = line.re_region.fullmatch(line.get_field(2))
+                start = int(reg.group(1), base=16)
+                end = int(reg.group(2), base=16)
+                reg = line.re_pid.fullmatch(line.get_field(4))
+
+                pid = reg.group(1)
+
+                if pid not in client_pids:
+                    client_pids[pid] = RegionCounter(start, end, line.ts)
+                else:
+                    client_pids[pid].add(start, end, line.ts)
+
+            for pid in client_pids:
+                print('{}:{}'.format(pid, client_pids[pid]))
 
 #pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning,
@@ -276,6 +437,7 @@ class LogTest():
         non_trace_lines = 0
 
         for line in self._li.new_iter(pid=pid, stateful=True):
+            self.save_log_line(line)
             if abort_on_warning:
                 if line.level <= cart_logparse.LOG_LEVELS['WARN']:
                     show = True
@@ -345,19 +507,18 @@ class LogTest():
                         show_line(line, 'NORMAL', 'invalid rpc remove')
                         err_count += 1
                 else:
-                    if desc not in active_desc and \
-                       desc not in active_rpcs and \
-                       have_debug and line.filename not in EFILES:
+                    if have_debug and desc not in active_desc and \
+                       desc not in active_rpcs:
 
-                        # There's something about this particular function
-                        # that makes it very slow at logging output.
                         show_line(line, 'NORMAL', 'inactive desc')
                         if line.descriptor in regions:
                             show_line(regions[line.descriptor], 'NORMAL',
                                       'Used as descriptor without registering')
                         error_files.add(line.filename)
                         err_count += 1
-            else:
+            elif len(line._fields) > 2:
+                # is_calloc() doesn't work on truncated output so only test if
+                # there are more than two fields to work with.
                 non_trace_lines += 1
                 if line.is_calloc():
                     pointer = line.get_field(-1).rstrip('.')
@@ -374,7 +535,7 @@ class LogTest():
                     if pointer in active_desc:
                         del active_desc[pointer]
                     if pointer in regions:
-                        if line.mask != regions[pointer].mask:
+                        if line.fac != regions[pointer].fac:
                             fvar = line.get_field(3).strip("'")
                             afunc = regions[pointer].function
                             avar = regions[pointer].get_field(3).strip("':")
@@ -385,13 +546,10 @@ class LogTest():
                                 pass
                             else:
                                 show_line(regions[pointer], 'LOW',
-                                          'mask mismatch in alloc/free')
+                                          'facility mismatch in alloc/free')
                                 show_line(line, 'LOW',
-                                          'mask mismatch in alloc/free')
+                                          'facility mismatch in alloc/free')
                                 err_count += 1
-                            add_line_count_to_dict(line, mismatch_free_seen)
-                            add_line_count_to_dict(regions[pointer],
-                                                   mismatch_alloc_seen)
                         if line.level != regions[pointer].level:
                             show_line(regions[pointer], 'LOW',
                                       'level mismatch in alloc/free')
@@ -443,15 +601,6 @@ class LogTest():
 
         print("Memsize: {}".format(memsize))
 
-        if False:
-            pp = pprint.PrettyPrinter()
-            if mismatch_alloc_seen:
-                print('Mismatched allocations were allocated here:')
-                print(pp.pformat(mismatch_alloc_seen))
-            if mismatch_free_seen:
-                print('Mismatched allocations were freed here:')
-                print(pp.pformat(mismatch_free_seen))
-
         # Special case the fuse arg values as these are allocated by IOF
         # but freed by fuse itself.
         # Skip over CaRT issues for now to get this landed, we can enable them
@@ -498,6 +647,9 @@ class LogTest():
             rpc_state = None
             opcode = None
 
+            function = getattr(line, 'function', None)
+            if not function:
+                continue
             if line.is_new_rpc():
                 rpc_state = 'ALLOCATED'
                 opcode = line.get_field(-4)
@@ -507,7 +659,7 @@ class LogTest():
                 rpc_state = 'DEALLOCATED'
             elif line.endswith('submitted.'):
                 rpc_state = 'SUBMITTED'
-            elif line.function == 'crt_hg_req_send' and \
+            elif function == 'crt_hg_req_send' and \
                  line.get_field(-6) == ('sent'):
                 rpc_state = 'SENT'
 
@@ -586,22 +738,31 @@ class LogTest():
                                      counts['ALLOCATED'],
                                      counts['DEALLOCATED']))
 
-        print('Opcode State Transition Tally')
-        print(tabulate.tabulate(table,
-                                headers=headers,
-                                stralign='right'))
+        if HAVE_TABULATE:
+            print('Opcode State Transition Tally')
+            print(tabulate.tabulate(table,
+                                    headers=headers,
+                                    stralign='right'))
 
         if errors:
             for error in errors:
                 print(error)
 
 
-def trace_one_file(filename):
+def run():
     """Trace a single file"""
-    log_iter = cart_logparse.LogIter(filename)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dfuse',
+                        help='Summarise dfuse I/O',
+                        action='store_true')
+    parser.add_argument('file', help='input file')
+    args = parser.parse_args()
+    log_iter = cart_logparse.LogIter(args.file)
     test_iter = LogTest(log_iter)
-    test_iter.check_log_file(False)
+    if args.dfuse:
+        test_iter.check_dfuse_io()
+    else:
+        test_iter.check_log_file(False)
 
 if __name__ == '__main__':
-    if len(sys.argv) == 2:
-        trace_one_file(sys.argv[1])
+    run()

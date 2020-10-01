@@ -24,7 +24,6 @@
 
 #include <daos/checksum.h>
 #include "evt_priv.h"
-#include "vos_internal.h"
 
 #ifdef VOS_DISABLE_TRACE
 #define V_TRACE(...) (void)0
@@ -32,11 +31,27 @@
 #define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #endif
 
+/** Get the length of the extent from durable format */
+static inline uint64_t
+evt_len_read(const struct evt_rect_df *rin)
+{
+	return ((uint64_t)rin->rd_len_hi << 16) + rin->rd_len_lo;
+}
+
+/** Store length into durable format */
+static inline void
+evt_len_write(struct evt_rect_df *rout, uint64_t len)
+{
+	rout->rd_len_hi = len >> 16;
+	rout->rd_len_lo = len & 0xffff;
+}
+
+/** Convert rect_df to an extent */
 static inline void
 evt_ext_read(struct evt_extent *ext, const struct evt_rect_df *rin)
 {
 	ext->ex_lo = rin->rd_lo;
-	ext->ex_hi = rin->rd_lo + rin->rd_len - 1;
+	ext->ex_hi = rin->rd_lo + evt_len_read(rin)  - 1;
 }
 
 /** Read and translate the rectangle in durable format to in-memory format */
@@ -52,7 +67,7 @@ evt_rect_read(struct evt_rect *rout, const struct evt_rect_df *rin)
 static inline void
 evt_rect_write(struct evt_rect_df *rout, const struct evt_rect *rin)
 {
-	rout->rd_len = rin->rc_ex.ex_hi - rin->rc_ex.ex_lo + 1;
+	evt_len_write(rout, evt_rect_width(rin));
 	rout->rd_epc = rin->rc_epc;
 	rout->rd_minor_epc = rin->rc_minor_epc;
 	rout->rd_lo = rin->rc_ex.ex_lo;
@@ -684,7 +699,6 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	d_list_t		*current;
 	d_list_t		*next;
 	bool			 insert;
-	daos_epoch_t		 punched_epoch = filter ? filter->fr_punch : 0;
 	int			 rc = 0;
 
 	D_INIT_LIST_HEAD(&covered);
@@ -698,7 +712,7 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	evt_ent_array_for_each(this_ent, ent_array) {
 		next = evt_array_entry2link(this_ent);
 
-		if (punched_epoch >= this_ent->en_epoch) {
+		if (evt_entry_punched(this_ent, filter)) {
 			this_ent->en_visibility = EVT_COVERED;
 			continue;
 		}
@@ -830,13 +844,15 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	int			 num_visible;
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER"\n",
+		DP_FILTER(filter));
 	if (ent_array->ea_ent_nr == 0)
 		return 0;
 
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);
 		num_visible = 0;
-		if (filter && filter->fr_punch >= ent->en_epoch) {
+		if (evt_entry_punched(ent, filter)) {
 			ent->en_visibility = EVT_COVERED;
 		} else {
 			num_visible = 1;
@@ -1920,12 +1936,15 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 {
 	struct evt_entry	*ent;
 	struct evt_entry_in	 hole;
-	daos_epoch_range_t	 epr = {0, entry->ei_rect.rc_epc};
+	struct evt_filter	 filter = {0};
 	struct evt_entry_array	 ent_array;
 	int			 rc = 0;
 
+	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
+	filter.fr_ex = entry->ei_rect.rc_ex;
+
 	evt_ent_array_init(&ent_array);
-	rc = evt_find(toh, &epr, &entry->ei_rect.rc_ex, &ent_array);
+	rc = evt_find(toh, &filter, &ent_array);
 	if (rc != 0)
 		goto done;
 
@@ -1989,7 +2008,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
 	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
-	filter.fr_punch = 0;
+	filter.fr_punch_epc = 0;
+	filter.fr_punch_minor_epc = 0;
 	/* Phase-1: Check for overwrite */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
 				&filter, &entry->ei_rect, &ent_array);
@@ -2304,32 +2324,28 @@ struct evt_max_rect {
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
-	 const struct evt_extent *extent,
+evt_find(daos_handle_t toh, const struct evt_filter *filter,
 	 struct evt_entry_array *ent_array)
 {
 	struct evt_context	*tcx;
-	struct evt_filter	 filter;
 	struct evt_rect		 rect;
 	int			 rc;
 
-	D_ASSERT(epr != NULL || extent != NULL);
+	D_ASSERT(filter != NULL);
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
 	evt_ent_array_init(ent_array);
-	rect.rc_ex = filter.fr_ex = *extent;
-	filter.fr_epr = *epr;
-	filter.fr_punch = 0;
-	rect.rc_epc = epr->epr_hi;
+	rect.rc_ex = filter->fr_ex;
+	rect.rc_epc = filter->fr_epr.epr_hi;
 	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
-				&filter, &rect, ent_array);
+				filter, &rect, ent_array);
 	if (rc == 0)
-		rc = evt_ent_array_sort(tcx, ent_array, NULL, EVT_VISIBLE);
+		rc = evt_ent_array_sort(tcx, ent_array, filter, EVT_VISIBLE);
 	if (rc != 0)
 		evt_ent_array_fini(ent_array);
 	return rc;
@@ -3173,7 +3189,7 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 		    struct evt_entry *ent, bool in_tx)
 {
 	struct evt_entry_array	 ent_array;
-	struct evt_filter	 filter;
+	struct evt_filter	 filter = {0};
 	int			 rc;
 
 	/* NB: This function presently only supports exact match on extent. */
@@ -3182,7 +3198,6 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
-	filter.fr_punch = 0;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
 				&filter, rect, &ent_array);
 	if (rc != 0)
@@ -3235,7 +3250,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	struct evt_context	*tcx;
 	struct evt_entry	*entry;
 	struct evt_entry_array	 ent_array;
-	struct evt_filter	 filter;
+	struct evt_filter	 filter = {0};
 	int			 rc;
 	struct evt_rect		 rect;
 
@@ -3251,7 +3266,6 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 
 	filter.fr_ex = rect.rc_ex;
 	filter.fr_epr = *epr;
-	filter.fr_punch = 0;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
 				&filter, &rect, &ent_array);
 	if (rc != 0) {
@@ -3343,27 +3357,20 @@ void
 evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		    struct evt_entry *entry)
 {
-	daos_off_t	lo_offset;
-	uint32_t	csum_count;
-	uint32_t	chunk_len;
-	uint64_t	csum_start;
+	uint32_t csum_count;
 
 	if (tcx->tc_root->tr_csum_len <= 0 || !tcx->tc_root->tr_csum_chunk_size)
 		return;
 
 	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
-	lo_offset = evt_entry_selected_offset(entry);
 	csum_count = evt_csum_count(tcx, &entry->en_ext);
-	chunk_len = tcx->tc_root->tr_csum_chunk_size;
-	csum_start = lo_offset / chunk_len;
 
 	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
 	entry->en_csum.cs_nr = csum_count;
 	entry->en_csum.cs_buf_len = csum_count * tcx->tc_root->tr_csum_len;
 	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
-	entry->en_csum.cs_chunksize = chunk_len;
-	entry->en_csum.cs_csum = &desc->pt_csum[0] + csum_start *
-						     tcx->tc_root->tr_csum_len;
+	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
+	entry->en_csum.cs_csum = &desc->pt_csum[0];
 }
 
 struct evt_extent
@@ -3385,15 +3392,20 @@ evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size)
 void
 evt_entry_csum_update(const struct evt_extent *const ext,
 		      const struct evt_extent *const sel,
-		      struct dcs_csum_info *csum_info)
+		      struct dcs_csum_info *csum_info,
+		      daos_size_t rec_len)
 {
 	uint32_t csum_to_remove;
+	daos_size_t chunk_records;
 
 	D_ASSERT(csum_info->cs_chunksize > 0);
 	D_ASSERT(sel->ex_lo >= ext->ex_lo);
 
-	csum_to_remove = (sel->ex_lo - ext->ex_lo)
-			 / csum_info->cs_chunksize;
+	chunk_records = csum_record_chunksize(csum_info->cs_chunksize, rec_len)
+			/ rec_len;
+
+	csum_to_remove = sel->ex_lo / chunk_records -
+			 ext->ex_lo / chunk_records;
 
 	csum_info->cs_csum += csum_info->cs_len * csum_to_remove;
 	csum_info->cs_nr -= csum_to_remove;

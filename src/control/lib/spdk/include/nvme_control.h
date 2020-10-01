@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2018-2019 Intel Corporation.
+* (C) Copyright 2018-2020 Intel Corporation.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -25,18 +25,6 @@
 #define NVMECONTROL_H
 
 /**
- * \brief Details of write sequence for quick format.
- */
-struct format_sequence {
-	struct spdk_nvme_ctrlr	*ctrlr;
-	struct spdk_nvme_qpair	*qpair;
-	struct spdk_nvme_ns	*ns;
-	char			*buf;
-	unsigned		 using_cmb_io;
-	int			 is_completed;
-};
-
-/**
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.
  *
@@ -55,7 +43,7 @@ nvme_discover(void);
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *
-nvme_wipe_first_ns(char *ctrlr_pci_addr);
+nvme_wipe_namespaces(void);
 
 /**
  * Format NVMe controller namespace.
@@ -78,11 +66,5 @@ nvme_format(char *ctrlr_pci_addr);
  */
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
-
-/**
- * Cleanup structs held in memory.
- */
-void
-nvme_cleanup(void);
 
 #endif

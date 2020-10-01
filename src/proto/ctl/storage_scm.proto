@@ -38,9 +38,8 @@ message ScmModule {
 	uint32 physicalid = 5;		// The physical id of the module.
 	uint64 capacity = 6;		// The capacity of the module.
 	string uid = 7;			// The uid of the module.
-	//string handle = 3; // The device handle of the module.
-	//string serial = 8; // The serial number of the module.
-	//string fwrev = 10; // The firmware revision of the module.
+	string partNumber = 8;		// The part number of the module.
+	string firmwareRevision = 9;	// Module's active firmware revision
 }
 
 // ScmNamespace represents SCM namespace as pmem device files created on a ScmRegion.

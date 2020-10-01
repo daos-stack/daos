@@ -28,8 +28,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 func TestFirmwareCommands(t *testing.T) {
@@ -37,6 +38,17 @@ func TestFirmwareCommands(t *testing.T) {
 		{
 			"Query with no args defaults to all",
 			"firmware query",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareQueryReq{
+					SCM:  true,
+					NVMe: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query with verbose",
+			"firmware query --verbose",
 			strings.Join([]string{
 				printRequest(t, &control.FirmwareQueryReq{
 					SCM:  true,
@@ -77,6 +89,42 @@ func TestFirmwareCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Query with model ID",
+			"firmware query --model=Model1",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareQueryReq{
+					SCM:     true,
+					NVMe:    true,
+					ModelID: "Model1",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query with FW rev",
+			"firmware query --fwrev=FW100",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareQueryReq{
+					SCM:         true,
+					NVMe:        true,
+					FirmwareRev: "FW100",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query with device list",
+			"firmware query --devices=D1,D2,D3",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareQueryReq{
+					SCM:     true,
+					NVMe:    true,
+					Devices: []string{"D1", "D2", "D3"},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Query with invalid type",
 			"firmware query --type=none",
 			"",
@@ -90,13 +138,13 @@ func TestFirmwareCommands(t *testing.T) {
 		},
 		{
 			"Update with no type",
-			"firmware update --path=/doesnt/matter",
+			"firmware update --path=/does_not/matter",
 			"",
 			errors.New("the required flag `-t, --type' was not specified"),
 		},
 		{
 			"Update with invalid type",
-			"firmware update --type=all --path=/doesnt/matter",
+			"firmware update --type=all --path=/does_not/matter",
 			"",
 			errors.New("Invalid value `all' for option `-t, --type'. Allowed values are: nvme or scm"),
 		},
@@ -112,12 +160,59 @@ func TestFirmwareCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Update with verbose option",
+			"firmware update --type=scm --path=/dont/care --verbose",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareUpdateReq{
+					FirmwarePath: "/dont/care",
+					Type:         control.DeviceTypeSCM,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Update with NVMe",
 			"firmware update --type=nvme --path=/dont/care",
 			strings.Join([]string{
 				printRequest(t, &control.FirmwareUpdateReq{
 					FirmwarePath: "/dont/care",
 					Type:         control.DeviceTypeNVMe,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update with model ID",
+			"firmware update --type=scm --path=/dont/care --model=Model1",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareUpdateReq{
+					FirmwarePath: "/dont/care",
+					Type:         control.DeviceTypeSCM,
+					ModelID:      "Model1",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update with FW rev",
+			"firmware update --type=scm --path=/dont/care --fwrev=FW100",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareUpdateReq{
+					FirmwarePath: "/dont/care",
+					Type:         control.DeviceTypeSCM,
+					FirmwareRev:  "FW100",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update with device list",
+			"firmware update --type=scm --path=/dont/care --devices=D1,D2,D3",
+			strings.Join([]string{
+				printRequest(t, &control.FirmwareUpdateReq{
+					FirmwarePath: "/dont/care",
+					Type:         control.DeviceTypeSCM,
+					Devices:      []string{"D1", "D2", "D3"},
 				}),
 			}, " "),
 			nil,

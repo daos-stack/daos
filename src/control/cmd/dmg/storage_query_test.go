@@ -36,12 +36,6 @@ import (
 func TestStorageQueryCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"NVMe health query",
-			"storage query nvme-health",
-			printRequest(t, &control.StorageScanReq{}),
-			nil,
-		},
-		{
 			"per-server metadata target health query",
 			"storage query target-health -r 0 -t 1",
 			printRequest(t, &control.SmdQueryReq{

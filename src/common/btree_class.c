@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1398,7 +1398,21 @@ iv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	return buf;
 }
 
+static int
+iv_key_msize(int alloc_overhead)
+{
+	return alloc_overhead + sizeof(struct iv_rec);
+}
+
+static int
+iv_hkey_size(void)
+{
+	return sizeof(uint32_t);
+}
+
 btr_ops_t dbtree_iv_ops = {
+	.to_rec_msize	= iv_key_msize,
+	.to_hkey_size	= iv_hkey_size,
 	.to_key_cmp	= iv_key_cmp,
 	.to_key_encode	= iv_key_encode,
 	.to_key_decode	= iv_key_decode,

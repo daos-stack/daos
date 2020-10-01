@@ -17,17 +17,19 @@ pool:
   svcn: 3
   control_method: dmg
 container:
+  type: POSIX
+  control_method: daos
   object_qty: 1
   record_qty: 1
   akey_size: 4
   dkey_size: 4
   data_size: 64
 ior:
-  api: DAOS
+  api: DFS
   block_size: 16m
   segment_count: 16
   transfer_size: 16m
-  daos_oclass: RP_3GX
+  dfs_oclass: RP_3GX
 test:
   loop_quantity: !mux
     one_loop:

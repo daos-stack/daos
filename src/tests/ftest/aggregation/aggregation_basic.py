@@ -57,6 +57,7 @@ class DaosAggregationBasic(IorTestBase):
             reclaimed the overwritten capacity.
 
         :avocado: tags=all,pr,hw,large,aggregate,daosio,aggregatebasic
+        :avocado: tags=DAOS_5610
         """
 
         # Create pool and container
@@ -90,7 +91,7 @@ class DaosAggregationBasic(IorTestBase):
 
         # Run ior the second time on the same pool and container, so another
         # copy of the file is inserted in DAOS.
-        self.run_ior_with_pool(update=False)
+        self.run_ior_with_pool(create_pool=False)
         pool_info = self.pool.pool.pool_query()
         free_space_after_second_ior =\
             pool_info.pi_space.ps_space.s_free[storage_index]

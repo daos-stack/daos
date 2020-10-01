@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,8 @@ enum rpcflags {
 	R_SYNC = 1
 };
 
-Drpc__Call *drpc_call_create(struct drpc *ctx, int32_t module, int32_t method);
+int drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
+		     Drpc__Call **callp);
 void drpc_call_free(Drpc__Call *call);
 
 Drpc__Response *drpc_response_create(Drpc__Call *call);

@@ -1976,17 +1976,17 @@ aggregate_22(void **state)
 		     sizeof(buf_u), &recx, buf_u);
 
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey,
 		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey2,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey2,
 		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 	memset(buf_u, 0, sizeof(buf_u));
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey3,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey3,
 		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey4,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey4,
 		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 
 	update_value(arg, oid, epoch++, 0, dkey, akey, DAOS_IOD_ARRAY,
@@ -2000,16 +2000,16 @@ aggregate_22(void **state)
 	assert_int_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey,
 		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey2,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey2,
 		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey3,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey3,
 		    DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	fetch_value(arg, oid, epoch++,
-		    VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_FETCH, dkey, akey4,
+		    VOS_OF_COND_AKEY_FETCH, dkey, akey4,
 		    DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 
 	arg->ta_flags &= TF_PUNCH;
@@ -2018,16 +2018,16 @@ aggregate_22(void **state)
 
 	/* Also check conditional updates still work */
 	update_value(arg, oid, epoch++,
-		     VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE, dkey,
+		     VOS_OF_COND_DKEY_UPDATE, dkey,
 		     akey, DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	update_value(arg, oid, epoch++,
-		     VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_UPDATE, dkey,
+		     VOS_OF_COND_AKEY_UPDATE, dkey,
 		     akey2, DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 	update_value(arg, oid, epoch++,
-		     VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_AKEY_UPDATE, dkey,
+		     VOS_OF_COND_AKEY_UPDATE, dkey,
 		     akey3, DAOS_IOD_ARRAY, sizeof(buf_u), &recx, buf_u);
 	update_value(arg, oid, epoch++,
-		     VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE, dkey,
+		     VOS_OF_COND_DKEY_UPDATE, dkey,
 		     akey4, DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
 }
 

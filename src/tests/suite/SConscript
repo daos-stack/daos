@@ -1,4 +1,6 @@
 """Build test suite"""
+import sys
+
 import subprocess
 #hack to handle old subprocess version
 try:
@@ -33,11 +35,13 @@ def CheckCmockaSkip(context):
     context.Message('Checking if cmocka skip() bug is present ... ')
     rc = context.TryCompile(test_cmocka_skip, '.c')
     if rc == 0:
-        print(" (Compile failed) assuming ", context.Result(not rc))
+        sys.stdout.write(" (Compile failed) assuming ")
+        context.Result(not rc)
         return rc
     rc = context.TryLink(test_cmocka_skip, '.c')
     if rc == 0:
-        print(" (Link failed) assuming ", context.Result(not rc))
+        sys.stdout.write(" (Link failed) assuming ")
+        context.Result(not rc)
         return rc
     prog = context.lastTarget
     pname = prog.get_abspath()
@@ -45,12 +49,13 @@ def CheckCmockaSkip(context):
                          stderr=DEVNULL)
     #in case of abort rc is -6 instead of 134 (128+6) with shell ...
     if rc == -6:
-        print(" (Bug reproduced) ", context.Result(rc))
+        sys.stdout.write(" (Bug reproduced) ")
     else:
         if rc != 0:
-            print(" (Other error than bug) assuming ", context.Result(rc))
+            sys.stdout.write(" (Other error than bug) assuming ")
         else:
-            print(" (Bug not reproduced) ", context.Result(rc))
+            sys.stdout.write(" (Bug not reproduced) ")
+    context.Result(rc)
     #return 0 means error
     return not rc
 

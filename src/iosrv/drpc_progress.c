@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -219,7 +219,7 @@ drpc_progress_context_accept(struct drpc_progress_context *ctx)
 		 * Any failure to accept is weird and surprising
 		 */
 		D_ERROR("Failed to accept new drpc connection\n");
-		return -DER_UNKNOWN;
+		return -DER_MISC;
 	}
 
 	D_ALLOC_PTR(session_node);
@@ -255,7 +255,7 @@ process_listener_activity(struct drpc_progress_context *ctx,
 		/* Unexpected - don't do anything */
 		D_INFO("Ignoring surprising listener activity: %u\n",
 		       listener_comm->activity);
-		rc = -DER_UNKNOWN;
+		rc = -DER_MISC;
 		break;
 
 	default:

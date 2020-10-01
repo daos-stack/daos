@@ -406,6 +406,28 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
 		   daos_event_t *ev);
 
 /**
+ * Delete a list of user-defined pool attributes.
+ *
+ * \param[in]	poh	Pool handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[],
+		   daos_event_t *ev);
+
+/**
  * List a pool's containers.
  *
  * \param[in]	poh	Pool connection handle.

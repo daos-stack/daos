@@ -500,8 +500,10 @@ rebuild_scanner(void *data)
 		return 0;
 	}
 
-	if (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG))
-		dss_sleep(daos_fail_value_get() * 1000000);
+	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
+		D_DEBUG(DB_REBUILD, "sleep 2 seconds then retry\n");
+		dss_sleep(2 * 1000);
+	}
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
@@ -603,6 +605,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
 	struct rebuild_scan_out		*ro;
+	struct rebuild_pool_tls		*tls;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	d_rank_list_t			*fail_list = NULL;
 	int				 rc;
@@ -657,6 +660,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		rpt->rt_leader_term = rsi->rsi_leader_term;
 
 		D_GOTO(out, rc = 0);
+	}
+
+	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
+	if (tls != NULL) {
+		D_WARN("the previous rebuild "DF_UUID"/%d is not cleanup yet\n",
+		       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
+		D_GOTO(out, rc = -DER_BUSY);
 	}
 
 	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))

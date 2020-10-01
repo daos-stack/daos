@@ -28,6 +28,12 @@ var (
 	ConfigDir string = "./"
 	// DaosVersion should be set via linker flag using the value of DAOS_VERSION.
 	DaosVersion string = "unset"
+	// ControlPlaneName defines a consistent name for the control plane server.
+	ControlPlaneName = "DAOS Control Server"
+	// DataPlaneName defines a consistent name for the ioserver.
+	DataPlaneName = "DAOS I/O Server"
+	// ManagementServiceName defines a consistent name for the Management Service.
+	ManagementServiceName = "DAOS Management Service"
 
 	// DefaultControlPort defines the default control plane listener port.
 	DefaultControlPort = 10001

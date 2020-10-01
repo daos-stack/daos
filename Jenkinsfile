@@ -14,9 +14,12 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def doc_only_change() {
+boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
         return true
+    }
+    if (cachedCommitPragma(pragma: 'Doc-only') == 'false') {
+        return false
     }
 
     def rc = sh label: "Determine if doc-only change",
@@ -27,11 +30,16 @@ def doc_only_change() {
     return rc == 1
 }
 
-def skip_stage(String stage) {
-    return cachedCommitPragma(pragma: 'Skip-' + stage) == 'true'
+def skip_stage(String stage, boolean def_val = false) {
+    String value = 'false'
+    if (def_val) {
+        value = 'true'
+    }
+    return cachedCommitPragma(pragma: 'Skip-' + stage,
+                              def_val: value) == 'true'
 }
 
-def quickbuild() {
+boolean quickbuild() {
     return cachedCommitPragma(pragma: 'Quick-build') == 'true'
 }
 
@@ -41,9 +49,14 @@ def functional_post_always() {
              returnStatus: true)
 }
 
-def get_daos_packages(String distro) {
+String get_daos_packages() {
+    Map stage_info = parseStageInfo()
+    return get_daos_packages(stage_info['target'])
+}
 
-    def pkgs
+String get_daos_packages(String distro) {
+
+    String pkgs
     if (env.TEST_RPMS == 'true') {
         pkgs = "daos{,-{client,tests,server}}"
     } else {
@@ -53,11 +66,24 @@ def get_daos_packages(String distro) {
     return pkgs + "-" + daos_packages_version(distro)
 }
 
-def component_repos() {
-    return cachedCommitPragma(pragma: 'PR-repos')
+String pr_repos() {
+    Map stage_info = parseStageInfo()
+    return pr_repos(stage_info['target'])
 }
 
-def daos_repo() {
+String pr_repos(String distro) {
+    String repos = ""
+    if (distro == 'centos7') {
+        repos = cachedCommitPragma(pragma: 'PR-repos-el7')
+    } else if (distro == 'leap15') {
+        repos = cachedCommitPragma(pragma: 'PR-repos-leap15')
+    } else {
+       error 'pr_repos not implemented for ' + distro
+    }
+    return repos + ' ' + cachedCommitPragma(pragma: 'PR-repos')
+}
+
+String daos_repo() {
     if (cachedCommitPragma(pragma: 'RPM-test-version') == '') {
         return "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
     } else {
@@ -65,8 +91,57 @@ def daos_repo() {
     }
 }
 
-def el7_daos_repos() {
-    return el7_component_repos + ' ' + component_repos() + ' ' + daos_repo()
+String hw_distro_target() {
+    if (env.STAGE_NAME.contains('Hardware')) {
+        if (env.STAGE_NAME.contains('Small')) {
+            return hw_distro('small')
+        }
+        if (env.STAGE_NAME.contains('Medium')) {
+            return hw_distro('medium')
+        }
+        if (env.STAGE_NAME.contains('Large')) {
+            return hw_distro('large')
+        }
+    }
+    Map stage_info = parseStageInfo()
+    return stage_info['target']
+}
+
+String daos_repos() {
+    String target = hw_distro_target()
+    return daos_repos(target)
+}
+
+String daos_repos(String distro) {
+    return pr_repos(distro) + ' ' + daos_repo()
+}
+
+String unit_packages() {
+    Map stage_info = parseStageInfo()
+    boolean need_qb = quickbuild()
+    if (env.STAGE_NAME.contains('Bullseye')) {
+        need_qb = true
+    }
+    if (stage_info['target'] == 'centos7') {
+        String packages =  'gotestsum openmpi3 ' +
+                           'hwloc-devel argobots ' +
+                           'fuse3-libs fuse3 ' +
+                           'boost-devel ' +
+                           'libisa-l-devel libpmem ' +
+                           'libpmemobj protobuf-c ' +
+                           'spdk-devel libfabric-devel '+
+                           'pmix numactl-devel ' +
+                           'libipmctl-devel ' +
+                           'python36-tabulate '
+        if (need_qb) {
+            // TODO: these should be gotten from the Requires: of RPM
+            packages += " spdk-tools mercury-2.0.0~rc1" +
+                        " boost-devel libisa-l_crypto libfabric-debuginfo"
+        }
+        return packages
+    } else {
+        error 'unit packages not implemented for ' + stage_info['target']
+    }
 }
 
 commit_pragma_cache = [:]
@@ -82,12 +157,23 @@ def cachedCommitPragma(Map config) {
 
 }
 
-def daos_packages_version(String distro) {
+String daos_packages_version() {
+    stage_info = parseStageInfo()
+    return daos_packages_version(stage_info['target'])
+}
+
+String daos_packages_version(String distro) {
     // commit pragma has highest priority
     // TODO: this should actually be determined from the PR-repos artifacts
-    def version = cachedCommitPragma(pragma: 'RPM-test-version')
+    String version = cachedCommitPragma(pragma: 'RPM-test-version')
     if (version != "") {
-        return version
+        String dist
+        if (distro == "centos7") {
+            dist = "el7"
+        } else if (distro == "leap15") {
+            dist = "suse.lp152"
+        }
+        return version + "." + dist
     }
 
     // use the stash after that
@@ -100,38 +186,7 @@ def daos_packages_version(String distro) {
     error "Don't know how to determine package version for " + distro
 }
 
-def fault_test_tag() {
-    if (skip_stage('fault-test')) {
-        return ",-faults"
-    }
-    return ""
-}
-
-def release_candidate() {
-    if (!sh(label: "Determine if building (a PR of) an RC",
-          script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
-                  "grep -i '[0-9]rc[0-9]' TAG",
-          returnStatus: true)) {
-        return true
-    }
-    return false
-}
-
-def faults_enabled(String type) {
-    // if the fault_enabled pragma is false or it a release candidate; disable fault injection
-    if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
-        return ""
-    }
-    if (type == "rpm") {
-        return "--with=fault-injection"
-    }
-    if (type == "scons") {
-        return "--with-fault-injection"
-    }
-    error("Unexpected value passed to faults_enabled(): " + type)
-}
-
-def parallel_build() {
+boolean parallel_build() {
     // defaults to false
     // true if Quick-build: true unless Parallel-build: false
     def pb = cachedCommitPragma(pragma: 'Parallel-build')
@@ -143,16 +198,50 @@ def parallel_build() {
     return false
 }
 
+String hw_distro(String size) {
+    // Possible values:
+    //'leap15
+    //'centos7
+    return cachedCommitPragma(pragma: 'Func-hw-test-' + size + '-distro',
+                              def_val: cachedCommitPragma(pragma: 'Func-hw-test-distro',
+                                                          def_val: 'centos7'))
+}
+
+String functional_packages() {
+    String target = hw_distro_target()
+    return functional_packages(target)
+}
+
+String functional_packages(String distro) {
+    String pkgs = get_daos_packages(distro)
+    pkgs += " openmpi3 hwloc ndctl fio " +
+            "ior-hpc-daos-0 " +
+            "romio-tests-cart-4-daos-0 " +
+            "testmpio-cart-4-daos-0 " + 
+            "mpi4py-tests-cart-4-daos-0 " +
+            "hdf5-mpich2-tests-daos-0 " +
+            "hdf5-openmpi3-tests-daos-0 " +
+            "hdf5-vol-daos-mpich2-tests-daos-0 " +
+            "hdf5-vol-daos-openmpi3-tests-daos-0 " +
+            "MACSio-mpich2-daos-0 " +
+            "MACSio-openmpi3-daos-0"
+    if (quickbuild()) {
+        pkgs += " spdk_tools"
+    }
+    if (distro == "leap15") {
+        return pkgs
+    } else if (distro == "centos7") {
+        // need to exclude openmpi until we remove it from the repo
+        return  "--exclude openmpi " + pkgs
+    } else {
+        error 'functional_packages not implemented for ' + stage_info['target']
+    }
+}
+
+// Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
-
-def qb_inst_rpms = ""
-el7_component_repos = ""
-def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
-                       "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
-                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
-                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0 fio"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -168,9 +257,9 @@ if (!env.CHANGE_ID &&
 cached_uid = 0
 def getuid() {
     if (cached_uid == 0)
-        cached_uid = sh label: 'getuid()',
+        cached_uid = sh(label: 'getuid()',
                         script: "id -u",
-                        returnStdout: true
+                        returnStdout: true).trim()
     return cached_uid
 }
 
@@ -194,8 +283,12 @@ def docker_build_args(Map config = [:]) {
       ret_str += ' --build-arg REPO_EL8=' + env.DAOS_STACK_EL_8_LOCAL_REPO
     }
     if (env.DAOS_STACK_LEAP_15_LOCAL_REPO) {
-      ret_str += ' --build-arg REPO_LEAP15=' +
+      ret_str += ' --build-arg REPO_LOCAL_LEAP15=' +
                  env.DAOS_STACK_LEAP_15_LOCAL_REPO
+    }
+    if (env.DAOS_STACK_LEAP_15_GROUP_REPO) {
+      ret_str += ' --build-arg REPO_GROUP_LEAP15=' +
+                 env.DAOS_STACK_LEAP_15_GROUP_REPO
     }
     if (env.HTTP_PROXY) {
       ret_str += ' --build-arg HTTP_PROXY="' + env.HTTP_PROXY + '"'
@@ -221,17 +314,28 @@ pipeline {
     }
 
     environment {
+        BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         BUILDARGS = docker_build_args()
         BUILDARGS_QB_CHECK = docker_build_args(qb: quickbuild())
         BUILDARGS_QB_TRUE = docker_build_args(qb: true)
-        QUICKBUILD_DEPS = sh label: 'Get Quickbuild dependencies',
-                             script: 'rpmspec -q --srpm --requires' +
-                                     ' utils/rpms/daos.spec 2>/dev/null',
-                             returnStdout: true
-        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'false')
+        QUICKBUILD_DEPS_EL7 = sh label:'Get Quickbuild dependencies',
+                                 script: "rpmspec -q --define dist\\ .el7 " +
+                                         "--undefine suse_version " +
+                                         "--define rhel\\ 7 --srpm " +
+                                         "--requires utils/rpms/daos.spec " +
+                                         "2>/dev/null",
+                                 returnStdout: true
+        QUICKBUILD_DEPS_LEAP15 = sh label:'Get Quickbuild dependencies',
+                                    script: "rpmspec -q --define dist\\ .suse.lp151 " +
+                                            "--undefine rhel " +
+                                            "--define suse_version\\ 1501 --srpm " +
+                                            "--requires utils/rpms/daos.spec " +
+                                            "2>/dev/null",
+                                    returnStdout: true
+        TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
     }
 
     options {
@@ -447,53 +551,13 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   scons_args: faults_enabled('scons'),
-                                   parallel_build: parallel_build(),
-                                   log_to_file: 'centos7-gcc-build.log',
-                                   failure_artifacts: 'config.log-centos7-gcc'
-                        stash name: 'centos7-gcc-install',
-                              includes: 'install/**'
-                        stash name: 'centos7-gcc-build-vars',
-                              includes: ".build_vars${arch}.*"
-                        stash name: 'centos7-gcc-tests',
-                              includes: '''build/*/*/src/cart/src/utest/test_linkage,
-                                           build/*/*/src/cart/src/utest/test_gurt,
-                                           build/*/*/src/cart/src/utest/utest_hlc,
-                                           build/*/*/src/cart/src/utest/utest_swim,
-                                           build/*/*/src/rdb/raft/src/tests_main,
-                                           build/*/*/src/common/tests/btree_direct,
-                                           build/*/*/src/common/tests/btree,
-                                           build/*/*/src/common/tests/sched,
-                                           build/*/*/src/common/tests/drpc_tests,
-                                           build/*/*/src/common/tests/acl_api_tests,
-                                           build/*/*/src/common/tests/acl_valid_tests,
-                                           build/*/*/src/common/tests/acl_util_tests,
-                                           build/*/*/src/common/tests/acl_principal_tests,
-                                           build/*/*/src/common/tests/acl_real_tests,
-                                           build/*/*/src/common/tests/prop_tests,
-                                           build/*/*/src/iosrv/tests/drpc_progress_tests,
-                                           build/*/*/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
-                                           build/*/*/src/client/api/tests/eq_tests,
-                                           build/*/*/src/iosrv/tests/drpc_handler_tests,
-                                           build/*/*/src/iosrv/tests/drpc_listener_tests,
-                                           build/*/*/src/mgmt/tests/srv_drpc_tests,
-                                           build/*/*/src/security/tests/cli_security_tests,
-                                           build/*/*/src/security/tests/srv_acl_tests,
-                                           build/*/*/src/vos/vea/tests/vea_ut,
-                                           build/*/*/src/common/tests/umem_test,
-                                           build/*/*/src/bio/smd/tests/smd_ut,
-                                           utils/sl/build_info/**,
-                                           src/common/tests/btree.sh,
-                                           src/control/run_go_tests.sh,
-                                           src/rdb/raft_tests/raft_tests.py,
-                                           src/vos/tests/evt_ctl.sh
-                                           src/control/lib/netdetect/netdetect.go'''
+                        sconsBuild parallel_build: parallel_build(),
+                                   stash_files: 'ci/test_files_to_stash.txt'
                     }
                     post {
                         always {
@@ -502,8 +566,8 @@ pipeline {
                                          id: "analysis-gcc-centos7",
                                          tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
                                                   cppCheck(pattern: 'centos7-gcc-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -513,6 +577,54 @@ pipeline {
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 7 Bullseye') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { environment name: 'NO_CI_TESTING',
+                                  value: 'true' }
+                            expression { ! skip_stage('bullseye', true) }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_TRUE' +
+                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallel_build(),
+                                   stash_files: 'ci/test_files_to_stash.txt'
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         aggregatingResults: true,
+                                         id: "analysis-covc-centos7",
+                                         tools: [ gcc4(pattern: 'centos7-covc-build.log'),
+                                                  cppCheck(pattern: 'centos7-covc-build.log') ],
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
+                        }
+                        success {
+                            sh "rm -rf _build.external${arch}"
+                        }
+                        unsuccessful {
+                            sh """if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log config.log-centos7-covc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos7-covc',
                                              allowEmptyArchive: true
                         }
                     }
@@ -533,17 +645,12 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   BUILD_TYPE: 'debug',
-                                   parallel_build: parallel_build(),
-                                   scons_args: faults_enabled('scons'),
-                                   log_to_file: 'centos7-gcc-debug-build.log',
-                                   failure_artifacts: 'config.log-centos7-gcc-debug'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -552,8 +659,8 @@ pipeline {
                                          id: "analysis-gcc-centos7-debug",
                                          tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log'),
                                                   cppCheck(pattern: 'centos7-gcc-debug-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                   excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -583,17 +690,12 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   BUILD_TYPE: 'release',
-                                   parallel_build: parallel_build(),
-                                   scons_args: faults_enabled('scons'),
-                                   log_to_file: 'centos7-gcc-release-build.log',
-                                   failure_artifacts: 'config.log-centos7-gcc-release'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -633,17 +735,11 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_CHECK' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"'
+                                  env.QUICKBUILD_DEPS_EL7 + '"'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf bandit.xml',
-                                   COMPILER: "clang",
-                                   parallel_build: parallel_build(),
-                                   scons_args: faults_enabled('scons'),
-                                   log_to_file: 'centos7-clang-build.log',
-                                   failure_artifacts: 'config.log-centos7-clang'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -652,8 +748,8 @@ pipeline {
                                          id: "analysis-centos7-clang",
                                          tools: [ clang(pattern: 'centos7-clang-build.log'),
                                                   cppCheck(pattern: 'centos7-clang-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -685,12 +781,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf bandit.xml',
-                                   parallel_build: parallel_build(),
-                                   scons_args: faults_enabled('scons'),
-                                   log_to_file: 'ubuntu20.04-gcc-build.log',
-                                   failure_artifacts: 'config.log-ubuntu20.04-gcc'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -699,8 +790,8 @@ pipeline {
                                          id: "analysis-ubuntu20",
                                          tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
                                                   cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -734,13 +825,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf bandit.xml',
-                                   COMPILER: "clang",
-                                   parallel_build: parallel_build(),
-                                   scons_args: faults_enabled('scons'),
-                                   log_to_file: 'ubuntu20.04-clang-build.log',
-                                   failure_artifacts: 'config.log-ubuntu20.04-clag'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -749,8 +834,8 @@ pipeline {
                                          id: "analysis-ubuntu20-clang",
                                          tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
                                                   cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -765,29 +850,21 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            branch target_branch
-                            expression { ! quickbuild() }
-                        }
-                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
-                                                 '$BUILDARGS'
+                                '$BUILDARGS_QB_CHECK' +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_LEAP15 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf bandit.xml',
-                                   parallel_build: parallel_build(),
-                                   scons_args: faults_enabled('scons'),
-                                   log_to_file: 'leap15-gcc-build.log',
-                                   failure_artifacts: 'config.log-leap15-gcc'
+                        sconsBuild parallel_build: parallel_build(),
+                                   stash_files: 'ci/test_files_to_stash.txt'
                     }
                     post {
                         always {
@@ -796,8 +873,8 @@ pipeline {
                                          id: "analysis-gcc-leap15",
                                          tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
                                                   cppCheck(pattern: 'leap15-gcc-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -829,12 +906,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   COMPILER: "clang",
-                                   parallel_build: parallel_build(),
-                                   scons_args: faults_enabled('scons'),
-                                   log_to_file: 'leap15-clang-build.log',
-                                   failure_artifacts: 'config.log-leap15-clang'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -843,8 +915,8 @@ pipeline {
                                          id: "analysis-leap15-clang",
                                          tools: [ clang(pattern: 'leap15-clang-build.log'),
                                                   cppCheck(pattern: 'leap15-clang-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -879,14 +951,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild clean: "_build.external${arch}",
-                                   prebuild: 'rm -rf src/rdb/raft/CLinkedListQueue',
-                                   COMPILER: "icc",
-                                   parallel_build: parallel_build(),
-                                   scons_args: faults_enabled('scons'),
-                                   log_to_file: 'leap15-icc-build.log',
-                                   TARGET_PREFIX: 'install/opt',
-                                   failure_artifacts: 'config.log-leap15-icc'
+                        sconsBuild parallel_build: parallel_build()
                     }
                     post {
                         always {
@@ -895,8 +960,8 @@ pipeline {
                                          id: "analysis-leap15-intelc",
                                          tools: [ intel(pattern: 'leap15-icc-build.log'),
                                                   cppCheck(pattern: 'leap15-icc-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
+                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
+                                                    excludeFile('_build\\.external\\/.*') ]
                         }
                         success {
                             sh "rm -rf _build.external${arch}"
@@ -912,7 +977,7 @@ pipeline {
                 }
             }
         }
-        stage('Unit Test') {
+        stage('Unit Tests') {
             when {
                 beforeAgent true
                 allOf {
@@ -926,96 +991,83 @@ pipeline {
                 }
             }
             parallel {
-                stage('run_test.sh') {
+                stage('Unit Test') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('run_test') }
+                      allOf {
+                          expression { ! skip_stage('unit-test')}
+                          expression { ! skip_stage('run_test') }
+                      }
                     }
                     agent {
                         label 'ci_vm1'
                     }
                     steps {
-                        script {
-                            if (quickbuild()) {
-                                // TODO: these should be gotten from the Requires: of RPMs
-                                qb_inst_rpms = " spdk-tools mercury boost-devel"
-                            }
-                        }
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       profile: 'daos_ci',
-                                       distro: 'el7',
-                                       snapshot: true,
-                                       inst_repos: el7_component_repos + ' ' +
-                                                   component_repos(),
-                                       inst_rpms: 'gotestsum openmpi3 ' +
-                                                  'hwloc-devel argobots ' +
-                                                  'fuse3-libs fuse3 ' +
-                                                  'boost-devel ' +
-                                                  'libisa-l-devel libpmem ' +
-                                                  'libpmemobj protobuf-c ' +
-                                                  'spdk-devel libfabric-devel '+
-                                                  'pmix numactl-devel ' +
-                                                  'libipmctl-devel ' +
-						    'python36-tabulate' +
-                                                  qb_inst_rpms
-                        timeout(time:60, unit:'MINUTES') {
-                          runTest stashes: [ 'centos7-gcc-tests',
-                                           'centos7-gcc-install',
-                                           'centos7-gcc-build-vars' ],
-                                script: "SSH_KEY_ARGS=${env.SSH_KEY_ARGS} " +
-                                        "NODELIST=${env.NODELIST} " +
-                                        'ci/unit/test_main.sh',
-                                junit_files: 'test_results/*.xml'
-                        }
+                        unitTest timeout_time: 60,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
                     }
                     post {
                       always {
-                            // https://issues.jenkins-ci.org/browse/JENKINS-58952
-                            // label is at the end
-                            // sh label: "Collect artifacts and tear down",
-                            //   script '''set -ex
-                            sh script: 'ci/unit/test_post_always.sh',
-                               label: "Collect artifacts and tear down"
-                            junit 'test_results/*.xml'
-                            archiveArtifacts artifacts: 'run_test.sh/**'
-                            archiveArtifacts artifacts: 'vm_test/**'
-                            publishValgrind (
-                                    failBuildOnInvalidReports: true,
-                                    failBuildOnMissingReports: true,
-                                    failThresholdDefinitelyLost: '0',
-                                    failThresholdInvalidReadWrite: '0',
-                                    failThresholdTotal: '0',
-                                    pattern: 'dnt.*.memcheck.xml',
-                                    publishResultsForAbortedBuilds: false,
-                                    publishResultsForFailedBuilds: true,
-                                    sourceSubstitutionPaths: '',
-                                    unstableThresholdDefinitelyLost: '0',
-                                    unstableThresholdInvalidReadWrite: '0',
-                                    unstableThresholdTotal: '0'
-                            )
-                            recordIssues enabledForFailure: true,
-                                         failOnError: true,
-                                         referenceJobName: 'daos-stack/daos/master',
-                                         ignoreFailedBuilds: false,
-                                         ignoreQualityGate: true,
-                                         /* Set qualitygate to 1 new "NORMAL" priority message
-                                           * Supporting messages to help identify causes of
-                                           * problems are set to "LOW", and there are a
-                                           * number of intermittent issues during server
-                                           * shutdown that would normally be NORMAL but in
-                                           * order to have stable results are set to LOW.
-                                           */
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_HIGH', unstable: true],
-                                                        [threshold: 1, type: 'TOTAL_ERROR', unstable: true],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true]],
-                                         name: "Node local testing",
-                                         tool: issues(pattern: 'vm_test/nlt-errors.json',
-                                                      name: 'NLT results',
-                                                      id: 'VM_test')
+                            unitTestPost artifacts: ['unit_test_logs/*',
+                                                     'unit_vm_test/**'],
+                                         valgrind_stash: 'centos7-gcc-unit-valg'
                         }
                     }
                 }
+                stage('Unit Test Bullseye') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('bullseye', true) }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        unitTest timeout_time: 60,
+                                 ignore_failure: true,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPost ignore_failure: true,
+                                         artifacts: ['covc_test_logs/*',
+                                                     'covc_vm_test/**']
+                        }
+                    }
+                } // stage('Unit test Bullseye')
+                stage('Unit Test with memcheck') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('unit-test-memcheck') }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        unitTest timeout_time: 60,
+                                 ignore_failure: true,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPost ignore_failure: true,
+                                         artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                     'unit_memcheck_vm_test/**'],
+                                         valgrind_stash: 'centos7-gcc-unit-memcheck'
+                        }
+                    }
+                } // stage('Unit Test with memcheck')
             }
         }
         stage('Test') {
@@ -1044,77 +1096,67 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS + '"' +
-                                ' --build-arg REPOS="' + component_repos() + '"'
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
                     steps {
-                        sh "rm -f coverity/daos_coverity.tgz"
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallel_build(),
-                                   clean: "_build.external${arch}",
-                                   failure_artifacts: 'config.log-centos7-cov',
-                                   scons_args: faults_enabled('scons')
+                                   parallel_build: parallel_build()
                     }
                     post {
                         success {
-                            sh """rm -rf _build.external${arch}
-                                  mkdir -p coverity
-                                  rm -f coverity/*
-                                  if [ -e cov-int ]; then
-                                      tar czf coverity/daos_coverity.tgz cov-int
-                                  fi"""
-                            archiveArtifacts artifacts: 'coverity/daos_coverity.tgz',
-                                             allowEmptyArchive: true
+                            coverityPost condition: 'success'
                         }
                         unsuccessful {
-                            sh """mkdir -p coverity
-                                  if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log coverity/config.log-centos7-cov
-                                  fi
-                                  if [ -f cov-int/build-log.txt ]; then
-                                      mv cov-int/build-log.txt coverity/cov-build-log.txt
-                                  fi"""
-                            archiveArtifacts artifacts: 'coverity/cov-build-log.txt',
-                                             allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'coverity/config.log-centos7-cov',
-                                             allowEmptyArchive: true
-                      }
+                            coverityPost condition: 'unsuccessful'
+                        }
                     }
                 }
-                stage('Functional') {
+                stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('func-test') }
+                        allOf {
+                            expression { ! skip_stage('func-test') }
+                            expression { ! skip_stage('func-test-vm') }
+                            expression { ! skip_stage('func-test-el7')}
+                        }
                     }
                     agent {
                         label 'ci_vm9'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 9,
-                                       profile: 'daos_ci',
-                                       distro: 'el7',
-                                       snapshot: true,
-                                       inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
-                        runTestFunctional stashes: [ 'centos7-gcc-install',
-                                                     'centos7-gcc-build-vars' ],
-                                          test_rpms: env.TEST_RPMS,
-                                          pragma_suffix: '',
-                                          test_tag: 'pr,-hw' + fault_test_tag(),
-                                          node_count: 9,
-                                          ftest_arg: ''
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
-                            functional_post_always()
-                            archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+                            functionalTestPost()
                         }
                     }
                 }
+                stage('Functional on Leap 15') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { ! skip_stage('func-test') }
+                            expression { ! skip_stage('func-test-vm') }
+                            expression { ! skip_stage('func-test-leap15') }
+                        }
+                    }
+                    agent {
+                        label 'ci_vm9'
+                    }
+                    steps {
+                        functionalTest inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                    }
+                    post {
+                        always {
+                            functionalTestPost()
+                        }
+                    } // post
+                } // stage('Functional on Leap 15')
                 stage('Functional_Hardware_Small') {
                     when {
                         beforeAgent true
@@ -1129,29 +1171,16 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 3,
-                                       profile: 'daos_ci',
-                                       distro: 'el7',
-                                       inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') +
-                                                   ' ' + functional_rpms
-                        runTestFunctional stashes: [ 'centos7-gcc-install',
-                                                     'centos7-gcc-build-vars' ],
-                                          test_rpms: env.TEST_RPMS,
-                                          pragma_suffix: '-hw-small',
-                                          test_tag: 'pr,hw,small' + fault_test_tag(),
-                                          node_count: 3,
-                                          ftest_arg: '"auto:Optane"'
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
-                            functional_post_always()
-                            archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+                            functionalTestPost()
                         }
                     }
-                }
+                } // stage('Functional_Hardware_Small')
                 stage('Functional_Hardware_Medium') {
                     when {
                         beforeAgent true
@@ -1166,29 +1195,16 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 5,
-                                       profile: 'daos_ci',
-                                       distro: 'el7',
-                                       inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
-                        runTestFunctional stashes: [ 'centos7-gcc-install',
-                                                     'centos7-gcc-build-vars' ],
-                                          test_rpms: env.TEST_RPMS,
-                                          pragma_suffix: '-hw-medium',
-                                          test_tag: 'pr,hw,medium,ib2' + fault_test_tag(),
-                                          node_count: 5,
-                                          ftest_arg: '"auto:Optane"'
-                    }
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
+                   }
                     post {
                         always {
-                            functional_post_always()
-                            archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+                            functionalTestPost()
                         }
                     }
-                }
+                } // stage('Functional_Hardware_Medium')
                 stage('Functional_Hardware_Large') {
                     when {
                         beforeAgent true
@@ -1203,29 +1219,16 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 9,
-                                       profile: 'daos_ci',
-                                       distro: 'el7',
-                                       inst_repos: el7_daos_repos(),
-                                       inst_rpms: get_daos_packages('centos7') + ' ' +
-                                                  functional_rpms
-                        runTestFunctional stashes: [ 'centos7-gcc-install',
-                                                     'centos7-gcc-build-vars' ],
-                                          test_rpms: env.TEST_RPMS,
-                                          pragma_suffix: '-hw-large',
-                                          test_tag: 'pr,hw,large' + fault_test_tag(),
-                                          node_count: 9,
-                                          ftest_arg: '"auto:Optane"'
+                        functionalTest target: hw_distro_target(),
+                                       inst_repos: daos_repos(),
+                                       inst_rpms: functional_packages()
                     }
                     post {
                         always {
-                            functional_post_always()
-                            archiveArtifacts artifacts: 'Functional/**'
-                            junit 'Functional/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+                            functionalTestPost()
                         }
                     }
-                }
+                } // stage('Functional_Hardware_Large')
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -1241,8 +1244,8 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        testRpm inst_repos: el7_daos_repos(),
-                                daos_pkg_version: daos_packages_version("centos7")
+                        testRpm inst_repos: daos_repos(),
+                                daos_pkg_version: daos_packages_version()
                    }
                 } // stage('Test CentOS 7 RPMs')
                 stage('Scan CentOS 7 RPMs') {
@@ -1259,8 +1262,8 @@ pipeline {
                         label 'ci_vm1'
                     }
                     steps {
-                        testRpm inst_repos: el7_daos_repos(),
-                                daos_pkg_version: daos_packages_version("centos7"),
+                        testRpm inst_repos: daos_repos(),
+                                daos_pkg_version: daos_packages_version(),
                                 inst_rpms: 'clamav clamav-devel',
                                 test_script: 'ci/rpm/scan_daos.sh',
                                 junit_files: 'maldetect.xml'
@@ -1271,12 +1274,52 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
-            }
-        }
-    }
+            } // parallel
+        } // stage('Test')
+        stage ('Test Report') {
+            parallel {
+                stage('Bullseye Report') {
+                    when {
+                      beforeAgent true
+                      allOf {
+                        expression { ! env.BULLSEYE != null }
+                        expression { ! skip_stage('bullseye', true) }
+                      }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                '$BUILDARGS_QB_TRUE' +
+                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                ' --build-arg REPOS="' + pr_repos() + '"'
+                        }
+                    }
+                    steps {
+                        // The coverage_healthy is primarily set here
+                        // while the code coverage feature is being implemented.
+                        cloverReportPublish(
+                                   coverage_stashes: ['centos7-covc-unit-cov'],
+                                   coverage_healthy: [methodCoverage: 0,
+                                                      conditionalCoverage: 0,
+                                                      statementCoverage: 0],
+                                   ignore_failure: true)
+                    }
+                } // stage('Bullseye Report')
+            } // parallel
+        } // stage ('Test Report')
+    } // stages
     post {
+        always {
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+                                                     'centos7-gcc-unit-memcheck']
+        }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
         }
-    }
+    } // post
 }

@@ -139,6 +139,8 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
+	vos_dedup_fini(pool);
+
 	D_FREE(pool);
 }
 
@@ -589,9 +591,10 @@ vos_register_slabs(struct umem_attr *uma)
 /**
  * Open a Versioning Object Storage Pool (VOSP), load its root object
  * and other internal data structures.
+ * Reserve space for system activity (less if caller specifies "small" pool).
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
+vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool_df	*pool_df;
@@ -709,6 +712,10 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		}
 	}
 
+	rc = vos_dedup_init(pool);
+	if (rc)
+		goto failed;
+
 	/* Insert the opened pool to the uuid hash table */
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
@@ -718,6 +725,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
+	pool->vp_small = small;
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
@@ -801,6 +809,19 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 	rc = vos_space_query(pool, vps, false);
 	vos_pool_decref(pool);
 	return rc;
+}
+
+int
+vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
+{
+	struct vos_pool	*pool = vos_hdl2pool(poh);
+
+	if (pool == NULL)
+		return -DER_NO_HDL;
+	if (space_sys == NULL)
+		return -DER_INVAL;
+
+	return vos_space_sys_set(pool, space_sys);
 }
 
 int

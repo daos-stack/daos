@@ -26,6 +26,7 @@ import socket
 from command_utils_base import \
     CommandFailure, FormattedParameter, YamlParameters, EnvironmentVariables
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
+from general_utils import get_log_file
 
 
 def include_local_host(hosts):
@@ -175,6 +176,9 @@ class DaosAgentManager(SubprocessManager):
         self.log.info(
             "<AGENT> Starting daos_agent on %s with %s",
             self._hosts, self.manager.command)
+        # Copy certificates
+        self.manager.job.copy_certificates(
+            get_log_file("daosCA/certs"), self._hosts)
         super(DaosAgentManager, self).start()
 
     def stop(self):

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,15 +24,19 @@
 package server
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestCheckDrpcClientSocketPath_Empty(t *testing.T) {
@@ -269,6 +273,9 @@ func TestDrpc_Errors(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
 			cfg := &mockDrpcClientConfig{
 				SendMsgError:    tc.sendError,
 				SendMsgResponse: tc.resp,
@@ -276,8 +283,95 @@ func TestDrpc_Errors(t *testing.T) {
 			}
 			mc := newMockDrpcClient(cfg)
 
-			_, err := makeDrpcCall(mc, drpc.MethodPoolCreate,
+			_, err := makeDrpcCall(context.TODO(), log,
+				mc, drpc.MethodPoolCreate,
 				&mgmtpb.PoolCreateReq{})
+			common.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestServer_DrpcRetryCancel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req          proto.Message
+		resp         proto.Message
+		method       drpc.Method
+		timeout      time.Duration
+		shouldCancel bool
+		expErr       error
+	}{
+		"wrapped request": {
+			req: &retryableDrpcReq{
+				Message:    &mgmtpb.PoolDestroyReq{},
+				RetryAfter: 1 * time.Microsecond,
+				RetryableStatuses: []drpc.DaosStatus{
+					drpc.DaosBusy,
+				},
+			},
+			resp: &mgmtpb.PoolDestroyResp{
+				Status: int32(drpc.DaosBusy),
+			},
+			method:  drpc.MethodPoolDestroy,
+			timeout: 10 * time.Microsecond,
+			expErr:  context.DeadlineExceeded,
+		},
+		"canceled request": {
+			req: &retryableDrpcReq{
+				Message:    &mgmtpb.PoolDestroyReq{},
+				RetryAfter: 1 * time.Microsecond,
+				RetryableStatuses: []drpc.DaosStatus{
+					drpc.DaosBusy,
+				},
+			},
+			resp: &mgmtpb.PoolDestroyResp{
+				Status: int32(drpc.DaosBusy),
+			},
+			method:       drpc.MethodPoolDestroy,
+			timeout:      1 * time.Second,
+			shouldCancel: true,
+			expErr:       context.Canceled,
+		},
+		"pool create retries on -DER_TIMEDOUT": {
+			req: &mgmtpb.PoolCreateReq{},
+			resp: &mgmtpb.PoolCreateResp{
+				Status: int32(drpc.DaosTimedOut),
+			},
+			method:  drpc.MethodPoolCreate,
+			timeout: defaultRetryAfter * 2,
+			expErr:  context.DeadlineExceeded,
+		},
+		"pool create retries on -DER_GRPVER": {
+			req: &mgmtpb.PoolCreateReq{},
+			resp: &mgmtpb.PoolCreateResp{
+				Status: int32(drpc.DaosGroupVersionMismatch),
+			},
+			method:  drpc.MethodPoolCreate,
+			timeout: defaultRetryAfter * 2,
+			expErr:  context.DeadlineExceeded,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			body, err := proto.Marshal(tc.resp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := &mockDrpcClientConfig{
+				SendMsgResponse: &drpc.Response{
+					Body: body,
+				},
+			}
+			mc := newMockDrpcClient(cfg)
+
+			ctx, cancel := context.WithTimeout(context.Background(), tc.timeout)
+			defer cancel()
+			if tc.shouldCancel {
+				cancel()
+			}
+
+			_, err = makeDrpcCall(ctx, log, mc, tc.method, tc.req)
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}

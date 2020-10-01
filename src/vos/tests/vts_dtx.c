@@ -48,14 +48,15 @@ vts_init_dte(struct dtx_entry *dte)
 	mbs->dm_data_size = sizeof(struct dtx_daos_target);
 	mbs->dm_tgts[0].ddt_id = 1;
 
-	daos_dti_gen(&dte->dte_xid, false);
+	/** Use unique API so new UUID is generated even on same thread */
+	daos_dti_gen_unique(&dte->dte_xid);
 	dte->dte_ver = 1;
 	dte->dte_refs = 1;
 	dte->dte_mbs = mbs;
 }
 
-static void
-vts_dtx_begin(daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
+void
+vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	      uint64_t dkey_hash, struct dtx_handle **dthp)
 {
 	struct dtx_handle	*dth;
@@ -73,6 +74,7 @@ vts_dtx_begin(daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_resent = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
+	dth->dth_local_retry = 0;
 	dth->dth_solo = 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
@@ -89,14 +91,16 @@ vts_dtx_begin(daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_oid_array = NULL;
 
 	dth->dth_dkey_hash = dkey_hash;
-	dth->dth_rsrvds = &dth->dth_rsrvd_inline;
+
+	vos_dtx_rsrvd_init(dth);
 
 	*dthp = dth;
 }
 
-static void
+void
 vts_dtx_end(struct dtx_handle *dth)
 {
+	vos_dtx_rsrvd_fini(dth);
 	D_FREE(dth->dth_dte.dte_mbs);
 	D_FREE_PTR(dth);
 }
@@ -592,7 +596,7 @@ dtx_16(void **state)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = vos_fetch_begin(args->ctx.tc_co_hdl, args->oid, epoch,
-			     0, &dkey_iov, 1, &iod, 0, NULL, &ioh, NULL);
+			     &dkey_iov, 1, &iod, 0, NULL, &ioh, NULL);
 	/* The former DTX is not committed, so need to retry with leader. */
 	assert_int_equal(rc, -DER_INPROGRESS);
 

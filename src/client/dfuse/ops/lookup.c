@@ -56,7 +56,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
-	DFUSE_TRA_INFO(ie, "Inserting inode %lu", entry.ino);
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %lu", entry.ino);
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
@@ -75,12 +75,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		/* Update the existing object with the new name/parent */
 
-		DFUSE_TRA_INFO(inode,
-			       "Maybe updating parent inode %lu dfs_root %lu",
-			       entry.ino, ie->ie_dfs->dfs_root);
+		DFUSE_TRA_DEBUG(inode,
+				"Maybe updating parent inode %lu dfs_root %lu",
+				entry.ino, ie->ie_dfs->dfs_root);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
-			DFUSE_TRA_INFO(inode, "Not updating parent");
+			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
 					       ie->ie_name);
@@ -90,7 +90,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 						rc);
 		}
 		inode->ie_parent = ie->ie_parent;
-		strncpy(inode->ie_name, ie->ie_name, NAME_MAX+1);
+		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
@@ -159,12 +159,10 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	 */
 	d_list_for_each_entry(dfpi, &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
-
 		DFUSE_TRA_DEBUG(ie, "Checking dfp %p", dfpi);
 
-		if (uuid_compare(dattr.da_puuid, dfpi->dfp_pool) != 0) {
+		if (uuid_compare(dattr.da_puuid, dfpi->dfp_pool) != 0)
 			continue;
-		}
 
 		DFUSE_TRA_DEBUG(ie, "Reusing dfp %p", dfpi);
 		dfp = dfpi;
@@ -195,7 +193,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	d_list_for_each_entry(dfsi, &dfp->dfp_dfs_list,	dfs_list) {
-
 		if (uuid_compare(dattr.da_cuuid, dfsi->dfs_cont) != 0)
 			continue;
 
@@ -309,10 +306,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	DFUSE_TRA_INFO(fs_handle,
-		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
-
-	DFUSE_TRA_INFO(parent, "parent");
+	DFUSE_TRA_DEBUG(fs_handle,
+			"Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -326,8 +321,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			    O_RDONLY, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_INFO(parent, "dfs_lookup() failed: (%s)",
-			       strerror(rc));
+		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
+				strerror(rc));
 
 		if (rc == ENOENT && ie->ie_dfs->dfs_attr_timeout > 0) {
 			struct fuse_entry_param entry = {};
@@ -347,8 +342,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	if (S_ISDIR(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
-		DFUSE_TRA_INFO(ie,
-			       "check_for_uns_ep() returned %d", rc);
+		DFUSE_TRA_DEBUG(ie,
+				"check_for_uns_ep() returned %d", rc);
 		if (rc)
 			D_GOTO(err, rc);
 	}
@@ -360,5 +355,4 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 free:
 	D_FREE(ie);
-	return;
 }

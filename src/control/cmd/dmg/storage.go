@@ -25,12 +25,12 @@ package main
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -63,6 +63,9 @@ type storagePrepareCmd struct {
 func (cmd *storagePrepareCmd) Execute(args []string) error {
 	prepNvme, prepScm, err := cmd.Validate()
 	if err != nil {
+		if cmd.jsonOutputEnabled() {
+			return cmd.errorJSON(err)
+		}
 		return err
 	}
 
@@ -78,6 +81,9 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if prepScm {
+		if cmd.jsonOutputEnabled() && !cmd.Force {
+			return cmd.errorJSON(errors.New("Cannot use --json without --force"))
+		}
 		if err := cmd.Warn(cmd.log); err != nil {
 			return err
 		}
@@ -92,12 +98,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StoragePrepare(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
@@ -118,29 +125,62 @@ type storageScanCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
+	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
+	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
+	NvmeMeta   bool `short:"m" long:"nvme-meta" description:"Display server meta data held on NVMe storage"`
 }
 
 // Execute is run when storageScanCmd activates.
 //
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
-	ctx := context.Background()
-	req := &control.StorageScanReq{}
-	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
-	if err != nil {
-		return err
+	if cmd.NvmeHealth && cmd.NvmeMeta {
+		return errors.New("Cannot use --nvme-health and --nvme-meta together")
 	}
 
+	ctx := context.Background()
+	req := &control.StorageScanReq{NvmeHealth: cmd.NvmeHealth, NvmeMeta: cmd.NvmeMeta}
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
+
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --json specified")
+		}
+
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	var bld strings.Builder
 	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
 		return err
+	}
+	if cmd.NvmeHealth {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --nvme-health specified")
+		}
+		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
+			return err
+		}
+		cmd.log.Info(bld.String())
+
+		return resp.Errors()
+	}
+	if cmd.NvmeMeta {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --nvme-meta specified")
+		}
+		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &bld); err != nil {
+			return err
+		}
+		cmd.log.Info(bld.String())
+
+		return resp.Errors()
 	}
 	if err := control.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err
@@ -156,35 +196,33 @@ type storageFormatCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose  bool   `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
-	Reformat bool   `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: Potentially destructive)"`
-	Ranks    string `long:"ranks" short:"r" description:"Comma separated list of system ranks to format, default is all ranks"`
+	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
+	Reformat bool `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)"`
 }
 
 // shouldReformatSystem queries system to interrogate membership before deciding
 // whether a system reformat is appropriate.
 //
 // Reformat system if membership is not empty and all member ranks are stopped.
-func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []system.Rank) (bool, error) {
+func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, error) {
 	if cmd.Reformat {
-		cmd.log.Info("processing system reformat request")
-
 		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
 		if err != nil {
+			// If the AP hasn't been started, it will respond as if it
+			// is not a replica.
+			if system.IsNotReplica(err) {
+				return false, nil
+			}
 			return false, errors.Wrap(err, "System-Query command failed")
 		}
 
 		if len(resp.Members) == 0 {
 			cmd.log.Debug("no system members, reformat host list")
-			if len(ranks) > 0 {
-				return false, errors.New(
-					"--ranks parameter invalid as membership is empty")
-			}
 
 			return false, nil
 		}
 
-		notStoppedRanks, err := system.NewRankSet("")
+		notStoppedRanks, err := system.CreateRankSet("")
 		if err != nil {
 			return false, err
 		}
@@ -205,11 +243,22 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 		return true, nil
 	}
 
-	if len(ranks) > 0 {
-		return false, errors.New("--ranks parameter invalid if --reformat is not set")
+	return false, nil
+}
+
+func (cmd *storageFormatCmd) systemReformat(ctx context.Context) error {
+	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
+		new(control.SystemResetFormatReq))
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
 	}
 
-	return false, nil
+	if err != nil {
+		return err
+	}
+
+	return cmd.printFormatResp(resp)
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -218,28 +267,25 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context, ranks []s
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	ctx := context.Background()
 
-	ranks, err := system.ParseRanks(cmd.Ranks)
+	sysReformat, err := cmd.shouldReformatSystem(ctx)
 	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
-	}
-
-	sysReformat, err := cmd.shouldReformatSystem(ctx, ranks)
-	if err != nil {
+		if cmd.jsonOutputEnabled() {
+			return cmd.errorJSON(err)
+		}
 		return err
 	}
-	if !sysReformat {
-		req := &control.StorageFormatReq{Reformat: cmd.Reformat}
-		req.SetHostList(cmd.hostlist)
-		resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
-		if err != nil {
-			return err
-		}
-
-		return cmd.printFormatResp(resp)
+	if sysReformat {
+		return cmd.systemReformat(ctx)
 	}
 
-	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
-		&control.SystemResetFormatReq{Ranks: ranks})
+	req := &control.StorageFormatReq{Reformat: cmd.Reformat}
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -248,10 +294,6 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 }
 
 func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, resp)
-	}
-
 	var bld strings.Builder
 	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
@@ -281,8 +323,13 @@ type nvmeSetFaultyCmd struct {
 // Set the SMD device state of the given device to "FAULTY"
 func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 	cmd.log.Info("WARNING: This command will permanently mark the device as unusable!")
-	if !cmd.Force && !common.GetConsent(cmd.log) {
-		return errors.New("consent not given")
+	if !cmd.Force {
+		if cmd.jsonOutputEnabled() {
+			return cmd.errorJSON(errors.New("Cannot use --json without --force"))
+		}
+		if !common.GetConsent(cmd.log) {
+			return errors.New("consent not given")
+		}
 	}
 
 	ctx := context.Background()

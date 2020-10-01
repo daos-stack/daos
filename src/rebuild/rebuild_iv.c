@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -302,8 +302,8 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 }
 
 int
-rebuild_iv_update(void *ns, struct rebuild_iv *iv,
-		  unsigned int shortcut, unsigned int sync_mode)
+rebuild_iv_update(void *ns, struct rebuild_iv *iv, unsigned int shortcut,
+		  unsigned int sync_mode, bool retry)
 {
 	d_sg_list_t		sgl;
 	d_iov_t		iov;
@@ -319,8 +319,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
-			  false /* retry */);
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
