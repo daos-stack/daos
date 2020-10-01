@@ -145,8 +145,8 @@ def set_defaults(env):
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
-        if env.get('BUILD_TYPE') == 'release' or GetOption("fault-injection"):
-            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE', '-DFAULT_INJECTION=1'])
+        if env.get('BUILD_TYPE') == 'release':
+            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE')
         env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
@@ -154,6 +154,9 @@ def set_defaults(env):
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
+
+    if GetOption("fault-injection") or env.get("BUILD_TYPE") != 'release':
+        env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
