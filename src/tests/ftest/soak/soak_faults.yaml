@@ -131,5 +131,6 @@ ior_faults:
     segment_count: 1
     dfs_oclass:
         - 'SX'
+    dfs_destroy: True
 
 

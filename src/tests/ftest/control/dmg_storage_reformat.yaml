@@ -5,7 +5,7 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 200
+timeout: 130
 server_config:
   name: daos_server
   port: 10001

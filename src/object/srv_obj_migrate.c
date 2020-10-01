@@ -203,7 +203,7 @@ int
 obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 		d_iov_t *val_iov)
 {
-	struct tree_cache_root	*cont_root;
+	struct tree_cache_root	*cont_root = NULL;
 	d_iov_t			key_iov;
 	d_iov_t			tmp_iov;
 	int			rc;
@@ -572,7 +572,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	if (fetch) {
 		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 				   mrone->mo_iod_num, mrone->mo_iods, sgls,
-				   NULL);
+				   NULL, DIOF_TO_LEADER, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch %d\n", rc);
 			return rc;
@@ -759,7 +759,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_iod_num, mrone->mo_epoch);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -848,7 +849,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_iod_num, mrone->mo_epoch);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -904,7 +906,7 @@ out:
 
 		/* since iod_recxs is being used by single value update somehow,
 		 * let's reset it after update.
-		 */ 
+		 */
 		if (mrone->mo_iods[i].iod_type == DAOS_IOD_SINGLE)
 			mrone->mo_iods[i].iod_recxs = NULL;
 	}
@@ -967,7 +969,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		mrone_recx_vos2_daos(mrone, oca, mrone->mo_oid.id_shard);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc)
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);

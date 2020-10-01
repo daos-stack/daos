@@ -416,8 +416,7 @@ else
     process_cores=\"\"
 fi
 # now run it!
-# DAOS-5622: Temporarily disable certs in CI
-if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} -ins \\
+if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} \\
                  ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else

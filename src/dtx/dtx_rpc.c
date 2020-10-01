@@ -367,7 +367,14 @@ dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
 
 	drr = (struct dtx_req_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	dcrb = (struct dtx_cf_rec_bundle *)val->iov_buf;
-	drr->drr_dti[drr->drr_count++] = *dcrb->dcrb_dti;
+	D_ASSERT(drr->drr_count >= 1);
+
+	if (!daos_dti_equal(&drr->drr_dti[drr->drr_count - 1],
+			    dcrb->dcrb_dti)) {
+		D_ASSERT(drr->drr_count < dcrb->dcrb_count);
+
+		drr->drr_dti[drr->drr_count++] = *dcrb->dcrb_dti;
+	}
 
 	return 0;
 }
