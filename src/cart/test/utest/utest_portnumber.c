@@ -38,7 +38,7 @@
 /*
  * Reference jira ticket DAOS-5732 to include socket and verb tests.
  */
-#define tests_not_included
+#define MY_TESTS_NOT_INCLUDED
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,20 +51,19 @@
 
 #include <cmocka.h>
 #include <cart/api.h>
-#include "../cart/crt_internal.h"
-
+#include "gurt/debug.h"
 
 static void
 run_test_fork(void **state)
 {
-	int	result1 = -1;
-	int	result2 = -1;
-	int	status = -1;
-	int	rc = 0;
-	int	child_result;
-	pid_t	pid1 = 0;
-	pid_t	pid2 = 0;
-	crt_context_t crt_context = NULL;
+	int		result1 = -1;
+	int		result2 = -1;
+	int		status = -1;
+	int		rc = 0;
+	int		child_result;
+	pid_t		pid1 = 0;
+	pid_t		pid2 = 0;
+	crt_context_t	crt_context = NULL;
 
 	pid1 = fork();
 	/* fork first child process */
@@ -91,9 +90,11 @@ run_test_fork(void **state)
 		if (rc != 0)
 			exit(20);
 		child_result = crt_context_create(&crt_context);
-		rc = crt_context_destroy(crt_context, false);
-		if (rc != 0)
-			exit(21);
+		if (child_result == 0) {
+			rc = crt_context_destroy(crt_context, false);
+			if (rc != 0)
+				exit(21);
+		}
 		rc = crt_finalize();
 		if (rc != 0)
 			exit(22);
@@ -115,7 +116,10 @@ run_test_fork(void **state)
 	/* Test results.  first child should should succeed. */
 	assert_true(result1 == 0);
 	assert_true(result2 != 0);
-	assert_true(rc == 0);    /* prevents compile issue */
+	assert_false(result2 == 20);
+	assert_false(result2 == 21);
+	assert_false(result2 == 22);
+
 }
 
 static void
@@ -126,7 +130,7 @@ test_port_tcp(void **state)
 	run_test_fork(state);
 }
 
-#ifndef tests_not_included
+#ifndef MY_TESTS_NOT_INCLUDED
 static void
 test_port_sockets(void **state)
 {
@@ -139,6 +143,7 @@ static void
 test_port_verb(void **state)
 {
 	setenv("OFI_INTERFACE", "eth0", 1);
+	setenv("OFI_DOMAIN", "Must define here", 1);
 	setenv("CRT_PHY_ADDR_STR", "ofi+verbs;ofi_rxm", 1);
 	run_test_fork(state);
 };
@@ -167,7 +172,7 @@ int main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
 		cmocka_unit_test(test_port_tcp),
-#ifndef tests_not_included
+#ifndef MY_TESTS_NOT_INCLUDED
 		cmocka_unit_test(test_port_sockets),
 		cmocka_unit_test(test_port_verb),
 #endif
