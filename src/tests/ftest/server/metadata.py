@@ -35,7 +35,7 @@ except ImportError:
     # python 2.7
     import Queue as queue
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
@@ -51,7 +51,7 @@ from test_utils_pool import TestPool
 #  ~48MB for background aggregation use
 # 52% of remaining free space set aside for staging log container
 # (installsnapshot RPC handling in raft)
-NO_OF_MAX_CONTAINER = 4464
+NO_OF_MAX_CONTAINER = 4150
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -95,7 +95,8 @@ class ObjectMetadata(TestWithServers):
         super(ObjectMetadata, self).setUp()
 
         # Create a pool
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, self.log,
+                             dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
 
@@ -136,65 +137,72 @@ class ObjectMetadata(TestWithServers):
         """
 
         # 3 Phases in nested try/except blocks below
-        # Phase 1: nearly fill pool metadata with container creates
-        #          no DaosApiError expected in this phase (otherwise fail test)
+        # Phase 1: overload pool metadata with a container create loop
+        #          DaosApiError expected here (otherwise fail test)
         #
         # Phase 2: if Phase 1 passed:
-        #          overload pool metadata with another container create loop
-        #          DaosApiError IS expected here (otherwise fail test)
-        #
-        # Phase 3: if Phase 2 passed:
         #          clean up all containers created (prove "critical" destroy
         #          in rdb (and vos) works without cascading nospace errors
-
+        #
+        # Phase 3: if Phase 2 passed:
+        #          Sustained container create loop, eventually encountering
+        #          -DER_NOSPACE, perhaps some successful creates (due to
+        #          rdb log compaction, eventually settling into continuous
+        #          -DER_NOSPACE. Make sure service keeps running.
+        #
         self.pool.pool.connect(2)
 
-        self.log.info("Phase 1: Fillup Metadata (expected to work) ...")
+        self.log.info("Phase 1: Fillup Metadata (expected to fail) ...")
         container_array = []
         try:
             # Phase 1 container creates
-            for _cont in range(NO_OF_MAX_CONTAINER):
+            for _cont in range(NO_OF_MAX_CONTAINER + 1000):
                 container = DaosContainer(self.context)
                 container.create(self.pool.pool.handle)
                 container_array.append(container)
 
-            self.log.info("Phase 1: pass (all container creates successful)")
+        # Phase 1 got DaosApiError (expected - proceed to Phase 2)
+        except DaosApiError:
+            self.log.info("Phase 1: passed (container create %d failed after "
+                          "metadata full)", _cont)
 
-            # Phase 2: should fail with no Metadata space Error.
+            # Phase 2 clean up containers (expected to succeed)
             try:
-                self.log.info("Phase 2: Metadata Overload (expect to fail) ...")
-                for _cont in range(400):
-                    container = DaosContainer(self.context)
-                    container.create(self.pool.pool.handle)
-                    container_array.append(container)
+                self.log.info("Phase 2: Cleaning up containers after "
+                              "DaosApiError (expected to work)")
+                for container in container_array:
+                    container.destroy()
+                self.log.info("Phase 2: pass (containers destroyed "
+                              "successfully)")
 
-                # Phase 2 failed - stop here
-                self.fail("Phase 2: fail (expected container create failure)")
+                # Phase 3 sustained container creates even after nospace error
+                # Due to rdb log compaction after initial nospace errors,
+                # Some brief periods of available space will occur, allowing
+                # a few container creates to succeed in the interim.
+                self.log.info("Phase 3: sustained container creates: "
+                              "to nospace and beyond")
+                big_array = []
+                in_failure = False
+                for _cont in range(30000):
+                    try:
+                        container = DaosContainer(self.context)
+                        container.create(self.pool.pool.handle)
+                        big_array.append(container)
+                        if in_failure:
+                            in_failure = False
+                    except DaosApiError:
+                        in_failure = True
 
-            # Phase 2 DaosApiError (expected - proceed to Phase 3)
-            except DaosApiError:
-                self.log.info("Phase 2: pass (container create failed as "
-                              "expected)")
+                self.log.info("Phase 3: passed (created %d / %d containers)",
+                              len(big_array), 30000)
+                return
 
-                # Phase 3 clean up containers (expected to succeed)
-                try:
-                    self.log.info("Phase 3: Cleaning up containers after "
-                                  "DaosApiError (expected to work)")
-                    for container in container_array:
-                        container.destroy()
-                    self.log.info("Phase 3: pass (containers destroyed "
-                                  "successfully)")
-                    return
+            except DaosApiError as exe2:
+                print(exe2, traceback.format_exc())
+                self.fail("Phase 2: fail (unexpected container destroy error)")
 
-                except DaosApiError as exe3:
-                    print(exe3, traceback.format_exc())
-                    self.fail("Phase 3: fail (container destroy error)")
-
-        # Phase 1 got DaosApiError (not expected)
-        except DaosApiError as exe1:
-            print(exe1, traceback.format_exc())
-            self.fail("Phase 1: failure (container creates should have worked)")
-
+        # Phase 1 failure
+        self.fail("Phase 1: failed (metadata full error did not occur)")
 
     @avocado.fail_on(DaosApiError)
     def test_metadata_addremove(self):

@@ -110,14 +110,23 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 			D_GOTO(out, rc);
 	}
 
-	cont = dc_cont_alloc(cont_uuid);
-	if (cont == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	D_ASSERT(!daos_handle_is_inval(poh));
 	pool = dc_hdl2pool(poh);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
+
+	cont = dc_cont_alloc(cont_uuid);
+	if (cont == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/** destroyed in dsc_cont_close */
+	rc = dsc_cont_csummer_init(&cont->dc_csummer, pool->dp_pool,
+				   cont_uuid);
+	if (rc != 0) {
+		dc_cont_free(cont);
+		cont = NULL;
+		D_GOTO(out, rc);
+	}
 
 	uuid_copy(cont->dc_cont_hdl, coh_uuid);
 	cont->dc_capas = flags;
@@ -126,12 +135,6 @@ dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t coh_uuid,
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-
-	/** destroyed in dsc_cont_close */
-	rc = dsc_cont_csummer_init(&cont->dc_csummer, pool->dp_pool,
-				   cont_uuid);
-	if (rc != 0)
-		D_GOTO(out, rc);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
