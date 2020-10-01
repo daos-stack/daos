@@ -42,7 +42,7 @@
 usage() {
     echo -n "get_remote_files.sh [OPTION]...
 
-This script has 3 modes that can be executed independently if needed.
+This script has 4 modes that can be executed independently if needed.
 
  1. Display big files specified by threshold value i.e. -t 5mb. This option
     will list files within provided local path with -d option and will prepend
@@ -56,12 +56,17 @@ This script has 3 modes that can be executed independently if needed.
  3. Archive files specified in provided local path with -d option to provided
     remote path destination.
 
+ 4. Create and display cart_logtest log files created by running cart_logtest.py
+    script. Output of running the script will be redirected to *_ctestlog.log
+    files.
+
  Options:
       -a        Archive files
       -c        Compress files
-      -d        Local path to files for achiving/compressing/size checking
-      -r        Remote path to scp files to i.e. server-A:/path/to/file
       -t        Threshold value to determine classification of big logs
+      -r        Remote path to scp files to i.e. server-A:/path/to/file
+      -d        Local path to files for achiving/compressing/size checking
+      -s        Path to cart_logtest.py
       -v        Display commands being executed
       -h        Display this help and exit
 "
@@ -74,9 +79,10 @@ display_set_vars() {
     echo "Set Variables:
     ARCHIVE = ${ARCHIVE}
     COMPRESS = ${COMPRESS}
+    THRESHOLD = ${THRESHOLD}
     REMOTE_DEST = ${REMOTE_DEST}
     LOCAL_SRC = ${LOCAL_SRC}
-    THRESHOLD = ${THRESHOLD}
+    CART_LOGTEST = ${CART_LOGTEST}
     VERBOSE = ${VERBOSE}"
 }
 
@@ -123,14 +129,14 @@ list_tag_files() {
     # shellcheck disable=SC2016,SC1004
     awk_cmd='{ \
     if (th <= $1){ \
-        print "Y:",hostname,$1,$2} \
+        print "Y:",$1,$2} \
     else { \
-        print "N:",hostname,$1,$2}\
+        print "N:",$1,$2}\
     }'
 
     # Convert to bytes and run
     bts=$(human_to_bytes "${2}")
-    du -ab -d 1 ${1} | awk -v hostname="$(hostname)" -v th="${bts}" "${awk_cmd}"
+    du -ab -d 1 ${1} | awk -v th="${bts}" "${awk_cmd}"
 }
 
 check_hw() {
@@ -143,13 +149,13 @@ compress_files() {
 }
 
 scp_files() {
-    set -eu
+    set -ux
     rc=0
     copied=()
     for file in ${1}
     do
         ls -sh "${file}"
-        if scp -p "${file}" "${2}"/"${file##*/}"-"$(hostname -s)"; then
+        if scp -r "${file}" "${2}"/"${file##*/}"-"$(hostname -s)"; then
             copied+=("${file}")
             if ! sudo rm -fr "${file}"; then
                 ((rc++))
@@ -159,6 +165,15 @@ scp_files() {
     done
     echo Copied "${copied[@]:-no files}"
     exit "$rc"
+}
+
+get_cartlogtest_files() {
+    set -ux
+    for file in $(ls -d ${2})
+    do
+        ls -sh "${file}"
+        "${1}" "${file}" |& tee "${file}"_ctestlog.log
+    done
 }
 
 ####### MAIN #######
@@ -174,7 +189,7 @@ VERBOSE="false"
 THRESHOLD=""
 
 # Step through arguments
-while getopts "vhcal:r:d:t:" opt; do
+while getopts "vhcas:r:d:t:" opt; do
     case ${opt} in
         r )
             REMOTE_DEST=$OPTARG
@@ -184,6 +199,9 @@ while getopts "vhcal:r:d:t:" opt; do
             ;;
         t )
             THRESHOLD=$OPTARG
+            ;;
+        s )
+            CART_LOGTEST=$OPTARG
             ;;
         c )
             COMPRESS="true"
@@ -207,22 +225,30 @@ while getopts "vhcal:r:d:t:" opt; do
 done
 shift "$((OPTIND -1))"
 
-# Run
-display_set_vars
+if [ "${VERBOSE}" == "true" ]; then
+    display_set_vars
+fi
+
+# Run cart_logtest.py on LOCAL_SRC
+if [ -n "${CART_LOGTEST}" ]; then
+    echo "Running cart_logtest.py on ${LOCAL_SRC}"
+    get_cartlogtest_files "${CART_LOGTEST}" "${LOCAL_SRC}"
+fi
 
 # Display big files to stdout
 if [ -n "${THRESHOLD}" ]; then
+    echo "Checking if files exceed ${THRESHOLD} threshold ..."
     list_tag_files "${LOCAL_SRC}" "${THRESHOLD}"
 fi
 
 # Compress files in LOCAL_SRC if not running on VM host.
 if check_hw; then
-    echo "Running on VM system, compression not available."
+    echo "Running on VM system, compression not available ..."
     COMPRESS="false"
 fi
 
 if [ "${COMPRESS}" == "true" ]; then
-    echo "Compressing files..."
+    echo "Compressing files ..."
     compressed_out=$(compress_files "${LOCAL_SRC}" 2>&1)
 
     if [ -n "${compressed_out}" ] && [ "${VERBOSE}" == "true" ]; then
