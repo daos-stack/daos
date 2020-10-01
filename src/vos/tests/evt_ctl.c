@@ -230,7 +230,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, daos_epoch_t *high,
 		*should_pass = false;
 	}
 parse_rect:
-	rect->rc_ex.ex_lo = atoll(str);
+	rect->rc_ex.ex_lo = strtoull(str, NULL, 10);
 
 	tmp = strchr(str, EVT_SEP_EXT);
 	if (tmp == NULL) {
@@ -239,7 +239,7 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_ex.ex_hi = atoll(str);
+	rect->rc_ex.ex_hi = strtoull(str, NULL, 10);
 	tmp = strchr(str, EVT_SEP_EPC);
 	if (tmp == NULL) {
 		D_PRINT("Invalid input string %s\n", str);
@@ -247,13 +247,13 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_epc = atoll(str);
+	rect->rc_epc = strtoull(str, NULL, 10);
 	tmp = strchr(str, EVT_SEP_MNR);
 	if (tmp == NULL) {
 		rect->rc_minor_epc = 1;
 	} else {
 		str = tmp + 1;
-		rect->rc_minor_epc = atoll(str);
+		rect->rc_minor_epc = atoi(str);
 	}
 
 	if (high) {
@@ -262,7 +262,7 @@ parse_rect:
 		if (tmp == NULL)
 			goto parse_value;
 		str = tmp + 1;
-		*high = atoll(str);
+		*high = strtoull(str, NULL, 10);
 	}
 
 parse_value:
@@ -437,13 +437,50 @@ ts_delete_rect(void **state)
 }
 
 static void
+ts_remove_rect(void **state)
+{
+	char			*arg;
+	struct evt_rect		 rect;
+	daos_epoch_range_t	 epr;
+	int			 rc;
+	bool			 should_pass;
+
+	arg = tst_fn_val.optval;
+	if (arg == NULL)
+		fail();
+
+	rc = ts_parse_rect(arg, &rect, NULL, NULL, &should_pass);
+	if (rc != 0)
+		fail();
+
+	D_PRINT("Remove all "DF_RECT" expect_pass=%s\n", DP_RECT(&rect),
+		should_pass ? "true" : "false");
+
+	epr.epr_lo = 0;
+	epr.epr_hi = rect.rc_epc;
+	rc = evt_remove_all(ts_toh, &rect.rc_ex, &epr);
+
+	if (should_pass) {
+		if (rc != 0)
+			D_FATAL("Remove rect failed "DF_RC"\n", DP_RC(rc));
+	} else {
+		if (rc == 0) {
+			D_FATAL("Remove rect should have failed\n");
+			fail();
+		}
+		rc = 0;
+	}
+}
+
+
+static void
 ts_find_rect(void **state)
 {
 	struct evt_entry	*ent;
 	char			*val;
+	struct evt_filter	 filter = {0};
 	bio_addr_t		 addr;
 	struct evt_rect		 rect;
-	daos_epoch_range_t	 epr;
 	struct evt_entry_array	 ent_array;
 	int			 rc;
 	bool			 should_pass;
@@ -459,10 +496,11 @@ ts_find_rect(void **state)
 
 	D_PRINT("Search rectangle "DF_RECT"\n", DP_RECT(&rect));
 
-	epr.epr_lo = 0;
-	epr.epr_hi = rect.rc_epc;
+	filter.fr_epr.epr_lo = 0;
+	filter.fr_epr.epr_hi = rect.rc_epc;
+	filter.fr_ex = rect.rc_ex;
 	evt_ent_array_init(&ent_array);
-	rc = evt_find(ts_toh, &epr, &rect.rc_ex, &ent_array);
+	rc = evt_find(ts_toh, &filter, &ent_array);
 	if (rc != 0)
 		D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
 
@@ -628,7 +666,7 @@ ts_many_add(void **state)
 {
 	char			*buf;
 	char			*tmp;
-	int			*seq;
+	uint64_t		*seq;
 	struct evt_rect		*rect;
 	struct evt_entry_in	 entry = {0};
 	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
@@ -693,7 +731,7 @@ ts_many_add(void **state)
 	if (!buf)
 		fail();
 
-	seq = dts_rand_iarr_alloc(nr, 0, true);
+	seq = dts_rand_iarr_alloc_set(nr, 0, true);
 	if (!seq) {
 		D_FREE(buf);
 		fail();
@@ -1328,8 +1366,7 @@ test_evt_find_internal(void **state)
 	daos_handle_t		 toh;
 	struct evt_entry_in	 entry = {0};
 	struct evt_entry	 *ent;
-	struct evt_extent	 extent;
-	daos_epoch_range_t	 epr;
+	struct evt_filter	 filter = {0};
 	struct evt_entry_array	 ent_array;
 	bio_addr_t		 addr;
 	int			 rc;
@@ -1385,13 +1422,13 @@ test_evt_find_internal(void **state)
 	 * you get deadbeef, d (2-records). Covered records
 	 * should be exposed on each deletes
 	 */
-	epr.epr_lo = 0;
+	filter.fr_epr.epr_lo = 0;
 	for (epoch = NUM_EPOCHS; epoch > 0; epoch--) {
-		extent.ex_lo = epoch-1;
-		extent.ex_hi = epoch+9;
-		epr.epr_hi = epoch;
+		filter.fr_ex.ex_lo = epoch - 1;
+		filter.fr_ex.ex_hi = epoch + 9;
+		filter.fr_epr.epr_hi = epoch;
 		evt_ent_array_init(&ent_array);
-		rc = evt_find(toh, &epr, &extent, &ent_array);
+		rc = evt_find(toh, &filter, &ent_array);
 		if (rc != 0)
 			D_FATAL("Find rect failed "DF_RC"\n", DP_RC(rc));
 		evt_ent_array_for_each(ent, &ent_array) {
@@ -1430,8 +1467,8 @@ test_evt_find_internal(void **state)
 		}
 		/* Delete the last visible record */
 		entry.ei_rect.rc_ex.ex_lo = epoch;
-		entry.ei_rect.rc_ex.ex_hi = extent.ex_hi;
-		entry.ei_rect.rc_epc = epr.epr_hi;
+		entry.ei_rect.rc_ex.ex_hi = filter.fr_ex.ex_hi;
+		entry.ei_rect.rc_epc = filter.fr_epr.epr_hi;
 		rc = evt_delete(toh, &entry.ei_rect, NULL);
 		assert_int_equal(rc, 0);
 		rc = utest_check_mem_decrease(arg->ta_utx);
@@ -1584,8 +1621,7 @@ test_evt_various_data_size_internal(void **state)
 	struct evt_entry_array	 ent_array;
 	struct evt_entry	 *ent;
 	bio_addr_t		 addr;
-	struct evt_extent	 extent;
-	daos_epoch_range_t	 epr;
+	struct evt_filter	 filter = {0};
 	int			 iteration = 0;
 
 	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
@@ -1598,7 +1634,6 @@ test_evt_various_data_size_internal(void **state)
 		D_PRINT("Data Size: %ld\n", data_size);
 		D_ALLOC(data, data_size);
 		strcpy(data, "EVTree: Out of Memory");
-		epr.epr_lo = 0;
 		/* Loop does the following : evt_insert,
 		* evt_find (first epoch) and evt_delete (random deletes)
 		* till out of space condition
@@ -1635,10 +1670,10 @@ test_evt_various_data_size_internal(void **state)
 			assert_int_equal(rc, 0);
 			if (epoch == 1) {
 				evt_ent_array_init(&ent_array);
-				extent.ex_lo = epoch;
-				extent.ex_hi = epoch + data_size;
-				epr.epr_hi = epoch;
-				rc = evt_find(toh, &epr, &extent, &ent_array);
+				filter.fr_ex.ex_lo = epoch;
+				filter.fr_ex.ex_hi = epoch + data_size;
+				filter.fr_epr.epr_hi = epoch;
+				rc = evt_find(toh, &filter, &ent_array);
 				if (rc != 0)
 					D_FATAL("Find rect failed "DF_RC"\n",
 						DP_RC(rc));
@@ -1896,7 +1931,7 @@ test_evt_overlap_split(struct test_arg *arg, int major_num, int minor_num)
 
 finish:
 	if (tree_depth_fail)
-		fail_msg("Node not splitted\n");
+		fail_msg("Node not split\n");
 	D_FREE(expected_data);
 	D_FREE(expected_epochs);
 	rc = evt_destroy(toh);
@@ -2083,7 +2118,8 @@ test_evt_outer_punch(void **state)
 	filter.fr_ex.ex_lo = 0;
 	filter.fr_ex.ex_hi = NUM_EPOCHS * NUM_EXTENTS;
 	filter.fr_epr.epr_lo = 0;
-	filter.fr_punch = NUM_EPOCHS - 1;
+	filter.fr_punch_epc = NUM_EPOCHS - 1;
+	filter.fr_punch_minor_epc = EVT_MINOR_EPC_MAX;
 	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_COVERED,
 			      &filter, &ih);
@@ -2219,6 +2255,7 @@ static struct option ts_ops[] = {
 	{ "add",	required_argument,	NULL,	'a'	},
 	{ "many_add",	required_argument,	NULL,	'm'	},
 	{ "find",	required_argument,	NULL,	'f'	},
+	{ "remove_all",	required_argument,	NULL,	'r'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "list",	optional_argument,	NULL,	'l'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
@@ -2270,6 +2307,9 @@ ts_cmd_run(char opc, char *args)
 	case 'd':
 		ts_delete_rect(st);
 		break;
+	case 'r':
+		ts_remove_rect(st);
+		break;
 	case 'b':
 		ts_tree_debug(st);
 		break;
@@ -2300,7 +2340,7 @@ ts_group(void **state)
 
 	while ((opc = getopt_long(test_group_argc,
 				 test_group_args,
-				 "C:a:m:e:f:g:d:b:Docl::ts",
+				 "C:a:m:e:f:g:d:b:Docl::tsr:",
 				 ts_ops, NULL)) != -1){
 		ts_cmd_run(opc, optarg);
 	}
@@ -2340,7 +2380,7 @@ main(int argc, char **argv)
 
 	ts_toh = DAOS_HDL_INVAL;
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
 

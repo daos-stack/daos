@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -241,7 +241,7 @@ int vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
  *
  * \param vsi         [IN]	In-memory compound index
  * \param hint        [IN]	Hint data
- * \param resrvd_list [IN]	List of reserved extent(s) to be cancelled
+ * \param resrvd_list [IN]	List of reserved extent(s) to be canceled
  *
  * \return			Zero on success; Appropriated negative value
  *				on error
@@ -320,7 +320,7 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 /**
  * Pause or resume flushing the free extents in aging buffer
  *
- * \param vsi       [IN]	In-memory compund index
+ * \param vsi       [IN]	In-memory compound index
  * \param plug      [IN]	Plug or unplug
  */
 void vea_flush(struct vea_space_info *vsi, bool plug);

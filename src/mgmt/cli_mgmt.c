@@ -74,7 +74,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n",
 			args->grp, DP_RC(rc));
-		rc = DER_INVAL;
+		rc = -DER_INVAL;
 		goto out_task;
 	}
 
@@ -300,6 +300,7 @@ static int
 get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 		struct sys_info *sy_info)
 {
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		*ctx;
 	Mgmt__GetAttachInfoReq	 req = MGMT__GET_ATTACH_INFO_REQ__INIT;
 	Mgmt__GetAttachInfoResp	*resp;
@@ -315,11 +316,11 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	/* Connect to daos_agent. */
 	D_ASSERT(dc_agent_sockpath != NULL);
-	ctx = drpc_connect(dc_agent_sockpath);
-	if (ctx == NULL) {
-		D_ERROR("failed to connect to %s\n", dc_agent_sockpath);
-		rc = -DER_BADPATH;
-		goto out;
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("failed to connect to %s " DF_RC "\n",
+			dc_agent_sockpath, DP_RC(rc));
+		D_GOTO(out, 0);
 	}
 
 	/* Prepare the GetAttachInfo request. */
@@ -331,10 +332,9 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 		goto out_ctx;
 	}
 	mgmt__get_attach_info_req__pack(&req, reqb);
-	dreq = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-				DRPC_METHOD_MGMT_GET_ATTACH_INFO);
-	if (dreq == NULL) {
-		rc = -DER_NOMEM;
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
+				DRPC_METHOD_MGMT_GET_ATTACH_INFO, &dreq);
+	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_ctx;
 	}
@@ -352,8 +352,10 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 		rc = -DER_MISC;
 		goto out_dresp;
 	}
-	resp = mgmt__get_attach_info_resp__unpack(NULL, dresp->body.len,
+	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len,
 						  dresp->body.data);
+	if (alloc.oom)
+		D_GOTO(out_dresp, rc = -DER_MISC);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack GetAttachInfo response\n");
 		rc = -DER_MISC;
@@ -392,32 +394,48 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	if (sy_info) {
 		if (strnlen(resp->provider, sizeof(sy_info->provider)) == 0) {
-			D_ERROR("GetAttachInfo provider string is empty\n");
-			D_GOTO(out_resp, rc = -DER_INVAL);
+			D_ERROR("GetAttachInfo failed: %d. "
+				"provider is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
 		}
 
 		if (strnlen(resp->interface, sizeof(sy_info->interface)) == 0) {
-			D_ERROR("GetAttachInfo interface string is empty\n");
-			D_GOTO(out_resp, rc = -DER_INVAL);
+			D_ERROR("GetAttachInfo failed: %d. "
+				"interface is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
 		}
 
 		if (strnlen(resp->domain, sizeof(sy_info->domain)) == 0) {
-			D_ERROR("GetAttachInfo domain string is empty\n");
-			D_GOTO(out_resp, rc = -DER_INVAL);
+			D_ERROR("GetAttachInfo failed: %d. "
+				"domain string is undefined. "
+				"libdaos.so is incompatible with DAOS Agent.\n",
+				resp->status);
+			D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
 		}
 
 		if (copy_str(sy_info->provider, resp->provider)) {
-			D_ERROR("GetAttachInfo provider string too long\n");
+			D_ERROR("GetAttachInfo failed: %d. "
+				"provider string too long.\n",
+				resp->status);
+
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
 
 		if (copy_str(sy_info->interface, resp->interface)) {
-			D_ERROR("GetAttachInfo interface string too long\n");
+			D_ERROR("GetAttachInfo failed: %d. "
+				"interface string too long\n",
+				resp->status);
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
 
 		if (copy_str(sy_info->domain, resp->domain)) {
-			D_ERROR("GetAttachInfo domain string too long\n");
+			D_ERROR("GetAttachInfo failed: %d. "
+				"domain string too long\n",
+				resp->status);
 			D_GOTO(out_resp, rc = -DER_INVAL);
 		}
 
@@ -429,10 +447,15 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
 			sy_info->provider, sy_info->interface, sy_info->domain,
 			sy_info->crt_ctx_share_addr, sy_info->crt_timeout);
+	} else {
+		D_ERROR("GetAttachInfo failed: %d. "
+			"libdaos.so is incompatible with DAOS Agent.\n",
+			resp->status);
+		D_GOTO(out_resp, rc = -DER_AGENT_INCOMPAT);
 	}
 
 out_resp:
-	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);
+	mgmt__get_attach_info_resp__free_unpacked(resp, &alloc.alloc);
 out_dresp:
 	drpc_response_free(dresp);
 out_dreq:

@@ -46,7 +46,7 @@ extern "C" {
  * daos_epoch_commit().
  *
  * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
- * factor/level requirments of the container.
+ * factor/level requirements of the container.
  */
 #define DAOS_COO_RO	(1U << 0)
 #define DAOS_COO_RW	(1U << 1)
@@ -60,7 +60,7 @@ extern "C" {
 typedef struct {
 	/** Container UUID */
 	uuid_t			ci_uuid;
-	/** Epoch of latest persisten snapshot */
+	/** Epoch of latest persistent snapshot */
 	daos_epoch_t		ci_lsnapshot;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
@@ -73,7 +73,7 @@ typedef struct {
 
 
 /**
- * Generate a rank list from a string with a seprator argument. This is a
+ * Generate a rank list from a string with a separator argument. This is a
  * convenience function to generate the rank list required by
  * daos_pool_connect().
  *
@@ -450,6 +450,28 @@ daos_cont_get_attr(daos_handle_t coh, int n, char const *const names[],
 int
 daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
+		   daos_event_t *ev);
+
+/**
+ * Delete a list of user-defined container attributes.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[],
 		   daos_event_t *ev);
 
 /**

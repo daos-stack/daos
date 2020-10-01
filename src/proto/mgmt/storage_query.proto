@@ -33,21 +33,35 @@ message BioHealthReq {
 	string tgt_id = 2;
 }
 
+// BioHealthResp mirrors nvme_health_stats structure.
 message BioHealthResp {
-	int32 status = 1; // DAOS error code
-	string dev_uuid = 2; // UUID of blobstore
-	uint64 error_count = 3;
-	uint32 temperature = 4;
-	uint64 media_errors = 5;
-	uint32 read_errs = 6;
-	uint32 write_errs = 7;
-	uint32 unmap_errs = 8;
-	uint32 checksum_errs = 9;
-	bool temp = 10;
-	bool spare = 11;
-	bool readonly = 12;
-	bool device_reliability = 13;
-	bool volatile_memory = 14;
+	string model = 1;
+	string serial = 2;
+	uint64 timestamp = 3;
+	uint64 err_count = 4;
+	// Device health details
+	uint32 warn_temp_time = 5;
+	uint32 crit_temp_time = 6;
+	uint64 ctrl_busy_time = 7;
+	uint64 power_cycles = 8;
+	uint64 power_on_hours = 9;
+	uint64 unsafe_shutdowns = 10;
+	uint64 media_errs = 11;
+	uint64 err_log_entries = 12;
+	// I/O error counters
+	uint32 bio_read_errs = 13;
+	uint32 bio_write_errs = 14;
+	uint32 bio_unmap_errs = 15;
+	uint32 checksum_errs = 16;
+	uint32 temperature = 17; // in Kelvin
+	// Critical warnings
+	bool temp_warn = 18;
+	bool avail_spare_warn = 19;
+	bool dev_reliability_warn = 20;
+	bool read_only_warn = 21;
+	bool volatile_mem_warn = 22; // volatile memory backup
+	int32 status = 23; // DAOS err code
+	string dev_uuid = 24; // UUID of blobstore
 }
 
 message SmdDevReq {
@@ -57,6 +71,7 @@ message SmdDevResp {
 	message Device {
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
+		string state = 3; // NORMAL or FAULTY
 	}
 	int32 status = 1;
 	repeated Device devices = 2;
@@ -83,4 +98,35 @@ message DevStateResp {
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of blobstore
 	string dev_state=3; //NORMAL or FAULTY
+}
+
+message SmdQueryReq {
+	bool omitDevices = 1; // query should omit devices
+	bool omitPools = 2; // query should omit pools
+	bool includeBioHealth = 3; // query should include BIO health for devices
+	bool setFaulty = 4; // set the specified device to FAULTY
+	string uuid = 5; // constrain query to this UUID (pool or device)
+	uint32 rank = 6; // response should only include information about this rank
+	string target = 7; // response should only include information about this VOS target
+}
+
+message SmdQueryResp {
+	message Device {
+		string uuid = 1; // UUID of blobstore
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		string state = 3; // NORMAL or FAULTY
+		BioHealthResp health = 4; // optional BIO health
+	}
+	message Pool {
+		string uuid = 1; // UUID of VOS pool
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		repeated uint64 blobs = 3; // SPDK blobs
+	}
+	message RankResp {
+		uint32 rank = 1; // rank to which this response corresponds
+		repeated Device devices = 2; // List of devices on the rank
+		repeated Pool pools = 3; // List of pools on the rank
+	}
+	int32 status = 1; // DAOS error code
+	repeated RankResp ranks = 2; // List of per-rank responses
 }

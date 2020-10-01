@@ -272,7 +272,7 @@ class Configuration(object):
         self._set_available_params()
 
     def _set_test_parameters(self, test_params):
-        """Set the object parameters based upon the test paramemeter items.
+        """Set the object parameters based upon the test parameter items.
 
         Args:
             test_params (AvocadoParams): avocado Test parameters
@@ -321,7 +321,7 @@ class Configuration(object):
         """
         if path.startswith(self.namespace):
             # Always include configuration definition paths in order to be able
-            # to find the requirments for each configuration
+            # to find the requirements for each configuration
             return True
         else:
             # Otherwise only include paths that are not configuration-specific
@@ -473,7 +473,7 @@ class Configuration(object):
             # no way to determine which value to use
             multiple_matches = True
 
-        # Report an AvocadoParam-style exception for multple key matches
+        # Report an AvocadoParam-style exception for multiple key matches
         if multiple_matches:
             raise ValueError(
                 "Multiple {} leaves contain the key '{}'; {}".format(

@@ -24,6 +24,7 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 
 import enum
 import uuid
+import pickle
 import sys
 
 # pylint: disable=no-name-in-module
@@ -42,6 +43,16 @@ ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
+
+class KvNotFound(Exception):
+    """Raised by get_kv_by_name if KV does not exist"""
+
+    def __init__(self, name):
+        self.name = name
+        super().__init__(self)
+
+    def __str__(self):
+        return "Failed to create '{}'".format(self.name)
 
 class ObjID(object):
     """
@@ -154,6 +165,30 @@ class Cont(object):
         oid = ObjID(hi, lo)
         return KVObj(self.coh, oid, self)
 
+    def get_kv_by_name(self, name, root=None, create=False):
+        """Return KV by name.
+
+        Allow selection of root (or parent) container, and
+        optionally create kv if not found"""
+
+        if not root:
+            root = self.rootkv()
+        if name in root:
+            object_data = pickle.loads(root[name])
+            return self.kv(object_data['oid'])
+
+        if not create:
+            raise KvNotFound(name)
+
+        new_kv = self.newkv()
+        # Create a new entry in the root kv, where the entry
+        # itself is a dict, and the 'oid' entry is the object
+        # of the new, referenced kv.  This allows for future
+        # expansion of the definition without changing
+        # existing containers.
+        root[name] = pickle.dumps({'oid': new_kv.oid})
+        return new_kv
+
     def __str__(self):
         return '{}@{}'.format(self.cuuid, self.puuid)
 
@@ -164,12 +199,12 @@ class _Obj(object):
         self._dc = DaosClient()
         self.oid = oid
         # Set self.oh to Null here so it's defined in __dell__ if there's
-        # a problem with the obj_open() call.
+        # a problem with the kv_open() call.
         self.oh = None
         # keep container around until all objects are gone
         self.cont = cont
         # Open to the object
-        (ret, oh) = pydaos_shim.obj_open(DAOS_MAGIC, coh, self.oid.hi,
+        (ret, oh) = pydaos_shim.kv_open(DAOS_MAGIC, coh, self.oid.hi,
                                          self.oid.lo, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to open object", ret)
@@ -178,11 +213,12 @@ class _Obj(object):
     def __del__(self):
         if self.oh is None:
             return
-        ret = pydaos_shim.obj_close(DAOS_MAGIC, self.oh)
+        ret = pydaos_shim.kv_close(DAOS_MAGIC, self.oh)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close object", ret)
 
     def getoid(self):
+        """Return the object ID for this object"""
         return self.oid
 
     def __str__(self):
@@ -283,6 +319,11 @@ class KVObj(_Obj):
     dump()
         Fetch all the key-value pairs and return them in a python dictionary.
     """
+
+    # Size of buffer to use for reads.  If the object value is bigger than this
+    # then it'll require two round trips rather than one.
+    value_size = 1024*1024
+
     def get(self, key):
         """Retrieve value associated with the key."""
 
@@ -306,8 +347,10 @@ class KVObj(_Obj):
     def __delitem__(self, key):
         self.put(key, None)
 
-    def bget(self, ddict, value_size=4096):
+    def bget(self, ddict, value_size=None):
         """Bulk get value for all the keys of the input python dictionary."""
+        if value_size is None:
+            value_size = self.value_size
         ret = pydaos_shim.kv_get(DAOS_MAGIC, self.oh, ddict, value_size)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to retrieve KV value", ret)

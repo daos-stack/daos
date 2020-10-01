@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2018 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -222,6 +222,7 @@ struct rdb_tx {
 	void	       *dt_entry;	/* raft entry buffer */
 	size_t		dt_entry_cap;	/* buffer capacity */
 	size_t		dt_entry_len;	/* data length */
+	size_t		dt_num_ops;	/* number of individual operations */
 };
 
 /** Nil term */

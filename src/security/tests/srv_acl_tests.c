@@ -291,7 +291,7 @@ test_validate_creds_drpc_call_failed(void **state)
 
 	init_default_cred(&cred);
 
-	drpc_call_return = -DER_UNKNOWN;
+	drpc_call_return = -DER_MISC;
 	drpc_call_resp_return_ptr = NULL;
 
 	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
@@ -411,11 +411,11 @@ test_validate_creds_drpc_response_bad_status(void **state)
 
 	init_default_cred(&cred);
 
-	resp.status = -DER_UNKNOWN;
+	resp.status = -DER_MISC;
 	pack_validate_resp_in_drpc_call_resp_body(&resp);
 
 	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
-			 -DER_UNKNOWN);
+			 -DER_MISC);
 
 	assert_null(result);
 
@@ -716,7 +716,7 @@ test_pool_get_capas_validate_cred_failed(void **state)
 	acl = daos_acl_create(NULL, 0);
 
 	/* drpc call failure will fail validation */
-	drpc_call_return = -DER_UNKNOWN;
+	drpc_call_return = -DER_MISC;
 	drpc_call_resp_return_ptr = NULL;
 
 	assert_int_equal(ds_sec_pool_get_capabilities(DAOS_PC_RO, &cred,
@@ -1245,7 +1245,7 @@ test_pool_get_capas_fall_thru_everyone(void **state)
 	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
 
 	/*
-	 * Cred doesn't match owner/group, falls thru to everyone
+	 * Cred doesn't match owner/group, falls through to everyone
 	 */
 	expect_pool_capas_with_acl(acl, &cred, DAOS_PC_RW, POOL_CAPA_READ |
 			      POOL_CAPA_CREATE_CONT | POOL_CAPA_DEL_CONT);

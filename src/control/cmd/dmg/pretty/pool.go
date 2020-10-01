@@ -42,7 +42,7 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...c
 	}
 	w := txtfmt.NewErrWriter(out)
 
-	// Maintain output compability with the `daos pool query` output.
+	// Maintain output compatibility with the `daos pool query` output.
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
 		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
 	fmt.Fprintln(w, "Pool space info:")

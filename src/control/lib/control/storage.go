@@ -25,6 +25,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/golang/protobuf/proto"
@@ -43,23 +44,27 @@ import (
 type HostStorage struct {
 	// NvmeDevices contains the set of NVMe controllers (SSDs)
 	// in this configuration.
-	NvmeDevices storage.NvmeControllers `hash:"set"`
+	NvmeDevices storage.NvmeControllers `hash:"set" json:"nvme_devices"`
 
 	// ScmModules contains the set of SCM modules (persistent
 	// memory DIMMs) in this configuration.
-	ScmModules storage.ScmModules `hash:"set"`
+	ScmModules storage.ScmModules `hash:"set" json:"scm_modules"`
 
 	// ScmNamespaces contains the set of prepared SCM namespaces
 	// (block devices) in this configuration.
-	ScmNamespaces storage.ScmNamespaces `hash:"set"`
+	ScmNamespaces storage.ScmNamespaces `hash:"set" json:"scm_namespaces"`
 
 	// ScmMountPoints contains the set of SCM mountpoints in
 	// this configuration.
-	ScmMountPoints storage.ScmMountPoints `hash:"set"`
+	ScmMountPoints storage.ScmMountPoints `hash:"set" json:"scm_mount_points"`
+
+	// SmdInfo contains information obtained by querying the
+	// host's metadata table, if available.
+	SmdInfo *SmdInfo `json:"smd_info"`
 
 	// RebootRequired indicates that a host reboot is necessary in order
 	// to achieve some goal (SCM prep, etc.)
-	RebootRequired bool
+	RebootRequired bool `json:"reboot_required"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -71,8 +76,8 @@ func (hs *HostStorage) HashKey() (uint64, error) {
 // HostStorageSet contains a HostStorage configuration and the
 // set of hosts matching this configuration.
 type HostStorageSet struct {
-	HostStorage *HostStorage
-	HostSet     *hostlist.HostSet
+	HostStorage *HostStorage      `json:"storage"`
+	HostSet     *hostlist.HostSet `json:"hosts"`
 }
 
 // NewHostStorageSet returns an initialized HostStorageSet for the given
@@ -127,6 +132,8 @@ type (
 	// StorageScanReq contains the parameters for a storage scan request.
 	StorageScanReq struct {
 		unaryRequest
+		NvmeHealth bool
+		NvmeMeta   bool
 	}
 
 	// StorageScanResp contains the response from a storage scan request.
@@ -138,39 +145,56 @@ type (
 
 // addHostResponse is responsible for validating the given HostResponse
 // and adding it to the StorageScanResp.
-func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) (err error) {
+//
+// TODO: pass info field that is embedded in message to response receiver.
+func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 	pbResp, ok := hr.Message.(*ctlpb.StorageScanResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
 
 	hs := new(HostStorage)
-	switch pbResp.GetNvme().GetState().GetStatus() {
+
+	nvmeResp := pbResp.GetNvme()
+	nvmeState := nvmeResp.GetState()
+	switch nvmeState.GetStatus() {
 	case ctlpb.ResponseStatus_CTL_SUCCESS:
-		if err := convert.Types(pbResp.GetNvme().GetCtrlrs(), &hs.NvmeDevices); err != nil {
-			return ssp.addHostError(hr.Addr, err)
+		if err := convert.Types(nvmeResp.GetCtrlrs(), &hs.NvmeDevices); err != nil {
+			return err
 		}
 	default:
-		if pbErr := pbResp.GetNvme().GetState().GetError(); pbErr != "" {
-			if err := ssp.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
-				return err
-			}
+		pbErrMsg := nvmeState.GetError()
+		if pbErrMsg == "" {
+			pbErrMsg = "unknown error"
+		}
+		if nvmeState.GetInfo() != "" {
+			pbErrMsg += fmt.Sprintf(" (%s)", nvmeState.GetInfo())
+		}
+		if err := ssp.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
+			return err
 		}
 	}
 
-	switch pbResp.GetScm().GetState().GetStatus() {
+	scmResp := pbResp.GetScm()
+	scmState := scmResp.GetState()
+	switch scmState.GetStatus() {
 	case ctlpb.ResponseStatus_CTL_SUCCESS:
-		if err := convert.Types(pbResp.GetScm().GetModules(), &hs.ScmModules); err != nil {
-			return ssp.addHostError(hr.Addr, err)
+		if err := convert.Types(scmResp.GetModules(), &hs.ScmModules); err != nil {
+			return err
 		}
-		if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hs.ScmNamespaces); err != nil {
-			return ssp.addHostError(hr.Addr, err)
+		if err := convert.Types(scmResp.GetNamespaces(), &hs.ScmNamespaces); err != nil {
+			return err
 		}
 	default:
-		if pbErr := pbResp.GetScm().GetState().GetError(); pbErr != "" {
-			if err := ssp.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
-				return err
-			}
+		pbErrMsg := scmState.GetError()
+		if pbErrMsg == "" {
+			pbErrMsg = "unknown error"
+		}
+		if scmState.GetInfo() != "" {
+			pbErrMsg += fmt.Sprintf(" (%s)", scmState.GetInfo())
+		}
+		if err := ssp.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
+			return err
 		}
 	}
 
@@ -181,7 +205,7 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) (err error) {
 		return err
 	}
 
-	return
+	return nil
 }
 
 // StorageScan concurrently performs storage scans across all hosts
@@ -191,7 +215,12 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) (err error) {
 // containing results for all host scan operations.
 func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanReq) (*StorageScanResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewMgmtCtlClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{})
+		return ctlpb.NewMgmtCtlClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{
+			Nvme: &ctlpb.ScanNvmeReq{
+				Health: req.NvmeHealth,
+				Meta:   req.NvmeMeta,
+			},
+		})
 	})
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)

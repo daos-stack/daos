@@ -33,7 +33,7 @@ class GlobalHandle(TestWithServers):
 
     """
     This class contains tests to verify the ability to share pool
-    handles amoung processes.
+    handles among processes.
     :avocado: recursive
     """
 

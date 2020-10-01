@@ -29,7 +29,7 @@ from apricot import Test
 def unittest_runner(self, unit_testname):
     """Run a unittest.
 
-    Unit tests needs to be run on local machine incase of server start required
+    Unit tests needs to be run on local machine in case of server start required
     For other unit tests, which does not required to start server,it needs to be
     run on server where /mnt/daos mounted.
 

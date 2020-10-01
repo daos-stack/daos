@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -795,7 +795,6 @@ ds_iv_fini(void)
 
 	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
 		iv_ns_destroy_internal(ns);
-		D_FREE(ns);
 	}
 
 	d_list_for_each_entry_safe(class, class_tmp, &ds_iv_class_list,
@@ -838,7 +837,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	else
 		cb_info->result = rc;
 
-	if (cb_info->opc == IV_FETCH && cb_info->value) {
+	if (cb_info->opc == IV_FETCH && cb_info->value && rc == 0) {
 		struct ds_iv_entry	*entry;
 		struct ds_iv_key	key;
 
@@ -866,8 +865,11 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	int			rc;
 
 	rc = ABT_future_create(1, NULL, &future);
-	if (rc)
+	if (rc) {
+		if (sync != NULL && sync->ivs_comp_cb)
+			sync->ivs_comp_cb(sync->ivs_comp_cb_arg, rc);
 		return rc;
+	}
 
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
@@ -914,14 +916,95 @@ out:
 	return rc;
 }
 
+struct sync_comp_cb_arg {
+	d_sg_list_t	iv_value;
+	struct ds_iv_key iv_key;
+	struct ds_iv_ns	*ns;
+	unsigned int	shortcut;
+	crt_iv_sync_t	iv_sync;
+	int		opc;
+	bool		retry;
+};
+
+static int
+iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc);
+
+static int
+sync_comp_cb(void *arg, int rc)
+{
+	struct sync_comp_cb_arg *cb_arg = arg;
+
+	if (cb_arg == NULL)
+		return rc;
+
+	/* Let's retry asynchronous IV only for GRPVER for the moment */
+	if (cb_arg->retry && rc == -DER_GRPVER) {
+		int rc1;
+
+		/* If the IV ns leader has been changed, then it will retry
+		 * in the mean time, it will rely on others to update the
+		 * ns for it.
+		 */
+		D_WARN("retry upon %d for class %d opc %d\n", rc,
+		       cb_arg->iv_key.class_id, IV_UPDATE);
+		rc1 = iv_op(cb_arg->ns, &cb_arg->iv_key, &cb_arg->iv_value,
+			    &cb_arg->iv_sync, cb_arg->shortcut, cb_arg->retry,
+			    cb_arg->opc);
+		if (rc1) {
+			D_ERROR("ds iv update retry failed: %d\n", rc1);
+			rc = rc1;
+		}
+	}
+
+	daos_sgl_fini(&cb_arg->iv_value, true);
+	D_FREE(cb_arg);
+	return rc;
+}
+
 static int
 iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
       crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
+	struct ds_iv_key *_key = key;
+	d_sg_list_t	 *_value = value;
 	int rc;
 
 retry:
-	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
+	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY) {
+		struct sync_comp_cb_arg *arg = NULL;
+
+		/* Register asynchronous sync(lazy mode) callback */
+		D_ALLOC_PTR(arg);
+		if (arg == NULL)
+			return -DER_NOMEM;
+
+		/* Asynchronous mode, let's realloc the value and key, since
+		 * the input parameters will be invalid after the call.
+		 */
+		if (value) {
+			rc = daos_sgl_alloc_copy_data(&arg->iv_value, value);
+			if (rc) {
+				D_FREE_PTR(arg);
+				return -DER_NOMEM;
+			}
+		}
+
+		memcpy(&arg->iv_key, key, sizeof(*key));
+		arg->shortcut = shortcut;
+		arg->iv_sync = *sync;
+		arg->retry = retry;
+		arg->ns = ns;
+		arg->opc = opc;
+
+		sync->ivs_comp_cb = sync_comp_cb;
+		sync->ivs_comp_cb_arg = arg;
+		if (value)
+			_value = &arg->iv_value;
+		_key = &arg->iv_key;
+	}
+
+	rc = iv_op_internal(ns, _key, _value, sync, shortcut, opc);
 	if (retry && (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
 		/* If the IV ns leader has been changed, then it will retry
 		 * in the mean time, it will rely on others to update the
@@ -952,28 +1035,6 @@ ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	return iv_op(ns, key, value, NULL, 0, retry, IV_FETCH);
 }
 
-struct sync_comp_cb_arg {
-	d_sg_list_t iv_value;
-	struct ds_iv_key iv_key;
-};
-
-static void
-sync_comp_cb_arg_free(struct sync_comp_cb_arg *arg)
-{
-	if (arg == NULL)
-		return;
-
-	daos_sgl_fini(&arg->iv_value, true);
-	D_FREE(arg);
-}
-
-int
-sync_comp_cb(void *arg)
-{
-	sync_comp_cb_arg_free((struct sync_comp_cb_arg *)arg);
-	return 0;
-}
-
 /**
  * Update the value to the iv_entry through Cart IV, and it will mark the
  * entry to be valid, so the following fetch will retrieve the value from
@@ -996,33 +1057,12 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	     unsigned int sync_flags, bool retry)
 {
 	crt_iv_sync_t		iv_sync = { 0 };
-	struct sync_comp_cb_arg *arg = NULL;
 	int			rc;
 
 	iv_sync.ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
-	if (sync_mode == CRT_IV_SYNC_LAZY) {
-		D_ALLOC_PTR(arg);
-		if (arg == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		rc = daos_sgl_alloc_copy_data(&arg->iv_value, value);
-		if (rc)
-			D_GOTO(out, rc);
-		memcpy(&arg->iv_key, key, sizeof(*key));
-
-		iv_sync.ivs_comp_cb = sync_comp_cb;
-		iv_sync.ivs_comp_cb_arg = arg;
-		value = &arg->iv_value;
-		key = &arg->iv_key;
-	}
-
 	rc = iv_op(ns, key, value, &iv_sync, shortcut, retry, IV_UPDATE);
-out:
-	if (rc && arg != NULL)
-		sync_comp_cb_arg_free(arg);
-
 	return rc;
 }
 

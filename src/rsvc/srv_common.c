@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,6 +109,68 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		if (rc != 0) {
 			D_ERROR("%s: failed to update attribute '%s': %d\n",
 				 svc->s_name, (char *) key.iov_buf, rc);
+			goto out_bulk;
+		}
+	}
+
+out_bulk:
+	crt_bulk_free(local_bulk);
+out_mem:
+	D_FREE(data);
+out:
+	return rc;
+}
+
+int
+ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
+		 crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t count)
+{
+	crt_bulk_t			 local_bulk;
+	daos_size_t			 bulk_size;
+	d_iov_t				 iov;
+	d_sg_list_t			 sgl;
+	void				*data;
+	char				*names;
+	int				 rc;
+	int				 i;
+
+	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
+	if (rc != 0)
+		goto out;
+	D_DEBUG(DB_MD, "%s: count=%lu, size=%lu\n", svc->s_name, count,
+		bulk_size);
+
+	D_ALLOC(data, bulk_size);
+	if (data == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = sgl.sg_nr;
+	sgl.sg_iovs = &iov;
+	d_iov_set(&iov, data, bulk_size);
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &local_bulk);
+	if (rc != 0)
+		goto out_mem;
+
+	rc = attr_bulk_transfer(rpc, CRT_BULK_GET, local_bulk,
+				remote_bulk, 0, 0, bulk_size);
+	if (rc != 0)
+		goto out_bulk;
+
+	names = data;
+
+	for (i = 0; i < count; i++) {
+		size_t len;
+		d_iov_t key;
+
+		len = strlen(names) /* trailing '\0' */ + 1;
+		d_iov_set(&key, names, len);
+		names += len;
+
+		rc = rdb_tx_delete(tx, path, &key);
+		if (rc != 0) {
+			D_ERROR("%s: failed to delete attribute '%s': %d\n",
+				svc->s_name, (char *) key.iov_buf, rc);
 			goto out_bulk;
 		}
 	}

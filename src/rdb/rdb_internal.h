@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,11 +49,19 @@ struct rdb_raft_event {
 
 /* rdb.c **********************************************************************/
 
+/* multi-ULT locking in struct rdb:
+ *  d_mutex: for RPC mgmt and ref count:
+ *    d_requests, d_replies/cv, d_ref/cv
+ *  d_raft_mutex: for raft state
+ *    d_lc_record, d_applied/cv, d_events[]/cv, d_nevents, d_compact_cv
+ *
+ * TODO: locking for d_stop
+ */
 struct rdb {
 	/* General fields */
 	d_list_t		d_entry;	/* in rdb_hash */
 	uuid_t			d_uuid;		/* of database */
-	ABT_mutex		d_mutex;	/* mainly for using CVs */
+	ABT_mutex		d_mutex;	/* d_replies, d_replies_cv */
 	int			d_ref;		/* of callers and RPCs */
 	ABT_cond		d_ref_cv;	/* for d_ref decrements */
 	struct rdb_cbs	       *d_cbs;		/* callers' callbacks */
@@ -64,6 +72,7 @@ struct rdb {
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
+	ABT_mutex		d_raft_mutex;	/* for raft state machine */
 	daos_handle_t		d_lc;		/* log container */
 	struct rdb_lc_record	d_lc_record;	/* of d_lc */
 	daos_handle_t		d_slc;		/* staging log container */
@@ -87,6 +96,12 @@ struct rdb {
 	ABT_thread		d_recvd;
 	ABT_thread		d_compactd;
 };
+
+/* thresholds of free space for a leader to avoid appending new log entries
+ * and follower to warn if the situation is really dire.
+ */
+#define RDB_NOAPPEND_FREE_SPACE (262144)
+#define RDB_CRITICAL_FREE_SPACE (16384)
 
 /* Current rank */
 #define DF_RANK "%u"
@@ -261,7 +276,7 @@ void rdb_recvd(void *arg);
 /* rdb_tx.c *******************************************************************/
 
 int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-		 void *result);
+		 void *result, bool *critp);
 
 /* rdb_kvs.c ******************************************************************/
 
@@ -324,8 +339,8 @@ int rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       daos_key_t *akey_out, d_iov_t *value);
 int rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		    bool backward, rdb_iterate_cb_t cb, void *arg);
-int rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-		   d_iov_t akeys[], d_iov_t values[]);
+int rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
+		   bool crit, int n, d_iov_t akeys[], d_iov_t values[]);
 int rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 		  d_iov_t akeys[]);
 int rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high);
@@ -346,7 +361,8 @@ rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, d_iov_t akeys[],
 	D_DEBUG(DB_TRACE, "mc="DF_X64" oid="DF_X64" n=%d akeys[0]=<%p, %zd> "
 		"values[0]=<%p, %zd>\n", mc.cookie, oid, n, akeys[0].iov_buf,
 		akeys[0].iov_len, values[0].iov_buf, values[0].iov_len);
-	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, n, akeys, values);
+	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, true /* crit */, n,
+			      akeys, values);
 }
 
 static inline int
@@ -361,14 +377,14 @@ rdb_mc_lookup(daos_handle_t mc, rdb_oid_t oid, d_iov_t *akey,
 }
 
 static inline int
-rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
-	      d_iov_t akeys[], d_iov_t values[])
+rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool crit,
+	      int n, d_iov_t akeys[], d_iov_t values[])
 {
 	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
 		" n=%d akeys[0]=<%p, %zd> values[0]=<%p, %zd>\n", lc.cookie,
 		index, oid, n, akeys[0].iov_buf, akeys[0].iov_len,
 		values[0].iov_buf, values[0].iov_len);
-	return rdb_vos_update(lc, index, oid, n, akeys, values);
+	return rdb_vos_update(lc, index, oid, crit, n, akeys, values);
 }
 
 static inline int
@@ -443,5 +459,8 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 		" backward=%d\n", lc.cookie, index, oid, backward);
 	return rdb_vos_iterate(lc, index, oid, backward, cb, arg);
 }
+
+int
+rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
 
 #endif /* RDB_INTERNAL_H */

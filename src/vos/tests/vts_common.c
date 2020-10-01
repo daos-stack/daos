@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +130,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	}
 	tcx->tc_step = TCX_PO_CREATE;
 
-	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, &tcx->tc_po_hdl);
+	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, false,
+			   &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vos pool open %s "DF_UUIDF" error: %d\n",
 			    tcx->tc_po_name, DP_UUID(tcx->tc_po_uuid), rc);
@@ -198,7 +199,7 @@ enum {
 	DTS_INIT_MODULE,	/* modules have been loaded */
 	DTS_INIT_POOL,		/* pool has been created */
 	DTS_INIT_CONT,		/* container has been created */
-	DTS_INIT_CREDITS,	/* I/O credits have been initalized */
+	DTS_INIT_CREDITS,	/* I/O credits have been initialized */
 };
 
 /** try to obtain a free credit */
@@ -271,7 +272,7 @@ pool_init(struct dts_context *tsc)
 	if (rc)
 		goto out;
 
-	rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, &poh);
+	rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, false, &poh);
 	if (rc)
 		goto out;
 
@@ -323,7 +324,7 @@ dts_ctx_init(struct dts_context *tsc)
 	int	rc;
 
 	tsc->tsc_init = DTS_INIT_NONE;
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;

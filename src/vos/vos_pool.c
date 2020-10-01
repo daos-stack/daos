@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,6 +117,7 @@ pool_hop_free(struct d_ulink *hlink)
 	int		 rc;
 
 	D_ASSERT(pool->vp_opened == 0);
+	D_ASSERT(!gc_have_pool(pool));
 
 	if (pool->vp_io_ctxt != NULL) {
 		rc = bio_ioctxt_close(pool->vp_io_ctxt);
@@ -137,6 +138,8 @@ pool_hop_free(struct d_ulink *hlink)
 
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
+
+	vos_dedup_fini(pool);
 
 	D_FREE(pool);
 }
@@ -289,7 +292,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	pool_df = vos_pool_pop2df(ph);
 
-	/* If the file is fallocated seperately we need the fallocated size
+	/* If the file is fallocated separately we need the fallocated size
 	 * for setting in the root object.
 	 */
 	if (!scm_sz) {
@@ -396,7 +399,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 
 	uuid_copy(ukey.uuid, uuid);
 	while (1) {
-		struct vos_pool	*pool;
+		struct vos_pool	*pool = NULL;
 
 		rc = pool_lookup(&ukey, &pool);
 		if (rc) {
@@ -405,6 +408,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 			break;
 		}
 
+		D_ASSERT(pool != NULL);
 		pool->vp_dying = 1;
 		if (gc_have_pool(pool)) {
 			/* still pinned by GC, un-pin it because there is no
@@ -509,7 +513,7 @@ set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
 		goto done;
 	}
 
-	size = &ovhd.to_node_overhead.no_size;
+	size = &ovhd.to_leaf_overhead.no_size;
 
 	switch (id) {
 	case VOS_SLAB_OBJ_NODE:
@@ -523,6 +527,10 @@ set_slab_prop(int id, struct pobj_alloc_class_desc *slab)
 		break;
 	case VOS_SLAB_EVT_NODE:
 		tclass = VOS_TC_ARRAY;
+		break;
+	case VOS_SLAB_EVT_NODE_SM:
+		tclass = VOS_TC_ARRAY;
+		size = &ovhd.to_int_node_size;
 		break;
 	case VOS_SLAB_EVT_DESC:
 		tclass = VOS_TC_ARRAY;
@@ -583,13 +591,14 @@ vos_register_slabs(struct umem_attr *uma)
 /**
  * Open a Versioning Object Storage Pool (VOSP), load its root object
  * and other internal data structures.
+ * Reserve space for system activity (less if caller specifies "small" pool).
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
+vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool_df	*pool_df;
-	struct vos_pool		*pool;
+	struct vos_pool		*pool = NULL;
 	struct umem_attr	*uma;
 	struct d_uuid		 ukey;
 	int			 rc, enabled = 1;
@@ -605,6 +614,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
+		D_ASSERT(pool != NULL);
 		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
 		pool->vp_opened++;
@@ -702,6 +712,10 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		}
 	}
 
+	rc = vos_dedup_init(pool);
+	if (rc)
+		goto failed;
+
 	/* Insert the opened pool to the uuid hash table */
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
@@ -711,10 +725,10 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
+	pool->vp_small = small;
 	vos_space_sys_init(pool);
-	/* NB: probably should call gc_add_pool to clean up garbages left
-	 * behind by crash.
-	 */
+	/* Ensure GC is triggered after server restart */
+	gc_add_pool(pool);
 	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
 	return 0;
 failed:
@@ -741,7 +755,11 @@ vos_pool_close(daos_handle_t poh)
 
 	D_ASSERT(pool->vp_opened > 0);
 	pool->vp_opened--;
-	if (pool->vp_opened == 0)
+
+	/* If the last reference is holding by GC */
+	if (pool->vp_opened == 1 && gc_have_pool(pool))
+		gc_del_pool(pool);
+	else if (pool->vp_opened == 0)
 		vos_pool_hash_del(pool);
 
 	vos_pool_decref(pool); /* -1 for myself */
@@ -773,6 +791,37 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 		D_ERROR("Query pool "DF_UUID" failed. "DF_RC"\n",
 			DP_UUID(pool->vp_id), DP_RC(rc));
 	return rc;
+}
+
+int
+vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
+{
+	struct vos_pool	*pool = NULL;
+	struct d_uuid	 ukey;
+	int		 rc;
+
+	uuid_copy(ukey.uuid, pool_id);
+	rc = pool_lookup(&ukey, &pool);
+	if (rc)
+		return rc;
+
+	D_ASSERT(pool != NULL);
+	rc = vos_space_query(pool, vps, false);
+	vos_pool_decref(pool);
+	return rc;
+}
+
+int
+vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
+{
+	struct vos_pool	*pool = vos_hdl2pool(poh);
+
+	if (pool == NULL)
+		return -DER_NO_HDL;
+	if (space_sys == NULL)
+		return -DER_INVAL;
+
+	return vos_space_sys_set(pool, space_sys);
 }
 
 int

@@ -26,7 +26,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -35,16 +34,6 @@ import (
 
 func getNilRequestResp() *pbin.Response {
 	return pbin.NewResponseWithError(errors.New("nil request"))
-}
-
-// pingHandler implements the Ping method.
-type pingHandler struct{}
-
-func (h *pingHandler) Handle(_ logging.Logger, req *pbin.Request) *pbin.Response {
-	if req == nil {
-		return getNilRequestResp()
-	}
-	return pbin.NewResponseWithPayload(&pbin.PingResp{Version: build.DaosVersion})
 }
 
 // scmHandler provides the ability to set up the scm.Provider for SCM method handlers.
@@ -180,31 +169,6 @@ func (h *bdevHandler) setupProvider(log logging.Logger) {
 	if h.bdevProvider == nil {
 		h.bdevProvider = bdev.DefaultProvider(log).WithForwardingDisabled()
 	}
-}
-
-// bdevInitHandler implements the BdevInit method.
-type bdevInitHandler struct {
-	bdevHandler
-}
-
-func (h *bdevInitHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
-	if req == nil {
-		return getNilRequestResp()
-	}
-
-	var iReq bdev.InitRequest
-	if err := json.Unmarshal(req.Payload, &iReq); err != nil {
-		return pbin.NewResponseWithError(err)
-	}
-
-	h.setupProvider(log)
-
-	err := h.bdevProvider.Init(iReq)
-	if err != nil {
-		return pbin.NewResponseWithError(err)
-	}
-
-	return pbin.NewResponseWithPayload(nil)
 }
 
 // bdevScanHandler implements the BdevScan method.

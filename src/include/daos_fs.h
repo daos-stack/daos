@@ -609,7 +609,7 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
  * \param[in]	obj	Open object to query.
  * \param[in]	buf	user buffer to copy the symlink value in.
  * \param[in,out]
- *		size	[in]: Size of buffer pased in. [out]: Actual size of
+ *		size	[in]: Size of buffer passed in. [out]: Actual size of
  *			value.
  *
  * \return		0 on success, errno code on failure.

@@ -23,7 +23,6 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include "evt_priv.h"
-#include "vos_internal.h"
 
 #define evt_iter_is_sorted(iter) \
 	(((iter)->it_options & (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) != 0)
@@ -95,7 +94,8 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 	iter->it_filter.fr_ex.ex_lo = 0;
 	iter->it_filter.fr_epr.epr_lo = 0;
 	iter->it_filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
-	iter->it_filter.fr_punch = 0;
+	iter->it_filter.fr_punch_epc = 0;
+	iter->it_filter.fr_punch_minor_epc = 0;
 	if (filter)
 		iter->it_filter = *filter;
  out:
@@ -272,7 +272,7 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 				continue;
 		}
 
-		evt_nd_off_read_rect_at(tcx, trace->tr_node, trace->tr_at,
+		evt_nd_off_rect_read_at(tcx, trace->tr_node, trace->tr_at,
 					&rect);
 		if (evt_filter_rect(&iter->it_filter, &rect, true))
 			continue;
@@ -551,7 +551,7 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 
 	iter->it_skip_move = 1;
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	evt_nd_off_read_rect_at(tcx, trace->tr_node, trace->tr_at, &rect);
+	evt_nd_off_rect_read_at(tcx, trace->tr_node, trace->tr_at, &rect);
 	if (!evt_filter_rect(&iter->it_filter, &rect, true))
 		goto out;
 
@@ -600,16 +600,16 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	}
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	node = evt_off2node(tcx, trace->tr_node);
-	evt_node_read_rect_at(tcx, node, trace->tr_at, &rect);
+	evt_node_rect_read_at(tcx, node, trace->tr_at, &rect);
 
 	if (entry)
 		evt_entry_fill(tcx, node, trace->tr_at, NULL,
 			       evt_iter_intent(iter), entry);
 
-	/* There is no visiblity flag for sorted entries but go ahead and set it
-	 * EVT_COVERED if user has specified a punch epoch in the filter
+	/* There is no visibility flag for unsorted entries but go ahead and
+	 * set it EVT_COVERED if user has specified a punch epoch in the filter
 	 */
-	if (entry->en_epoch <= iter->it_filter.fr_punch)
+	if (evt_entry_punched(entry, &iter->it_filter))
 		entry->en_visibility = EVT_COVERED;
 set_anchor:
 	*inob = tcx->tc_inob;

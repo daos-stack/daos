@@ -160,7 +160,7 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	rc = daos_debug_init(NULL);
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc) {
 		print_error("Error initializing debug system\n");
 		return rc;
@@ -278,7 +278,7 @@ main(int argc, char **argv)
 			print_usage();
 			goto exit_1;
 		default:
-			print_error("Unkown option\n");
+			print_error("Unknown option\n");
 			print_usage();
 			goto exit_1;
 		}

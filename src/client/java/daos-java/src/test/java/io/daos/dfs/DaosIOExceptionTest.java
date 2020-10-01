@@ -6,8 +6,8 @@ import org.junit.Test;
 public class DaosIOExceptionTest {
 
   @Test
-  public void testLoadErrorCode(){
-    Assert.assertEquals(4, DaosIOException.errorMap.size());
+  public void testLoadErrorCode() {
+    Assert.assertEquals(5, DaosIOException.errorMap.size());
     ErrorCode errorCode = Constants.CUSTOM_ERR_NO_POOL_SIZE;
     Assert.assertEquals(errorCode.getMsg(), DaosIOException.errorMap.get(errorCode.getCode()));
 
@@ -16,7 +16,7 @@ public class DaosIOExceptionTest {
   }
 
   @Test
-  public void testParseCustomError(){
+  public void testParseCustomError() {
     ErrorCode errorCode = Constants.CUSTOM_ERR_INCORRECT_SVC_REPLICS;
     String m = "test get message";
     DaosIOException exception = new DaosIOException(m, errorCode.getCode(), errorCode.getMsg());
@@ -33,7 +33,7 @@ public class DaosIOExceptionTest {
   }
 
   @Test
-  public void testParseDaosError(){
+  public void testParseDaosError() {
     String m = "test get message";
     String dm = "daos error message";
     DaosIOException exception = new DaosIOException(m, 1001, dm);

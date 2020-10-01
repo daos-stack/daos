@@ -62,9 +62,9 @@ def printhelp():
     """
     print("\n")
     print("Usage: ./launch <tag>\n")
-    print("\ttag:  ")
-    print("\tall\tRun all tests ")
-    print("\tproto\tRun basic CaRT protocol test ")
+    print("        ttag:")
+    print("        all     Run all tests")
+    print("        proto   Run basic CaRT protocol test")
     print("\n")
     exit()
 
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     # setup some aspects of the environment
     with open(os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                           "./.build_vars.json")) as f:
+                           "../../../../.build_vars.json")) as f:
         envdata = json.load(f)
 
     BINDIR = envdata['PREFIX'] + '/bin'

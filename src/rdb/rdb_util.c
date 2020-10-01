@@ -274,7 +274,7 @@ static inline int
 rdb_vos_fetch_check(d_iov_t *value, d_iov_t *value_orig)
 {
 	/*
-	 * An emtpy value represents nonexistence. Keep the caller value intact
+	 * An empty value represents nonexistence. Keep the caller value intact
 	 * in this case.
 	 */
 	if (value->iov_len == 0) {
@@ -333,8 +333,9 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
-	rc = vos_fetch_begin(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
-			     1 /* n */, &iod, false /* size_fetch */, &io);
+	rc = vos_fetch_begin(cont, uoid, epoch, &rdb_dkey,
+			     1 /* n */, &iod, 0 /* vos_flags */, NULL, &io,
+			     NULL /* dth */);
 	if (rc != 0)
 		return rc;
 
@@ -394,7 +395,7 @@ rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	param.ip_dkey = rdb_dkey;
 	param.ip_epr.epr_lo = epoch;
 	param.ip_epr.epr_hi = epoch;
-	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter);
+	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter, NULL);
 	if (rc != 0)
 		goto out;
 	rc = vos_iter_probe(iter, NULL /* anchor */);
@@ -449,7 +450,7 @@ rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	param.ip_dkey = rdb_dkey;
 	param.ip_epr.epr_lo = epoch;
 	param.ip_epr.epr_hi = epoch;
-	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter);
+	rc = vos_iter_prepare(VOS_ITER_AKEY, &param, &iter, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			/* No a-keys. */
@@ -503,18 +504,19 @@ out:
 }
 
 int
-rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-	       d_iov_t akeys[], d_iov_t values[])
+rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, bool crit,
+	       int n, d_iov_t akeys[], d_iov_t values[])
 {
 	daos_unit_oid_t	uoid;
 	daos_iod_t	iods[n];
 	d_sg_list_t	sgls[n];
+	uint64_t	vos_flags = crit ? VOS_OF_CRIT : 0;
 
 	D_ASSERTF(n <= RDB_VOS_BATCH_MAX, "%d <= %d\n", n, RDB_VOS_BATCH_MAX);
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
-	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, 0 /* flags */,
+	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, vos_flags,
 			      &rdb_dkey, n, iods, NULL, sgls);
 }
 
@@ -540,7 +542,7 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 	range.epr_lo = low;
 	range.epr_hi = high;
 
-	return vos_discard(cont, &range);
+	return vos_discard(cont, &range, NULL, NULL);
 }
 
 int
@@ -552,5 +554,31 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr, NULL);
+	return vos_aggregate(cont, &epr, NULL, NULL, NULL);
 }
+
+/* Return amount of vos pool SCM memory available accounting for
+ * VOS PMDK allocation state and VOS "system reserved" memory.
+ * TODO: decide if we should also account for VOS in-flight "held" memory.
+ */
+int
+rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp)
+{
+	struct vos_pool_space	vps;
+	int rc;
+
+	rc = vos_pool_query_space(db->d_uuid, &vps);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to query vos pool space: "DF_RC"\n",
+			DP_UUID(db->d_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	if (SCM_FREE(&vps) > SCM_SYS(&vps))
+		*scm_left_outp = SCM_FREE(&vps) - SCM_SYS(&vps);
+	else
+		*scm_left_outp = 0;
+
+	return 0;
+}
+

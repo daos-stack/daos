@@ -32,7 +32,7 @@ class BasicSnapshot(TestWithServers):
     """DAOS-1370 Basic snapshot test.
 
     Test Class Description:
-        Test that a snapshot taken of a container remains unchaged even after
+        Test that a snapshot taken of a container remains unchanged even after
         an object in the container has been updated 500 times.
         Create the container.
         Write an object to the container.

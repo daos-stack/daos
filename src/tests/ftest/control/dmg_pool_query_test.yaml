@@ -5,7 +5,7 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 200
+timeout: 80
 server_config:
   name: daos_server
   port: 10001
@@ -15,19 +15,28 @@ server_config:
     bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
-
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True
 pool:
   control_method: dmg
   mode: 146
   scm_size: "16GB"
   nvme_size: "32GB"
   name: daos_server
-
+container:
+    type: POSIX
+    control_method: daos
 ior:
   flags: "-k -w -r"
   transfer_size: "64M"
   block_size: "2G"
-  daos_destroy: False
+  dfs_destroy: False
 
 exp_vals:
   pool_info: ['8', '0', '0', '1']

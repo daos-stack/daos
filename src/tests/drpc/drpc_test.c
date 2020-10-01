@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,9 +51,8 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	ctx = drpc_connect(argv[1]);
-
-	if (ctx == NULL) {
+	ret = drpc_connect(argv[1], &ctx);
+	if (ret != -DER_SUCCESS) {
 		fprintf(stderr, "Unable to connect to %s\n", argv[1]);
 		exit(1);
 	}

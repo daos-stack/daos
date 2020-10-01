@@ -53,6 +53,7 @@ GO_CONTROL_FILES = common/proto/mgmt/acl.pb.go\
 		   common/proto/ctl/system.pb.go\
 		   common/proto/ctl/control.pb.go\
  		   common/proto/ctl/network.pb.go\
+ 		   common/proto/ctl/firmware.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
@@ -72,7 +73,8 @@ $(PROTOC):
 	@false
 
 GOPATH ?= $(shell go env GOPATH)
-PROTOC_GEN_GO_TAG ?= v1.2.0
+PROTOC_GEN_GO_MOD_TAG = $(shell awk '/protobuf/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
+PROTOC_GEN_GO_TAG ?= $(PROTOC_GEN_GO_MOD_TAG)
 PROTOC_GEN_GO_IMP := github.com/golang/protobuf/protoc-gen-go
 PROTOC_GEN_GO := $(GOPATH)/bin/protoc-gen-go
 
