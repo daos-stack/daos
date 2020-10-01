@@ -183,6 +183,7 @@ class TestWithoutServers(Test):
         super(TestWithoutServers, self).setUp()
         if not load_mpi("openmpi"):
             self.fail("Failed to load openmpi")
+
         self.orterun = find_executable('orterun')
         if self.orterun is None:
             self.fail("Could not find orterun")

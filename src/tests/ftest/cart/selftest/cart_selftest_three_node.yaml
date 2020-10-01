@@ -1,0 +1,54 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/no_sep
+  #!filter-only : /run/tests/self_np
+  D_LOG_MASK: "WARN"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  test_servers_CRT_CTX_NUM: "16"
+  test_clients_1_CRT_CTX_NUM: "16"
+  test_clients_2_CRT_CTX_NUM: "16"
+env_CRT_CTX_SHARE_ADDR: !mux
+  sep:
+    env: sep
+    CRT_CTX_SHARE_ADDR: "1"
+  no_sep:
+    env: no_sep
+    CRT_CTX_SHARE_ADDR: "0"
+hosts: !mux
+  hosts_1:
+    config: three_node
+    test_servers:
+      - boro-A
+      - boro-B
+    test_clients_1:
+      - boro-C
+    test_clients_2:
+      - boro-C
+    test_clients_3:
+      - boro-C
+tests: !mux
+  self_np:
+    name: self_test_np
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_group_np_srv --name selftest_srv_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+
+    test_clients_1_bin: self_test
+    test_clients_1_arg: "--group-name selftest_srv_grp --endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
+    test_clients_1_env: ""
+    test_clients_1_ppn: "1"
+
+    test_clients_2_bin: self_test
+    test_clients_2_arg: "--group-name selftest_srv_grp --endpoint 0-1:0 --master-endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
+    test_clients_2_env: ""
+    test_clients_2_ppn: "1"
+
+    test_clients_3_bin: ../tests/test_group_np_cli
+    test_clients_3_arg: "--name client-group --attach_to selftest_srv_grp --shut_only \
+              "
+    test_clients_3_env: ""
+    test_clients_3_ppn: "1"

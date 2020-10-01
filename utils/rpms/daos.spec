@@ -160,6 +160,7 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: python-distro
+Requires: python2-tabulate
 Requires: fio
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
@@ -369,7 +370,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
-%{_prefix}/lib/cart/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %exclude %{_bindir}/self_test
