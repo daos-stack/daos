@@ -433,7 +433,7 @@ class DmgCommand(DmgCommandBase):
         else:
             match = re.findall(
                 r"UUID:\s+([A-Za-z0-9-]+),\s+"
-                r"Service replicas:\s+([A-Za-z0-9-]+)",
+                r"Service replicas:\s+([0-9]+(,[0-9]+)*)",
                 self.result.stdout)
             if match:
                 data["uuid"] = match[0][0]
