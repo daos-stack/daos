@@ -146,7 +146,7 @@ def set_defaults(env):
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
         if env.get('BUILD_TYPE') == 'release':
-            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE')
+            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
         env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
