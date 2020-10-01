@@ -3,11 +3,22 @@
 hosts:
   test_servers:
     - server-A
-timeout: 60
+  test_clients:
+    - client-B
+timeout: 100
 server_config:
   name: daos_server
 pool:
   control_method: dmg
   mode: 511
+  scm_size: 2G
   name: daos_server
-  scm_size: 1073741824
+container:
+  control_method: daos
+  type: POSIX
+
+valid_out_filename:
+  - "123456789"
+  - vAliD.txt
+  - 1ab2@3c4$%(
+  - normal_filename.txt
