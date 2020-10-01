@@ -169,10 +169,11 @@ scp_files() {
 
 get_cartlogtest_files() {
     set -ux
-    for file in $(ls -d ${2})
+    for file in $(ls -d ${1})
     do
         ls -sh "${file}"
-        "${1}" "${file}" |& tee "${file}"_ctestlog.log
+        ../../../cart/TESTING/util/cart_logtest.py "${file}" |& \
+        tee "${file}"_ctestlog.log
     done
 }
 
@@ -186,6 +187,7 @@ fi
 COMPRESS="false"
 ARCHIVE="false"
 VERBOSE="false"
+CART_LOGTEST="false"
 THRESHOLD=""
 
 # Step through arguments
@@ -201,7 +203,7 @@ while getopts "vhcas:r:d:t:" opt; do
             THRESHOLD=$OPTARG
             ;;
         s )
-            CART_LOGTEST=$OPTARG
+            CART_LOGTEST="true"
             ;;
         c )
             COMPRESS="true"
@@ -230,9 +232,9 @@ if [ "${VERBOSE}" == "true" ]; then
 fi
 
 # Run cart_logtest.py on LOCAL_SRC
-if [ -n "${CART_LOGTEST}" ]; then
+if [ "${CART_LOGTEST}" == "true" ]; then
     echo "Running cart_logtest.py on ${LOCAL_SRC}"
-    get_cartlogtest_files "${CART_LOGTEST}" "${LOCAL_SRC}"
+    get_cartlogtest_files "${LOCAL_SRC}"
 fi
 
 # Display big files to stdout

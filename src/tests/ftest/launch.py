@@ -1010,11 +1010,9 @@ def archive_cart_logs(avocado_logs_dir, test_files, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    cart_logtest = os.path.join(os.path.abspath("cart"), "cart_logtest.py")
     threshold = args.logs_threshold if args.logs_threshold else None
     task = archive_files(
-        destination, hosts, "{}/*/*log*".format(logs_dir),
-        cart_logtest, threshold)
+        destination, hosts, "{}/*/*log*".format(logs_dir), True, threshold)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
@@ -1058,14 +1056,14 @@ def archive_config_files(avocado_logs_dir):
     return status
 
 
-def archive_files(destination, hosts, source_files, cart=None, threshold=None):
+def archive_files(destination, hosts, source_files, cart=False, threshold=None):
     """Archive all of the remote files to the destination directory.
 
     Args:
         destination (str): path to which to archive files
         hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
-        cart (str): path to cart_logtest.py
+        cart (str): enable running cart_logtest.py
         threshold (str): size threshold for reporting big/large files
 
     Returns:
@@ -1090,7 +1088,7 @@ def archive_files(destination, hosts, source_files, cart=None, threshold=None):
         "-d \"{}\"".format(source_files),
     ]
     if cart:
-        command.append("-s {}".format(cart))
+        command.append("-s")
     if threshold:
         command.append("-t {}".format(threshold))
 
