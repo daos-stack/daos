@@ -29,7 +29,8 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev,
                libipmctl-dev,
-               libraft-dev
+               libraft-dev,
+               python3-tabulate
 Standards-Version: 4.1.2
 Homepage: https://wiki.hpdd.intel.com/display/DC/DAOS+Community+Home
 Vcs-Git: https://github.com/daos-stack/daos.git

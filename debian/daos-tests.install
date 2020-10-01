@@ -1,5 +1,4 @@
 usr/lib/daos/TESTING/*
-usr/lib/cart/TESTING/*
 usr/bin/hello_drpc
 usr/bin/acl_dump_test
 usr/bin/agent_tests
