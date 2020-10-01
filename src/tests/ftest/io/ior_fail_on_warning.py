@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+import traceback
+from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 
@@ -50,9 +52,10 @@ class IorFailOnWarning(IorTestBase):
         try:
             # IOR command should fail if 'WARNING' found.
             self.run_ior_with_pool(fail_on_warning=True)
-        except:
+        except TestFail as exc:
+            self.log.info(exc)
+            self.log.info(traceback.format_exc())
             self.log.info("==> Test expected to Fail. Test PASSED")
-        
+
         # IOR command should succeed, even when 'WARNING' found.
-        out = self.run_ior_with_pool()
-        IorCommand.get_ior_metrics(out)
+        self.run_ior_with_pool()
