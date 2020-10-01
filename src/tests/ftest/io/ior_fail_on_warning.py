@@ -50,11 +50,11 @@ class IorFailOnWarning(IorTestBase):
         """
         try:
             # IOR command should fail if 'WARNING' found.
-            self.run_ior_with_pool(fail_on_warning=True)
+            _ = self.run_ior_with_pool(fail_on_warning=True)
         except TestFail as exc:
             self.log.info(exc)
             self.log.info(traceback.format_exc())
             self.log.info("==> Test expected to Fail. Test PASSED")
 
         # IOR command should succeed, even when 'WARNING' found.
-        self.run_ior_with_pool()
+        _ = self.run_ior_with_pool()
