@@ -470,7 +470,7 @@ class TestWithServers(TestWithoutServers):
         filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
         return os.path.join(self.tmp, filename)
 
-    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=30):
+    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=5):
         """Add a new daos agent manager object to the agent manager list.
 
         Args:
@@ -497,7 +497,7 @@ class TestWithServers(TestWithoutServers):
             DaosAgentManager(agent_cmd, self.manager_class))
 
     def add_server_manager(self, config_file=None, dmg_config_file=None,
-                           common_cfg=None, timeout=90):
+                           common_cfg=None, timeout=20):
         """Add a new daos server manager object to the server manager list.
 
         When adding multiple server managers unique yaml config file names
