@@ -919,7 +919,6 @@ def check_big_files(avocado_logs_dir, task, test_name, threshold):
     log_files = []
     hosts = []
     for output, nodelist in task.iter_buffers():
-        print("{}: {}".format(NodeSet.fromlist(nodelist), output))
         hosts.extend(nodelist)
         log_files.extend(re.findall(r"Y:(.*)", str(output)))
 
