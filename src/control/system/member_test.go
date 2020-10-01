@@ -745,3 +745,86 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 		})
 	}
 }
+
+func TestSystem_Membership_Join(t *testing.T) {
+	curMember := MockMember(t, 0, MemberStateJoined)
+	newMember := MockMember(t, 1, MemberStateJoined)
+
+	for name, tc := range map[string]struct {
+		notLeader bool
+		req       *JoinRequest
+		expResp   *JoinResponse
+		expErr    error
+	}{
+		"not leader": {
+			notLeader: true,
+			req:       &JoinRequest{},
+			expErr:    &ErrNotLeader{},
+		},
+		"successful rejoin": {
+			req: &JoinRequest{
+				Rank:        curMember.Rank,
+				UUID:        curMember.UUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+			},
+			expResp: &JoinResponse{
+				Member:     curMember,
+				PrevState:  curMember.state,
+				MapVersion: 2,
+			},
+		},
+		"rejoin with different rank": {
+			req: &JoinRequest{
+				Rank:        Rank(42),
+				UUID:        curMember.UUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+			},
+			expErr: errors.New("different rank"),
+		},
+		"successful join": {
+			req: &JoinRequest{
+				Rank:           NilRank,
+				UUID:           newMember.UUID,
+				ControlAddr:    newMember.Addr,
+				FabricURI:      newMember.FabricURI,
+				FabricContexts: newMember.FabricContexts,
+			},
+			expResp: &JoinResponse{
+				Created:    true,
+				Member:     newMember,
+				PrevState:  MemberStateUnknown,
+				MapVersion: 2,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			ms := NewMembership(log, db)
+			curMember.Rank = NilRank
+			if err := ms.addMember(curMember); err != nil {
+				t.Fatal(err)
+			}
+			if tc.notLeader {
+				_ = db.raft.Shutdown().Error()
+			}
+
+			gotResp, gotErr := ms.Join(tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(Member{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

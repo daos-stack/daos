@@ -189,12 +189,12 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 
 	if (dss_drpc_ctx == NULL) {
 		D_ERROR("DRPC not connected\n");
-		return -DER_INVAL;
+		return -DER_UNINIT;
 	}
 
 	D_ALLOC(gps_req.uuid, DAOS_UUID_STR_SIZE);
 	if (gps_req.uuid == NULL) {
-		D_ERROR("failed to allocate device uuid\n");
+		D_ERROR("failed to allocate pool uuid\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	uuid_unparse_lower(pool_uuid, gps_req.uuid);

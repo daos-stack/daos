@@ -59,6 +59,14 @@ func (srv *IOServerInstance) format(ctx context.Context, recreateSBs bool) error
 		return errors.Errorf("instance %d: no superblock after format", idx)
 	}
 
+	// After we know that the instance storage is ready, fire off
+	// any callbacks that were waiting for this state.
+	for _, readyFn := range srv.onStorageReady {
+		if err := readyFn(ctx); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -145,14 +153,6 @@ func (srv *IOServerInstance) run(ctx context.Context, membership *system.Members
 
 	if err = srv.format(ctx, recreateSBs); err != nil {
 		return
-	}
-
-	// After we know that the instance storage is ready, fire off
-	// any callbacks that were waiting for this state.
-	for _, readyFn := range srv.onStorageReady {
-		if err := readyFn(); err != nil {
-			return err
-		}
 	}
 
 	if err = srv.start(ctx, errChan); err != nil {

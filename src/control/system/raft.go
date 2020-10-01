@@ -137,6 +137,13 @@ type fsm Database
 // the only reasonable response to an Apply() failure is to panic,
 // because the Raft algorithm does not specify a recovery mechanism
 // for this scenario.
+//
+// TODO: This approach feels too heavy-handed, given that the control
+// plane is responsible for more than just hosting the raft service.
+// It's not clear how we can meaningfully handle errors though, and it
+// seems risky to allow a replica to continue in an indeterminite state.
+// For the moment, let's just use the nuclear option on the theory that
+// these are "can't happen" errors, e.g. ENOMEM or corrupt snapshot.
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	c := new(raftUpdate)
 	if err := json.Unmarshal(l.Data, c); err != nil {

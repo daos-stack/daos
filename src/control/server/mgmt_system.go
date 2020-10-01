@@ -458,7 +458,11 @@ func (svc *mgmtSvc) ResetFormatRanks(ctx context.Context, req *mgmtpb.RanksReq) 
 		if err := srv.RemoveSuperblock(); err != nil {
 			return nil, err
 		}
-		srv.startLoop <- true // proceed to awaiting storage format
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case srv.startLoop <- true: // proceed to awaiting storage format
+		}
 	}
 
 	// ignore poll results as we gather state immediately after
@@ -517,7 +521,6 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case srv.startLoop <- true:
-			continue
 		}
 	}
 

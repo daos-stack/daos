@@ -34,16 +34,21 @@ import (
 	"github.com/hashicorp/raft"
 )
 
-// MockMember returns a system member with appropriate values.
-func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
+func mockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
 	addr, err := net.ResolveTCPAddr("tcp",
 		fmt.Sprintf("127.0.0.%d:10001", idx))
 	if err != nil {
 		t.Fatal(err)
 	}
+	return addr
+}
 
+// MockMember returns a system member with appropriate values.
+func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
+	addr := mockControlAddr(t, idx)
 	m := NewMember(Rank(idx), common.MockUUID(int32(idx)),
 		addr.String(), addr, state)
+	m.FabricContexts = idx
 	if len(info) > 0 {
 		m.Info = info[0]
 	}

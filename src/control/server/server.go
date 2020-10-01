@@ -274,7 +274,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			// Start the system db after instance 0's SCM is
 			// ready.
 			var once sync.Once
-			srv.OnStorageReady(func() (err error) {
+			srv.OnStorageReady(func(ctx context.Context) (err error) {
 				once.Do(func() {
 					err = errors.Wrap(sysdb.Start(ctx, controlAddr),
 						"failed to start system db",

@@ -44,7 +44,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-type onStorageReadyFn func() error
+type onStorageReadyFn func(ctx context.Context) error
 type onReadyFn func(ctx context.Context) error
 
 // IOServerInstance encapsulates control-plane specific configuration

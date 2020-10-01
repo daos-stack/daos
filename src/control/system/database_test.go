@@ -31,43 +31,147 @@ import (
 	"math/rand"
 	"net"
 	"testing"
+	"time"
 
-	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func setupTestDatabase(t *testing.T, log logging.Logger, replicas []string) (*Database, func()) {
 	testDir, cleanup := common.CreateTestDir(t)
 
 	db := NewDatabase(log, &DatabaseConfig{
-		RaftDir:  testDir,
+		RaftDir:  testDir + "/raft",
 		Replicas: replicas,
 	})
 	return db, cleanup
 }
 
-/*func TestSystem_DatabaseSnapshot(t *testing.T) {
+func waitForLeadership(t *testing.T, ctx context.Context, db *Database, gained bool, timeout time.Duration) {
+	t.Helper()
+	timer := time.NewTimer(timeout)
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+			return
+		case <-timer.C:
+			t.Fatal("leadership state did not change before timeout")
+			return
+		default:
+			if db.IsLeader() == gained {
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+func TestSystem_Database_checkReplica(t *testing.T) {
+	for name, tc := range map[string]struct {
+		replicas     []string
+		controlAddr  *net.TCPAddr
+		expRepAddr   *net.TCPAddr
+		expBootstrap bool
+		expErr       error
+	}{
+		"not replica": {
+			replicas:    []string{mockControlAddr(t, 2).String()},
+			controlAddr: mockControlAddr(t, 1),
+		},
+		"replica, no bootstrap": {
+			replicas: []string{
+				mockControlAddr(t, 2).String(),
+				mockControlAddr(t, 1).String(),
+			},
+			controlAddr: mockControlAddr(t, 1),
+			expRepAddr:  mockControlAddr(t, 1),
+		},
+		"replica, bootstrap": {
+			replicas: []string{
+				mockControlAddr(t, 1).String(),
+			},
+			controlAddr:  mockControlAddr(t, 1),
+			expRepAddr:   mockControlAddr(t, 1),
+			expBootstrap: true,
+		},
+		"replica, unspecified control address": {
+			replicas: []string{
+				mockControlAddr(t, 1).String(),
+			},
+			controlAddr: &net.TCPAddr{
+				IP:   net.IPv4zero,
+				Port: build.DefaultControlPort,
+			},
+			expRepAddr:   mockControlAddr(t, 1),
+			expBootstrap: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db, cleanup := setupTestDatabase(t, log, tc.replicas)
+			defer cleanup()
+
+			repAddr, isBootstrap, gotErr := db.checkReplica(tc.controlAddr)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			// Just to get a bit of extra coverage
+			if repAddr != nil {
+				db.replicaAddr = repAddr
+				var err error
+				repAddr, err = db.ReplicaAddr()
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				_, err := db.ReplicaAddr()
+				common.CmpErr(t, &ErrNotReplica{tc.replicas}, err)
+			}
+
+			if diff := cmp.Diff(tc.expRepAddr, repAddr); diff != "" {
+				t.Fatalf("unexpected repAddr (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expBootstrap, isBootstrap); diff != "" {
+				t.Fatalf("unexpected isBootstrap (-want, +got)\n:%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_Database_Cancel(t *testing.T) {
 	localhost := &net.TCPAddr{
 		IP: net.IPv4(127, 0, 0, 1),
 	}
+
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	dbCtx, dbCancel := context.WithCancel(ctx)
 
 	db, cleanup := setupTestDatabase(t, log, []string{localhost.String()})
 	defer cleanup()
-	if err := db.Start(ctx, localhost); err != nil {
+	if err := db.Start(dbCtx, localhost); err != nil {
 		t.Fatal(err)
 	}
-}*/
+
+	waitForLeadership(t, ctx, db, true, 5*time.Second)
+	dbCancel()
+	waitForLeadership(t, ctx, db, false, 5*time.Second)
+}
 
 func replicaGen(ctx context.Context, maxRanks, maxReplicas int) chan []Rank {
 	makeReplicas := func() (replicas []Rank) {
@@ -143,7 +247,7 @@ func (tss *testSnapshotSink) Reader() io.ReadCloser {
 	return ioutil.NopCloser(tss.contents)
 }
 
-func TestSystem_DatabaseSnapshotRestore(t *testing.T) {
+func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	maxRanks := 2048
 	maxPools := 1024
 
@@ -219,7 +323,7 @@ func TestSystem_DatabaseSnapshotRestore(t *testing.T) {
 	}
 }
 
-func TestSystem_DatabaseSnapshotRestoreBadVersion(t *testing.T) {
+func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
@@ -244,7 +348,7 @@ func TestSystem_DatabaseSnapshotRestoreBadVersion(t *testing.T) {
 	common.CmpErr(t, wantErr, gotErr)
 }
 
-func TestSystem_DatabaseBadApply(t *testing.T) {
+func TestSystem_Database_BadApply(t *testing.T) {
 	makePayload := func(t *testing.T, op raftOp, inner interface{}) []byte {
 		t.Helper()
 		data, err := createRaftUpdate(op, inner)

@@ -161,10 +161,9 @@ func (srv *IOServerInstance) createSuperblock(recreate bool) error {
 	}
 
 	superblock := &Superblock{
-		Version: superblockVersion,
-		UUID:    u.String(),
-		System:  systemName,
-		//ValidRank:   msInfo.isReplica && msInfo.shouldBootstrap,
+		Version:     superblockVersion,
+		UUID:        u.String(),
+		System:      systemName,
 		MS:          msInfo.isReplica,
 		CreateMS:    msInfo.isReplica,
 		BootstrapMS: msInfo.shouldBootstrap,

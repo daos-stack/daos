@@ -54,9 +54,9 @@ type (
 	// applied in order to ensure that they are sent to
 	// all participating replicas.
 	dbData struct {
+		sync.RWMutex
 		log logging.Logger
 
-		sync.RWMutex
 		NextRank      Rank
 		MapVersion    uint32
 		Members       *MemberDatabase
@@ -72,8 +72,6 @@ type (
 		log                logging.Logger
 		cfg                *DatabaseConfig
 		replicaAddr        *net.TCPAddr
-		resolveTCPAddr     func(string, string) (*net.TCPAddr, error)
-		interfaceAddrs     func() ([]net.Addr, error)
 		raft               *raft.Raft
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
@@ -101,10 +99,8 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) *Database {
 	}
 
 	return &Database{
-		log:            log,
-		cfg:            cfg,
-		resolveTCPAddr: net.ResolveTCPAddr,
-		interfaceAddrs: net.InterfaceAddrs,
+		log: log,
+		cfg: cfg,
 
 		data: &dbData{
 			log: log,
@@ -126,7 +122,7 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) *Database {
 // addresses to a slice of resolved addresses, or returns an error.
 func (db *Database) resolveReplicas() (reps []*net.TCPAddr, err error) {
 	for _, rs := range db.cfg.Replicas {
-		rAddr, err := db.resolveTCPAddr("tcp", rs)
+		rAddr, err := net.ResolveTCPAddr("tcp", rs)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +145,7 @@ func (db *Database) checkReplica(ctrlAddr *net.TCPAddr) (repAddr *net.TCPAddr, i
 	var localAddrs []net.IP
 	if ctrlAddr.IP.IsUnspecified() {
 		var ifaceAddrs []net.Addr
-		ifaceAddrs, err = db.interfaceAddrs()
+		ifaceAddrs, err = net.InterfaceAddrs()
 		if err != nil {
 			return
 		}
@@ -255,7 +251,7 @@ func (db *Database) Start(ctx context.Context, ctrlAddr *net.TCPAddr) error {
 	}
 
 	rc := raft.DefaultConfig()
-	rc.Logger = newCompatLogger(db.log)
+	rc.Logger = newHcLogger(db.log)
 	rc.SnapshotThreshold = 16 // arbitrarily low to exercise snapshots
 	//rc.SnapshotInterval = 5 * time.Second
 	rc.HeartbeatTimeout = 250 * time.Millisecond
@@ -316,6 +312,7 @@ func (db *Database) monitorLeadershipState(parent context.Context, rc *raft.Conf
 			if cancelGainedCtx != nil {
 				cancelGainedCtx()
 			}
+			_ = db.raft.Shutdown().Error()
 			return
 		case isLeader := <-db.raft.LeaderCh():
 			if !isLeader {
@@ -482,6 +479,11 @@ func (db *Database) RemoveMember(m *Member) error {
 	db.Lock()
 	defer db.Unlock()
 
+	_, err := db.FindMemberByUUID(m.UUID)
+	if err != nil {
+		return err
+	}
+
 	return db.submitMemberUpdate(raftOpRemoveMember, &memberUpdate{Member: m})
 }
 
@@ -493,13 +495,11 @@ func (db *Database) AddMember(newMember *Member) error {
 	db.Lock()
 	defer db.Unlock()
 
+	db.log.Debugf("newMember: %+v", newMember)
 	mu := &memberUpdate{Member: newMember}
 	if cur, err := db.FindMemberByUUID(newMember.UUID); err == nil {
-		if !cur.Rank.Equals(newMember.Rank) {
-			return errors.Errorf("re-joining server %s has different rank (%d != %d)",
-				newMember.UUID, newMember.Rank, cur.Rank)
-		}
-		return db.submitMemberUpdate(raftOpUpdateMember, mu)
+		db.log.Debugf("curMember: %+v", cur)
+		return &ErrMemberExists{Rank: cur.Rank}
 	}
 
 	if newMember.Rank.Equals(NilRank) {
@@ -521,6 +521,11 @@ func (db *Database) UpdateMember(m *Member) error {
 	}
 	db.Lock()
 	defer db.Unlock()
+
+	_, err := db.FindMemberByUUID(m.UUID)
+	if err != nil {
+		return err
+	}
 
 	return db.submitMemberUpdate(raftOpUpdateMember, &memberUpdate{Member: m})
 }

@@ -297,23 +297,15 @@ type Membership struct {
 }
 
 func (m *Membership) addMember(member *Member) error {
-	_, err := m.db.FindMemberByUUID(member.UUID)
-	if err == nil {
-		return &ErrMemberExists{Rank: member.Rank}
-	}
 	m.log.Debugf("adding system member: %s", member)
 
 	return m.db.AddMember(member)
 }
 
 func (m *Membership) updateMember(member *Member) error {
-	old, err := m.db.FindMemberByUUID(member.UUID)
-	m.log.Debugf("updating system member: %s->%s", old, member)
-	if err != nil {
-		return err
-	}
+	m.log.Debugf("updating system member: %s", member)
 
-	return m.db.AddMember(member)
+	return m.db.UpdateMember(member)
 }
 
 // Add adds member to membership, returns member count.
@@ -353,6 +345,8 @@ type JoinResponse struct {
 	MapVersion uint32
 }
 
+// Join creates or updates an entry in the membership for the given
+// JoinRequest.
 func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	m.Lock()
 	defer m.Unlock()
@@ -360,15 +354,20 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	resp = new(JoinResponse)
 	curMember, err := m.db.FindMemberByUUID(req.UUID)
 	if err == nil {
+		if !curMember.Rank.Equals(req.Rank) {
+			return nil, errors.Errorf("re-joining server %s has different rank (%d != %d)",
+				req.UUID, req.Rank, curMember.Rank)
+		}
+
 		resp.PrevState = curMember.state
 		curMember.state = MemberStateJoined
 		curMember.Addr = req.ControlAddr
 		curMember.FabricURI = req.FabricURI
 		curMember.FabricContexts = req.FabricContexts
-		resp.Member = curMember
 		if err := m.db.UpdateMember(curMember); err != nil {
 			return nil, err
 		}
+		resp.Member = curMember
 
 		resp.MapVersion, err = m.db.CurMapVersion()
 		if err != nil {
@@ -376,6 +375,10 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		return resp, err
+	}
+
+	if !IsMemberNotFound(err) {
+		return nil, err
 	}
 
 	newMember := &Member{
@@ -421,11 +424,11 @@ func (m *Membership) Remove(rank Rank) {
 
 	member, err := m.db.FindMemberByRank(rank)
 	if err != nil {
-		m.log.Errorf("remove %d failed: %s", rank, err)
+		m.log.Debugf("remove %d failed: %s", rank, err)
 		return
 	}
 	if err := m.db.RemoveMember(member); err != nil {
-		m.log.Errorf("remove %d failed: %s", rank, err)
+		m.log.Debugf("remove %d failed: %s", rank, err)
 	}
 }
 

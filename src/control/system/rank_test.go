@@ -368,3 +368,33 @@ func TestSystem_RanksFromUint32(t *testing.T) {
 		})
 	}
 }
+
+func TestSystem_DedupeRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		inList     []Rank
+		expOutlist []Rank
+	}{
+		"nil input": {
+			expOutlist: []Rank{},
+		},
+		"empty input": {
+			inList:     []Rank{},
+			expOutlist: []Rank{},
+		},
+		"dupes": {
+			inList:     []Rank{0, 1, 2, 2, 3, 4, 4, 0},
+			expOutlist: []Rank{0, 1, 2, 3, 4},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotOutlist, err := DedupeRanks(tc.inList)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expOutlist, gotOutlist); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

@@ -83,12 +83,19 @@ func (err *ErrMemberExists) Error() string {
 	return fmt.Sprintf("member with rank %d already exists", err.Rank)
 }
 
+// IsMemberExists returns a boolean indicating whether or not the
+// supplied error is an instance of ErrMemberExists.
+func IsMemberExists(err error) bool {
+	_, ok := errors.Cause(err).(*ErrMemberExists)
+	return ok
+}
+
 // ErrMemberNotFound indicates a failure to find a member with the
 // given search criterion.
 type ErrMemberNotFound struct {
 	byRank *Rank
 	byUUID *uuid.UUID
-	byAddr net.Addr
+	byAddr *net.TCPAddr
 }
 
 func (err *ErrMemberNotFound) Error() string {
@@ -104,12 +111,18 @@ func (err *ErrMemberNotFound) Error() string {
 	}
 }
 
+// IsMemberNotFound returns a boolean indicating whether or not the
+// supplied error is an instance of ErrMemberNotFound.
+func IsMemberNotFound(err error) bool {
+	_, ok := errors.Cause(err).(*ErrMemberNotFound)
+	return ok
+}
+
 // ErrPoolNotFound indicates a failure to find a pool service with the
 // given search criterion.
 type ErrPoolNotFound struct {
 	byRank *Rank
 	byUUID *uuid.UUID
-	byAddr net.Addr
 }
 
 func (err *ErrPoolNotFound) Error() string {
@@ -121,4 +134,11 @@ func (err *ErrPoolNotFound) Error() string {
 	default:
 		return "unable to find pool service"
 	}
+}
+
+// IsPoolNotFound returns a boolean indicating whether or not the
+// supplied error is an instance of ErrPoolNotFound.
+func IsPoolNotFound(err error) bool {
+	_, ok := errors.Cause(err).(*ErrPoolNotFound)
+	return ok
 }
