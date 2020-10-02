@@ -260,12 +260,8 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq, 
 }
 
 func (c *ControlService) scanInstanceScm(ctx context.Context) (storage.ScmNamespaces, storage.ScmModules, error) {
-	// rescan scm storage details by default
-	scmReq := scm.ScanRequest{Rescan: true}
-	ssr, err := c.ScmScan(scmReq)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "ScmScan()")
-	}
+	// TODO: get utilisation for any mounted namespaces by querying
+	// chroma_core_
 
 	return ssr.Namespaces, ssr.Modules, nil
 }
@@ -273,7 +269,9 @@ func (c *ControlService) scanInstanceScm(ctx context.Context) (storage.ScmNamesp
 func (c *ControlService) scanScm(ctx context.Context, resp *ctlpb.ScanScmResp) error {
 	state := newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", "Scan SCM Storage")
 
-	namespaces, modules, err := c.scanInstanceScm(ctx)
+	// rescan scm storage details by default
+	scmReq := scm.ScanRequest{Rescan: true}
+	ssr, err := c.ScmScan(scmReq)
 	if err != nil {
 		state.Status = ctlpb.ResponseStatus_CTL_ERR_SCM
 		state.Error = err.Error()
@@ -285,20 +283,20 @@ func (c *ControlService) scanScm(ctx context.Context, resp *ctlpb.ScanScmResp) e
 		return nil
 	}
 
-	if len(namespaces) > 0 {
-		resp.Namespaces = make(proto.ScmNamespaces, 0, len(namespaces))
-		err := (*proto.ScmNamespaces)(&resp.Namespaces).FromNative(namespaces)
+	if len(ssr.Namespaces) > 0 {
+		resp.Namespaces = make(proto.ScmNamespaces, 0, len(ssr.Namespaces))
+		err := (*proto.ScmNamespaces)(&resp.Namespaces).FromNative(ssr.Namespaces)
 		if err != nil {
-			return errors.Wrapf(err, "convert %#v to protobuf format", namespaces)
+			return errors.Wrapf(err, "convert %#v to protobuf format", ssr.Namespaces)
 		}
 		resp.State = state
 
 		return nil
 	}
 
-	resp.Modules = make(proto.ScmModules, 0, len(modules))
-	if err := (*proto.ScmModules)(&resp.Modules).FromNative(modules); err != nil {
-		return errors.Wrapf(err, "convert %#v to protobuf format", modules)
+	resp.Modules = make(proto.ScmModules, 0, len(ssr.Modules))
+	if err := (*proto.ScmModules)(&resp.Modules).FromNative(ssr.Modules); err != nil {
+		return errors.Wrapf(err, "convert %#v to protobuf format", ssr.Modules)
 	}
 	resp.State = state
 

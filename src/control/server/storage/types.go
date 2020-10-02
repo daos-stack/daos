@@ -106,7 +106,7 @@ type (
 	}
 
 	// NvmeControllerHealth represents a set of health statistics for a NVMe device
-	// and mirrors C.struct_nvme_health_stats.
+	// and mirrors C.struct_nvme_stats.
 	NvmeControllerHealth struct {
 		Model           string `json:"model"`
 		Serial          string `json:"serial"`
@@ -141,10 +141,12 @@ type (
 	// SmdDevice contains DAOS storage device information, including
 	// health details if requested.
 	SmdDevice struct {
-		UUID      string      `json:"uuid"`
-		TargetIDs []int32     `hash:"set" json:"tgt_ids"`
-		State     string      `json:"state"`
-		Rank      system.Rank `json:"rank"`
+		UUID       string      `json:"uuid"`
+		TargetIDs  []int32     `hash:"set" json:"tgt_ids"`
+		State      string      `json:"state"`
+		Rank       system.Rank `json:"rank"`
+		TotalBytes uint64      `json:"total_bytes"`
+		AvailBytes uint64      `json:"avail_bytes"`
 		// TODO: included only for compatibility with storage_query smd
 		//       commands and should be removed when possible
 		Health *NvmeControllerHealth `json:"health"`
@@ -225,16 +227,16 @@ func (nc *NvmeController) GenAltKey() (string, error) {
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
-func (ctrlr *NvmeController) UpdateSmd(smdDev *SmdDevice) {
-	for idx := range ctrlr.SmdDevices {
-		if smdDev.UUID == ctrlr.SmdDevices[idx].UUID {
-			ctrlr.SmdDevices[idx] = smdDev
+func (nc *NvmeController) UpdateSmd(smdDev *SmdDevice) {
+	for idx := range nc.SmdDevices {
+		if smdDev.UUID == nc.SmdDevices[idx].UUID {
+			nc.SmdDevices[idx] = smdDev
 
 			return
 		}
 	}
 
-	ctrlr.SmdDevices = append(ctrlr.SmdDevices, smdDev)
+	nc.SmdDevices = append(nc.SmdDevices, smdDev)
 }
 
 // String translates the update status to a string

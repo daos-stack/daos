@@ -181,10 +181,6 @@ func (pb *ScmNamespaces) ToNative() (storage.ScmNamespaces, error) {
 	return native, convert.Types(pb, &native)
 }
 
-// ScmMounts are protobuf representations of mounted SCM namespaces identified
-// by mount points
-type ScmMounts []*ctlpb.ScmMount
-
 // ScmMountResults is an alias for protobuf ScmMountResult message slice
 // representing operation results on a number of SCM mounts.
 type ScmMountResults []*ctlpb.ScmMountResult

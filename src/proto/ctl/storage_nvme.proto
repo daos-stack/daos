@@ -71,6 +71,8 @@ message NvmeController {
 		repeated int32 tgt_ids = 2;	// VOS target IDs
 		string state = 3;		// NORMAL or FAULTY
 		uint32 rank = 4;		// DAOS I/O server using controller
+		uint64 total_bytes = 5;		// blobstore clusters total bytes
+		uint64 avail_bytes = 6;		// blobstore clusters available bytes
 	}
 
 	string model = 1;	// model name

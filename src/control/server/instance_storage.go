@@ -172,18 +172,37 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 	return ctx.Err()
 }
 
-func (srv *IOServerInstance) logScmStorage() error {
+type ScmStorageUsage struct {
+	MountPoint string
+	TotalBytes uint64
+	AvailBytes uint64
+}
+
+func (srv *IOServerInstance) getScmStorageUsage() (*ScmStorageUsage, error) {
 	scmMount := path.Dir(srv.superblockPath())
 	stBuf := new(syscall.Statfs_t)
 
 	if err := syscall.Statfs(scmMount, stBuf); err != nil {
-		return err
+		return nil, err
 	}
 
 	frSize := uint64(stBuf.Frsize)
-	totalBytes := frSize * stBuf.Blocks
-	availBytes := frSize * stBuf.Bavail
-	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
-		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
+
+	return &ScmStorageUsage{
+		MountPoint: scmMount,
+		TotalBytes: frSize * stBuf.Blocks,
+		AvailBytes: frSize * stBuf.Bavail,
+	}, nil
+}
+
+func (srv *IOServerInstance) logScmStorage() error {
+	usage, err := srv.getScmStorageUsage()
+	if err != nil {
+		return err
+	}
+
+	srv.log.Infof("SCM @ %s: %s Total/%s Avail", usage.MountPoint,
+		humanize.Bytes(usage.TotalBytes), humanize.Bytes(usage.AvailBytes))
+
 	return nil
 }

@@ -33,6 +33,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -345,6 +346,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		}
 		bioHealthResp.Model = ctrlr.Model
 		bioHealthResp.Serial = ctrlr.Serial
+		bioHealthResp.TotalBytes = uint64(idx) * uint64(humanize.TByte)
+		bioHealthResp.AvailBytes = uint64(idx) * uint64(humanize.TByte)
 
 		return ctrlr, bioHealthResp
 	}
@@ -363,13 +366,18 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		ctrlr := proto.MockNvmeController(idx)
 		ctrlr.Serial = common.MockUUID(idx)
 		ctrlr.Healthstats = nil
-		ctrlr.Smddevices = []*NvmeController_SmdDevice{proto.MockSmdDevice(idx + 1)}
-		ctrlr.Smddevices[0].Rank = uint32(idx)
+		sd := proto.MockSmdDevice(idx + 1)
+		sd.Rank = uint32(idx)
+		ctrlr.Smddevices = []*NvmeController_SmdDevice{sd}
 
 		smdDevRespDevice := new(mgmtpb.SmdDevResp_Device)
 		if err := convert.Types(ctrlr.Smddevices[0], smdDevRespDevice); err != nil {
 			t.Fatal(err)
 		}
+
+		// expect resultant controller to have updated utilisation values
+		ctrlr.Smddevices[0].TotalBytes = uint64(idx) * uint64(humanize.TByte)
+		ctrlr.Smddevices[0].AvailBytes = uint64(idx) * uint64(humanize.TByte)
 
 		return ctrlr, smdDevRespDevice
 	}
@@ -679,16 +687,20 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 							},
 							Smddevices: []*NvmeController_SmdDevice{
 								{
-									Uuid:   newSmdDevRespDevice(1).Uuid,
-									TgtIds: newSmdDevRespDevice(1).TgtIds,
-									State:  newSmdDevRespDevice(1).State,
-									Rank:   1,
+									Uuid:       newSmdDevRespDevice(1).Uuid,
+									TgtIds:     newSmdDevRespDevice(1).TgtIds,
+									State:      newSmdDevRespDevice(1).State,
+									Rank:       1,
+									TotalBytes: newBioHealthResp(1, 1).TotalBytes,
+									AvailBytes: newBioHealthResp(1, 1).AvailBytes,
 								},
 								{
-									Uuid:   newSmdDevRespDevice(2).Uuid,
-									TgtIds: newSmdDevRespDevice(2).TgtIds,
-									State:  newSmdDevRespDevice(2).State,
-									Rank:   1,
+									Uuid:       newSmdDevRespDevice(2).Uuid,
+									TgtIds:     newSmdDevRespDevice(2).TgtIds,
+									State:      newSmdDevRespDevice(2).State,
+									Rank:       1,
+									TotalBytes: newBioHealthResp(2, 1).TotalBytes,
+									AvailBytes: newBioHealthResp(2, 1).AvailBytes,
 								},
 							},
 						},
@@ -710,16 +722,20 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 							},
 							Smddevices: []*NvmeController_SmdDevice{
 								{
-									Uuid:   newSmdDevRespDevice(3).Uuid,
-									TgtIds: newSmdDevRespDevice(3).TgtIds,
-									State:  newSmdDevRespDevice(3).State,
-									Rank:   2,
+									Uuid:       newSmdDevRespDevice(3).Uuid,
+									TgtIds:     newSmdDevRespDevice(3).TgtIds,
+									State:      newSmdDevRespDevice(3).State,
+									Rank:       2,
+									TotalBytes: newBioHealthResp(3, 2).TotalBytes,
+									AvailBytes: newBioHealthResp(3, 2).AvailBytes,
 								},
 								{
-									Uuid:   newSmdDevRespDevice(4).Uuid,
-									TgtIds: newSmdDevRespDevice(4).TgtIds,
-									State:  newSmdDevRespDevice(4).State,
-									Rank:   2,
+									Uuid:       newSmdDevRespDevice(4).Uuid,
+									TgtIds:     newSmdDevRespDevice(4).TgtIds,
+									State:      newSmdDevRespDevice(4).State,
+									Rank:       2,
+									TotalBytes: newBioHealthResp(4, 2).TotalBytes,
+									AvailBytes: newBioHealthResp(4, 2).AvailBytes,
 								},
 							},
 						},
