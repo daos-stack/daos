@@ -547,6 +547,8 @@ out:
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_join(ult_send);
 
+	tls->rebuild_pool_status = rc;
+
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
 	return rc;

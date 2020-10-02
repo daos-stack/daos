@@ -64,7 +64,6 @@ rpc_handle_reply(const struct crt_cb_info *info)
 	sem_post(sem);
 }
 
-
 int main(int argc, char **argv)
 {
 	crt_context_t		crt_ctx;
