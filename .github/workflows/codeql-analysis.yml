@@ -74,7 +74,7 @@ jobs:
     #    and modify them (or add more) to build your code if your project
     #    uses a compiled language
 
-    - name Build DAOS
+    - name: Build DAOS
       run: |
         git submodule init && git submodule update
         scons --build-deps=yes install PREFIX=install
