@@ -948,7 +948,7 @@ def compress_log_files(avocado_logs_dir):
     """
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
-    command = [get_remote_file_command(), "-c", "-d \"{}\"".format(logs_dir)]
+    command = [get_remote_file_command(), "-z", "-f \"{}\"".format(logs_dir)]
     print(get_output(command, check=False))
 
 
@@ -1083,12 +1083,12 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
 
     command = [
         get_remote_file_command(),
-        "-c",
-        "-r \"{}:{}\"".format(this_host, destination),
-        "-d \"{}\"".format(source_files),
+        "-z",
+        "-a \"{}:{}\"".format(this_host, destination),
+        "-f \"{}\"".format(source_files),
     ]
     if cart:
-        command.append("-s")
+        command.append("-c")
     if threshold:
         command.append("-t \"{}\"".format(threshold))
     return get_remote_output(hosts, " ".join(command), 900)

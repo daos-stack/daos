@@ -45,15 +45,15 @@ usage() {
 This script has 4 modes that can be executed independently if needed.
 
  1. Display big files specified by threshold value i.e. -t 5mb. This option
-    will list files within provided local path with -d option and will prepend
+    will list files within provided local path with -f option and will prepend
     each file with a \"Y\" if file exceeds threshold value and with \"N\" if
     it does not.
 
- 2. Compress files specified in provided local path with -d option that exceed
+ 2. Compress files specified in provided local path with -f option that exceed
     1M in size. This script will check if current local system is a VM host, if
     so, compression will not be executed.
 
- 3. Archive files specified in provided local path with -d option to provided
+ 3. Archive files specified in provided local path with -f option to provided
     remote path destination.
 
  4. Create and display cart_logtest log files created by running cart_logtest.py
@@ -61,11 +61,11 @@ This script has 4 modes that can be executed independently if needed.
     files.
 
  Options:
-      -c        Compress files
+      -z        Compress files
       -t        Threshold value to determine classification of big logs
-      -r        Remote path to scp files to i.e. server-A:/path/to/file
-      -d        Local path to files for archiving/compressing/size checking
-      -s        Enable running cart_logtest.py
+      -a        Remote path to scp files to i.e. server-A:/path/to/file
+      -f        Local path to files for archiving/compressing/size checking
+      -c        Enable running cart_logtest.py
       -v        Display commands being executed
       -h        Display this help and exit
 "
@@ -84,8 +84,8 @@ display_set_vars() {
     echo "Set Variables:
     COMPRESS = ${COMPRESS}
     THRESHOLD = ${THRESHOLD}
-    REMOTE_DEST = ${REMOTE_DEST}
-    LOCAL_SRC = ${LOCAL_SRC}
+    ARCHIVE_DEST = ${ARCHIVE_DEST}
+    FILES_TO_PROCESS = ${FILES_TO_PROCESS}
     CART_LOGTEST = ${CART_LOGTEST}
     VERBOSE = ${VERBOSE}"
 }
@@ -155,13 +155,13 @@ compress_files() {
 }
 
 scp_files() {
-    set -ux
     rc=0
     copied=()
     # shellcheck disable=SC2045,SC2086
     for file in $(ls -d ${1})
     do
         ls -sh "${file}"
+        set -ux
         if scp -r "${file}" "${2}"/"$(hostname -s)"-"${file##*/}"; then
             copied+=("${file}")
             if ! sudo rm -fr "${file}"; then
@@ -169,6 +169,7 @@ scp_files() {
                 ls -al "${file}"
             fi
         fi
+        set +x
     done
     echo Copied "${copied[@]:-no files}"
 }
@@ -179,7 +180,7 @@ get_cartlogtest_files() {
     for file in $(ls -d ${1})
     do
         ls -sh "${file}"
-        "${CART_LOGTEST_PATH}" "${file}" |& tee "${file}"_ctestlog
+        "${CART_LOGTEST_PATH}" "${file}" &>> "${file}"_ctestlog
     done
 }
 
@@ -196,21 +197,21 @@ CART_LOGTEST="false"
 THRESHOLD=""
 
 # Step through arguments
-while getopts "vhcs:r:d:t:" opt; do
+while getopts "vhzca:f:t:" opt; do
     case ${opt} in
-        r )
-            REMOTE_DEST=$OPTARG
+        a )
+            ARCHIVE_DEST=$OPTARG
             ;;
-        d )
-            LOCAL_SRC=$OPTARG
+        f )
+            FILES_TO_PROCESS=$OPTARG
             ;;
         t )
             THRESHOLD=$OPTARG
             ;;
-        s )
+        c )
             CART_LOGTEST="true"
             ;;
-        c )
+        z )
             COMPRESS="true"
             ;;
         v )
@@ -236,20 +237,20 @@ fi
 # Display big files to stdout
 if [ -n "${THRESHOLD}" ]; then
     echo "Checking if files exceed ${THRESHOLD} threshold ..."
-    list_tag_files "${LOCAL_SRC}" "${THRESHOLD}"
+    list_tag_files "${FILES_TO_PROCESS}" "${THRESHOLD}"
 fi
 
-# Run cart_logtest.py on LOCAL_SRC
+# Run cart_logtest.py on FILES_TO_PROCESS
 if [ "${CART_LOGTEST}" == "true" ]; then
     if [ -f "${CART_LOGTEST_PATH}" ]; then
-        echo "Running cart_logtest.py on ${LOCAL_SRC}"
-        get_cartlogtest_files "${LOCAL_SRC}"
+        echo "Running cart_logtest.py on ${FILES_TO_PROCESS}"
+        get_cartlogtest_files "${FILES_TO_PROCESS}"
     else
         echo "${CART_LOGTEST_PATH} does not exist!"
     fi
 fi
 
-# Compress files in LOCAL_SRC if not running on VM host.
+# Compress files in FILES_TO_PROCESS if not running on VM host.
 set +x
 if check_hw; then
     echo "Running on VM system, skipping compression ..."
@@ -258,15 +259,15 @@ fi
 
 if [ "${COMPRESS}" == "true" ]; then
     echo "Compressing files ..."
-    compressed_out=$(compress_files "${LOCAL_SRC}" 2>&1)
+    compressed_out=$(compress_files "${FILES_TO_PROCESS}" 2>&1)
 
-    if [ -n "${compressed_out}" ] && [ "${VERBOSE}" == "true" ]; then
+    if [ -n "${compressed_out}" ]; then
         echo "${compressed_out}"
     fi
 fi
 
-# Scp files specified in LOCAL_SRC to REMOTE_DEST
-if [ -n "${REMOTE_DEST}" ]; then
-    echo "Archiving logs in ${LOCAL_SRC} to ${REMOTE_DEST}"
-    scp_files "${LOCAL_SRC}" "${REMOTE_DEST}"
+# Scp files specified in FILES_TO_PROCESS to ARCHIVE_DEST
+if [ -n "${ARCHIVE_DEST}" ]; then
+    echo "Archiving logs in ${FILES_TO_PROCESS} to ${ARCHIVE_DEST}"
+    scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"
 fi
