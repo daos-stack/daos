@@ -51,16 +51,6 @@ class SnapshotAggregation(IorTestBase):
                 "api": int(self.pool.info.pi_space.ps_space.s_free[index])
             })
 
-    def detect_aggregation_complete(self):
-        """Detect that aggregation has started and completed."""
-        # Detect aggregation start
-        self.log.info("Waiting for 90 seconds for aggregation to start")
-        time.sleep(90)
-
-        # Detect aggregation completion
-        self.log.info("Waiting for 30 seconds for aggregation to finish")
-        time.sleep(30)
-
     def test_snapshot_aggregation(self):
         """JIRA ID: DAOS-3751.
 
@@ -114,13 +104,7 @@ class SnapshotAggregation(IorTestBase):
         self.ior_cmd.signature.value += 333
         self.run_ior(self.get_ior_job_manager_command(), self.processes)
 
-        # Enable the aggregation
-        self.pool.set_property("reclaim", "time")
-
-        # Wait for aggregation to start and finish.
-        self.detect_aggregation_complete()
-
-        # Verify that the utilized capacity of the pool has doubled.
+        # Verify that the utilized capacity of the pool has increased.
         self.update_free_space()
         self.log.info(
             "Pool free space after second write:\n  SCM:  %s\n  NVMe: %s",
@@ -134,26 +118,49 @@ class SnapshotAggregation(IorTestBase):
             self.free_space["nvme"][1]["api"],
             "NVMe free pool space was not reduced by the overwrite")
 
+        # Enable the aggregation
+        self.pool.set_property("reclaim", "time")
+
         # Delete the snapshot.
         daos.container_destroy_snap(
             pool=self.pool.uuid, svc=self.pool.svc_ranks,
             cont=self.container.uuid, epc=self.container.epoch)
 
         # Wait for aggregation to start and finish.
-        self.detect_aggregation_complete()
+        space_reclaimed = False
+        time_exceeded = False
+        sleep_time = 20
+        loop_count = 0
+        while not space_reclaimed and not time_exceeded:
+            self.log.info(
+                "Waiting for %s seconds for aggregation to finish", sleep_time)
+            time.sleep(sleep_time)
+            loop_count += 1
 
-        # Verify that the utilized capacity of the pool has been halved.
-        self.pool.get_info()
-        self.pool.set_query_data()
-        self.update_free_space()
+            # Update the utilized capacity of the pool
+            self.pool.get_info()
+            self.pool.set_query_data()
+            self.update_free_space()
+            self.log.info(
+                "Pool free space %s seconds after deleting the snapshot:"
+                "\n  SCM:  %s\n  NVMe: %s", time_exceeded * loop_count,
+                self.free_space["scm"][-1], self.free_space["nvme"][-1])
+
+            # Determine if the utilized capacity of the pool has been reduced
+            # back to the capacity after the first ior write
+            space_reclaimed = all([
+                self.free_space[name][1]["api"] ==
+                self.free_space[name][-1]["api"]
+                for name in self.free_space])
+
+            # Determine if the time has exceeded
+            time_exceeded = sleep_time * loop_count > 140
+
+        if not space_reclaimed:
+            self.fail(
+                "Pool free space was not restored by the aggregation after "
+                "snapshot deletion")
+
         self.log.info(
-            "Pool free space after deleting snapshot:\n  SCM:  %s\n  NVMe: %s",
-            self.free_space["scm"][-1], self.free_space["nvme"][-1])
-        self.assertEqual(
-            self.free_space["scm"][3]["api"],
-            self.free_space["scm"][1]["api"],
-            "SCM free pool space was not restored by the aggregation")
-        self.assertEqual(
-            self.free_space["nvme"][3]["api"],
-            self.free_space["nvme"][1]["api"],
-            "NVMe free pool space was not restored by the aggregation")
+            "Pool free space restored by the aggregation after snapshot "
+            "deletion")

@@ -705,7 +705,7 @@ class TestPool(TestDaosApiBase):
 
         Only supported with the dmg control method.
         """
-        self.query_data.clear()
+        self.query_data = []
         if self.pool:
             if self.dmg:
                 self.query_data = self.dmg.pool_query(self.pool.uuid)
