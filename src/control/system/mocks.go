@@ -29,9 +29,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/raft"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/hashicorp/raft"
 )
 
 func mockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
