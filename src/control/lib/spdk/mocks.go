@@ -25,6 +25,7 @@ package spdk
 
 import (
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // MockEnvCfg controls the behavior of the MockEnvImpl.
@@ -51,7 +52,7 @@ func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) {
 
 // MockNvmeCfg controls the behavior of the MockNvmeImpl.
 type MockNvmeCfg struct {
-	DiscoverCtrlrs []Controller
+	DiscoverCtrlrs storage.NvmeControllers
 	DiscoverErr    error
 	FormatRes      []*FormatResult
 	FormatErr      error
@@ -72,7 +73,7 @@ func (n *MockNvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) er
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
 // accessible by SPDK on a given host.
-func (n *MockNvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
+func (n *MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
 	if n.Cfg.DiscoverErr != nil {
 		return nil, n.Cfg.DiscoverErr
 	}

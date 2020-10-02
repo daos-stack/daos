@@ -28,12 +28,12 @@ conducted to efficiently support the hyper-converged model as well.
 ## Processor Requirements
 
 DAOS requires a 64-bit processor architecture and is primarily developed
-on Intel 64 architecture. The DAOS software and the libraries it depends
+on Intel x86_64 architecture. The DAOS software and the libraries it depends
 on (e.g., ISA-L, SPDK, PMDK, and DPDK) can take advantage of Intel SSE
 and AVX extensions.
 
 DAOS is also regularly tested on 64-bit ARM processors configured in
-Little Endian mode. The same build instructions that are used for x86-64
+Little Endian mode. The same build instructions that are used for x86_64
 are applicable for ARM builds as well. DAOS and its dependencies will
 make the necessary adjustments automatically in their respective build
 systems for ARM platforms.
@@ -50,7 +50,7 @@ The DAOS control plane provides methods for administering and managing
 the DAOS servers using a secure socket layer interface. An additional
 out-of-band network connecting the nodes in the DAOS
 service cluster is required for DAOS administration. Management traffic
-between clients and servers use IP over Fabric.
+between clients and servers uses IP over Fabric.
 
 ## Storage Requirements
 
@@ -83,7 +83,8 @@ file.
 The hardware design of a DAOS storage server balances the network
 bandwidth of the fabric with the aggregate storage bandwidth of the NVMe
 storage devices.  This relationship sets the number of NVMe drives.
-For example, 8 PCIe4 x4 NVMe SSDs balance a 200gbps PCIe4 x16 network adapter.
+For example, 8 PCIe gen4 x4 NVMe SSDs balance two 200Gbps PCIe gen4 x16
+network adapters.
 The capacity of the SSDs will determine the minimum capacity of the
 Optane PMem DIMMs needed to provide the 6% ratio for DAOS metadata.
 
@@ -92,7 +93,7 @@ Optane PMem DIMMs needed to provide the 6% ratio for DAOS metadata.
 
 ## CPU Affinity
 
-Recent Xeon data center platforms use two processor CPUs connected
+Recent Intel Xeon data center platforms use two processor CPUs connected
 together with the Ultra Path Interconnect (UPI). PCIe lanes in these
 servers have a natural affinity to one CPU.
 Although globally accessible from any of the system cores, NVMe SSDs and

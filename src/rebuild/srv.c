@@ -823,10 +823,17 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	rsi->rsi_tgts_num = tgts_failed->pti_number;
 	rsi->rsi_rebuild_op = rebuild_op;
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
+
+retry:
 	rc = dss_rpc_send(rpc);
 	rso = crt_reply_get(rpc);
 	if (rc == 0)
 		rc = rso->rso_status;
+	if (rc == -DER_BUSY) {
+		D_DEBUG(DB_REBUILD, "retry broadcast scan "DF_UUID"\n",
+			DP_UUID(pool->sp_uuid));
+		goto retry;
+	}
 
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
@@ -1286,6 +1293,7 @@ ds_rebuild_abort(uuid_t pool_uuid, unsigned int version)
 	D_ASSERT(rpt->rt_refcount > 1);
 	rpt_put(rpt);
 
+	rpt->rt_abort = 1;
 	/* Since the rpt will be destroyed after signal rt_done_cond,
 	 * so we have to use another lock here.
 	 */
@@ -1625,7 +1633,6 @@ rebuild_tgt_status_check_ult(void *arg)
 				status.status = rc;
 			if (rpt->rt_errno == 0)
 				rpt->rt_errno = status.status;
-			rpt->rt_abort = 1;
 		}
 
 		memset(&iv, 0, sizeof(iv));
@@ -1658,7 +1665,8 @@ rebuild_tgt_status_check_ult(void *arg)
 					   rpt->rt_reported_size;
 		}
 		iv.riv_status = status.status;
-		if (status.scanning == 0 || rpt->rt_abort) {
+		if (status.scanning == 0 || rpt->rt_abort ||
+		    status.status != 0) {
 			iv.riv_scan_done = 1;
 			rpt->rt_scan_done = 1;
 		}
@@ -1721,7 +1729,7 @@ rebuild_tgt_status_check_ult(void *arg)
 			iv.riv_pull_done, rpt->rt_global_scan_done,
 			rpt->rt_global_done, iv.riv_status);
 
-		if (rpt->rt_global_done)
+		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
 		dss_ult_sleep(rpt->rt_ult, RBLD_CHECK_INTV);

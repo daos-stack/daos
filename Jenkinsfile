@@ -215,7 +215,7 @@ String functional_packages() {
 String functional_packages(String distro) {
     String pkgs = get_daos_packages(distro)
     pkgs += " openmpi3 hwloc ndctl fio " +
-            "ior-hpc-cart-4-daos-0 " +
+            "ior-hpc-daos-0 " +
             "romio-tests-cart-4-daos-0 " +
             "testmpio-cart-4-daos-0 " + 
             "mpi4py-tests-cart-4-daos-0 " +
@@ -1041,6 +1041,33 @@ pipeline {
                         }
                     }
                 } // stage('Unit test Bullseye')
+                stage('Unit Test with memcheck') {
+                    when {
+                      beforeAgent true
+                      expression { ! skip_stage('unit-test-memcheck') }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        unitTest timeout_time: 60,
+                                 ignore_failure: true,
+                                 inst_repos: pr_repos(),
+                                 inst_rpms: unit_packages()
+                    }
+                    post {
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPost ignore_failure: true,
+                                         artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                     'unit_memcheck_vm_test/**'],
+                                         valgrind_stash: 'centos7-gcc-unit-memcheck'
+                        }
+                    }
+                } // stage('Unit Test with memcheck')
             }
         }
         stage('Test') {
@@ -1288,7 +1315,8 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
+                                                     'centos7-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

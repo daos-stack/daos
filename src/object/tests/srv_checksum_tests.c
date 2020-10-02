@@ -51,7 +51,7 @@ static int fake_update_bytes;
 static int fake_update_called;
 
 static int
-fake_reset(struct daos_csummer *obj)
+fake_reset(void *daos_mhash_ctx)
 {
 	fake_update_buf[0] = '>';
 	fake_update_buf++;
@@ -60,10 +60,8 @@ fake_reset(struct daos_csummer *obj)
 }
 
 static int
-fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
+fake_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
-	int	i;
-
 	fake_update_called++;
 
 	if (fake_update_bytes + buf_len < FAKE_UPDATE_BUF_LEN) {
@@ -75,16 +73,24 @@ fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		fake_update_bytes++;
 	}
 
+	return 0;
+}
+
+static int
+fake_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
+{
+	int i;
+
 	/** Fill checksum with 'N' to indicate creating new checksum */
-	for (i = 0; i < daos_csummer_get_csum_len(obj); i++)
-		obj->dcs_csum_buf[i] = 'N';
+	for (i = 0; i < buf_len; i++)
+		buf[i] = 'N';
 
 	return 0;
 }
 
 static int fake_compare_called;
 static bool
-fake_compare(struct daos_csummer *obj,
+fake_compare(void *daos_mhash_ctx,
 	     uint8_t *buf1, uint8_t *buf2,
 	     size_t buf_len)
 {
@@ -92,13 +98,14 @@ fake_compare(struct daos_csummer *obj,
 	return true;
 }
 
-static struct csum_ft fake_algo = {
-	.cf_reset = fake_reset,
-	.cf_update = fake_update,
-	.cf_compare = fake_compare,
-	.cf_csum_len = sizeof(uint32_t),
-	.cf_type = 999,
-	.cf_name = "fake"
+static struct hash_ft fake_algo = {
+	.cf_reset	= fake_reset,
+	.cf_update	= fake_update,
+	.cf_finish	= fake_finish,
+	.cf_compare	= fake_compare,
+	.cf_hash_len	= sizeof(uint32_t),
+	.cf_type	= 999,
+	.cf_name	= "fake"
 };
 
 static void

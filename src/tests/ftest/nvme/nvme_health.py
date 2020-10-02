@@ -107,6 +107,6 @@ class NvmeHealth(ServerFillUp):
 
         # Get the nvme-health
         try:
-            self.dmg.storage_query_nvme_health()
+            self.dmg.storage_scan_nvme_health()
         except CommandFailure as error:
-            self.fail("dmg nvme-health failed {}".format(error))
+            self.fail("dmg storage scan --nvme-health failed {}".format(error))

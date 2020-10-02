@@ -207,7 +207,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
-    def destroy(self, force=1):
+    def destroy(self, force=1, disconnect=1):
         """Destroy the pool with either API or dmg.
 
         It uses control_method member previously set, so if you want to use the
@@ -215,6 +215,7 @@ class TestPool(TestDaosApiBase):
 
         Args:
             force (int, optional): force flag. Defaults to 1.
+            disconnect (int, optional): disconnect flag. Defaults to 1.
 
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
@@ -223,7 +224,8 @@ class TestPool(TestDaosApiBase):
         """
         status = False
         if self.pool:
-            self.disconnect()
+            if disconnect:
+                self.disconnect()
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.uuid)
 
