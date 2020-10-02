@@ -1,8 +1,8 @@
 # DFS Overview
 
-DFS stands for DAOS File System. The DFS API provides an encapuslated namespace
-with a POSIX like API directly on top of the DAOS API. The namespace is
-encapsulated under a single DAOS container where directories and files are
+DFS stands for DAOS File System. The DFS API provides an encapsulated namespace
+with a POSIX-like API directly on top of the DAOS API. The namespace is
+encapsulated under a single DAOS container, where directories and files are
 objects in that container.
 
 The encapsulated namespace will be located in one DAOS Pool and a single DAOS
@@ -13,15 +13,15 @@ container handle where the namespace will be located.
 
 When the file system is created (i.e. when the DAOS container is initialized as
 an encapsulated namespace), a reserved object (with a predefined object ID) will
-be added to the container and will record superblock information about the
-namespace. The SB object is replicated with object class OC_RP_XSF, and has the
+be added to the container and will record superblock (SB) information about the
+namespace. The SB object is replicated with object class `OC_RP_XSF`, and has the
 reserved OID 0.0.
 
-The SB object contains an entry with a magic value to indicate it's a POSIX
+The SB object contains an entry with a magic value to indicate it is a POSIX
 filesystem. The SB object will contain also an entry to the root directory of
-the filesystem, which will be another reserved object with a predefined oid
-(1.0), replicated with object class OC_RP_XSF, and will have the same
-representation as a directory (see next section). The oid of the root id will be
+the filesystem, which will be another reserved object with a predefined OID
+(1.0), replicated with object class `OC_RP_XSF`, and will have the same
+representation as a directory (see next section). The OID of the root id will be
 inserted as an entry in the superblock object.
 
 The SB will look like this:
@@ -91,7 +91,7 @@ This summarizes the mapping of a directory testdir with a file, directory, and
 symlink:
 
 ~~~~~~
-testdirdir$ ls
+testdir$ ls
 dir1
 file1
 syml1 -> dir1
@@ -113,8 +113,8 @@ Object testdir
 ~~~~~~
 
 Note that with this mapping, the inode information is stored with the entry that
-it corresponds to in the parent directory object. Thus, hard links won"t be
-supported, since it won"t be possible to create a different entry (dkey) that
+it corresponds to in the parent directory object. Thus, hard links won't be
+supported, since it won't be possible to create a different entry (dkey) that
 actually points to the same set of akeys that the current ones are stored
 within. This limitation was agreed upon, and makes the representation simple as
 described above.
@@ -124,7 +124,7 @@ described above.
 As shown in the directory mapping above, the entry of a file will be inserted in
 its parent directory object with an object ID that corresponds to that file. The
 object ID for a regular file will be of a DAOS array object, which itself is a
-DAOS object with some properties being the element size and chunk size. In the
+DAOS object with some properties (the element size and chunk size). In the
 POSIX file case, the cell size will always be 1 byte. The chunk size can be set
 at create time only, with the default being 1 MB. The array object itself is
 mapped onto a DAOS object with integer dkeys, where each dkey contains
@@ -149,9 +149,9 @@ README.md file for Array Addons.
 Access to that object is done through the DAOS Array API. All read and write
 operations to the file will be translated to DAOS array read and write
 operations. The file size can be set (truncate) or retrieved by the DAOS array
-set/get_size functions. Increasing the file size however in this case, does not
-guarantee that space is allocated. Since DAOS logs I/Os across different epoch,
-space allocation cannot be supported by a naïve set size operation.
+set_size/get_size functions. Increasing the file size however in this case, does not
+guarantee that space is allocated. Since DAOS logs I/Os across different epochs,
+space allocation cannot be supported by a naïve set_size operation.
 
 ## Symbolic Links
 
@@ -163,8 +163,8 @@ directory containing the actual value of the symlink.
 
 All DFS objects (files, directories, and symlinks) inherit the access
 permissions of the DFS pool that they are created with. So when a user is trying
-to access an object in the DFS namespace, it's real/effective uid/gid are
-compared against those of the pool's uid and gid that are obtained when
+to access an object in the DFS namespace, their real/effective uid/gid are
+compared against those of the pool's uid and gid, which are obtained when
 connecting to the pool. The check then is done with the stored object mode and
 depending on the type of access being requested (R, W, X) and the object mode,
 access permission is determined. In the source code, this is implemented in the
@@ -175,7 +175,7 @@ DFS namespace.
 
 ## DFUSE_HL
 
-A simple high level fuse plugin (dfuse_hl) is implemented to test the DFS API
+A simple high level fuse plugin (dfuse_hl) is implemented to use the DFS API
 and functionality with existing POSIX tests and benchmarks (IOR, mdtest,
 etc.). The DFS high level fuse exposes one mounpoint as a single DFS namespace
 with a single pool and container.

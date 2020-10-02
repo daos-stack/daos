@@ -555,6 +555,8 @@ out:
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_join(ult_send);
 
+	tls->rebuild_pool_status = rc;
+
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
 	return rc;
@@ -613,6 +615,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
 	struct rebuild_scan_out		*ro;
+	struct rebuild_pool_tls		*tls;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	d_rank_list_t			*fail_list = NULL;
 	int				 rc;
@@ -667,6 +670,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		rpt->rt_leader_term = rsi->rsi_leader_term;
 
 		D_GOTO(out, rc = 0);
+	}
+
+	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
+	if (tls != NULL) {
+		D_WARN("the previous rebuild "DF_UUID"/%d is not cleanup yet\n",
+		       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
+		D_GOTO(out, rc = -DER_BUSY);
 	}
 
 	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))
