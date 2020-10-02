@@ -399,7 +399,8 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 						 NULL, &lookup_table_ops,
 						 &htables[i]);
 		if (rc != 0) {
-			D_ERROR("d_hash_table_create failed, rc: %d.\n", rc);
+			D_ERROR("d_hash_table_create() failed, " DF_RC "\n",
+				DP_RC(rc));
 			D_GOTO(free_htables, rc);
 		}
 	}
@@ -410,7 +411,7 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 				NULL, &uri_lookup_table_ops,
 				&grp_priv->gp_uri_lookup_cache);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create failed, rc: %d.\n", rc);
+		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(free_htables, rc);
 	}
 
@@ -421,14 +422,15 @@ free_htables:
 		rc2 = d_hash_table_destroy_inplace(&htables[j],
 						true /* force */);
 		if (rc2 != 0)
-			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
+			D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
+				DP_RC(rc));
 	}
 	D_FREE(htables);
 	grp_priv->gp_lookup_cache = NULL;
 
 out:
 	if (rc != 0)
-		D_ERROR("crt_grp_lc_create failed, rc: %d.\n", rc);
+		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
 
 	return rc;
 }
@@ -448,7 +450,8 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 					&grp_priv->gp_lookup_cache[i],
 					true /* force */);
 		if (rc2 != 0) {
-			D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
+			D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
+				DP_RC(rc));
 			rc = rc ? rc : rc2;
 		}
 	}
@@ -457,7 +460,8 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 	rc2 = d_hash_table_destroy_inplace(&grp_priv->gp_uri_lookup_cache,
 					   true /* force */);
 	if (rc2 != 0) {
-		D_ERROR("d_hash_table_destroy failed, rc: %d.\n", rc2);
+		D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
+			DP_RC(rc2));
 		rc = rc ? rc : rc2;
 	}
 
@@ -620,7 +624,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 		rc = grp_lc_uri_insert_internal_locked(grp_priv, ctx_idx, rank,
 						tag, uri);
 		if (rc != 0) {
-			D_ERROR("Insertion failed: rc %d\n", rc);
+			D_ERROR("Insertion failed, " DF_RC "\n", DP_RC(rc));
 			D_GOTO(unlock, rc);
 		}
 	}
@@ -1413,8 +1417,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 
 	rc = crt_grp_lc_create(grp_priv);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_create failed, rc: %d.\n",
-			rc);
+		D_ERROR("crt_grp_lc_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1424,7 +1427,7 @@ out:
 			grp_priv->gp_pub.cg_grpid, grp_priv->gp_size,
 			grp_priv->gp_self);
 	} else {
-		D_ERROR("crt_primary_grp_init failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
 		if (grp_priv != NULL)
 			crt_grp_priv_decref(grp_priv);
 	}
@@ -2385,7 +2388,8 @@ crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		rc = crt_grp_lc_uri_insert(grp_priv, i, rank, tag, uri);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d\n", rc);
+			D_ERROR("crt_grp_lc_uri_insert() failed, " DF_RC "\n",
+				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}
@@ -2696,8 +2700,8 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 
 	rc = crt_grp_priv_create(&grp_priv, srv_grpid, true);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_create(%s) failed; rc=%d\n",
-			srv_grpid, rc);
+		D_ERROR("crt_grp_priv_create(%s) failed, " DF_RC "\n",
+			srv_grpid, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2706,7 +2710,7 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
-		D_ERROR("grp_priv_init_membs() failed; rc=%d\n", rc);
+		D_ERROR("grp_priv_init_membs() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2714,7 +2718,7 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 
 	rc = crt_grp_lc_create(grp_priv);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_create() failed, rc: %d\n", rc);
+		D_ERROR("crt_grp_lc_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2747,7 +2751,7 @@ crt_group_view_destroy(crt_group_t *grp)
 
 	rc = crt_grp_priv_decref(grp_priv);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_decref() failed; rc=%d\n", rc);
+		D_ERROR("crt_grp_priv_decref() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2771,7 +2775,7 @@ crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
 
 	rc = crt_rank_uri_get(grp, rank, 0, &uri);
 	if (rc != 0) {
-		D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_rank_uri_get() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2811,8 +2815,8 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 
 	rc = crt_grp_priv_create(&grp_priv, grp_name, false);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_create(%s) failed; rc=%d\n",
-			grp_name, rc);
+		D_ERROR("crt_grp_priv_create(%s) failed, " DF_RC "\n",
+			grp_name, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2821,7 +2825,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
-		D_ERROR("grp_priv_init_membs() failed; rc=%d\n", rc);
+		D_ERROR("grp_priv_init_membs() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2831,7 +2835,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 					NULL, &rank_mapping_ops,
 					&grp_priv->gp_p2s_table);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create failed, rc: %d\n", rc);
+		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2840,7 +2844,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 					NULL, &rank_mapping_ops,
 					&grp_priv->gp_s2p_table);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create failed, rc: %d\n", rc);
+		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2911,7 +2915,7 @@ crt_group_secondary_destroy(crt_group_t *grp)
 
 	rc = crt_grp_priv_decref(grp_priv);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_decref() failed; rc=%d\n", rc);
+		D_ERROR("crt_grp_priv_decref() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

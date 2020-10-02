@@ -68,7 +68,7 @@ crt_opc_map_create(unsigned int bits)
 	for (i = 0; i < 16; i++) {
 		rc = crt_opc_map_L2_create(&map->com_map[i]);
 		if (rc != DER_SUCCESS) {
-			D_ERROR("crt_opc_map_L2_create() failed, rc %d.\n", rc);
+			D_ERROR("crt_opc_map_L2_create() failed, " DF_RC "\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}
@@ -84,7 +84,8 @@ crt_opc_map_create(unsigned int bits)
 
 	rc = crt_internal_rpc_register();
 	if (rc != 0)
-		D_ERROR("crt_internal_rpc_register failed, rc: %d.\n", rc);
+		D_ERROR("crt_internal_rpc_register() failed, " DF_RC "\n",
+			DP_RC(rc));
 
 out:
 	if (rc != 0)
@@ -416,7 +417,7 @@ crt_proto_reg_L2(struct crt_opc_map_L2 *L2_map,
 		L2_map->L2_num_slots_used++;
 	rc = crt_proto_reg_L3(L3_map, cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_reg_L3() failed, rc: %d.\n", rc);
+		D_ERROR("crt_proto_reg_L3() failed, " DF_RC "\n", DP_RC(rc));
 
 	return rc;
 }
@@ -440,7 +441,7 @@ crt_proto_reg_L1(struct crt_opc_map *map, struct crt_proto_format *cpf)
 
 	rc = crt_proto_reg_L2(L2_map, cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_reg_L2() failed, rc: %d.\n", rc);
+		D_ERROR("crt_proto_reg_L2() failed, " DF_RC "\n", DP_RC(rc));
 	D_RWLOCK_UNLOCK(&map->com_rwlock);
 
 	return rc;
@@ -478,8 +479,8 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 	rc = crt_proto_reg_L1(crt_gdata.cg_opc_map, cpf);
 	if (rc != 0)
 		D_ERROR("crt_proto_reg_L1() failed, "
-			"protocol: '%s', version %u, base_opc %#x. %d\n",
-			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base, rc);
+			"protocol: '%s', version %u, base_opc %#x. " DF_RC "\n",
+			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base, DP_RC(rc));
 	else
 		D_DEBUG(DB_TRACE, "registered protocol: '%s', version %u, "
 			"base_opc %#x.\n",

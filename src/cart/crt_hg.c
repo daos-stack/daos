@@ -177,8 +177,8 @@ crt_hg_pool_init(struct crt_hg_context *hg_ctx)
 	rc = crt_hg_pool_enable(hg_ctx, CRT_HG_POOL_MAX_NUM,
 				CRT_HG_POOL_PREPOST_NUM);
 	if (rc != 0)
-		D_ERROR("crt_hg_pool_enable, hg_ctx %p, failed rc:%d.\n",
-			hg_ctx, rc);
+		D_ERROR("crt_hg_pool_enable, hg_ctx %p, failed rc: " DF_RC "\n",
+			hg_ctx, DP_RC(rc));
 
 exit:
 	return rc;
@@ -618,7 +618,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	rc = crt_hg_pool_init(hg_ctx);
 	if (rc != 0)
 		D_ERROR("context idx %d hg_ctx %p, crt_hg_pool_init failed, "
-			"rc: %d.\n", idx, hg_ctx, rc);
+			"rc: " DF_RC "\n", idx, hg_ctx, DP_RC(rc));
 out:
 	return rc;
 }

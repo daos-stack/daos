@@ -77,7 +77,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
+		D_ERROR("d_rank_list_dup() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, 0);
 	}
 
