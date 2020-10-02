@@ -214,20 +214,20 @@ if ! $TEST_RPMS; then
     # necessary if we were testing from RPMs) in order to
     # perform NVMe operations via daos_admin
     sudo mkdir -p /usr/share/daos/control
-    sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+    sudo ln -sf $DAOS_BASE/install/share/daos/control/setup_spdk.sh \
                /usr/share/daos/control
     sudo mkdir -p /usr/share/spdk/scripts
     if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
-        sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+        sudo ln -sf $DAOS_BASE/install/share/spdk/scripts/setup.sh \
                    /usr/share/spdk/scripts
     fi
     if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
-        sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+        sudo ln -sf $DAOS_BASE/install/share/spdk/scripts/common.sh \
                    /usr/share/spdk/scripts
     fi
     if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
         sudo rm -f /usr/share/spdk/include
-        sudo ln -s $SL_PREFIX/include \
+        sudo ln -s $DAOS_BASE/install/include \
                    /usr/share/spdk/include
     fi
 
