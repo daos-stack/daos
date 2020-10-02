@@ -36,6 +36,7 @@ import yaml
 import errno
 import xml.etree.ElementTree as ET
 
+from xml.dom import minidom
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -1154,12 +1155,13 @@ def create_results_xml(hosts, testname, output, destination):
     system_out.text = "<![CDATA[{}]]>".format(output)
 
     # Get xml as string and write it to a file
-    junit_xml = ET.tostring(testsuite)
-    filen = os.path.join(
-        destination, "{}_biglogs.xml".format(testname))
+    rough_xml = ET.tostring(testsuite, "utf-8")
+    junit_xml = minidom.parseString(rough_xml)
+    filen = os.path.join(destination, "log_size_check.xml")
+    print("Generating junit xml file ...")
     try:
         with open(filen, "w") as results_xml:
-            results_xml.write(junit_xml)
+            results_xml.write(junit_xml.toprettyxml())
     except IOError as error:
         print("Failed to create xml file: {}".format(error))
         return False

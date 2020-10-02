@@ -66,6 +66,7 @@ This script has 4 modes that can be executed independently if needed.
       -a        Remote path to scp files to i.e. server-A:/path/to/file
       -f        Local path to files for archiving/compressing/size checking
       -c        Enable running cart_logtest.py
+      -x        Enable performing compression when running on VM system
       -v        Display commands being executed
       -h        Display this help and exit
 "
@@ -75,7 +76,7 @@ This script has 4 modes that can be executed independently if needed.
 # CONSTANT variables.
 #######################################
 # shellcheck disable=SC2046,SC2086
-CART_LOGTEST_PATH="$(dirname $(readlink -f ${0}))/cart/util/cart_logtest.py"
+CART_LOGTEST_PATH="$(dirname $(readlink -f ${0}))/cart/cart_logtest.py"
 
 #######################################
 # Print set GLOBAL variables.
@@ -83,6 +84,7 @@ CART_LOGTEST_PATH="$(dirname $(readlink -f ${0}))/cart/util/cart_logtest.py"
 display_set_vars() {
     echo "Set Variables:
     COMPRESS = ${COMPRESS}
+    EXCLUDE_ZIP = ${EXCLUDE_ZIP}
     THRESHOLD = ${THRESHOLD}
     ARCHIVE_DEST = ${ARCHIVE_DEST}
     FILES_TO_PROCESS = ${FILES_TO_PROCESS}
@@ -150,38 +152,50 @@ check_hw() {
 }
 
 compress_files() {
+    echo "Compressing files ..."
+    echo "find ${1} -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2 -v"
     # shellcheck disable=SC2086
     find ${1} -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2 -v
+    return $?
 }
 
 scp_files() {
     rc=0
     copied=()
+    echo "Archiving logs in ${1} to ${2}"
     # shellcheck disable=SC2045,SC2086
     for file in $(ls -d ${1})
     do
-        ls -sh "${file}"
-        set -ux
+        echo "scp -r ${file} ${2}/<hostname>-${file##*/}"
         if scp -r "${file}" "${2}"/"$(hostname -s)"-"${file##*/}"; then
             copied+=("${file}")
             if ! sudo rm -fr "${file}"; then
-                ((rc++))
-                ls -al "${file}"
+                rc=1
+                echo "Error removing ${file}"
             fi
+        else
+            echo "Failure to copy ${file} to ${2}"
+            rc=1
         fi
-        set +x
     done
     echo Copied "${copied[@]:-no files}"
+    return "${rc}"
 }
 
 get_cartlogtest_files() {
-    set -ux
+    rc=0
+    echo "Running ${CART_LOGTEST_PATH} on ${FILES_TO_PROCESS}"
     # shellcheck disable=SC2045,SC2086
     for file in $(ls -d ${1})
     do
-        ls -sh "${file}"
-        "${CART_LOGTEST_PATH}" "${file}" &>> "${file}"_ctestlog
+        if "${CART_LOGTEST_PATH}" "${file}" &> "${file}"_cart_testlog; then
+            echo "${CART_LOGTEST_PATH} ${file} &> ${file}_cart_testlog"
+        else
+            echo "Failed to run ${CART_LOGTEST_PATH} ..."
+            rc=1
+        fi
     done
+    return ${rc}
 }
 
 ####### MAIN #######
@@ -194,10 +208,12 @@ fi
 COMPRESS="false"
 VERBOSE="false"
 CART_LOGTEST="false"
+EXCLUDE_ZIP="false"
 THRESHOLD=""
+rc=0
 
 # Step through arguments
-while getopts "vhzca:f:t:" opt; do
+while getopts "vhxzca:f:t:" opt; do
     case ${opt} in
         a )
             ARCHIVE_DEST=$OPTARG
@@ -213,6 +229,9 @@ while getopts "vhzca:f:t:" opt; do
             ;;
         z )
             COMPRESS="true"
+            ;;
+        x )
+            EXCLUDE_ZIP="true"
             ;;
         v )
             VERBOSE="true"
@@ -232,6 +251,18 @@ shift "$((OPTIND -1))"
 
 if [ "${VERBOSE}" == "true" ]; then
     display_set_vars
+    set -ux
+fi
+
+if [ -n "${FILES_TO_PROCESS}" ]; then
+    files=$(ls -d "${FILES_TO_PROCESS}")
+    files_rc=$?
+    if [ -n "${files}" ] && [ "${files_rc}" -eq 0 ]; then
+        echo "Files to process: ${files}"
+    else
+        echo "Error getting files: ${FILES_TO_PROCESS}"
+        exit 1
+    fi
 fi
 
 # Display big files to stdout
@@ -243,31 +274,36 @@ fi
 # Run cart_logtest.py on FILES_TO_PROCESS
 if [ "${CART_LOGTEST}" == "true" ]; then
     if [ -f "${CART_LOGTEST_PATH}" ]; then
-        echo "Running cart_logtest.py on ${FILES_TO_PROCESS}"
-        get_cartlogtest_files "${FILES_TO_PROCESS}"
+        ret=$(get_cartlogtest_files "${FILES_TO_PROCESS}")
+        # shellcheck disable=SC2004
+        rc=$((${rc} | ${ret}))
     else
         echo "${CART_LOGTEST_PATH} does not exist!"
+        rc=1
     fi
 fi
 
 # Compress files in FILES_TO_PROCESS if not running on VM host.
-set +x
 if check_hw; then
-    echo "Running on VM system, skipping compression ..."
-    COMPRESS="false"
+    if [ "${EXCLUDE_ZIP}" == "true" ]; then
+        echo "Ignoring VM system, performing compression ..."
+    else
+        echo "Running on VM system, skipping compression ..."
+        COMPRESS="false"
+    fi
 fi
 
 if [ "${COMPRESS}" == "true" ]; then
-    echo "Compressing files ..."
-    compressed_out=$(compress_files "${FILES_TO_PROCESS}" 2>&1)
-
-    if [ -n "${compressed_out}" ]; then
-        echo "${compressed_out}"
-    fi
+    ret=$(compress_files "${FILES_TO_PROCESS}" 2>&1)
+    # shellcheck disable=SC2004
+    rc=$((${rc} | ${ret}))
 fi
 
 # Scp files specified in FILES_TO_PROCESS to ARCHIVE_DEST
 if [ -n "${ARCHIVE_DEST}" ]; then
-    echo "Archiving logs in ${FILES_TO_PROCESS} to ${ARCHIVE_DEST}"
-    scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"
+    ret=$(scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}")
+    # shellcheck disable=SC2004
+    rc=$((${rc} | ${ret}))
 fi
+
+exit ${rc}
