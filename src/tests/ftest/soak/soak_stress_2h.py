@@ -22,7 +22,7 @@ Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
 
-from soak import SoakTestBase
+from soak_test_base import SoakTestBase
 
 
 class SoakStress(SoakTestBase):

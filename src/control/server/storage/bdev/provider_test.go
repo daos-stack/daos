@@ -33,7 +33,69 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+func TestBdev_ScanResponse_filter(t *testing.T) {
+	ctrlr1 := storage.MockNvmeController(1)
+	ctrlr2 := storage.MockNvmeController(2)
+	ctrlr3 := storage.MockNvmeController(3)
+	ctrlr4 := storage.MockNvmeController(4)
+	ctrlr5 := storage.MockNvmeController(5)
+
+	for name, tc := range map[string]struct {
+		scanResp   *ScanResponse
+		deviceList []string
+		expResp    *ScanResponse
+	}{
+		"scan response no filter": {
+			scanResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			},
+			expResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			},
+		},
+		"scan response filtered": {
+			deviceList: []string{ctrlr1.PciAddr, ctrlr3.PciAddr},
+			scanResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			},
+			expResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{ctrlr1, ctrlr3},
+			},
+		},
+		"scan response inclusive filter": {
+			deviceList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
+			scanResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{ctrlr1, ctrlr3},
+			},
+			expResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{ctrlr1, ctrlr3},
+			},
+		},
+		"scan response exclusive filter": {
+			deviceList: []string{ctrlr1.PciAddr, ctrlr5.PciAddr, ctrlr3.PciAddr},
+			scanResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{ctrlr2, ctrlr4},
+			},
+			expResp: &ScanResponse{
+				Controllers: storage.NvmeControllers{},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotResp := tc.scanResp.filter(tc.deviceList...)
+
+			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestBdevScan(t *testing.T) {
+	ctrlr1 := storage.MockNvmeController(1)
+	ctrlr2 := storage.MockNvmeController(2)
+	ctrlr3 := storage.MockNvmeController(3)
+
 	for name, tc := range map[string]struct {
 		req            ScanRequest
 		forwarded      bool
@@ -50,13 +112,11 @@ func TestBdevScan(t *testing.T) {
 			req: ScanRequest{},
 			mbc: &MockBackendConfig{
 				ScanRes: &ScanResponse{
-					Controllers: storage.NvmeControllers{
-						storage.MockNvmeController(),
-					},
+					Controllers: storage.NvmeControllers{ctrlr1},
 				},
 			},
 			expRes: &ScanResponse{
-				Controllers: storage.NvmeControllers{storage.MockNvmeController()},
+				Controllers: storage.NvmeControllers{ctrlr1},
 			},
 		},
 		"multiple devices": {
@@ -64,17 +124,13 @@ func TestBdevScan(t *testing.T) {
 			mbc: &MockBackendConfig{
 				ScanRes: &ScanResponse{
 					Controllers: storage.NvmeControllers{
-						storage.MockNvmeController(1),
-						storage.MockNvmeController(2),
-						storage.MockNvmeController(3),
+						ctrlr1, ctrlr2, ctrlr3,
 					},
 				},
 			},
 			expRes: &ScanResponse{
 				Controllers: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
+					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
 		},
@@ -84,17 +140,13 @@ func TestBdevScan(t *testing.T) {
 			mbc: &MockBackendConfig{
 				ScanRes: &ScanResponse{
 					Controllers: storage.NvmeControllers{
-						storage.MockNvmeController(1),
-						storage.MockNvmeController(2),
-						storage.MockNvmeController(3),
+						ctrlr1, ctrlr2, ctrlr3,
 					},
 				},
 			},
 			expRes: &ScanResponse{
 				Controllers: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
+					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
 			expVMDDisabled: true,

@@ -1036,6 +1036,30 @@ map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t rec_idx)
 	map->iom_nr_out++;
 }
 
+static inline int
+recx_compare(const void *rank1, const void *rank2)
+{
+	const daos_recx_t *r1 = rank1;
+	const daos_recx_t *r2 = rank2;
+
+	D_ASSERT(r1 != NULL && r2 != NULL);
+	if (r1->rx_idx < r2->rx_idx)
+		return -1;
+	else if (r1->rx_idx == r2->rx_idx)
+		return 0;
+	else /** r1->rx_idx < r2->rx_idx */
+		return 1;
+}
+
+static void
+daos_iom_sort(daos_iom_t *map)
+{
+	if (map == NULL)
+		return;
+	qsort(map->iom_recxs, map->iom_nr_out,
+	      sizeof(*map->iom_recxs), recx_compare);
+}
+
 /** create maps for actually written to extents. */
 static int
 obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
@@ -1099,6 +1123,8 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod)
 				bsgl_iov_idx++;
 			}
 		}
+
+		daos_iom_sort(map);
 
 		/** allocated and used should be the same */
 		D_ASSERTF(map->iom_nr == map->iom_nr_out,
@@ -3464,9 +3490,14 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			if (rc != 0)
 				goto out;
 		} else {
-			if (dcsr->dcsr_opc != DCSO_PUNCH_OBJ &&
-			    dcsr->dcsr_opc != DCSO_PUNCH_DKEY &&
-			    dcsr->dcsr_opc != DCSO_PUNCH_AKEY) {
+			daos_key_t	*dkey;
+
+			if (dcsr->dcsr_opc == DCSO_PUNCH_OBJ) {
+				dkey = NULL;
+			} else if (dcsr->dcsr_opc == DCSO_PUNCH_DKEY ||
+				   dcsr->dcsr_opc == DCSO_PUNCH_AKEY) {
+				dkey = &dcsr->dcsr_dkey;
+			} else {
 				D_ERROR("Unknown sub request opc %u for obj "
 					DF_UOID", DTX "DF_DTI":\n",
 					dcsr->dcsr_opc, DP_UOID(dcsr->dcsr_oid),
@@ -3482,8 +3513,9 @@ ds_obj_dtx_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 			rc = vos_obj_punch(ioc->ioc_coc->sc_hdl, dcsr->dcsr_oid,
 				dcsh->dcsh_epoch.oe_value, dth->dth_ver,
-				dcsr->dcsr_api_flags, &dcsr->dcsr_dkey,
-				dcsr->dcsr_nr, dcsr->dcsr_punch.dcp_akeys, dth);
+				dcsr->dcsr_api_flags, dkey,
+				dkey != NULL ? dcsr->dcsr_nr : 0, dkey != NULL ?
+				dcsr->dcsr_punch.dcp_akeys : NULL, dth);
 			if (rc != 0)
 				goto out;
 		}
