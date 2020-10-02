@@ -111,7 +111,7 @@ class OSAOfflineParallelTest(TestWithServers):
                 ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
 
     @fail_on(DaosApiError)
-    def verify_single_object(self, container, obj):
+    def verify_single_object(self):
         """Verify the container data on the existing pool."""
         self.log.info("Single Dataset Verification -- Started")
         for dkey in range(self.no_of_dkeys):
@@ -233,7 +233,7 @@ class OSAOfflineParallelTest(TestWithServers):
                 self.fail("Test failed : {0}".format(failure))
 
         if data:
-            self.verify_single_object(self)
+            self.verify_single_object()
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
