@@ -461,7 +461,7 @@ int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 			   daos_recx_t **recxs_p, unsigned int *iod_nr);
-int obj_ec_singv_encode_buf(daos_obj_id_t oid, daos_iod_t *iod,
+int obj_ec_singv_encode_buf(daos_obj_id_t oid, int shard, daos_iod_t *iod,
 			    struct daos_oclass_attr *oca,
 			    d_sg_list_t *sgl, d_iov_t *e_iov);
 int obj_ec_singv_split(daos_obj_id_t oid, uint32_t shard, daos_size_t iod_size,

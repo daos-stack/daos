@@ -5,7 +5,7 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 100
+timeout: 85
 server_config:
   name: daos_server
   servers:
