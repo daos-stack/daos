@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       34%{?relval}%{?dist}
+Release:       33%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -386,9 +386,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Thu Oct 1 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-34
-- Set OFI to compile with --disable-efa flag to disable EFA provider
-
 * Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
 - Update OFI to v1.11.0
 
