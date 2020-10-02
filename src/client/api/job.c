@@ -29,7 +29,8 @@
 char *dc_jobid_env;
 char *dc_jobid;
 
-static int craft_default_jobid(char **jobid) {
+static int craft_default_jobid(char **jobid)
+{
 	struct utsname name = {0};
 	pid_t pid;
 	int ret;
@@ -46,7 +47,7 @@ static int craft_default_jobid(char **jobid) {
 	return 0;
 }
 
-int dc_job_init()
+int dc_job_init(void)
 {
 	char *jobid;
 	char *jobid_env = getenv(JOBID_ENV);
@@ -54,7 +55,7 @@ int dc_job_init()
 
 	if (jobid_env == NULL)
 		D_STRNDUP(jobid_env, DEFAULT_JOBID_ENV,
-				sizeof(DEFAULT_JOBID_ENV));
+			  sizeof(DEFAULT_JOBID_ENV));
 	if (jobid_env == NULL) {
 		err = -DER_NOMEM;
 		goto out_err;
