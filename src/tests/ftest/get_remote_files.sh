@@ -74,7 +74,8 @@ This script has 4 modes that can be executed independently if needed.
 #######################################
 # CONSTANT variables.
 #######################################
-CART_TESTLOG="./cart/util/cart_logtest.py"
+# shellcheck disable=SC2046,SC2086
+CART_LOGTEST_PATH="$(dirname $(readlink -f ${0}))/cart/util/cart_logtest.py"
 
 #######################################
 # Print set GLOBAL variables.
@@ -157,7 +158,8 @@ scp_files() {
     set -ux
     rc=0
     copied=()
-    for file in ${1}
+    # shellcheck disable=SC2045,SC2086
+    for file in $(ls -d ${1})
     do
         ls -sh "${file}"
         if scp -r "${file}" "${2}"/"$(hostname -s)"-"${file##*/}"; then
@@ -169,7 +171,6 @@ scp_files() {
         fi
     done
     echo Copied "${copied[@]:-no files}"
-    exit "$rc"
 }
 
 get_cartlogtest_files() {
@@ -178,7 +179,7 @@ get_cartlogtest_files() {
     for file in $(ls -d ${1})
     do
         ls -sh "${file}"
-        "${CART_TESTLOG}" "${file}" |& tee "${file}"_ctestlog
+        "${CART_LOGTEST_PATH}" "${file}" |& tee "${file}"_ctestlog
     done
 }
 
@@ -240,11 +241,16 @@ fi
 
 # Run cart_logtest.py on LOCAL_SRC
 if [ "${CART_LOGTEST}" == "true" ]; then
-    echo "Running cart_logtest.py on ${LOCAL_SRC}"
-    get_cartlogtest_files "${LOCAL_SRC}"
+    if [ -f "${CART_LOGTEST_PATH}" ]; then
+        echo "Running cart_logtest.py on ${LOCAL_SRC}"
+        get_cartlogtest_files "${LOCAL_SRC}"
+    else
+        echo "${CART_LOGTEST_PATH} does not exist!"
+    fi
 fi
 
 # Compress files in LOCAL_SRC if not running on VM host.
+set +x
 if check_hw; then
     echo "Running on VM system, skipping compression ..."
     COMPRESS="false"

@@ -1001,7 +1001,7 @@ def archive_cart_logs(avocado_logs_dir, test_files, args):
 
     """
     # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "daos_logs")
+    destination = os.path.join(avocado_logs_dir, "latest", "cart_logs")
 
     # Copy any DAOS logs created on any host under test
     hosts = get_hosts_from_yaml(test_files["yaml"], args)
@@ -1090,7 +1090,7 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
     if cart:
         command.append("-s")
     if threshold:
-        command.append("-t {}".format(threshold))
+        command.append("-t \"{}\"".format(threshold))
     return get_remote_output(hosts, " ".join(command), 900)
 
 
