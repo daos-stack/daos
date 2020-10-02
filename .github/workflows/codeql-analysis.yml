@@ -1,0 +1,66 @@
+# For most projects, this workflow file will not need changing; you simply need
+# to commit it to your repository.
+#
+# You may wish to alter this file to override the set of languages analyzed,
+# or to provide custom queries or build logic.
+name: "CodeQL"
+
+on:
+  push:
+    branches: [dpquigl/CodeQLEval]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [dpquigl/CodeQLEval]
+  schedule:
+    - cron: '0 6 * * 6'
+
+jobs:
+  CodeQL-Build:
+    name: CodeQL Analysis
+    runs-on: ubuntu-20.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['cpp', 'python', 'go', 'java']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    # Packages DAOS needs to build
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install apt-utils
+        sudo apt-get -y upgrade
+        sudo apt-get remove -y adoptopenjdk-8-hotspot adoptopenjdk-11-hotspot
+        sudo apt-get -y install build-essential scons python3-distro python3-distutils valgrind autoconf libtool-bin locales pkg-config pandoc clang cmake libcmocka-dev libnuma-dev patchelf libhwloc-dev libboost-dev uuid-dev libssl-dev fuse3 libfuse3-dev curl libjson-c-dev liblz4-dev libibverbs-dev librdmacm-dev libaio-dev yasm python3-dev golang-go git libyaml-dev python3-tabulate python3-pyxattr openjdk-8-jdk maven libipmctl-dev libcunit1-dev libopenmpi-dev numactl doxygen libunwind-dev
+        sudo apt-get clean all
+
+    - name: Build DAOS
+      run: |
+        git submodule init && git submodule update
+        scons --build-deps=yes --config=force install
+
+    - name: Build DAOS Java Packages
+      run: |
+        # use Java 8 instead of default Java 11
+        sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+        echo $JAVA_HOME
+        export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+        # set maven mirror
+        mkdir -p ~/.m2
+        echo -e "<settings>\n <mirrors>\n  <mirror>\n   <id>google-maven-central</id>\n   <name>GCS Maven Central mirror</name>\n   <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n   <mirrorOf>central</mirrorOf>\n  </mirror>\n </mirrors>\n</settings>" > ~/.m2/settings.xml
+        cd src/client/java && mvn clean install -DskipITs -Ddaos.install.path=$PWD/../../../install
+
+    # Initializes the CodeQL tools for scanning.
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v1
+      with:
+        #Not sure if this is needed languages: ${{ matrix.language }}
+        setup-python-dependencies: false
+        queries: +security-and-quality
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v1
