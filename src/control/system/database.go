@@ -508,10 +508,8 @@ func (db *Database) AddMember(newMember *Member) error {
 	db.Lock()
 	defer db.Unlock()
 
-	db.log.Debugf("newMember: %+v", newMember)
 	mu := &memberUpdate{Member: newMember}
 	if cur, err := db.FindMemberByUUID(newMember.UUID); err == nil {
-		db.log.Debugf("curMember: %+v", cur)
 		return &ErrMemberExists{Rank: cur.Rank}
 	}
 

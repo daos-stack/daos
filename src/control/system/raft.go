@@ -262,10 +262,13 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	return nil
 }
 
+// fsmSnapshot implements the raft.FSMSnapshot interface, and is used
+// to persist the snapshot to an io.WriteCloser.
 type fsmSnapshot struct {
 	data []byte
 }
 
+// Persist writes the snapshot to the supplied raft.SnapshotSink.
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
 		if _, err := sink.Write(f.data); err != nil {
@@ -282,4 +285,5 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	return err
 }
 
+// Release is a no-op for this implementation.
 func (f *fsmSnapshot) Release() {}
