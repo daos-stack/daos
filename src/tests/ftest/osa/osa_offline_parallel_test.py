@@ -57,6 +57,7 @@ class OSAOfflineParallelTest(TestWithServers):
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')[0]
         self.out_queue = queue.Queue()
+        self.test_ioreq = None
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -95,6 +96,7 @@ class OSAOfflineParallelTest(TestWithServers):
         ioreq = IORequest(self.context,
                           container,
                           obj, objtype=4)
+        self.test_ioreq = ioreq
         self.log.info("Writing the Single Dataset")
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
@@ -107,6 +109,29 @@ class OSAOfflineParallelTest(TestWithServers):
                 c_value = ctypes.create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
                 ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
+
+    @fail_on(DaosApiError)
+    def verify_single_object(self, container, obj):
+        """Verify the container data on the existing pool."""
+        self.log.info("Single Dataset Verification -- Started")
+        for dkey in range(self.no_of_dkeys):
+            for akey in range(self.no_of_akeys):
+                indata = ("{0}".format(str(akey)[0]) *
+                          self.record_length)
+                c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
+                c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
+                val = self.ioreq.single_fetch(c_dkey,
+                                              c_akey,
+                                              len(indata)+1)
+                if indata != (repr(val.value)[1:-1]):
+                    self.d_log.error("ERROR:Data mismatch for "
+                                     "dkey = {0}, "
+                                     "akey = {1}".format(
+                                         "dkey {0}".format(dkey),
+                                         "akey {0}".format(akey)))
+                    self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}"
+                              .format("dkey {0}".format(dkey),
+                                      "akey {0}".format(akey)))
 
     def dmg_thread(self, puuid, rank, target, action, results):
         """Generate different dmg command related to OSA.
@@ -207,6 +232,9 @@ class OSAOfflineParallelTest(TestWithServers):
             if "FAIL" in failure:
                 self.fail("Test failed : {0}".format(failure))
 
+        if data:
+            self.verify_single_object(self)
+
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
@@ -230,4 +258,4 @@ class OSAOfflineParallelTest(TestWithServers):
         self.run_offline_parallel_test(1)
         # Perform drain testing : inserting data in pool
         # Bug : DAOS-4946 blocks the following test case.
-        # self.run_offline_parallel_test(1, True)
+        self.run_offline_parallel_test(1, True)
