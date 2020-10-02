@@ -54,9 +54,4 @@ extern char *dc_jobid;
  */
 #define DEFAULT_JOBID_ENV "DAOS_JOBID"
 
-/**
- * Default jobid when one is not specified by the caller
- */
-#define DEFAULT_JOBID "unbound"
-
 #endif /* __DAOS_JOB_H__ */

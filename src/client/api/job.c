@@ -22,30 +22,59 @@
  */
 
 #include <stdlib.h>
+#include <sys/utsname.h>
 #include <daos/common.h>
 #include <daos/job.h>
 
 char *dc_jobid_env;
 char *dc_jobid;
 
+static int craft_default_jobid(char **jobid) {
+	struct utsname name = {0};
+	pid_t pid;
+	int ret;
+
+	ret = uname(&name);
+	if (ret)
+		return -DER_INVAL;
+
+	pid = getpid();
+
+	D_ASPRINTF(*jobid, "%s-%d", name.nodename, pid);
+	if (*jobid == NULL)
+		return -DER_NOMEM;
+	return 0;
+}
+
 int dc_job_init()
 {
 	char *jobid;
 	char *jobid_env = getenv(JOBID_ENV);
+	int err = 0;
 
-	if (jobid_env == NULL) {
+	if (jobid_env == NULL)
 		D_STRNDUP(jobid_env, DEFAULT_JOBID_ENV,
 				sizeof(DEFAULT_JOBID_ENV));
+	if (jobid_env == NULL) {
+		err = -DER_NOMEM;
+		goto out_err;
 	}
+
 	dc_jobid_env = jobid_env;
 
 	jobid = getenv(dc_jobid_env);
-	if (jobid == NULL) {
-		D_STRNDUP(jobid, DEFAULT_JOBID,
-				sizeof(DEFAULT_JOBID));
-	}
+	if (jobid == NULL)
+		err = craft_default_jobid(&jobid);
+	if (err)
+		goto out_env;
 	dc_jobid = jobid;
 	return 0;
+
+out_env:
+	free(dc_jobid_env);
+	dc_jobid_env = NULL;
+out_err:
+	return err;
 }
 
 void

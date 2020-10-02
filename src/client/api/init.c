@@ -220,7 +220,7 @@ out_pl:
 out_eq:
 	daos_eq_lib_fini();
 out_job:
-	dc_job_init();
+	dc_job_fini();
 out_agent:
 	dc_agent_fini();
 out_hhash:
