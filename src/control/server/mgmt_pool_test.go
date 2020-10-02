@@ -43,6 +43,61 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
+	for name, tc := range map[string]struct {
+		state   system.PoolServiceState
+		expResp *mgmtpb.PoolCreateResp
+	}{
+		"creating": {
+			state: system.PoolServiceStateCreating,
+			expResp: &mgmtpb.PoolCreateResp{
+				Status: int32(drpc.DaosTryAgain),
+			},
+		},
+		"ready": {
+			state: system.PoolServiceStateReady,
+			expResp: &mgmtpb.PoolCreateResp{
+				Status: int32(drpc.DaosAlready),
+			},
+		},
+		"destroying": {
+			state: system.PoolServiceStateDestroying,
+			expResp: &mgmtpb.PoolCreateResp{
+				Status: int32(drpc.DaosAlready),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			svc := newTestMgmtSvc(t, log)
+			if err := svc.sysdb.AddPoolService(&system.PoolService{
+				PoolUUID: uuid.MustParse(common.MockUUID(0)),
+				State:    tc.state,
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			req := &mgmtpb.PoolCreateReq{
+				Uuid:     common.MockUUID(0),
+				Scmbytes: ioserver.ScmMinBytesPerTarget,
+			}
+
+			gotResp, err := svc.PoolCreate(ctx, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)

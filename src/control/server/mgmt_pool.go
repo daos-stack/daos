@@ -122,10 +122,10 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
+		resp.Status = int32(drpc.DaosAlready)
 		if ps.State == system.PoolServiceStateCreating {
 			resp.Status = int32(drpc.DaosTryAgain)
 		}
-		resp.Status = int32(drpc.DaosAlready)
 		return resp, nil
 	}
 	if _, ok := err.(*system.ErrPoolNotFound); !ok {
