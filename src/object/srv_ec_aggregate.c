@@ -196,7 +196,8 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 			end_stripe * stripe_size;
 
 	/* What if an extent carries over, and the tail is the only extent in
-	 * the next stripe? (Answer: we leak it, for now.)
+	 * the next stripe? (Answer: we retain it, but this is okay, since in
+	 * this case the carryover is a valid replica for the next stripe)
 	 */
 	}
 	return 0;
@@ -209,10 +210,12 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 static void
 agg_clear_extents(struct ec_agg_entry *agg_entry)
 {
-	struct ec_agg_extent *agg_extent, *ext_tmp;
-	unsigned int	      tail, ptail = 0U;
+	struct ec_agg_extent	*agg_extent, *ext_tmp;
+	unsigned int		 tail, ptail = 0U;
+	bool			 has_holes = false;
 
 	agg_entry->ae_cur_stripe.as_prefix_ext = 0U;
+	/* Don't need for each. Just check tail */
 	d_list_for_each_entry_safe(agg_extent, ext_tmp,
 				   &agg_entry->ae_cur_stripe.as_dextents,
 				   ae_link) {
@@ -237,6 +240,12 @@ agg_clear_extents(struct ec_agg_entry *agg_entry)
 	agg_entry->ae_cur_stripe.as_hi_epoch = 0UL;
 	/* Account for carry over. */
 	agg_entry->ae_cur_stripe.as_stripe_fill = ptail;
+	if (has_holes)
+		agg_entry->ae_cur_stripe.as_has_holes = true;
+	else
+		agg_entry->ae_cur_stripe.as_has_holes = false;
+
+
 }
 
 /* Returns the stripe number for the stripe containing ex_lo.
@@ -762,20 +771,19 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		unsigned char *buf = (unsigned char *)
 			entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
 
-		sgl.sg_iovs[i].iov_buf = &buf[i * len];
-		sgl.sg_iovs[i].iov_len = len;
-		sgl.sg_iovs[i].iov_buf_len = len;
-		/* zeroed to ensure correct when cell is partially filled */
+		d_iov_set(sgl.sg_iovs[i].iov_buf, &buf[i * len], len);
+		/* zeroed to ensure correctness when cell is partially filled */
 		memset(sgl.sg_iovs[i].iov_buf, 0, len);
 	}
 
-	if (is_recalc) {
-		/* this is wrong for p > 1, since the leader is on q. */
-		sgl.sg_iovs[cell_cnt].iov_buf =
-			entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
-		sgl.sg_iovs[cell_cnt].iov_len = len;
-		sgl.sg_iovs[cell_cnt].iov_buf_len = len;
-	}
+	/* fetch the local parity */
+	if (is_recalc)
+		/* This is correct for p > 1, since the leader is last, but we
+		 * reverse the order in the parity buf.
+		 */
+		d_iov_set(sgl.sg_iovs[cell_cnt].iov_buf,
+			   entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf, len);
+
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_size = entry->ae_rsize;
@@ -809,7 +817,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	unsigned int	len = entry->ae_oca->u.ec.e_len;
 	unsigned int	p = entry->ae_oca->u.ec.e_p;
 	unsigned int	pshard  = entry->ae_oid.id_shard - 1;
-	int		rc = 0;
+	int		i, rc = 0;
 
 	/* Only called when p > 1. Code supports only 1 <= p <= 2 for now. */
 	D_ASSERT(p == 2);
@@ -823,16 +831,21 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	iod.iod_nr = 1;
 	iod.iod_recxs = &recx;
 
-	/* set up the sgl */
 	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
-	iov.iov_buf = &buf[len];
-	iov.iov_len = len;
-	iov.iov_buf_len = len;
-	sgl.sg_iovs = &iov;
 	sgl.sg_nr = 1;
-	rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_par_extent.ape_epoch,
-			   &entry->ae_dkey, 1, &iod, &sgl, NULL,
-			   DIOF_TO_SPEC_SHARD, &pshard);
+	/* Need a loop here for p > 2. */
+	for (i = 1; i < p; i++) {
+		D_ASSERT(pshard >= entry->ae_oca->u.ec.e_k);
+		d_iov_set(iov.iov_buf, &buf[i * len], len);
+		rc = dsc_obj_fetch(entry->ae_obj_hdl,
+				   entry->ae_par_extent.ape_epoch,
+				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
+				   DIOF_TO_SPEC_SHARD, &pshard);
+		if (rc)
+			goto out;
+		pshard--;
+	}
+out:
 	return rc;
 }
 
@@ -1176,6 +1189,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	vos_iter_param_t	iter_param = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
 	bool			update_vos = true;
+	bool			process_holes = false;
 	int			rc = 0;
 
 	entry->ae_par_extent.ape_epoch	= ~(0ULL);
@@ -1203,9 +1217,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		entry->ae_par_extent.ape_recx.rx_idx,
 		entry->ae_par_extent.ape_recx.rx_nr);
 
-	if (rc != 0)
-		goto out;
-		/* change to >= to deal with retained extent */
+	/* change to >= to deal with retained extent */
 	if (entry->ae_par_extent.ape_epoch >= entry->ae_cur_stripe.as_hi_epoch
 	    && entry->ae_par_extent.ape_epoch != ~(0ULL)) {
 		/* Parity newer than data and holes; nothing to do. */
@@ -1226,16 +1238,19 @@ agg_process_stripe(struct ec_agg_entry *entry)
 	}
 	/* Parity, some later replicas, possibly holes, not full stripe. */
 	if (entry->ae_cur_stripe. as_has_holes)
-		rc = agg_process_holes(entry);
+		process_holes = true;
 	else
 		rc = agg_process_partial_stripe(entry);
 
 out:
-	if (update_vos && rc == 0) {
-		rc = agg_update_vos(entry);
+	if (process_holes && rc == 0)
+		rc = agg_process_holes(entry);
+	else if (update_vos && rc == 0) {
 		if (!rc && entry->ae_oca->u.ec.e_p > 1)
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry);
+		if (rc == 0)
+			rc = agg_update_vos(entry);
 	}
 
 	agg_clear_extents(entry);
@@ -1270,8 +1285,12 @@ agg_data_extent(vos_iter_entry_t *entry, struct ec_agg_entry *agg_entry,
 
 	if (agg_stripenum(agg_entry, entry->ie_recx.rx_idx) !=
 			agg_entry->ae_cur_stripe.as_stripenum) {
-		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL)
-			agg_process_stripe(agg_entry);
+		if (agg_entry->ae_cur_stripe.as_stripenum != ~0UL) {
+			rc = agg_process_stripe(agg_entry);
+				D_ERROR("Process stripe returned "DF_RC"\n",
+					DP_RC(rc));
+			rc = 0;
+		}
 		agg_entry->ae_cur_stripe.as_stripenum =
 			agg_stripenum(agg_entry, entry->ie_recx.rx_idx);
 	}
@@ -1435,11 +1454,6 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 	iter_param.ip_epr.epr_lo	= 0ULL;
 	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
-
-	/* I forgot one question.
-	 * Is it okay to just use the array range punch to get rid of the parity
-	 * after I re-replicate the stripe?
-	 */
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
