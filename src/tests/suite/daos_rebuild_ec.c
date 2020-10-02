@@ -172,108 +172,147 @@ enum op_type {
 };
 
 static void
-rebuild_ec_internal(void **state, bool parity, int type)
+rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
+		    int kill_parity_nr, int write_type)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oid;
 	struct ioreq		req;
-	d_rank_t		kill_rank = 0;
-	d_rank_t		kill_rank1 = 0;
+	d_rank_t		kill_ranks[4] = { -1 };
+	int			kill_ranks_num = 0;
+	d_rank_t		kill_data_rank;
 
-	if (!test_runable(arg, 5))
+	if (oclass == OC_EC_2P1G1 && !test_runable(arg, 5))
+		return;
+	else if (oclass == OC_EC_4P2G1 && !test_runable(arg, 7))
 		return;
 
-	oid = dts_oid_gen(OC_EC_2P1G1, 0, arg->myrank);
+	oid = dts_oid_gen(oclass, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      KEY_NR, DP_OID(oid));
 
-	if (type == PARTIAL_UPDATE)
+	if (write_type == PARTIAL_UPDATE)
 		write_ec_partial(&req, arg->index, 0);
-	else if (type == FULL_UPDATE)
+	else if (write_type == FULL_UPDATE)
 		write_ec_full(&req, arg->index, 0);
-	else if (type == FULL_PARTIAL_UPDATE)
+	else if (write_type == FULL_PARTIAL_UPDATE)
 		write_ec_full_partial(&req, arg->index, 0);
-	else if (type == PARTIAL_FULL_UPDATE)
+	else if (write_type == PARTIAL_FULL_UPDATE)
 		write_ec_partial_full(&req, arg->index, 0);
 
 	ioreq_fini(&req);
 
-	kill_rank = get_killing_rank_by_oid(arg, oid, parity);
-	rebuild_single_pool_target(arg, kill_rank, -1, false);
+	get_killing_rank_by_oid(arg, oid, kill_data_nr, kill_parity_nr,
+				kill_ranks, &kill_ranks_num);
+
+	rebuild_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num, false);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	if (parity) {
+	if (kill_parity_nr > 0) {
+		int tmp;
+
 		/* To verify if the parity being rebuild correctly,
-		 * let's kill another node to to rebuild data, then
+		 * let's kill another data node to to rebuild data, then
 		 * verify if the rebuild data is correct.
 		 */
-		kill_rank1 = get_killing_rank_by_oid(arg, oid, false);
-		rebuild_single_pool_target(arg, kill_rank1, -1, false);
+		get_killing_rank_by_oid(arg, oid, 1, 0, &kill_data_rank, &tmp);
+		rebuild_pools_ranks(&arg, 1, &kill_data_rank, 1, false);
 	}
 
-	if (type == PARTIAL_UPDATE)
+	if (write_type == PARTIAL_UPDATE)
 		verify_ec_partial(&req, arg->index, 0);
-	else if (type == FULL_UPDATE)
+	else if (write_type == FULL_UPDATE)
 		verify_ec_full(&req, arg->index, 0);
-	else if (type == FULL_PARTIAL_UPDATE)
+	else if (write_type == FULL_PARTIAL_UPDATE)
 		verify_ec_full_partial(&req, arg->index, 0);
-	else if (type == PARTIAL_FULL_UPDATE)
+	else if (write_type == PARTIAL_FULL_UPDATE)
 		verify_ec_full(&req, arg->index, 0);
 
 	ioreq_fini(&req);
-	reintegrate_single_pool_target(arg, kill_rank, -1);
-	if (parity)
-		reintegrate_single_pool_target(arg, kill_rank1, -1);
+	if (kill_parity_nr > 0)
+		reintegrate_pools_ranks(&arg, 1, &kill_data_rank, 1);
+
+	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
 }
 
 static void
 rebuild_partial_fail_data(void **state)
 {
-	rebuild_ec_internal(state, false, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, PARTIAL_UPDATE);
 }
 
 static void
 rebuild_partial_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, true, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, PARTIAL_UPDATE);
 }
 
 static void
 rebuild_full_fail_data(void **state)
 {
-	rebuild_ec_internal(state, false, FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, FULL_UPDATE);
 }
 
 static void
 rebuild_full_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, true, FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, FULL_UPDATE);
 }
 
 static void
 rebuild_full_partial_fail_data(void **state)
 {
-	rebuild_ec_internal(state, false, FULL_PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, FULL_PARTIAL_UPDATE);
 }
 
 static void
 rebuild_full_partial_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, true, FULL_PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, FULL_PARTIAL_UPDATE);
 }
 
 static void
 rebuild_partial_full_fail_data(void **state)
 {
-	rebuild_ec_internal(state, false, PARTIAL_FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, PARTIAL_FULL_UPDATE);
 }
 
 static void
 rebuild_partial_full_fail_parity(void **state)
 {
-	rebuild_ec_internal(state, true, PARTIAL_FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, PARTIAL_FULL_UPDATE);
+}
+
+static void
+rebuild2p_partial_fail_data(void **state)
+{
+	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 0, PARTIAL_UPDATE);
+}
+
+static void
+rebuild2p_partial_fail_2data(void **state)
+{
+	rebuild_ec_internal(state, OC_EC_4P2G1, 2, 0, PARTIAL_UPDATE);
+}
+
+static void
+rebuild2p_partial_fail_data_parity(void **state)
+{
+	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 1, PARTIAL_UPDATE);
+}
+
+static void
+rebuild2p_partial_fail_parity(void **state)
+{
+	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 1, PARTIAL_UPDATE);
+}
+
+static void
+rebuild2p_partial_fail_2parity(void **state)
+{
+	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 2, PARTIAL_UPDATE);
 }
 
 /** create a new pool/container for each test */
@@ -297,6 +336,18 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD7: rebuild partial then full update with parity tgt fail",
 	 rebuild_partial_full_fail_parity, rebuild_small_sub_setup,
+	 test_teardown},
+	{"REBUILD8: rebuild2p partial update with data tgt fail ",
+	 rebuild2p_partial_fail_data, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD9: rebuild2p partial update with 2 data tgt fail ",
+	 rebuild2p_partial_fail_2data, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD10: rebuild2p partial update with data/parity tgts fail ",
+	 rebuild2p_partial_fail_data_parity, rebuild_small_sub_setup,
+	 test_teardown},
+	{"REBUILD11: rebuild2p partial update with parity tgt fail",
+	 rebuild2p_partial_fail_parity, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD12: rebuild2p partial update with 2 parity tgt fail",
+	 rebuild2p_partial_fail_2parity, rebuild_small_sub_setup,
 	 test_teardown},
 };
 
