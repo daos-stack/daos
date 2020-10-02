@@ -52,27 +52,27 @@ type (
 // MarshalJSON creates a serialized representation of the MemberRankMap.
 // The member's UUID is used to represent the member in order to
 // avoid duplicating member details in the serialized format.
-func (srm MemberRankMap) MarshalJSON() ([]byte, error) {
+func (mrm MemberRankMap) MarshalJSON() ([]byte, error) {
 	jm := make(map[Rank]uuid.UUID)
-	for rank, member := range srm {
+	for rank, member := range mrm {
 		jm[rank] = member.UUID
 	}
 	return json.Marshal(jm)
 }
 
-func (sam MemberAddrMap) addMember(addr *net.TCPAddr, m *Member) {
-	if _, exists := sam[addr.String()]; !exists {
-		sam[addr.String()] = []*Member{}
+func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *Member) {
+	if _, exists := mam[addr.String()]; !exists {
+		mam[addr.String()] = []*Member{}
 	}
-	sam[addr.String()] = append(sam[addr.String()], m)
+	mam[addr.String()] = append(mam[addr.String()], m)
 }
 
 // MarshalJSON creates a serialized representation of the MemberAddrMap.
 // The member's UUID is used to represent the member in order to
 // avoid duplicating member details in the serialized format.
-func (sam MemberAddrMap) MarshalJSON() ([]byte, error) {
+func (mam MemberAddrMap) MarshalJSON() ([]byte, error) {
 	jm := make(map[string][]uuid.UUID)
-	for addr, members := range sam {
+	for addr, members := range mam {
 		if _, exists := jm[addr]; !exists {
 			jm[addr] = []uuid.UUID{}
 		}

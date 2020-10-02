@@ -89,7 +89,7 @@ func raftDir(cfg *Configuration) string {
 func hostname() string {
 	hn, err := os.Hostname()
 	if err != nil {
-		return "unknown"
+		return fmt.Sprintf("Hostname() failed: %s", err.Error())
 	}
 	return hn
 }

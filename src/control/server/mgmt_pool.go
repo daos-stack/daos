@@ -74,6 +74,29 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 	return system.RanksToUint32(ps.Replicas), nil
 }
 
+// calculateCreateStorage determines the amount of SCM/NVMe storage to
+// allocate per server in order to fulfill the create request, if those
+// values are not already supplied as part of the request.
+func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
+	instances := svc.harness.Instances()
+	if len(instances) < 1 {
+		return errors.New("harness has no managed instances")
+	}
+
+	targetCount := instances[0].runner.GetConfig().TargetCount
+	if targetCount == 0 {
+		return errors.New("zero target count")
+	}
+	if req.Scmbytes < ioserver.ScmMinBytesPerTarget*uint64(targetCount) {
+		return FaultPoolScmTooSmall(req.Scmbytes, targetCount)
+	}
+	if req.Nvmebytes != 0 && req.Nvmebytes < ioserver.NvmeMinBytesPerTarget*uint64(targetCount) {
+		return FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
+	}
+
+	return nil
+}
+
 // PoolCreate implements the method defined for the Management Service.
 //
 // Validate minimum SCM/NVMe pool size per VOS target, pool size request params
@@ -87,23 +110,16 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.getMSLeaderInstance()
-	if err != nil {
+	if err := svc.calculateCreateStorage(req); err != nil {
 		return nil, err
 	}
 
-	targetCount := mi.runner.GetConfig().TargetCount
-	if targetCount == 0 {
-		return nil, errors.New("zero target count")
-	}
-	if req.Scmbytes < ioserver.ScmMinBytesPerTarget*uint64(targetCount) {
-		return nil, FaultPoolScmTooSmall(req.Scmbytes, targetCount)
-	}
-	if req.Nvmebytes != 0 && req.Nvmebytes < ioserver.NvmeMinBytesPerTarget*uint64(targetCount) {
-		return nil, FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
+	uuid, err := uuid.Parse(req.GetUuid())
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to parse pool UUID %q", req.GetUuid())
 	}
 
-	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid.MustParse(req.GetUuid()))
+	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
 		if ps.State == system.PoolServiceStateCreating {
@@ -132,11 +148,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 			return nil, err
 		}
 		req.Ranks = system.RanksToUint32(ranks)
-	}
-
-	uuid, err := uuid.Parse(req.GetUuid())
-	if err != nil {
-		return nil, err
 	}
 
 	ps = &system.PoolService{

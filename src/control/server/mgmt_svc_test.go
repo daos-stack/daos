@@ -158,7 +158,7 @@ func TestListCont_DrpcFailed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newTestMgmtSvc(log)
+	svc := newTestMgmtSvc(t, log)
 	expectedErr := errors.New("mock error")
 	setupMockDrpcClient(svc, nil, expectedErr)
 
@@ -175,7 +175,7 @@ func TestPoolListCont_BadDrpcResp(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newTestMgmtSvc(log)
+	svc := newTestMgmtSvc(t, log)
 	// dRPC call returns junk in the message body
 	badBytes := makeBadBytes(12)
 
@@ -194,7 +194,7 @@ func TestListCont_ZeroContSuccess(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newTestMgmtSvc(log)
+	svc := newTestMgmtSvc(t, log)
 
 	expectedResp := &mgmtpb.ListContResp{}
 	setupMockDrpcClient(svc, expectedResp, nil)
@@ -215,7 +215,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newTestMgmtSvc(log)
+	svc := newTestMgmtSvc(t, log)
 
 	expectedResp := &mgmtpb.ListContResp{
 		Containers: []*mgmtpb.ListContResp_Cont{
@@ -866,7 +866,7 @@ func TestContSetOwner_DrpcFailed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newTestMgmtSvc(log)
+	svc := newTestMgmtSvc(t, log)
 	expectedErr := errors.New("mock error")
 	setupMockDrpcClient(svc, nil, expectedErr)
 
@@ -883,7 +883,7 @@ func TestContSetOwner_BadDrpcResp(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newTestMgmtSvc(log)
+	svc := newTestMgmtSvc(t, log)
 	// dRPC call returns junk in the message body
 	badBytes := makeBadBytes(16)
 
@@ -902,7 +902,7 @@ func TestContSetOwner_Success(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newTestMgmtSvc(log)
+	svc := newTestMgmtSvc(t, log)
 
 	expectedResp := &mgmtpb.ContSetOwnerResp{
 		Status: 0,

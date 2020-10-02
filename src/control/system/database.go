@@ -49,6 +49,16 @@ type (
 	onLeadershipGainedFn func(context.Context) error
 	onLeadershipLostFn   func() error
 
+	raftService interface {
+		Apply([]byte, time.Duration) raft.ApplyFuture
+		BootstrapCluster(raft.Configuration) raft.Future
+		Leader() raft.ServerAddress
+		LeaderCh() <-chan bool
+		LeadershipTransfer() raft.Future
+		Shutdown() raft.Future
+		State() raft.RaftState
+	}
+
 	// dbData is the raft-replicated system database. It
 	// should never be updated directly; updates must be
 	// applied in order to ensure that they are sent to
@@ -72,7 +82,7 @@ type (
 		log                logging.Logger
 		cfg                *DatabaseConfig
 		replicaAddr        *net.TCPAddr
-		raft               *raft.Raft
+		raft               raftService
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
 
@@ -354,6 +364,9 @@ func (db *Database) ResignLeadership(cause error) error {
 	// the raft service continues to run. Leaving this enabled
 	// so that we can see it in logs in case there are unexpected
 	// resignation events.
+	if cause == nil {
+		cause = errors.New("unknown error")
+	}
 	db.log.Errorf("resigning leadership (%s)", cause)
 	if err := db.raft.LeadershipTransfer().Error(); err != nil {
 		return errors.Wrap(err, cause.Error())
