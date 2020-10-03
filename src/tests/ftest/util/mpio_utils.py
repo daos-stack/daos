@@ -99,6 +99,7 @@ class MpioUtils():
         env["DAOS_POOL"] = "{}".format(pool_uuid)
         env["DAOS_SVCL"] = "{}".format(":".join([str(item) for item in svcl]))
         env["DAOS_CONT"] = "{}".format(cont_uuid)
+        env["DAOS_BYPASS_DUNS"] = "1"
         mpirun = os.path.join(self.mpichinstall, "bin", "mpirun")
 
         executables = {
