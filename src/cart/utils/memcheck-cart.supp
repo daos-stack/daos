@@ -69,12 +69,28 @@
    FI leak 5
    Memcheck:Leak
    match-leak-kinds: possible
+   fun:malloc
+   fun:strdup
+   fun:fi_param_define@@FABRIC_1.0
+   fun:ofi_hook_init
+   fun:fi_ini
+   fun:fi_getinfo@@FABRIC_1.2
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+   ...
+   fun:crt_hg_ctx_init
+   ...
+}
+{
+   FI leak 6
+   Memcheck:Leak
+   match-leak-kinds: possible
    ...
    obj:/usr/lib64/librdmacm.so.1.1.22.1
    ...
 }
 {
-   FI leak 6
+   FI leak 7
    Memcheck:Leak
    match-leak-kinds: indirect
    ...
@@ -83,7 +99,7 @@
    ...
 }
 {
-   FI leak 7
+   FI leak 8
    Memcheck:Leak
    match-leak-kinds: possible
    ...
@@ -92,7 +108,7 @@
    ...
 }
 {
-   FI leak 8
+   FI leak 9
    Memcheck:Leak
    match-leak-kinds: reachable
    ...
@@ -101,7 +117,7 @@
    ...
 }
 {
-   FI leak 9
+   FI leak 10
    Memcheck:Leak
    match-leak-kinds: definite
    ...
@@ -109,9 +125,8 @@
    fun:fi_getinfo@@FABRIC_1.3
    ...
 }
-
 {
-   spdk leak 1
+   spdk leak 0
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:calloc
@@ -119,7 +134,7 @@
    ...
 }
 {
-   spdk leak 2
+   spdk leak 1
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:calloc
@@ -127,7 +142,7 @@
    ...
 }
 {
-   spdk leak 3
+   spdk leak 2
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:calloc
@@ -135,7 +150,7 @@
    ...
 }
 {
-   spdk leak 4
+   spdk leak 3
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:calloc
