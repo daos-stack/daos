@@ -255,7 +255,8 @@ if [ "${VERBOSE}" == "true" ]; then
 fi
 
 if [ -n "${FILES_TO_PROCESS}" ]; then
-    files=$(ls -d "${FILES_TO_PROCESS}")
+    # shellcheck disable=SC2086
+    files=$(ls -d ${FILES_TO_PROCESS})
     files_rc=$?
     if [ -n "${files}" ] && [ "${files_rc}" -eq 0 ]; then
         echo "Files to process: ${files}"
@@ -263,6 +264,9 @@ if [ -n "${FILES_TO_PROCESS}" ]; then
         echo "Error getting files: ${FILES_TO_PROCESS}"
         exit 1
     fi
+else
+    echo "Please specify -f option ..."
+    exit 1
 fi
 
 # Display big files to stdout
