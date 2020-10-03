@@ -3446,12 +3446,14 @@ obj_comp_cb(tse_task_t *task, void *data)
 			}
 		} else {
 			if (obj_auxi->is_ec_obj && task->dt_result == 0 &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
-			    obj_auxi->bulks != NULL) {
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
-				obj_ec_fetch_set_sgl(&obj_auxi->reasb_req,
-						     args->nr);
+				if (obj_auxi->bulks != NULL)
+					obj_ec_fetch_set_sgl(
+						&obj_auxi->reasb_req, args->nr);
+				obj_ec_update_iod_size(&obj_auxi->reasb_req,
+						       args->nr);
 			}
 
 			obj_bulk_fini(obj_auxi);
