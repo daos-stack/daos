@@ -143,6 +143,12 @@ class CartUtils():
             env_CCSA = ""
             log_dir = "{}".format(test_name)
 
+        # Write hostfile to HOME or DAOS_TEST_SHARED_DIR (can't be '.' or
+        # cwd(), it must be some place writable)
+        daos_test_shared_dir = os.environ['HOME']
+        if 'DAOS_TEST_SHARED_DIR' in os.environ:
+            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
+
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_file = os.path.join(log_path, log_dir,
                                 test_name + "_" + env_CCSA + "_cart.log")
@@ -178,7 +184,7 @@ class CartUtils():
         if ofi_share_addr is not None:
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
 
-        env += " -x CRT_ATTACH_INFO_PATH={!s}".format(log_path)
+        env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
 
         cartobj.log_path = log_path
 
