@@ -143,8 +143,8 @@ class CartUtils():
             env_CCSA = ""
             log_dir = "{}".format(test_name)
 
-        # Write hostfile to HOME or DAOS_TEST_SHARED_DIR (can't be '.' or
-        # cwd(), it must be some place writable)
+        # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
+        # (It can't be '.' or cwd(), it must be some place writable.)
         daos_test_shared_dir = os.environ['HOME']
         if 'DAOS_TEST_SHARED_DIR' in os.environ:
             daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
