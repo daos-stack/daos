@@ -1097,8 +1097,8 @@ out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 	if (rc == 0)
 		rc = rc2;
 
@@ -1167,8 +1167,8 @@ out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 	if (rc == 0)
 		rc = rc2;
 

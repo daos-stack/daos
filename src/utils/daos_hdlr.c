@@ -193,8 +193,8 @@ out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 
 	if (rc == 0)
 		rc = rc2;
@@ -241,8 +241,8 @@ out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 
 	if (rc == 0)
 		rc = rc2;
@@ -287,8 +287,8 @@ out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 
 	if (rc == 0)
 		rc = rc2;
@@ -365,8 +365,8 @@ out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 
 	if (rc == 0)
 		rc = rc2;
@@ -442,8 +442,8 @@ out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 
 	if (rc == 0)
 		rc = rc2;
@@ -513,8 +513,8 @@ out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 
 	if (rc == 0)
 		rc = rc2;
@@ -589,8 +589,8 @@ out_disconnect:
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF": %s\n",
-			ap->p_uuid, d_errdesc(rc2));
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s\n", ap->p_uuid, d_errdesc(rc2));
 
 	if (rc == 0)
 		rc = rc2;
@@ -764,7 +764,7 @@ cont_set_attr_hdlr(struct cmd_args_s *ap)
 				(const size_t *)&value_size, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to set attribute %s for container "
-			DF_UUIDF": %s\n", &ap->attrname_str, ap->c_uuid,
+			DF_UUIDF": %s\n", ap->attrname_str, ap->c_uuid,
 			d_errdesc(rc));
 		D_GOTO(out, rc);
 	}
@@ -788,7 +788,7 @@ cont_del_attr_hdlr(struct cmd_args_s *ap)
 				(const char * const*)&ap->attrname_str, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to delete attribute %s for container "
-			DF_UUIDF": %s\n", &ap->attrname_str, ap->c_uuid,
+			DF_UUIDF": %s\n", ap->attrname_str, ap->c_uuid,
 			d_errdesc(rc));
 		D_GOTO(out, rc);
 	}
@@ -817,7 +817,7 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 				&attr_size, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to retrieve size of attribute %s for "
-			"container "DF_UUIDF": %s\n", &ap->attrname_str,
+			"container "DF_UUIDF": %s\n", ap->attrname_str,
 			ap->c_uuid, d_errdesc(rc));
 		D_GOTO(out, rc);
 	}
@@ -838,7 +838,7 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 				(void * const*)&buf, &attr_size, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to get attribute %s for container "
-			DF_UUIDF": %s\n", &ap->attrname_str, ap->c_uuid,
+			DF_UUIDF": %s\n", ap->attrname_str, ap->c_uuid,
 			d_errdesc(rc));
 		D_GOTO(out, rc);
 	}
@@ -1459,8 +1459,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 
 			rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
 			if (rc) {
-				fprintf(stderr, "failed to mount container: "
-					"%s\n" DF_UUIDF": %s\n", ap->c_uuid,
+				fprintf(stderr, "failed to mount container "
+					DF_UUIDF": %s\n", ap->c_uuid,
 					d_errdesc(rc));
 				D_GOTO(err_out, rc);
 			}
@@ -1472,8 +1472,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 
 			rc = dfs_umount(dfs);
 			if (rc) {
-				fprintf(stderr, "failed to unmount container: "
-					"%s\n" DF_UUIDF": %s\n", ap->c_uuid,
+				fprintf(stderr, "failed to unmount container "
+					DF_UUIDF": %s\n", ap->c_uuid,
 					d_errdesc(rc));
 				D_GOTO(err_out, rc);
 			}
@@ -1494,8 +1494,8 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	if (ap->path) {
 		rc = duns_destroy_path(ap->pool, ap->path);
 		if (rc)
-			fprintf(stderr, "failed to unlink container path %s:
-				%s\n", ap->path, strerror(rc));
+			fprintf(stderr, "failed to unlink container path %s:"
+				"%s\n", ap->path, strerror(rc));
 		else
 			fprintf(stdout, "Successfully destroyed path %s\n",
 				ap->path);
@@ -1887,8 +1887,8 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 	}
 	rc = daos_cont_rollback(ap->cont, ap->epc, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to roll back to snapshot %d for "
-			"container "DF_UUIDF": %s\n", ap->c_uuid, ap->epc,
+		fprintf(stderr, "failed to roll back container "DF_UUIDF
+			" to snapshot "DF_U64": %s\n", ap->c_uuid, ap->epc,
 			d_errdesc(rc));
 		return rc;
 	}
