@@ -152,7 +152,7 @@ class OSAOfflineParallelTest(TestWithServers):
             elif action == "drain":
                 dmg.pool_drain(puuid, rank)
             elif action == "reintegrate":
-                time.sleep(30)
+                time.sleep(60)
                 dmg.pool_reintegrate(puuid, (rank + 1), target)
             else:
                 self.fail("Invalid action for dmg thread")
@@ -162,7 +162,7 @@ class OSAOfflineParallelTest(TestWithServers):
             #    dmg.pool_extend(puuid, (rank + 2))
 
     def run_offline_parallel_test(self, num_pool, data=False):
-        """Run the offline reintegration without data.
+        """Run multiple OSA commands in parallel with or without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
             data (bool) : whether pool has no data or to create
@@ -244,11 +244,11 @@ class OSAOfflineParallelTest(TestWithServers):
                             "Pool Version Error:  at the end")
             pool[val].destroy()
 
-    def test_osa_offline_drain(self):
+    def test_osa_offline_parallel_test(self):
         """
-        JIRA ID: DAOS-4750
+        JIRA ID: DAOS-4752
 
-        Test Description: Validate Offline Drain
+        Test Description: Runs multiple OSA commands in parallel.
 
         :avocado: tags=all,pr,hw,large,osa,osa_parallel,offline_parallel
         """
