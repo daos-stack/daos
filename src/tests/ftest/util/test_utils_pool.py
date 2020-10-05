@@ -708,6 +708,6 @@ class TestPool(TestDaosApiBase):
         self.query_data = []
         if self.pool:
             if self.dmg:
-                self.query_data = self.dmg.pool_query(self.pool.uuid)
+                self.query_data = self.dmg.pool_query(self.pool.get_uuid_str())
             else:
                 self.log.error("Error: Undefined dmg command")
