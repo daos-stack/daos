@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -163,6 +163,7 @@ CRT_RPC_DEFINE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST,
 		DAOS_OSEQ_POOL_ATTR_LIST)
 CRT_RPC_DEFINE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DEFINE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
+CRT_RPC_DEFINE(pool_attr_del, DAOS_ISEQ_POOL_ATTR_DEL, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DEFINE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
 CRT_RPC_DEFINE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,

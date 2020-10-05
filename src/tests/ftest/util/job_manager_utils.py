@@ -183,6 +183,7 @@ class Orterun(JobManager):
             "btl": "tcp,self",
             "oob": "tcp",
             "pml": "ob1",
+            "btl_tcp_if_include": "eth0",
         }
 
         self.hostfile = FormattedParameter("--hostfile {}", None)
@@ -290,6 +291,7 @@ class Mpirun(JobManager):
                 "btl": "tcp,self",
                 "oob": "tcp",
                 "pml": "ob1",
+                "btl_tcp_if_include": "eth0",
             }
 
         self.hostfile = FormattedParameter("-hostfile {}", None)
@@ -298,10 +300,7 @@ class Mpirun(JobManager):
         self.envlist = FormattedParameter("-envlist {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
-
         self.mpitype = mpitype
-        self.working_dir = FormattedParameter("-wdir {}", None)
-        self.mca = FormattedParameter("--mca {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).

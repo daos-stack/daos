@@ -53,6 +53,7 @@ pool_reserved:
     control_method: dmg
 container:
     type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 container_reserved:
     akey_size: 5
@@ -62,6 +63,9 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: API
 faults:
     fault_list:
     #    - DAOS_DTX_LOST_RPC_REQUEST
@@ -127,5 +131,6 @@ ior_faults:
     segment_count: 1
     dfs_oclass:
         - 'SX'
+    dfs_destroy: True
 
 

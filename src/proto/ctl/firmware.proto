@@ -30,6 +30,9 @@ import "storage_nvme.proto";
 message FirmwareQueryReq {
 	bool queryScm = 1; // Should we query SCM devices?
 	bool queryNvme = 2; // Should we query NVMe devices?
+	repeated string deviceIDs = 3; // Filter by specific devices
+	string modelID = 4; // Filter by model ID
+	string firmwareRev = 5; // Filter by current firmware revision
 }
 
 message ScmFirmwareQueryResp {
@@ -57,6 +60,9 @@ message FirmwareUpdateReq {
 		NVMe = 1;
 	}
 	DeviceType type = 2; // Type of device this firmware applies to
+	repeated string deviceIDs = 3; // Devices this update applies to
+	string modelID = 4; // Model ID this update applies to
+	string firmwareRev = 5; // Starting FW rev this update applies to
 }
 
 message ScmFirmwareUpdateResp {

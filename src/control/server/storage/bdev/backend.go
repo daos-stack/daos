@@ -26,7 +26,6 @@ package bdev
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"sort"
@@ -35,7 +34,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -45,9 +43,7 @@ type (
 	spdkWrapper struct {
 		spdk.Env
 		spdk.Nvme
-		controllers []spdk.Controller
 
-		initialized bool
 		vmdDisabled bool
 	}
 
@@ -94,44 +90,19 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (err error) {
-	if w.initialized {
-		return nil
-	}
-
+func (w *spdkWrapper) init(log logging.Logger, spdkOpts spdk.EnvOptions) (func(), error) {
 	restore, err := w.suppressOutput()
 	if err != nil {
-		return errors.Wrap(err, "failed to suppress spdk output")
+		return nil, errors.Wrap(err, "failed to suppress spdk output")
 	}
-	defer restore()
 
 	// provide empty whitelist on init so all devices are discovered
 	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
-		return errors.Wrap(err, "failed to init spdk env")
+		restore()
+		return nil, errors.Wrap(err, "failed to init spdk env")
 	}
 
-	cs, err := w.Discover(log)
-	if err != nil {
-		return errors.Wrap(err, "failed to discover nvme")
-	}
-	w.controllers = cs
-	w.initialized = true
-	// TODO: w.FiniSPDKEnv(log, spdkOpts)
-
-	return nil
-}
-
-func convert(in interface{}, out interface{}) error {
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, out)
-}
-
-func convertController(in spdk.Controller, out *storage.NvmeController) error {
-	return convert(in, out)
+	return restore, nil
 }
 
 func newBackend(log logging.Logger, sr *spdkSetupScript) *spdkBackend {
@@ -156,72 +127,22 @@ func (b *spdkBackend) IsVMDDisabled() bool {
 	return b.binding.vmdDisabled
 }
 
-func convertControllers(bcs []spdk.Controller, pciFilter ...string) ([]*storage.NvmeController, error) {
-	scs := make([]*storage.NvmeController, 0, len(bcs))
-
-	for _, bc := range bcs {
-		if len(pciFilter) > 0 && !common.Includes(pciFilter, bc.PCIAddr) {
-			continue
-		}
-
-		sc := &storage.NvmeController{}
-		if err := convertController(bc, sc); err != nil {
-			return nil, errors.Wrapf(err,
-				"failed to convert spdk controller %+v", bc)
-		}
-
-		scs = append(scs, sc)
-	}
-
-	return scs, nil
-}
-
 // Scan discovers NVMe controllers accessible by SPDK.
 func (b *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
-	spdkOpts := spdk.EnvOptions{
+	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
 		DisableVMD: b.IsVMDDisabled(),
-	}
-
-	if err := b.binding.init(b.log, spdkOpts); err != nil {
-		return nil, err
-	}
-
-	cs, err := convertControllers(b.binding.controllers, req.DeviceList...)
+	})
 	if err != nil {
 		return nil, err
 	}
+	defer restoreOutput()
 
-	return &ScanResponse{
-		Controllers: cs,
-	}, nil
-}
-
-func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeController, error) {
-	if pciAddr == "" {
-		return nil, FaultBadPCIAddr("")
-	}
-
-	var spdkController *spdk.Controller
-	for _, bc := range bcs {
-		if bc.PCIAddr == pciAddr {
-			spdkController = &bc
-			break
-		}
-	}
-
-	if spdkController == nil {
-		return nil, FaultPCIAddrNotFound(pciAddr)
-	}
-
-	scs, err := convertControllers([]spdk.Controller{*spdkController})
+	cs, err := b.binding.Discover(b.log)
 	if err != nil {
-		return nil, err
-	}
-	if len(scs) != 1 {
-		return nil, errors.Errorf("unable to resolve %s in convertControllers", pciAddr)
+		return nil, errors.Wrap(err, "failed to discover nvme")
 	}
 
-	return scs[0], nil
+	return &ScanResponse{Controllers: cs}, nil
 }
 
 func (b *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*FormatResponse, error) {
@@ -331,10 +252,11 @@ func (b *spdkBackend) Format(req FormatRequest) (*FormatResponse, error) {
 		DisableVMD:   b.IsVMDDisabled(),
 	}
 
-	// provide bdev as whitelist so only formatting devices are bound
-	if err := b.binding.InitSPDKEnv(b.log, spdkOpts); err != nil {
-		return nil, errors.Wrap(err, "failed to init spdk env")
+	restoreOutput, err := b.binding.init(b.log, spdkOpts)
+	if err != nil {
+		return nil, err
 	}
+	defer restoreOutput()
 	defer b.binding.FiniSPDKEnv(b.log, spdkOpts)
 	defer b.binding.CleanLockfiles(b.log, req.DeviceList...)
 
@@ -426,17 +348,33 @@ func (b *spdkBackend) PrepareReset() error {
 }
 
 func (b *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
-	spdkOpts := spdk.EnvOptions{
+	if pciAddr == "" {
+		return FaultBadPCIAddr("")
+	}
+
+	restoreOutput, err := b.binding.init(b.log, spdk.EnvOptions{
 		DisableVMD: b.IsVMDDisabled(),
-	}
-
-	if err := b.binding.init(b.log, spdkOpts); err != nil {
-		return err
-	}
-
-	_, err := getController(pciAddr, b.binding.controllers)
+	})
 	if err != nil {
 		return err
+	}
+	defer restoreOutput()
+
+	cs, err := b.binding.Discover(b.log)
+	if err != nil {
+		return errors.Wrap(err, "failed to discover nvme")
+	}
+
+	var found bool
+	for _, c := range cs {
+		if c.PciAddr == pciAddr {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return FaultPCIAddrNotFound(pciAddr)
 	}
 
 	if err := b.binding.Update(b.log, pciAddr, path, slot); err != nil {

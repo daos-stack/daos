@@ -63,6 +63,7 @@ pool_reserved:
     control_method: dmg
 container:
     type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 container_reserved:
     akey_size: 5
@@ -72,6 +73,9 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: API
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -113,6 +117,8 @@ ior_stress:
     api:
         - DFS
         - MPIIO
+        - HDF5
+        - HDF5-VOL
     test_file: daos:testFile
     flags: -v -w -W -r -R
     block_size:
@@ -128,6 +134,7 @@ ior_stress:
         - '64k'
     dfs_oclass:
         - "SX"
+    dfs_destroy: True
 fio_stress:
   names:
     - global
@@ -153,5 +160,7 @@ fio_stress:
         - 'rw'
         - 'randrw'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
-
+    mount_dir: "/tmp/daos_dfuse"
+    disable_direct_io: True
+hdf5_vol:
+    plugin_path: "/usr/lib64/mpich/lib"

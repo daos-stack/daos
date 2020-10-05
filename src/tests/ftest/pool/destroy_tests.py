@@ -27,7 +27,6 @@ from server_utils import ServerFailed
 from apricot import TestWithServers, skipForTicket
 from avocado.core.exceptions import TestFail
 from test_utils_base import CallbackHandler
-from pydaos.raw import DaosApiError
 import ctypes
 
 
@@ -39,6 +38,7 @@ class DestroyTests(TestWithServers):
 
     def setUp(self):
         """Set up for destroy."""
+
         self.setup_start_servers = False
         super(DestroyTests, self).setUp()
 
@@ -239,6 +239,7 @@ class DestroyTests(TestWithServers):
             "Restoring the pool's valid uuid: %s", str(valid_uuid.value))
         self.pool.pool.uuid = valid_uuid
 
+    @skipForTicket("DAOS-5545")
     def test_destroy_invalid_group(self):
         """Test destroying a valid pool but use the wrong server group.
 
@@ -341,12 +342,12 @@ class DestroyTests(TestWithServers):
         self.assertTrue(
             self.pool.connect(), "Pool connect failed before destroy")
 
-        # Destroy pool with direct API call (no disconnect)
+        # Destroy pool with force unset
         self.log.info("Attempting to destroy a connected pool")
         exception_detected = False
         try:
-            self.pool.pool.destroy(0)
-        except DaosApiError as result:
+            self.pool.destroy(force=0, disconnect=0)
+        except TestFail as result:
             exception_detected = True
             self.log.info(
                 "Expected exception - destroying connected pool: %s",
@@ -391,13 +392,13 @@ class DestroyTests(TestWithServers):
         self.assertTrue(
             self.pool.connect(), "Pool connect failed before destroy")
 
-        # Destroy pool with direct API call (no disconnect)
+        # Destroy pool with force set
         self.log.info("Attempting to forcibly destroy a connected pool")
         exception_detected = False
         try:
-            self.pool.pool.destroy(1)
+            self.pool.destroy(force=1, disconnect=0)
 
-        except DaosApiError as result:
+        except TestFail as result:
             exception_detected = True
             self.log.info(
                 "Unexpected exception - destroying connected pool: %s",
@@ -440,8 +441,8 @@ class DestroyTests(TestWithServers):
         self.log.info("Attempting to destroy a connected pool with data")
         exception_detected = False
         try:
-            self.pool.pool.destroy(0)
-        except DaosApiError as result:
+            self.pool.destroy(force=0, disconnect=0)
+        except TestFail as result:
             exception_detected = True
             self.log.info(
                 "Expected exception - destroying connected pool with data: %s",

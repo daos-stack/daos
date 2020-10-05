@@ -5,31 +5,6 @@ from prereq_tools import GitRepoRetriever
 def define_checksum_timing(build, env, prereqs):
     """Define the Checksum Timing build"""
     checksum_timing_libs = ['daos_common', 'gurt']
-    AddOption('--mchecksum',
-              dest='mchecksum',
-              action='store_true',
-              default=False,
-              help='Include mchecksum library')
-    if GetOption("mchecksum"):
-        prereqs.define('mchecksum',
-                       retriever=GitRepoRetriever("https://github.com/"
-                                                  "mercury-hpc/"
-                                                  "mchecksum.git"),
-                       commands=['cmake -DBUILD_SHARED_LIBS=ON $MCHECKSUM_SRC '
-                                 '-DBUILD_TESTING=ON '
-                                 '-DCMAKE_INSTALL_PREFIX=$MCHECKSUM_PREFIX '
-                                 '-DMCHECKSUM_ENABLE_COVERAGE=OFF '
-                                 '-DMCHECKSUM_ENABLE_VERBOSE_ERROR=ON '
-                                 '-DMCHECKSUM_USE_ZLIB=OFF '
-                                 '-DCMAKE_INSTALL_RPATH=$MCHECKSUM_PREFIX/lib '
-                                 '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ',
-                                 'make $JOBS_OPT', 'make install'],
-                       libs=['mchecksum'],
-                       out_of_src_build=True)
-        prereqs.require(env, 'mchecksum')
-        env.Append(CCFLAGS=['-DMCHECKSUM_SUPPORT=1'])
-        checksum_timing_libs += ['mchecksum']
-
     build.test(env, 'checksum_timing', 'checksum_timing.c',
                LIBS=checksum_timing_libs)
 
