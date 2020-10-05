@@ -84,7 +84,4 @@ gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
 enabled=0
 EOF
-
-    # now make sure everything is fully up-to-date
-    time yum -y upgrade --exclude fuse,mercury,daos,daos-\*
 }
