@@ -69,10 +69,11 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 17
       args: -s3 -u subtests="17"
-    test_r_18:
-      daos_test: r
-      test_name: rebuild tests 18
-      args: -s3 -u subtests="18"
+    # Moved to weekly. DAOS-5717
+    # test_r_18:
+    #   daos_test: r
+    #   test_name: rebuild tests 18
+    #   args: -s3 -u subtests="18"
     test_r_19:
       daos_test: r
       test_name: rebuild tests 19
@@ -85,18 +86,19 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 21
       args: -s3 -u subtests="21"
-    test_r_22:
-      daos_test: r
-      test_name: rebuild tests 22
-      args: -s3 -u subtests="22"
-    test_r_23:
-      daos_test: r
-      test_name: rebuild tests 23
-      args: -s3 -u subtests="23"
-    test_r_24:
-      daos_test: r
-      test_name: rebuild tests 24
-      args: -s3 -u subtests="24"
+    # Moved to weekly. DAOS-5717
+    # test_r_22:
+    #   daos_test: r
+    #   test_name: rebuild tests 22
+    #   args: -s3 -u subtests="22"
+    # test_r_23:
+    #   daos_test: r
+    #   test_name: rebuild tests 23
+    #   args: -s3 -u subtests="23"
+    # test_r_24:
+    #   daos_test: r
+    #   test_name: rebuild tests 24
+    #   args: -s3 -u subtests="24"
     test_r_25:
       daos_test: r
       test_name: rebuild tests 25
