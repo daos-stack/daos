@@ -132,10 +132,11 @@ class SnapshotAggregation(IorTestBase):
         sleep_time = 20
         loop_count = 0
         while not space_reclaimed and not time_exceeded:
-            self.log.info(
-                "Waiting for %s seconds for aggregation to finish", sleep_time)
-            time.sleep(sleep_time)
             loop_count += 1
+            self.log.info(
+                "Waiting for %s seconds for aggregation to finish - loop %s",
+                sleep_time, loop_count)
+            time.sleep(sleep_time)
 
             # Update the utilized capacity of the pool
             self.pool.get_info()
@@ -143,15 +144,13 @@ class SnapshotAggregation(IorTestBase):
             self.update_free_space()
             self.log.info(
                 "Pool free space %s seconds after deleting the snapshot:"
-                "\n  SCM:  %s\n  NVMe: %s", time_exceeded * loop_count,
+                "\n  SCM:  %s\n  NVMe: %s", sleep_time * loop_count,
                 self.free_space["scm"][-1], self.free_space["nvme"][-1])
 
-            # Determine if the utilized capacity of the pool has been reduced
-            # back to the capacity after the first ior write
-            space_reclaimed = all([
-                self.free_space[name][1]["api"] ==
-                self.free_space[name][-1]["api"]
-                for name in self.free_space])
+            # Determine if the utilized NVMEe capacity of the pool has been
+            # reduced back to the capacity after the first ior write
+            space_reclaimed = self.free_space["nvme"][1]["api"] == \
+                self.free_space["nvme"][-1]["api"]
 
             # Determine if the time has exceeded
             time_exceeded = sleep_time * loop_count > 140
