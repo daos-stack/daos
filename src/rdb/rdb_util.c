@@ -556,3 +556,29 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 
 	return vos_aggregate(cont, &epr, NULL, NULL, NULL);
 }
+
+/* Return amount of vos pool SCM memory available accounting for
+ * VOS PMDK allocation state and VOS "system reserved" memory.
+ * TODO: decide if we should also account for VOS in-flight "held" memory.
+ */
+int
+rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp)
+{
+	struct vos_pool_space	vps;
+	int rc;
+
+	rc = vos_pool_query_space(db->d_uuid, &vps);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to query vos pool space: "DF_RC"\n",
+			DP_UUID(db->d_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	if (SCM_FREE(&vps) > SCM_SYS(&vps))
+		*scm_left_outp = SCM_FREE(&vps) - SCM_SYS(&vps);
+	else
+		*scm_left_outp = 0;
+
+	return 0;
+}
+
