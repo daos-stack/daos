@@ -42,19 +42,14 @@ boolean release_candidate() {
 
 String faults_enabled(String type) {
     // if the fault_enabled pragma is false or it a release candidate; disable fault injection
-    // scons: BUILD_TYPE = (dev|release|debug)  rpms BUILD_OPTION = (--with=fault-injection|"")
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
-        if (type == "scons") {
-            return "release"
-        }
         return ""
-    }
-    // if fault enabled or not release candidate; enable fault injection
-    if (type == "scons") {
-        return "dev"
     }
     if (type == "rpm") {
         return "--with=fault-injection"
+    }
+    if (type == "scons") {
+        return "--with-fault-injection"
     }
     error("Unexpected value passed to faults_enabled(): " + type)
 }
@@ -366,7 +361,6 @@ pipeline {
                                     returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         BUILD_OPTION = faults_enabled('rpm')
-        BUILD_TYPE = faults_enabled('scons')
     }
 
     options {
@@ -588,7 +582,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
@@ -636,7 +631,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
@@ -681,7 +677,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
@@ -770,7 +767,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
@@ -812,7 +810,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
@@ -856,7 +855,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
@@ -895,7 +895,8 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
@@ -937,7 +938,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
@@ -982,7 +984,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallel_build()
+                        sconsBuild parallel_build: parallel_build(),
+                                   scons_args: fault_enabled('scons')
                     }
                     post {
                         always {
