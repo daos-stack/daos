@@ -49,12 +49,12 @@ class IorFailOnWarning(IorTestBase):
         :avocado: tags=all,full_regression,hw,small,daosio,iorfailonwarning
         """
         try:
-            # IOR command should fail if 'WARNING' found.
+            # IOR command should fail if 'WARNING' found
             _ = self.run_ior_with_pool(fail_on_warning=True)
         except TestFail as exc:
             self.log.info(exc)
             self.log.info(traceback.format_exc())
             self.log.info("==> Test expected to Fail. Test PASSED")
 
-        # IOR command should succeed, even when 'WARNING' found.
+        # IOR command should succeed, even when 'WARNING' found
         _ = self.run_ior_with_pool()
