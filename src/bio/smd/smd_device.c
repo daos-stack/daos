@@ -339,3 +339,118 @@ out:
 
 	return rc;
 }
+
+int
+smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
+{
+	struct smd_dev_entry	 entry = { 0 };
+	d_iov_t			 key, val;
+	struct d_uuid		 key_dev;
+	struct smd_pool_info	*pool_info;
+	int			 i, tgt_id, rc;
+
+	D_ASSERT(uuid_compare(old_id, new_id) != 0);
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_tgt_hdl));
+
+	uuid_copy(key_dev.uuid, new_id);
+	smd_lock(&smd_store);
+
+	/* Fetch new device */
+	d_iov_set(&key, &key_dev, sizeof(key_dev));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_dev_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc == 0) {
+		D_ERROR("New dev "DF_UUID" is inuse\n",
+			DP_UUID(&key_dev.uuid));
+		rc = -DER_INVAL;
+		goto out;
+	} else if (rc != -DER_NONEXIST) {
+		D_ERROR("Fetch new dev "DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(&key_dev.uuid), DP_RC(rc));
+		goto out;
+	}
+
+	/* Fetch old device */
+	uuid_copy(key_dev.uuid, old_id);
+	rc = dbtree_fetch(smd_store.ss_dev_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc) {
+		D_ERROR("Fetch dev "DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(&key_dev.uuid), DP_RC(rc));
+		goto out;
+	}
+
+	/* Sanity check to old device */
+	if (entry.sde_state != SMD_DEV_FAULTY) {
+		D_ERROR("Dev "DF_UUID" isn't in faulty\n",
+			DP_UUID(&key_dev.uuid));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (entry.sde_tgt_cnt >= SMD_MAX_TGT_CNT || entry.sde_tgt_cnt == 0) {
+		D_ERROR("Invalid targets (%d) for dev "DF_UUID"\n",
+			entry.sde_tgt_cnt, DP_UUID(&key_dev.uuid));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/* Update device, target and pool tables in one transaction */
+	rc = smd_tx_begin(&smd_store);
+	if (rc)
+		goto out;
+
+	/* Delete old device in device table */
+	rc = dbtree_delete(smd_store.ss_dev_hdl, BTR_PROBE_EQ, &key, NULL);
+	if (rc) {
+		D_ERROR("Failed to delete old dev "DF_UUID". "DF_RC"\n",
+			DP_UUID(&key_dev.uuid), DP_RC(rc));
+		goto tx_end;
+	}
+
+	/* Insert new device in device table */
+	uuid_copy(key_dev.uuid, new_id);
+	entry.sde_state = SMD_DEV_NORMAL;
+	rc = dbtree_update(smd_store.ss_dev_hdl, &key, &val);
+	if (rc) {
+		D_ERROR("Failed to insert new dev "DF_UUID". "DF_RC"\n",
+			DP_UUID(&key_dev.uuid), DP_RC(rc));
+		goto tx_end;
+	}
+
+	/* Replace old device ID with new device ID in target table */
+	d_iov_set(&key, &tgt_id, sizeof(tgt_id));
+	d_iov_set(&val, &key_dev, sizeof(key_dev));
+	for (i = 0; i < entry.sde_tgt_cnt; i++) {
+		tgt_id = entry.sde_tgts[i];
+
+		rc = dbtree_update(smd_store.ss_tgt_hdl, &key, &val);
+		if (rc) {
+			D_ERROR("Update target %d failed. "DF_RC"\n",
+				tgt_id, DP_RC(rc));
+			goto tx_end;
+		}
+	}
+
+	if (pool_list == NULL)
+		goto tx_end;
+
+	/* Replace old blob IDs with new blob IDs in pool map */
+	d_list_for_each_entry(pool_info, pool_list, spi_link) {
+		rc = smd_replace_blobs(pool_info, entry.sde_tgt_cnt,
+				       &entry.sde_tgts[0]);
+		if (rc) {
+			D_ERROR("Update pool "DF_UUID" failed. "DF_RC"\n",
+				DP_UUID(pool_info->spi_id), DP_RC(rc));
+			goto tx_end;
+		}
+	}
+
+tx_end:
+	rc = smd_tx_end(&smd_store, rc);
+out:
+	smd_unlock(&smd_store);
+	return rc;
+}

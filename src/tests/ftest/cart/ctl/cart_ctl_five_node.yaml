@@ -1,0 +1,46 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
+  #!filter-only : /run/tests/ctl
+  D_LOG_MASK: "DEBUG,MEM=ERR"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  test_servers_CRT_CTX_NUM: "0"
+  test_clients_1_CRT_CTX_NUM: "0"
+  test_clients_2_CRT_CTX_NUM: "0"
+env_CRT_CTX_SHARE_ADDR: !mux
+  no_sep:
+    env: no_sep
+    CRT_CTX_SHARE_ADDR: "0"
+hosts: !mux
+  hosts_1:
+    config: five_node
+    test_servers:
+      - boro-A
+      - boro-B
+      - boro-C
+      - boro-D
+      - boro-E
+    test_clients_1:
+      - boro-A
+    test_clients_2:
+      - boro-A
+tests: !mux
+  ctl:
+    name: ctl_basic
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+
+    test_clients_1_bin: cart_ctl
+    test_clients_1_arg: "get_uri_cache --group-name server_grp --rank 0,2-3,4"
+    test_clients_1_env: ""
+    test_clients_1_ppn: "1"
+
+    test_clients_2_bin: cart_ctl
+    test_clients_2_arg: "list_ctx --group-name server_grp --rank 0,2-3,4"
+    test_clients_2_env: ""
+    test_clients_2_ppn: "1"

@@ -1,0 +1,156 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
+  #!filter-only : /run/tests/rpc_error
+  D_LOG_MASK: "DEBUG,MEM=ERR"
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  test_servers_CRT_CTX_NUM: "16"
+  test_clients_CRT_CTX_NUM: "16"
+env_CRT_CTX_SHARE_ADDR: !mux
+  sep:
+    env: sep
+    CRT_CTX_SHARE_ADDR: "1"
+  no_sep:
+    env: no_sep
+    CRT_CTX_SHARE_ADDR: "0"
+hosts: !mux
+  hosts_1:
+    config: two_node
+    test_servers:
+      - boro-A
+    test_clients:
+      - boro-B
+tests: !mux
+  proto_np_1:
+    name: proto_np_1
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_proto_server -p 4 --name proto_srv_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_proto_client
+    test_clients_arg: "-p 4 --name proto_cli_grp --attach_to proto_srv_grp"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  proto_np_2:
+    name: proto_np_2
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_proto_server -p 4 --name proto_srv_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_proto_client
+    test_clients_arg: "-p 2 --name proto_cli_grp --attach_to proto_srv_grp"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  proto_np_3:
+    name: proto_np_3
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_proto_server -p 3 --name proto_srv_grp"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_proto_client
+    test_clients_arg: "-p 4 --name proto_cli_grp --attach_to proto_srv_grp"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  test_group:
+    name: test_group_basic
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_group_np_srv --name tg_srv_grp"
+    test_servers_env: "-x D_FI_CONFIG=/usr/etc/fault-inject-cart.yaml"
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_group_np_cli
+    test_clients_arg: "--name client_group --attach_to tg_srv_grp"
+    test_clients_env: "-x D_FI_CONFIG=/usr/etc/fault-inject-cart.yaml"
+    test_clients_ppn: "1"
+  ep_credits_1:
+    name: ep_credits_1
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_ep_cred_server -n epc1_srv_grp -s"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_ep_cred_client
+    test_clients_arg: "-a epc1_srv_grp -c 1 -b 20 -f -q"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  ep_credits_2:
+    name: ep_credits_2
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_ep_cred_client
+    test_clients_arg: "-a cred_group -c 5 -b 20 -q"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  ep_credits_3:
+    name: ep_credits_3
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_ep_cred_client
+    test_clients_arg: "-a cred_group -c 10 -b 20 -q"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  ep_credits_4:
+    name: ep_credits_4
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_ep_cred_client
+    test_clients_arg: "-a cred_group -c 20 -b 20 -q"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  ep_credits_5:
+    name: ep_credits_5
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_ep_cred_client
+    test_clients_arg: "-a cred_group -c 255 -b 20 -q"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  ep_credits_6:
+    name: ep_credits_6
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_ep_cred_server -n cred_group -s"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_ep_cred_client
+    test_clients_arg: "-a cred_group -c 0 -b 20 -q"
+    test_clients_env: ""
+    test_clients_ppn: "1"
+  no_timeout:
+    name: no_timeout_basic
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_group_np_srv --name timeout_srv_grp"
+    test_servers_env: "-x CRT_TIMEOUT=10"
+    test_servers_ppn: "1"
+    test_clients_bin: ../tests/test_no_timeout
+    test_clients_arg: " --name client_group --attach_to timeout_srv_grp"
+    test_clients_env: "-x CRT_TIMEOUT=10"
+    test_clients_ppn: "1"
+#  threaded:
+#    name: threaded_basic
+#    test_servers_bin: ../tests/threaded_server
+#    test_servers_arg: ""
+#    test_servers_env: ""
+#    test_servers_ppn: "1"
+#    test_clients_bin: ../tests/threaded_client
+#    test_clients_arg: ""
+#    test_clients_env: ""
+#    test_clients_ppn: "1"
+#  rpc_error:
+#    name: rpc_error_basic
+#    test_servers_bin: ../tests/test_rpc_error
+#    test_servers_arg: "--name service_group --is_service"
+#    test_servers_env: ""
+#    test_servers_ppn: "1"
+#    test_clients_bin: ../tests/test_rpc_error
+#    test_clients_arg: "--name client_group --attach_to service_group"
+#    test_clients_env: ""
+#    test_clients_ppn: "1"
