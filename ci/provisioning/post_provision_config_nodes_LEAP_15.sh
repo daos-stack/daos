@@ -67,4 +67,8 @@ post_provision_config_nodes() {
         done
         exit "$rc"
     fi
+
+    # now make sure everything is fully up-to-date
+    zypper addlock daos daos-\*
+    time zypper --non-interactive up
 }
