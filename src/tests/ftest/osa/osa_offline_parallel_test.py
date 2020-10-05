@@ -30,7 +30,6 @@ from avocado import fail_on
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 from command_utils import CommandFailure
-from dmg_utils import DmgCommand
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj, DaosApiError)
 try:
@@ -120,9 +119,9 @@ class OSAOfflineParallelTest(TestWithServers):
                           self.record_length)
                 c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
                 c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
-                val = self.ioreq.single_fetch(c_dkey,
-                                              c_akey,
-                                              len(indata)+1)
+                val = self.test_ioreq.single_fetch(c_dkey,
+                                                   c_akey,
+                                                   len(indata)+1)
                 if indata != (repr(val.value)[1:-1]):
                     self.d_log.error("ERROR:Data mismatch for "
                                      "dkey = {0}, "
