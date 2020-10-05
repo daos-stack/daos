@@ -37,7 +37,6 @@
 #define TEST_IV_BASE 0x010000000
 #define TEST_IV_VER  0
 
-
 /* Describes internal structure of a key */
 struct iv_key_struct {
 	d_rank_t	rank;
@@ -186,7 +185,6 @@ int prepare_rpc_request(crt_context_t crt_ctx, int rpc_id,
 
 	return rc;
 }
-
 
 int send_rpc_request(crt_context_t crt_ctx, crt_rpc_t *rpc_req, void **output)
 {
