@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ test_dc_agent_init_no_env(void **state)
 static void
 test_dc_agent_init_with_env(void **state)
 {
-	char *expected_sockaddr = "/nice/good/agent.sock";
+	char *expected_sockaddr = "/nice/good/daos_agent.sock";
 
 	getenv_return = "/nice/good";
 

@@ -168,6 +168,29 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	dev_health->bdh_inflights--;
 }
 
+static int
+populate_health_cdata(struct nvme_health_stats *dev_state,
+		      const struct spdk_nvme_ctrlr_data *cdata)
+{
+	int	written, rc = 0;
+
+	written = snprintf(dev_state->model, sizeof(dev_state->model),
+			   "%-20.20s", cdata->mn);
+	if (written >= sizeof(dev_state->model)) {
+		D_WARN("data truncated when writing model to health state");
+		rc = -DER_TRUNC;
+	}
+
+	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
+			   "%-20.20s", cdata->sn);
+	if (written >= sizeof(dev_state->serial)) {
+		D_WARN("data truncated when writing model to health state");
+		rc = -DER_TRUNC;
+	}
+
+	return rc;
+}
+
 static void
 get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 				   void *cb_arg)
@@ -196,7 +219,14 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	D_ASSERT(bdev != NULL);
+
+	/* Store ctrlr details in in-memory health state log. */
 	cdata = dev_health->bdh_ctrlr_buf;
+	rc = populate_health_cdata(&dev_health->bdh_health_state, cdata);
+	if (rc != 0) {
+		D_ERROR("failed to populate device details in health state");
+		goto out;
+	}
 
 	/* Prep NVMe command to get device error log pages */
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
@@ -237,13 +267,11 @@ out:
 	spdk_bdev_free_io(bdev_io);
 }
 
-static int
-populate_dev_health(struct nvme_health_stats *dev_state,
-		    struct spdk_nvme_health_information_page *page,
-		    const struct spdk_nvme_ctrlr_data *cdata)
+static void
+populate_health_stats(struct nvme_health_stats *dev_state,
+		      struct spdk_nvme_health_information_page *page)
 {
 	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
-	int					written;
 
 	dev_state->warn_temp_time = page->warning_temp_time;
 	dev_state->crit_temp_time = page->critical_temp_time;
@@ -261,35 +289,18 @@ populate_dev_health(struct nvme_health_stats *dev_state,
 	dev_state->read_only_warn = cw.bits.read_only ? true : false;
 	dev_state->volatile_mem_warn = cw.bits.volatile_memory_backup ?
 		true : false;
-
-	written = snprintf(dev_state->model, sizeof(dev_state->model),
-			   "%-20.20s", cdata->mn);
-	if (written >= sizeof(dev_state->model)) {
-		D_ERROR("writing model to dev_state");
-		return -DER_TRUNC;
-	}
-
-	written = snprintf(dev_state->serial, sizeof(dev_state->serial),
-			   "%-20.20s", cdata->sn);
-	if (written >= sizeof(dev_state->serial)) {
-		D_ERROR("writing serial to dev_state");
-		return -DER_TRUNC;
-	}
-
-	return 0;
 }
 
 static void
 get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
-	struct bio_dev_health			 *dev_health = cb_arg;
-	struct nvme_health_stats		 *dev_state;
-	struct spdk_bdev			 *bdev;
-	struct spdk_nvme_cmd			  cmd;
-	uint32_t				  cp_sz;
-	int					  rc, sc, sct;
-	uint32_t				  cdw0;
+	struct bio_dev_health	*dev_health = cb_arg;
+	struct spdk_bdev	*bdev;
+	struct spdk_nvme_cmd	 cmd;
+	uint32_t		 cp_sz;
+	int			 rc, sc, sct;
+	uint32_t		 cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -306,12 +317,9 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 
 	/* Store device health info in in-memory health state log. */
-	dev_state = &dev_health->bdh_health_state;
-	dev_state->timestamp = dev_health->bdh_stat_age;
-	rc = populate_dev_health(dev_state, dev_health->bdh_health_buf,
-				 dev_health->bdh_ctrlr_buf);
-	if (rc != 0)
-		goto out;
+	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
+	populate_health_stats(&dev_health->bdh_health_state,
+			      dev_health->bdh_health_buf);
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
@@ -343,8 +351,7 @@ out:
 static int
 auto_detect_faulty(struct bio_blobstore *bbs)
 {
-	if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
-	    bbs->bb_state != BIO_BS_STATE_SETUP)
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
 		return 0;
 	/*
 	 * TODO: Check the health data stored in @bbs, and mark the bbs as
@@ -424,28 +431,32 @@ void
 bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_dev_health	*dev_health;
+	struct bio_blobstore	*bbs;
 	int			 rc;
 	uint64_t		 monitor_period;
 
 	D_ASSERT(ctxt != NULL);
-	D_ASSERT(ctxt->bxc_blobstore != NULL);
-	dev_health = &ctxt->bxc_blobstore->bb_dev_health;
+	bbs = ctxt->bxc_blobstore;
 
-	if (dev_health->bdh_monitor_pd > 0)
-		monitor_period = dev_health->bdh_monitor_pd;
-	else
+	D_ASSERT(bbs != NULL);
+	dev_health = &bbs->bb_dev_health;
+
+	if (bbs->bb_state == BIO_BS_STATE_NORMAL ||
+	    bbs->bb_state == BIO_BS_STATE_OUT)
 		monitor_period = NVME_MONITOR_PERIOD;
+	else
+		monitor_period = NVME_MONITOR_SHORT_PERIOD;
 
 	if (dev_health->bdh_stat_age + monitor_period >= now)
 		return;
 	dev_health->bdh_stat_age = now;
 
-	rc = auto_detect_faulty(ctxt->bxc_blobstore);
+	rc = auto_detect_faulty(bbs);
 	if (rc)
 		D_ERROR("Auto faulty detect on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	rc = bio_bs_state_transit(ctxt->bxc_blobstore);
+	rc = bio_bs_state_transit(bbs);
 	if (rc)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
@@ -562,7 +573,6 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	}
 
 	bb->bb_dev_health.bdh_inflights = 0;
-	bb->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_PERIOD;
 
 	if (bb->bb_state == BIO_BS_STATE_OUT)
 		return 0;

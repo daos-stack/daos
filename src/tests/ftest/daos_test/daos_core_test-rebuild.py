@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
     """
 
     def test_rebuild(self):
-        """Jira ID: DAOS-2770.
+        """JIRA ID: DAOS-2770.
 
         Test Description:
             Purpose of this test is to run just the daos_test rebuild tests.
@@ -42,5 +42,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Balance testing load between hardware and VM clusters.
 
         :avocado: tags=all,pr,hw,medium,ib2,unittest,daos_test_rebuild
+        :avocado: tags=DAOS_5610
         """
         DaosCoreBase.run_subtest(self)

@@ -38,8 +38,10 @@ BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
 %if (0%{?suse_version} >= 1500)
 BuildRequires: libprotobuf-c-devel
+BuildRequires: liblz4-devel
 %else
 BuildRequires: protobuf-c-devel
+BuildRequires: lz4-devel
 %endif
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
@@ -93,7 +95,9 @@ BuildRequires: libpsm_infinipath1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
 %if (0%{?suse_version} >= 1500)
-Requires: libpmem1, libpmemobj1
+Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
+%else
+Requires: libpmem >= 1.8, libpmemobj >= 1.8
 %endif
 Requires: protobuf-c
 Requires: openssl
@@ -152,6 +156,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: python2-tabulate
 Requires: fio
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
@@ -361,7 +366,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
-%{_prefix}/lib/cart/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/smd_ut

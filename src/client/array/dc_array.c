@@ -2535,17 +2535,17 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		args->sgl->sg_nr = 1;
 		d_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
 
-		rc = tse_task_reinit(task);
-		if (rc) {
-			D_ERROR("FAILED to reinit task\n");
-			return rc;
-		}
-
 		rc = tse_task_register_cbs(task, NULL, NULL, 0,
 					   adjust_array_size_cb, &props,
 					   sizeof(props));
 		if (rc) {
 			tse_task_complete(task, rc);
+			return rc;
+		}
+
+		rc = tse_task_reinit(task);
+		if (rc) {
+			D_ERROR("FAILED to reinit task\n");
 			return rc;
 		}
 

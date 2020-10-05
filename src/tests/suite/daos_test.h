@@ -345,8 +345,9 @@ void daos_add_server(const uuid_t pool_uuid, const char *grp,
 		     const char *dmg_config, const d_rank_list_t *svc,
 		     d_rank_t rank);
 
-d_rank_t
-get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, bool parity);
+void
+get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
+			int parity, d_rank_t *ranks, int *ranks_num);
 
 d_rank_t
 get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
