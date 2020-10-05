@@ -147,7 +147,7 @@ class SnapshotAggregation(IorTestBase):
                 "\n  SCM:  %s\n  NVMe: %s", sleep_time * loop_count,
                 self.free_space["scm"][-1], self.free_space["nvme"][-1])
 
-            # Determine if the utilized NVMEe capacity of the pool has been
+            # Determine if the utilized NVMe capacity of the pool has been
             # reduced back to the capacity after the first ior write
             space_reclaimed = self.free_space["nvme"][1]["api"] == \
                 self.free_space["nvme"][-1]["api"]
