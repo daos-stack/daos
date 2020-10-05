@@ -900,6 +900,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
 	}
 	it_entry->ie_rsize	 = rbund.rb_rsize;
+	it_entry->ie_gsize	 = rbund.rb_gsize;
 	it_entry->ie_ver	 = rbund.rb_ver;
 	it_entry->ie_recx.rx_idx = 0;
 	it_entry->ie_recx.rx_nr  = 1;

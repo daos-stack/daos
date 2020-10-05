@@ -68,6 +68,30 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Scan NVMe health short",
+			"storage scan -n",
+			printRequest(t, &control.StorageScanReq{NvmeHealth: true}),
+			nil,
+		},
+		{
+			"Scan NVMe health long",
+			"storage scan --nvme-health",
+			printRequest(t, &control.StorageScanReq{NvmeHealth: true}),
+			nil,
+		},
+		{
+			"Scan NVMe meta data short",
+			"storage scan -m",
+			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
+			nil,
+		},
+		{
+			"Scan NVMe meta data long",
+			"storage scan --nvme-meta",
+			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
+			nil,
+		},
+		{
 			"Prepare without force",
 			"storage prepare",
 			"",

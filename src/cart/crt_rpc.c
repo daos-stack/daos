@@ -623,7 +623,6 @@ out:
 	if (rc != 0) {
 		crt_context_req_untrack(chained_rpc_priv);
 		crt_rpc_complete(chained_rpc_priv, rc);
-		RPC_DECREF(chained_rpc_priv);
 	}
 
 	/* Addref done in crt_issue_uri_lookup() */
@@ -1118,9 +1117,11 @@ out:
 			/* failure already reported through complete cb */
 			if (complete_cb != NULL)
 				rc = 0;
+		} else {
+			RPC_DECREF(rpc_priv);
 		}
-		RPC_DECREF(rpc_priv);
 	}
+
 	/* corresponds to RPC_ADDREF in this function */
 	RPC_DECREF(rpc_priv);
 	return rc;

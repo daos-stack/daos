@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       33%{?relval}%{?dist}
+Release:       34%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -38,8 +38,10 @@ BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
 %if (0%{?suse_version} >= 1500)
 BuildRequires: libprotobuf-c-devel
+BuildRequires: liblz4-devel
 %else
 BuildRequires: protobuf-c-devel
+BuildRequires: lz4-devel
 %endif
 BuildRequires: spdk-devel >= 20, spdk-devel < 21
 %if (0%{?rhel} >= 7)
@@ -93,7 +95,9 @@ BuildRequires: libpsm_infinipath1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
 %if (0%{?suse_version} >= 1500)
-Requires: libpmem1, libpmemobj1
+Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
+%else
+Requires: libpmem >= 1.8, libpmemobj >= 1.8
 %endif
 Requires: protobuf-c
 Requires: openssl
@@ -152,6 +156,7 @@ This is the package needed to run a DAOS client
 Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
+Requires: python2-tabulate
 Requires: mpich
 Requires: openmpi3
 Requires: ndctl
@@ -167,7 +172,7 @@ This is the package needed to run the DAOS test suite
 Summary: The DAOS test suite for external test suites
 Requires: %{name}-tests = %{version}-%{release}
 Requires: fio
-Requires: ior-hpc-cart-4-daos-0
+Requires: ior-hpc-daos-0
 Requires: romio-tests-cart-4-daos-0
 Requires: testmpio-cart-4-daos-0
 Requires: mpi4py-tests-cart-4-daos-0
@@ -295,7 +300,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs
 %dir %{conf_dir}/certs/clients
 %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
-%attr(0664,root,root) %{conf_dir}/daos_server.yml
+%attr(0644,root,root) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
@@ -383,7 +388,6 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
 %exclude %{_prefix}/lib/daos/TESTING/ftest/external
-%{_prefix}/lib/cart/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
@@ -409,9 +413,12 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Thu Sep 17 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.0-33
+* Thu Oct 5 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.0-34
 - Added daos-tests-external package for functional tests utilizing external
   test utilities
+
+* Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
+- Update OFI to v1.11.0
 
 * Mon Aug 17 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-32
 - Install completion script in /etc/bash_completion.d

@@ -1,6 +1,6 @@
-build/*/*/src/cart/test/utest/test_linkage,
-build/*/*/src/cart/test/utest/utest_hlc,
-build/*/*/src/cart/test/utest/utest_swim,
+build/*/*/src/tests/ftest/cart/utest/test_linkage,
+build/*/*/src/tests/ftest/cart/utest/utest_hlc,
+build/*/*/src/tests/ftest/cart/utest/utest_swim,
 build/*/*/src/gurt/tests/test_gurt,
 build/*/*/src/rdb/raft/src/tests_main,
 build/*/*/src/common/tests/btree_direct,
@@ -30,3 +30,4 @@ src/control/run_go_tests.sh,
 src/rdb/raft_tests/raft_tests.py,
 src/vos/tests/evt_ctl.sh
 src/control/lib/netdetect/netdetect.go
+src/include/**
