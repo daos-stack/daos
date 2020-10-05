@@ -261,7 +261,7 @@ if [ -n "${FILES_TO_PROCESS}" ]; then
     if [ -n "${files}" ] && [ "${files_rc}" -eq 0 ]; then
         echo "Files to process: ${files}"
     else
-        echo "Error getting files: ${FILES_TO_PROCESS}"
+        echo "Input to -f did not match any files: ${FILES_TO_PROCESS}"
         exit 1
     fi
 else
@@ -278,9 +278,11 @@ fi
 # Run cart_logtest.py on FILES_TO_PROCESS
 if [ "${CART_LOGTEST}" == "true" ]; then
     if [ -f "${CART_LOGTEST_PATH}" ]; then
-        ret=$(get_cartlogtest_files "${FILES_TO_PROCESS}")
-        # shellcheck disable=SC2004
-        rc=$((${rc} | ${ret}))
+        get_cartlogtest_files "${FILES_TO_PROCESS}"
+        ret=$?
+        if [ ${ret} -ne 0 ]; then
+            rc=1
+        fi
     else
         echo "${CART_LOGTEST_PATH} does not exist!"
         rc=1
@@ -298,16 +300,20 @@ if check_hw; then
 fi
 
 if [ "${COMPRESS}" == "true" ]; then
-    ret=$(compress_files "${FILES_TO_PROCESS}" 2>&1)
-    # shellcheck disable=SC2004
-    rc=$((${rc} | ${ret}))
+    compress_files "${FILES_TO_PROCESS}" 2>&1
+    ret=$?
+    if [ ${ret} -ne 0 ]; then
+        rc=1
+    fi
 fi
 
 # Scp files specified in FILES_TO_PROCESS to ARCHIVE_DEST
 if [ -n "${ARCHIVE_DEST}" ]; then
-    ret=$(scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}")
-    # shellcheck disable=SC2004
-    rc=$((${rc} | ${ret}))
+    scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"
+    ret=$?
+    if [ ${ret} -ne 0 ]; then
+        rc=1
+    fi
 fi
 
 exit ${rc}
