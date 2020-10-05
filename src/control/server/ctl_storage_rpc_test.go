@@ -157,7 +157,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
 					State: &ResponseState{
-						Error:  "NvmeScan(): spdk scan failed",
+						Error:  "spdk scan failed",
 						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
@@ -183,7 +183,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 				Scm: &ScanScmResp{
 					State: &ResponseState{
-						Error:  "ScmScan(): scm discover failed",
+						Error:  "scm discover failed",
 						Status: ResponseStatus_CTL_ERR_SCM,
 					},
 				},
@@ -199,13 +199,13 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
 					State: &ResponseState{
-						Error:  "NvmeScan(): spdk scan failed",
+						Error:  "spdk scan failed",
 						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
 				Scm: &ScanScmResp{
 					State: &ResponseState{
-						Error:  "ScmScan(): scm discover failed",
+						Error:  "scm discover failed",
 						Status: ResponseStatus_CTL_ERR_SCM,
 					},
 				},
@@ -1102,7 +1102,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						State: &ResponseState{
 							Status: ResponseStatus_CTL_ERR_SCM,
 							Error:  "instance 0: can't format storage of running instance",
-							Info:   fault.ShowResolutionFor(errors.New("")),
 						},
 					},
 				},
