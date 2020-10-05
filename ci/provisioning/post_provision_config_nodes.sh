@@ -29,4 +29,3 @@ systemctl enable nfs-server.service
 systemctl start nfs-server.service
 sync
 sync
-exit 0

@@ -27,5 +27,17 @@ clush -B -S -l root -w "$NODESTRING" \
     DAOS_STACK_LOCAL_REPO=\"${!DSL_REPO_var}\"
     DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var}\"
     DISTRO=\"$DISTRO\"
+    rpm -qa | grep libfabric || true
+    rpm -qi libfabric || true
+    rpm -qi libfabric1 || true
+    ls -l /usr/lib64/libfabric.* || true
+    rpm -qf /usr/lib64/libfabric.* || true
+    strings /usr/lib64/libfabric.so.1 | grep \"As a result\" || true
     $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
-    $(cat ci/provisioning/post_provision_config_nodes.sh)"
+    $(cat ci/provisioning/post_provision_config_nodes.sh)
+    rpm -qa | grep libfabric || true
+    rpm -qi libfabric || true
+    rpm -qi libfabric1 || true
+    ls -l /usr/lib64/libfabric.* || true
+    rpm -qf /usr/lib64/libfabric.* || true
+    strings /usr/lib64/libfabric.so.1 | grep \"As a result\" || true"
