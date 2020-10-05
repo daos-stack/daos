@@ -87,6 +87,7 @@ def check(reqs, name, built_str, installed_str=""):
     return built_str
 
 def ofi_config(config):
+    """Check ofi version"""
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be > 1.11");"""
