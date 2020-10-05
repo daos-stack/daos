@@ -40,12 +40,23 @@ boolean release_candidate() {
     return false
 }
 
-String rpm_faults_enabled() {
-    // if the fault_enabled pragma is false or it a release candidate; disable fault injection in rpm
+String faults_enabled(String type) {
+    // if the fault_enabled pragma is false or it a release candidate; disable fault injection
+    // scons: BUILD_TYPE = (dev|release|debug)  rpms BUILD_OPTION = (--with=fault-injection|"")
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
-        return ''
+        if (type == "scons") {
+            return "release"
+        }
+        return ""
     }
-    return '--with=fault-injection'
+    // if fault enabled or not release candidate; enable fault injection
+    if (type == "scons") {
+        return "dev"
+    }
+    if (type == "rpm") {
+        return "--with=fault-injection"
+    }
+    error("Unexpected value passed to faults_enabled(): " + type)
 }
 
 def skip_stage(String stage, boolean def_val = false) {
@@ -354,7 +365,8 @@ pipeline {
                                             "2>/dev/null",
                                     returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
-        BUILD_OPTION = rpm_faults_enabled()
+        BUILD_OPTION = faults_enabled('rpm')
+        BUILD_TYPE = faults_enabled('scons')
     }
 
     options {
