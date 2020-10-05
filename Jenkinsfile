@@ -30,6 +30,24 @@ boolean doc_only_change() {
     return rc == 1
 }
 
+boolean release_candidate() {
+    if (!sh(label: "Determine if building (a PR of) an RC",
+          script: "git diff-index --name-only HEAD^ | grep -q TAG && " +
+                  "grep -i '[0-9]rc[0-9]' TAG",
+          returnStatus: true)) {
+        return true
+    }
+    return false
+}
+
+String rpm_faults_enabled() {
+    // if the fault_enabled pragma is false or it a release candidate; disable fault injection in rpm
+    if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
+        return ''
+    }
+    return '--with=fault-injection'
+}
+
 def skip_stage(String stage, boolean def_val = false) {
     String value = 'false'
     if (def_val) {
@@ -336,6 +354,7 @@ pipeline {
                                             "2>/dev/null",
                                     returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
+        BUILD_OPTION = rpm_faults_enabled()
     }
 
     options {
