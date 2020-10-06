@@ -63,7 +63,6 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	rc = vos_iterate_key(obj, toh, type, epr, empty_tree_check, &empty,
 			     NULL);
 
-
 	if (rc < 0)
 		return rc;
 
@@ -78,7 +77,7 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 		    struct vos_ts_set *ts_set, const daos_epoch_range_t *epr,
 		    vos_iter_type_t type)
 {
-	const char	*tree_name = "AKEY";
+	const char	*tree_name = NULL;
 	uint64_t	 punch_flag = VOS_OF_PUNCH_PROPAGATE;
 	int		 rc = 0;
 	uint32_t	 read_flag = 0;
@@ -99,6 +98,7 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
+		tree_name = "AKEY";
 		break;
 	default:
 		D_ASSERT(0);
@@ -111,8 +111,10 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 
 	rc = tree_is_empty(obj, toh, epr, type);
 	if (rc > 0) {
-		/** dkey tree is now empty, punch the object */
-		D_DEBUG(DB_TRACE, "%s tree empty, punching object\n",
+		/** tree is now empty, set the flags so we can punch
+		 *  the parent
+		 */
+		D_DEBUG(DB_TRACE, "%s tree empty, punching parent\n",
 			tree_name);
 		vos_ts_set_append_vflags(ts_set, punch_flag);
 		vos_ts_set_append_cflags(ts_set, write_flag);
@@ -143,8 +145,9 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_ilog_info	 akey_info = {0};
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
+	daos_handle_t		 toh;
+	int			 i;
 	int			 rc;
-	int			 propagated = 0;
 
 	if (flags & VOS_OF_COND_PUNCH) {
 		vos_ilog_fetch_init(&obj_info);
@@ -166,73 +169,67 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	rbund.rb_csum	= &csum;
 	ci_set_null(&csum);
 
-	if (!akeys) {
+	if (!akeys)
+		goto punch_dkey;
+
+	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
+			      dkey, SUBTR_CREATE, DAOS_INTENT_PUNCH,
+			      &krec, &toh, ts_set);
+	if (rc) {
+		D_ERROR("Error preparing dkey: rc="DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr,
+			    &obj_info, &dkey_info, ts_set, false,
+			    false);
+	if (rc)
+		D_GOTO(out, rc);
+
+	/* We do not need to add an incarnation log entry in parent tree
+	 * on punch.   If the subtree has nothing but punches, no need
+	 * to track that.  If it has updates, the parent tree will have
+	 * updates
+	 */
+	rbund.rb_tclass	= VOS_BTR_AKEY;
+	for (i = 0; i < akey_nr; i++) {
+		rbund.rb_iov = &akeys[i];
+		rc = key_tree_punch(obj, toh, epoch, &akeys[i], &riov,
+				    flags, ts_set, &dkey_info,
+				    &akey_info);
+		if (rc != 0) {
+			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
+					DF_RC"\n", DP_RC(rc));
+			break;
+	}
+	}
+
+	if (rc == 0) {
+		/** Check if we need to propagate the punch */
+		rc = vos_propagate_check(obj, toh, ts_set, &epr,
+					 VOS_ITER_AKEY);
+	}
+
+	key_tree_release(toh, 0);
+
+	if (rc != 1)
+		goto out;
+	/** else propagate the punch */
+
 punch_dkey:
-		propagated = 0; /* Reset so we don't punch the object */
-		rbund.rb_iov = dkey;
-		rbund.rb_tclass	= VOS_BTR_DKEY;
+	rbund.rb_iov = dkey;
+	rbund.rb_tclass	= VOS_BTR_DKEY;
 
-		rc = key_tree_punch(obj, obj->obj_toh, epoch, dkey, &riov,
-				    flags, ts_set, &obj_info, &dkey_info);
-		if (rc != 0)
-			D_GOTO(out, rc);
+	rc = key_tree_punch(obj, obj->obj_toh, epoch, dkey, &riov,
+			    flags, ts_set, &obj_info, &dkey_info);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
-		if (rc == 0) {
-			rc = vos_propagate_check(obj, obj->obj_toh, ts_set,
-						 &epr, VOS_ITER_DKEY);
-			if (rc == 1) {
-				propagated = 1;
-				rc = 0;
-			}
-		}
-	} else {
-		daos_handle_t		 toh;
-		int			 i;
-
-		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
-				      dkey, SUBTR_CREATE, DAOS_INTENT_PUNCH,
-				      &krec, &toh, ts_set);
-		if (rc) {
-			D_ERROR("Error preparing dkey: rc="DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-
-		rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr,
-				    &obj_info, &dkey_info, ts_set, false,
-				    false);
-		if (rc)
-			D_GOTO(out, rc);
-
-		/* We do not need to add an incarnation log entry in parent tree
-		 * on punch.   If the subtree has nothing but punches, no need
-		 * to track that.  If it has updates, the parent tree will have
-		 * updates
-		 */
-		rbund.rb_tclass	= VOS_BTR_AKEY;
-		for (i = 0; i < akey_nr; i++) {
-			rbund.rb_iov = &akeys[i];
-			rc = key_tree_punch(obj, toh, epoch, &akeys[i], &riov,
-					    flags, ts_set, &dkey_info,
-					    &akey_info);
-			if (rc != 0) {
-				VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
-						DF_RC"\n", DP_RC(rc));
-				break;
-		}
-		}
-
-		if (rc == 0) {
-			rc = vos_propagate_check(obj, toh, ts_set, &epr,
-						 VOS_ITER_AKEY);
-			if (rc == 1) {
-				propagated = 1;
-				key_tree_release(toh, 0);
-				goto punch_dkey;
-			}
-		}
-
-		key_tree_release(toh, 0);
+	if (rc == 0) {
+		/** Check if we need to propagate to object */
+		rc = vos_propagate_check(obj, obj->obj_toh, ts_set,
+					 &epr, VOS_ITER_DKEY);
 	}
  out:
 	if (flags & VOS_OF_COND_PUNCH) {
@@ -240,9 +237,6 @@ punch_dkey:
 		vos_ilog_fetch_finish(&dkey_info);
 		vos_ilog_fetch_finish(&akey_info);
 	}
-
-	if (rc == 0 && propagated)
-		rc = propagated;
 
 	return rc;
 }
