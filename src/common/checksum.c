@@ -1065,6 +1065,8 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len)
 uint64_t
 ci2csum(struct dcs_csum_info ci)
 {
+	if (ci.cs_csum == 0)
+		return 0;
 	return ci_buf2uint64(ci.cs_csum, ci.cs_len);
 }
 

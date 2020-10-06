@@ -3379,13 +3379,17 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 
 	memset(&entry->en_csum, 0, sizeof(entry->en_csum));
 
+	/**
+	 * Fill these in even if is a hole. Aggregation depends on these
+	 * being set to always know checksums is enabled
+	 */
+	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
+	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
+	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
 	if (bio_addr_is_hole(&desc->dc_ex_addr))
 		return;
 	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
 	csum_count = evt_csum_count(tcx, &entry->en_ext);
-	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
-	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
-	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
 	entry->en_csum.cs_nr = csum_count;
 	entry->en_csum.cs_buf_len = csum_count * tcx->tc_root->tr_csum_len;
 	entry->en_csum.cs_csum = &desc->pt_csum[0];
