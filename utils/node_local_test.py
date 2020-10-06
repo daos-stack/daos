@@ -2,6 +2,9 @@
 
 """Test code for dfuse"""
 
+# pylint: disable=too-many-lines
+# pylint: disable=too-few-public-methods
+
 import os
 import sys
 import time
@@ -109,6 +112,7 @@ class WarningsFactory():
         entry = {}
         entry['fileName'] = os.path.basename(self._file)
         entry['directory'] = os.path.dirname(self._file)
+        # pylint: disable=protected-access
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
@@ -207,6 +211,7 @@ class WarningsFactory():
             entry = {}
             entry['fileName'] = os.path.basename(self._file)
             entry['directory'] = os.path.dirname(self._file)
+            # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
             entry['message'] = 'Tests are still running'
@@ -306,6 +311,8 @@ class DaosServer():
                                                        delete=False)
         scyaml = yaml.load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
+        if self.conf.args.server_debug:
+            scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = control_log_file.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
@@ -865,7 +872,7 @@ def setup_log_test(conf):
     """Setup and import the log tracing code"""
     file_self = os.path.dirname(os.path.abspath(__file__))
     logparse_dir = os.path.join(file_self,
-                                '../src/cart/test/util')
+                                '../src/tests/ftest/cart/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -1340,6 +1347,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
+    parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('mode', nargs='?')
