@@ -199,6 +199,23 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	int			 i;
 	int			 rc = 0;
 
+	orw = crt_req_get(rw_args->rpc);
+	orwo = crt_reply_get(rw_args->rpc);
+	sgls = rw_args->rwaa_sgls;
+	iods = orw->orw_iod_array.oia_iods;
+	oiods = rw_args->shard_args->oiods;
+	iods_csums = orwo->orw_iod_csums.ca_arrays;
+	maps = orwo->orw_maps.ca_arrays;
+
+	/** currently don't verify echo classes */
+	if ((daos_obj_is_echo(orw->orw_oid.id_pub)) || (sgls == NULL))
+		return 0;
+
+	D_ASSERTF(orwo->orw_maps.ca_count == orw->orw_iod_array.oia_iod_nr,
+		  "orwo->orw_maps.ca_count(%lu) == "
+		  "orw->orw_iod_array.oia_iod_nr(%d)",
+		  orwo->orw_maps.ca_count, orw->orw_iod_array.oia_iod_nr);
+
 	csummer = dc_cont_hdl2csummer(rw_args->coh);
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		return 0;
@@ -209,24 +226,6 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	csummer_copy = daos_csummer_copy(csummer);
 	if (csummer_copy == NULL)
 		return -DER_NOMEM;
-
-	orw = crt_req_get(rw_args->rpc);
-	orwo = crt_reply_get(rw_args->rpc);
-	sgls = rw_args->rwaa_sgls;
-	iods = orw->orw_iod_array.oia_iods;
-	oiods = rw_args->shard_args->oiods;
-	iods_csums = orwo->orw_iod_csums.ca_arrays;
-	maps = orwo->orw_maps.ca_arrays;
-
-	/** currently don't verify echo classes */
-	if ((daos_obj_is_echo(orw->orw_oid.id_pub)) || (sgls == NULL)) {
-		daos_csummer_destroy(&csummer_copy);
-		return 0;
-	}
-	D_ASSERTF(orwo->orw_maps.ca_count == orw->orw_iod_array.oia_iod_nr,
-		  "orwo->orw_maps.ca_count(%lu) == "
-		  "orw->orw_iod_array.oia_iod_nr(%d)",
-		  orwo->orw_maps.ca_count, orw->orw_iod_array.oia_iod_nr);
 
 	/** fault injection - corrupt data after getting from server and before
 	 * verifying on client - simulates corruption over network

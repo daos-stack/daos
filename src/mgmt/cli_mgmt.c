@@ -286,11 +286,12 @@ put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
 {
 	int i;
 
-	if (psrs != NULL) {
-		for (i = 0; i < npsrs; i++)
-			D_FREE(psrs[i].uri);
-		D_FREE(psrs);
-	}
+	if (psrs == NULL)
+		return;
+
+	for (i = 0; i < npsrs; i++)
+		D_FREE(psrs[i].uri);
+	D_FREE(psrs);
 }
 
 /*
