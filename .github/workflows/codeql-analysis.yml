@@ -88,7 +88,7 @@ jobs:
         # set maven mirror
         mkdir -p ~/.m2
         echo -e "<settings>\n <mirrors>\n  <mirror>\n   <id>google-maven-central</id>\n   <name>GCS Maven Central mirror</name>\n   <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n   <mirrorOf>central</mirrorOf>\n  </mirror>\n </mirrors>\n</settings>" > ~/.m2/settings.xml
-        cd src/client/java && mvn clean install -DskipITs -Ddaos.install.path=/home/daos/daos/install
+        cd src/client/java && mvn clean install -DskipITs -Ddaos.install.path=/home/daos/daos/install || true
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
