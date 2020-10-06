@@ -27,8 +27,6 @@ from __future__ import print_function
 import sys
 import time
 
-from apricot import skipForTicket
-
 from avocado  import Test
 from avocado  import main
 
@@ -54,7 +52,6 @@ class CartCtlFiveNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @skipForTicket("DAOS-5547")
     def test_cart_ctl(self):
         """
         Test CaRT ctl
