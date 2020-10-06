@@ -88,6 +88,8 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_fseq = tgt->ta_comp.co_fseq;
 	f_new->fs_status = tgt->ta_comp.co_status;
 
+	D_DEBUG(DB_PL, "tgt %u status %u reint %s\n", tgt->ta_comp.co_id,
+		tgt->ta_comp.co_status, for_reint ? "yes" : "no");
 	if (!for_reint) {
 		f_new->fs_tgt_id = -1;
 		remap_add_one(remap_list, f_new);
@@ -125,7 +127,7 @@ remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 		DP_OID(md->omd_id), comment, md->omd_ver);
 
 	d_list_for_each_entry(f_shard, remap_list, fs_list) {
-		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u rank %d\n",
+		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u tgt %d\n",
 			f_shard->fs_fseq, f_shard->fs_shard_idx,
 			f_shard->fs_status, f_shard->fs_tgt_id);
 	}
