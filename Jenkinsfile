@@ -41,7 +41,7 @@ boolean release_candidate() {
 }
 
 def faults_enabled(String type) {
-    // if the fault_enabled pragma is false or it a release candidate; disable fault injection
+    // if the faults_enabled pragma is false or it a release candidate; disable fault injection
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
         return ''
     }
