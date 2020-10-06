@@ -517,7 +517,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 
 func (c *Configuration) validateFaultDomain(log logging.Logger) error {
 	if c.FaultPath != "" {
-		_, err := system.NewFaultDomain(c.FaultPath)
+		_, err := system.NewFaultDomainFromString(c.FaultPath)
 		if err != nil {
 			return FaultConfigFaultDomainInvalid
 		}

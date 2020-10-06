@@ -55,7 +55,7 @@ func getFaultDomain(cfg *Configuration) (*system.FaultDomain, error) {
 }
 
 func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
-	fd, err := system.NewFaultDomain(domainStr)
+	fd, err := system.NewFaultDomainFromString(domainStr)
 	if err != nil {
 		return nil, FaultConfigFaultDomainInvalid
 	}
