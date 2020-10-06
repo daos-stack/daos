@@ -51,8 +51,8 @@ jobs:
         # Prefix the list here with "+" to use these queries and those in the config file.
         # queries: ./path/to/local/query, your-org/your-repo/queries@main
     # Packages DAOS needs to build
-    - name: Install dependencies
-      if: matrix.language == 'cpp'
+    - if: matrix.language == 'cpp' || matrix.language == 'java'
+      name: Install dependencies
       run: |
         env
         dpkg -l \*jdk\*
@@ -79,13 +79,17 @@ jobs:
     #    and modify them (or add more) to build your code if your project
     #    uses a compiled language
 
-    - name: Build DAOS
-      if: matrix.language == 'cpp'
+    - if: matrix.language == 'cpp' || matrix.language == 'java'
+      name: Build DAOS
       run: |
         set -x
         env
         git submodule init && git submodule update
         scons --build-deps=yes install PREFIX=install
+        rc=$?
+        if [ "${{ matrix.vcvarsall }}" != "java" ]; then
+            exit $rc
+        fi
         # use Java 8 instead of default Java 11
         sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
         echo $JAVA_HOME
