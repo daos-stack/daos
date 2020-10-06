@@ -47,7 +47,7 @@
 #define REBUILD_PROTO_SRV_RPC_LIST					\
 	X(REBUILD_OBJECTS_SCAN,						\
 		0, &CQF_rebuild_scan,					\
-		rebuild_tgt_scan_handler, &rebuild_tgt_scan_co_ops)
+		rebuild_tgt_scan_handler, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -71,7 +71,6 @@ extern struct crt_proto_format rebuild_proto_fmt;
 	((uint32_t)		(rsi_padding)		CRT_VAR)
 
 #define DAOS_OSEQ_REBUILD_SCAN	/* output fields */		 \
-	((d_rank_list_t)	(rso_ranks_list)	CRT_PTR) \
 	((uint64_t)		(rso_stable_epoch)	CRT_VAR) \
 	((int32_t)		(rso_status)		CRT_VAR)
 

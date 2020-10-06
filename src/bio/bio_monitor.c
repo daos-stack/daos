@@ -431,28 +431,32 @@ void
 bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_dev_health	*dev_health;
+	struct bio_blobstore	*bbs;
 	int			 rc;
 	uint64_t		 monitor_period;
 
 	D_ASSERT(ctxt != NULL);
-	D_ASSERT(ctxt->bxc_blobstore != NULL);
-	dev_health = &ctxt->bxc_blobstore->bb_dev_health;
+	bbs = ctxt->bxc_blobstore;
 
-	if (dev_health->bdh_monitor_pd > 0)
-		monitor_period = dev_health->bdh_monitor_pd;
-	else
+	D_ASSERT(bbs != NULL);
+	dev_health = &bbs->bb_dev_health;
+
+	if (bbs->bb_state == BIO_BS_STATE_NORMAL ||
+	    bbs->bb_state == BIO_BS_STATE_OUT)
 		monitor_period = NVME_MONITOR_PERIOD;
+	else
+		monitor_period = NVME_MONITOR_SHORT_PERIOD;
 
 	if (dev_health->bdh_stat_age + monitor_period >= now)
 		return;
 	dev_health->bdh_stat_age = now;
 
-	rc = auto_detect_faulty(ctxt->bxc_blobstore);
+	rc = auto_detect_faulty(bbs);
 	if (rc)
 		D_ERROR("Auto faulty detect on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	rc = bio_bs_state_transit(ctxt->bxc_blobstore);
+	rc = bio_bs_state_transit(bbs);
 	if (rc)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
@@ -569,7 +573,6 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	}
 
 	bb->bb_dev_health.bdh_inflights = 0;
-	bb->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_PERIOD;
 
 	if (bb->bb_state == BIO_BS_STATE_OUT)
 		return 0;
