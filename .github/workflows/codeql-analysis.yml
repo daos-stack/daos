@@ -52,7 +52,7 @@ jobs:
         # queries: ./path/to/local/query, your-org/your-repo/queries@main
     # Packages DAOS needs to build
     - name: Install dependencies
-      if: matrix.name == 'cpp'
+      if: matrix.language == 'cpp'
       run: |
         env
         dpkg -l \*jdk\*
@@ -79,7 +79,7 @@ jobs:
     #    uses a compiled language
 
     - name: Build DAOS
-      if: matrix.name == 'cpp'
+      if: matrix.language == 'cpp'
       run: |
         set -x
         env
