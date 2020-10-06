@@ -320,38 +320,38 @@ fetch_ane_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 read_ts_o(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	  daos_epoch_t epoch, uint64_t flags)
+	  daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
+	  daos_iod_t *iod, unsigned int iod_nr)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	daos_unit_oid_t	 oid;
 
 	set_oid(mvcc_arg->i, path, &oid);
 
-	return tx_fetch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, NULL,
-			0, NULL, NULL);
+	return tx_fetch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, dkey,
+			iod_nr, iod, NULL);
 }
 
 static int
 read_ts_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	  daos_epoch_t epoch, uint64_t flags, daos_iod_t *iod, int iod_nr)
+	  daos_epoch_t epoch, uint64_t flags, daos_iod_t *iod,
+	  unsigned int iod_nr)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	char		 dkey_buf[64];
 	daos_key_t	 dkey = {dkey_buf, sizeof(dkey_buf), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 
-	return tx_fetch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, &dkey,
-			iod_nr, iod, NULL);
+	return read_ts_o(arg, txh, path, epoch, flags, &dkey, iod, iod_nr);
 }
 
 static int
 read_ts_o_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
-	return read_ts_o(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY);
+	return read_ts_o(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 NULL, NULL, 0);
 }
 
 static int
