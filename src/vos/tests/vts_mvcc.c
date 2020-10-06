@@ -333,7 +333,7 @@ read_ts_o(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 read_ts_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	  daos_epoch_t epoch, uint64_t flags)
+	  daos_epoch_t epoch, uint64_t flags, daos_iod_t *iod, int iod_nr)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	daos_unit_oid_t	 oid;
@@ -344,38 +344,7 @@ read_ts_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	set_dkey(mvcc_arg->i, path, &dkey);
 
 	return tx_fetch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, &dkey,
-			0, NULL, NULL);
-}
-
-static int
-read_ts_a(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	  daos_epoch_t epoch, uint64_t flags)
-{
-	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
-	char		 dkey_buf[64];
-	daos_key_t	 dkey = {dkey_buf, sizeof(dkey_buf), 0};
-	char		 akey_buf[64];
-	daos_key_t	 akey = {akey_buf, sizeof(akey_buf), 1};
-	daos_iod_t	 iod;
-	char		 value_buf[64] = {0};
-	daos_recx_t	 recx;
-
-	set_oid(mvcc_arg->i, path, &oid);
-	set_dkey(mvcc_arg->i, path, &dkey);
-	set_akey(mvcc_arg->i, path, &akey);
-
-	memset(&iod, 0, sizeof(iod));
-	iod.iod_name = akey;
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = 1;
-	iod.iod_nr = 1;
-	iod.iod_recxs = &recx;
-	recx.rx_idx = 1;
-	recx.rx_nr = sizeof(value_buf);
-
-	return tx_fetch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, &dkey,
-			iod.iod_nr, &iod, NULL);
+			iod_nr, iod, NULL);
 }
 
 static int
@@ -389,14 +358,33 @@ static int
 read_ts_d_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
-	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY);
+	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 NULL, 0);
 }
 
 static int
 read_ts_a_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	     daos_epoch_t epoch)
 {
-	return read_ts_a(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY);
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_iod_t	 iod;
+	char		 akey_buf[64];
+	daos_key_t	 akey = {akey_buf, sizeof(akey_buf), 1};
+	char		 value_buf[64] = {0};
+	daos_recx_t	 recx;
+
+	set_akey(mvcc_arg->i, path, &akey);
+	memset(&iod, 0, sizeof(iod));
+	iod.iod_name = akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	recx.rx_idx = 1;
+	recx.rx_nr = sizeof(value_buf);
+
+	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 &iod, iod.iod_nr);
 }
 
 static int
