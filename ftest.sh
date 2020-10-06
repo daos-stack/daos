@@ -213,6 +213,9 @@ if ! $TEST_RPMS; then
     # set up symlinks to spdk scripts (none of this would be
     # necessary if we were testing from RPMs) in order to
     # perform NVMe operations via daos_admin
+    echo SL_PREFIX $SL_PREFIX
+    echo DAOS_BASE $DAOS_BASE
+
     sudo mkdir -p /usr/share/daos/control
     sudo ln -sf $DAOS_BASE/install/share/daos/control/setup_spdk.sh \
                /usr/share/daos/control
@@ -237,6 +240,10 @@ if ! $TEST_RPMS; then
     sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
 	    sudo chown root /usr/bin/daos_admin && \
 	    sudo chmod 4755 /usr/bin/daos_admin
+
+    ls -al /usr/share/daos/control
+    ls -al /usr/share/spdk/scripts
+    ls -al /usr/share/spdk/include
 fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
@@ -268,6 +275,7 @@ else
     mkdir -p $DAOS_BASE/install/tmp
     logs_prefix=\"$DAOS_BASE/install/lib/daos/TESTING\"
     cd $DAOS_BASE
+    export DAOS_TEST_SHARED_DIR=$DAOS_BASE/install/tmp
 fi
 
 export CRT_PHY_ADDR_STR=ofi+sockets
