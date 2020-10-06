@@ -659,8 +659,6 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 
 	for (i = 0; i < iod_nr; i++) {
 		iod = reasb_req->orr_iods + i;
-		if (iod == NULL)
-			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
 		daos_sgl_fini(reasb_req->orr_sgls + i, false);
@@ -3953,7 +3951,7 @@ comp:
 static void
 shard_anchors_free(daos_anchor_t *anchor)
 {
-	void *tmp = (void *)anchor->da_sub_anchors;
+	void *tmp;
 
 	if (anchor == NULL)
 		return;
@@ -3961,6 +3959,7 @@ shard_anchors_free(daos_anchor_t *anchor)
 	if (anchor->da_sub_anchors == 0)
 		return;
 
+	tmp = (void *)anchor->da_sub_anchors;
 	D_FREE(tmp);
 	anchor->da_sub_anchors = 0;
 }

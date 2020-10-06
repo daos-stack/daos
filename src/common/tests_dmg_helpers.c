@@ -52,12 +52,12 @@ cmd_push_arg(char *args[], int *argcount, const char *fmt, ...)
 
 	va_start(ap, fmt);
 	rc = vasprintf(&arg, fmt, ap);
+	va_end(ap);
 	if (arg == NULL || rc < 0) {
 		D_ERROR("failed to create arg\n");
 		cmd_free_args(args, *argcount);
 		return NULL;
 	}
-	va_end(ap);
 
 	D_REALLOC(tmp, args, sizeof(char *) * (*argcount + 1));
 	if (tmp == NULL) {
@@ -261,6 +261,10 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		return -DER_INVAL;
 	}
 	uuid_str = json_object_get_string(tmp);
+	if (uuid_str == NULL) {
+		D_ERROR("unable to extract UUID string from JSON\n");
+		return -DER_INVAL;
+	}
 	uuid_parse(uuid_str, pool_info->mgpi_uuid);
 
 	if (!json_object_object_get_ex(json_pool, "Svcreps", &tmp)) {

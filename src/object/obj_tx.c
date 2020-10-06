@@ -1163,7 +1163,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 	/* Descending order to guarantee that EC parity is handled firstly. */
 	for (idx = start + obj->cob_grp_size - 1; idx >= start; idx--) {
-		if (reasb_req != NULL &&
+		if (reasb_req != NULL && reasb_req->tgt_bitmap != NULL &&
 		    !isset(reasb_req->tgt_bitmap, idx - start))
 			continue;
 
@@ -2067,7 +2067,7 @@ dc_tx_add_update(struct dc_tx *tx, daos_handle_t oh, uint64_t flags,
 
 fail:
 	if (dcu != NULL) {
-		if (iod_array != NULL) {
+		if (iod_array != NULL && iod_array->oia_iods != NULL) {
 			for (i = 0; i < nr; i++) {
 				daos_iov_free(&iod_array->oia_iods[i].iod_name);
 				D_FREE(iod_array->oia_iods[i].iod_recxs);

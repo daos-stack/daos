@@ -1653,13 +1653,19 @@ pool_req_cleanup(enum preq_cleanup_stage stage, struct pool_req_arg *args)
 	switch (stage) {
 	case CLEANUP_ALL:
 		crt_req_decref(args->pra_rpc);
+		break;
 	case CLEANUP_BULK:
 		if (args->pra_bulk)
 			crt_bulk_free(args->pra_bulk);
+		break;
 	case CLEANUP_RPC:
 		crt_req_decref(args->pra_rpc);
+		break;
 	case CLEANUP_POOL:
 		dc_pool_put(args->pra_pool);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -2200,10 +2206,15 @@ rsvc_client_state_cleanup(int stage, struct rsvc_client_state *state)
 	switch (stage) {
 	case CCS_CU_CLI:
 		rsvc_client_fini(&state->scs_client);
+		break;
 	case CCS_CU_GRP:
 		dc_mgmt_sys_detach(state->scs_sys);
+		break;
 	case CCS_CU_MEM:
 		D_FREE_PTR(state);
+		break;
+	default:
+		break;
 	}
 }
 
