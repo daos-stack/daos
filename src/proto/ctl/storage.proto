@@ -43,7 +43,6 @@ message StoragePrepareResp {
 message StorageScanReq {
 	ScanNvmeReq nvme = 1;
 	ScanScmReq scm = 2;
-	bool ConfigDevicesOnly = 3;
 }
 
 message StorageScanResp {

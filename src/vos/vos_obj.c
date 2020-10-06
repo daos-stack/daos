@@ -219,7 +219,7 @@ punch_dkey:
 				VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
 						DF_RC"\n", DP_RC(rc));
 				break;
-			}
+		}
 		}
 
 		if (rc == 0) {
@@ -1107,6 +1107,21 @@ done:
 }
 
 /**
+ * Sets the range filter.
+ */
+static inline void
+recx2filter(struct evt_filter *filter, daos_recx_t *recx)
+{
+	if (recx->rx_nr == 0) {
+		filter->fr_ex.ex_lo = 0ULL;
+		filter->fr_ex.ex_hi = ~(0ULL);
+	} else {
+		filter->fr_ex.ex_lo = recx->rx_idx;
+		filter->fr_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
+	}
+}
+
+/**
  * Prepare the iterator for the recx tree.
  */
 static int
@@ -1132,8 +1147,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	filter.fr_ex.ex_lo = 0;
-	filter.fr_ex.ex_hi = ~(0ULL);
+	recx2filter(&filter, &oiter->it_recx);
 	filter.fr_epr = oiter->it_epr;
 	filter.fr_punch_epc = oiter->it_punched.pr_epc;
 	filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
@@ -1257,6 +1271,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->it_epr = param->ip_epr;
 	oiter->it_epc_expr = param->ip_epc_expr;
 	oiter->it_flags = param->ip_flags;
+	oiter->it_recx = param->ip_recx;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
 	if (param->ip_flags & VOS_IT_FOR_REBUILD)
@@ -1483,8 +1498,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 				" rc = "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
-		filter.fr_ex.ex_lo = 0;
-		filter.fr_ex.ex_hi = ~(0ULL);
+		recx2filter(&filter, &info->ii_recx);
 		filter.fr_epr = oiter->it_epr;
 		filter.fr_punch_epc = oiter->it_punched.pr_epc;
 		filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
