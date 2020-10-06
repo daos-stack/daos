@@ -1,10 +1,13 @@
 #!/bin/bash
 
-# This is the script used for the run_tests.sh stage in CI
-# for doing unit testing.
+# This is the script used for running unit testing
+# run_tests.sh and run_tests.sh with memcheck stages on the CI
 set -ex
 
 # JENKINS-52781 tar function is breaking symlinks
+
+rm -rf unit_memcheck_vm_test unit_test_memcheck_logs unit-test*.memcheck.xml
+rm -rf unit_vm_test unit_test_logs
 rm -rf test_results
 mkdir test_results
 
@@ -40,5 +43,6 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" "DAOS_BASE=$DAOS_BASE      \
                                      HOSTNAME=$HOSTNAME        \
                                      HOSTPWD=$PWD              \
                                      SL_PREFIX=$SL_PREFIX      \
+                                     WITH_VALGRIND=$WITH_VALGRIND \
                                      BULLSEYE=$BULLSEYE        \
                                      $(cat "$mydir/test_main_node.sh")"

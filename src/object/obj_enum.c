@@ -763,7 +763,7 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 	io->ui_dkey_punch_eph = 0;
 	io->ui_iods_top = -1;
 	io->ui_version = 0;
-	io->ui_is_array_exist = 0;
+	io->ui_type = 0;
 }
 
 /**
@@ -1017,14 +1017,18 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 	else
 		type = DAOS_IOD_ARRAY;
 
-	/* Check version first to see if the current IO should be complete. Only
-	 * one version per VOS update.
-	 */
-	if (io->ui_version == 0) {
+	if (io->ui_type == 0)
+		io->ui_type = type;
+
+	if (io->ui_version == 0)
 		io->ui_version = rec->rec_version;
-	} else if (io->ui_version != rec->rec_version) {
-		D_DEBUG(DB_IO, "different version %u != %u\n", io->ui_version,
-			rec->rec_version);
+
+	/* Check version/type first to see if the current IO should be complete.
+	 * Only one version/type per VOS update.
+	 */
+	if (io->ui_version != rec->rec_version || io->ui_type != type) {
+		D_DEBUG(DB_IO, "different version %u != %u or type %u != %u\n",
+			io->ui_version, rec->rec_version, io->ui_type, type);
 
 		rc = complete_io_init_iod(io, cb, cb_arg, NULL);
 		if (rc)
@@ -1032,29 +1036,15 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 	}
 
 	top = io->ui_iods_top;
-	/*
-	 * Check the iod size and iod_type to see if the current IOD should be
-	 * moved to next.
-	 */
 	top_iod = &io->ui_iods[top];
-	if (type == DAOS_IOD_SINGLE) { 
-		/* Let's do not put single and array record in the same IO,
-		 * since single IOD record rebuild is a bit different.
-		 */
-		if (top_iod->iod_nr > 0) {
-			if (!io->ui_is_array_exist)
-				rc = next_iod(io, cb, cb_arg,
-					      &top_iod->iod_name);
-			else
-				rc = complete_io_init_iod(io, cb, cb_arg, NULL);
-			if (rc)
-				D_GOTO(free, rc);
-		}
-	} else {
-		if(top_iod->iod_nr > 0 && (rec->rec_size != top_iod->iod_size))
+	if (top_iod->iod_nr > 0) {
+		/* Move to next IOD for each single value. */
+		if (type == DAOS_IOD_SINGLE)
 			rc = next_iod(io, cb, cb_arg, &top_iod->iod_name);
-
-		io->ui_is_array_exist = 1;
+		else if (top_iod->iod_size != rec->rec_size)
+			rc = next_iod(io, cb, cb_arg, &top_iod->iod_name);
+		if (rc)
+			D_GOTO(free, rc);
 	}
 
 	top = io->ui_iods_top;

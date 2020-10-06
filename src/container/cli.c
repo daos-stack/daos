@@ -396,20 +396,17 @@ err:
 }
 
 static void
-dc_cont_free(struct d_hlink *hlink)
+dc_cont_hop_free(struct d_hlink *hlink)
 {
 	struct dc_cont *dc;
 
 	dc = container_of(hlink, struct dc_cont, dc_hlink);
 	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
-	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
-	D_ASSERT(d_list_empty(&dc->dc_po_list));
-	D_ASSERT(d_list_empty(&dc->dc_obj_list));
-	D_FREE(dc);
+	dc_cont_free(dc);
 }
 
 static struct d_hlink_ops cont_h_ops = {
-	.hop_free	= dc_cont_free,
+	.hop_free	= dc_cont_hop_free,
 };
 
 void
@@ -428,6 +425,16 @@ void
 dc_cont_hdl_unlink(struct dc_cont *dc)
 {
 	daos_hhash_link_delete(&dc->dc_hlink);
+}
+
+void
+dc_cont_free(struct dc_cont *dc)
+{
+	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
+	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
+	D_ASSERT(d_list_empty(&dc->dc_po_list));
+	D_ASSERT(d_list_empty(&dc->dc_obj_list));
+	D_FREE(dc);
 }
 
 struct dc_cont *
