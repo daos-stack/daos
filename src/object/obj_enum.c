@@ -1037,7 +1037,7 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 	 * moved to next.
 	 */
 	top_iod = &io->ui_iods[top];
-	if (type == DAOS_IOD_SINGLE) { 
+	if (type == DAOS_IOD_SINGLE) {
 		/* Let's do not put single and array record in the same IO,
 		 * since single IOD record rebuild is a bit different.
 		 */
