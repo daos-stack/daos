@@ -265,15 +265,19 @@ class OSAOnlineParallelTest(TestWithServers):
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
-                    time.sleep(5)
+                    time.sleep(3)
+                
+                # Wait to finish the threads
+                for thrd in threads:
+                    thrd.join()
 
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)
                 pool[val].display_pool_daos_space(display_string)
                 pver_end = self.get_pool_version()
                 self.log.info("Pool Version at the End %s", pver_end)
-                #self.assertTrue(pver_end == 25,
-                #                "Pool Version Error:  at the end")
+                self.assertTrue(pver_end == 25,
+                                "Pool Version Error:  at the end")
                 pool[val].destroy()
 
     def test_osa_online_parallel_test(self):
