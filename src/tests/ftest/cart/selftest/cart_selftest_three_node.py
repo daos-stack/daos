@@ -73,13 +73,9 @@ class CartSelfThreeNodeTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_1")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_2")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients_3")
-        self.utils.launch_test(self, clicmd, srv_rtn)
-
+        for i in range(3):
+          clicmd = self.utils.build_cmd(self, self.env, "test_clients", index=i)
+          self.utils.launch_test(self, clicmd, srv_rtn)
 
 if __name__ == "__main__":
     main()
