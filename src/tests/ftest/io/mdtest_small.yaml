@@ -7,7 +7,7 @@ hosts:
   test_clients:
     - client-E
     - client-F
-timeout: 1500
+timeout: 305
 server_config:
   name: daos_server
   transport_config:

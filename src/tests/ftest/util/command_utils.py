@@ -555,7 +555,7 @@ class SubProcessCommand(CommandWithSubCommand):
     Example commands: daos_agent, daos_server
     """
 
-    def __init__(self, namespace, command, path="", timeout=60):
+    def __init__(self, namespace, command, path="", timeout=10):
         """Create a SubProcessCommand object.
 
         Args:
@@ -564,7 +564,7 @@ class SubProcessCommand(CommandWithSubCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to "".
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 60 seconds.
+                appear in the subprocess output. Defaults to 10 seconds.
         """
         super(SubProcessCommand, self).__init__(namespace, command, path, True)
 
@@ -658,7 +658,7 @@ class YamlCommand(SubProcessCommand):
     Example commands: daos_agent, daos_server, dmg
     """
 
-    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=60):
+    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10):
         """Create a YamlCommand command object.
 
         Args:
@@ -669,7 +669,7 @@ class YamlCommand(SubProcessCommand):
             path (str, optional): path to location of daos command binary.
                 Defaults to ""
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 60 seconds.
+                appear in the subprocess output. Defaults to 10 seconds.
         """
         super(YamlCommand, self).__init__(namespace, command, path, timeout)
 
