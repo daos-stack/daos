@@ -92,34 +92,6 @@
 {
    FI leak 7
    Memcheck:Leak
-   match-leak-kinds: indirect
-   ...
-   fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
-   ...
-}
-{
-   FI leak 8
-   Memcheck:Leak
-   match-leak-kinds: possible
-   ...
-   fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
-   ...
-}
-{
-   FI leak 9
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   ...
-   fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
-   ...
-}
-{
-   FI leak 10
-   Memcheck:Leak
-   match-leak-kinds: definite
    ...
    fun:fi_ini
    fun:fi_getinfo@@FABRIC_1.3
