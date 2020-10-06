@@ -39,9 +39,6 @@
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
-static int
-rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
-
 static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 {
@@ -274,22 +271,6 @@ err_out:
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
 	return rc;
-}
-
-static d_rank_list_t *
-uint32_array_to_rank_list(uint32_t *ints, size_t len)
-{
-	d_rank_list_t	*result;
-	size_t		i;
-
-	result = d_rank_list_alloc(len);
-	if (result == NULL)
-		return NULL;
-
-	for (i = 0; i < len; i++)
-		result->rl_ranks[i] = (d_rank_t)ints[i];
-
-	return result;
 }
 
 void
@@ -1201,23 +1182,6 @@ out:
 	free_resp_acl(&resp);
 
 	mgmt__delete_aclreq__free_unpacked(req, &alloc.alloc);
-}
-
-static int
-rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
-{
-	uint32_t i;
-
-	D_ALLOC_ARRAY(*ints, rl->rl_nr);
-	if (*ints == NULL)
-		return -DER_NOMEM;
-
-	*len = rl->rl_nr;
-
-	for (i = 0; i < rl->rl_nr; i++)
-		(*ints)[i] = (uint32_t)rl->rl_ranks[i];
-
-	return 0;
 }
 
 void

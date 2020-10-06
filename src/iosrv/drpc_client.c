@@ -158,23 +158,6 @@ out_dreq:
 	return rc;
 }
 
-/* FIXME: Don't copy this -- move to common? */
-static d_rank_list_t *
-uint32_array_to_rank_list(uint32_t *ints, size_t len)
-{
-	d_rank_list_t	*result;
-	size_t		i;
-
-	result = d_rank_list_alloc(len);
-	if (result == NULL)
-		return NULL;
-
-	for (i = 0; i < len; i++)
-		result->rl_ranks[i] = (d_rank_t)ints[i];
-
-	return result;
-}
-
 int
 get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 {

@@ -399,13 +399,6 @@ dss_init_state_set(enum dss_init_state state)
 {
 }
 
-int
-ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
-		  char *addr)
-{
-	return 0;
-}
-
 size_t
 ds_rsvc_get_md_cap(void)
 {
