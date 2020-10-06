@@ -40,18 +40,18 @@ boolean release_candidate() {
     return false
 }
 
-String faults_enabled(String type) {
+def faults_enabled(String type) {
     // if the fault_enabled pragma is false or it a release candidate; disable fault injection
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
-        return ""
+        return ''
     }
-    if (type == "rpm") {
-        return "--with=fault-injection"
+    if (type == 'rpm') {
+        return '--with=fault-injection'
     }
-    if (type == "scons") {
-        return "--with-fault-injection"
+    if (type == 'scons') {
+        return '--with-fault-injection'
     }
-    error("Unexpected value passed to faults_enabled(): " + type)
+    error('Unexpected value passed to faults_enabled(): ' + type)
 }
 
 def skip_stage(String stage, boolean def_val = false) {
@@ -583,7 +583,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -632,7 +632,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -678,7 +678,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -768,7 +768,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -811,7 +811,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -856,7 +856,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -896,7 +896,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallel_build(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -939,7 +939,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
@@ -985,7 +985,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallel_build(),
-                                   scons_args: "--with-fault-injection"
+                                   scons_args: faults_enabled('scons')
                     }
                     post {
                         always {
