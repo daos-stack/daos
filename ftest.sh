@@ -214,20 +214,20 @@ if ! $TEST_RPMS; then
     # necessary if we were testing from RPMs) in order to
     # perform NVMe operations via daos_admin
     sudo mkdir -p /usr/share/daos/control
-    sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+    sudo ln -sf $DAOS_BASE/install/share/daos/control/setup_spdk.sh \
                /usr/share/daos/control
     sudo mkdir -p /usr/share/spdk/scripts
     if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
-        sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+        sudo ln -sf $DAOS_BASE/install/share/spdk/scripts/setup.sh \
                    /usr/share/spdk/scripts
     fi
     if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
-        sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+        sudo ln -sf $DAOS_BASE/install/share/spdk/scripts/common.sh \
                    /usr/share/spdk/scripts
     fi
     if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
         sudo rm -f /usr/share/spdk/include
-        sudo ln -s $SL_PREFIX/include \
+        sudo ln -s $DAOS_BASE/install/include \
                    /usr/share/spdk/include
     fi
 
@@ -237,6 +237,12 @@ if ! $TEST_RPMS; then
     sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
 	    sudo chown root /usr/bin/daos_admin && \
 	    sudo chmod 4755 /usr/bin/daos_admin
+
+    echo DAOS_BASE $DAOS_BASE
+    echo SL_PREFIX $SL_PREFIX
+    ls -al /usr/share/daos/control
+    ls -al /usr/share/spdk/scripts
+    ls -al /usr/share/spdk/include
 fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
@@ -268,6 +274,8 @@ else
     mkdir -p $DAOS_BASE/install/tmp
     logs_prefix=\"$DAOS_BASE/install/lib/daos/TESTING\"
     cd $DAOS_BASE
+    export DAOS_TEST_SHARED_DIR=$DAOS_BASE/install/tmp
+    echo \$DAOS_TEST_SHARED_DIR
 fi
 
 export CRT_PHY_ADDR_STR=ofi+sockets
