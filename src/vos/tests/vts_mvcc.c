@@ -348,7 +348,7 @@ read_ts_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 read_ts_o_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	     daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	return read_ts_o(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
 			 NULL, NULL, 0);
@@ -356,7 +356,7 @@ read_ts_o_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 read_ts_d_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	     daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
 			 NULL, 0);
@@ -364,7 +364,7 @@ read_ts_d_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 read_ts_a_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	     daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	daos_iod_t	 iod;
