@@ -239,7 +239,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_umount, ret = rc);
 	}
 
-	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj,
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
 			NULL, NULL);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)",
