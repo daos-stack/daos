@@ -208,6 +208,7 @@ get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 		D_ERROR("received erroneous dRPC response: %d\n",
 			dresp->status);
 		rc = -DER_IO;
+		goto out_dresp;
 	}
 
 	gps_resp = srv__get_pool_svc_resp__unpack(
