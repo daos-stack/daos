@@ -4,7 +4,7 @@ hosts:
   test_servers:
     - server-A
     - server-B
-timeout: 600
+timeout: 60
 faults:
     no_faults:
       fault_list: []

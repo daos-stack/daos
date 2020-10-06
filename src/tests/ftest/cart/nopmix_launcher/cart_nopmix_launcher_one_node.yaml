@@ -1,0 +1,34 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+defaultENV:
+  #!filter-only : /run/tests/no_pmix_launcher
+  CRT_PHY_ADDR_STR: "ofi+sockets"
+  OFI_INTERFACE: "eth0"
+  D_LOG_MASK: "ERR"
+hosts: !mux
+  hosts_1:
+    config: one_node
+    test_servers:
+      - boro-A
+    test_clients:
+      - boro-A
+tests: !mux
+  no_pmix_launcher:
+    name: no_pmix_launcher
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/no_pmix_launcher_server"
+    test_servers_ppn: "5"
+    test_servers_slt: "6"
+    test_clients_bin: crt_launch
+    test_clients_arg: "-c -e ../tests/no_pmix_launcher_client"
+    test_clients_ppn: "1"
+  test_group_np:
+    name: test_group_basic
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e ../tests/test_group_np_srv --name server_grp"
+    test_servers_ppn: "1"
+    test_servers_slt: "2"
+    test_clients_bin: crt_launch
+    test_clients_arg: "-c -e ../tests/test_group_np_cli --name client_grp --attach_to server_grp"
+    test_clients_ppn: "1"
