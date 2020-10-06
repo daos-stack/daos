@@ -1260,8 +1260,11 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 out:
 	vos_dth_set(NULL);
 
-	if (rc == -DER_NONEXIST || rc == 0)
+	if (rc == -DER_NONEXIST || rc == 0) {
+		if (ioc->ic_read_ts_only)
+			rc = 0;
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+	}
 
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
