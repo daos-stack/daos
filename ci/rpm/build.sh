@@ -24,4 +24,4 @@ fi
 
 rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
-make CHROOT_NAME="${CHROOT_NAME}" -C utils/rpms chrootbuild
+make CHROOT_NAME="${CHROOT_NAME}" EXTERNAL_RPM_BUILD_OPTIONS="${BUILD_OPTION}" -C utils/rpms chrootbuild
