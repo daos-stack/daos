@@ -157,6 +157,9 @@ def set_defaults(env):
     if GetOption("fault-injection"):
         env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
+    if env.get('BUILD_TYPE') != 'release':
+        env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
+
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
 
