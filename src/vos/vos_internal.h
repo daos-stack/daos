@@ -813,6 +813,8 @@ struct vos_iter_info {
 	/* Reference to vos object, set in iop_tree_prepare. */
 	struct vos_object	*ii_obj;
 	d_iov_t			*ii_akey; /* conditional akey */
+	/** address range (RECX); rx_nr == 0 means entire range (0:~0ULL) */
+	daos_recx_t              ii_recx;
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
 	struct vos_punch_record	 ii_punched;
@@ -899,6 +901,8 @@ struct vos_obj_iter {
 	daos_key_t		 it_akey;
 	/* reference on the object */
 	struct vos_object	*it_obj;
+	/** condition of the iterator: extent range */
+	daos_recx_t              it_recx;
 };
 
 static inline struct vos_obj_iter *
