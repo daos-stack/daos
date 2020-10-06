@@ -772,8 +772,8 @@ struct dss_enum_unpack_io {
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
 	d_sg_list_t		*ui_sgls;	/**< optional */
-	uint32_t		 ui_version;
-	uint32_t		 ui_is_array_exist:1;
+	uint32_t		ui_version;
+	uint32_t		ui_type;
 };
 
 typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
