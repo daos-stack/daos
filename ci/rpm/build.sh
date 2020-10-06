@@ -21,6 +21,7 @@ fi
 
 : "${CHROOT_NAME:='epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
+: "${BUILD_OPTION:=''}"
 
 rm -rf "artifacts/${TARGET}/"
 mkdir -p "artifacts/${TARGET}/"
