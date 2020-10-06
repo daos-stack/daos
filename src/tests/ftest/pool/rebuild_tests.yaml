@@ -21,25 +21,25 @@ pool:
 container:
   akey_size: 5
   dkey_size: 5
-  data: !mux
+  data:
     small_data:
       data_size: 32
     large_data:
       data_size: 250
-  objects: !mux
+  objects:
     zero_objects:
       object_qty: 0
     one_object:
       object_qty: 1
     twenty_objects:
       object_qty: 20
-  records: !mux
+  records:
     one_record:
       record_qty: 1
     ten_records:
       record_qty: 10
 testparams:
-  ranks: !mux
+  ranks: 
     rank1:
       rank: 1
     rank4:
