@@ -26,8 +26,6 @@ from __future__ import print_function
 
 import sys
 
-from apricot import skipForTicket
-
 from avocado  import Test
 from avocado  import main
 
@@ -53,7 +51,6 @@ class CartRpcTwoNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    @skipForTicket("DAOS-5549")
     def test_cart_rpc(self):
         """
         Test CaRT RPC
