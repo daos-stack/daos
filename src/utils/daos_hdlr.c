@@ -1870,7 +1870,7 @@ obj_query_hdlr(struct cmd_args_s *ap)
 		fprintf(stdout, "grp: %d\n", i);
 		for (j = 0; j < shard->os_replica_nr; j++)
 			fprintf(stdout, "replica %d %d\n", j,
-				shard->os_ranks[j]);
+				shard->os_shard_data[j].sd_rank);
 	}
 
 	daos_obj_layout_free(layout);

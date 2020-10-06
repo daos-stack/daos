@@ -169,12 +169,12 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 	ctx->fetch_iod.iod_type = ctx->update_iod.iod_type;
 }
 
-static daos_oclass_id_t dts_ec_agg_oc = OC_EC_2P2G1;
+static daos_oclass_id_t dts_ec_agg_oc = DAOS_OC_EC_K2P2_L32K;
 
 static int
 incremental_fill(void **statep)
 {
-	dts_ec_agg_oc = OC_EC_2P1G1;
+	dts_ec_agg_oc = DAOS_OC_EC_K2P2_L32K;
 	return 0;
 }
 
@@ -206,7 +206,7 @@ test_filled_stripe(void **statep)
 	struct ec_agg_test_ctx	 ctx = { 0 };
 	struct daos_oclass_attr	*oca;
 	tse_task_t		*task = NULL;
-	unsigned int		 len, shard = 2; /* 2+1, 1 group leadeer */
+	unsigned int		 len, shard = 2; /* 2+2, group leadeer */
 	int			 i, rc;
 
 	ec_setup_from_test_args(&ctx, (test_arg_t *) *statep);
@@ -224,7 +224,8 @@ test_filled_stripe(void **statep)
 	sleep(30);
 	for (i = 0; i < 64; i++) {
 		ec_setup_single_recx_data(&ctx, EC_SPECIFIED, i * (2 * len),
-				       1 << 16);
+					  2 * len);
+		shard++;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,
@@ -237,9 +238,36 @@ test_filled_stripe(void **statep)
 		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
 		task = NULL;
 		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		shard--;
+		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
+					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
+					      &ctx.fetch_iod, &ctx.fetch_sgl,
+					      &ctx.fetch_iom, &shard, NULL,
+					      NULL, &task);
+		assert_int_equal(rc, 0);
+		rc = dc_task_schedule(task, true);
+		assert_int_equal(rc, 0);
+		/* verify no remaining replicas on parity target */
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 0);
+		task = NULL;
+		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		shard++;
 		ctx.fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 						     PARITY_INDICATOR;
 		ctx.fetch_iod.iod_recxs[0].rx_nr = len;
+		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
+					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
+					      &ctx.fetch_iod, &ctx.fetch_sgl,
+					      &ctx.fetch_iom, &shard, NULL,
+					      NULL, &task);
+		assert_int_equal(rc, 0);
+		rc = dc_task_schedule(task, true);
+		assert_int_equal(rc, 0);
+		/* verify parity now exists on parity target */
+		assert_int_equal(ctx.fetch_iom.iom_nr_out, 1);
+		task = NULL;
+		memset(&ctx.fetch_iom, 0, sizeof(daos_iom_t));
+		shard--;
 		rc = dc_obj_fetch_task_create(ctx.oh, DAOS_TX_NONE, 0,
 					      &ctx.dkey, 1, DIOF_TO_SPEC_SHARD,
 					      &ctx.fetch_iod, &ctx.fetch_sgl,

@@ -104,7 +104,8 @@ struct ec_agg_entry {
 	struct ec_agg_stripe	 ae_cur_stripe;  /* Struct for current stripe */
 	struct ec_agg_par_extent ae_par_extent;	 /* Parity extent             */
 	daos_handle_t		 ae_obj_hdl;	 /* Object handle for cur obj */
-	d_rank_t		 ae_peer_rank;	 /* Rank of peer parity tgt   */
+	d_rank_t		 ae_peer_rank;   /* Rank of peer parity tgt   */
+	uint32_t		 ae_peer_idx;    /* Index of peer parity tgt  */
 };
 
 /* Struct used to drive offloaded stripe update.
@@ -647,18 +648,28 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	}
 	if (opened) {
 		d_rank_t myrank, prevrank = ~0;
+		uint32_t previdx = ~0;
 
 		crt_group_rank(NULL, &myrank);
 		dc_obj_layout_get(entry->ae_obj_hdl, &layout);
 		for (i = 0; i < layout->ol_nr; i++)
 			for (j = 0; j < layout->ol_shards[i]->os_replica_nr;
 			     j++) {
-				if (layout->ol_shards[i]->os_ranks[j] == myrank)
+				if (layout->ol_shards[i]->
+				    os_shard_data[j].sd_rank == myrank) {
 					entry->ae_peer_rank = prevrank;
-				else
+					D_ASSERT(previdx != ~0);
+					entry->ae_peer_idx = previdx;
+				} else {
 					prevrank =
-					layout->ol_shards[i]->os_ranks[j];
+					layout->ol_shards[i]->
+					os_shard_data[j].sd_rank;
+					previdx =
+					layout->ol_shards[i]->
+					os_shard_data[j].sd_tgt_idx;
+				}
 			}
+		daos_obj_layout_free(layout);
 	}
 	return rc;
 }
@@ -1098,13 +1109,13 @@ agg_peer_update_ult(void *arg)
 	unsigned char		*buf = NULL;
 	struct obj_ec_agg_in	*ec_agg_in = NULL;
 	struct obj_ec_agg_out	*ec_agg_out = NULL;
-	struct pool_target	*target;
+	//struct pool_target	*target;
 	struct ds_pool		*pool = entry->ae_pool_info->api_pool;
 	crt_opcode_t		 opcode;
-	unsigned int		 tgt_id = entry->ae_oid.id_shard - 1;
 	crt_rpc_t		*rpc;
 	int			 rc = 0;
 
+#if 0
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
 	if (rc != 1 || (target->ta_comp.co_status != PO_COMP_ST_UPIN
@@ -1121,9 +1132,11 @@ agg_peer_update_ult(void *arg)
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
-	/* tgt_ep.ep_tag = target->ta_comp.co_index + 1; */
+#endif
 	tgt_ep.ep_rank = entry->ae_peer_rank;
-	tgt_ep.ep_tag = 1; // because we are testing with 1 target per node?
+	tgt_ep.ep_tag = entry->ae_peer_idx + 1;
+	D_PRINT("target index: %u\n", tgt_ep.ep_tag);
+	 // 1 because we are testing with 1 target per node?
 	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_AGGREGATE, DAOS_OBJ_MODULE,
 				 DAOS_OBJ_VERSION);
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
@@ -1152,7 +1165,7 @@ agg_peer_update_ult(void *arg)
 		  entry->ae_oca->u.ec.e_len * entry->ae_rsize);
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr = sgl.sg_nr_out = 1;
-	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &sgl, CRT_BULK_RO,
+	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &sgl, CRT_BULK_RW,
 			     &ec_agg_in->ea_bulk);
 	if (rc) {
 		D_ERROR("crt_bulk_create returned: "DF_RC"\n", DP_RC(rc));
@@ -1166,6 +1179,9 @@ agg_peer_update_ult(void *arg)
 	}
 	ec_agg_out = crt_reply_get(rpc);
 	rc = ec_agg_out->ea_status;
+	if (rc)
+		D_ERROR("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
+
 	crt_bulk_free(ec_agg_in->ea_bulk);
 out:
 	if (rpc)
@@ -1300,11 +1316,19 @@ out:
 	if (process_holes && rc == 0)
 		rc = agg_process_holes(entry);
 	else if (update_vos && rc == 0) {
-		if (!rc && entry->ae_oca->u.ec.e_p > 1)
+		if (!rc && entry->ae_oca->u.ec.e_p > 1) {
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry);
-		if (rc == 0)
+			if (rc)
+				D_ERROR("agg_peer_update fail: "DF_RC"\n",
+					DP_RC(rc));
+		}
+		if (rc == 0) {
 			rc = agg_update_vos(entry);
+			if (rc)
+				D_ERROR("agg_update_vos fail: "DF_RC"\n",
+					DP_RC(rc));
+		}
 	}
 
 	agg_clear_extents(entry);

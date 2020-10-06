@@ -1812,7 +1812,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			DP_UOID(oea->ea_oid), DP_RC(rc));
 		goto out;
 	}
-	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, oea->ea_bulk, NULL,
+	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oea->ea_bulk, NULL,
 			       ioh, NULL, NULL, 1, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
@@ -1821,12 +1821,23 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 
 	rc = bio_iod_post(biod);
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_post failed: "DF_RC".\n",
+			DP_UOID(oea->ea_oid), DP_RC(rc));
+		goto out;
+	}
 	rc = vos_update_end(ioh, ioc.ioc_map_ver, &oea->ea_dkey, rc, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
+			DP_UOID(oea->ea_oid), DP_RC(rc));
+		goto out;
+	}
 	epoch_range.epr_lo = 0ULL;
 	epoch_range.epr_hi = oea->ea_epoch;
 	recx.rx_idx = oea->ea_stripenum * oca->u.ec.e_len * oca->u.ec.e_k -
 							oea->ea_prior_len;
-	recx.rx_nr = oca->u.ec.e_len + oea->ea_prior_len - oea->ea_after_len;
+	recx.rx_nr = oca->u.ec.e_k * oca->u.ec.e_len +
+		oea->ea_prior_len - oea->ea_after_len;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				  &epoch_range, dkey, &oea->ea_akey, &recx);
 out:
