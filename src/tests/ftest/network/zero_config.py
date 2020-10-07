@@ -88,7 +88,8 @@ class ZeroConfigTest(TestWithServers):
 
         """
 	# anticipate log switch
-        cmd = "if [ -e {}.old ]; then head -50 {}.old; else head -50 {}; fi".format(log_file)
+        cmd = "if [ -f {0}.old ]; then head -50 {0}.old; else head -50 {0}; fi"
+              .format(log_file)
         err = "Error getting log data."
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
@@ -144,9 +145,6 @@ class ZeroConfigTest(TestWithServers):
         # Add FI_LOG_LEVEL to get more info on device issues
         racer_env = daos_racer.get_environment(self.server_managers[0], logf)
         racer_env["FI_LOG_LEVEL"] = "info"
-        # bump/double log size limit to avoid log switch and be able to
-        # find initialization msg in single/first log file
-        racer_env["D_LOG_SIZE"] = "2G"
         daos_racer.set_environment(racer_env)
 
         # Run client
