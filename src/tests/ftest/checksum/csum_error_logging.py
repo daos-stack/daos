@@ -25,7 +25,6 @@ import json
 
 from daos_core_base import DaosCoreBase
 from avocado.utils import process
-##DH+
 from general_utils import get_log_file
 
 class CSumErrorLog(DaosCoreBase):
@@ -98,7 +97,6 @@ class CSumErrorLog(DaosCoreBase):
         dev_id = self.get_nvme_device_id()
         self.log.info("%s", dev_id)
         csum = self.get_checksum_error_value(dev_id)
-        ##DH++
         self.dmg.copy_certificates(get_log_file("daosCA/certs"),
                                    self.hostlist_clients)
         self.log.info("Checksum Errors : %d", csum)
