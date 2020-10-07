@@ -35,9 +35,9 @@ import time
 import yaml
 import errno
 import xml.etree.ElementTree as ET
+from xml.dom import minidom
 import glob
 
-from xml.dom import minidom
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -950,7 +950,7 @@ def compress_log_files(avocado_logs_dir):
     """
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
-    # Debug check if this directoy exisits
+    # Debug check if this directory exists
     files = glob.glob(logs_dir)
     if files:
         print("Found files for {}: {}".format(logs_dir, files))
