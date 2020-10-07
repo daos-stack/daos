@@ -241,9 +241,10 @@ if ! $TEST_RPMS; then
 
     echo DAOS_BASE $DAOS_BASE
     echo SL_PREFIX $SL_PREFIX
-    ls -al /usr/share/daos/control
-    ls -al /usr/share/spdk/scripts
-    ls -al /usr/share/spdk/include
+    ls -al $DAOS_BASE
+    ls -al $DAOS_BASE/install/
+    ls -al $DAOS_BASE/install/share/
+    ls -al $DAOS_BASE/install/share/spdk/
     ls -al $DAOS_BASE/install/share/spdk/scripts
 fi
 
