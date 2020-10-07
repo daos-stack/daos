@@ -59,7 +59,6 @@ class IorIntercept(IorTestBase):
         """
         out = self.run_ior_with_pool(fail_on_warning=False)
         without_intercept = IorCommand.get_ior_metrics(out)
-        
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         out = self.run_ior_with_pool(intercept, fail_on_warning=False)
         with_intercept = IorCommand.get_ior_metrics(out)
