@@ -311,6 +311,8 @@ class DaosServer():
                                                        delete=False)
         scyaml = yaml.load(scfd)
         scyaml['servers'][0]['log_file'] = self._log_file
+        if self.conf.args.server_debug:
+            scyaml['servers'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = control_log_file.name
 
         self._yaml_file = tempfile.NamedTemporaryFile(
@@ -1355,6 +1357,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--output-file', default='nlt-errors.json')
+    parser.add_argument('--server-debug', default=None)
     parser.add_argument('--memcheck', default='some',
                         choices=['yes', 'no', 'some'])
     parser.add_argument('mode', nargs='?')

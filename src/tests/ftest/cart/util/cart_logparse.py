@@ -108,6 +108,8 @@ class LogLine():
     re_uuid = re.compile(r"[0-9a-f]{8}(:?)")
     # Match a truncated uuid[rank] from DF_DB
     re_uuid_rank = re.compile(r"[0-9,a-f]{8}\[\d+\](:?)")
+    # Match a RPCID from RPC_TRACE macro.
+    re_rpcid = re.compile(r"rpcid=0x[0-9a-f]{1,16}")
 
     def __init__(self, line):
         fields = line.split()
@@ -227,6 +229,10 @@ class LogLine():
                 r = self.re_uuid_rank.fullmatch(entry)
                 if r:
                     field = 'uuid/rank{}'.format(r.group(1))
+            if not field:
+                r = self.re_rpcid.fullmatch(entry)
+                if r:
+                    field = 'rpcid=<rpcid>'
             if field:
                 fields.append(field)
             else:
