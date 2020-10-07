@@ -49,7 +49,7 @@ def build_type() {
     }
 }
 
-def rpm_faults_enabled(String type) {
+def rpm_faults_enabled() {
     // if the fault_enabled pragma is false or it a release candidate; disable fault injection
     if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
         return "--without=fault-injection"
