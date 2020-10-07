@@ -115,7 +115,7 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "DAOS management tests..");
 			daos_test_print(rank, "=====================");
 			nr_failed = run_daos_mgmt_test(rank, size, sub_tests,
-						      sub_tests_size);
+						       sub_tests_size);
 			break;
 		case 'p':
 			daos_test_print(rank, "\n\n=================");
