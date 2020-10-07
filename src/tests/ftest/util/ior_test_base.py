@@ -271,6 +271,9 @@ class IorTestBase(TestWithServers):
         finally:
             if not self.subprocess and display_space:
                 self.pool.display_pool_daos_space()
+                if self.pool.dmg:
+                    # Display the per-target free space
+                    self.pool.set_query_data()
 
     def stop_ior(self):
         """Stop IOR process.
