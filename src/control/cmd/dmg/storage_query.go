@@ -81,8 +81,7 @@ type storageQueryCmd struct {
 	DeviceHealth devHealthQueryCmd   `command:"device-health" alias:"d" description:"Query the device health"`
 	ListPools    listPoolsQueryCmd   `command:"list-pools" alias:"p" description:"List pools on the server"`
 	ListDevices  listDevicesQueryCmd `command:"list-devices" alias:"d" description:"List storage devices on the server"`
-	//Usage usageQueryCmd `command:"usage" alias:"u" description:"Show
-	//storage device space utilization on the server"`
+	Usage        usageQueryCmd       `command:"usage" alias:"u" description:"Show SCM & NVMe storage space utilization per storage server"`
 }
 
 type devHealthQueryCmd struct {
@@ -159,14 +158,12 @@ type usageQueryCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
-	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
-	NvmeMeta   bool `short:"m" long:"nvme-meta" description:"Display server meta data held on NVMe storage"`
+	//Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 }
 
 // Execute is run when usageQueryCmd activates.
 //
-// Queries NVMe and SCM usage on hosts cstorage scan on all connected servers.
+// Queries NVMe and SCM usage on hosts.
 func (cmd *usageQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{}
@@ -174,9 +171,9 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
-		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --json specified")
-		}
+//		if cmd.Verbose {
+//			cmd.log.Info("--verbose flag ignored if --json specified")
+//		}
 
 		return cmd.outputJSON(resp, err)
 	}
@@ -186,33 +183,11 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	}
 
 	var bld strings.Builder
-	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
+	// verbose := control.PrintWithVerboseOutput(cmd.Verbose)
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if cmd.NvmeHealth {
-		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --nvme-health specified")
-		}
-		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
-			return err
-		}
-		cmd.log.Info(bld.String())
-
-		return resp.Errors()
-	}
-	if cmd.NvmeMeta {
-		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --nvme-meta specified")
-		}
-		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &bld); err != nil {
-			return err
-		}
-		cmd.log.Info(bld.String())
-
-		return resp.Errors()
-	}
-	if err := control.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
+	if err := control.PrintHostStorageMap(resp.HostStorage, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())

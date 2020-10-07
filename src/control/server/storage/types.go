@@ -324,6 +324,28 @@ func (sns ScmNamespaces) Capacity() (tb uint64) {
 	return
 }
 
+// Total returns the cumulative total bytes of all mounted SCM namespaces.
+func (sns ScmNamespaces) Total() (tb uint64) {
+	for _, sn := range sns {
+		if sn.Mount == nil {
+			continue
+		}
+		tb += sn.Mount.TotalBytes
+	}
+	return
+}
+
+// Free returns the cumulative available bytes of all mounted SCM namespaces.
+func (sns ScmNamespaces) Free() (tb uint64) {
+	for _, sn := range sns {
+		if sn.Mount == nil {
+			continue
+		}
+		tb += sn.Mount.AvailBytes
+	}
+	return
+}
+
 // Summary reports total storage space and the number of namespaces.
 //
 // Capacity given in IEC standard units.
@@ -344,6 +366,26 @@ func (nc *NvmeController) Capacity() (tb uint64) {
 func (ncs NvmeControllers) Capacity() (tb uint64) {
 	for _, c := range ncs {
 		tb += (*NvmeController)(c).Capacity()
+	}
+	return
+}
+
+// Total returns the cumulative total bytes of all blobstore clusters.
+func (ncs NvmeControllers) Total() (tb uint64) {
+	for _, c := range ncs {
+		for _, d := range c.SmdDevices {
+			tb += d.TotalBytes
+		}
+	}
+	return
+}
+
+// Free returns the cumulative available bytes of all blobstore clusters.
+func (ncs NvmeControllers) Free() (tb uint64) {
+	for _, c := range ncs {
+		for _, d := range c.SmdDevices {
+			tb += d.AvailBytes
+		}
 	}
 	return
 }

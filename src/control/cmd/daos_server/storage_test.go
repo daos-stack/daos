@@ -83,7 +83,7 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				StartingState:   storage.ScmStateNoRegions,
 				PrepNeedsReboot: true,
 			},
-			expLogMsg: scm.MsgScmRebootRequired,
+			expLogMsg: scm.MsgRebootRequired,
 		},
 		"prepare scm; create namespaces": {
 			smbc: &scm.MockBackendConfig{
