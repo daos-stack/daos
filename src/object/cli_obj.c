@@ -4195,6 +4195,11 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			obj_auxi->to_leader = 0;
 			D_GOTO(out, leader = -DER_NOTAPPLICABLE);
 		} else {
+			/* return nonapplicable in case the caller
+			 * want to retry non-leader option.
+			 */
+			if (leader < 0)
+				leader = -DER_NOTAPPLICABLE;
 			shard = leader;
 		}
 	} else {
