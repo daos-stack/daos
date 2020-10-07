@@ -49,6 +49,15 @@ def build_type() {
     }
 }
 
+def rpm_faults_enabled(String type) {
+    // if the fault_enabled pragma is false or it a release candidate; disable fault injection
+    if ((cachedCommitPragma(pragma: 'faults-enabled', def_val: 'true') != 'true') || release_candidate()) {
+        return "--without=fault-injection"
+    } else {
+        return "--with=fault-injection"
+    }
+}
+
 def skip_stage(String stage, boolean def_val = false) {
     String value = 'false'
     if (def_val) {
@@ -355,7 +364,7 @@ pipeline {
                                             "2>/dev/null",
                                     returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
-        BUILD_TYPE = build_type()
+        BUILD_OPTION = rpm_faults_enabled()
     }
 
     options {
