@@ -81,6 +81,7 @@ struct ec_agg_stripe {
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
 	unsigned int	as_offset;      /* start offset in stripe            */
 	unsigned int	as_prefix_ext;  /* prefix range to delete            */
+	unsigned int	as_suffix_ext;  /* suffix range to retain            */
 	bool		as_has_holes;   /* stripe includes holes             */
 };
 
@@ -561,7 +562,7 @@ agg_get_carry_under(struct ec_agg_entry *entry)
 		tail = agg_carry_over(entry, agg_extent);
 		/* At most one extent should carry over.( */
 		if (tail)
-			return agg_extent->ae_recx.rx_nr = tail;
+			return agg_extent->ae_recx.rx_nr - tail;
 		/* At most one extent should carry over. */
 	}
 	return 0;
@@ -588,8 +589,8 @@ agg_update_vos(struct ec_agg_entry *entry)
 
 	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * k * len -
 		entry->ae_cur_stripe.as_prefix_ext;
-	recx.rx_nr = k * len - agg_get_carry_under(entry) +
-		entry->ae_cur_stripe.as_prefix_ext;
+	recx.rx_nr = k * len + entry->ae_cur_stripe.as_prefix_ext -
+		entry->ae_cur_stripe.as_suffix_ext;
 	epoch_range.epr_lo = 0ULL;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 	rc = vos_obj_array_remove(entry->ae_chdl, entry->ae_oid,
@@ -1115,28 +1116,8 @@ agg_peer_update_ult(void *arg)
 	crt_rpc_t		*rpc;
 	int			 rc = 0;
 
-#if 0
-	ABT_rwlock_rdlock(pool->sp_lock);
-	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
-	if (rc != 1 || (target->ta_comp.co_status != PO_COMP_ST_UPIN
-			&& target->ta_comp.co_status != PO_COMP_ST_UP)) {
-		/* Remote target has failed, no need retry, but not
-		 * report failure as well and next rebuild will handle
-		 * it anyway.
-		 */
-		ABT_rwlock_unlock(pool->sp_lock);
-		D_DEBUG(DB_TRACE, "Can not find tgt %d or target is down %d\n",
-			tgt_id, target->ta_comp.co_status);
-		rc = -DER_NONEXIST;
-		goto out;
-	}
-
-	ABT_rwlock_unlock(pool->sp_lock);
-#endif
 	tgt_ep.ep_rank = entry->ae_peer_rank;
 	tgt_ep.ep_tag = entry->ae_peer_idx + 1;
-	D_PRINT("target index: %u\n", tgt_ep.ep_tag);
-	 // 1 because we are testing with 1 target per node?
 	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_AGGREGATE, DAOS_OBJ_MODULE,
 				 DAOS_OBJ_VERSION);
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
@@ -1158,8 +1139,8 @@ agg_peer_update_ult(void *arg)
 	ec_agg_in->ea_epoch = entry->ae_cur_stripe.as_hi_epoch;
 	ec_agg_in->ea_stripenum = entry->ae_cur_stripe.as_stripenum;
 	ec_agg_in->ea_map_ver = pool->sp_map_version;
-	ec_agg_in->ea_prior_len = 0;
-	ec_agg_in->ea_after_len = 0;
+	ec_agg_in->ea_prior_len = entry->ae_cur_stripe.as_prefix_ext;
+	ec_agg_in->ea_after_len = entry->ae_cur_stripe.as_suffix_ext;
 	buf = (unsigned char *)entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
 	d_iov_set(&iov, &buf[entry->ae_oca->u.ec.e_len],
 		  entry->ae_oca->u.ec.e_len * entry->ae_rsize);
@@ -1316,6 +1297,7 @@ out:
 	if (process_holes && rc == 0)
 		rc = agg_process_holes(entry);
 	else if (update_vos && rc == 0) {
+		entry->ae_cur_stripe.as_suffix_ext = agg_get_carry_under(entry);
 		if (!rc && entry->ae_oca->u.ec.e_p > 1) {
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry);
