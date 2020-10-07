@@ -411,7 +411,7 @@ do_init:
 		if (crt_plugin_gdata.cpg_inited == 0) {
 			rc = crt_plugin_init();
 			if (rc != 0) {
-				D_ERROR("crt_plugin_init() failed, , " DF_RC "\n",
+				D_ERROR("crt_plugin_init() failed, " DF_RC "\n",
 					DP_RC(rc));
 				D_GOTO(cleanup, rc);
 			}

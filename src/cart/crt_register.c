@@ -68,7 +68,8 @@ crt_opc_map_create(unsigned int bits)
 	for (i = 0; i < 16; i++) {
 		rc = crt_opc_map_L2_create(&map->com_map[i]);
 		if (rc != DER_SUCCESS) {
-			D_ERROR("crt_opc_map_L2_create() failed, " DF_RC "\n", DP_RC(rc));
+			D_ERROR("crt_opc_map_L2_create() failed, " DF_RC "\n",
+				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}

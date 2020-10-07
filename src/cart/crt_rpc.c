@@ -989,7 +989,8 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		rc = crt_req_ep_lc_lookup(rpc_priv, &uri_exists);
 		if (rc != 0) {
 			RPC_ERROR(rpc_priv,
-				  "crt_grp_ep_lc_lookup() failed, " DF_RC "\n", DP_RC(rc));
+				  "crt_grp_ep_lc_lookup() failed, " DF_RC "\n",
+				  DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 

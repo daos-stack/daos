@@ -300,7 +300,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag,
-			DP_RC(cbinfo.cci_rc));
+			  DP_RC(cbinfo.cci_rc));
 
 		rpc_priv->crp_complete_cb(&cbinfo);
 	}
