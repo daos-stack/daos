@@ -192,6 +192,8 @@ def set_test_environment(args):
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
 
+    print("SCHAN15 - Using PATH={}".format(os.environ["PATH"]))
+
     # Set the default location for daos log files written during testing if not
     # already defined.
     if "DAOS_TEST_LOG_DIR" not in os.environ:

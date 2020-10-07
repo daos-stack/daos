@@ -134,8 +134,9 @@ if ${TEST_RPMS:-false}; then
     SL_PREFIX=$PWD
 else
     TEST_RPMS=false
-    PREFIX=install
+    #PREFIX=install
     . .build_vars.sh
+    PREFIX=$SL_PREFIX
 fi
 
 if ${TEARDOWN_ONLY:-false}; then
@@ -243,6 +244,7 @@ if ! $TEST_RPMS; then
     ls -al /usr/share/daos/control
     ls -al /usr/share/spdk/scripts
     ls -al /usr/share/spdk/include
+    ls -al \$DAOS_BASE/install/share/spdk/scripts
 fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
