@@ -708,7 +708,7 @@ static struct op operations[] = {
 	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
 	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
 	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
-	/* Fetch with updates */
+	/* Read timestamp update only cases */
 	{"read_ts_o",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	read_ts_o_f},
 	{"read_ts_d",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	read_ts_d_f},
 	{"read_ts_a",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	read_ts_a_f},
