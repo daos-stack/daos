@@ -377,10 +377,21 @@ class TestWithServers(TestWithoutServers):
         if manager_class_name is not None:
             self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
-            # Set a timeout for the job manager using the following priority:
-            #   - use the test method specific timeout (if defined in the yaml)
-            #   - use the common job_manager timeout (if defined in the yaml)
-            #   - use the avocado test timeout minus 30 seconds
+            self.set_job_manager_timeout()
+
+    def set_job_manager_timeout(self):
+        """Set the timeout for the job manager.
+
+        Use the following priority when setting the job_manager timeout:
+            1) use the test method specific timeout from the test yaml, e.g.
+                job_manager_timeout:
+                    test_one: 30
+                    test_two: 60
+            2) use the common job_manager timeout from the test yaml, e.g.
+                job_manager_timeout: 45
+            3) use the avocado test timeout minus 30 seconds
+        """
+        if self.job_manager:
             self.job_manager.timeout = self.params.get(
                 self.get_test_name(), "/run/job_manager_timeout/*", None)
             if self.job_manager.timeout is None:
