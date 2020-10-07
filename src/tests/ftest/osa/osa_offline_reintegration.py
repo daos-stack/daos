@@ -50,23 +50,25 @@ class OSAOfflineReintegration(TestWithServers):
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
-        """Get the pool leader
-           Returns : int (pool_leader)
+        """Get the pool leader.
+
+        Returns:
+            int: pool leader number
+
         """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][3])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["leader"])
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
-        """Get the pool version
-           Returns : int (pool_version_value)
+        """Get the pool version.
+
+        Returns:
+            int: pool version number
+
         """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][4])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["version"])
 
     @fail_on(DaosApiError)
     def write_single_object(self):

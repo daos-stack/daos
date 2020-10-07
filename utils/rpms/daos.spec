@@ -37,7 +37,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       34%{?relval}%{?dist}
+Release:       35%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -63,6 +63,10 @@ BuildRequires: libjson-c-devel
 BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
 %if (0%{?suse_version} >= 1500)
+# NB: OpenSUSE is stupid about this... If we just
+# specify go >= 1.X, it installs go=1.11 AND 1.X.
+BuildRequires: go1.14
+BuildRequires: go1.14-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
 %else
@@ -104,7 +108,6 @@ BuildRequires: libcurl4
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
-BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: lua-lmod
@@ -499,9 +502,12 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Wed Oct 7 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.0-34
+* Wed Oct 7 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.0-35
 - Separated the daos-tests package into multiple packages based upon external
   package requirements.
+
+* Sat Oct 03 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-34
+- Add go-race to BuildRequires on OpenSUSE Leap
 
 * Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
 - Update OFI to v1.11.0
