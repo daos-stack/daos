@@ -338,10 +338,13 @@ def check_remote_output(task, command):
         else:
             for output, o_hosts in output_data:
                 n_set = NodeSet.fromlist(o_hosts)
-                lines = str(output).splitlines()
+                lines = output.decode('utf-8').splitlines()
                 if len(lines) > 1:
-                    output = "\n      {}".format("\n      ".join(lines))
-                print("    {}: rc={}, output: {}".format(n_set, code, output))
+                    print("    {}: rc={}, output:".format(n_set, code))
+                    for line in lines:
+                        print("      {}".format(lines)
+                else:
+                    print("    {}: rc={}, output: {}".format(n_set, code, output))
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
