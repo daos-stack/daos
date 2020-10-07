@@ -23,7 +23,7 @@
 """
 from apricot import TestWithServers
 from command_utils_base import CommandFailure
-from macsio_util import MacsioCommand
+from macsio_utils import MacsioCommand
 
 
 class MacsioTestBase(TestWithServers):

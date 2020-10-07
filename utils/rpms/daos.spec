@@ -2,6 +2,32 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
+%define create_file_list() (
+  touch ${1}
+  for file in ${2}
+  do
+    echo "${file}" >> ${1}
+    file_name_w_ext=${file##*/}
+    file_name=${name_w_ext%.*}
+    utils=$(grep -l -R -E "(from|import) ${file_name}" ${3}/ftest/util/* ${4})
+    for util_file in ${utils}
+    do
+      echo "${util_file}" >> ${1}
+      util_name_file_w_ext=${util_file##*/}
+      util_name=${util_name_w_ext%.*}
+      ftests=$(grep -l -R -E "(from|import) (${util_name}|${file_name})" \
+        ${3}/ftest/* --exclude-dir=soak --exclude-dir=util ${4})
+      for ftest_file in ${ftests}
+      do
+        echo "${ftest_file}" >> ${1}
+        echo "${ftest_file%.*}.yaml" >> ${1}
+      done
+    done
+  done
+  echo "Files in ${1}:"
+  cat ${1}
+)
+
 %if (0%{?suse_version} >= 1500)
 # until we get an updated mercury build on 15.2
 %global mercury_version 2.0.0~rc1-1.suse.lp151
@@ -11,7 +37,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       33%{?relval}%{?dist}
+Release:       34%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -157,14 +183,65 @@ Summary: The DAOS test suite
 Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: python2-tabulate
-Requires: fio
+Requires: mpich
+Requires: openmpi3
+Requires: ndctl
+Requires: hwloc
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
 
-
 %description tests
 This is the package needed to run the DAOS test suite
+
+%package tests-ior
+Summary: The DAOS test suite for ior tests
+Requires: %{name}-tests = %{version}-%{release}
+Requires: ior-hpc-daos-0
+Requires: hdf5-mpich2-tests-daos-0
+Requires: hdf5-openmpi3-tests-daos-0
+Requires: hdf5-vol-daos-mpich2-tests-daos-0
+Requires: hdf5-vol-daos-openmpi3-tests-daos-0
+
+%description tests-ior
+This is the package needed to run the DAOS test suite with ior
+
+%package tests-fio
+Summary: The DAOS test suite for fio tests
+Requires: %{name}-tests = %{version}-%{release}
+Requires: fio
+
+%description tests-fio
+This is the package needed to run the DAOS test suite with fio
+
+%package tests-mpiio
+Summary: The DAOS test suite for mpiio tests
+Requires: %{name}-tests-ior = %{version}-%{release}
+Requires: romio-tests-cart-4-daos-0
+Requires: testmpio-cart-4-daos-0
+Requires: mpi4py-tests-cart-4-daos-0
+
+%description tests-mpiio
+This is the package needed to run the DAOS test suite with mpiio
+
+%package tests-macsio
+Summary: The DAOS test suite for macsio tests
+Requires: %{name}-tests-mpiio = %{version}-%{release}
+Requires: MACSio-mpich2-daos-0
+Requires: MACSio-openmpi3-daos-0
+
+%description tests-macsio
+This is the package needed to run the DAOS test suite with  macsio
+
+%package tests-soak
+Summary: The DAOS soak test suite
+Requires: %{name}-tests = %{version}-%{release}
+Requires: %{name}-tests-ior = %{version}-%{release}
+Requires: %{name}-tests-fio = %{version}-%{release}
+Requires: slurm
+
+%description tests-soak
+This is the package needed to run the DAOS soak test suite
 
 %package devel
 # Leap 15 doesn't seem to be creating dependencies as richly as EL7
@@ -223,6 +300,28 @@ install -m 644 utils/systemd/%{server_svc_name} %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
+
+ftest_path=%{_prefix}/lib/daos/TESTING
+files=(%{?buildroot}/src/tests/ftest/util/ior_utils.py \
+  %{?buildroot}/src/tests/ftest/util/nvme_utils.py)
+%create_file_list daos-tests-ior.files ${files} ${ftest_path}
+exclude="--exclude=ior_utils.py --exclude=ior_test_base.py"
+
+files=%{?buildroot}/src/tests/ftest/util/fio_utils.py
+%create_file_list daos-tests-fio.files ${files} ${ftest_path} ${exclude}
+
+files=%{?buildroot}/src/tests/ftest/util/mpiio_utils.py
+%create_file_list daos-tests-mpiio.files ${files} ${ftest_path} ${exclude}
+
+files=%{?buildroot}/src/tests/ftest/util/macsio_utils.py
+%create_file_list daos-tests-macsio.files ${files} ${ftest_path} ${exclude}
+
+find ${ftest_path}/ftest | sort > daos-tests.files
+for name in ior fio mpiio macsio
+do
+  grep -Fvxf daos-tests-${name}.files daos-tests.files > daos-tests.files
+done
+grep -v ${ftest_path}/ftest/soak daos-tests.files > daos-tests.files
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
@@ -363,9 +462,10 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
 
-%files tests
+%files tests -f daos-tests.files
 %dir %{_prefix}/lib/daos
-%{_prefix}/lib/daos/TESTING
+%{_prefix}/lib/daos/TESTING/scripts
+%{_prefix}/lib/daos/TESTING/tests
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
@@ -382,12 +482,27 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
 
+%files tests-ior -f daos-tests-ior.files
+
+%files tests-fio -f daos-tests-fio.files
+
+%files tests-mpiio -f daos-tests-mpiio.files
+
+%files tests-macsio -f daos-tests-macsio.files
+
+%files tests-soak
+%{_prefix}/lib/daos/TESTING/soak
+
 %files devel
 %{_includedir}/*
 %{_libdir}/libdaos.so
 %{_libdir}/*.a
 
 %changelog
+* Wed Oct 7 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.0-34
+- Separated the daos-tests package into multiple packages based upon external
+  package requirements.
+
 * Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
 - Update OFI to v1.11.0
 
