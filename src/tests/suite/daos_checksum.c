@@ -215,10 +215,14 @@ static void
 setup_single_recx_data(struct csum_test_ctx *ctx, char *seed_data,
 		       daos_size_t data_bytes)
 {
+	int	rc;
+
 	iov_alloc_str(&ctx->dkey, "dkey");
 	iov_alloc_str(&ctx->update_iod.iod_name, "akey");
 
-	daos_sgl_init(&ctx->update_sgl, 1);
+	rc = daos_sgl_init(&ctx->update_sgl, 1);
+	if (rc)
+		return;
 	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
 	iov_update_fill(ctx->update_sgl.sg_iovs, seed_data, data_bytes);
 
@@ -243,10 +247,14 @@ static void
 setup_single_value_data(struct csum_test_ctx *ctx, char *seed_data,
 		       daos_size_t data_bytes)
 {
+	int	rc;
+
 	iov_alloc_str(&ctx->dkey, "dkey");
 	iov_alloc_str(&ctx->update_iod.iod_name, "akey");
 
-	daos_sgl_init(&ctx->update_sgl, 1);
+	rc = daos_sgl_init(&ctx->update_sgl, 1);
+	if (rc)
+		return;
 	iov_alloc(&ctx->update_sgl.sg_iovs[0], data_bytes);
 	iov_update_fill(ctx->update_sgl.sg_iovs, seed_data, data_bytes);
 

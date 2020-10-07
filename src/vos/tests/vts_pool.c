@@ -79,10 +79,13 @@ pool_file_setup(void **state)
 static int
 pool_file_destroy(void **state)
 {
+	int	rc;
+
 	struct vp_test_args	*arg = *state;
 
 	if (arg->fname[0]) {
-		remove(arg->fname[0]);
+		rc = remove(arg->fname[0]);
+		assert_int_equal(rc, 0);
 		D_FREE(arg->fname[0]);
 	}
 	D_FREE(arg->fname);
@@ -267,11 +270,13 @@ static int
 pool_unit_teardown(void **state)
 {
 	struct vp_test_args	*arg = *state;
-	int			i;
+	int			i, rc;
 
 	for (i = 0; i < arg->nfiles; i++) {
-		if (vts_file_exists(arg->fname[i]))
-			remove(arg->fname[i]);
+		if (vts_file_exists(arg->fname[i])) {
+			rc = remove(arg->fname[i]);
+			assert_int_equal(rc, 0);
+		}
 		if (arg->fname[i])
 			D_FREE(arg->fname[i]);
 		if (arg->ops_seq[i])
