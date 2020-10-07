@@ -466,7 +466,9 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.hugepages.value = 4096
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=30)
+        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
+        # be further investigated.
+        result = pcmd(self._hosts, str(cmd), timeout=40)
         if len(result) > 1 or 0 not in result:
             dev_type = "nvme"
             if using_dcpm and using_nvme:
