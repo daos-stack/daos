@@ -123,7 +123,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 				VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
 						DF_RC"\n", DP_RC(rc));
 				break;
-			}
+		}
 		}
 		key_tree_release(toh, 0);
 	}
@@ -977,6 +977,21 @@ done:
 	return options;
 }
 
+static inline void
+recx2filter(struct evt_filter *filter, daos_recx_t *recx)
+{
+	if (recx->rx_nr == 0) {
+		filter->fr_ex.ex_lo = 0ULL;
+		filter->fr_ex.ex_hi = ~(0ULL);
+	} else {
+		filter->fr_ex.ex_lo = recx->rx_idx;
+		filter->fr_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
+	}
+}
+
+/**
+ * Sets the range filter.
+ */
 static inline void
 recx2filter(struct evt_filter *filter, daos_recx_t *recx)
 {

@@ -1106,6 +1106,15 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
 				""DF_RC"\n", enum_args->rpc, opc, DP_RC(rc));
 		} else {
+			if (enum_args->eaa_obj) {
+				struct dc_obj_shard *shard;
+
+				shard = enum_args->eaa_obj;
+				shard->do_pl_shard.po_target = -1;
+				D_ERROR(DF_OID" set shard %d invalid.\n",
+					DP_OID(shard->do_id.id_pub),
+					shard->do_pl_shard.po_shard);
+			}
 			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
 				enum_args->rpc, opc, DP_RC(rc));
 		}
