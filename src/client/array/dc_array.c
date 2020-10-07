@@ -235,6 +235,11 @@ err_obj:
 
 		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 				 0, NULL, &close_task);
+		if (rc != 0) {
+			 D_ERROR("Failed to create object_close task\n");
+			 return rc;
+		}
+
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
 		tse_task_schedule(close_task, true);
@@ -682,8 +687,13 @@ err_obj:
 		daos_obj_close_t *close_args;
 		tse_task_t	 *close_task;
 
-		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
+		rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 				 0, NULL, &close_task);
+		if (rc != 0) {
+			D_ERROR("Failed to create object_close task\n");
+			return rc;
+		}
+
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
 		tse_task_schedule(close_task, true);
