@@ -28,6 +28,8 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/common"
 )
 
@@ -48,14 +50,14 @@ func getRandIdx(n ...int32) int32 {
 	return rand.Int31()
 }
 
-// MockNvmeControllerHealth returns struct with examples values.
-func MockNvmeControllerHealth(varIdx ...int32) *NvmeControllerHealth {
+// MockNvmeHealth returns struct with examples values.
+func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 	idx := common.GetIndex(varIdx...)
 	tWarn := false
 	if idx > 0 {
 		tWarn = true
 	}
-	return &NvmeControllerHealth{
+	return &NvmeHealth{
 		TempWarnTime:    uint32(idx),
 		TempCritTime:    uint32(idx),
 		CtrlBusyTime:    uint64(idx),
@@ -107,7 +109,7 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 		PciAddr:     concat("0000:80:00", idx, "."),
 		FwRev:       concat("fwRev", idx),
 		SocketID:    idx,
-		HealthStats: MockNvmeControllerHealth(idx),
+		HealthStats: MockNvmeHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
 		SmdDevices:  []*SmdDevice{MockSmdDevice(idx)},
 	}
@@ -150,6 +152,17 @@ func MockScmModules(length int) ScmModules {
 	}
 
 	return result
+}
+
+// MockScmMountPoint returns struct with examples values.
+func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
+	idx := common.GetIndex(varIdx...)
+
+	return &ScmMountPoint{
+		Path:       fmt.Sprintf("/mnt/daos%d", idx),
+		TotalBytes: uint64(humanize.TByte) * uint64(idx),
+		AvailBytes: uint64(humanize.TByte/2) * uint64(idx),
+	}
 }
 
 // MockScmNamespace returns struct with examples values.

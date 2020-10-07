@@ -31,18 +31,18 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-type NvmeControllerHealth ctlpb.NvmeController_Health
+type NvmeHealth ctlpb.NvmeController_Health
 
-func (pb *NvmeControllerHealth) FromNative(native *storage.NvmeControllerHealth) error {
+func (pb *NvmeHealth) FromNative(native *storage.NvmeHealth) error {
 	return convert.Types(native, pb)
 }
 
-func (pb *NvmeControllerHealth) ToNative() (*storage.NvmeControllerHealth, error) {
-	native := new(storage.NvmeControllerHealth)
+func (pb *NvmeHealth) ToNative() (*storage.NvmeHealth, error) {
+	native := new(storage.NvmeHealth)
 	return native, convert.Types(pb, native)
 }
 
-func (pb *NvmeControllerHealth) AsProto() *ctlpb.NvmeController_Health {
+func (pb *NvmeHealth) AsProto() *ctlpb.NvmeController_Health {
 	return (*ctlpb.NvmeController_Health)(pb)
 }
 
@@ -179,6 +179,21 @@ func (pb *ScmNamespaces) FromNative(native storage.ScmNamespaces) error {
 func (pb *ScmNamespaces) ToNative() (storage.ScmNamespaces, error) {
 	native := make(storage.ScmNamespaces, 0, len(*pb))
 	return native, convert.Types(pb, &native)
+}
+
+type ScmMountPoint ctlpb.ScmNamespace_Mount
+
+func (pb *ScmMountPoint) FromNative(native *storage.ScmMountPoint) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *ScmMountPoint) ToNative() (*storage.ScmMountPoint, error) {
+	native := new(storage.ScmMountPoint)
+	return native, convert.Types(pb, native)
+}
+
+func (pb *ScmMountPoint) AsProto() *ctlpb.ScmNamespace_Mount {
+	return (*ctlpb.ScmNamespace_Mount)(pb)
 }
 
 // ScmMountResults is an alias for protobuf ScmMountResult message slice

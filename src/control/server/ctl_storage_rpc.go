@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -83,17 +84,18 @@ func newPrepareScmResp(inResp *scm.PrepareResponse, inErr error) (*ctlpb.Prepare
 	}()
 
 	if inErr != nil {
-		return outResp, nil // response populated in defer
+		return outResp, nil
 	}
 
 	if inResp.RebootRequired {
-		info = scm.MsgScmRebootRequired
+		info = scm.MsgRebootRequired
 		outResp.Rebootrequired = true
 	}
 
 	outResp.Namespaces = make(proto.ScmNamespaces, 0, len(inResp.Namespaces))
+	err = (*proto.ScmNamespaces)(&outResp.Namespaces).FromNative(inResp.Namespaces)
 
-	return outResp, (*proto.ScmNamespaces)(&outResp.Namespaces).FromNative(inResp.Namespaces)
+	return outResp, err
 }
 
 func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (*ctlpb.PrepareScmResp, error) {
@@ -258,11 +260,27 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 	return newScanNvmeResp(req, resp, err)
 }
 
-func (c *ControlService) scanInstanceScm(ctx context.Context, nss storage.ScmNamespaces) (storage.ScmNamespaces, error) {
-	// TODO: get utilisation for any mounted namespaces
-	// chroma_core_
+func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResponse) (*scm.ScanResponse, error) {
+	instances := c.harness.Instances()
 
-	return nss, nil
+	// get utilisation for any mounted namespaces
+	for _, ns := range resp.Namespaces {
+		for _, srv := range instances {
+			if !srv.isReady() {
+				continue
+			}
+			if !common.Includes(srv.scmConfig().DeviceList, ns.BlockDevice) {
+				continue
+			}
+			mp, err := srv.scmProvider.MountUsage(srv.scmConfig().MountPoint)
+			if err != nil {
+				return nil, err
+			}
+			ns.Mount = mp
+		}
+	}
+
+	return resp, nil
 }
 
 // newScanScmResp sets protobuf SCM scan response with module or namespace info.
@@ -301,7 +319,7 @@ func (c *ControlService) scanScm(ctx context.Context) (*ctlpb.ScanScmResp, error
 	ssr, scanErr := c.ScmScan(scmReq)
 	if scanErr == nil && len(ssr.Namespaces) > 0 {
 		// update namespace info if storage is online
-		ssr.Namespaces, scanErr = c.scanInstanceScm(ctx, ssr.Namespaces)
+		return newScanScmResp(c.scanInstanceScm(ctx, ssr))
 	}
 
 	return newScanScmResp(ssr, scanErr)

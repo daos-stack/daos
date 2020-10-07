@@ -27,7 +27,6 @@ import (
 	"context"
 	"os"
 	"path"
-	"syscall"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -74,7 +73,7 @@ func (srv *IOServerInstance) MountScmDevice() error {
 		}
 		res, err = srv.scmProvider.MountDcpm(scmCfg.DeviceList[0], scmCfg.MountPoint)
 	default:
-		err = errors.New(scm.MsgScmClassNotSupported)
+		err = errors.New(scm.MsgClassNotSupported)
 	}
 	if err != nil {
 		return errors.WithMessage(err, "mounting existing scm dir")
@@ -172,37 +171,20 @@ func (srv *IOServerInstance) awaitStorageReady(ctx context.Context, skipMissingS
 	return ctx.Err()
 }
 
-type ScmStorageUsage struct {
-	MountPoint string
-	TotalBytes uint64
-	AvailBytes uint64
-}
-
-func (srv *IOServerInstance) getScmStorageUsage() (*ScmStorageUsage, error) {
+func (srv *IOServerInstance) logScmStorage() error {
 	scmMount := path.Dir(srv.superblockPath())
-	stBuf := new(syscall.Statfs_t)
 
-	if err := syscall.Statfs(scmMount, stBuf); err != nil {
-		return nil, err
+	if scmMount != srv.scmConfig().MountPoint {
+		return errors.New("superblock path doesn't match config mountpoint")
 	}
 
-	frSize := uint64(stBuf.Frsize)
-
-	return &ScmStorageUsage{
-		MountPoint: scmMount,
-		TotalBytes: frSize * stBuf.Blocks,
-		AvailBytes: frSize * stBuf.Bavail,
-	}, nil
-}
-
-func (srv *IOServerInstance) logScmStorage() error {
-	usage, err := srv.getScmStorageUsage()
+	mp, err := srv.scmProvider.MountUsage(scmMount)
 	if err != nil {
 		return err
 	}
 
-	srv.log.Infof("SCM @ %s: %s Total/%s Avail", usage.MountPoint,
-		humanize.Bytes(usage.TotalBytes), humanize.Bytes(usage.AvailBytes))
+	srv.log.Infof("SCM @ %s: %s Total/%s Avail", mp.Path,
+		humanize.Bytes(mp.TotalBytes), humanize.Bytes(mp.AvailBytes))
 
 	return nil
 }

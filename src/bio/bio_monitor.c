@@ -430,7 +430,7 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 
 /* Collect space utilisation for blobstore */
 static void
-collect_bs_usage_stats(struct spdk_blob_store *bs, struct nvme_stats *stats)
+collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 {
 	uint64_t	cl_sz;
 
@@ -477,8 +477,8 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 			ctxt->bxc_tgt_id, rc);
 
 	collect_raw_health_data(dev_health);
-	collect_bs_usage_stats(ctxt->bxc_blobstore->bb_bs,
-			       &dev_health->bdh_health_state);
+	collect_bs_usage(ctxt->bxc_blobstore->bb_bs,
+			 &dev_health->bdh_health_state);
 }
 
 /* Print the io stat every few seconds, for debug only */

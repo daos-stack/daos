@@ -337,7 +337,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		}
 		ctrlr.Model = fmt.Sprintf("model-%d", sIdx)
 		ctrlr.Serial = common.MockUUID(sIdx)
-		ctrlr.Healthstats = proto.MockNvmeControllerHealth(idx + 1)
+		ctrlr.Healthstats = proto.MockNvmeHealth(idx + 1)
 		ctrlr.Smddevices = nil
 
 		bioHealthResp := new(mgmtpb.BioHealthResp)
@@ -390,10 +390,15 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		return b
 	}
 
+	mockPbScmMount := proto.MockScmMountPoint()
+	mockPbScmNamespace := proto.MockScmNamespace()
+	mockPbScmNamespace.Mount = mockPbScmMount
+
 	for name, tc := range map[string]struct {
 		req       *StorageScanReq
 		bmbc      *bdev.MockBackendConfig
 		smbc      *scm.MockBackendConfig
+		smsc      *scm.MockSysConfig
 		cfg       *Configuration
 		scanTwice bool
 		junkResp  bool
@@ -745,6 +750,33 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Scm: &ScanScmResp{State: new(ResponseState)},
 			},
 		},
+		"scan scm with space utilization": {
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+			},
+			smsc: &scm.MockSysConfig{
+				MountUsageTotal: mockPbScmMount.Totalbytes,
+				MountUsageAvail: mockPbScmMount.Availbytes,
+			},
+			cfg: newDefaultConfiguration(nil).WithServers(
+				ioserver.NewConfig().
+					WithScmMountPoint(mockPbScmMount.Path).
+					WithScmClass(storage.ScmClassDCPM.String()).
+					WithScmDeviceList(mockPbScmNamespace.Blockdev)),
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {},
+			},
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					State: new(ResponseState),
+				},
+				Scm: &ScanScmResp{
+					Namespaces: proto.ScmNamespaces{mockPbScmNamespace},
+					State:      new(ResponseState),
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -760,13 +792,16 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			if len(tc.cfg.Servers) != len(tc.drpcResps) {
 				t.Fatalf("num servers in tc.cfg doesn't match num drpc msgs")
 			}
-			svc := newTestMgmtSvcMulti(t, log, len(tc.cfg.Servers), false)
 
-			cs := mockControlService(t, log, tc.cfg, tc.bmbc, tc.smbc, nil)
+			cs := mockControlService(t, log, tc.cfg, tc.bmbc, tc.smbc, tc.smsc)
+			cs.harness.started.SetTrue()
 			for i := range cs.harness.instances {
-				// enable mocking of harness instance drpc channel
-				svcInstance := svc.harness.instances[i]
-				cs.harness.instances[i] = svcInstance
+				// replace harness instance with mock IO server
+				// to enable mocking of harness instance drpc channel
+				newSrv := newTestIOServer(log, false, tc.cfg.Servers[i])
+				newSrv.scmProvider = cs.scm
+				cs.harness.instances[i] = newSrv
+
 				cfg := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
@@ -775,8 +810,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				svcInstance.setDrpcClient(newMockDrpcClient(cfg))
-				svcInstance._superblock.Rank = system.NewRankPtr(uint32(i + 1))
+				newSrv.setDrpcClient(newMockDrpcClient(cfg))
+				newSrv._superblock.Rank = system.NewRankPtr(uint32(i + 1))
 			}
 
 			// runs discovery for nvme & scm
@@ -861,6 +896,7 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes:      storage.ScmModules{storage.MockScmModule()},
 				PrepNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				PrepNeedsReboot:  true,
 			},
 			req: StoragePrepareReq{
 				Nvme: &PrepareNvmeReq{},
@@ -869,8 +905,11 @@ func TestServer_CtlSvc_StoragePrepare(t *testing.T) {
 			expResp: &StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
-					State:      new(ResponseState),
-					Namespaces: []*ScmNamespace{proto.MockScmNamespace()},
+					State: &ResponseState{
+						Info: scm.MsgRebootRequired,
+					},
+					Namespaces:     []*ScmNamespace{proto.MockScmNamespace()},
+					Rebootrequired: true,
 				},
 			},
 		},

@@ -224,7 +224,7 @@ func (srv *IOServerInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[
 		msg := fmt.Sprintf("instance %d: health stats from smd uuid %s", srv.Index(),
 			dev.GetUuid())
 
-		health := new(storage.NvmeControllerHealth)
+		health := new(storage.NvmeHealth)
 		if err := convert.Types(pbStats, health); err != nil {
 			return errors.Wrapf(err, msg)
 		}

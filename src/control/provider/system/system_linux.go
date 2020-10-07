@@ -169,3 +169,16 @@ func (s LinuxProvider) Unmount(target string, flags int) error {
 	}
 	return unix.Unmount(target, flags)
 }
+
+// MountUsage retrieves total and available byte counts for a mountpoint.
+func (s LinuxProvider) MountUsage(target string) (uint64, uint64, error) {
+	stBuf := new(syscall.Statfs_t)
+
+	if err := syscall.Statfs(target, stBuf); err != nil {
+		return 0, 0, err
+	}
+
+	frSize := uint64(stBuf.Frsize)
+
+	return frSize * stBuf.Blocks, frSize * stBuf.Bavail, nil
+}
