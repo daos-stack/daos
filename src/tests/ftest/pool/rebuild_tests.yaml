@@ -24,28 +24,28 @@ container:
   data:
     small_data:
       data_size: 32
-    large_data:
-      data_size: 250
+#    large_data:
+#      data_size: 250
   objects:
     zero_objects:
       object_qty: 0
-    one_object:
-      object_qty: 1
-    twenty_objects:
-      object_qty: 20
+#    one_object:
+#      object_qty: 1
+#    twenty_objects:
+#      object_qty: 20
   records:
     one_record:
       record_qty: 1
-    ten_records:
-      record_qty: 10
+#    ten_records:
+#      record_qty: 10
 testparams:
   ranks: 
     rank1:
       rank: 1
-    rank4:
-      rank: 4
-    rank3:
-      rank: 3
+#    rank4:
+#      rank: 4
+#    rank3:
+#      rank: 3
   quantity: 2
   object_class: DAOS_OC_R3_RW
 
