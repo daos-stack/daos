@@ -26,6 +26,7 @@ from logging import getLogger
 import os
 import random
 
+from collections import Counter
 
 def write_host_file(hostlist, path='/tmp', slots=1):
     """Write out a hostfile suitable for orterun.
@@ -43,6 +44,28 @@ def write_host_file(hostlist, path='/tmp', slots=1):
         str: the full path of the written hostfile
 
     """
+
+    # Adjust slot parameter if we get duplicate entries of a hostname, which
+    # will prevent the generation of hostfiles that would throw this orterun
+    # error:
+    #   "A hostfile was provided that contains multiple definitions of the slot
+    #   count for at least one node."
+    #
+    # In other words, this is a valid hostfile:
+    # boro-A
+    # boro-A
+    #
+    # This is a valid hostfile:
+    # boro-A slots=2
+    #
+    # But this is *not* a valid hostfile:
+    # boro-A slots=1
+    # boro-A slots=1
+
+    hosts_with_multiple_entries = [k for k,v in Counter(hostlist).items() if v>1]
+    if len(hosts_with_multiple_entries):
+      slots=None
+
     log = getLogger()
     unique = random.randint(1, 100000)
 

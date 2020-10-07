@@ -38,6 +38,8 @@ import logging
 import cart_logparse
 import cart_logtest
 
+from write_host_file import write_host_file
+
 class CartUtils():
     """CartUtils Class"""
 
@@ -48,38 +50,6 @@ class CartUtils():
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
-
-    @staticmethod
-    def write_host_file(hostlist, slots=1):
-        """ write out a hostfile suitable for orterun """
-
-        unique = random.randint(1, 100000)
-
-        # Write hostfile to HOME or DAOS_TEST_SHARED_DIR (can't be '.' or
-        # cwd(), it must be some place writable)
-        hostfile_path_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            hostfile_path_dir = os.environ['DAOS_TEST_SHARED_DIR']
-
-        path = hostfile_path_dir + '/hostfile'
-
-        if not os.path.exists(path):
-            os.makedirs(path)
-        hostfile = path + "/hostfile" + str(unique)
-
-        if hostlist is None:
-            raise ValueError("host list parameter must be provided.")
-        hostfile_handle = open(hostfile, 'w')
-
-        for host in hostlist:
-            if slots is None:
-                print("<<{}>>".format(slots))
-                hostfile_handle.write("{0}\n".format(host))
-            else:
-                print("<<{}>>".format(slots))
-                hostfile_handle.write("{0} slots={1}\n".format(host, slots))
-        hostfile_handle.close()
-        return hostfile
 
     @staticmethod
     def check_process(proc):
@@ -278,10 +248,20 @@ class CartUtils():
         tst_ppn = cartobj.params.get("{}_ppn".format(host), "/run/tests/*/")
         logparse = cartobj.params.get("logparse", "/run/tests/*/")
 
+        # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
+        # (It can't be '.' or cwd(), it must be some place writable.)
+        daos_test_shared_dir = os.environ['HOME']
+        if 'DAOS_TEST_SHARED_DIR' in os.environ:
+            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
+
         if tst_slt is not None:
-            hostfile = self.write_host_file(tst_host, tst_slt)
+            hostfile = write_host_file(tst_host,
+                                       daos_test_shared_dir,
+                                       tst_slt)
         else:
-            hostfile = self.write_host_file(tst_host, tst_ppn)
+            hostfile = write_host_file(tst_host,
+                                       daos_test_shared_dir,
+                                       tst_ppn)
 
         mca_flags = "--mca btl self,tcp "
 
