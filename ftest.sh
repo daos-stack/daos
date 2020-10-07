@@ -244,7 +244,7 @@ if ! $TEST_RPMS; then
     ls -al /usr/share/daos/control
     ls -al /usr/share/spdk/scripts
     ls -al /usr/share/spdk/include
-    ls -al \$DAOS_BASE/install/share/spdk/scripts
+    ls -al $DAOS_BASE/install/share/spdk/scripts
 fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
