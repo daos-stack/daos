@@ -188,11 +188,14 @@ get_cartlogtest_files() {
     # shellcheck disable=SC2045,SC2086
     for file in $(ls -d ${1})
     do
-        if "${CART_LOGTEST_PATH}" "${file}" &> "${file}"_cart_testlog; then
+        if [ -f ${file} ]; then
             echo "${CART_LOGTEST_PATH} ${file} &> ${file}_cart_testlog"
-        else
-            echo "Failed to run ${CART_LOGTEST_PATH} ..."
-            rc=1
+            ${CART_LOGTEST_PATH} ${file} &> ${file}_cart_testlog
+            ret=$?
+            if [ ${ret} -ne 0 ]; then
+                echo "  Error detected - see ${file}_cart_testlog for details."
+                rc=1
+            fi
         fi
     done
     return ${rc}
@@ -255,8 +258,10 @@ if [ "${VERBOSE}" == "true" ]; then
 fi
 
 if [ -n "${FILES_TO_PROCESS}" ]; then
+    ftp="${FILES_TO_PROCESS%\"}"
+    ftp="${ftp#\"}"
     # shellcheck disable=SC2086
-    files=$(ls -d ${FILES_TO_PROCESS})
+    files=$(ls -d ${ftp})
     files_rc=$?
     if [ -n "${files}" ] && [ "${files_rc}" -eq 0 ]; then
         echo "Files to process: ${files}"
