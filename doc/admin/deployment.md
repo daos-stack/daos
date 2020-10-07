@@ -953,6 +953,41 @@ mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
 daos_test requires at least 8GB of SCM (or DRAM with tmpfs) storage on
 each storage node.
 
+## Smoke Test
+Basic DAOS features can be tested automatically with `smoke_test/basic.py`. This
+tool executes some basic features so that you can ensure that your system
+configurations and DAOS installation have been done properly. Some of the
+features executed are; starting `daos_server` and `daos_agent`, creating a pool
+and a container, and writing some data to the container.
+
+### Requirements to run `basic.py`
+-	Python3 should be installed. The version needs to be higher than 3.6.8.
+-	pyyaml should be installed. (pip install pyyaml)
+-	`daos_server`, `daos_client` (if using RPM), and fuse3 are installed and the
+path for `daos_server`, `daos_agent`, `dfuse`, and `fusermount3` are set.
+-	If DCPM is used, its content should be deleted before running the test
+(wipefs -a /dev/<pmem_device>). If data exist, it may interfere with the test.
+e.g., If there is an existing pool, the test will fail because it sees
+unexpected pool.
+-	If DCPM is used, the test will create a pool in it, so wiping out the disk
+after the test is recommended.
+-	If tmpfs is used, it should be unmounted before running the test and the size
+should be at least 2GB.
+
+### Running the test
+```bash
+python3 basic.py --server <server.yaml> [--agent <agent.yaml>] [--without_daos_server] [--without_daos_agent]
+```
+You have the option to start your `daos_server` and/or `daos_agent` and run this
+test against them. `daos_server` yaml is required. `daos_agent` yaml isn’t
+unless you want `basic.py` to start `daos_agent`. Show more help with:
+```bash
+python3 basic.py --help
+```
+
+### Limitations
+- The test doesn’t use authentication.
+
 [^1]: https://github.com/intel/ipmctl
 
 [^2]: https://github.com/daos-stack/daos/tree/master/utils/config
