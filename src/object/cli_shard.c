@@ -199,6 +199,10 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	int			 i;
 	int			 rc = 0;
 
+	csummer = dc_cont_hdl2csummer(rw_args->coh);
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
+		return 0;
+
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
 	sgls = rw_args->rwaa_sgls;
@@ -215,10 +219,6 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		  "orwo->orw_maps.ca_count(%lu) == "
 		  "orw->orw_iod_array.oia_iod_nr(%d)",
 		  orwo->orw_maps.ca_count, orw->orw_iod_array.oia_iod_nr);
-
-	csummer = dc_cont_hdl2csummer(rw_args->coh);
-	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
-		return 0;
 
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
