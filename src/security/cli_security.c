@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,11 +132,15 @@ auth_cred_to_iov(Auth__Credential *cred, d_iov_t *iov)
 static int
 get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 {
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int			rc = 0;
 	Auth__GetCredResp	*cred_resp = NULL;
 
-	cred_resp = auth__get_cred_resp__unpack(NULL, response->body.len,
+	cred_resp = auth__get_cred_resp__unpack(&alloc.alloc,
+						response->body.len,
 						response->body.data);
+	if (alloc.oom)
+		return -DER_NOMEM;
 	if (cred_resp == NULL) {
 		D_ERROR("Body was not a GetCredentialResp");
 		return -DER_PROTO;
@@ -160,6 +164,6 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 
 	rc = auth_cred_to_iov(cred_resp->cred, cred);
 out:
-	auth__get_cred_resp__free_unpacked(cred_resp, NULL);
+	auth__get_cred_resp__free_unpacked(cred_resp, &alloc.alloc);
 	return rc;
 }

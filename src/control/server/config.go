@@ -73,6 +73,7 @@ type Configuration struct {
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool                      `yaml:"disable_vfio"`
+	DisableVMD          bool                      `yaml:"disable_vmd"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`
 	SetHugepages        bool                      `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
@@ -274,8 +275,15 @@ func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
 // WithDisableVFIO indicates that the vfio-pci driver should not be
 // used by SPDK even if an IOMMU is detected. Note that this option
 // requires that DAOS be run as root.
-func (c *Configuration) WithDisableVFIO() *Configuration {
-	c.DisableVFIO = true
+func (c *Configuration) WithDisableVFIO(disabled bool) *Configuration {
+	c.DisableVFIO = disabled
+	return c
+}
+
+// WithDisableVMD indicates that vmd devices should not be used even if they
+// exist.
+func (c *Configuration) WithDisableVMD(disabled bool) *Configuration {
+	c.DisableVMD = disabled
 	return c
 }
 
@@ -337,6 +345,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
 		getDeviceClassFn:   netdetect.GetDeviceClass,
+		DisableVMD:         true, // support currently unstable
 	}
 }
 
@@ -420,7 +429,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// config without servers is valid when initially discovering hardware
 	// prior to adding per-server sections with device allocations
 	if len(c.Servers) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", DataPlaneName, ControlPlaneName)
+		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName, build.ControlPlaneName)
 		c.Servers = nil
 		return nil
 	}

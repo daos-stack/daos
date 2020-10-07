@@ -162,9 +162,21 @@ enum daos_cont_props {
 	 * Expected to be in the order: Owner, User(s), Group(s), Everyone
 	 */
 	DAOS_PROP_CO_ACL,
-	/** Compression on/off + compression type */
+	/**
+	 * Determine whether inline compression is enabled
+	 * Value: DAOS_PROP_CO_COMPRESS_OFF/LZ4/DEFLATE[1-4]
+	 * Default: DAOS_PROP_CO_COMPRESS_OFF
+	 */
 	DAOS_PROP_CO_COMPRESS,
-	/** Encryption on/off + encryption type */
+	/**
+	 * Determine whether encryption is enabled
+	 * Value:
+	 * DAOS_PROP_CO_ENCRYPT_OFF,
+	 * DAOS_PROP_CO_ENCRYPT_AES_XTS{128,256},
+	 * DAOS_PROP_CO_ENCRYPT_AES_CBC{128,192,256},
+	 * DAOS_PROP_CO_ENCRYPT_AES_GCM{128,256}
+	 * Default: DAOS_PROP_CO_ENCRYPT_OFF
+	 */
 	DAOS_PROP_CO_ENCRYPT,
 	/**
 	 * The user who acts as the owner of the container.
@@ -176,6 +188,18 @@ enum daos_cont_props {
 	 * Format: group@[domain]
 	 */
 	DAOS_PROP_CO_OWNER_GROUP,
+	/**
+	 * Determine whether deduplication is enabled
+	 * Require checksum to be enabled
+	 * Value DAOS_PROP_CO_DEDUP_OFF/MEMCMP/HASH
+	 * Default: DAOS_PROP_CO_DEDUP_OFF
+	 */
+	DAOS_PROP_CO_DEDUP,
+	/**
+	 * Deduplication threshold size
+	 * Default: 4K
+	 */
+	DAOS_PROP_CO_DEDUP_THRESHOLD,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -210,15 +234,34 @@ enum {
 	DAOS_PROP_CO_CSUM_SV_ON
 };
 
+/** container deduplication */
+enum {
+	DAOS_PROP_CO_DEDUP_OFF,
+	DAOS_PROP_CO_DEDUP_MEMCMP,
+	DAOS_PROP_CO_DEDUP_HASH
+};
 
-/** container compress type */
+/** container compression type */
 enum {
 	DAOS_PROP_CO_COMPRESS_OFF,
+	DAOS_PROP_CO_COMPRESS_LZ4,
+	DAOS_PROP_CO_COMPRESS_DEFLATE, /** deflate default */
+	DAOS_PROP_CO_COMPRESS_DEFLATE1,
+	DAOS_PROP_CO_COMPRESS_DEFLATE2,
+	DAOS_PROP_CO_COMPRESS_DEFLATE3,
+	DAOS_PROP_CO_COMPRESS_DEFLATE4,
 };
 
 /** container encryption type */
 enum {
 	DAOS_PROP_CO_ENCRYPT_OFF,
+	DAOS_PROP_CO_ENCRYPT_AES_XTS128,
+	DAOS_PROP_CO_ENCRYPT_AES_XTS256,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC128,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC192,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC256,
+	DAOS_PROP_CO_ENCRYPT_AES_GCM128,
+	DAOS_PROP_CO_ENCRYPT_AES_GCM256
 };
 
 /** container redundancy factor */

@@ -1,0 +1,49 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+  test_clients:
+    - server-C
+    - server-D
+    - client-E
+    - client-F
+    - client-G
+    - client-H
+timeout: 3600
+server_config:
+    name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 500GiB
+    nvme_size: 500GiB
+    svcn: 1
+    control_method: dmg
+container:
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
+hdf5_vol:
+    plugin_path: /usr/lib64/mpich/lib
+ior:
+  client_processes:
+    np_144:
+      np: 144
+  flags: "-v -W -w -r -R"
+  api: HDF5
+  repetitions: 1
+  transfersize_blocksize: !mux
+    1K:
+      transfer_size: '1K'
+      block_size: '256M'
+    1M:
+      transfer_size: '1M'
+      block_size: '6G'
+dfuse:
+    mount_dir: "/tmp/daos_dfuse"
+

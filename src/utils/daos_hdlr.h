@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,8 @@ enum pool_op {
 	POOL_GET_PROP,
 	POOL_SET_ATTR,
 	POOL_GET_ATTR,
-	POOL_LIST_ATTRS
+	POOL_LIST_ATTRS,
+	POOL_DEL_ATTR
 };
 
 enum obj_op {
@@ -183,6 +184,7 @@ int pool_query_hdlr(struct cmd_args_s *ap);
 int pool_list_containers_hdlr(struct cmd_args_s *ap);
 int pool_get_prop_hdlr(struct cmd_args_s *ap);
 int pool_set_attr_hdlr(struct cmd_args_s *ap);
+int pool_del_attr_hdlr(struct cmd_args_s *ap);
 int pool_get_attr_hdlr(struct cmd_args_s *ap);
 int pool_list_attrs_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
@@ -200,14 +202,17 @@ int cont_set_prop_hdlr(struct cmd_args_s *ap);
 int cont_list_attrs_hdlr(struct cmd_args_s *ap);
 int cont_set_attr_hdlr(struct cmd_args_s *ap);
 int cont_get_attr_hdlr(struct cmd_args_s *ap);
+int cont_del_attr_hdlr(struct cmd_args_s *ap);
 int cont_create_snap_hdlr(struct cmd_args_s *ap);
-int cont_list_snaps_hdlr(struct cmd_args_s *ap);
+int cont_list_snaps_hdlr(struct cmd_args_s *ap, char *snapname,
+			 daos_epoch_t *epoch);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
 int cont_update_acl_hdlr(struct cmd_args_s *ap);
 int cont_delete_acl_hdlr(struct cmd_args_s *ap);
 int cont_set_owner_hdlr(struct cmd_args_s *ap);
+int cont_rollback_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:

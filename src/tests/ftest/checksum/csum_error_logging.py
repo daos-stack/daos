@@ -21,12 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
-import re
 import json
 
 from daos_core_base import DaosCoreBase
-from dmg_utils import DmgCommand
 from avocado.utils import process
 
 
@@ -38,24 +35,17 @@ class CSumErrorLog(DaosCoreBase):
     in the NVME device due to checksum fault injection.
     :avocado: recursive
     """
-    # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-instance-attributes,too-many-ancestors
     def setUp(self):
         super(CSumErrorLog, self).setUp()
-        self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        self.dmg.get_params(self)
+        self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
-        self.dmg.insecure.update(
-            self.server_managers[0].get_config_value("allow_insecure"),
-            "dmg.insecure")
-        self.dmg.set_sub_command("storage")
-        self.dmg.sub_command_class.set_sub_command("query")
 
     def get_nvme_device_id(self):
+        """method to get nvme device-id. """
         self.dmg.json.value = True
-        self.dmg.sub_command_class. \
-            sub_command_class.set_sub_command("list-devices")
         try:
-            result = self.dmg.run()
+            result = self.dmg.storage_query_list_devices()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
 
@@ -71,17 +61,17 @@ class CSumErrorLog(DaosCoreBase):
                 return v['storage']['smd_info']['devices'][0]['uuid']
 
     def get_checksum_error_value(self, device_id=None):
+        """Get checksum error value from dmg storage_query_device_health.
+
+        Args:
+            device_id (str): Device UUID.
+        """
         if device_id is None:
             self.fail("No device id provided")
             return
         self.dmg.json.value = True
-        self.dmg.sub_command_class. \
-            sub_command_class.set_sub_command("device-health")
-        self.dmg.sub_command_class. \
-            sub_command_class. \
-            sub_command_class.uuid.value = device_id
         try:
-            result = self.dmg.run()
+            result = self.dmg.storage_query_device_health(device_id)
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
 
@@ -95,7 +85,7 @@ class CSumErrorLog(DaosCoreBase):
         for v in resp['host_storage_map'].values():
             if v['storage']['smd_info']['devices']:
                 dev = v['storage']['smd_info']['devices'][0]
-                return dev['health']['checksum_errors']
+                return dev['health']['checksum_errs']
 
     def test_csum_error_logging(self):
         """

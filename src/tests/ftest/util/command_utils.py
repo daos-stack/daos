@@ -513,7 +513,7 @@ class CommandWithSubCommand(ExecutableCommand):
         """Get the result from running the command with the defined arguments.
 
         The optional sub_command_list and kwargs are used to define the command
-        that will be executed.  If they are excluded, the commnad will be run as
+        that will be executed.  If they are excluded, the command will be run as
         it currently defined.
 
         Note: the returned CmdResult is also stored in the self.result
@@ -555,7 +555,7 @@ class SubProcessCommand(CommandWithSubCommand):
     Example commands: daos_agent, daos_server
     """
 
-    def __init__(self, namespace, command, path="", timeout=60):
+    def __init__(self, namespace, command, path="", timeout=10):
         """Create a SubProcessCommand object.
 
         Args:
@@ -564,7 +564,7 @@ class SubProcessCommand(CommandWithSubCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to "".
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 60 seconds.
+                appear in the subprocess output. Defaults to 10 seconds.
         """
         super(SubProcessCommand, self).__init__(namespace, command, path, True)
 
@@ -658,7 +658,7 @@ class YamlCommand(SubProcessCommand):
     Example commands: daos_agent, daos_server, dmg
     """
 
-    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=60):
+    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10):
         """Create a YamlCommand command object.
 
         Args:
@@ -669,7 +669,7 @@ class YamlCommand(SubProcessCommand):
             path (str, optional): path to location of daos command binary.
                 Defaults to ""
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 60 seconds.
+                appear in the subprocess output. Defaults to 10 seconds.
         """
         super(YamlCommand, self).__init__(namespace, command, path, timeout)
 
@@ -765,14 +765,15 @@ class YamlCommand(SubProcessCommand):
                 for name in data:
                     run_command(
                         "clush -S -v -w {} /usr/bin/mkdir -p {}".format(
-                            ",".join(hosts), name))
+                            ",".join(hosts), name),
+                        verbose=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
                         result = run_command(
                             "clush -S -v -w {} --copy {} --dest {}".format(
                                 ",".join(hosts), src_file, dst_file),
-                            raise_exception=False)
+                            raise_exception=False, verbose=False)
                         if result.exit_status != 0:
                             self.log.info(
                                 "WARNING: failure copying '%s' to '%s' on %s",

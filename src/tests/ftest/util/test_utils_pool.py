@@ -207,7 +207,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
-    def destroy(self, force=1):
+    def destroy(self, force=1, disconnect=1):
         """Destroy the pool with either API or dmg.
 
         It uses control_method member previously set, so if you want to use the
@@ -215,6 +215,7 @@ class TestPool(TestDaosApiBase):
 
         Args:
             force (int, optional): force flag. Defaults to 1.
+            disconnect (int, optional): disconnect flag. Defaults to 1.
 
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
@@ -223,7 +224,8 @@ class TestPool(TestDaosApiBase):
         """
         status = False
         if self.pool:
-            self.disconnect()
+            if disconnect:
+                self.disconnect()
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.uuid)
 
@@ -624,6 +626,19 @@ class TestPool(TestDaosApiBase):
         self.log.info(
             "Pool %s space%s:\n  %s", self.uuid,
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
+
+    def pool_percentage_used(self):
+        """Get the pool storage used % for SCM and NVMe.
+
+        Returns:
+            dict: a dictionary of SCM/NVMe pool space usage in %(float)
+        """
+        daos_space = self.get_pool_daos_space()
+        pool_percent = {'scm':round(float(daos_space["s_free"][0])/
+                                    float(daos_space["s_total"][0]) * 100, 2),
+                        'nvme':round(float(daos_space["s_free"][1])/
+                                     float(daos_space["s_total"][1]) * 100, 2)}
+        return pool_percent
 
     def get_pool_rebuild_status(self):
         """Get the pool info rebuild status attributes as a dictionary.

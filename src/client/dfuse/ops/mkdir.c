@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	DFUSE_TRA_INFO(ie, "parent, mode %d", mode);
+	DFUSE_TRA_DEBUG(ie, "parent, mode %d", mode);
 
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);
@@ -67,6 +67,4 @@ release:
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(ie);
-
-	return;
 }

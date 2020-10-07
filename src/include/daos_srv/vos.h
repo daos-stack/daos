@@ -37,6 +37,23 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
+/** Initialize the vos reserve/cancel related fields in dtx handle
+ *
+ * \param dth	[IN]	The dtx handle
+ *
+ * \return	0 on success
+ *		-DER_NOMEM on failure
+ */
+int
+vos_dtx_rsrvd_init(struct dtx_handle *dth);
+
+/** Finalize the vos reserve/cancel related fields in dtx handle
+ *
+ * \param dth	[IN]	The dtx handle
+ */
+void
+vos_dtx_rsrvd_fini(struct dtx_handle *dth);
+
 /**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
@@ -245,12 +262,14 @@ vos_pool_destroy(const char *path, uuid_t uuid);
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
+ * \param small	[IN]	Pool is small
+ *			(system memory reservation shall be small, to fit)
  * \param poh	[OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -422,8 +441,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
- *			is provided by \a iods.
+ * \param epoch	[IN]	Epoch for the fetch.
  * \param flags	[IN]	Fetch flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
@@ -450,8 +468,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
- *			is provided by \a iods.
+ * \param epoch	[IN]	Epoch for the fetch.  Ignored if a valid DTX handle
+ *			is provided.
  * \param flags	[IN]	Fetch flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
@@ -477,8 +495,8 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
- *			range is provided by \a iods (kvl::kv_epr).
+ * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
+ *			is provided.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param flags	[IN]	Update flags
@@ -512,8 +530,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
- *			range is provided by \a iods (kvl::kv_epr).
+ * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
+ *			is provided.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param flags	[IN]	Update flags
@@ -565,7 +583,8 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID, the full object will be punched if \a dkey
  *			and \a akeys are not provided.
- * \param epoch	[IN]	Epoch for the punch.
+ * \param epoch	[IN]	Epoch for the punch. Ignored if a DTX handle
+ *			is provided.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
  * \param flags [IN]	Object punch flags, including VOS_OF_REPLAY_PC and
@@ -595,21 +614,6 @@ int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 
 /**
- * I/O APIs
- */
-
-enum vos_fetch_flags {
-	/* only query iod_size */
-	VOS_FETCH_SIZE_ONLY		= (1 << 0),
-	/* query recx list */
-	VOS_FETCH_RECX_LIST		= (1 << 1),
-	/* only set read TS */
-	VOS_FETCH_SET_TS_ONLY		= (1 << 2),
-	/* check the target (obj/dkey/akey) existence */
-	VOS_FETCH_CHECK_EXISTENCE	= (1 << 3),
-};
-
-/**
  *
  * Find and return I/O source buffers for the data of the specified
  * arrays of the given object. The caller can directly use these buffers
@@ -622,8 +626,8 @@ enum vos_fetch_flags {
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
- *			is provided by \a iods.
+ * \param epoch	[IN]	Epoch for the fetch. Ignored if a DTX handle
+ *			is provided.
  * \param cond_flags [IN]
  *			conditional flags
  * \param dkey	[IN]	Distribution key.
@@ -632,8 +636,8 @@ enum vos_fetch_flags {
  *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
  * \param fetch_flags [IN]
- *			VOS fetch flags, VOS_FETCH_SIZE_ONLY or
- *			VOS_FETCH_RECX_LIST.
+ *			VOS fetch flags, VOS_OF_FETCH_SIZE_ONLY or
+ *			VOS_OF_FETCH_RECX_LIST.
  * \param shadows [IN]	Optional shadow recx/epoch lists, one for each iod.
  *			data of extents covered by these should not be returned
  *			by fetch function. Only used for EC obj degraded fetch.
@@ -644,7 +648,7 @@ enum vos_fetch_flags {
  */
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t cond_flags, daos_key_t *dkey, unsigned int nr,
+		daos_key_t *dkey, unsigned int nr,
 		daos_iod_t *iods, uint32_t fetch_flags,
 		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
 		struct dtx_handle *dth);
@@ -669,8 +673,8 @@ vos_fetch_end(daos_handle_t ioh, int err);
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
- *			range is provided by \a iods (kvl::kv_epr).
+ * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
+ *			is provided.
  * \param flags [IN]	conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
@@ -678,6 +682,8 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
+ * \param dedup [IN]	Whether deduplication is enabled for this I/O
+ * \param dedup_th [IN]	Deduplication threshold size
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
@@ -687,7 +693,8 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 daos_handle_t *ioh, struct dtx_handle *dth);
+		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
+		 struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -1047,4 +1054,14 @@ int
 vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
+
+/**
+ * Helper functions to create/free duplicated bsgl for dedup verify.
+ */
+int
+vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
+		   struct bio_sglist *bsgl_dup);
+void
+vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+
 #endif /* __VOS_API_H */

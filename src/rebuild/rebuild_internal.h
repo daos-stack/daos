@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -288,7 +288,8 @@ int rebuild_tgt_scan_pre_forward(crt_rpc_t *rpc, void *arg);
 
 int rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv);
 int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
-		      unsigned int shortcut, unsigned int sync_mode);
+		      unsigned int shortcut, unsigned int sync_mode,
+		      bool retry);
 int rebuild_iv_ns_create(struct ds_pool *pool, uint32_t map_ver,
 			 d_rank_list_t *exclude_tgts,
 			 unsigned int master_rank);

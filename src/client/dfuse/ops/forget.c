@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,9 +43,9 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle,
 		return;
 	}
 
-	DFUSE_TRA_INFO(container_of(rlink, struct dfuse_inode_entry, ie_htl),
-		       "ino %lu count %lu",
-		       ino, nlookup);
+	DFUSE_TRA_DEBUG(container_of(rlink, struct dfuse_inode_entry, ie_htl),
+			"ino %lu count %lu",
+			ino, nlookup);
 
 	rc = d_hash_rec_ndecref(&fs_handle->dpi_iet, nlookup, rlink);
 	if (rc != -DER_SUCCESS) {

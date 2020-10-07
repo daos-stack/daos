@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ struct dc_cont {
 	/* pool handler of the container */
 	daos_handle_t		dc_pool_hdl;
 	struct daos_csummer    *dc_csummer;
+	struct cont_props	dc_props;
 	uint32_t		dc_closing:1,
 				dc_slave:1; /* generated via g2l */
 };
@@ -72,6 +73,7 @@ void dc_cont_hdl_link(struct dc_cont *dc);
 void dc_cont_hdl_unlink(struct dc_cont *dc);
 
 struct dc_cont *dc_cont_alloc(const uuid_t uuid);
+void dc_cont_free(struct dc_cont *);
 void dc_cont_put(struct dc_cont *dc);
 int dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		tse_task_t *task);

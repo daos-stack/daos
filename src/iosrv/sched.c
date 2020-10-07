@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ struct sched_pool_info {
 	int			spi_gc_ults;
 	int			spi_gc_sleeping;
 	int			spi_ref;
+	uint32_t		spi_req_cnt;
 };
 
 struct sched_request {
@@ -222,7 +223,7 @@ static uint32_t
 spi_key_hash(struct d_hash_table *htable, const void *key, unsigned int len)
 {
 	D_ASSERT(len == sizeof(uuid_t));
-	return d_hash_string_u32((const char *)key, len);
+	return *((const uint32_t *)key);
 }
 
 static void
@@ -251,7 +252,8 @@ spi_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	unsigned int		 type;
 
 	for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX; type++) {
-		D_ASSERT(pool2req_cnt(spi, type) == 0);
+		D_ASSERTF(pool2req_cnt(spi, type) == 0, "type:%u cnt:%u\n",
+			  type, pool2req_cnt(spi, type));
 		D_ASSERT(d_list_empty(pool2req_list(spi, type)));
 	}
 
@@ -280,16 +282,42 @@ static void
 prune_purge_list(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_pool_info	*spi;
 	struct purge_item	*pi, *tmp;
+	d_list_t		*rlink;
 	bool			 deleted;
 
 	d_list_for_each_entry_safe(pi, tmp, &info->si_purge_list, pi_link) {
-		deleted = d_hash_rec_delete(info->si_pool_hash, pi->pi_pool_id,
-					    sizeof(uuid_t));
-		if (!deleted)
-			D_ERROR("XS(%d): Purge "DF_UUID" failed.\n",
-				dx->dx_xs_id, DP_UUID(pi->pi_pool_id));
+		rlink = d_hash_rec_find(info->si_pool_hash, pi->pi_pool_id,
+					sizeof(uuid_t));
+		if (rlink == NULL)
+			goto next;
 
+		spi = sched_rlink2spi(rlink);
+		D_ASSERT(spi->spi_ref > 1);
+		d_hash_rec_decref(info->si_pool_hash, rlink);
+		if (spi->spi_req_cnt == 0) {
+			deleted = d_hash_rec_delete(info->si_pool_hash,
+						    pi->pi_pool_id,
+						    sizeof(uuid_t));
+			if (!deleted)
+				D_ERROR("XS(%d): Purge "DF_UUID" failed.\n",
+					dx->dx_xs_id, DP_UUID(pi->pi_pool_id));
+		} else {
+			unsigned int type;
+
+			D_ERROR("XS(%d): Pool "DF_UUID", req_cnt:%u\n",
+				dx->dx_xs_id, DP_UUID(pi->pi_pool_id),
+				spi->spi_req_cnt);
+
+			for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX;
+			     type++) {
+				if (pool2req_cnt(spi, type) != 0)
+					D_ERROR("type:%u, req_cnt:%u\n", type,
+						pool2req_cnt(spi, type));
+			}
+		}
+next:
 		d_list_del_init(&pi->pi_link);
 		D_FREE(pi);
 	}
@@ -300,6 +328,20 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct purge_item	*pi;
+
+	D_CDEBUG(spi->spi_req_cnt == 0, DB_TRACE, DLOG_ERR,
+		 "XS(%d): vos pool:"DF_UUID" is destroyed. req_cnt:%u\n",
+		 dx->dx_xs_id, DP_UUID(spi->spi_pool_id), spi->spi_req_cnt);
+
+	/* Don't purge the spi when there is queued request */
+	if (spi->spi_req_cnt != 0)
+		return;
+
+	d_list_for_each_entry(pi, &info->si_purge_list, pi_link) {
+		/* Already in purge list */
+		if (uuid_compare(pi->pi_pool_id, spi->spi_pool_id) == 0)
+			return;
+	}
 
 	D_ALLOC_PTR(pi);
 	if (pi == NULL) {
@@ -526,6 +568,8 @@ req_kickoff(struct dss_xstream *dx, struct sched_request *req)
 
 	D_ASSERT(sri->sri_req_cnt > 0);
 	sri->sri_req_cnt--;
+	D_ASSERT(spi->spi_req_cnt > 0);
+	spi->spi_req_cnt--;
 	D_ASSERT(info->si_req_cnt > 0);
 	info->si_req_cnt--;
 
@@ -538,8 +582,7 @@ req_kickoff(struct dss_xstream *dx, struct sched_request *req)
 #define SCHED_SPACE_AGE_MAX	2000	/* 2000 msecs */
 
 static int
-check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
-		     bool purge)
+check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
@@ -554,11 +597,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi,
 
 	rc = vos_pool_query_space(spi->spi_pool_id, &vps);
 	if (rc == -DER_NONEXIST) {	/* vos pool is destroyed */
-		D_CDEBUG(purge, DB_TRACE, DLOG_ERR,
-			 "XS(%d): vos pool:"DF_UUID" is destroyed.\n",
-			 dx->dx_xs_id, DP_UUID(spi->spi_pool_id));
-		if (purge)
-			add_purge_list(dx, spi);
+		add_purge_list(dx, spi);
 		goto out;
 	} else if (rc) {
 		D_ERROR("XS(%d): query pool:"DF_UUID" space failed. "DF_RC"\n",
@@ -731,7 +770,7 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	gc_max	= pool2req_cnt(spi, SCHED_REQ_GC);
 	mig_max	= pool2req_cnt(spi, SCHED_REQ_MIGRATE);
 
-	press = check_space_pressure(dx, spi, true);
+	press = check_space_pressure(dx, spi);
 
 	if (press == SCHED_SPACE_PRESS_NONE) {
 		/* Throttle GC & aggregation */
@@ -865,11 +904,12 @@ static void
 req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_attr	*attr = &req->sr_attr;
 	struct sched_req_info	*sri;
 
-	D_ASSERT(req->sr_pool_info != NULL);
-	sri = &req->sr_pool_info->spi_req_array[attr->sra_type];
+	D_ASSERT(spi != NULL);
+	sri = &spi->spi_req_array[attr->sra_type];
 
 	D_ASSERT(d_list_empty(&req->sr_link));
 	if (attr->sra_type == SCHED_REQ_UPDATE ||
@@ -882,6 +922,7 @@ req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 	req->sr_enqueue_ts = info->si_cur_ts;
 
 	sri->sri_req_cnt++;
+	spi->spi_req_cnt++;
 	info->si_req_cnt++;
 }
 
@@ -1014,7 +1055,7 @@ sched_req_space_check(struct sched_request *req)
 	struct dss_xstream	*dx = dss_current_xstream();
 
 	D_ASSERT(req != NULL && req->sr_pool_info != NULL);
-	return check_space_pressure(dx, req->sr_pool_info, false);
+	return check_space_pressure(dx, req->sr_pool_info);
 }
 
 static void

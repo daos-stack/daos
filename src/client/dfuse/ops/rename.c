@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 
 #include "dfuse_common.h"
 #include "dfuse.h"
-
 
 void
 dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,

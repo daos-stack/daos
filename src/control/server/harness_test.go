@@ -53,6 +53,7 @@ const (
 	testShortTimeout   = 50 * time.Millisecond
 	testLongTimeout    = 1 * time.Minute
 	delayedFailTimeout = 20 * testShortTimeout
+	maxIOServers       = 2
 )
 
 func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
@@ -151,7 +152,7 @@ func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 			}
 			h.started.SetTrue()
 
-			_, err := h.GetMSLeaderInstance()
+			_, err := h.getMSLeaderInstance()
 			CmpErr(t, tc.expError, err)
 		})
 	}
@@ -556,7 +557,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				gotDrpcCalls := dc.(*mockDrpcClient).Calls
 				AssertEqual(t, tc.expDrpcCalls[srv.Index()], gotDrpcCalls,
-					name+": unexpected dRPCs for instance "+string(srv.Index()))
+					fmt.Sprintf("%s: unexpected dRPCs for instance %d", name, srv.Index()))
 
 				gotGrpcCalls := mockMSClients[int(srv.Index())].Calls
 				if diff := cmp.Diff(tc.expGrpcCalls[srv.Index()], gotGrpcCalls); diff != "" {

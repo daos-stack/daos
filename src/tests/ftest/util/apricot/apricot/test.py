@@ -46,8 +46,10 @@ from server_utils_params import \
 from dmg_utils_params import \
     DmgYamlParameters, DmgTransportCredentials
 from dmg_utils import DmgCommand
+from daos_utils import DaosCommand
 from server_utils import DaosServerCommand, DaosServerManager
-from general_utils import get_partition_hosts, stop_processes
+from general_utils import \
+    get_partition_hosts, stop_processes, get_job_manager_class
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -171,12 +173,18 @@ class TestWithoutServers(Test):
         self.fault_file = None
         self.context = None
         self.d_log = None
-        self.test_log = None
+
+        # Create a default TestLogger w/o a DaosLog object to prevent errors in
+        # tearDown() if setUp() is not completed.  The DaosLog is added upon the
+        # completion of setUp().
+        self.test_log = TestLogger(self.log, None)
 
     def setUp(self):
         """Set up run before each test."""
         super(TestWithoutServers, self).setUp()
+
         load_mpi('openmpi')
+
         self.orterun = find_executable('orterun')
         if self.orterun is None:
             self.fail("Could not find orterun")
@@ -222,7 +230,7 @@ class TestWithoutServers(Test):
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
-        self.test_log = TestLogger(self.log, self.d_log)
+        self.test_log.daos_log = self.d_log
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -273,12 +281,14 @@ class TestWithServers(TestWithoutServers):
         self.control_log = None
         self.helper_log = None
         self.client_log = None
+        self.config_file_base = "test"
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         self.test_id = "{}-{}".format(
             os.path.split(self.filename)[1], self.name.str_uid)
         # self.debug = False
         # self.config = None
+        self.job_manager = None
 
     def setUp(self):
         """Set up each test case."""
@@ -356,6 +366,17 @@ class TestWithServers(TestWithoutServers):
         # Start the servers
         if self.setup_start_servers:
             self.start_servers()
+
+        # Setup a job manager command for running the test command
+        manager_class_name = self.params.get(
+            "job_manager_class_name", default=None)
+        manager_subprocess = self.params.get(
+            "job_manager_subprocess", default=False)
+        manager_mpi_type = self.params.get(
+            "job_manager_mpi_type", default="mpich")
+        if manager_class_name is not None:
+            self.job_manager = get_job_manager_class(
+                manager_class_name, None, manager_subprocess, manager_mpi_type)
 
     def stop_leftover_processes(self, processes, hosts):
         """Stop leftover processes on the specified hosts before starting tests.
@@ -461,9 +482,10 @@ class TestWithServers(TestWithoutServers):
             str: daos_agent yaml configuration file full name
 
         """
-        return os.path.join(self.tmp, "test_{}_{}.yaml".format(name, command))
+        filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
+        return os.path.join(self.tmp, filename)
 
-    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=30):
+    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=5):
         """Add a new daos agent manager object to the agent manager list.
 
         Args:
@@ -490,7 +512,7 @@ class TestWithServers(TestWithoutServers):
             DaosAgentManager(agent_cmd, self.manager_class))
 
     def add_server_manager(self, config_file=None, dmg_config_file=None,
-                           common_cfg=None, timeout=90):
+                           common_cfg=None, timeout=20):
         """Add a new daos server manager object to the server manager list.
 
         When adding multiple server managers unique yaml config file names
@@ -585,6 +607,9 @@ class TestWithServers(TestWithoutServers):
         # Tear down any test-specific items
         errors = self.pre_tear_down()
 
+        # Stop any test jobs that may still be running
+        errors.extend(self.stop_job_managers())
+
         # Destroy any containers first
         errors.extend(self.destroy_containers(self.container))
 
@@ -619,6 +644,20 @@ class TestWithServers(TestWithoutServers):
         """
         self.log.info("teardown() started")
         return []
+
+    def stop_job_managers(self):
+        """Stop the test job manager.
+
+        Returns:
+            list: a list of exceptions raised stopping the agents
+
+        """
+        error_list = []
+        if self.job_manager:
+            self.test_log.info("Stopping test job manager")
+            error_list = self._stop_managers(
+                [self.job_manager], "test job manager")
+        return error_list
 
     def destroy_containers(self, containers):
         """Close and destroy one or more containers.
@@ -753,6 +792,7 @@ class TestWithServers(TestWithoutServers):
         self.control_log = "{}_daos_control.log".format(self.test_id)
         self.helper_log = "{}_daos_admin.log".format(self.test_id)
         self.client_log = "{}_daos_client.log".format(self.test_id)
+        self.config_file_base = "{}_".format(self.test_id)
 
     def get_dmg_command(self, index=0):
         """Get a DmgCommand setup to interact with server manager index.
@@ -783,6 +823,15 @@ class TestWithServers(TestWithoutServers):
             DmgTransportCredentials(self.workdir))
         dmg_cfg.hostlist.update(self.hostlist_servers[:1], "dmg.yaml.hostlist")
         return DmgCommand(self.bin, dmg_cfg)
+
+    def get_daos_command(self):
+        """Get a DaosCommand object.
+
+        Returns:
+            DaosCommand: New DaosCommand object.
+
+        """
+        return DaosCommand(self.bin)
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.
@@ -852,7 +901,7 @@ class TestWithServers(TestWithoutServers):
             TestContainer: the created test container object.
 
         """
-        container = TestContainer(pool)
+        container = TestContainer(pool, daos_command=self.get_daos_command())
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)

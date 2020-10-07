@@ -78,6 +78,11 @@ insert_single(const char *dkey, const char *akey, uint64_t idx, void *value,
 	      daos_size_t iod_size, daos_handle_t th, struct ioreq *req);
 
 void
+insert_single_with_flags(const char *dkey, const char *akey, uint64_t idx,
+			 void *value, daos_size_t iod_size, daos_handle_t th,
+			 struct ioreq *req, uint64_t flags);
+
+void
 insert_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
 			void *value, daos_size_t iod_size, int rx_nr,
 			daos_handle_t th, struct ioreq *req);
@@ -107,8 +112,8 @@ enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	       daos_size_t len, struct ioreq *req);
 void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
-	struct ioreq *req);
+       int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+       struct ioreq *req, uint64_t flags);
 
 void
 insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
@@ -127,8 +132,17 @@ void
 punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req);
 
 void
+punch_dkey_with_flags(const char *dkey, daos_handle_t th, struct ioreq *req,
+		      uint64_t flags);
+
+void
 punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 	   struct ioreq *req);
+
+void
+punch_akey_with_flags(const char *dkey, const char *akey, daos_handle_t th,
+		      struct ioreq *req, uint64_t flags);
+
 void
 punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
 	    int nr, daos_handle_t th, struct ioreq *req);

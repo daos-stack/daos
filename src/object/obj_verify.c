@@ -496,6 +496,7 @@ again:
 			break;
 		case OBJ_ITER_DKEY_EPOCH:
 		case OBJ_ITER_AKEY_EPOCH:
+		case OBJ_ITER_OBJ:
 			break;
 		default:
 			D_ERROR(DF_OID" invalid type %d\n",
@@ -546,11 +547,14 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->dkey, &cur_b->dkey)) {
+		/* TODO: There are many cases of %s in this file but this is the
+		 * only one that is triggered in testing
+		 */
 		D_INFO(DF_OID" (reps %u, inconsistent) "
-		       "shard %u has dkey %s, but shard %u has dkey %s.\n",
-		       DP_OID(oid), reps,
-		       shard_a, (char *)cur_a->dkey.iov_buf,
-		       shard_b, (char *)cur_b->dkey.iov_buf);
+			"shard %u has dkey "DF_KEY", but shard %u has dkey "DF_KEY".\n",
+			DP_OID(oid), reps,
+			shard_a, DP_KEY(&cur_a->dkey),
+			shard_b, DP_KEY(&cur_b->dkey));
 		return -DER_MISMATCH;
 	}
 
@@ -706,6 +710,11 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		for (i = 1; i < reps; i++) {
 			rc = dc_obj_verify_cmp(&dova[0], &dova[i],
 					       oid, reps, start, start + i);
+			if (rc == -DER_CSUM) {
+				D_ERROR("Failed to verify because of "
+					"data corruption");
+				D_GOTO(out, rc = -DER_MISMATCH);
+			}
 			if (rc != 0) {
 				D_ERROR("Failed to verify cmp: "DF_RC"\n",
 					DP_RC(rc));

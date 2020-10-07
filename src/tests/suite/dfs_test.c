@@ -526,8 +526,8 @@ dfs_test_cond(void **state)
 	if (arg->myrank == 0)
 		print_message("All ranks unlink the same file\n");
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
-	rc = check_one_success(rc, ENOENT, MPI_COMM_WORLD);
+	op_rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
+	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
 	if (rc)
 		print_error("Failed concurrent file unlink\n");
 	assert_int_equal(rc, 0);
@@ -536,8 +536,8 @@ dfs_test_cond(void **state)
 	if (arg->myrank == 0)
 		print_message("All ranks create the same directory\n");
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = dfs_mkdir(dfs_mt, NULL, dirname, S_IWUSR | S_IRUSR, 0);
-	rc = check_one_success(rc, EEXIST, MPI_COMM_WORLD);
+	op_rc = dfs_mkdir(dfs_mt, NULL, dirname, S_IWUSR | S_IRUSR, 0);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
 	if (rc)
 		print_error("Failed concurrent dir creation\n");
 	assert_int_equal(rc, 0);
@@ -546,10 +546,38 @@ dfs_test_cond(void **state)
 	if (arg->myrank == 0)
 		print_message("All ranks remove the same directory\n");
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
-	rc = check_one_success(rc, ENOENT, MPI_COMM_WORLD);
+	op_rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
 	if (rc)
 		print_error("Failed concurrent rmdir\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** test atomic rename with DFS DTX mode */
+	bool use_dtx;
+
+	d_getenv_bool("DFS_USE_DTX", &use_dtx);
+	if (!use_dtx)
+		return;
+	if (arg->myrank == 0) {
+		print_message("All ranks rename the same file\n");
+		rc = dfs_open(dfs_mt, NULL, filename,
+			      S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+		if (rc)
+			print_error("Failed creating file for rename\n");
+		rc = dfs_release(file);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	char newfilename[1024];
+
+	sprintf(newfilename, "%s_new.%d", filename, arg->myrank);
+	op_rc = dfs_move(dfs_mt, NULL, filename, NULL, newfilename, NULL);
+	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent rename\n");
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -914,9 +942,9 @@ run_daos_fs_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
-					 dfs_tests, dfs_setup,
-					 dfs_teardown);
+	rc = run_daos_sub_tests("DAOS FileSystem (DFS) tests", dfs_tests,
+				ARRAY_SIZE(dfs_tests), sub_tests,
+				sub_tests_size, dfs_setup, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

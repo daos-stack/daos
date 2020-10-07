@@ -48,14 +48,14 @@ class DaosServerTransportCredentials(TransportCredentials):
     def get_certificate_data(self, name_list):
         """Get certificate data.
 
-           Args:
-               name_list (list): list of certificate attribute names.
+        Args:
+            name_list (list): list of certificate attribute names.
 
-           Returns:
-               data (dict): a dictionary of parameter directory name keys and
-                   value.
+        Returns:
+            data (dict): a dictionary of parameter directory name keys and
+                value.
+
         """
-
         # Ensure the client cert directory includes the required certificate
         name_list.remove("client_cert_dir")
         data = super(
@@ -331,7 +331,6 @@ class DaosServerYamlParameters(YamlParameters):
             #   log_file:               map to D_LOG_FILE env
             #   env_vars:               influences DAOS IO Server behavior
             #       Add to enable scalable endpoint:
-            #           - CRT_CREDIT_EP_CTX=0
             #           - CRT_CTX_SHARE_ADDR=1
             #           - CRT_CTX_NUM=8
             #       nvme options:
@@ -356,10 +355,7 @@ class DaosServerYamlParameters(YamlParameters):
                 default_env_vars.extend([
                     "FI_SOCKETS_MAX_CONN_RETRY=5",
                     "FI_SOCKETS_CONN_TIMEOUT=2000",
-                    "CRT_SWIM_RPC_TIMEOUT=10",
-                    "SWIM_PING_TIMEOUT=10000",
-                    "SWIM_PROTOCOL_PERIOD_LEN=30000",
-                    "SWIM_SUSPECT_TIMEOUT=90000",
+                    "CRT_SWIM_RPC_TIMEOUT=10"
                 ])
             self.env_vars = BasicParameter(None, default_env_vars)
 

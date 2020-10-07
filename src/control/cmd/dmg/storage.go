@@ -30,6 +30,7 @@ import (
 	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -124,19 +125,29 @@ type storageScanCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
+	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
+	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
+	NvmeMeta   bool `short:"m" long:"nvme-meta" description:"Display server meta data held on NVMe storage"`
 }
 
 // Execute is run when storageScanCmd activates.
 //
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
+	if cmd.NvmeHealth && cmd.NvmeMeta {
+		return errors.New("Cannot use --nvme-health and --nvme-meta together")
+	}
+
 	ctx := context.Background()
-	req := &control.StorageScanReq{}
+	req := &control.StorageScanReq{NvmeHealth: cmd.NvmeHealth, NvmeMeta: cmd.NvmeMeta}
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --json specified")
+		}
+
 		return cmd.outputJSON(resp, err)
 	}
 
@@ -148,6 +159,28 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	verbose := control.PrintWithVerboseOutput(cmd.Verbose)
 	if err := control.PrintResponseErrors(resp, &bld); err != nil {
 		return err
+	}
+	if cmd.NvmeHealth {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --nvme-health specified")
+		}
+		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
+			return err
+		}
+		cmd.log.Info(bld.String())
+
+		return resp.Errors()
+	}
+	if cmd.NvmeMeta {
+		if cmd.Verbose {
+			cmd.log.Info("--verbose flag ignored if --nvme-meta specified")
+		}
+		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &bld); err != nil {
+			return err
+		}
+		cmd.log.Info(bld.String())
+
+		return resp.Errors()
 	}
 	if err := control.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
 		return err
@@ -163,7 +196,6 @@ type storageFormatCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	rankListCmd
 	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Reformat bool `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)"`
 }
@@ -174,23 +206,18 @@ type storageFormatCmd struct {
 // Reformat system if membership is not empty and all member ranks are stopped.
 func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, error) {
 	if cmd.Reformat {
-		cmd.log.Info("processing system reformat request")
-
 		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
 		if err != nil {
+			// If the AP hasn't been started, it will respond as if it
+			// is not a replica.
+			if system.IsNotReplica(err) {
+				return false, nil
+			}
 			return false, errors.Wrap(err, "System-Query command failed")
 		}
 
 		if len(resp.Members) == 0 {
 			cmd.log.Debug("no system members, reformat host list")
-			if cmd.Ranks != "" {
-				return false, errors.New(
-					"--ranks parameter invalid as membership is empty")
-			}
-			if cmd.Hosts != "" {
-				return false, errors.New(
-					"--rank-hosts parameter invalid as membership is empty")
-			}
 
 			return false, nil
 		}
@@ -216,26 +243,12 @@ func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, er
 		return true, nil
 	}
 
-	if cmd.Ranks != "" {
-		return false, errors.New("--ranks parameter invalid if --reformat is not set")
-	}
-	if cmd.Hosts != "" {
-		return false, errors.New("--rank-hosts parameter invalid if --reformat is not set")
-	}
-
 	return false, nil
 }
 
 func (cmd *storageFormatCmd) systemReformat(ctx context.Context) error {
-	hostSet, rankSet, err := cmd.validateHostsRanks()
-	if err != nil {
-		return err
-	}
-	srReq := new(control.SystemResetFormatReq)
-	srReq.Hosts = *hostSet
-	srReq.Ranks = *rankSet
-
-	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker, srReq)
+	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
+		new(control.SystemResetFormatReq))
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)

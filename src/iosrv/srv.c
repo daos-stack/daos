@@ -798,9 +798,12 @@ dss_xstreams_fini(bool force)
 	struct dss_xstream	*dx;
 	int			 i;
 	int			 rc;
+	bool			 started = false;
 
 	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
 	dss_xstreams_open_barrier();
+	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
+	D_ASSERT(rc == 0);
 
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
@@ -1199,6 +1202,7 @@ int
 dss_srv_init()
 {
 	int	rc;
+	bool	started = true;
 
 	xstream_data.xd_init_step  = XD_INIT_NONE;
 	xstream_data.xd_ult_signal = false;
@@ -1246,6 +1250,9 @@ dss_srv_init()
 
 	if (rc != 0)
 		D_GOTO(failed, rc);
+
+	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
+	D_ASSERT(rc == 0);
 
 	/* start up drpc listener */
 	rc = drpc_listener_init();

@@ -1,25 +1,25 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+(C) Copyright 2018-2020 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-     http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+The Government's rights to use, modify, reproduce, release, perform, display,
+or disclose this software are subject to the terms of the Apache License as
+provided in Contract No. B609815.
+Any reproduction of computer software, computer software documentation, or
+portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
 
@@ -58,7 +58,7 @@ class IorCommand(ExecutableCommand):
         self.flags = FormattedParameter("{}")
 
         # Optional arguments
-        #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DAOS|DFS]
+        #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DFS|HDF5]
         #   -b=1048576      blockSize -- contiguous bytes to write per task
         #   -d=0            interTestDelay -- delay between reps in seconds
         #   -f=STRING       scriptFile -- test script name
@@ -77,7 +77,7 @@ class IorCommand(ExecutableCommand):
         #   -T=0            maxTimeDuration -- max time in minutes executing
         #                      repeated test; it aborts only between iterations
         #                      and not within a test!
-        self.api = FormattedParameter("-a {}", "DAOS")
+        self.api = FormattedParameter("-a {}", "DFS")
         self.block_size = FormattedParameter("-b {}")
         self.test_delay = FormattedParameter("-d {}")
         self.script = FormattedParameter("-f {}")
@@ -95,32 +95,13 @@ class IorCommand(ExecutableCommand):
         self.transfer_size = FormattedParameter("-t {}")
         self.max_duration = FormattedParameter("-T {}")
 
-        # Module DAOS
-        #   Required arguments
-        #       --daos.pool=STRING            pool uuid
-        #       --daos.svcl=STRING            pool SVCL
-        #       --daos.cont=STRING            container uuid
-        #   Flags
-        #       --daos.destroy                Destroy Container
-        #   Optional arguments
-        #       --daos.group=STRING           server group
-        #       --daos.chunk_size=1048576     chunk size
-        #       --daos.oclass=STRING          object class
-        self.daos_pool = FormattedParameter("--daos.pool {}")
-        self.daos_svcl = FormattedParameter("--daos.svcl {}")
-        self.daos_cont = FormattedParameter("--daos.cont {}")
-        self.daos_destroy = FormattedParameter("--daos.destroy", True)
-        self.daos_group = FormattedParameter("--daos.group {}")
-        self.daos_chunk = FormattedParameter("--daos.chunk_size {}", 1048576)
-        self.daos_oclass = FormattedParameter("--daos.oclass {}", "SX")
-
         # Module DFS
         #   Required arguments
         #       --dfs.pool=STRING            pool uuid
         #       --dfs.svcl=STRING            pool SVCL
         #       --dfs.cont=STRING            container uuid
         #   Flags
-        #       --daos.destroy               Destroy Container
+        #       --dfs.destroy               Destroy Container
         #   Optional arguments
         #       --dfs.group=STRING           server group
         #       --dfs.chunk_size=1048576     chunk size
@@ -133,6 +114,7 @@ class IorCommand(ExecutableCommand):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
 
         # A list of environment variable names to set and export with ior
@@ -153,10 +135,7 @@ class IorCommand(ExecutableCommand):
         param_names = [name for name in all_param_names if ("daos" not in name)
                        and ("dfs" not in name)]
 
-        if self.api.value == "DAOS":
-            param_names.extend(
-                [name for name in all_param_names if "daos" in name])
-        elif self.api.value == "DFS":
+        if self.api.value == "DFS":
             param_names.extend(
                 [name for name in all_param_names if "dfs" in name])
 
@@ -173,16 +152,11 @@ class IorCommand(ExecutableCommand):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.set_daos_pool_params(pool, display)
-        if self.api.value in ["DAOS", "MPIIO"]:
-            self.daos_group.update(group, "daos_group" if display else None)
-            self.daos_cont.update(
-                cont_uuid if cont_uuid else str(uuid.uuid4()),
-                "daos_cont" if display else None)
-        else:
-            self.dfs_group.update(group, "daos_group" if display else None)
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
+            self.dfs_group.update(group, "dfs_group" if display else None)
             self.dfs_cont.update(
                 cont_uuid if cont_uuid else str(uuid.uuid4()),
-                "daos_cont" if display else None)
+                "dfs_cont" if display else None)
 
     def set_daos_pool_params(self, pool, display=True):
         """Set the IOR parameters that are based on a DAOS pool.
@@ -191,16 +165,13 @@ class IorCommand(ExecutableCommand):
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        if self.api.value in ["DAOS", "MPIIO"]:
-            self.daos_pool.update(
-                pool.pool.get_uuid_str(), "daos_pool" if display else None)
-        else:
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_pool.update(
                 pool.pool.get_uuid_str(), "dfs_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
-        """Set the IOR daos_svcl param from the ranks of a DAOS pool object.
+        """Set the IOR dfs_svcl param from the ranks of a DAOS pool object.
 
         Args:
             pool (TestPool): DAOS test pool object
@@ -210,9 +181,7 @@ class IorCommand(ExecutableCommand):
             [str(item) for item in [
                 int(pool.pool.svc.rl_ranks[index])
                 for index in range(pool.pool.svc.rl_nr)]])
-        if self.api.value in ["DAOS", "MPIIO"]:
-            self.daos_svcl.update(svcl, "daos_svcl" if display else None)
-        else:
+        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
     def get_aggregate_total(self, processes):
@@ -252,10 +221,10 @@ class IorCommand(ExecutableCommand):
 
         # Account for any replicas, except for the ones with no replication
         # i.e all object classes starting with "S". Eg: S1,S2,...,SX.
-        if not self.daos_oclass.value.startswith("S"):
+        if not self.dfs_oclass.value.startswith("S"):
             try:
                 # Extract the replica quantity from the object class string
-                replica_qty = int(re.findall(r"\d+", self.daos_oclass.value)[0])
+                replica_qty = int(re.findall(r"\d+", self.dfs_oclass.value)[0])
             except (TypeError, IndexError):
                 # If the daos object class is undefined (TypeError) or it does
                 # not contain any numbers (IndexError) then there is only one
@@ -286,17 +255,12 @@ class IorCommand(ExecutableCommand):
             return env
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
-            if self.daos_pool.value is not None:
-                env["DAOS_POOL"] = self.daos_pool.value
-                env["DAOS_SVCL"] = self.daos_svcl.value
-                env["DAOS_CONT"] = self.daos_cont.value
-                env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                    self.daos_oclass.value
-            elif self.dfs_pool.value is not None:
+            if self.dfs_pool.value is not None:
                 env["DAOS_POOL"] = self.dfs_pool.value
                 env["DAOS_SVCL"] = self.dfs_svcl.value
                 env["DAOS_CONT"] = self.dfs_cont.value
-                env["IOR_HINT__MPI__romio_dfs_obj_class"] = \
+                env["DAOS_BYPASS_DUNS"] = "1"
+                env["IOR_HINT__MPI__romio_daos_obj_class"] = \
                     self.dfs_oclass.value
         return env
 
@@ -337,10 +301,9 @@ class IorCommand(ExecutableCommand):
         """
         logger.info("\n")
         logger.info(message)
-        for message in metrics:
-            logger.info(message)
+        for metric in metrics:
+            logger.info(metric)
         logger.info("\n")
-
 
     def check_ior_subprocess_status(self, sub_process, command,
                                     pattern_timeout=10):
@@ -403,6 +366,7 @@ class IorCommand(ExecutableCommand):
                     "%s subprocess startup detected - %s", command, msg)
 
         return complete
+
 
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary."""

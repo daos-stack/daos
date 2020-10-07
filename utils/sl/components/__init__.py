@@ -124,6 +124,7 @@ def define_mercury(reqs):
                 retriever=retriever,
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
+                          '--disable-efa ' +
                           OFI_DEBUG +
                           exclude(reqs, 'psm2',
                                   '--enable-psm2' +
@@ -216,6 +217,9 @@ def define_common(reqs):
 
     reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
                 package='openssl-devel')
+
+    reqs.define('json-c', libs=['json-c'], headers=['json-c/json.h'],
+                package='json-c-devel')
 
     if reqs.get_env('PLATFORM') == 'darwin':
         reqs.define('uuid', headers=['uuid/uuid.h'])

@@ -495,8 +495,10 @@ and writes:
       - List objects under container [container level]
       - List dkeys under object [object level]
       - List akeys under dkey [dkey level]
+      - List recx under akey [akey level]
       - Query min/max dkeys under object [object level]
       - Query min/max akeys under dkey [dkey level]
+      - Query min/max recx under akey [akey level]
   - Writes
       - Update akeys [akey level]
       - Punch akeys [akey level]

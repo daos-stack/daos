@@ -21,8 +21,6 @@ timeout: 24H15M
 setup:
     start_servers: True
     start_agents: True
-dmg:
-    insecure: True
 server_config:
     name: daos_server
     provider: ofi+sockets
@@ -53,6 +51,10 @@ pool_reserved:
     scm_size: 3000000000
     nvme_size: 50000000000
     control_method: dmg
+container:
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
 container_reserved:
     akey_size: 5
     dkey_size: 5
@@ -61,6 +63,9 @@ container_reserved:
     record_qty: 1
     record_size: 100
     array_size: 1
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: API
 faults:
     fault_list:
     #    - DAOS_DTX_LOST_RPC_REQUEST
@@ -108,11 +113,11 @@ soak_faults:
         - ior_faults
 # Commandline parameters
 # Benchmark and application params
-# IOR params -a DAOS and -a MPIIO
+# IOR params -a DFS and -a MPIIO
 # sequential
 ior_faults:
     api:
-        - DAOS
+        - DFS
         - MPIIO
     test_file: daos:testFile
     flags: -v -w -W -r -R
@@ -124,7 +129,8 @@ ior_faults:
         - '128k'
         - '1m'
     segment_count: 1
-    daos_oclass:
+    dfs_oclass:
         - 'SX'
+    dfs_destroy: True
 
 
