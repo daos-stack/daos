@@ -123,6 +123,8 @@ entry_array_close(void *arg) {
 			}
 		}
 
+		ioil_ioc.ioc_dfs = NULL;
+
 		CONT_CLOSE(ioil_ioc);
 		POOL_DISCONNECT(ioil_ioc);
 	}
