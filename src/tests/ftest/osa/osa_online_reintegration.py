@@ -39,7 +39,7 @@ from daos_racer_utils import DaosRacerCommand
 
 try:
     # python 3.x
-    import queue as queue
+    import queue
 except ImportError:
     # python 2.7
     import Queue as queue
@@ -81,26 +81,22 @@ class OSAOnlineReintegration(TestWithServers):
         """Get the pool leader.
 
         Returns:
-            int: pool_leader
+            int: pool leader number
 
         """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][3])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["leader"])
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
         """Get the pool version.
 
         Returns:
-            int: pool_version_value
+            int: pool version number
 
         """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][4])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["version"])
 
     def daos_racer_thread(self):
         """Start the daos_racer thread."""

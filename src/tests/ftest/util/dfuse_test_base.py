@@ -39,14 +39,14 @@ class DfuseTestBase(TestWithServers):
         super(DfuseTestBase, self).__init__(*args, **kwargs)
         self.dfuse = None
 
-    def pre_tear_down(self):
-        """Tear down steps to optionally run before tearDown().
+    def stop_job_managers(self):
+        """Stop the test job manager followed by dfuse.
 
         Returns:
-            list: a list of error strings to report at the end of tearDown().
+            list: a list of exceptions raised stopping the agents
 
         """
-        error_list = super(DfuseTestBase, self).pre_tear_down()
+        error_list = super(DfuseTestBase, self).stop_job_managers()
         try:
             self.stop_dfuse()
         except CommandFailure as error:

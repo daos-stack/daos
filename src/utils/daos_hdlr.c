@@ -1041,24 +1041,16 @@ cont_decode_props(daos_prop_t *props)
 			D_PRINT("off\n");
 		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_LZ4)
 			D_PRINT("lz4\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP1)
-			D_PRINT("gzip1\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP2)
-			D_PRINT("gzip2\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP3)
-			D_PRINT("gzip3\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP4)
-			D_PRINT("gzip4\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP5)
-			D_PRINT("gzip5\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP6)
-			D_PRINT("gzip (= gzip6)\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP7)
-			D_PRINT("gzip7\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP8)
-			D_PRINT("gzip8\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP9)
-			D_PRINT("gzip9\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE)
+			D_PRINT("deflate\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE1)
+			D_PRINT("deflate1\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE2)
+			D_PRINT("deflate2\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE3)
+			D_PRINT("deflate3\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE4)
+			D_PRINT("deflate4\n");
 		else
 			D_PRINT("<unknown> ("DF_X64")\n", entry->dpe_val);
 	}
