@@ -172,7 +172,7 @@ func (srv *IOServerInstance) removeSocket() error {
 func (srv *IOServerInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, error) {
 	superblock := srv.getSuperblock()
 	if superblock == nil {
-		return system.NilRank, errors.New("nil superblock in setRank()")
+		return system.NilRank, errors.New("nil superblock while determining rank")
 	}
 
 	r := system.NilRank

@@ -24,6 +24,8 @@
 package server
 
 import (
+	"os"
+
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -51,7 +53,7 @@ func getFaultDomain(cfg *Configuration) (*system.FaultDomain, error) {
 
 	// TODO DAOS-4449: Try to get fault domain from callback
 
-	return getDefaultFaultDomain(cfg.ext.getHostname)
+	return getDefaultFaultDomain(os.Hostname)
 }
 
 func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {

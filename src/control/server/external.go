@@ -34,7 +34,6 @@ type External interface {
 	getAbsInstallPath(string) (string, error)
 	checkSudo() (bool, string)
 	getHistory() []string
-	getHostname() (string, error)
 }
 
 type ext struct {
@@ -56,8 +55,4 @@ func (e *ext) checkSudo() (bool, string) {
 	}
 
 	return (os.Geteuid() == 0), usr
-}
-
-func (e *ext) getHostname() (string, error) {
-	return os.Hostname()
 }

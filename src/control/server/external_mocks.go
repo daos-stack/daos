@@ -30,10 +30,8 @@ import (
 // mockExt implements the External interface.
 type mockExt struct {
 	sync.RWMutex
-	isRoot      bool
-	hostnameStr string
-	hostnameErr error
-	history     []string
+	isRoot  bool
+	history []string
 }
 
 func (m *mockExt) getHistory() []string {
@@ -49,10 +47,6 @@ func (m *mockExt) getAbsInstallPath(path string) (string, error) {
 
 func (m *mockExt) checkSudo() (bool, string) {
 	return m.isRoot, ""
-}
-
-func (m *mockExt) getHostname() (string, error) {
-	return m.hostnameStr, m.hostnameErr
 }
 
 func newMockExt(isRoot bool) External {

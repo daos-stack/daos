@@ -24,14 +24,55 @@
 package server
 
 import (
+	"os"
 	"testing"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
+func TestServer_getDefaultFaultDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		getHostname hostnameGetterFn
+		expResult   string
+		expErr      error
+	}{
+		"hostname returns error": {
+			getHostname: func() (string, error) {
+				return "", errors.New("mock hostname")
+			},
+			expErr: errors.New("mock hostname"),
+		},
+		"success": {
+			getHostname: func() (string, error) {
+				return "myhost", nil
+			},
+			expResult: "/myhost",
+		},
+		"hostname not usable": {
+			getHostname: func() (string, error) {
+				return "/////////", nil
+			},
+			expErr: FaultConfigFaultDomainInvalid,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := getDefaultFaultDomain(tc.getHostname)
+
+			common.CmpErr(t, tc.expErr, err)
+			common.AssertEqual(t, tc.expResult, result.String(), "incorrect fault domain")
+		})
+	}
+}
+
 func TestServer_getFaultDomain(t *testing.T) {
+	realHostname, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("couldn't get hostname: %s", err)
+	}
+
 	for name, tc := range map[string]struct {
 		cfg       *Configuration
 		expResult string
@@ -52,29 +93,9 @@ func TestServer_getFaultDomain(t *testing.T) {
 			},
 			expErr: FaultConfigFaultDomainInvalid,
 		},
-		"hostname returns error": {
-			cfg: &Configuration{
-				ext: &mockExt{
-					hostnameErr: errors.New("mock hostname"),
-				},
-			},
-			expErr: errors.New("mock hostname"),
-		},
-		"success": {
-			cfg: &Configuration{
-				ext: &mockExt{
-					hostnameStr: "myhost",
-				},
-			},
-			expResult: "/myhost",
-		},
-		"hostname not usable": {
-			cfg: &Configuration{
-				ext: &mockExt{
-					hostnameStr: "//////",
-				},
-			},
-			expErr: FaultConfigFaultDomainInvalid,
+		"default gets hostname": {
+			cfg:       &Configuration{},
+			expResult: system.FaultDomainSeparator + realHostname,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
