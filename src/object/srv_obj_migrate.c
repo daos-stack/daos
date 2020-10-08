@@ -539,7 +539,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 {
 	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	d_iov_t			 iov[DSS_ENUM_UNPACK_MAX_IODS];
-	struct dcs_iod_csums	*iod_csums;
+	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 iod_cnt = 0;
 	int			 start;
 	char		 iov_buf[DSS_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
@@ -599,7 +599,6 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				D_DEBUG(DB_TRACE, "i %d iod_size = 0\n", i);
 				continue;
 			}
-
 
 			iod_csums = mrone->mo_iods_csums == NULL ? NULL
 					: &mrone->mo_iods_csums[start];
@@ -1504,7 +1503,6 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		if (!inline_copy)
 			break;
 	}
-
 	for (i = 0; i < iod_eph_total; i++) {
 		/* Pack punched epoch here */
 		mrone->mo_akey_punch_ephs[i] = akey_ephs[i];
@@ -1516,21 +1514,24 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		if (iods[i].iod_nr == 0)
 			continue;
 
-		if (iods[i].iod_size == 0)
+		if (iods[i].iod_size == 0) {
 			rc = punch_iod_pack(mrone, &iods[i], rec_ephs[i]);
-		else
+		} else {
 			rc = rw_iod_pack(mrone, &iods[i],
 					 inline_copy ? &sgls[i] : NULL);
+			mrone->mo_iods_csums[mrone->mo_iod_num - 1] =
+				iods_csums[i];
+		}
 
 		if (rc != 0)
 			return rc;
 
-		mrone->mo_iods_csums[i] = iods_csums[i];
 		/**
 		 * mrone owns the allocated memory now and will free it in
 		 * migrate_one_destroy
 		 */
 		iods_csums[i].ic_data = NULL;
+		iods_csums[i].ic_nr = 0;
 	}
 
 	mrone->mo_version = version;
