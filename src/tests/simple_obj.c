@@ -57,8 +57,8 @@ do {								\
 } while (0)
 
 enum handleType {
-        HANDLE_POOL,
-        HANDLE_CO,
+	HANDLE_POOL,
+	HANDLE_CO,
 };
 
 #define ENUM_DESC_BUF	512
@@ -203,7 +203,8 @@ example_daos_key_array()
 	 * generate objid to encode feature flags and object class to the
 	 * OID. The object class controls the sharding and redundancy of the
 	 * object (replication, Erasure coding, no protection). In this case, we
-	 * choose max striping with no data prorection - OC_SX. */
+	 * choose max striping with no data prorection - OC_SX.
+	 */
 	daos_obj_generate_id(&oid, 0, OC_SX, 0);
 
 	/** open DAOS object */
@@ -236,7 +237,7 @@ example_daos_key_array()
 		sprintf(dkey_str, "dkey_%d", i);
 		d_iov_set(&dkey, dkey_str, strlen(dkey_str));
 
-		/* 
+		/*
 		 * init scatter/gather. this describes that data in your
 		 * memory. in this case it's a single contigous buffer, but this
 		 * gives the ability to provide an iovec for segmented buffer in
@@ -250,16 +251,18 @@ example_daos_key_array()
 		/** init I/O descriptor */
 		d_iov_set(&iod.iod_name, "akey", strlen("akey")); /** akey */
 
-		/* number of extents in recx array, 1 means we are accessing a
+		/*
+		 * number of extents in recx array, 1 means we are accessing a
 		 * single contiguous extent. we can have segmented/partial
 		 * access similar to an iovec for file offsets. Each process
-		 * writes 1k extent contiguously: 0: 0, 1:1024, 2:2048, etc. */
+		 * writes 1k extent contiguously: 0: 0, 1:1024, 2:2048, etc.
+		 */
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1; /** record size (1 byte array here) */
 		recx.rx_nr	= BUFLEN; /** extent size */
 		recx.rx_idx	= rank * BUFLEN; /** extent offset */
 		iod.iod_recxs	= &recx;
-		iod.iod_type	= DAOS_IOD_ARRAY; /** the value type of the akey */
+		iod.iod_type	= DAOS_IOD_ARRAY; /** value type of the akey */
 
 		/*
 		 * Update a dkey. In this case we have 1 akey under this dkey,
@@ -296,7 +299,7 @@ example_daos_key_array()
 		recx.rx_nr	= BUFLEN; /** extent size */
 		recx.rx_idx	= rank * BUFLEN; /** extent offset */
 		iod.iod_recxs	= &recx;
-		iod.iod_type	= DAOS_IOD_ARRAY; /** the value type of the akey */
+		iod.iod_type	= DAOS_IOD_ARRAY; /** value type of the akey */
 
 		/** fetch a dkey */
 		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
@@ -402,7 +405,7 @@ example_daos_key_sv()
 		iod.iod_nr	= 1; /** has to be 1 for single value */
 		iod.iod_size	= BUFLEN; /** size of the single value */
 		iod.iod_recxs	= NULL; /** recx is ignored for single value */
-		iod.iod_type	= DAOS_IOD_SINGLE; /** the value type of the akey */
+		iod.iod_type	= DAOS_IOD_SINGLE; /** value type of the akey */
 
 		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				     NULL);
@@ -509,7 +512,8 @@ example_daos_array()
 	 * user of course.
 	 */
 	if (rank == 0) {
-		rc = daos_array_create(coh, oid, DAOS_TX_NONE, 1, 1048576, &oh, NULL);
+		rc = daos_array_create(coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
+				       NULL);
 		ASSERT(rc == 0, "array create failed with %d", rc);
 	}
 
@@ -524,7 +528,6 @@ example_daos_array()
 		ASSERT(cell_size == 1, "array open failed");
 		ASSERT(csize == 1048576, "array open failed");
 	}
-	
 
 	daos_array_iod_t iod;
 	d_sg_list_t	sgl;
