@@ -139,7 +139,7 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 	if (dtm == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
-        DFUSE_TRA_UP(dtm, dfuse_info, "thread_manager");
+	DFUSE_TRA_UP(dtm, dfuse_info, "thread_manager");
 
 	D_INIT_LIST_HEAD(&dtm->tm_threads);
 	dtm->tm_se = se;
