@@ -59,8 +59,19 @@
 
 #include <gurt/common.h>
 
-
 #define URI_MAX 4096
+
+/*
+ * Start port from which crt_launch will hand out ports to launched
+ * servers. This start port has to match system-reserved range of ports
+ * which can be set via following command as a super-user.
+ *
+ * Command below will reserve 100 ports from 31415. Those ports will not
+ * be handed out to random cart contexts.
+ *
+ * echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
+ */
+#define START_PORT 31416
 
 struct host {
 	int	my_rank;
@@ -131,13 +142,22 @@ parse_args(int argc, char **argv)
 
 /* Retrieve self uri via CART */
 static int
-get_self_uri(struct host *h)
+get_self_uri(struct host *h, int rank)
 {
 	char		*uri;
 	crt_context_t	ctx;
 	char		*p;
 	int		len;
 	int		rc;
+	char		*str_port;
+
+	/* Assign ports sequentually to each rank starting from START_PORT */
+	rc = asprintf(&str_port, "%d", START_PORT + rank);
+	if (rc == -1) {
+		return -DER_NOMEM;
+	}
+
+	setenv("OFI_PORT", str_port, 1);
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
@@ -175,7 +195,6 @@ get_self_uri(struct host *h)
 
 	p++;
 	h->ofi_port = atoi(p);
-
 	D_FREE(uri);
 
 	rc = crt_context_destroy(ctx, 1);
@@ -288,7 +307,7 @@ int main(int argc, char **argv)
 
 	hostbuf->is_client = g_opt.is_client;
 	hostbuf->my_rank = my_rank;
-	rc = get_self_uri(hostbuf);
+	rc = get_self_uri(hostbuf, my_rank);
 	if (rc != 0) {
 		D_ERROR("Failed to retrieve self uri\n");
 		D_GOTO(exit, rc);
