@@ -28,8 +28,8 @@ def scons():
     daos_build.test(tenv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     common_test = daos_build.test(tenv, 'common_test',
-                    ['common_test.c', 'checksum_tests.c',
-                     'misc_tests.c'],
+                    ['common_test.c', 'checksum_tests.c', 'compress_tests.c',
+                    'misc_tests.c'],
                     LIBS=['daos_common', 'daos_tests', 'gurt', 'cart',
                           'cmocka'])
     daos_build.test(tenv, 'lru', 'lru.c',
