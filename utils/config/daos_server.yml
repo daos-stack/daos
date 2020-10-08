@@ -221,6 +221,13 @@
 #  # normally be chosen automatically.
 #
 #  fabric_iface: qib0
+#
+#  # In order to avoid port clashes on a system, specified fabric_iface_port
+#  # should be reserved in a systems /proc/sys/net/ipv4/ip_local_reserved_ports
+#  # file.
+#  # Using port of '20000' in this example, run following as a super-user:
+#  # echo 20000 > /proc/sys/net/ipv4/ip_local_reserved_ports
+#  #
 #  fabric_iface_port: 20000
 #  pinned_numa_node: 0
 #
@@ -314,6 +321,13 @@
 #  # normally be chosen automatically.
 #
 #  fabric_iface: qib1
+#
+#  # In order to avoid port clashes on a system, specified fabric_iface_port
+#  # should be reserved in a systems /proc/sys/net/ipv4/ip_local_reserved_ports
+#  # file.
+#  # Using port of '20000' in this example, run following as a super-user:
+#  # echo 20000 > /proc/sys/net/ipv4/ip_local_reserved_ports
+#  #
 #  fabric_iface_port: 20000
 #  pinned_numa_node: 1
 #

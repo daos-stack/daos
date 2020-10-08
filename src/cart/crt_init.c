@@ -620,6 +620,103 @@ crt_get_port_psm2(int *port)
 	return rc;
 }
 
+#define PORT_STR_SIZE 5
+
+static inline void
+print_reserved_failure_msg(char *proc_name, int port)
+{
+	D_ERROR("\n"
+		"---------------------------------------------------------\n"
+		"Failed to find port '%d' as one of reserved entries in\n%s\n"
+		"As a result, current server can run into unexpected behavior\n"
+                "especially in cases of multiple servers being launched on\n"
+                "the same node.\n"
+		"To correct this problem run\n'echo %d > %s'\n"
+		"as a superuser prior to launching this app\n"
+		"---------------------------------------------------------\n\n",
+		port, proc_name, port, proc_name);
+}
+
+static void
+crt_port_reserved_verify(int port)
+{
+	char 	proc_file[] = "/proc/sys/net/ipv4/ip_local_reserved_ports";
+	FILE	*f;
+	int	port_start;
+	int	port_found = 0;
+	char	c;
+	char	tmp_port[PORT_STR_SIZE + 1];
+	int	tmp_i =0;
+	int	rc;
+	int	cur_port;
+	int	is_range = 0;
+
+	f = fopen(proc_file, "r");
+	if (!f) {
+		D_WARN("Failed to open %s", proc_file);
+		return;
+	}
+
+	memset(tmp_port, 0x0, PORT_STR_SIZE + 1);
+	is_range = 0;
+	tmp_i = 0;
+	port_start = 0;
+
+	while (1) {
+		rc = fread(&c, 1, 1, f);
+
+		/* If we reached the end, or hit one of separators */
+		if (rc <= 0 || c == ',' || c == '\n' || c == '\r' || c == ' '
+		    || c == '\t') {
+			if (is_range) {
+				/* this was a port range */
+				cur_port = atoi(tmp_port);
+				if (port >= port_start && port <= cur_port) {
+					port_found = 1;
+					goto exit;
+				}
+			} else {
+				/* individual port */
+				cur_port = atoi(tmp_port);
+				if (port == cur_port) {
+					port_found = 1;
+					goto exit;
+				}
+			}
+
+			/* Reset temp buffer and helper variables */
+			memset(tmp_port, 0x0, PORT_STR_SIZE + 1);
+			tmp_i = 0;
+			is_range = 0;
+
+			if (rc <= 0)
+				goto exit;
+		} else if (c >= '0' && c <= '9') {
+			if (tmp_i < PORT_STR_SIZE)
+				tmp_port[tmp_i++] = c;
+			else {
+				D_WARN("Failed to parse %s\n", proc_file);
+				goto exit;
+			}
+		} else if (c == '-') {
+			port_start = atoi(tmp_port);
+			is_range = 1;
+			tmp_i = 0;
+			memset(tmp_port, 0x0, PORT_STR_SIZE + 1);
+		} else {
+			D_WARN("Failed to parse %s on char '%c'\n",
+				proc_file, c);
+		}
+	}
+
+exit:
+	fclose(f);
+	if (!port_found)
+		print_reserved_failure_msg(proc_file, port);
+
+	return;
+}
+
 int crt_na_ofi_config_init(void)
 {
 	char		*port_str;
@@ -707,11 +804,15 @@ int crt_na_ofi_config_init(void)
 	port = -1;
 	port_str = getenv("OFI_PORT");
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
+
 		if (!is_integer_str(port_str)) {
 			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s.",
 				port_str);
 		} else {
 			port = atoi(port_str);
+
+			crt_port_reserved_verify(port);
+
 			if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2)
 				port = (uint16_t) port << 8;
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service "
