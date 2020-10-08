@@ -624,6 +624,62 @@ listr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	return tx_list(&param, VOS_ITER_RECX, txh);
 }
 
+static int
+tx_query(daos_handle_t coh, struct tx_helper *txh, daos_unit_oid_t oid,
+	 daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
+	 daos_recx_t *recx, uint64_t flags)
+{
+	struct dtx_handle	*dth;
+	int			 rc;
+
+	dth = start_tx(coh, oid, epoch, txh);
+
+	rc = vos_obj_query_key(coh, oid, flags, epoch, dkey, akey, recx,
+			       dth);
+
+	stop_tx(coh, txh, rc == 0, true);
+
+	return rc;
+}
+
+static int
+querymax_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	char		 dkey_buf[64];
+	daos_key_t	 dkey = {dkey_buf, sizeof(dkey_buf), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, NULL,
+			NULL, DAOS_GET_DKEY | DAOS_GET_MAX);
+}
+
+static int
+querymax_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	char		 dkey_buf[64];
+	daos_key_t	 dkey = {dkey_buf, sizeof(dkey_buf), 0};
+	char		 akey_buf[64];
+	daos_key_t	 akey = {akey_buf, sizeof(akey_buf), 0};
+	char		 value_buf[64] = {0};
+	daos_recx_t	 recx;
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+	set_akey(mvcc_arg->i, path, &akey);
+
+	recx.rx_idx = 0;
+	recx.rx_nr = sizeof(value_buf);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
+			&recx, DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX |
+			DAOS_GET_RECX);
+}
 
 static struct op operations[] = {
 	/* {name,	type,	rlevel,	wlevel,	rtype,	wtype,	func} */
@@ -638,7 +694,8 @@ static struct op operations[] = {
 	{"listr",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	listr_f},
 	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
 	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
-	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"querymaxd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	querymax_d},
+	{"querymaxdar",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	querymax_dar},
 
 	/*
 	 * Readwrites
