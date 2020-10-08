@@ -40,7 +40,7 @@ tests: !mux
     test_clients_bin: 
       - self_test
       - self_test
-      - tests/test_group_np_cli
+      - ../tests/test_group_np_cli
     test_clients_arg: 
       - "--group-name selftest_srv_grp --endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
       - "--group-name selftest_srv_grp --endpoint 0-1:0 --master-endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
