@@ -50,18 +50,22 @@ class LargeFileCount(MdtestBase, IorTestBase):
         :avocado: tags=all,daosio,hw,large,full_regression,largefilecount
         """
         apis = self.params.get("api", "/run/largefilecount/*")
+        object_class = self.params.get("object_class", '/run/largefilecount/*')
 
-        for api in apis:
-            self.ior_cmd.api.update(api)
-            self.mdtest_cmd.api.update(api)
+        for oclass in object_class:
+            self.ior_cmd.dfs_oclass.update(oclass)
+            self.mdtest_cmd.dfs_oclass.update(oclass)
+            for api in apis:
+                self.ior_cmd.api.update(api)
+                self.mdtest_cmd.api.update(api)
 
-            # Until DAOS-3320 is resolved run IOR for POSIX
-            # with single client node
-            self.single_client(api)
+                # Until DAOS-3320 is resolved run IOR for POSIX
+                # with single client node
+                self.single_client(api)
 
-            # run mdtest and ior
-            self.execute_mdtest()
-            self.run_ior_with_pool()
+                # run mdtest and ior
+                self.execute_mdtest()
+                self.run_ior_with_pool()
 
     def test_largefilecount_rc(self):
         """Jira ID: DAOS-3845.
@@ -77,18 +81,22 @@ class LargeFileCount(MdtestBase, IorTestBase):
         apis = self.params.get("api", "/run/largefilecount/*")
         num_of_files_dirs_rc = self.params.get("num_of_files_dirs_rc",
                                                "/run/mdtest/*")
+        object_class = self.params.get("object_class", '/run/largefilecount/*')
 
         # update mdtest file count
         self.mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs_rc)
 
-        for api in apis:
-            self.ior_cmd.api.update(api)
-            self.mdtest_cmd.api.update(api)
+        for oclass in object_class:
+            self.ior_cmd.dfs_oclass.update(oclass)
+            self.mdtest_cmd.dfs_oclass.update(oclass)
+            for api in apis:
+                self.ior_cmd.api.update(api)
+                self.mdtest_cmd.api.update(api)
 
-            # Until DAOS-3320 is resolved run IOR for POSIX
-            # with single client node
-            self.single_client(api)
+                # Until DAOS-3320 is resolved run IOR for POSIX
+                # with single client node
+                self.single_client(api)
 
-            # run mdtest and ior
-            self.execute_mdtest()
-            self.run_ior_with_pool()
+                # run mdtest and ior
+                self.execute_mdtest()
+                self.run_ior_with_pool()
