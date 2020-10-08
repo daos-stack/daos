@@ -90,7 +90,7 @@ def ofi_config(config):
     """Check ofi version"""
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
-               "libfabric must be > 1.11");"""
+               "libfabric must be >= 1.11");"""
     return config.TryCompile(code, ".c")
 
 def define_mercury(reqs):
