@@ -92,6 +92,14 @@ display_set_vars() {
     VERBOSE = ${VERBOSE}"
 }
 
+#######################################
+# Check if the files exist on this host.
+# Arguments:
+#   $1: local logs to process
+# Returns:
+#   0: Files exist or no matches were found
+#   1: Missing the log files argument
+#######################################
 check_files_input() {
     if [ -n "${1}" ]; then
         # shellcheck disable=SC2086
@@ -180,8 +188,7 @@ check_hw() {
         echo "Skipping VM check for compression"
         return 1
     fi
-    echo "Determining if this host is a VM"
-    dmesg | grep "Hypervisor detected"
+    dmesg | grep "Hypervisor detected" 2> /dev/null
     return $?
 }
 
@@ -215,16 +222,21 @@ scp_files() {
     do
         if scp -r "${file}" "${2}"/"$(hostname -s)"-"${file##*/}"; then
             copied+=("${file}")
-            if ! sudo rm -fr "${file}"; then
-                rc=1
+            if ! rm -fr "${file}"; then
                 echo "  Error removing ${file}"
+                echo "    $(ls -al ${file})"
+                rc=1
             fi
         else
             echo "  Failed to archive ${file} to ${2}"
             rc=1
         fi
     done
-    echo Copied "${copied[@]:-no files}"
+    echo "  The following files were archived:"
+    for file in ${copied[@]:-no files}
+    do
+        echo "    ${file}"
+    done
     return ${rc}
 }
 

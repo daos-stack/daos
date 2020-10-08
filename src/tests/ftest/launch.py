@@ -248,6 +248,10 @@ def set_test_environment(args):
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
     print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+    if args.verbose:
+        print("ENVIRONMENT VARIABLES")
+        for key in sorted(os.environ):
+            print("  {}: {}".format(key, os.environ[key]))
 
 
 def get_output(cmd, check=True):
@@ -791,7 +795,7 @@ def run_tests(test_files, tag_filter, args):
             # Optionally store all of the server and client config files
             # and archive remote logs and report big log files, if any.
             if args.archive:
-                return_code |= archive_config_files(avocado_logs_dir)
+                return_code |= archive_config_files(avocado_logs_dir, args)
                 return_code |= archive_daos_logs(
                     avocado_logs_dir, test_file, args)
                 return_code |= archive_cart_logs(
@@ -951,17 +955,16 @@ def archive_daos_logs(avocado_logs_dir, test_files, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    threshold = args.logs_threshold if args.logs_threshold else None
     task = archive_files(
-        destination, hosts, "{}/*.log*".format(logs_dir), True, threshold)
+        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
     if not check_remote_output(task, "archive_daos_logs command"):
         status |= 16
-    if threshold:
+    if args.logs_threshold:
         test_name = get_test_category(test_files["py"])
-        if not check_big_files(avocado_logs_dir, task, test_name, threshold):
+        if not check_big_files(avocado_logs_dir, task, test_name, args):
             status |= 32
     return status
 
@@ -987,26 +990,26 @@ def archive_cart_logs(avocado_logs_dir, test_files, args):
 
     # Copy any log files written to the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    threshold = args.logs_threshold if args.logs_threshold else None
     task = archive_files(
-        destination, hosts, "{}/*/*log*".format(logs_dir), True, threshold)
+        destination, hosts, "{}/*/*log*".format(logs_dir), True, args)
 
     # Determine if the command completed successfully across all the hosts
     status = 0
     if not check_remote_output(task, "archive_cart_logs command"):
         status |= 16
-    if threshold:
+    if args.logs_threshold:
         test_name = get_test_category(test_files["py"])
-        if not check_big_files(avocado_logs_dir, task, test_name, threshold):
+        if not check_big_files(avocado_logs_dir, task, test_name, args):
             status |= 32
     return status
 
 
-def archive_config_files(avocado_logs_dir):
+def archive_config_files(avocado_logs_dir, args):
     """Copy all of the configuration files to the avocado results directory.
 
     Args:
         avocado_logs_dir (str): path to the avocado log files
+        args (argparse.Namespace): command line arguments for this program
 
     Returns:
         int: status code.
@@ -1025,7 +1028,8 @@ def archive_config_files(avocado_logs_dir):
     base_dir = get_build_environment()["PREFIX"]
     configs_dir = get_temporary_directory(base_dir)
     task = archive_files(
-        destination, host_list, "{}/*_*_*.yaml".format(configs_dir))
+        destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
+        args)
 
     status = 0
     if not check_remote_output(task, "archive_config_files"):
@@ -1033,7 +1037,7 @@ def archive_config_files(avocado_logs_dir):
     return status
 
 
-def archive_files(destination, hosts, source_files, cart=False, threshold=None):
+def archive_files(destination, hosts, source_files, cart, args):
     """Archive all of the remote files to the destination directory.
 
     Args:
@@ -1041,7 +1045,7 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
         hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
         cart (str): enable running cart_logtest.py
-        threshold (str): size threshold for reporting big/large files
+        args (argparse.Namespace): command line arguments for this program
 
     Returns:
         Task: a Task object containing the result of the running the command on
@@ -1067,8 +1071,10 @@ def archive_files(destination, hosts, source_files, cart=False, threshold=None):
     ]
     if cart:
         command.append("-c")
-    if threshold:
-        command.append("-t \"{}\"".format(threshold))
+    if args.logs_threshold:
+        command.append("-t \"{}\"".format(args.logs_threshold))
+    if args.verbose:
+        command.append("-v")
     return get_remote_output(hosts, " ".join(command), 900)
 
 
@@ -1094,14 +1100,14 @@ def rename_logs(avocado_logs_dir, test_file):
                 test_logs_dir, new_test_logs_dir, error))
 
 
-def check_big_files(avocado_logs_dir, task, test_name, threshold):
+def check_big_files(avocado_logs_dir, task, test_name, args):
     """Check the contents of the task object, tag big files, create junit xml.
 
     Args:
         avocado_logs_dir (str): path to the avocado log files.
         task (Task): a Task object containing the command result
         test_name (str): current running testname
-        threshold (str): size threshold for reporting big/large files
+        args (argparse.Namespace): command line arguments for this program
 
     Returns:
         bool: True if no errors occurred checking and creating junit file.
@@ -1118,14 +1124,14 @@ def check_big_files(avocado_logs_dir, task, test_name, threshold):
         if big_files:
             cdata.append(
                 "The following log files on {} exceeded the {} "
-                "threshold:".format(node_set, threshold))
+                "threshold:".format(node_set, args.logs_threshold))
             cdata.extend(["  {}".format(big_file) for big_file in big_files])
     if cdata:
         destination = os.path.join(avocado_logs_dir, "latest")
         status = create_results_xml(
             hosts, test_name, "\n".join(cdata), destination)
     else:
-        print("No log files found exceeding {}".format(threshold))
+        print("No log files found exceeding {}".format(args.logs_threshold))
 
     return status
 
