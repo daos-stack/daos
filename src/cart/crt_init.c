@@ -641,7 +641,7 @@ crt_port_range_verify(int port)
 
 	memset(buff, 0x0, PORT_RANGE_STR_SIZE);
 
-	rc = fread(buff, 1, PORT_RANGE_STR_SIZE-1, f);
+	rc = fread(buff, 1, PORT_RANGE_STR_SIZE - 1, f);
 	if (rc <= 0) {
 		D_ERROR("Failed to read from file %s\n", proc);
 		fclose(f);
@@ -674,8 +674,6 @@ crt_port_range_verify(int port)
 			port, proc, start_port, end_port);
 		return;
 	}
-
-	return;
 }
 
 int crt_na_ofi_config_init(void)
