@@ -702,3 +702,20 @@ out:
 	ro->rso_stable_epoch = crt_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
+
+int
+rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+			    void *priv)
+{
+	struct rebuild_scan_out	*src = crt_reply_get(source);
+	struct rebuild_scan_out *dst = crt_reply_get(result);
+
+	if (dst->rso_status == 0)
+		dst->rso_status = src->rso_status;
+
+	if (src->rso_status == 0 &&
+	    dst->rso_stable_epoch < src->rso_stable_epoch)
+		dst->rso_stable_epoch = src->rso_stable_epoch;
+
+	return 0;
+}
