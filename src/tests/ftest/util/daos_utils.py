@@ -463,10 +463,11 @@ class DaosCommand(DaosCommandBase):
         # Container's `&()\;'"!<> attribute value: attr12
         match = re.findall(
             r"Container's\s+([\S ]+)\s+attribute\s+value:\s+(.+)$",
-            self.result.stdout)[0]
+            self.result.stdout)
         data = {}
-        data["attr"] = match[0]
-        data["value"] = match[1]
+        if match:
+            data["attr"] = match[0][0]
+            data["value"] = match[0][1]
 
         return data
 
