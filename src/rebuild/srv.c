@@ -478,14 +478,10 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, -1);
 	if (rgt == NULL) {
 		rs_inlist = rebuild_status_completed_lookup(pool_uuid);
-		if (rs_inlist != NULL) {
+		if (rs_inlist != NULL)
 			memcpy(status, rs_inlist, sizeof(*status));
-		} else {
-			if (d_list_empty(&rebuild_gst.rg_queue_list) &&
-			    rebuild_gst.rg_inflight == 0)
-				status->rs_done = 1;
-			D_GOTO(out, rc = 0);
-		}
+		else
+			status->rs_done = 1;
 	} else {
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
 		status->rs_version = rgt->rgt_rebuild_ver;
@@ -507,7 +503,6 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		}
 	}
 
-out:
 	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" done %s rec "DF_U64" obj "
 		DF_U64" ver %d err %d\n", DP_UUID(pool_uuid),
 		status->rs_done ? "yes" : "no", status->rs_rec_nr,
@@ -1946,6 +1941,10 @@ out:
 
 	return rc;
 }
+
+static struct crt_corpc_ops rebuild_tgt_scan_co_ops = {
+	.co_aggregate	= rebuild_tgt_scan_aggregator,
+};
 
 /* Define for cont_rpcs[] array population below.
  * See REBUILD_PROTO_*_RPC_LIST macro definition
