@@ -342,9 +342,11 @@ def check_remote_output(task, command):
                 if len(lines) > 1:
                     print("    {}: rc={}, output:".format(n_set, code))
                     for line in lines:
-                        print("      {}".format(lines)
+                        print("      {}".format(line))
                 else:
-                    print("    {}: rc={}, output: {}".format(n_set, code, output))
+                    print("    {}: rc={}, output: {}".format(n_set,
+                                                             code,
+                                                             output))
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
