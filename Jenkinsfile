@@ -1309,14 +1309,18 @@ pipeline {
                                                       statementCoverage: 0],
                                    ignore_failure: true)
                     }
+                    post {
+                        always {
+                            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg']
+                        }
+                    } // post
                 } // stage('Bullseye Report')
             } // parallel
         } // stage ('Test Report')
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-valg',
-                                                     'centos7-gcc-unit-memcheck']
+            valgrindReportPublish valgrind_stashes: ['centos7-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
