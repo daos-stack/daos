@@ -49,9 +49,23 @@
 #include <time.h>
 #include <sys/wait.h>
 
+#include <sys/types.h>
+#include <sys/shm.h>
+#include <sys/ipc.h>
+#include <semaphore.h>
+#include <string.h>
+#include <errno.h>
+
 #include <cmocka.h>
 #include <cart/api.h>
 #include "gurt/debug.h"
+
+/* global semaphores */
+sem_t *child1_sem = NULL;
+sem_t *child2_sem = NULL;
+
+int shmid_c1 = 0;
+int shmid_c2 = 0;
 
 static void
 run_test_fork(void **state)
@@ -65,40 +79,74 @@ run_test_fork(void **state)
 	pid_t		pid2 = 0;
 	crt_context_t	crt_context = NULL;
 
+	/* lock the semaphore */
+	sem_trywait(child1_sem);
+	sem_trywait(child2_sem);
+
+
 	pid1 = fork();
 	/* fork first child process */
 	if (pid1 == 0) {
 		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
-		if (rc != 0)
-			exit(10);
+		if (rc != 0){
+			sem_post(child2_sem);
+			rc = 10;
+			goto child1_error;
+		}
 		child_result = crt_context_create(&crt_context);
-		sleep(10);	/* wait for second child */
-		rc = crt_context_destroy(crt_context, false);
-		if (rc != 0)
-			exit(11);
+
+		/* Signal second child to continue and wait */
+		sem_post(child2_sem);
+		sem_wait(child1_sem);
+
+		if (child_result == 0) {
+			rc = crt_context_destroy(crt_context, false);
+			if (rc != 0){
+				rc = 11;
+				goto child1_error;
+			}
+		}
 		rc = crt_finalize();
-		if (rc != 0)
-			exit(12);
+		if (rc != 0){
+			rc = 12;
+			goto child1_error;
+		}
 		exit(child_result);
+child1_error:
+		exit(rc);
 	}
 
 	/* fork second child process */
 	pid2 = fork();
 	if (pid2 == 0) {
-		sleep(2);  /* wait for first child just in case */
+		/* wait for signal from child 1 */
+		sem_wait(child2_sem);
+
 		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
-		if (rc != 0)
-			exit(20);
+		if (rc != 0){
+			rc = 20;
+			goto child2_error;
+		}
 		child_result = crt_context_create(&crt_context);
 		if (child_result == 0) {
 			rc = crt_context_destroy(crt_context, false);
-			if (rc != 0)
-				exit(21);
+			if (rc != 0){
+				rc = 21;
+				goto child2_error;
+			}
 		}
+		/* signal child 1 to finish up */
+		sem_post(child1_sem);
 		rc = crt_finalize();
-		if (rc != 0)
-			exit(22);
+		if (rc != 0){
+			rc = 22;
+			goto child2_error;
+		}
 		exit(child_result);
+child2_error:
+		sem_post(child1_sem);
+		exit(rc);
+
 	}
 
 	/* Wait for first child and get results */
@@ -149,25 +197,75 @@ test_port_verb(void **state)
 };
 #endif
 
+/*******************/
 static int
 init_tests(void **state)
 {
-	unsigned int seed;
+	int size = sizeof (sem_t);
+	int flag = IPC_CREAT  | 0666;
+	int pshare = 1;
+	int init_value = 1;
+	int rc;
 
-	/* Seed the random number generator once per test run */
-	seed = time(NULL);
-	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
-	srand(seed);
+	/* create shared memory regions for semaphores */
+	shmid_c1 = shmget(IPC_PRIVATE, size, flag);
+	assert_true(shmid_c1  != -1);
+	shmid_c2 = shmget(IPC_PRIVATE, size, flag);
+	assert_true(shmid_c2  != -1);
+	if ((shmid_c1 == -1) || (shmid_c2 == -1)) {
+		printf(" SHMID not created\n");
+		goto cleanup;
+	}
+
+	/* Attach share memeory regions */
+	child1_sem = (sem_t *)shmat(shmid_c1, NULL, 0);
+	child2_sem = (sem_t *)shmat(shmid_c2, NULL, 0);
+
+	assert_true(child1_sem  != (sem_t *)-1);
+	assert_true(child2_sem  != (sem_t *)-1);
+
+	/* Initialize semaphores */
+	rc = sem_init (child1_sem, pshare, init_value );
+	assert_true(rc == 0);
+
+	rc = sem_init (child2_sem, pshare, init_value );
+	assert_true(rc == 0);
 
 	return 0;
+
+cleanup:
+	printf(" Error creating semaphoes \n");
+ 	return -1;
 }
 
+/*******************/
 static int
 fini_tests(void **state)
 {
+	struct shmid_ds smds;
+	int rc;
+
+	/* detatch shared memory region */
+	if (child1_sem != NULL)
+		shmdt(child1_sem);
+	if (child2_sem != NULL)
+		shmdt(child2_sem);
+
+	/* elimiante the shared memory regions */
+	rc = shmctl(shmid_c1, IPC_STAT, &smds);
+	assert_true(rc == 0);
+	rc = shmctl(shmid_c1, IPC_RMID, &smds);
+	assert_true(rc == 0);
+
+	rc = shmctl(shmid_c2, IPC_STAT, &smds);
+	assert_true(rc == 0);
+	rc = shmctl(shmid_c2, IPC_RMID, &smds);
+	assert_true(rc == 0);
+
 	return 0;
 }
 
+/*******************/
 int main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
