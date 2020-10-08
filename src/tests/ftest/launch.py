@@ -338,7 +338,7 @@ def check_remote_output(task, command):
         else:
             for output, o_hosts in output_data:
                 n_set = NodeSet.fromlist(o_hosts)
-                lines = output.decode('utf-8').splitlines()
+                lines = str(output).splitlines()
                 if len(lines) > 1:
                     print("    {}: rc={}, output:".format(n_set, code))
                     for line in lines:
