@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@schan_fn_cov") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -991,30 +991,6 @@ pipeline {
                 }
             }
             parallel {
-                stage('Unit Test') {
-                    when {
-                      beforeAgent true
-                      allOf {
-                          expression { ! skip_stage('unit-test')}
-                          expression { ! skip_stage('run_test') }
-                      }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        unitTest timeout_time: 60,
-                                 inst_repos: pr_repos(),
-                                 inst_rpms: unit_packages()
-                    }
-                    post {
-                      always {
-                            unitTestPost artifacts: ['unit_test_logs/*',
-                                                     'unit_vm_test/**'],
-                                         valgrind_stash: 'centos7-gcc-unit-valg'
-                        }
-                    }
-                }
                 stage('Unit Test Bullseye') {
                     when {
                       beforeAgent true
@@ -1113,20 +1089,18 @@ pipeline {
                         }
                     }
                 }
-                stage('Functional on CentOS 7') {
+                stage('Functional on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { ! skip_stage('func-test') }
-                            expression { ! skip_stage('func-test-vm') }
-                            expression { ! skip_stage('func-test-el7')}
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daos_repos(),
+                        fnCovTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
                     post {
@@ -1135,35 +1109,11 @@ pipeline {
                         }
                     }
                 }
-                stage('Functional on Leap 15') {
+                stage('Functional_Hardware_Small Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { ! skip_stage('func-test') }
-                            expression { ! skip_stage('func-test-vm') }
-                            expression { ! skip_stage('func-test-leap15') }
-                        }
-                    }
-                    agent {
-                        label 'ci_vm9'
-                    }
-                    steps {
-                        functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
-                    }
-                    post {
-                        always {
-                            functionalTestPost()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional_Hardware_Small') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-small') }
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
@@ -1171,7 +1121,7 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
@@ -1180,14 +1130,12 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Small')
-                stage('Functional_Hardware_Medium') {
+                } // stage('Functional_Hardware_Small Bullseye')
+                stage('Functional_Hardware_Medium Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-medium') }
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
@@ -1195,7 +1143,7 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                    }
@@ -1204,14 +1152,12 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Medium')
-                stage('Functional_Hardware_Large') {
+                } // stage('Functional_Hardware_Medium Bullseye')
+                stage('Functional_Hardware_Large Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-large') }
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
@@ -1219,7 +1165,7 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
@@ -1228,7 +1174,7 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Large')
+                } // stage('Functional_Hardware_Large Bullseye')
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -1303,7 +1249,11 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish(
-                                   coverage_stashes: ['centos7-covc-unit-cov'],
+                                   coverage_stashes: [ 'centos7-covc-unit-cov',
+                                                     'centos7-covc-cov',
+                                                     'centos7-covc-hw-small-cov',
+                                                     'centos7-covc-hw-large-cov',
+                                                     'centos7-covc-hw-medium-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
