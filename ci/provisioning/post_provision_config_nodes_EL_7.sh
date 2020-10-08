@@ -4,6 +4,10 @@ post_provision_config_nodes() {
     local yum_repo_args="--disablerepo=*"
     yum_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
     yum_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
+
+    # Reserve port ranges for DAOS and CART servers
+    echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
+
     if $CONFIG_POWER_ONLY; then
         rm -f /etc/yum.repos.d/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
         yum -y erase fio fuse ior-hpc mpich-autoload               \
