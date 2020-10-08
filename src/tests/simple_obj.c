@@ -238,10 +238,9 @@ example_daos_key_array()
 		d_iov_set(&dkey, dkey_str, strlen(dkey_str));
 
 		/*
-		 * init scatter/gather. this describes that data in your
-		 * memory. in this case it's a single contigous buffer, but this
-		 * gives the ability to provide an iovec for segmented buffer in
-		 * memory.
+		 * init scatter/gather. this describes data in your memory. in
+		 * this case it's a single contiguous buffer, but this gives the
+		 * ability to provide an iovec for segmented buffer in memory.
 		 */
 		d_iov_set(&sg_iov, buf, BUFLEN);
 		sgl.sg_nr		= 1;
