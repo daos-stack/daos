@@ -240,7 +240,7 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
-		D_ALLOC_ARRAY(resp->pools[i]);
+		D_ALLOC_PTR(resp->pools[i]);
 		if (resp->pools[i] == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -301,7 +301,6 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			}
 		}
 		D_FREE(resp->pools);
-		resp->pools = NULL;
 		resp->n_pools = 0;
 		goto out;
 	}
