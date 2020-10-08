@@ -916,7 +916,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_dev_resp__device__field_descript
     offsetof(Mgmt__SmdDevResp__Device, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1049,7 +1049,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descripto
     offsetof(Mgmt__SmdPoolResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1061,7 +1061,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descripto
     offsetof(Mgmt__SmdPoolResp__Pool, blobs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1382,7 +1382,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__device__field_descri
     offsetof(Mgmt__SmdQueryResp__Device, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1459,7 +1459,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__pool__field_descript
     offsetof(Mgmt__SmdQueryResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1471,7 +1471,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_query_resp__pool__field_descript
     offsetof(Mgmt__SmdQueryResp__Pool, blobs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

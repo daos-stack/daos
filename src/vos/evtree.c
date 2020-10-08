@@ -1900,7 +1900,7 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
 	struct evt_desc		*dst_desc;
 	struct evt_trace	*trace;
 	struct evt_node		*node;
-	daos_size_t		 csum_buf_len;
+	daos_size_t		 csum_buf_len = 0;
 	daos_size_t		 size;
 	int			 rc;
 
@@ -1915,7 +1915,9 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
 	if (rc != 0)
 		return rc;
 
-	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	if (ci_is_valid(&ent->ei_csum))
+		csum_buf_len = ci_csums_len(ent->ei_csum);
+
 	rc = umem_tx_add_ptr(evt_umm(tcx), dst_desc,
 			     sizeof(*dst_desc) + csum_buf_len);
 	if (rc != 0)
@@ -2693,8 +2695,10 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 	if (leaf) {
 		umem_off_t desc_off;
-		uint32_t   csum_buf_size =
-				evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+		uint32_t   csum_buf_size = 0;
+
+		if (ci_is_valid(&ent->ei_csum))
+			csum_buf_size = ci_csums_len(ent->ei_csum);
 		size_t     desc_size = sizeof(struct evt_desc) + csum_buf_size;
 		ne = evt_node_entry_at(tcx, nd, i);
 
@@ -3336,17 +3340,28 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		   const struct evt_entry_in *ent, uint8_t **csum_bufp)
 {
 	const struct dcs_csum_info	*csum = &ent->ei_csum;
-	daos_size_t			 csum_buf_len;
+	daos_size_t			 csum_buf_len = 0;
 
 	if (!ci_is_valid(csum))
 		return;
 
-	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	/**
+	 * If a punch was inserted first (rec_len = 0), then the csum info
+	 * won't have been set in evt_root_activate.
+	 */
+	if (tcx->tc_root->tr_csum_len == 0 && csum->cs_len > 0) {
+		tcx->tc_root->tr_csum_len = csum->cs_len;
+		tcx->tc_root->tr_csum_type = csum->cs_type;
+		tcx->tc_root->tr_csum_chunk_size = csum->cs_chunksize;
+	}
+
+	csum_buf_len = ci_csums_len(ent->ei_csum);
+
 	if (csum->cs_buf_len < csum_buf_len) {
 		D_ERROR("Issue copying checksum. Source (%d) is "
 			"larger than destination (%"PRIu64")",
 			csum->cs_buf_len, csum_buf_len);
-	} else {
+	} else if (csum_buf_len > 0) {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
 		if (csum_bufp != NULL)
 			*csum_bufp = desc->pt_csum;
@@ -3359,17 +3374,24 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 {
 	uint32_t csum_count;
 
-	if (tcx->tc_root->tr_csum_len <= 0 || !tcx->tc_root->tr_csum_chunk_size)
+	if (tcx->tc_root->tr_csum_len == 0)
 		return;
 
-	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
-	csum_count = evt_csum_count(tcx, &entry->en_ext);
+	memset(&entry->en_csum, 0, sizeof(entry->en_csum));
 
+	/**
+	 * Fill these in even if is a hole. Aggregation depends on these
+	 * being set to always know checksums is enabled
+	 */
 	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
-	entry->en_csum.cs_nr = csum_count;
-	entry->en_csum.cs_buf_len = csum_count * tcx->tc_root->tr_csum_len;
 	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
 	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
+	if (bio_addr_is_hole(&desc->dc_ex_addr))
+		return;
+	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
+	csum_count = evt_csum_count(tcx, &entry->en_ext);
+	entry->en_csum.cs_nr = csum_count;
+	entry->en_csum.cs_buf_len = csum_count * tcx->tc_root->tr_csum_len;
 	entry->en_csum.cs_csum = &desc->pt_csum[0];
 }
 
