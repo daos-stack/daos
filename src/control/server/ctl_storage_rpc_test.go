@@ -547,7 +547,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Scm: &ScanScmResp{State: new(ResponseState)},
 			},
 		},
-		"scan twice bdev meta with multiple io servers up": {
+		// make sure information is not duplicated in cache
+		"verify cache integrity over multiple storage scan calls": {
 			req: &StorageScanReq{Nvme: &ScanNvmeReq{Meta: true}},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &bdev.ScanResponse{

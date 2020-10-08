@@ -180,3 +180,38 @@ export DAOS_CSUM_TEST_ALL_TYPE=1
 ./daos_server -z
 ./daos_server -i --csum_type crc64
 ```
+
+# Life of a checksum (WIP)
+## Rebuild
+- migrate_one_insert - mrone.iods_csums is allocated, iods_csums copied from
+  dss_enum_unpack_io. Memory reference removed from iods_csums.data. It will be
+  freed in migrate_one_destory
+- migrate_fetch_update_inline - mrone.iods_csums sent to vos_obj_update
+
+## VOS
+- akey_update_begin - determines how much extra space needs to be allocated in
+  SCM to account for the checksum
+### Arrays
+- evt_root_activate - evtree root is activated. If has a csum them the root csum
+  properties are set (csum_len, csum_type, csum_chunk_size)
+- evt_desc_csum_fill - if root was activated with a punched record then it won't
+  have had the csum fields set correctly so set them here. Main purpose is to
+  copy the csum to the end of persistent evt record (evt_desc). Enough SCM
+  should have been reserved in akey_update_begin.
+- evt_entry_csum_fill - Copy the csum from the persistent memory to the
+  evt_entry returned. Also copy the csum fields from the evtree root to complete
+  the csum_info structure in the evt_entry.
+- akey_fetch_recx - checksums are saved to the ioc for each found extent. Will
+  be used to be added to to the result later.
+
+### Update/Fetch (copied from vos/README.md)
+- SV Update: vos_update_end -> akey_update_single -> svt_rec_store
+- Sv Fetch: vos_fetch_begin -> akey_fetch_single -> svt_rec_load
+- EV Update: vos_update_end -> akey_update_recx -> evt_insert
+- EV Fetch: vos_fetch_begin -> akey_fetch_recx -> evt_fill_entry
+
+## Enumeration
+For enumeration the csums for the keys and values are packed into an iov
+dedicated to csums.
+- fill_key_csum - Checksum is calcuated for the key and packed into the iov
+- fill_data_csum - pack/serialize the csum_info structure into the iov.

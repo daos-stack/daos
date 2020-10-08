@@ -6,7 +6,7 @@ hosts:
     - server-D
 server_config:
     name: daos_server
-timeout: 180
+timeout: 60
 pool:
     control_method: dmg
     mode: 146

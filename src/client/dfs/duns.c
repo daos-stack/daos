@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <dlfcn.h>
+#include <regex.h>
 #ifdef LUSTRE_INCLUDE
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_idl.h>
@@ -263,17 +264,108 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 }
 #endif
 
+#define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
+#define DAOS_FORMAT "daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
+#define DAOS_FORMAT_NO_PREFIX "/"UUID_REGEX"/"UUID_REGEX"[/]?"
+
+static int
+check_direct_format(const char *path, bool no_prefix)
+{
+	regex_t regx;
+	int	rc;
+
+	if (no_prefix)
+		rc = regcomp(&regx, DAOS_FORMAT_NO_PREFIX,
+			     REG_EXTENDED | REG_ICASE);
+	else
+		rc = regcomp(&regx, DAOS_FORMAT, REG_EXTENDED | REG_ICASE);
+	if (rc)
+		return -DER_INVAL;
+
+	rc = regexec(&regx, path, 0, NULL, 0);
+	regfree(&regx);
+
+	return rc;
+}
+
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr)
 {
-	ssize_t	s;
-	char	str[DUNS_MAX_XATTR_LEN];
-	struct	statfs fs;
-	int	rc;
+	ssize_t		s;
+	char		str[DUNS_MAX_XATTR_LEN];
+	struct statfs	fs;
+	int		rc;
+
+	rc = check_direct_format(path, attr->da_no_prefix);
+	if (rc == 0) {
+		char	*dir;
+		char	*saveptr, *t;
+
+		D_STRNDUP(dir, path, PATH_MAX);
+		if (dir == NULL) {
+			D_ERROR("Failed to copy path\n");
+			return ENOMEM;
+		}
+
+		D_DEBUG(DB_TRACE, "DUNS resolve to direct path: %s\n", dir);
+		t = strtok_r(dir, "/", &saveptr);
+		if (t == NULL) {
+			D_ERROR("Invalid DAOS format (%s).\n", path);
+			D_FREE(dir);
+			return EINVAL;
+		}
+
+		/** if there is a daos: prefix, skip over it */
+		if (!attr->da_no_prefix) {
+			t = strtok_r(NULL, "/", &saveptr);
+			if (t == NULL) {
+				D_ERROR("Invalid DAOS format (%s).\n", path);
+				D_FREE(dir);
+				return EINVAL;
+			}
+		}
+
+		/** parse the pool uuid */
+		rc = uuid_parse(t, attr->da_puuid);
+		if (rc) {
+			D_ERROR("Invalid format: pool UUID cannot be parsed\n");
+			D_FREE(dir);
+			return EINVAL;
+		}
+
+		t = strtok_r(NULL, "/", &saveptr);
+		if (t == NULL) {
+			D_ERROR("Invalid DAOS format (%s).\n", path);
+			D_FREE(dir);
+			return EINVAL;
+		}
+
+		/** parse the container uuid */
+		rc = uuid_parse(t, attr->da_cuuid);
+		if (rc) {
+			D_ERROR("Invalid format: cont UUID cannot be parsed\n");
+			D_FREE(dir);
+			return EINVAL;
+		}
+
+		/** if there is a relative path, parse it out */
+		t = strtok_r(NULL, "", &saveptr);
+		if (t != NULL) {
+			D_ASPRINTF(attr->da_rel_path, "/%s", t);
+			if (!attr->da_rel_path) {
+				D_FREE(dir);
+				return ENOMEM;
+			}
+		}
+
+		D_FREE(dir);
+		return 0;
+	}
 
 	rc = statfs(path, &fs);
 	if (rc == -1) {
 		int err = errno;
+
 		D_INFO("Failed to statfs %s: %s\n", path, strerror(errno));
 		return err;
 	}
@@ -315,9 +407,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 {
-	char *local;
+	char	*local;
 	char	*saveptr = NULL, *t;
-	int rc;
+	int	rc;
 
 	D_STRNDUP(local, str, len);
 	if (!local)
