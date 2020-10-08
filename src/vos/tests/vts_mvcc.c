@@ -637,7 +637,7 @@ tx_query(daos_handle_t coh, struct tx_helper *txh, daos_unit_oid_t oid,
 	rc = vos_obj_query_key(coh, oid, flags, epoch, dkey, akey, recx,
 			       dth);
 
-	stop_tx(coh, txh, rc == 0, true);
+	stop_tx(coh, txh, rc == 0, false);
 
 	return rc;
 }
