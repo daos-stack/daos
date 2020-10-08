@@ -620,8 +620,6 @@ crt_get_port_psm2(int *port)
 	return rc;
 }
 
-#define PORT_STR_SIZE 5
-
 static inline void
 print_reserved_failure_msg(char *proc_name, int port)
 {
@@ -636,6 +634,8 @@ print_reserved_failure_msg(char *proc_name, int port)
 		"---------------------------------------------------------\n\n",
 		port, proc_name, port, proc_name);
 }
+
+#define PORT_STR_SIZE 5
 
 static void
 crt_port_reserved_verify(int port)
@@ -671,17 +671,13 @@ crt_port_reserved_verify(int port)
 			if (is_range) {
 				/* this was a port range */
 				cur_port = atoi(tmp_port);
-				if (port >= port_start && port <= cur_port) {
-					port_found = 1;
-					goto exit;
-				}
+				if (port >= port_start && port <= cur_port)
+					D_GOTO(exit, port_found = 1);
 			} else {
 				/* individual port */
 				cur_port = atoi(tmp_port);
-				if (port == cur_port) {
-					port_found = 1;
-					goto exit;
-				}
+				if (port == cur_port)
+					D_GOTO(exit, port_found = 1);
 			}
 
 			/* Reset temp buffer and helper variables */
@@ -690,13 +686,13 @@ crt_port_reserved_verify(int port)
 			is_range = 0;
 
 			if (rc <= 0)
-				goto exit;
+				D_GOTO(exit, 0);
 		} else if (c >= '0' && c <= '9') {
 			if (tmp_i < PORT_STR_SIZE)
 				tmp_port[tmp_i++] = c;
 			else {
 				D_WARN("Failed to parse %s\n", proc_file);
-				goto exit;
+				D_GOTO(exit, 0);
 			}
 		} else if (c == '-') {
 			port_start = atoi(tmp_port);
@@ -706,6 +702,7 @@ crt_port_reserved_verify(int port)
 		} else {
 			D_WARN("Failed to parse %s on char '%c'\n",
 				proc_file, c);
+			D_GOTO(exit, 0);
 		}
 	}
 
