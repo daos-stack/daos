@@ -57,19 +57,34 @@ static int
 tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
-	bool	empty = true;
-	int	rc;
+	struct dtx_handle	*dth = vos_dth_get();
+	bool			 empty = true;
+	int			 rc;
 
-	rc = vos_iterate_key(obj, toh, type, epr, empty_tree_check, &empty,
-			     NULL);
+	/** First ignore any uncommitted entries because they only matter
+	 *  when there are no committed entries
+	 */
+	rc = vos_iterate_key(obj, toh, type, epr, false, empty_tree_check,
+			     &empty, dth);
 
 	if (rc < 0)
 		return rc;
 
-	if (empty)
-		return 1;
+	if (!empty)
+		return 0;
 
-	return 0;
+	/** Ok, there are no committed entries.  We need to run the iterator
+	 *  on more time to ensure there are no uncommitted entries.  If there
+	 *  are, this will return -DER_INPROGRESS.
+	 */
+	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
+			     &empty, dth);
+
+	if (rc < 0)
+		return rc;
+
+	/** The tree is empty */
+	return 1;
 }
 
 static int
@@ -122,9 +137,8 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 		return 1;
 	}
 
-	if (rc != 0)
-		D_ERROR("Could not check emptiness on punch: "
-			DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: " DF_RC"\n",
+			DP_RC(rc));
 
 	return rc;
 }

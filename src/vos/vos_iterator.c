@@ -590,11 +590,13 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
  */
 static int
 vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
-		     bool recursive, struct vos_iter_anchors *anchors,
+		     bool recursive, bool fail_uncommitted,
+		     struct vos_iter_anchors *anchors,
 		     vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg,
 		     struct dtx_handle *dth)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
+	struct vos_iterator	*iter;
 	vos_iter_entry_t	iter_ent = {0};
 	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
@@ -620,6 +622,9 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 
 		return rc;
 	}
+
+	iter = vos_hdl2iter(ih);
+	iter->it_fail_uncommitted = fail_uncommitted ? 1 : 0;
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	if (!daos_anchor_is_zero(anchor))
@@ -741,8 +746,8 @@ out:
  */
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
-		const daos_epoch_range_t *epr, vos_iter_cb_t cb,
-		void *arg, struct dtx_handle *dth)
+		const daos_epoch_range_t *epr, bool fail_uncommitted,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth)
 {
 	vos_iter_param_t	 param = {0};
 	struct vos_iter_anchors	 anchors = {0};
@@ -757,8 +762,8 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 	param.ip_dkey.iov_buf = obj;
 
 
-	return vos_iterate_internal(&param, type, false, &anchors, cb, NULL,
-				    arg, dth);
+	return vos_iterate_internal(&param, type, false, fail_uncommitted,
+				    &anchors, cb, NULL, arg, dth);
 }
 
 /**
@@ -772,6 +777,6 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 {
 	D_ASSERT((param->ip_flags & VOS_IT_KEY_TREE) == 0);
 
-	return vos_iterate_internal(param, type, recursive, anchors, pre_cb,
-				    post_cb, arg, dth);
+	return vos_iterate_internal(param, type, recursive, false, anchors,
+				    pre_cb, post_cb, arg, dth);
 }

@@ -1814,6 +1814,141 @@ minor_epoch_punch_rebuild(void **state)
 	start_epoch = epoch + 1;
 }
 
+static void
+test_inprogress_parent_punch(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey1;
+	daos_key_t		akey2;
+	daos_key_t		akey3;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	struct dtx_handle	*dth1;
+	struct dtx_handle	*dth2;
+	daos_epoch_t		epoch = start_epoch;
+	struct dtx_id		xid1;
+	struct dtx_id		xid2;
+	const char		*expected = "xxxxx";
+	const char		*first = "hello";
+	char			buf[32] = {0};
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey1_buf[UPDATE_DKEY_SIZE];
+	char			akey2_buf[UPDATE_DKEY_SIZE];
+	char			akey3_buf[UPDATE_DKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey1_buf[0], arg->akey_size, false, arg);
+	vts_key_gen(&akey2_buf[0], arg->akey_size, false, arg);
+	vts_key_gen(&akey3_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey1, &akey1_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&akey3, &akey3_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+	rex.rx_idx = 0;
+	rex.rx_nr = strlen(first);
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_name = akey1;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	/** This test replays one tricky scenario
+	 *
+	 * u(c/o/d/a1, 10) // committed
+	 * u(c/o/d/a2, 15) // committed
+	 * u(c/o/d/a3, 20) // prepared
+	 * p(c/o/d/a1, 25) // committed - This should succeed because a1 is committed
+	 *		      so tree is not empty
+	 * p(c/o/d/a2, 30) // This should return -DER_INPROGRESS because a2 is
+	 *		      not committed and is the only entry left
+	 */
+
+	/** First, a committed update to a1*/
+	d_iov_set(&sgl.sg_iovs[0], (void *)first, rex.rx_nr);
+	epoch++;
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
+			    &iod, NULL, &sgl);
+	assert_int_equal(rc, 0);
+
+	/** Second, committed update to a2 */
+	epoch++;
+	iod.iod_name = akey2;
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
+			    &iod, NULL, &sgl);
+	assert_int_equal(rc, 0);
+
+	/** Now prepared update to akey 3 */
+	epoch++;
+	iod.iod_name = akey3;
+	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth1);
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
+			       &iod, NULL, &sgl, dth1);
+	assert_int_equal(rc, 0);
+	xid1 = dth1->dth_xid;
+	vts_dtx_end(dth1);
+
+	/** Now committed punch to akey 1 */
+	epoch++;
+	iod.iod_name = akey1;
+	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth2);
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
+			   &akey1, dth2);
+	assert_int_equal(rc, 0);
+	xid2 = dth2->dth_xid;
+	vts_dtx_end(dth2);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, NULL);
+	assert_int_equal(rc, 1);
+
+	/** Now try to punch akey 2, should fail */
+	epoch++;
+	vts_dtx_begin(&oid, arg->ctx.tc_co_hdl, epoch, 0, &dth2);
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
+			   &akey2, dth2);
+	assert_int_equal(rc, -DER_INPROGRESS);
+
+	/** Now commit the in progress punch and try again */
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid1, 1, NULL);
+	assert_int_equal(rc, 1);
+
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey, 1,
+			   &akey2, dth2);
+	assert_int_equal(rc, 0);
+	xid2 = dth2->dth_xid;
+	vts_dtx_end(dth2);
+	rc = vos_dtx_commit(arg->ctx.tc_co_hdl, &xid2, 1, NULL);
+	assert_int_equal(rc, 1);
+
+	memset(buf, 'x', sizeof(buf));
+	rex.rx_idx = 0;
+	rex.rx_nr = sizeof(buf);
+	iod.iod_name = akey2;
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch + 2, 0, &dkey, 1,
+			   &iod, &sgl);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(buf, expected, strlen(expected));
+
+	daos_sgl_fini(&sgl, false);
+
+	start_epoch = epoch + 1;
+}
+
 static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS800: VOS punch model array set/get size",
 	  array_set_get_size, pm_setup, pm_teardown },
@@ -1842,6 +1977,8 @@ static const struct CMUnitTest punch_model_tests[] = {
 		NULL },
 	{ "VOS815: Multiple oid cond test", multiple_oid_cond_test, NULL,
 		NULL },
+	{ "VOS816: Punch while other akey is inprogress",
+		test_inprogress_parent_punch, NULL, NULL },
 };
 
 int

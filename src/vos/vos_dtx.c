@@ -1194,7 +1194,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_UNAVAILABLE;
 	}
 
-	D_ASSERTF(intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH,
+	D_ASSERTF(intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH ||
+		  intent == DAOS_INTENT_PUNCH_PROP,
 		  "Unexpected intent (1) %u\n", intent);
 
 	if (type == DTX_RT_ILOG) {
@@ -2229,6 +2230,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 				DP_DTI(&dth->dth_xid), DP_RC(rc));
 		} else {
 			dtx_act_ent_cleanup(cont, dae, true);
+			dth->dth_ent = NULL;
 			dtx_evict_lid(cont, dae);
 		}
 	}

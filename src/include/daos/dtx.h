@@ -165,10 +165,11 @@ enum daos_ops_intent {
 	DAOS_INTENT_PURGE	= 1,	/* purge/aggregation */
 	DAOS_INTENT_UPDATE	= 2,	/* write/insert */
 	DAOS_INTENT_PUNCH	= 3,	/* punch/delete */
-	DAOS_INTENT_REBUILD	= 4,	/* for rebuild related scan */
-	DAOS_INTENT_CHECK	= 5,	/* check aborted or not */
-	DAOS_INTENT_KILL	= 6,	/* delete object/key */
-	DAOS_INTENT_COS		= 7,	/* add something into CoS cache. */
+	DAOS_INTENT_PUNCH_PROP	= 4,	/* propagate a punch */
+	DAOS_INTENT_REBUILD	= 5,	/* for rebuild related scan */
+	DAOS_INTENT_CHECK	= 6,	/* check aborted or not */
+	DAOS_INTENT_KILL	= 7,	/* delete object/key */
+	DAOS_INTENT_COS		= 8,	/* add something into CoS cache. */
 };
 
 enum daos_dtx_alb {

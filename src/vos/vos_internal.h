@@ -789,7 +789,8 @@ struct vos_iterator {
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
-				 it_for_rebuild:1;
+				 it_for_rebuild:1,
+				 it_fail_uncommitted:1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1042,6 +1043,8 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_PURGE;
 	if (iter->it_for_rebuild)
 		return DAOS_INTENT_REBUILD;
+	if (iter->it_fail_uncommitted)
+		return DAOS_INTENT_PUNCH_PROP;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -1104,18 +1107,19 @@ D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
 /** Internal vos iterator API for iterating through keys using an
  *  open tree handle to initialize the iterator
  *
- *  \param obj[IN]	VOS object
- *  \param toh[IN]	Open key tree handle
- *  \param type[IN]	Iterator type (VOS_ITER_AKEY/DKEY only)
- *  \param epr[IN]	Valid epoch range for iteration
- *  \param cb[IN]	Callback for key
- *  \param arg[IN]	argument to pass to callback
- *  \param dth[IN]	dtx handle
+ *  \param obj[IN]		VOS object
+ *  \param toh[IN]		Open key tree handle
+ *  \param type[IN]		Iterator type (VOS_ITER_AKEY/DKEY only)
+ *  \param epr[IN]		Valid epoch range for iteration
+ *  \param fail_uncommitted[IN]	Fail if there are uncommitted entries
+ *  \param cb[IN]		Callback for key
+ *  \param arg[IN]		argument to pass to callback
+ *  \param dth[IN]		dtx handle
  */
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
-		const daos_epoch_range_t *epr, vos_iter_cb_t cb,
-		void *arg, struct dtx_handle *dth);
+		const daos_epoch_range_t *epr, bool fail_uncommitted,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
