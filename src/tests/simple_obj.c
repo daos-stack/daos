@@ -760,10 +760,10 @@ main(int argc, char **argv)
 	/** Example of DAOS key_SV object */
 	example_daos_key_sv();
 
-	/** Example of DAOS Array array object */
+	/** Example of DAOS Array object */
 	example_daos_array();
 
-	/** Example of DAOS KV array object */
+	/** Example of DAOS KV object */
 	example_daos_kv();
 
 	MPI_Barrier(MPI_COMM_WORLD);
