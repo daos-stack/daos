@@ -904,39 +904,6 @@ def clean_logs(test_yaml, args):
     return True
 
 
-def check_big_files(avocado_logs_dir, task, test_name, threshold):
-    # pylint: disable=bad-continuation
-    """Check the contents of the task object, tag big files, create junit xml.
-
-    Args:
-        avocado_logs_dir (str): path to the avocado log files.
-        task (Task): a Task object containing the command result
-        test_name (str): current running testname
-        threshold (str): size threshold for reporting big/large files
-
-    Returns:
-        bool: True if no errors occurred checking and creating junit file.
-            False, otherwise.
-
-    """
-    log_files = []
-    hosts = []
-    for output, nodelist in task.iter_buffers():
-        hosts.extend(nodelist)
-        log_files.extend(re.findall(r"Y:(.*)", str(output)))
-
-    status = True
-    if log_files:
-        destination = os.path.join(avocado_logs_dir, "latest")
-        if create_results_xml(
-           hosts, test_name, "\n".join(log_files), destination) is False:
-            status = False
-    else:
-        print("No log files found exceeding {}".format(threshold))
-
-    return status
-
-
 def get_remote_file_command():
     """Get path to get_remote_files.sh script."""
     return "{}/get_remote_files.sh".format(os.path.abspath(os.getcwd()))
@@ -1127,6 +1094,42 @@ def rename_logs(avocado_logs_dir, test_file):
                 test_logs_dir, new_test_logs_dir, error))
 
 
+def check_big_files(avocado_logs_dir, task, test_name, threshold):
+    """Check the contents of the task object, tag big files, create junit xml.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files.
+        task (Task): a Task object containing the command result
+        test_name (str): current running testname
+        threshold (str): size threshold for reporting big/large files
+
+    Returns:
+        bool: True if no errors occurred checking and creating junit file.
+            False, otherwise.
+
+    """
+    status = True
+    hosts = NodeSet()
+    cdata = []
+    for output, nodelist in task.iter_buffers():
+        node_set = NodeSet.fromlist(nodelist)
+        hosts.update(node_set)
+        big_files = re.findall(r"Y:(.*)", str(output))
+        if big_files:
+            cdata.append(
+                "The following log files on {} exceeded the {} "
+                "threshold:".format(node_set, threshold))
+            cdata.extend(["  {}".format(big_file) for big_file in big_files])
+    if cdata:
+        destination = os.path.join(avocado_logs_dir, "latest")
+        status = create_results_xml(
+            hosts, test_name, "\n".join(cdata), destination)
+    else:
+        print("No log files found exceeding {}".format(threshold))
+
+    return status
+
+
 def create_results_xml(hosts, testname, output, destination):
     """Create Junit xml file.
 
@@ -1140,6 +1143,7 @@ def create_results_xml(hosts, testname, output, destination):
         bool: status of writing to junit file
 
     """
+    status = True
     testsuite_attrs = {
         "name": "{}".format(testname),
         "errors": "1",
@@ -1162,7 +1166,8 @@ def create_results_xml(hosts, testname, output, destination):
     testcase = ET.SubElement(testsuite, "testcase", testcase_attrs)
     ET.SubElement(testcase, "error", error_atttrs)
     system_out = ET.SubElement(testcase, "system-out")
-    system_out.text = "<![CDATA[{}]]>".format(output)
+    # system_out.text = "<![CDATA[{}]]>".format(output)
+    system_out.text = output
 
     # Get xml as string and write it to a file
     rough_xml = ET.tostring(testsuite, "utf-8")
@@ -1174,7 +1179,8 @@ def create_results_xml(hosts, testname, output, destination):
             results_xml.write(junit_xml.toprettyxml())
     except IOError as error:
         print("Failed to create xml file: {}".format(error))
-        return False
+        status = False
+    return status
 
 
 USE_DEBUGINFO_INSTALL = True

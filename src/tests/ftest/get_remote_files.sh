@@ -92,6 +92,27 @@ display_set_vars() {
     VERBOSE = ${VERBOSE}"
 }
 
+check_files_input() {
+    if [ -n "${1}" ]; then
+        # shellcheck disable=SC2086
+        files=$(ls -d ${1} 2> /dev/null)
+        files_rc=$?
+        if [ -n "${files}" ] && [ "${files_rc}" -eq 0 ]; then
+            echo "Processing the following detected files:"
+            for file in ${files}
+            do
+                echo "  ${file}"
+            done
+        else
+            echo "No files matched ${1}. Done."
+            exit 0
+        fi
+    else
+        echo "Please specify -f option."
+        exit 1
+    fi
+}
+
 #######################################
 # Convert human readable size values to respective byte value.
 # Arguments:
@@ -135,9 +156,9 @@ list_tag_files() {
     # shellcheck disable=SC2016,SC1004,SC2086
     awk_cmd='{ \
     if (th <= $1){ \
-        print "Y:",$1,$2} \
+        print "  Y:",$1,$2} \
     else { \
-        print "N:",$1,$2}\
+        print "  N:",$1,$2}\
     }'
 
     # Convert to bytes and run
@@ -146,35 +167,60 @@ list_tag_files() {
     du -ab -d 1 ${1} | awk -v th="${bts}" "${awk_cmd}"
 }
 
+#######################################
+# Check if this host is a VM.
+# Arguments:
+#   $1: whether or not to skip the check
+# Returns:
+#   0: VM detected
+#   1: No VM detected or skipped
+#######################################
 check_hw() {
+    if [ "${1}" == "true" ]; then
+        echo "Skipping VM check for compression"
+        return 1
+    fi
+    echo "Determining if this host is a VM"
     dmesg | grep "Hypervisor detected"
     return $?
 }
 
+#######################################
+# Compress any files exceeding 1M.
+# Arguments:
+#   $1: local logs to compress
+# Returns:
+#   status of the lbzip2 command
+#######################################
 compress_files() {
-    echo "Compressing files ..."
-    echo "find ${1} -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2 -v"
     # shellcheck disable=SC2086
     find ${1} -maxdepth 0 -type f -size +1M -print0 | xargs -r0 lbzip2 -v
     return $?
 }
 
+#######################################
+# Archive files to the remote host.
+# Arguments:
+#   $1: local logs to copy
+#   $2: remote location to copy files
+# Returns:
+#   0: All commands were successful
+#   1: Failure detected with at least one command
+#######################################
 scp_files() {
     rc=0
     copied=()
-    echo "Archiving logs in ${1} to ${2}"
     # shellcheck disable=SC2045,SC2086
     for file in $(ls -d ${1})
     do
-        echo "scp -r ${file} ${2}/<hostname>-${file##*/}"
         if scp -r "${file}" "${2}"/"$(hostname -s)"-"${file##*/}"; then
             copied+=("${file}")
             if ! sudo rm -fr "${file}"; then
                 rc=1
-                echo "Error removing ${file}"
+                echo "  Error removing ${file}"
             fi
         else
-            echo "Failure to copy ${file} to ${2}"
+            echo "  Failed to archive ${file} to ${2}"
             rc=1
         fi
     done
@@ -182,22 +228,33 @@ scp_files() {
     return ${rc}
 }
 
+#######################################
+# Run cart_logtest.py against the logs.
+# Arguments:
+#   $1: local logs
+# Returns:
+#   0: All cart_logtest were successful
+#   1: Failure detected with cart_logtest
+#######################################
 get_cartlogtest_files() {
     rc=0
-    echo "Running ${CART_LOGTEST_PATH} on ${FILES_TO_PROCESS}"
-    # shellcheck disable=SC2045,SC2086
-    for file in $(ls -d ${1})
-    do
-        if [ -f ${file} ]; then
-            echo "${CART_LOGTEST_PATH} ${file} &> ${file}_cart_testlog"
-            ${CART_LOGTEST_PATH} ${file} &> ${file}_cart_testlog
-            ret=$?
-            if [ ${ret} -ne 0 ]; then
-                echo "  Error detected - see ${file}_cart_testlog for details."
-                rc=1
+    if [ -f "${CART_LOGTEST_PATH}" ]; then
+        # shellcheck disable=SC2045,SC2086
+        for file in $(ls -d ${1})
+        do
+            if [ -f ${file} ]; then
+                ${CART_LOGTEST_PATH} ${file} > ${file}_cart_testlog 2>&1
+                ret=$?
+                if [ ${ret} -ne 0 ]; then
+                    echo "  Error: details in ${file}_cart_testlog"
+                    rc=1
+                fi
             fi
-        fi
-    done
+        done
+    else
+        echo "  Error: ${CART_LOGTEST_PATH} does not exist!"
+        rc=1
+    fi
     return ${rc}
 }
 
@@ -208,6 +265,8 @@ if [[ $# -eq 0 ]] ; then
 fi
 
 # Setup defaults
+ARCHIVE_DEST=""
+FILES_TO_PROCESS=""
 COMPRESS="false"
 VERBOSE="false"
 CART_LOGTEST="false"
@@ -257,22 +316,8 @@ if [ "${VERBOSE}" == "true" ]; then
     set -ux
 fi
 
-if [ -n "${FILES_TO_PROCESS}" ]; then
-    ftp="${FILES_TO_PROCESS%\"}"
-    ftp="${ftp#\"}"
-    # shellcheck disable=SC2086
-    files=$(ls -d ${ftp})
-    files_rc=$?
-    if [ -n "${files}" ] && [ "${files_rc}" -eq 0 ]; then
-        echo "Files to process: ${files}"
-    else
-        echo "Input to -f did not match any files: ${FILES_TO_PROCESS}"
-        exit 1
-    fi
-else
-    echo "Please specify -f option ..."
-    exit 1
-fi
+# Verify files have been specified and they exist on this host
+check_files_input "${FILES_TO_PROCESS}"
 
 # Display big files to stdout
 if [ -n "${THRESHOLD}" ]; then
@@ -282,38 +327,31 @@ fi
 
 # Run cart_logtest.py on FILES_TO_PROCESS
 if [ "${CART_LOGTEST}" == "true" ]; then
-    if [ -f "${CART_LOGTEST_PATH}" ]; then
-        get_cartlogtest_files "${FILES_TO_PROCESS}"
-        ret=$?
-        if [ ${ret} -ne 0 ]; then
-            rc=1
-        fi
-    else
-        echo "${CART_LOGTEST_PATH} does not exist!"
-        rc=1
-    fi
-fi
-
-# Compress files in FILES_TO_PROCESS if not running on VM host.
-if check_hw; then
-    if [ "${EXCLUDE_ZIP}" == "true" ]; then
-        echo "Ignoring VM system, performing compression ..."
-    else
-        echo "Running on VM system, skipping compression ..."
-        COMPRESS="false"
-    fi
-fi
-
-if [ "${COMPRESS}" == "true" ]; then
-    compress_files "${FILES_TO_PROCESS}" 2>&1
+    echo "Running ${CART_LOGTEST_PATH} ..."
+    get_cartlogtest_files "${FILES_TO_PROCESS}"
     ret=$?
     if [ ${ret} -ne 0 ]; then
         rc=1
     fi
 fi
 
+# Compress files in FILES_TO_PROCESS if not running on VM host.
+if [ "${COMPRESS}" == "true" ]; then
+    echo "Compressing files larger than 1M ..."
+    if check_hw "${EXCLUDE_ZIP}"; then
+        echo "VM system detected, skipping compression ..."
+    else
+        compress_files "${FILES_TO_PROCESS}"
+        ret=$?
+        if [ ${ret} -ne 0 ]; then
+            rc=1
+        fi
+    fi
+fi
+
 # Scp files specified in FILES_TO_PROCESS to ARCHIVE_DEST
 if [ -n "${ARCHIVE_DEST}" ]; then
+    echo "Archiving logs to ${ARCHIVE_DEST} ..."
     scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"
     ret=$?
     if [ ${ret} -ne 0 ]; then
