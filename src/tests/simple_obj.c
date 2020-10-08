@@ -352,7 +352,7 @@ example_daos_key_sv()
 
 	/*
 	 * Most of this example is the same as the key_array one, except the
-	 * type of the value under tha akey will be a single value of size
+	 * type of the value under the akey will be a single value of size
 	 * 1024. This is a single value that is atomically updated / read, and
 	 * no partial access is allowed.
 	 */
