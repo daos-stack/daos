@@ -226,23 +226,24 @@ class CartUtils():
         if orterun_bin is None:
             orterun_bin = "orterun_not_installed"
 
-        _tst_bin = cartobj.params.get("{}_bin".format(host),
-                                      "/run/tests/*/")
-        _tst_arg = cartobj.params.get("{}_arg".format(host),
-                                      "/run/tests/*/")
-        _tst_env = cartobj.params.get("{}_env".format(host),
-                                      "/run/tests/*/")
-        _tst_slt = cartobj.params.get("{}_slt".format(host),
-                                      "/run/tests/*/")
-        _tst_ctx = cartobj.params.get("{}_CRT_CTX_NUM".format(host),
+        tst_bin = cartobj.params.get("{}_bin".format(host),
+                                     "/run/tests/*/")
+        tst_arg = cartobj.params.get("{}_arg".format(host),
+                                     "/run/tests/*/")
+        tst_env = cartobj.params.get("{}_env".format(host),
+                                     "/run/tests/*/")
+        tst_slt = cartobj.params.get("{}_slt".format(host),
+                                     "/run/tests/*/")
+        tst_ctx = cartobj.params.get("{}_CRT_CTX_NUM".format(host),
                                      "/run/defaultENV/")
 
         # If the yaml parameter is a list, return the n-th element
-        tst_bin = self.get_yaml_list_elem(_tst_bin, index)
-        tst_arg = self.get_yaml_list_elem(_tst_arg, index)
-        tst_env = self.get_yaml_list_elem(_tst_env, index)
-        tst_slt = self.get_yaml_list_elem(_tst_slt, index)
-        tst_ctx = self.get_yaml_list_elem(_tst_ctx, index)
+        # DEBUGGING: Is this why tests are hanging?
+        # tst_bin = self.get_yaml_list_elem(_tst_bin, index)
+        # tst_arg = self.get_yaml_list_elem(_tst_arg, index)
+        # tst_env = self.get_yaml_list_elem(_tst_env, index)
+        # tst_slt = self.get_yaml_list_elem(_tst_slt, index)
+        # tst_ctx = self.get_yaml_list_elem(_tst_ctx, index)
 
         tst_host = cartobj.params.get("{}".format(host), "/run/hosts/*/")
         tst_ppn = cartobj.params.get("{}_ppn".format(host), "/run/tests/*/")
