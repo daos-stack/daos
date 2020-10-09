@@ -877,7 +877,7 @@ def clean_logs(test_yaml, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {} /tmp/daos_dump*".format(os.path.join(logs_dir,
-              "*.log"))
+                                                                   "*.log"))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")

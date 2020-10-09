@@ -970,7 +970,7 @@ main(int argc, char **argv)
 				if (rc != -1 && tm != NULL)
 					snprintf(name, 34,
 						 "/tmp/daos_dump_%04d%02d%02d_%02d_%02d.txt",
-						 tm->tm_year + 1900, 
+						 tm->tm_year + 1900,
 						 tm->tm_mon + 1, tm->tm_mday,
 						 tm->tm_hour, tm->tm_min);
 
@@ -983,12 +983,14 @@ main(int argc, char **argv)
 			}
 
 			/* print header msg with date */
-			fprintf(abt_infos, "=== Dump of ABT infos and ULTs stacks in %s mode (",
+			fprintf(abt_infos,
+				"=== Dump of ABT infos and ULTs stacks in %s mode (",
 				sig == SIGUSR1 ? "unattended" : "attended");
 			if (rc == -1 || tm == NULL)
 				fprintf(abt_infos, "time unavailable");
 			else
-				fprintf(abt_infos, "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
+				fprintf(abt_infos,
+					"%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
 					tm->tm_year + 1900, tm->tm_mon + 1,
 					tm->tm_mday, tm->tm_hour, tm->tm_min,
 					tm->tm_sec,
