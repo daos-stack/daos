@@ -1873,8 +1873,8 @@ test_inprogress_parent_punch(void **state)
 	 * u(c/o/d/a1, 10) // committed
 	 * u(c/o/d/a2, 15) // committed
 	 * u(c/o/d/a3, 20) // prepared
-	 * p(c/o/d/a1, 25) // committed - This should succeed because a1 is committed
-	 *		      so tree is not empty
+	 * p(c/o/d/a1, 25) // committed - This should succeed because a1 is
+	 *		      committed so tree is not empty
 	 * p(c/o/d/a2, 30) // This should return -DER_INPROGRESS because a2 is
 	 *		      not committed and is the only entry left
 	 */
