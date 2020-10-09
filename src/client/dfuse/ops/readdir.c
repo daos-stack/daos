@@ -64,7 +64,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	DFUSE_TRA_DEBUG(oh, "Fetching new entries at offset %ld", offset);
 
 	rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &count,
-			 (size_t)((NAME_MAX + 1) * READDIR_COUNT),
+			 (NAME_MAX + 1) * count,
 			 filler_cb, &idata);
 
 	oh->doh_anchor_index = count;
@@ -128,8 +128,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
 				       &ie->ie_stat.st_ino,
-				sizeof(ie->ie_stat.st_ino),
-				&ie->ie_htl);
+				       sizeof(ie->ie_stat.st_ino),
+				       &ie->ie_htl);
 
 	if (rlink != &ie->ie_htl) {
 		struct dfuse_inode_entry *inode;
