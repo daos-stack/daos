@@ -29,7 +29,6 @@
 #include "crt_internal.h"
 #include "swim/swim_internal.h"
 
-#define CRT_OPC_SWIM_PROTO	0xFE000000U
 #define CRT_OPC_SWIM_VERSION	0
 
 #define crt_proc_swim_id_t	crt_proc_uint64_t
@@ -120,7 +119,14 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 		self_id, rpc_swim_input->src);
 
 	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
-	delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc) / NSEC_PER_MSEC;
+	/*
+	 * crt_hg_unpack_header may have failed to synchronize the HLC with
+	 * this request.
+	 */
+	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
+		delay = (hlc - rpc_priv->crp_req_hdr.cch_hlc) / NSEC_PER_MSEC;
+	else
+		delay = 0;
 	csm->csm_msg_count++;
 
 	if (csm->csm_hlc) {

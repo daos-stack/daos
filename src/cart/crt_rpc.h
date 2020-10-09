@@ -298,7 +298,15 @@ enum {
 	CRT_FI_RPCS_LIST
 };
 
+#define CRT_OPC_SWIM_PROTO	0xFE000000U
+
 #undef X
+
+static inline bool
+crt_opc_is_swim(crt_opcode_t opc)
+{
+	return ((opc & CRT_PROTO_BASEOPC_MASK) == CRT_OPC_SWIM_PROTO);
+}
 
 #define CRT_SEQ_GRP_CACHE					 \
 	((d_rank_t)		(gc_rank)		CRT_VAR) \

@@ -62,13 +62,16 @@ test_hlc_get_msg(void **state)
 	int i;
 
 	for (i = 0; i < COUNT; i++) {
+		int rc;
+
 		if (i % 5 == 1)
 			time2 = time + 0x100;
 		else if (i % 5 == 2)
 			time2 = time - 0x100;
 		else
 			time2 = time + (i % 3);
-		time = crt_hlc_get_msg(time2);
+		rc = crt_hlc_get_msg(time2, &time);
+		assert_true(rc == 0);
 		assert_true(time2 < time);
 		assert_true(last < time);
 		last = time;
