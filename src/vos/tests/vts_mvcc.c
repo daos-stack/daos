@@ -306,16 +306,85 @@ fetch_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 fetch_dne_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	return fetch_with_flags(arg, txh, path, epoch, DAOS_COND_DKEY_FETCH);
 }
 
 static int
 fetch_ane_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	return fetch_with_flags(arg, txh, path, epoch, DAOS_COND_AKEY_FETCH);
+}
+
+static int
+read_ts_o(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	  daos_epoch_t epoch, uint64_t flags, daos_key_t *dkey,
+	  daos_iod_t *iod, unsigned int iod_nr)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+
+	set_oid(mvcc_arg->i, path, &oid);
+
+	return tx_fetch(arg->ctx.tc_co_hdl, txh, oid, epoch, flags, dkey,
+			iod_nr, iod, NULL);
+}
+
+static int
+read_ts_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	  daos_epoch_t epoch, uint64_t flags, daos_iod_t *iod,
+	  unsigned int iod_nr)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	char		 dkey_buf[64];
+	daos_key_t	 dkey = {dkey_buf, sizeof(dkey_buf), 0};
+
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return read_ts_o(arg, txh, path, epoch, flags, &dkey, iod, iod_nr);
+}
+
+static int
+read_ts_o_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	return read_ts_o(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 NULL, NULL, 0);
+}
+
+static int
+read_ts_d_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 NULL, 0);
+}
+
+static int
+read_ts_a_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	    daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_iod_t	 iod;
+	char		 akey_buf[64];
+	daos_key_t	 akey = {akey_buf, sizeof(akey_buf), 1};
+	char		 value_buf[64] = {0};
+	daos_recx_t	 recx;
+
+	set_akey(mvcc_arg->i, path, &akey);
+	memset(&iod, 0, sizeof(iod));
+	iod.iod_name = akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx;
+	recx.rx_idx = 1;
+	recx.rx_nr = sizeof(value_buf);
+
+	return read_ts_d(arg, txh, path, epoch, VOS_OF_FETCH_SET_TS_ONLY,
+			 &iod, iod.iod_nr);
 }
 
 static int
@@ -639,6 +708,10 @@ static struct op operations[] = {
 	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
 	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
 	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
+	/* Read timestamp update only cases */
+	{"read_ts_o",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	read_ts_o_f},
+	{"read_ts_d",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	read_ts_d_f},
+	{"read_ts_a",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	read_ts_a_f},
 
 	/*
 	 * Readwrites
