@@ -233,7 +233,7 @@ pool_set_attr_hdlr(struct cmd_args_s *ap)
 				(const void * const*)&ap->value_str,
 				(const size_t *)&value_size, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to set attribute %s for pool "DF_UUIDF
+		fprintf(stderr, "failed to set attribute '%s' for pool "DF_UUIDF
 			": %s (%d)\n", ap->attrname_str, DP_UUID(ap->p_uuid),
 			d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
@@ -280,7 +280,7 @@ pool_del_attr_hdlr(struct cmd_args_s *ap)
 	rc = daos_pool_del_attr(ap->pool, 1,
 				(const char * const*)&ap->attrname_str, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to delete attribute %s for pool "
+		fprintf(stderr, "failed to delete attribute '%s' for pool "
 			DF_UUIDF": %s (%d)\n", ap->attrname_str,
 			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
@@ -332,13 +332,13 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 				(const char * const*)&ap->attrname_str, NULL,
 				&attr_size, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to retrieve size of attribute %s for "
+		fprintf(stderr, "failed to retrieve size of attribute '%s' for "
 			"pool "DF_UUIDF": %s (%d)\n", ap->attrname_str,
 			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
 
-	D_PRINT("Pool's %s attribute value: ", ap->attrname_str);
+	D_PRINT("Pool's '%s' attribute value: ", ap->attrname_str);
 	if (attr_size <= 0) {
 		D_PRINT("empty attribute\n");
 		D_GOTO(out_disconnect, rc);
@@ -353,14 +353,15 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 				(const char * const*)&ap->attrname_str,
 				(void * const*)&buf, &attr_size, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to get attribute %s for pool "DF_UUIDF
+		fprintf(stderr, "failed to get attribute '%s' for pool "DF_UUIDF
 			": %s (%d)\n", ap->attrname_str, DP_UUID(ap->p_uuid),
 			d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
 
 	if (expected_size < attr_size)
-		fprintf(stderr, "size required to get attributes has raised, value has been truncated\n");
+		fprintf(stderr, "size required to get attributes has raised, "
+			"value has been truncated\n");
 	D_PRINT("%s\n", buf);
 
 out_disconnect:
@@ -776,7 +777,7 @@ cont_set_attr_hdlr(struct cmd_args_s *ap)
 				(const void * const*)&ap->value_str,
 				(const size_t *)&value_size, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to set attribute %s for container "
+		fprintf(stderr, "failed to set attribute '%s' for container "
 			DF_UUIDF": %s (%d)\n", ap->attrname_str,
 			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
@@ -800,7 +801,7 @@ cont_del_attr_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_del_attr(ap->cont, 1,
 				(const char * const*)&ap->attrname_str, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to delete attribute %s for container "
+		fprintf(stderr, "failed to delete attribute '%s' for container "
 			DF_UUIDF": %s (%d)\n", ap->attrname_str,
 			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
@@ -829,13 +830,13 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 				(const char * const*)&ap->attrname_str, NULL,
 				&attr_size, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to retrieve size of attribute %s for "
+		fprintf(stderr, "failed to retrieve size of attribute '%s' for "
 			"container "DF_UUIDF": %s (%d)\n", ap->attrname_str,
 			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
-	D_PRINT("Container's %s attribute value: ", ap->attrname_str);
+	D_PRINT("Container's '%s' attribute value: ", ap->attrname_str);
 	if (attr_size <= 0) {
 		D_PRINT("empty attribute\n");
 		D_GOTO(out, rc);
@@ -850,7 +851,7 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 				(const char * const*)&ap->attrname_str,
 				(void * const*)&buf, &attr_size, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to get attribute %s for container "
+		fprintf(stderr, "failed to get attribute '%s' for container "
 			DF_UUIDF": %s (%d)\n", ap->attrname_str,
 			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
@@ -1778,8 +1779,9 @@ cont_update_acl_hdlr(struct cmd_args_s *ap)
 		acl = daos_acl_create(&ace, 1);
 		daos_ace_free(ace);
 		if (acl == NULL) {
-			fprintf(stderr, "failed to make ACL from entry: %s\n",
-				d_errdesc(rc));
+			rc = -DER_NOMEM;
+			fprintf(stderr, "failed to make ACL from entry: %s "
+				"(%d)\n", d_errdesc(rc), rc);
 			return rc;
 		}
 	}
