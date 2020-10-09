@@ -309,8 +309,7 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {

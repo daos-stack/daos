@@ -219,7 +219,7 @@ func PrintNvmeControllerHealth(stat *storage.NvmeControllerHealth, out io.Writer
 	iw := txtfmt.NewIndentWriter(out)
 
 	if stat.Timestamp > 0 {
-		fmt.Fprintf(iw, "Timestamp:%s\n", time.Time(time.Unix(int64(stat.Timestamp), 0)))
+		fmt.Fprintf(iw, "Timestamp:%s\n", time.Unix(int64(stat.Timestamp), 0).UTC())
 	}
 
 	fmt.Fprintf(iw, "Temperature:%dK(%.02fC)\n", stat.TempK(), stat.TempC())
@@ -237,12 +237,13 @@ func PrintNvmeControllerHealth(stat *storage.NvmeControllerHealth, out io.Writer
 	fmt.Fprintf(iw, "Power Cycles:%d\n", uint64(stat.PowerCycles))
 	fmt.Fprintf(iw, "Power On Duration:%s\n", time.Duration(stat.PowerOnHours)*time.Hour)
 	fmt.Fprintf(iw, "Unsafe Shutdowns:%d\n", uint64(stat.UnsafeShutdowns))
-	fmt.Fprintf(iw, "Error Count:%d\n", uint64(stat.ErrorCount))
 	fmt.Fprintf(iw, "Media Errors:%d\n", uint64(stat.MediaErrors))
-	fmt.Fprintf(iw, "Read Errors:%d\n", uint64(stat.ReadErrors))
-	fmt.Fprintf(iw, "Write Errors:%d\n", uint64(stat.WriteErrors))
-	fmt.Fprintf(iw, "Unmap Errors:%d\n", uint64(stat.UnmapErrors))
-	fmt.Fprintf(iw, "Checksum Errors:%d\n", uint64(stat.ChecksumErrors))
+	if stat.Timestamp > 0 {
+		fmt.Fprintf(iw, "Read Errors:%d\n", uint64(stat.ReadErrors))
+		fmt.Fprintf(iw, "Write Errors:%d\n", uint64(stat.WriteErrors))
+		fmt.Fprintf(iw, "Unmap Errors:%d\n", uint64(stat.UnmapErrors))
+		fmt.Fprintf(iw, "Checksum Errors:%d\n", uint64(stat.ChecksumErrors))
+	}
 	fmt.Fprintf(iw, "Error Log Entries:%d\n", uint64(stat.ErrorLogEntries))
 
 	fmt.Fprintf(out, "Critical Warnings:\n")
