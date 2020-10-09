@@ -462,6 +462,8 @@ class LogTest():
                         # that fail during shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
+                    elif line.fac == 'external':
+                        show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher
                         # like assert should trigger a failure.

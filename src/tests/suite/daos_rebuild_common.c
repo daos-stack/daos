@@ -55,8 +55,6 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
 				 args[0]->group, args[0]->pool.alive_svc,
 				 rank);
-		print_message("sleep 120 seconds for rebuild to start\n");
-		sleep(120);
 		/* If one rank is killed, then it has to exclude all
 		 * targets on this rank.
 		 **/
@@ -69,7 +67,6 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 				    args[i]->group, args[i]->dmg_config,
 				    args[i]->pool.svc,
 				    rank, tgt_idx);
-		sleep(2);
 	}
 }
 
@@ -137,8 +134,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 						tgts ? tgts[i] : -1);
 				break;
 			}
-			/* Sleep 5 seconds to make sure the rebuild start */
-			sleep(5);
 		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
