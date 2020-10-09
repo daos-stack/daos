@@ -61,6 +61,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define DB_ALL_BITS	"all"
 
 #define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
+#define D_LOG_SIZE_ENV	"D_LOG_SIZE"	/**< Env to specify log max file size */
 #define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
 
 /**< Env to specify log file pid append to filename*/
@@ -292,8 +293,10 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define D_ASSERT(e)							\
 	do {								\
-		if (!(e))						\
-			D_FATAL("Assertion '%s' failed\n", #e);	\
+		if (!(e)) {						\
+			D_FATAL("Assertion '%s' failed\n", #e);		\
+			d_log_sync();					\
+		}							\
 		if (d_alt_assert != NULL)				\
 			d_alt_assert((int64_t)(e), #e, __FILE__, __LINE__);\
 		assert(e);						\
