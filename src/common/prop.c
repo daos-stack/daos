@@ -402,15 +402,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_COMPRESS_OFF &&
 			    val != DAOS_PROP_CO_COMPRESS_LZ4 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP1 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP2 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP3 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP4 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP5 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP6 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP7 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP8 &&
-			    val != DAOS_PROP_CO_COMPRESS_GZIP9) {
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE &&
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE1 &&
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE2 &&
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE3 &&
+			    val != DAOS_PROP_CO_COMPRESS_DEFLATE4) {
 				D_ERROR("invalid compression parameter "
 					DF_U64".\n", val);
 				return false;

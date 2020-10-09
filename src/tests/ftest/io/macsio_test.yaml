@@ -9,7 +9,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 120
+timeout: 140
 server_config:
     name: daos_server
     servers:
@@ -34,13 +34,19 @@ macsio:
   part_size: 10M
   avg_num_parts: 2.5
   num_dumps: 2
+  debug_level: 1
+macsio_timeout:
+  test_macsio: 20
+  test_macsio_daos_vol: 90
 mpi: !mux
   mpich:
-    mpi_type: "mpich"
+    job_manager_class_name: Mpirun
+    job_manager_mpi_type: mpich
     macsio_path: /usr/lib64/mpich/bin
     plugin_path: /usr/lib64/mpich/lib
   openmpi:
-    mpi_type: "openmpi"
+    job_manager_class_name: Orterun
+    job_manager_mpi_type: openmpi
     macsio_path: /usr/lib64/openmpi3/bin
     plugin_path: /usr/lib64/openmpi3/lib
 dfuse:
