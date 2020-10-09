@@ -1294,7 +1294,7 @@ def test_alloc_fail(conf):
 
     pools = get_pool_list()
 
-    if len(pools) > 1:
+    if len(pools) > 0:
         pool = pools[0]
     else:
         pool = '5848df55-a97c-46e3-8eca-45adf85591d6'
