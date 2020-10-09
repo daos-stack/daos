@@ -1792,7 +1792,6 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->power_on_hours = stats.power_on_hours;
 	resp->unsafe_shutdowns = stats.unsafe_shutdowns;
 	resp->err_log_entries = stats.err_log_entries;
-	resp->err_count = stats.err_count;
 	resp->temperature = stats.temperature;
 	resp->media_errs = stats.media_errs;
 	resp->bio_read_errs = stats.bio_read_errs;
