@@ -89,7 +89,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				},
 			},
 			expResp: &SmdQueryResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"nil request": {
