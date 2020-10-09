@@ -609,7 +609,6 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_scan_out		*ro;
 	struct rebuild_pool_tls		*tls;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
-	d_rank_list_t			*fail_list = NULL;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
@@ -701,29 +700,7 @@ out:
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	ro->rso_stable_epoch = crt_hlc_get();
-	if (rc) {
-		/* If it failed, tell the master the target can not
-		 * start the rebuild, so master will put the target
-		 * into DOWN state.
-		 */
-		fail_list = d_rank_list_alloc(1);
-		if (fail_list != NULL) {
-			if (rpt && rpt->rt_pool)
-				crt_group_rank(rpt->rt_pool->sp_group,
-					       &fail_list->rl_ranks[0]);
-			else
-				crt_group_rank(NULL, &fail_list->rl_ranks[0]);
-
-			ro->rso_ranks_list = fail_list;
-		} else {
-			D_ERROR("failed to alloc rank list.\n");
-		}
-		if (rpt)
-			rpt->rt_abort = 1;
-	}
-
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
-	d_rank_list_free(fail_list);
 }
 
 int
@@ -732,7 +709,6 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 {
 	struct rebuild_scan_out	*src = crt_reply_get(source);
 	struct rebuild_scan_out *dst = crt_reply_get(result);
-	int i;
 
 	if (dst->rso_status == 0)
 		dst->rso_status = src->rso_status;
@@ -740,25 +716,6 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	if (src->rso_status == 0 &&
 	    dst->rso_stable_epoch < src->rso_stable_epoch)
 		dst->rso_stable_epoch = src->rso_stable_epoch;
-
-	if (src->rso_ranks_list == NULL ||
-	    src->rso_ranks_list->rl_nr == 0)
-		return 0;
-
-	if (dst->rso_ranks_list == NULL) {
-		D_ALLOC_PTR(dst->rso_ranks_list);
-		if (dst->rso_ranks_list == NULL)
-			return -DER_NOMEM;
-	}
-
-	for (i = 0; i < src->rso_ranks_list->rl_nr; i++) {
-		int rc;
-
-		rc = d_rank_list_append(dst->rso_ranks_list,
-					src->rso_ranks_list->rl_ranks[i]);
-		if (rc)
-			return rc;
-	}
 
 	return 0;
 }

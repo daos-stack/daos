@@ -1372,9 +1372,8 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
 
-	if (ci_is_valid(csum)) {
+	if (csum != NULL)
 		ent.ei_csum = *csum;
-	}
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
