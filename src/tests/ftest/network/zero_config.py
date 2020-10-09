@@ -87,7 +87,9 @@ class ZeroConfigTest(TestWithServers):
             bool: status of whether correct device was used.
 
         """
-        cmd = "head -50 {}".format(log_file)
+	# anticipate log switch
+        cmd = "if [ -f {0}.old ]; then head -50 {0}.old; else head -50 {0};" \
+              "fi".format(log_file)
         err = "Error getting log data."
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
