@@ -40,7 +40,7 @@ class CartCtlFiveNodeTest(Test):
     """
     Runs basic CaRT ctl tests
 
-    :avocado: tags=all,cart,pr,ctl,five_node
+    :avocado: tags=all,cart,pr,ctl,five_node,5547
     """
     def setUp(self):
         """ Test setup """
@@ -56,7 +56,7 @@ class CartCtlFiveNodeTest(Test):
         """
         Test CaRT ctl
 
-        :avocado: tags=all,cart,pr,ctl,five_node
+        :avocado: tags=all,cart,pr,ctl,five_node,5547
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
