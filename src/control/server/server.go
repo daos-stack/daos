@@ -99,6 +99,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
+	faultDomain, err := getFaultDomain(cfg)
+	if err != nil {
+		return err
+	}
+	log.Debugf("fault domain: %s", faultDomain.String())
+
 	// Create the root context here. All contexts should
 	// inherit from this one so that they can be shut down
 	// from one place.
@@ -168,7 +174,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// this will record the DAOS system membership.
 	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
-	harness := NewIOServerHarness(log)
+	harness := NewIOServerHarness(log).WithFaultDomain(faultDomain)
 	var netDevClass uint32
 
 	netCtx, err := netdetect.Init(context.Background())
@@ -222,7 +228,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			TransportConfig: cfg.TransportConfig,
 		})
 
-		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg))
+		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg)).
+			WithHostFaultDomain(faultDomain)
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}

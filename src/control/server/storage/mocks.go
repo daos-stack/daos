@@ -56,7 +56,6 @@ func MockNvmeControllerHealth(varIdx ...int32) *NvmeControllerHealth {
 		tWarn = true
 	}
 	return &NvmeControllerHealth{
-		ErrorCount:      uint64(idx),
 		TempWarnTime:    uint32(idx),
 		TempCritTime:    uint32(idx),
 		CtrlBusyTime:    uint64(idx),
