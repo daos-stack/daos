@@ -598,24 +598,37 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	return rank;
 }
 
-d_rank_t
-get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, bool parity)
+void
+get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
+			int parity_nr, d_rank_t *ranks, int *ranks_num)
 {
 	struct daos_oclass_attr *oca;
 	uint32_t		shard = 0;
+	int			idx = 0;
+	int			data_idx;
 
 	oca = daos_oclass_attr_find(oid);
 	if (oca->ca_resil == DAOS_RES_REPL) {
-		shard = 0;
-	} else if (oca->ca_resil == DAOS_RES_EC) {
-		if (parity)
-			shard = oca->u.ec.e_k;
-		else
-			shard = 0;
+		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
+		*ranks_num = 1;
+		return;
 	}
 
-	print_message("get shard %u k %u\n", shard, oca->u.ec.e_k);
-	return get_rank_by_oid_shard(arg, oid, shard);
+	/* for EC object */
+	assert_true(data_nr <= oca->u.ec.e_k);
+	assert_true(parity_nr <= oca->u.ec.e_p);
+	while (parity_nr-- > 0) {
+		shard = oca->u.ec.e_k + oca->u.ec.e_p - 1 - idx;
+		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
+	}
+
+	data_idx = 0;
+	while (data_nr-- > 0) {
+		shard = data_idx++;
+		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
+	}
+
+	*ranks_num = idx;
 }
 
 static void
