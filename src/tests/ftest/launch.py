@@ -36,7 +36,6 @@ import yaml
 import errno
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-import glob
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
