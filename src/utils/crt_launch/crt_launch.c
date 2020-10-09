@@ -161,13 +161,12 @@ get_self_uri(struct host *h, int rank)
 	char		*p;
 	int		len;
 	int		rc;
-	char		*str_port;
+	char		*str_port = NULL;
 
 	/* Assign ports sequentually to each rank */
-	rc = asprintf(&str_port, "%d", g_opt.start_port + rank);
-	if (rc == -1) {
+	D_ASPRINTF(str_port, "%d", g_opt.start_port + rank);
+	if (str_port == NULL)
 		return -DER_NOMEM;
-	}
 
 	setenv("OFI_PORT", str_port, 1);
 
@@ -222,6 +221,7 @@ get_self_uri(struct host *h, int rank)
 	}
 
 out:
+	D_FREE(str_port);
 	return rc;
 }
 
