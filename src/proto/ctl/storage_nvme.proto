@@ -34,7 +34,6 @@ message NvmeController {
 	// Health mirrors bio_dev_state structure.
 	message Health {
 		uint64 timestamp = 1;
-		uint64 err_count = 2;
 		// Device health details
 		uint32 warn_temp_time = 3;
 		uint32 crit_temp_time = 4;
