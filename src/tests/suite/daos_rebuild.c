@@ -134,16 +134,11 @@ rebuild_retry_for_stale_pool(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
-	if (arg->myrank == 0) {
-		d_rank_t rank;
-
-		/* make one shard to return STALE for rebuild fetch */
-		rank = get_rank_by_oid_shard(arg, oids[0], 1);
-		daos_mgmt_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
+	/* Set no hdl fail_loc on all servers */
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_STALE_POOL | DAOS_FAIL_ONCE,
 				     0, NULL);
-	}
-
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
@@ -915,7 +910,8 @@ rebuild_multiple_tgts(void **state)
 		/* kill 2 ranks at the same time */
 		D_ASSERT(layout->ol_shards[0]->os_replica_nr > 2);
 		for (i = 0; i < 3; i++) {
-			d_rank_t rank = layout->ol_shards[0]->os_ranks[i];
+			d_rank_t rank =
+				layout->ol_shards[0]->os_shard_data[i].sd_rank;
 
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
@@ -954,7 +950,6 @@ rebuild_multiple_tgts(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-#if 0
 static int
 rebuild_io_cb(void *arg)
 {
@@ -967,6 +962,7 @@ rebuild_io_cb(void *arg)
 	return 0;
 }
 
+#if 0
 static int
 rebuild_io_post_cb(void *arg)
 {
@@ -1076,10 +1072,9 @@ rebuild_multiple_failures(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
-#if 0
-	/* Remove this inflight IO temporarily XXX */
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
+#if 0
 	/* Disable data validation because of DAOS-2915. */
 	arg->rebuild_post_cb = rebuild_io_post_cb;
 #else
@@ -1118,7 +1113,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* Kill one replica and start rebuild */
 	shard = layout->ol_shards[0];
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 arg->pool.alive_svc, shard->os_ranks[0]);
+			 arg->pool.alive_svc, shard->os_shard_data[0].sd_rank);
 
 	/* Sleep 10 seconds after it scan finish and hang before rebuild */
 	print_message("sleep 10 seconds to wait scan to be finished \n");
@@ -1128,9 +1123,10 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	/* NB: we can not kill rank 0, otherwise the following set_params
 	 * will fail and also pool destroy will not work.
 	 */
-	if (shard->os_ranks[1] != 0)
+	if (shard->os_shard_data[1].sd_rank != 0)
 		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, shard->os_ranks[1]);
+				 arg->pool.alive_svc,
+				 shard->os_shard_data[1].sd_rank);
 
 	/* Continue rebuild */
 	daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
@@ -1174,7 +1170,8 @@ rebuild_fail_all_replicas(void **state)
 		int j;
 
 		for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
-			d_rank_t rank = layout->ol_shards[i]->os_ranks[j];
+			d_rank_t rank =
+				layout->ol_shards[i]->os_shard_data[j].sd_rank;
 
 			daos_kill_server(arg, arg->pool.pool_uuid,
 					 arg->group, arg->pool.alive_svc,

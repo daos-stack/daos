@@ -165,12 +165,17 @@ struct daos_obj_shard_md {
 	uint32_t		smd_padding;
 };
 
+struct daos_shard_data {
+	uint32_t	sd_rank;
+	uint32_t	sd_tgt_idx;
+};
+
 /**
  * object layout information.
  **/
 struct daos_obj_shard {
-	uint32_t	os_replica_nr;
-	uint32_t	os_ranks[0];
+	uint32_t		os_replica_nr;
+	struct daos_shard_data	os_shard_data[0];
 };
 
 struct daos_obj_layout {

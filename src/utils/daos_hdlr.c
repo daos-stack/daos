@@ -1041,16 +1041,24 @@ cont_decode_props(daos_prop_t *props)
 			D_PRINT("off\n");
 		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_LZ4)
 			D_PRINT("lz4\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE)
-			D_PRINT("deflate\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE1)
-			D_PRINT("deflate1\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE2)
-			D_PRINT("deflate2\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE3)
-			D_PRINT("deflate3\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE4)
-			D_PRINT("deflate4\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP1)
+			D_PRINT("gzip1\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP2)
+			D_PRINT("gzip2\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP3)
+			D_PRINT("gzip3\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP4)
+			D_PRINT("gzip4\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP5)
+			D_PRINT("gzip5\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP6)
+			D_PRINT("gzip (= gzip6)\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP7)
+			D_PRINT("gzip7\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP8)
+			D_PRINT("gzip8\n");
+		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_GZIP9)
+			D_PRINT("gzip9\n");
 		else
 			D_PRINT("<unknown> ("DF_X64")\n", entry->dpe_val);
 	}
@@ -1862,7 +1870,7 @@ obj_query_hdlr(struct cmd_args_s *ap)
 		fprintf(stdout, "grp: %d\n", i);
 		for (j = 0; j < shard->os_replica_nr; j++)
 			fprintf(stdout, "replica %d %d\n", j,
-				shard->os_ranks[j]);
+				shard->os_shard_data[j].sd_rank);
 	}
 
 	daos_obj_layout_free(layout);
