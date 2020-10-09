@@ -648,7 +648,10 @@ crt_port_range_verify(int port)
 		return;
 	}
 
+	fclose(f);
+
 	p = buff;
+	/* Data is in the format of <start_port><whitespaces><end_port>*/
 	while (*p != '\0') {
 		if (*p == ' ' || *p == '\t') {
 			*p = '\0';
@@ -664,16 +667,15 @@ crt_port_range_verify(int port)
 		p++;
 	}
 
-	fclose(f);
-
-	if (port >= start_port && port <= end_port) {
-		D_ERROR("\nRequested port %d is inside of the local port range "
-			"as specified by file\n'%s'\nIn order to avoid port "
-			"conflicts pick a different value outside of the "
-			"%d-%d range\n",
-			port, proc, start_port, end_port);
+	if (start_port == -1)
 		return;
-	}
+
+	if (port >= start_port && port <= end_port)
+		D_WARN("\nRequested port %d is inside of the local port range "
+		       "as specified by file\n'%s'\nIn order to avoid port "
+		       "conflicts pick a different value outside of the "
+		       "%d-%d range\n",
+		       port, proc, start_port, end_port);
 }
 
 int crt_na_ofi_config_init(void)
