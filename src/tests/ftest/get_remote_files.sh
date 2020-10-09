@@ -180,12 +180,15 @@ list_tag_files() {
 #   1: No VM detected or skipped
 #######################################
 check_hw() {
-    if [ "${1}" == "true" ]; then
-        echo "  Skipping VM check for compression"
-        return 1
-    fi
     dmesg | grep "Hypervisor detected" >/dev/null 2>&1
-    return $?
+    ret=$?
+    if [ ${ret} -eq 0 ]; then
+        if [ "${1}" == "true" ]; then
+            echo "  Running compression on a VM host"
+            ret=1
+        fi
+    fi
+    return ${ret}
 }
 
 #######################################
@@ -216,7 +219,9 @@ scp_files() {
     # shellcheck disable=SC2045,SC2086
     for file in $(ls -d ${1})
     do
-        if scp -r "${file}" "${2}"/"$(hostname -s)"-"${file##*/}"; then
+        file_name=${file##*/}
+        archive_name="${file_name%%.*}.$(hostname -s).${file_name#*.}"
+        if scp -r "${file}" "${2}"/"${archive_name}"; then
             copied+=("${file}")
             if ! rm -fr "${file}"; then
                 echo "  Error removing ${file}"
@@ -251,7 +256,8 @@ run_cartlogtest() {
         for file in $(ls -d ${1})
         do
             if [ -f ${file} ]; then
-                ${CART_LOGTEST_PATH} ${file} > ${file}_cart_testlog 2>&1
+                logtest_log="${file%.*}.cart_logtest.${file##*.}"
+                ${CART_LOGTEST_PATH} ${file} > ${logtest_log} 2>&1
                 ret=$?
                 if [ ${ret} -ne 0 ]; then
                     echo "  Error: details in ${file}_cart_testlog"
