@@ -106,13 +106,9 @@ check_files_input() {
         files=$(ls -d ${1} 2> /dev/null)
         files_rc=$?
         if [ -n "${files}" ] && [ "${files_rc}" -eq 0 ]; then
-            echo "Processing the following detected files:"
-            for file in ${files}
-            do
-                echo "  ${file}"
-            done
+            echo "Files found that match ${1}."
         else
-            echo "No files matched ${1}. Done."
+            echo "No files matched ${1}. Nothing to do."
             exit 0
         fi
     else
@@ -185,10 +181,10 @@ list_tag_files() {
 #######################################
 check_hw() {
     if [ "${1}" == "true" ]; then
-        echo "Skipping VM check for compression"
+        echo "  Skipping VM check for compression"
         return 1
     fi
-    dmesg | grep "Hypervisor detected" 2> /dev/null
+    dmesg | grep "Hypervisor detected" >/dev/null 2>&1
     return $?
 }
 
@@ -233,7 +229,7 @@ scp_files() {
         fi
     done
     echo "  The following files were archived:"
-    for file in ${copied[@]:-no files}
+    for file in "${copied[@]:-no files}"
     do
         echo "    ${file}"
     done
@@ -248,7 +244,7 @@ scp_files() {
 #   0: All cart_logtest were successful
 #   1: Failure detected with cart_logtest
 #######################################
-get_cartlogtest_files() {
+run_cartlogtest() {
     rc=0
     if [ -f "${CART_LOGTEST_PATH}" ]; then
         # shellcheck disable=SC2045,SC2086
@@ -340,7 +336,7 @@ fi
 # Run cart_logtest.py on FILES_TO_PROCESS
 if [ "${CART_LOGTEST}" == "true" ]; then
     echo "Running ${CART_LOGTEST_PATH} ..."
-    get_cartlogtest_files "${FILES_TO_PROCESS}"
+    run_cartlogtest "${FILES_TO_PROCESS}"
     ret=$?
     if [ ${ret} -ne 0 ]; then
         rc=1

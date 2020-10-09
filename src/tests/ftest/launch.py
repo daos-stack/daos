@@ -921,16 +921,7 @@ def compress_log_files(avocado_logs_dir):
     """
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
-    # Debug check if this directory exists
-    files = glob.glob(logs_dir)
-    if files:
-        print("Found files for {}: {}".format(logs_dir, files))
-    else:
-        print("No file found for: {}".format(logs_dir))
-    command = [
-        get_remote_file_command(),
-        "-z", "-x", "-f \"{}\"".format(logs_dir)
-    ]
+    command = [get_remote_file_command(), "-z", "-x", "-f {}".format(logs_dir)]
     print(get_output(command, check=False))
 
 
@@ -1172,13 +1163,12 @@ def create_results_xml(hosts, testname, output, destination):
     testcase = ET.SubElement(testsuite, "testcase", testcase_attrs)
     ET.SubElement(testcase, "error", error_atttrs)
     system_out = ET.SubElement(testcase, "system-out")
-    # system_out.text = "<![CDATA[{}]]>".format(output)
     system_out.text = output
 
     # Get xml as string and write it to a file
     rough_xml = ET.tostring(testsuite, "utf-8")
     junit_xml = minidom.parseString(rough_xml)
-    filen = os.path.join(destination, "log_size_check.xml")
+    filen = os.path.join(destination, "framework_results.xml")
     print("Generating junit xml file ...")
     try:
         with open(filen, "w") as results_xml:

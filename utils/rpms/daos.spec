@@ -11,7 +11,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       34%{?relval}%{?dist}
+Release:       35%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -161,10 +161,10 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 Requires: python2-tabulate
 Requires: fio
+Requires: lbzip2
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
-
 
 %description tests
 This is the package needed to run the DAOS test suite
@@ -391,6 +391,9 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
+* Fri Oct 09 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.0-35
+- Add lbzip2 requirement to the daos-tests package
+
 * Sat Oct 03 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-34
 - Add go-race to BuildRequires on OpenSUSE Leap
 
