@@ -1225,9 +1225,6 @@ cond_test(void **state)
 	daos_epoch_t		 epoch = start_epoch;
 	int			 i;
 
-	if (getenv("DAOS_IO_BYPASS"))
-		skip();
-
 	test_args_reset(arg, VPOOL_SIZE);
 
 	oid = gen_oid(0);
@@ -1337,9 +1334,6 @@ multiple_oid_cond_test(void **state)
 	d_iov_t			 iov = {0};
 	daos_epoch_t		 epoch = start_epoch + NUM_OIDS * 3;
 	int			 i;
-
-	if (getenv("DAOS_IO_BYPASS"))
-		skip();
 
 	start_epoch = epoch + 1;
 
@@ -1840,11 +1834,6 @@ test_inprogress_parent_punch(void **state)
 	char			akey3_buf[UPDATE_DKEY_SIZE];
 	daos_unit_oid_t		oid;
 
-	if (getenv("DAOS_IO_BYPASS")) {
-		/* Tests with aborted transactions cannot be run with bypass */
-		skip();
-	}
-
 	test_args_reset(arg, VPOOL_SIZE);
 
 	memset(&rex, 0, sizeof(rex));
@@ -1954,7 +1943,15 @@ test_inprogress_parent_punch(void **state)
 	start_epoch = epoch + 1;
 }
 
-static const struct CMUnitTest punch_model_tests[] = {
+static const struct CMUnitTest punch_model_tests_pmdk[] = {
+	{ "VOS860: Conditionals test", cond_test, NULL, NULL },
+	{ "VOS861: Multiple oid cond test", multiple_oid_cond_test, NULL,
+		NULL },
+	{ "VOS862: Punch while other akey is inprogress",
+		test_inprogress_parent_punch, NULL, NULL },
+};
+
+static const struct CMUnitTest punch_model_tests_all[] = {
 	{ "VOS800: VOS punch model array set/get size",
 	  array_set_get_size, pm_setup, pm_teardown },
 	{ "VOS801: VOS punch model array read/write/punch int32_t",
@@ -1972,29 +1969,35 @@ static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS808: Object punch and fetch",
 	  object_punch_and_fetch, NULL, NULL },
 	{ "VOS809: SGL test", sgl_test, NULL, NULL },
-	{ "VOS809: Small SGL test", small_sgl, NULL, NULL },
-	{ "VOS810: Conditionals test", cond_test, NULL, NULL },
+	{ "VOS810: Small SGL test", small_sgl, NULL, NULL },
 	{ "VOS811: Test vos_obj_array_remove", remove_test, NULL, NULL },
 	{ "VOS812: Minor epoch punch sv", minor_epoch_punch_sv, NULL, NULL },
 	{ "VOS813: Minor epoch punch array", minor_epoch_punch_array, NULL,
 		NULL },
 	{ "VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
 		NULL },
-	{ "VOS815: Multiple oid cond test", multiple_oid_cond_test, NULL,
-		NULL },
-	{ "VOS816: Punch while other akey is inprogress",
-		test_inprogress_parent_punch, NULL, NULL },
 };
 
 int
 run_pm_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
+	int	rc;
 
-	dts_create_config(test_name, "VOS Punch Model tests %s", cfg);
+	dts_create_config(test_name, "VOS Universal Punch Model tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
-	return cmocka_run_group_tests_name(test_name,
-					   punch_model_tests, setup_io,
-					   teardown_io);
+
+	rc = cmocka_run_group_tests_name(test_name, punch_model_tests_all,
+					 setup_io, teardown_io);
+
+	if (getenv("DAOS_IO_BYPASS"))
+		return rc;
+
+	dts_create_config(test_name, "VOS PMDK only Punch Model tests %s", cfg);
+
+	rc += cmocka_run_group_tests_name(test_name, punch_model_tests_pmdk,
+					  setup_io, teardown_io);
+
+	return rc;
 }
