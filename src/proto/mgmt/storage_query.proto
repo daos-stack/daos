@@ -38,7 +38,6 @@ message BioHealthResp {
 	string model = 1;
 	string serial = 2;
 	uint64 timestamp = 3;
-	uint64 err_count = 4;
 	// Device health details
 	uint32 warn_temp_time = 5;
 	uint32 crit_temp_time = 6;
