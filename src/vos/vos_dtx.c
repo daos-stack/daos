@@ -811,6 +811,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 				if (umoff_is_null(rec_off)) {
 					D_ERROR("No space to store CMT DTX OID "
 						DF_DTI"\n", DP_DTI(dti));
+					*fatal = true;
 					D_GOTO(out, rc = -DER_NOSPACE);
 				}
 
@@ -1647,7 +1648,7 @@ new_blob:
 	if (umoff_is_null(dbd_off)) {
 		D_ERROR("No space to store committed DTX %d "DF_DTI"\n",
 			count, DP_DTI(&dtis[cur]));
-		return committed > 0 ? committed : -DER_NOSPACE;
+		return -DER_NOSPACE;
 	}
 
 	dbd = umem_off2ptr(umm, dbd_off);

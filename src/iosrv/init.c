@@ -832,6 +832,11 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 	void	*bt[128];
 	int	 bt_size, i, rc;
 
+	/* since we mainly handle fatal signals here, flush the log to not
+	 * risk losing any debug traces
+	 */
+	d_log_sync();
+
 	fprintf(stderr, "*** Process %d received signal %d ***\n", getpid(),
 		signo);
 
