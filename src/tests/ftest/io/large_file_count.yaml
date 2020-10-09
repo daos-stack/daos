@@ -30,6 +30,7 @@ pool:
     nvme_size: 400000000000 # large nvme_size for mdtest 1M file creation
   createsvc:
     svcn: 1
+  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -39,7 +40,7 @@ largefilecount:
     - POSIX
   object_class:
     - SX
-    - RP_2GX
+    - RP_3GX
 ior:
   np: 30
   dfs_destroy: False

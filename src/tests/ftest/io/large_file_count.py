@@ -58,7 +58,9 @@ class LargeFileCount(MdtestBase, IorTestBase):
             for api in apis:
                 self.ior_cmd.api.update(api)
                 self.mdtest_cmd.api.update(api)
-
+                # update test_dir for mdtest if api is DFS
+                if api == "DFS":
+                    self.mdtest_cmd.test_dir.update("/")
                 # Until DAOS-3320 is resolved run IOR for POSIX
                 # with single client node
                 self.single_client(api)
@@ -92,7 +94,9 @@ class LargeFileCount(MdtestBase, IorTestBase):
             for api in apis:
                 self.ior_cmd.api.update(api)
                 self.mdtest_cmd.api.update(api)
-
+                # update test_dir for mdtest if api is DFS
+                if api == "DFS":
+                    self.mdtest_cmd.test_dir.update("/")
                 # Until DAOS-3320 is resolved run IOR for POSIX
                 # with single client node
                 self.single_client(api)

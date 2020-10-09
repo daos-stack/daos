@@ -140,7 +140,7 @@ class MdtestCommand(ExecutableCommand):
         self.set_daos_pool_params(pool, display)
         self.dfs_group.update(group, "dfs_group" if display else None)
         self.dfs_cont.update(
-            cont_uuid if cont_uuid else uuid.uuid4(),
+            cont_uuid if cont_uuid else str(uuid.uuid4()),
             "dfs_cont" if display else None)
 
     def set_daos_pool_params(self, pool, display=True):
