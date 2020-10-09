@@ -145,8 +145,6 @@ class MdtestBase(TestWithServers):
             # self.create_cont()
             self._start_dfuse()
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
-#        elif self.mdtest_cmd.api.value == "DFS":
-#            self.mdtest_cmd.test_dir.update("/")
 
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
