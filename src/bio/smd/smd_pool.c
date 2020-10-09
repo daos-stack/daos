@@ -27,6 +27,7 @@
 #include "smd_internal.h"
 
 struct smd_pool_entry {
+	uint64_t	spe_blob_sz;
 	uint32_t	spe_tgt_cnt;
 	int		spe_tgts[SMD_MAX_TGT_CNT];
 	uint64_t	spe_blobs[SMD_MAX_TGT_CNT];
@@ -45,7 +46,7 @@ get_tgt_idx(struct smd_pool_entry *entry, int tgt_id)
 }
 
 int
-smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id)
+smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id, uint64_t blob_sz)
 {
 	struct smd_pool_entry	entry = { 0 };
 	struct d_uuid		key_pool;
@@ -63,6 +64,15 @@ smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id)
 	rc = dbtree_fetch(smd_store.ss_pool_hdl, BTR_PROBE_EQ,
 			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
 	if (rc == 0) {
+		if (entry.spe_blob_sz != blob_sz) {
+			D_ERROR("Pool "DF_UUID" blob size mismatch. "
+				""DF_U64" != "DF_U64"\n",
+				DP_UUID(&key_pool.uuid), entry.spe_blob_sz,
+				blob_sz);
+			rc = -DER_MISMATCH;
+			goto out;
+		}
+
 		if (entry.spe_tgt_cnt >= SMD_MAX_TGT_CNT) {
 			D_ERROR("Pool "DF_UUID" is assigned to too many "
 				"targets (%d)\n", DP_UUID(&key_pool.uuid),
@@ -85,6 +95,7 @@ smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id)
 		entry.spe_tgts[0] = tgt_id;
 		entry.spe_blobs[0] = blob_id;
 		entry.spe_tgt_cnt = 1;
+		entry.spe_blob_sz = blob_sz;
 	} else {
 		D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
 			DP_UUID(&key_pool.uuid), rc);
@@ -190,6 +201,7 @@ create_pool_info(uuid_t pool_id, struct smd_pool_entry *entry)
 
 	D_INIT_LIST_HEAD(&info->spi_link);
 	uuid_copy(info->spi_id, pool_id);
+	info->spi_blob_sz = entry->spe_blob_sz;
 	info->spi_tgt_cnt = entry->spe_tgt_cnt;
 	for (i = 0; i < info->spi_tgt_cnt; i++) {
 		info->spi_tgts[i] = entry->spe_tgts[i];
@@ -341,6 +353,54 @@ out:
 
 	/* return pool count along with the pool list */
 	*pools = pool_cnt;
+
+	return rc;
+}
+
+/* smd_lock() and smd_tx_begin() are called by caller */
+int
+smd_replace_blobs(struct smd_pool_info *info, uint32_t tgt_cnt, int *tgts)
+{
+	struct smd_pool_entry	entry = { 0 };
+	struct d_uuid		key_pool;
+	d_iov_t			key, val;
+	int			tgt_id, tgt_idx;
+	int			i, rc;
+
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+
+	uuid_copy(key_pool.uuid, info->spi_id);
+
+	d_iov_set(&key, &key_pool, sizeof(key_pool));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_pool_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc) {
+		D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
+			DP_UUID(&key_pool.uuid), rc);
+		return rc;
+	}
+
+	D_ASSERT(info->spi_blob_sz == entry.spe_blob_sz);
+	D_ASSERT(info->spi_tgt_cnt == entry.spe_tgt_cnt);
+	D_ASSERT(entry.spe_tgt_cnt >= tgt_cnt);
+
+	for (i = 0; i < tgt_cnt; i++) {
+		tgt_id = tgts[i];
+		tgt_idx = get_tgt_idx(&entry, tgt_id);
+		if (tgt_idx == -1) {
+			D_ERROR("Invalid tgt %d for pool "DF_UUID"\n",
+				tgt_id, DP_UUID(&key_pool.uuid));
+			return -DER_INVAL;
+		}
+
+		entry.spe_blobs[tgt_idx] = info->spi_blobs[tgt_idx];
+	}
+
+	rc = dbtree_update(smd_store.ss_pool_hdl, &key, &val);
+	if (rc)
+		D_ERROR("Replace blobs for pool "DF_UUID" failed. "DF_RC"\n",
+			DP_UUID(&key_pool.uuid), DP_RC(rc));
 
 	return rc;
 }
