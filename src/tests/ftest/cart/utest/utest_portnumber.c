@@ -64,7 +64,7 @@
 sem_t *child1_sem;
 sem_t *child2_sem;
 
-int shmid_c1 = 1;
+int shmid_c1;
 int shmid_c2;
 
 static void
@@ -83,9 +83,8 @@ run_test_fork(void **state)
 	sem_trywait(child1_sem);
 	sem_trywait(child2_sem);
 
-
-	pid1 = fork();
 	/* fork first child process */
+	pid1 = fork();
 	if (pid1 == 0) {
 		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
 		if (rc != 0) {
@@ -146,7 +145,6 @@ child1_error:
 child2_error:
 		sem_post(child1_sem);
 		exit(rc);
-
 	}
 
 	/* Wait for first child and get results */
@@ -167,7 +165,6 @@ child2_error:
 	assert_false(result2 == 20);
 	assert_false(result2 == 21);
 	assert_false(result2 == 22);
-
 }
 
 static void
@@ -217,7 +214,7 @@ init_tests(void **state)
 		goto cleanup;
 	}
 
-	/* Attach share memeory regions */
+	/* Attach share memory regions */
 	child1_sem = (sem_t *)shmat(shmid_c1, NULL, 0);
 	child2_sem = (sem_t *)shmat(shmid_c2, NULL, 0);
 
@@ -234,7 +231,7 @@ init_tests(void **state)
 	return 0;
 
 cleanup:
-	printf(" Error creating semaphoes \n");
+	printf(" Error creating semaphores\n");
 	return -1;
 }
 
@@ -245,13 +242,13 @@ fini_tests(void **state)
 	struct shmid_ds smds;
 	int rc;
 
-	/* detatch shared memory region */
+	/* detach shared memory region */
 	if (child1_sem != NULL)
 		shmdt(child1_sem);
 	if (child2_sem != NULL)
 		shmdt(child2_sem);
 
-	/* elimiante the shared memory regions */
+	/* eliminate the shared memory regions */
 	rc = shmctl(shmid_c1, IPC_STAT, &smds);
 	assert_true(rc == 0);
 	rc = shmctl(shmid_c1, IPC_RMID, &smds);
