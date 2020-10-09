@@ -61,11 +61,11 @@
 #include "gurt/debug.h"
 
 /* global semaphores */
-sem_t *child1_sem = NULL;
-sem_t *child2_sem = NULL;
+sem_t *child1_sem;
+sem_t *child2_sem;
 
-int shmid_c1 = 0;
-int shmid_c2 = 0;
+int shmid_c1 = 1;
+int shmid_c2;
 
 static void
 run_test_fork(void **state)
@@ -88,7 +88,7 @@ run_test_fork(void **state)
 	/* fork first child process */
 	if (pid1 == 0) {
 		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
-		if (rc != 0){
+		if (rc != 0) {
 			sem_post(child2_sem);
 			rc = 10;
 			goto child1_error;
@@ -101,13 +101,13 @@ run_test_fork(void **state)
 
 		if (child_result == 0) {
 			rc = crt_context_destroy(crt_context, false);
-			if (rc != 0){
+			if (rc != 0) {
 				rc = 11;
 				goto child1_error;
 			}
 		}
 		rc = crt_finalize();
-		if (rc != 0){
+		if (rc != 0) {
 			rc = 12;
 			goto child1_error;
 		}
@@ -123,14 +123,14 @@ child1_error:
 		sem_wait(child2_sem);
 
 		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
-		if (rc != 0){
+		if (rc != 0) {
 			rc = 20;
 			goto child2_error;
 		}
 		child_result = crt_context_create(&crt_context);
 		if (child_result == 0) {
 			rc = crt_context_destroy(crt_context, false);
-			if (rc != 0){
+			if (rc != 0) {
 				rc = 21;
 				goto child2_error;
 			}
@@ -138,7 +138,7 @@ child1_error:
 		/* signal child 1 to finish up */
 		sem_post(child1_sem);
 		rc = crt_finalize();
-		if (rc != 0){
+		if (rc != 0) {
 			rc = 22;
 			goto child2_error;
 		}
@@ -201,8 +201,8 @@ test_port_verb(void **state)
 static int
 init_tests(void **state)
 {
-	int size = sizeof (sem_t);
-	int flag = IPC_CREAT  | 0666;
+	int size = sizeof(sem_t);
+	int flag = IPC_CREAT | 0666;
 	int pshare = 1;
 	int init_value = 1;
 	int rc;
@@ -225,17 +225,17 @@ init_tests(void **state)
 	assert_true(child2_sem  != (sem_t *)-1);
 
 	/* Initialize semaphores */
-	rc = sem_init (child1_sem, pshare, init_value );
+	rc = sem_init(child1_sem, pshare, init_value);
 	assert_true(rc == 0);
 
-	rc = sem_init (child2_sem, pshare, init_value );
+	rc = sem_init(child2_sem, pshare, init_value);
 	assert_true(rc == 0);
 
 	return 0;
 
 cleanup:
 	printf(" Error creating semaphoes \n");
- 	return -1;
+	return -1;
 }
 
 /*******************/
