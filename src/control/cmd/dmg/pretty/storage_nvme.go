@@ -48,7 +48,7 @@ func printNvmeControllerSummary(nvme *storage.NvmeController, out io.Writer, opt
 	return w.Err
 }
 
-func printNvmeHealth(stat *storage.NvmeControllerHealth, out io.Writer, opts ...PrintConfigOption) error {
+func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
 	if stat == nil {

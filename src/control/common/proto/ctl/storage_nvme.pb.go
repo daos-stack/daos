@@ -360,7 +360,7 @@ func (m *NvmeController_Namespace) GetCtrlrpciaddr() string {
 }
 
 // SmdDevice represents a blobstore created on a NvmeController_Namespace.
-// TODO: this should really be embedded in Namespace above.
+// TODO: this should be embedded in Namespace above
 type NvmeController_SmdDevice struct {
 	Uuid                 string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
 	TgtIds               []int32  `protobuf:"varint,2,rep,packed,name=tgt_ids,json=tgtIds,proto3" json:"tgt_ids,omitempty"`

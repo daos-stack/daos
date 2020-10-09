@@ -58,19 +58,21 @@ func mockHostStorageMap(t *testing.T, hosts ...*mockHostStorage) control.HostSto
 
 func TestControl_PrintStorageScanResponse(t *testing.T) {
 	var (
-		standardScan      = control.MockServerScanResp(t, "standard")
-		withNamespaceScan = control.MockServerScanResp(t, "withNamespace")
-		noNVMEScan        = control.MockServerScanResp(t, "noNVME")
-		noSCMScan         = control.MockServerScanResp(t, "noSCM")
-		noStorageScan     = control.MockServerScanResp(t, "noStorage")
-		scmScanFailed     = control.MockServerScanResp(t, "scmFailed")
-		nvmeScanFailed    = control.MockServerScanResp(t, "nvmeFailed")
-		bothScansFailed   = control.MockServerScanResp(t, "bothFailed")
+		standardScan       = control.MockServerScanResp(t, "standard")
+		withNamespaceScan  = control.MockServerScanResp(t, "withNamespace")
+		withSpaceUsageScan = control.MockServerScanResp(t, "withSpaceUsage")
+		noNVMEScan         = control.MockServerScanResp(t, "noNVME")
+		noSCMScan          = control.MockServerScanResp(t, "noSCM")
+		noStorageScan      = control.MockServerScanResp(t, "noStorage")
+		scmScanFailed      = control.MockServerScanResp(t, "scmFailed")
+		nvmeScanFailed     = control.MockServerScanResp(t, "nvmeFailed")
+		bothScansFailed    = control.MockServerScanResp(t, "bothFailed")
 	)
 
 	for name, tc := range map[string]struct {
-		mic         *control.MockInvokerConfig
-		expPrintStr string
+		mic               *control.MockInvokerConfig
+		displaySpaceUsage bool
+		expPrintStr       string
 	}{
 		"empty response": {
 			mic: &control.MockInvokerConfig{
@@ -274,6 +276,24 @@ Hosts        SCM Total      NVMe Total
 host[0-1023] 1 B (1 module) 1 B (1 controller) 
 `,
 		},
+		"single host with space usage": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsageScan,
+						},
+					},
+				},
+			},
+			displaySpaceUsage: true,
+			expPrintStr: `
+Hosts SCM Total SCM Free NVMe Total NVMe Free 
+----- --------- -------- ---------- --------- 
+host1 3.0 TB    1.5 TB   36 TB      18 TB     
+`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -291,7 +311,12 @@ host[0-1023] 1 B (1 module) 1 B (1 controller)
 			if err := PrintResponseErrors(resp, &bld); err != nil {
 				t.Fatal(err)
 			}
-			if err := PrintHostStorageMap(resp.HostStorage, &bld); err != nil {
+			if tc.displaySpaceUsage {
+				err = PrintHostStorageSpaceMap(resp.HostStorage, &bld)
+			} else {
+				err = PrintHostStorageMap(resp.HostStorage, &bld)
+			}
+			if err != nil {
 				t.Fatal(err)
 			}
 
@@ -629,7 +654,7 @@ func TestControl_PrintStorageFormatResponse(t *testing.T) {
 		"server error": {
 			resp: &control.StorageFormatResp{
 				HostErrorsResp: control.MockHostErrorsResp(t,
-					&control.MockHostError{"host1", "failed"}),
+					&control.MockHostError{Hosts: "host1", Error: "failed"}),
 			},
 			expPrintStr: `
 Errors:
@@ -752,7 +777,7 @@ func TestControl_PrintStorageFormatResponseVerbose(t *testing.T) {
 		"server error": {
 			resp: &control.StorageFormatResp{
 				HostErrorsResp: control.MockHostErrorsResp(t,
-					&control.MockHostError{"host1", "failed"}),
+					&control.MockHostError{Hosts: "host1", Error: "failed"}),
 			},
 			expPrintStr: `
 Errors:

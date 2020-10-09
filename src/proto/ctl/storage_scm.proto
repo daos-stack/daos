@@ -47,8 +47,8 @@ message ScmNamespace {
 	// Mount represents a mounted pmem block device.
 	message Mount {
 		string path = 1;
-		uint64 totalbytes = 2;
-		uint64 availbytes = 3;
+		uint64 total_bytes = 2;
+		uint64 avail_bytes = 3;
 	}
 	string uuid = 1;
 	string blockdev = 2;

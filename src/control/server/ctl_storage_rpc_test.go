@@ -756,8 +756,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			smsc: &scm.MockSysConfig{
-				MountUsageTotal: mockPbScmMount.Totalbytes,
-				MountUsageAvail: mockPbScmMount.Availbytes,
+				MountUsageTotal: mockPbScmMount.TotalBytes,
+				MountUsageAvail: mockPbScmMount.AvailBytes,
 			},
 			cfg: newDefaultConfiguration(nil).WithServers(
 				ioserver.NewConfig().

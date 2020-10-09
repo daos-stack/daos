@@ -28,6 +28,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -90,6 +92,40 @@ func PrintHostStorageMap(hsm control.HostStorageMap, out io.Writer, opts ...Prin
 			row[scmTitle] = hss.HostStorage.ScmNamespaces.Summary()
 		}
 		row[nvmeTitle] = hss.HostStorage.NvmeDevices.Summary()
+		table = append(table, row)
+	}
+
+	tablePrint.Format(table)
+	return nil
+}
+
+// PrintHostStorageSpaceMap generates a human-readable representation of the supplied
+// HostStorageMap struct and writes utilization info to the supplied io.Writer.
+func PrintHostStorageSpaceMap(hsm control.HostStorageMap, out io.Writer) error {
+	if len(hsm) == 0 {
+		return nil
+	}
+
+	hostsTitle := "Hosts"
+	scmTitle := "SCM Total"
+	scmFreeTitle := "SCM Free"
+	nvmeTitle := "NVMe Total"
+	nvmeFreeTitle := "NVMe Free"
+
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, scmFreeTitle,
+		nvmeTitle, nvmeFreeTitle)
+	tablePrint.InitWriter(out)
+	table := []txtfmt.TableRow{}
+
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := getPrintHosts(hss.HostSet.RangedString())
+		row := txtfmt.TableRow{hostsTitle: hosts}
+		fmt.Printf("scm space: %s", humanize.Bytes(hss.HostStorage.ScmNamespaces.Total()))
+		row[scmTitle] = humanize.Bytes(hss.HostStorage.ScmNamespaces.Total())
+		row[scmFreeTitle] = humanize.Bytes(hss.HostStorage.ScmNamespaces.Free())
+		row[nvmeTitle] = humanize.Bytes(hss.HostStorage.NvmeDevices.Total())
+		row[nvmeFreeTitle] = humanize.Bytes(hss.HostStorage.NvmeDevices.Free())
 		table = append(table, row)
 	}
 

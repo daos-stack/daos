@@ -158,7 +158,6 @@ type usageQueryCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	//Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 }
 
 // Execute is run when usageQueryCmd activates.
@@ -171,10 +170,6 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
-//		if cmd.Verbose {
-//			cmd.log.Info("--verbose flag ignored if --json specified")
-//		}
-
 		return cmd.outputJSON(resp, err)
 	}
 
@@ -183,11 +178,10 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	}
 
 	var bld strings.Builder
-	// verbose := control.PrintWithVerboseOutput(cmd.Verbose)
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := control.PrintHostStorageMap(resp.HostStorage, &bld); err != nil {
+	if err := pretty.PrintHostStorageSpaceMap(resp.HostStorage, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
