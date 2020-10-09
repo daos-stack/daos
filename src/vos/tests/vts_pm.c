@@ -1840,6 +1840,11 @@ test_inprogress_parent_punch(void **state)
 	char			akey3_buf[UPDATE_DKEY_SIZE];
 	daos_unit_oid_t		oid;
 
+	if (getenv("DAOS_IO_BYPASS")) {
+		/* Tests with aborted transactions cannot be run with bypass */
+		skip();
+	}
+
 	test_args_reset(arg, VPOOL_SIZE);
 
 	memset(&rex, 0, sizeof(rex));
