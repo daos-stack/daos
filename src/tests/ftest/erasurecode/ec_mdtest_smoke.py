@@ -25,6 +25,7 @@ from mdtest_test_base import MdtestBase
 from apricot import skipForTicket
 
 class ErasureCodeMdtest(MdtestBase):
+    # pylint: disable=too-many-ancestors
     """
     EC MDtest class to run smoke tests.
     :avocado: recursive
