@@ -95,6 +95,26 @@ var (
 		"invalid fault domain",
 		"specify a valid fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
+	FaultConfigFaultCallbackNotFound = serverFault(
+		code.ServerConfigFaultCallbackNotFound,
+		"fault domain callback script not found",
+		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigFaultCallbackBadPerms = serverFault(
+		code.ServerConfigFaultCallbackBadPerms,
+		"fault domain callback cannot be executed",
+		"ensure that permissions for the DAOS server user are properly set on the fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigFaultCallbackFailed = serverFault(
+		code.ServerConfigFaultCallbackNotFound,
+		"fault domain callback script failed during execution",
+		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigBothFaultPathAndCallbackDefined = serverFault(
+		code.ServerConfigBothFaultPathAndCallbackDefined,
+		"both fault domain and fault path are defined in the configuration",
+		"remove either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
 )
 
 func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
