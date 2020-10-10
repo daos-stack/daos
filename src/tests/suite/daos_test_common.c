@@ -1026,3 +1026,186 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 	D_FREE(user);
 	return prop;
 }
+
+int
+get_pid_of_process(char *host, char *dpid, char *proc)
+{
+	char    command[256];
+	size_t  len = 0;
+	size_t  read;
+	char    *line = NULL;
+
+	snprintf(command, sizeof(command),
+		 "ssh %s pgrep %s", host, proc);
+	FILE *fp1 = popen(command, "r");
+
+	print_message("Command= %s\n", command);
+	if (fp1 == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp1)) != -1) {
+		print_message("%s pid = %s", proc, line);
+		strcat(dpid, line);
+	}
+
+	pclose(fp1);
+	return 0;
+}
+
+int
+get_server_config(char *host, char *server_config_file)
+{
+	char	command[256];
+	size_t	len = 0;
+	size_t	read;
+	char	*line = NULL;
+	char	*pch;
+	char    *dpid;
+	int	rc;
+	char    daos_proc[16] = "daos_server";
+
+	D_ALLOC(dpid, 16);
+	rc = get_pid_of_process(host, dpid, daos_proc);
+	assert_int_equal(rc, 0);
+
+	snprintf(command, sizeof(command),
+		 "ssh %s ps ux -A | grep %s", host, dpid);
+	FILE *fp = popen(command, "r");
+
+	print_message("Command %s", command);
+	if (fp == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		print_message("line %s", line);
+		if (strstr(line, "--config") != NULL ||
+		    strstr(line, "-o") != NULL)
+			break;
+	}
+
+	pch = strtok(line, " ");
+	while (pch != NULL) {
+		if (strstr(pch, "--config") != NULL) {
+			if (strchr(pch, '=') != NULL)
+				strcpy(server_config_file,
+				       strchr(pch, '=') + 1);
+			else {
+				pch = strtok(NULL, " ");
+				strcpy(server_config_file, pch);
+			}
+			break;
+		}
+
+		if (strstr(pch, "-o") != NULL) {
+			pch = strtok(NULL, " ");
+			strcpy(server_config_file, pch);
+			break;
+		}
+		pch = strtok(NULL, " ");
+	}
+
+	pclose(fp);
+
+	D_FREE(dpid);
+	free(line);
+	return 0;
+}
+
+int verify_server_log_mask(char *host, char *server_config_file,
+			   char *log_mask){
+	char	command[256];
+	size_t	len = 0;
+	size_t	read;
+	char	*line = NULL;
+
+	snprintf(command, sizeof(command),
+		 "ssh %s cat %s", host, server_config_file);
+
+	FILE *fp = popen(command, "r");
+
+	if (fp == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		if (strstr(line, " log_mask") != NULL) {
+			if (strstr(line, log_mask) == NULL) {
+				print_message(
+					"Expected log_mask = %s, Found %s\n ",
+					log_mask, line);
+				return -DER_INVAL;
+			}
+		}
+	}
+
+	pclose(fp);
+	free(line);
+	return 0;
+}
+
+int get_server_log_file(char *host, char *server_config_file,
+			char *log_file)
+{
+	char	command[256];
+	size_t	len = 0;
+	size_t	read;
+	char	*line = NULL;
+
+	snprintf(command, sizeof(command),
+		 "ssh %s cat %s", host, server_config_file);
+
+	FILE *fp = popen(command, "r");
+
+	if (fp == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		if (strstr(line, " log_file") != NULL)
+			strcat(log_file, strrchr(line, ':') + 1);
+	}
+
+	pclose(fp);
+	free(line);
+	return 0;
+}
+
+int verify_state_in_log(char *host, char *log_file, char *state)
+{
+	char	command[1024];
+	size_t	len = 0;
+	size_t	read;
+	char	*line = NULL;
+	char	*pch = NULL;
+	int		length;
+	char	*tmp = NULL;
+	FILE	*fp;
+
+	D_ALLOC(tmp, 1024);
+	strcpy(tmp, log_file);
+
+	pch = strtok(tmp, "\n");
+	while (pch != NULL) {
+		length = strlen(pch);
+		if (pch[length - 1] == '\n')
+			pch[length - 1]  = '\0';
+
+		snprintf(command, sizeof(command),
+			 "ssh %s cat %s | grep \"%s\"", host, pch, state);
+		fp = popen(command, "r");
+		while ((read = getline(&line, &len, fp)) != -1) {
+			if (strstr(line, state) != NULL) {
+				print_message("Found state %s in Log file %s\n",
+					      state, pch);
+				goto out;
+			}
+		}
+		pch = strtok(NULL, " ");
+		pclose(fp);
+		free(line);
+	}
+
+	D_FREE(tmp);
+	return -DER_INVAL;
+out:
+	D_FREE(tmp);
+	return 0;
+}

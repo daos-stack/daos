@@ -982,7 +982,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1007,7 +1008,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
 				    &ap->cont, &cont_info, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "cont open failed: %d\n", rc);
+			fprintf(stderr, "failed to open container "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->c_uuid),
+				d_errdesc(rc), rc);
 			D_GOTO(out_disconnect, rc);
 		}
 	}
@@ -1086,7 +1089,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
 		rc2 = daos_cont_close(ap->cont, NULL);
 		if (rc2 != 0)
-			fprintf(stderr, "Container close failed: %d\n", rc2);
+			fprintf(stderr, "failed to close container "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ap->c_uuid),
+				d_errdesc(rc2), rc2);
 		if (rc == 0)
 			rc = rc2;
 	}
@@ -1095,7 +1100,9 @@ out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1129,14 +1136,16 @@ obj_op_hdlr(struct cmd_args_s *ap)
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		fprintf(stderr, "failed to connect to pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW,
 			&ap->cont, &cont_info, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "cont open failed: %d\n", rc);
+		fprintf(stderr, "failed to open container "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
 
@@ -1153,7 +1162,9 @@ obj_op_hdlr(struct cmd_args_s *ap)
 	/* Container close in normal and error flows: preserve rc */
 	rc2 = daos_cont_close(ap->cont, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Container close failed: %d\n", rc2);
+		fprintf(stderr, "failed to close container "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1161,7 +1172,9 @@ out_disconnect:
 	/* Pool disconnect in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
-		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+		fprintf(stderr, "failed to disconnect from pool "DF_UUIDF
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
+			rc2);
 	if (rc == 0)
 		rc = rc2;
 
@@ -1459,7 +1472,8 @@ main(int argc, char *argv[])
 
 	rc = daos_init();
 	if (rc != 0) {
-		fprintf(stderr, "failed to initialize daos: %d\n", rc);
+		fprintf(stderr, "failed to initialize daos: %s (%d)\n",
+			d_errdesc(rc), rc);
 		return 1;
 	}
 
