@@ -25,6 +25,7 @@ package pretty
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -56,9 +57,17 @@ func mockHostStorageMap(t *testing.T, hosts ...*mockHostStorage) control.HostSto
 
 func TestPretty_PrintNVMeHealthMap(t *testing.T) {
 	var (
-		controllerA = storage.MockNvmeController(1)
-		controllerB = storage.MockNvmeController(2)
+		controllerA    = storage.MockNvmeController(1)
+		controllerB    = storage.MockNvmeController(2)
+		controllerAwTS = storage.MockNvmeController(1)
 	)
+	tt, err := strconv.ParseUint("1405544146", 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	controllerAwTS.HealthStats.Timestamp = tt
+	ttStr := "2014-07-16 20:55:46 +0000 UTC"
+
 	for name, tc := range map[string]struct {
 		hsm         control.HostStorageMap
 		expPrintStr string
@@ -97,12 +106,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Power Cycles:%d
     Power On Duration:%s
     Unsafe Shutdowns:%d
-    Error Count:%d
     Media Errors:%d
-    Read Errors:%d
-    Write Errors:%d
-    Unmap Errors:%d
-    Checksum Errors:%d
     Error Log Entries:%d
   Critical Warnings:
     Temperature: WARNING
@@ -120,7 +124,60 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Power Cycles:%d
     Power On Duration:%s
     Unsafe Shutdowns:%d
-    Error Count:%d
+    Media Errors:%d
+    Error Log Entries:%d
+  Critical Warnings:
+    Temperature: WARNING
+    Available Spare: WARNING
+    Device Reliability: WARNING
+    Read Only: WARNING
+    Volatile Memory Backup: WARNING
+
+`,
+				controllerA.PciAddr, controllerA.Model, controllerA.FwRev,
+				controllerA.SocketID, humanize.Bytes(controllerA.Capacity()),
+				controllerA.HealthStats.TempK(), controllerA.HealthStats.TempC(),
+				controllerA.HealthStats.TempWarnTime, controllerA.HealthStats.TempCritTime,
+				controllerA.HealthStats.CtrlBusyTime, controllerA.HealthStats.PowerCycles,
+				time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
+				controllerA.HealthStats.UnsafeShutdowns, controllerA.HealthStats.MediaErrors,
+				controllerA.HealthStats.ErrorLogEntries,
+
+				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
+				humanize.Bytes(controllerB.Capacity()),
+				controllerB.HealthStats.TempK(), controllerB.HealthStats.TempC(),
+				controllerB.HealthStats.TempWarnTime, controllerB.HealthStats.TempCritTime,
+				controllerB.HealthStats.CtrlBusyTime, controllerB.HealthStats.PowerCycles,
+				time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
+				controllerB.HealthStats.UnsafeShutdowns, controllerB.HealthStats.MediaErrors,
+				controllerB.HealthStats.ErrorLogEntries,
+			),
+		},
+		"1 host; 1 device, fetched over drpc": {
+			hsm: mockHostStorageMap(t,
+				&mockHostStorage{
+					"host1",
+					&control.HostStorage{
+						NvmeDevices: storage.NvmeControllers{
+							controllerAwTS,
+						},
+					},
+				},
+			),
+			expPrintStr: fmt.Sprintf(`
+-----
+host1
+-----
+PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
+  Health Stats:
+    Timestamp:%s
+    Temperature:%dK(%.02fC)
+    Temperature Warning Duration:%dm0s
+    Temperature Critical Duration:%dm0s
+    Controller Busy Time:%dm0s
+    Power Cycles:%d
+    Power On Duration:%s
+    Unsafe Shutdowns:%d
     Media Errors:%d
     Read Errors:%d
     Write Errors:%d
@@ -135,27 +192,16 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Volatile Memory Backup: WARNING
 
 `,
-				controllerA.PciAddr, controllerA.Model, controllerA.FwRev, controllerA.SocketID,
-				humanize.Bytes(controllerA.Capacity()),
-				controllerA.HealthStats.TempK(), controllerA.HealthStats.TempC(),
-				controllerA.HealthStats.TempWarnTime, controllerA.HealthStats.TempCritTime,
-				controllerA.HealthStats.CtrlBusyTime, controllerA.HealthStats.PowerCycles,
-				time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
-				controllerA.HealthStats.UnsafeShutdowns, controllerA.HealthStats.ErrorCount,
-				controllerA.HealthStats.MediaErrors, controllerA.HealthStats.ReadErrors,
-				controllerA.HealthStats.WriteErrors, controllerA.HealthStats.UnmapErrors,
-				controllerA.HealthStats.ChecksumErrors, controllerA.HealthStats.ErrorLogEntries,
-
-				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
-				humanize.Bytes(controllerB.Capacity()),
-				controllerB.HealthStats.TempK(), controllerB.HealthStats.TempC(),
-				controllerB.HealthStats.TempWarnTime, controllerB.HealthStats.TempCritTime,
-				controllerB.HealthStats.CtrlBusyTime, controllerB.HealthStats.PowerCycles,
-				time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
-				controllerB.HealthStats.UnsafeShutdowns, controllerB.HealthStats.ErrorCount,
-				controllerB.HealthStats.MediaErrors, controllerB.HealthStats.ReadErrors,
-				controllerB.HealthStats.WriteErrors, controllerB.HealthStats.UnmapErrors,
-				controllerB.HealthStats.ChecksumErrors, controllerB.HealthStats.ErrorLogEntries,
+				controllerAwTS.PciAddr, controllerAwTS.Model, controllerAwTS.FwRev,
+				controllerAwTS.SocketID, humanize.Bytes(controllerAwTS.Capacity()), ttStr,
+				controllerAwTS.HealthStats.TempK(), controllerAwTS.HealthStats.TempC(),
+				controllerAwTS.HealthStats.TempWarnTime, controllerAwTS.HealthStats.TempCritTime,
+				controllerAwTS.HealthStats.CtrlBusyTime, controllerAwTS.HealthStats.PowerCycles,
+				time.Duration(controllerAwTS.HealthStats.PowerOnHours)*time.Hour,
+				controllerAwTS.HealthStats.UnsafeShutdowns, controllerAwTS.HealthStats.MediaErrors,
+				controllerAwTS.HealthStats.ReadErrors, controllerAwTS.HealthStats.WriteErrors,
+				controllerAwTS.HealthStats.UnmapErrors, controllerAwTS.HealthStats.ChecksumErrors,
+				controllerAwTS.HealthStats.ErrorLogEntries,
 			),
 		},
 	} {
@@ -543,12 +589,7 @@ host1
         Power Cycles:%d
         Power On Duration:%s
         Unsafe Shutdowns:%d
-        Error Count:%d
         Media Errors:%d
-        Read Errors:%d
-        Write Errors:%d
-        Unmap Errors:%d
-        Checksum Errors:%d
         Error Log Entries:%d
       Critical Warnings:
         Temperature: WARNING
@@ -562,10 +603,8 @@ host1
 				mockController.HealthStats.TempWarnTime, mockController.HealthStats.TempCritTime,
 				mockController.HealthStats.CtrlBusyTime, mockController.HealthStats.PowerCycles,
 				time.Duration(mockController.HealthStats.PowerOnHours)*time.Hour,
-				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.ErrorCount,
-				mockController.HealthStats.MediaErrors, mockController.HealthStats.ReadErrors,
-				mockController.HealthStats.WriteErrors, mockController.HealthStats.UnmapErrors,
-				mockController.HealthStats.ChecksumErrors, mockController.HealthStats.ErrorLogEntries,
+				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.MediaErrors,
+				mockController.HealthStats.ErrorLogEntries,
 			),
 		},
 	} {

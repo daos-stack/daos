@@ -27,10 +27,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func getTestIOServerInstance(logger logging.Logger) *IOServerInstance {
@@ -63,4 +66,21 @@ func TestServer_Instance_BioError(t *testing.T) {
 	if !strings.Contains(buf.String(), expectedOut) {
 		t.Fatal("No I/O error notification detected")
 	}
+}
+
+func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
+	instance := &IOServerInstance{}
+	fd, err := system.NewFaultDomainFromString("/one/two")
+	if err != nil {
+		t.Fatalf("couldn't create fault domain: %s", err)
+	}
+
+	updatedInstance := instance.WithHostFaultDomain(fd)
+
+	// Updated to include the fault domain
+	if diff := cmp.Diff(instance.hostFaultDomain, fd, cmp.AllowUnexported(system.FaultDomain{})); diff != "" {
+		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
+	}
+	// updatedInstance is the same ptr as instance
+	common.AssertEqual(t, updatedInstance, instance, "not the same structure")
 }
