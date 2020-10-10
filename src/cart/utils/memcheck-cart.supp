@@ -97,6 +97,9 @@
    fun:fi_getinfo@@FABRIC_1.3
    ...
 }
+# We couldn't find a rte_log_fini() function or similar on SPDK codebase to
+# suppress the leak warning message. The rte_log_init() function is called
+# from a constructor while loading the SPDK libraries.
 {
    spdk leak 0
    Memcheck:Leak
