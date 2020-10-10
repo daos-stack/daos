@@ -464,6 +464,37 @@ pipeline {
                 }
             }
             parallel {
+                stage('Build RPM on CentOS 7') {
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.mockbuild'
+                            dir 'utils/rpms/packaging'
+                            label 'docker_runner'
+                            additionalBuildArgs '$BUILDARGS'
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        buildRpm()
+                    }
+                    post {
+                        success {
+                            buildRpmPost condition: 'success'
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup'
+                        }
+                    }
+                }
                 stage('Build on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
