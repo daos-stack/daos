@@ -406,6 +406,11 @@ fi
 
 mv $DAOS_BASE/test.cov $DAOS_BASE/install/lib/daos/TESTING/ftest
 
+echo SCHAN15 - checking file permission
+ls -al $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
+chmod 777 $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
+ls -al $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
+
 if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} \\
                  ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
