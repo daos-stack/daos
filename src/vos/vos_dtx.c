@@ -2231,6 +2231,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 				DP_DTI(&dth->dth_xid), DP_RC(rc));
 		} else {
 			dtx_act_ent_cleanup(cont, dae, true);
+			dth->dth_ent = NULL;
 			dtx_evict_lid(cont, dae);
 		}
 	}
