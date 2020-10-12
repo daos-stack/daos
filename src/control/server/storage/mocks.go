@@ -161,7 +161,7 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 	return &ScmMountPoint{
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
 		TotalBytes: uint64(humanize.TByte) * uint64(idx),
-		AvailBytes: uint64(humanize.TByte/2) * uint64(idx),
+		AvailBytes: uint64(humanize.TByte/4) * uint64(idx), // 75% used
 	}
 }
 

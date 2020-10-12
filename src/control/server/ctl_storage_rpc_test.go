@@ -347,7 +347,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		bioHealthResp.Model = ctrlr.Model
 		bioHealthResp.Serial = ctrlr.Serial
 		bioHealthResp.TotalBytes = uint64(idx) * uint64(humanize.TByte)
-		bioHealthResp.AvailBytes = uint64(idx) * uint64(humanize.TByte)
+		bioHealthResp.AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
 
 		return ctrlr, bioHealthResp
 	}
@@ -377,7 +377,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 
 		// expect resultant controller to have updated utilisation values
 		ctrlr.Smddevices[0].TotalBytes = uint64(idx) * uint64(humanize.TByte)
-		ctrlr.Smddevices[0].AvailBytes = uint64(idx) * uint64(humanize.TByte)
+		ctrlr.Smddevices[0].AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
 
 		return ctrlr, smdDevRespDevice
 	}
@@ -756,8 +756,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			smsc: &scm.MockSysConfig{
-				MountUsageTotal: mockPbScmMount.TotalBytes,
-				MountUsageAvail: mockPbScmMount.AvailBytes,
+				GetfsUsageTotal: mockPbScmMount.TotalBytes,
+				GetfsUsageAvail: mockPbScmMount.AvailBytes,
 			},
 			cfg: newDefaultConfiguration(nil).WithServers(
 				ioserver.NewConfig().

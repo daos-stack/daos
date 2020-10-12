@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -170,11 +170,11 @@ func (s LinuxProvider) Unmount(target string, flags int) error {
 	return unix.Unmount(target, flags)
 }
 
-// MountUsage retrieves total and available byte counts for a mountpoint.
-func (s LinuxProvider) MountUsage(target string) (uint64, uint64, error) {
-	stBuf := new(syscall.Statfs_t)
+// GetfsUsage retrieves total and available byte counts for a mountpoint.
+func (s LinuxProvider) GetfsUsage(target string) (uint64, uint64, error) {
+	stBuf := new(unix.Statfs_t)
 
-	if err := syscall.Statfs(target, stBuf); err != nil {
+	if err := unix.Statfs(target, stBuf); err != nil {
 		return 0, 0, err
 	}
 

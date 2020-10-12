@@ -72,30 +72,25 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) *ctlpb.
 
 // newPrepareScmResp sets protobuf SCM prepare response with results.
 func newPrepareScmResp(inResp *scm.PrepareResponse, inErr error) (*ctlpb.PrepareScmResp, error) {
-	var info string
-	var err error
 	outResp := new(ctlpb.PrepareScmResp)
-
-	defer func() {
-		if err != nil {
-			return
-		}
-		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_SCM, info)
-	}()
+	outResp.State = new(ctlpb.ResponseState)
 
 	if inErr != nil {
+		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_SCM, "")
 		return outResp, nil
 	}
 
 	if inResp.RebootRequired {
-		info = scm.MsgRebootRequired
 		outResp.Rebootrequired = true
+		outResp.State.Info = scm.MsgRebootRequired
 	}
 
 	outResp.Namespaces = make(proto.ScmNamespaces, 0, len(inResp.Namespaces))
-	err = (*proto.ScmNamespaces)(&outResp.Namespaces).FromNative(inResp.Namespaces)
+	if err := (*proto.ScmNamespaces)(&outResp.Namespaces).FromNative(inResp.Namespaces); err != nil {
+		return nil, err
+	}
 
-	return outResp, err
+	return outResp, nil
 }
 
 func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (*ctlpb.PrepareScmResp, error) {
@@ -209,23 +204,16 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*bdev.ScanRespo
 // newScanBdevResp populates protobuf NVMe scan response with controller info
 // including health statistics or metadata if requested.
 func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr error) (*ctlpb.ScanNvmeResp, error) {
-	var info string
-	var err error
 	outResp := new(ctlpb.ScanNvmeResp)
-
-	defer func() {
-		if err != nil {
-			return
-		}
-		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_NVME, info)
-	}()
+	outResp.State = new(ctlpb.ResponseState)
 
 	if inErr != nil {
+		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
 		return outResp, nil
 	}
 
 	pbCtrlrs := make(proto.NvmeControllers, 0, len(inResp.Controllers))
-	if err = pbCtrlrs.FromNative(inResp.Controllers); err != nil {
+	if err := pbCtrlrs.FromNative(inResp.Controllers); err != nil {
 		return nil, err
 	}
 
@@ -272,7 +260,7 @@ func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResp
 			if !common.Includes(srv.scmConfig().DeviceList, ns.BlockDevice) {
 				continue
 			}
-			mp, err := srv.scmProvider.MountUsage(srv.scmConfig().MountPoint)
+			mp, err := srv.scmProvider.GetfsUsage(srv.scmConfig().MountPoint)
 			if err != nil {
 				return nil, err
 			}
@@ -285,32 +273,29 @@ func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResp
 
 // newScanScmResp sets protobuf SCM scan response with module or namespace info.
 func newScanScmResp(inResp *scm.ScanResponse, inErr error) (*ctlpb.ScanScmResp, error) {
-	var info string
-	var err error
 	outResp := new(ctlpb.ScanScmResp)
-
-	defer func() {
-		if err != nil {
-			return
-		}
-		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_SCM, info)
-	}()
+	outResp.State = new(ctlpb.ResponseState)
 
 	if inErr != nil {
+		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_SCM, "")
 		return outResp, nil
 	}
 
 	if len(inResp.Namespaces) == 0 {
 		outResp.Modules = make(proto.ScmModules, 0, len(inResp.Modules))
-		err = (*proto.ScmModules)(&outResp.Modules).FromNative(inResp.Modules)
+		if err := (*proto.ScmModules)(&outResp.Modules).FromNative(inResp.Modules); err != nil {
+			return nil, err
+		}
 
-		return outResp, err
+		return outResp, nil
 	}
 
 	outResp.Namespaces = make(proto.ScmNamespaces, 0, len(inResp.Namespaces))
-	err = (*proto.ScmNamespaces)(&outResp.Namespaces).FromNative(inResp.Namespaces)
+	if err := (*proto.ScmNamespaces)(&outResp.Namespaces).FromNative(inResp.Namespaces); err != nil {
+		return nil, err
+	}
 
-	return outResp, err
+	return outResp, nil
 }
 
 func (c *ControlService) scanScm(ctx context.Context) (*ctlpb.ScanScmResp, error) {

@@ -42,9 +42,9 @@ type (
 		GetfsStr        string
 		GetfsErr        error
 		SourceToTarget  map[string]string
-		MountUsageTotal uint64
-		MountUsageAvail uint64
-		MountUsageErr   error
+		GetfsUsageTotal uint64
+		GetfsUsageAvail uint64
+		GetfsUsageErr   error
 	}
 
 	MockSysProvider struct {
@@ -104,8 +104,8 @@ func (msp *MockSysProvider) Getfs(_ string) (string, error) {
 	return msp.cfg.GetfsStr, msp.cfg.GetfsErr
 }
 
-func (msp *MockSysProvider) MountUsage(_ string) (uint64, uint64, error) {
-	return msp.cfg.MountUsageTotal, msp.cfg.MountUsageAvail, msp.cfg.MountUsageErr
+func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
+	return msp.cfg.GetfsUsageTotal, msp.cfg.GetfsUsageAvail, msp.cfg.GetfsUsageErr
 }
 
 func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {

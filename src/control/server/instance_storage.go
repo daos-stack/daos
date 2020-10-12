@@ -178,7 +178,7 @@ func (srv *IOServerInstance) logScmStorage() error {
 		return errors.New("superblock path doesn't match config mountpoint")
 	}
 
-	mp, err := srv.scmProvider.MountUsage(scmMount)
+	mp, err := srv.scmProvider.GetfsUsage(scmMount)
 	if err != nil {
 		return err
 	}

@@ -68,7 +68,7 @@ func PrintHostStorageMap(hsm control.HostStorageMap, out io.Writer, opts ...Prin
 	if len(hsm) == 0 {
 		return nil
 	}
-	fc := GetPrintConfig(opts...)
+	fc := getPrintConfig(opts...)
 
 	if fc.Verbose {
 		return printHostStorageMapVerbose(hsm, out, opts...)
@@ -107,13 +107,15 @@ func PrintHostStorageSpaceMap(hsm control.HostStorageMap, out io.Writer) error {
 	}
 
 	hostsTitle := "Hosts"
-	scmTitle := "SCM Total"
-	scmFreeTitle := "SCM Free"
-	nvmeTitle := "NVMe Total"
-	nvmeFreeTitle := "NVMe Free"
+	scmTitle := "SCM-Total"
+	scmFreeTitle := "SCM-Free"
+	scmUsageTitle := "SCM-Used"
+	nvmeTitle := "NVMe-Total"
+	nvmeFreeTitle := "NVMe-Free"
+	nvmeUsageTitle := "NVMe-Used"
 
 	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, scmFreeTitle,
-		nvmeTitle, nvmeFreeTitle)
+		scmUsageTitle, nvmeTitle, nvmeFreeTitle, nvmeUsageTitle)
 	tablePrint.InitWriter(out)
 	table := []txtfmt.TableRow{}
 
@@ -121,11 +123,13 @@ func PrintHostStorageSpaceMap(hsm control.HostStorageMap, out io.Writer) error {
 		hss := hsm[key]
 		hosts := getPrintHosts(hss.HostSet.RangedString())
 		row := txtfmt.TableRow{hostsTitle: hosts}
-		fmt.Printf("scm space: %s", humanize.Bytes(hss.HostStorage.ScmNamespaces.Total()))
-		row[scmTitle] = humanize.Bytes(hss.HostStorage.ScmNamespaces.Total())
-		row[scmFreeTitle] = humanize.Bytes(hss.HostStorage.ScmNamespaces.Free())
-		row[nvmeTitle] = humanize.Bytes(hss.HostStorage.NvmeDevices.Total())
-		row[nvmeFreeTitle] = humanize.Bytes(hss.HostStorage.NvmeDevices.Free())
+		storage := hss.HostStorage
+		row[scmTitle] = humanize.Bytes(storage.ScmNamespaces.Total())
+		row[scmFreeTitle] = humanize.Bytes(storage.ScmNamespaces.Free())
+		row[scmUsageTitle] = storage.ScmNamespaces.PercentUsage()
+		row[nvmeTitle] = humanize.Bytes(storage.NvmeDevices.Total())
+		row[nvmeFreeTitle] = humanize.Bytes(storage.NvmeDevices.Free())
+		row[nvmeUsageTitle] = storage.NvmeDevices.PercentUsage()
 		table = append(table, row)
 	}
 
@@ -187,7 +191,7 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 	if len(hsm) == 0 {
 		return nil
 	}
-	fc := GetPrintConfig(opts...)
+	fc := getPrintConfig(opts...)
 
 	if fc.Verbose {
 		return printStorageFormatMapVerbose(hsm, out, opts...)
@@ -223,7 +227,7 @@ func printSmdDevice(dev *storage.SmdDevice, out io.Writer, opts ...PrintConfigOp
 
 func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOption) error {
 	_, err := fmt.Fprintf(out, "Rank:%d Targets:%+v", pool.Rank, pool.TargetIDs)
-	cfg := GetPrintConfig(opts...)
+	cfg := getPrintConfig(opts...)
 	if cfg.Verbose {
 		_, err = fmt.Fprintf(out, " Blobs:%+v", pool.Blobs)
 	}

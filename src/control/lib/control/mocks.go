@@ -264,8 +264,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		ncs := make(storage.NvmeControllers, 0)
 		for _, i := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
 			sd := storage.MockSmdDevice(int32(i))
-			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)   // 36 TB cumulative
-			sd.AvailBytes = uint64(humanize.TByte/2) * uint64(i) // 18 TB cumulative
+			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)
+			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
 			nc := storage.MockNvmeController(int32(i))
 			nc.SmdDevices = append(nc.SmdDevices, sd)
 			ncs = append(ncs, nc)

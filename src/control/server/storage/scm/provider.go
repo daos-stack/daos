@@ -158,7 +158,7 @@ type (
 		system.UnmountProvider
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
-		MountUsage(string) (uint64, uint64, error)
+		GetfsUsage(string) (uint64, uint64, error)
 	}
 
 	defaultSystemProvider struct {
@@ -813,9 +813,9 @@ func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
 }
 
-// MountUsage returns space utilisation info for a mount point.
-func (p *Provider) MountUsage(target string) (*storage.ScmMountPoint, error) {
-	total, avail, err := p.sys.MountUsage(target)
+// GetfsUsage returns space utilisation info for a mount point.
+func (p *Provider) GetfsUsage(target string) (*storage.ScmMountPoint, error) {
+	total, avail, err := p.sys.GetfsUsage(target)
 	if err != nil {
 		return nil, err
 	}

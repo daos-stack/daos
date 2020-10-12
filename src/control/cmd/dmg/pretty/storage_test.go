@@ -289,9 +289,9 @@ host[0-1023] 1 B (1 module) 1 B (1 controller)
 			},
 			displaySpaceUsage: true,
 			expPrintStr: `
-Hosts SCM Total SCM Free NVMe Total NVMe Free 
------ --------- -------- ---------- --------- 
-host1 3.0 TB    1.5 TB   36 TB      18 TB     
+Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
+----- --------- -------- -------- ---------- --------- --------- 
+host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %      
 `,
 		},
 	} {

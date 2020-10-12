@@ -115,6 +115,7 @@ func (srv *IOServerInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeCon
 	}
 
 	for dev, status := range res.DeviceResponses {
+		// TODO DAOS-5828: passing status.Error directly triggers segfault
 		var err error
 		if status.Error != nil {
 			err = status.Error

@@ -361,6 +361,11 @@ func (sns ScmNamespaces) Free() (tb uint64) {
 	return
 }
 
+// PercentUsage returns the percentage of used storage space.
+func (sns ScmNamespaces) PercentUsage() string {
+	return common.PercentageString(sns.Total()-sns.Free(), sns.Total())
+}
+
 // Summary reports total storage space and the number of namespaces.
 //
 // Capacity given in IEC standard units.
@@ -415,6 +420,11 @@ func (ncs NvmeControllers) Free() (tb uint64) {
 		tb += (*NvmeController)(c).Free()
 	}
 	return
+}
+
+// PercentUsage returns the percentage of used storage space.
+func (ncs NvmeControllers) PercentUsage() string {
+	return common.PercentageString(ncs.Total()-ncs.Free(), ncs.Total())
 }
 
 // Summary reports accumulated storage space and the number of controllers.
