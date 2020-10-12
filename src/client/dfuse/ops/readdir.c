@@ -57,7 +57,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 {
 	struct iterate_data	idata = {};
 	uint32_t		count;
-	int			rc READDIR_COUNT - 1;
+	int			rc = READDIR_COUNT - 1;
 
 	idata.dre = oh->doh_dre;
 	idata.base_offset = offset;
