@@ -1038,10 +1038,10 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			  crt_cbinfo.cci_rc);
 
 	RPC_TRACE(DB_TRACE, rpc_priv,
-		  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
+		  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
 		  rpc_priv->crp_pub.cr_ep.ep_rank,
 		  rpc_priv->crp_pub.cr_ep.ep_tag,
-		  crt_cbinfo.cci_rc);
+		  DP_RC(crt_cbinfo.cci_rc));
 
 	rpc_priv->crp_complete_cb(&crt_cbinfo);
 
