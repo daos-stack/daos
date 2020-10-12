@@ -41,6 +41,7 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+/** This callback is invoked only if the tree is not empty */
 static int
 empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 		 vos_iter_type_t type, vos_iter_param_t *param, void *cb_arg,
