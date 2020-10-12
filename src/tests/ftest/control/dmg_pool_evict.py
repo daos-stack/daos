@@ -67,9 +67,9 @@ class DmgPoolEvictTest(TestWithServers):
         # -1012.
         daos_cmd = self.get_daos_command()
         try:
-            cmd_res = daos_cmd.pool_list_cont(
+            daos_cmd.pool_list_cont(
                 pool=self.pool[1].uuid, svc=self.pool[1].svc_ranks[0])
-            self.fail("daos pool list-cont suceeded after pool evict!")
+            self.fail("daos pool list-cont succeeded after pool evict!")
         except CommandFailure:
             self.log.info("daos pool list-cont failed as expected")
 
