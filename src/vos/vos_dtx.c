@@ -246,10 +246,11 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_dtx_act_ent	*dae_old;
 
 	dae_old = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	D_ASSERTF(0, "NOT allow to update act DTX entry for "DF_DTI
-		  " from epoch "DF_X64" to "DF_X64"\n",
-		  DP_DTI(&DAE_XID(dae_old)),
-		  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
+	if (DAE_EPOCH(dae_old) != DAE_EPOCH(dae_new))
+		D_ASSERTF(0, "NOT allow to update act DTX entry for "DF_DTI
+			  " from epoch "DF_X64" to "DF_X64"\n",
+			  DP_DTI(&DAE_XID(dae_old)),
+			  DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
 
 	return 0;
 }
@@ -811,6 +812,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 				if (umoff_is_null(rec_off)) {
 					D_ERROR("No space to store CMT DTX OID "
 						DF_DTI"\n", DP_DTI(dti));
+					*fatal = true;
 					D_GOTO(out, rc = -DER_NOSPACE);
 				}
 
@@ -1647,7 +1649,7 @@ new_blob:
 	if (umoff_is_null(dbd_off)) {
 		D_ERROR("No space to store committed DTX %d "DF_DTI"\n",
 			count, DP_DTI(&dtis[cur]));
-		return committed > 0 ? committed : -DER_NOSPACE;
+		return -DER_NOSPACE;
 	}
 
 	dbd = umem_off2ptr(umm, dbd_off);
