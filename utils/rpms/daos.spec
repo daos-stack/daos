@@ -2,30 +2,30 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%define create_file_list() (
-  touch ${1}
-  for file in ${2}
-  do
-    echo "${file}" >> ${1}
-    file_name_w_ext=${file##*/}
-    file_name=${name_w_ext%.*}
-    utils=$(grep -l -R -E "(from|import) ${file_name}" ${3}/ftest/util/* ${4})
-    for util_file in ${utils}
-    do
-      echo "${util_file}" >> ${1}
-      util_name_file_w_ext=${util_file##*/}
-      util_name=${util_name_w_ext%.*}
+%define create_file_list() ( \
+  touch ${1} \
+  for file in ${2} \
+  do \
+    echo "${file}" >> ${1} \
+    file_name_w_ext=${file##*/} \
+    file_name=${name_w_ext%.*} \
+    utils=$(grep -l -R -E "(from|import) ${file_name}" ${3}/ftest/util/* ${4}) \
+    for util_file in ${utils} \
+    do \
+      echo "${util_file}" >> ${1} \
+      util_name_file_w_ext=${util_file##*/} \
+      util_name=${util_name_w_ext%.*} \
       ftests=$(grep -l -R -E "(from|import) (${util_name}|${file_name})" \
-        ${3}/ftest/* --exclude-dir=soak --exclude-dir=util ${4})
-      for ftest_file in ${ftests}
-      do
-        echo "${ftest_file}" >> ${1}
-        echo "${ftest_file%.*}.yaml" >> ${1}
-      done
-    done
-  done
-  echo "Files in ${1}:"
-  cat ${1}
+        ${3}/ftest/* --exclude-dir=soak --exclude-dir=util ${4}) \
+      for ftest_file in ${ftests} \
+      do \
+        echo "${ftest_file}" >> ${1} \
+        echo "${ftest_file%.*}.yaml" >> ${1} \
+      done \
+    done \
+  done \
+  echo "Files in ${1}:" \
+  cat ${1} \
 )
 
 %if (0%{?suse_version} >= 1500)
