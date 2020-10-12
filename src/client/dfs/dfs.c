@@ -3165,6 +3165,8 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		return EINVAL;
 	if (dfs->amode != O_RDWR)
 		return EPERM;
+	if ((obj->flags & O_ACCMODE) == O_RDONLY)
+		return EPERM;
 
 	euid = geteuid();
 	/** only root or owner can change mode */

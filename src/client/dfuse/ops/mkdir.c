@@ -58,10 +58,6 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(release, rc);
 
-	/* TODO, Check for mode u+w and if not present then call dfs_dup()
-	 * to re-open with the right permissions.
-	 */
-
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 
