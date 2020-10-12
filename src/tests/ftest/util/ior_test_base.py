@@ -93,12 +93,20 @@ class IorTestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def create_cont(self):
-        """Create a TestContainer object to be used to create container."""
+    def create_cont(self, oclass):
+        """Create a TestContainer object to be used to create container.
+        Args:
+            oclass: Explicitly supply object class for container create
+        """
         # Get container params
         self.container = TestContainer(
             self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
+
+        # update object class for container create, if supplied
+        # explicitly.
+        if oclass:
+            self.container.oclass.update(oclass)
 
         # create container
         self.container.create()
@@ -183,7 +191,7 @@ class IorTestBase(TestWithServers):
             self.dfuse = None
         return out
 
-    def update_ior_cmd_with_pool(self, create_cont=True):
+    def update_ior_cmd_with_pool(self, create_cont=True, oclass=None):
         """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -193,7 +201,7 @@ class IorTestBase(TestWithServers):
         # It will not enable checksum feature
         if create_cont:
             self.pool.connect()
-            self.create_cont()
+            self.create_cont(oclass)
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)

@@ -66,8 +66,13 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 self.single_client(api)
 
                 # run mdtest and ior
-                self.execute_mdtest()
-                self.run_ior_with_pool()
+                self.execute_mdtest(oclass=oclass)
+                # container destroy
+                self.container.destroy()
+                self.update_ior_cmd_with_pool(oclass=oclass)
+                self.run_ior_with_pool(create_pool=False)
+                # container destroy
+                self.container.destroy()
 
     def test_largefilecount_rc(self):
         """Jira ID: DAOS-3845.
@@ -102,5 +107,10 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 self.single_client(api)
 
                 # run mdtest and ior
-                self.execute_mdtest()
-                self.run_ior_with_pool()
+                self.execute_mdtest(oclass=oclass)
+                # container destroy
+                self.container.destroy()
+                self.update_ior_cmd_with_pool(oclass=oclass)
+                self.run_ior_with_pool(create_pool=False)
+                # container destroy
+                self.container.destroy()

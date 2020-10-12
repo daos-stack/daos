@@ -30,6 +30,7 @@ from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils_base import CommandFailure
+from test_utils_container import TestContainer
 from job_manager_utils import Mpirun, Orterun
 from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
@@ -87,26 +88,23 @@ class MdtestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def _create_cont(self):
+    def _create_cont(self, oclass):
         """Create a container.
-
-        Returns:
-            str: UUID of the created container
-
+        Args:
+            oclass (string): Pass object class type for container create
+                             explicitly.
         """
-        cont_type = self.params.get("type", "/run/container/*")
-        result = self.daos_cmd.container_create(
-            pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont_type=cont_type)
 
-        # Extract the container UUID from the daos container create output
-        cont_uuid = re.findall(
-            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
-        if not cont_uuid:
-            self.fail(
-                "Error obtaining the container uuid from: {}".format(
-                    result.stdout))
-        return cont_uuid[0]
+        # Get container params
+        self.container = TestContainer(
+            self.pool, daos_command=DaosCommand(self.bin))
+        self.container.get_params(self)
+        # update oclass param if specified
+        if oclass:
+            self.container.oclass.update(oclass)
+
+        # create container
+        self.container.create()
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -117,7 +115,7 @@ class MdtestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont())
+        self.dfuse.set_dfuse_cont_param(self.container)
         self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
 
         try:
@@ -129,20 +127,24 @@ class MdtestBase(TestWithServers):
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 
-    def execute_mdtest(self):
-        """Runner method for Mdtest."""
+    def execute_mdtest(self, create_cont=True, oclass=None):
+        """Runner method for Mdtest.
+        Args:
+            create_cont (bool): Create container if true
+            oclass (string): Pass object class type for container create
+        """
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
+        # create container
+        if create_cont:
+            self._create_cont(oclass)
         # set Mdtest params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
-            # Connect to the pool, create container and then start dfuse
-            # Uncomment below two lines once DAOS-3355 is resolved
-            # self.pool.connect()
-            # self.create_cont()
+            # start dfuse
             self._start_dfuse()
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
