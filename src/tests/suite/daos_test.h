@@ -332,18 +332,18 @@ void test_rebuild_wait(test_arg_t **args, int args_cnt);
 void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config, const d_rank_list_t *svc,
 			 d_rank_t rank, int tgt);
-void daos_add_target(const uuid_t pool_uuid, const char *grp,
-		     const char *dmg_config, const d_rank_list_t *svc,
-		     d_rank_t rank, int tgt);
+void daos_reint_target(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank, int tgt);
 void daos_drain_target(const uuid_t pool_uuid, const char *grp,
 		       const char *dmg_config, const d_rank_list_t *svc,
 		       d_rank_t rank, int tgt);
 void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 			 const char *dmg_config, const d_rank_list_t *svc,
 			 d_rank_t rank);
-void daos_add_server(const uuid_t pool_uuid, const char *grp,
-		     const char *dmg_config, const d_rank_list_t *svc,
-		     d_rank_t rank);
+void daos_reint_server(const uuid_t pool_uuid, const char *grp,
+		       const char *dmg_config, const d_rank_list_t *svc,
+		       d_rank_t rank);
 
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
