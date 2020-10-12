@@ -797,7 +797,7 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *rank_list,
 	for (i = 0; i < ntargets; ++i)
 		doms[i] = 1;
 
-	rc = ds_pool_add(pool_uuid, ntargets, tgt_uuids, rank_list,
+	rc = ds_pool_extend(pool_uuid, ntargets, tgt_uuids, rank_list,
 			    ARRAY_SIZE(doms), doms, ranks);
 
 	d_rank_list_free(ranks);
