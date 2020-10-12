@@ -423,7 +423,7 @@ free_htables:
 						true /* force */);
 		if (rc2 != 0)
 			D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
-				DP_RC(rc));
+				DP_RC(rc2));
 	}
 	D_FREE(htables);
 	grp_priv->gp_lookup_cache = NULL;
@@ -451,7 +451,7 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 					true /* force */);
 		if (rc2 != 0) {
 			D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
-				DP_RC(rc));
+				DP_RC(rc2));
 			rc = rc ? rc : rc2;
 		}
 	}
