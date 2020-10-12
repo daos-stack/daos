@@ -29,6 +29,7 @@
 #include <gurt/list.h>
 
 #include <mercury.h>
+#include <mercury_bulk.h>
 #include <mercury_types.h>
 #include <mercury_macros.h>
 #include <mercury_proc.h>
