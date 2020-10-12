@@ -79,20 +79,6 @@ This script has 4 modes that can be executed independently if needed.
 CART_LOGTEST_PATH="$(dirname $(readlink -f ${0}))/cart/cart_logtest.py"
 
 #######################################
-# Print set GLOBAL variables.
-#######################################
-display_set_vars() {
-    echo "Set Variables:
-    COMPRESS = ${COMPRESS}
-    EXCLUDE_ZIP = ${EXCLUDE_ZIP}
-    THRESHOLD = ${THRESHOLD}
-    ARCHIVE_DEST = ${ARCHIVE_DEST}
-    FILES_TO_PROCESS = ${FILES_TO_PROCESS}
-    CART_LOGTEST = ${CART_LOGTEST}
-    VERBOSE = ${VERBOSE}"
-}
-
-#######################################
 # Check if the files exist on this host.
 # Arguments:
 #   $1: local logs to process
@@ -180,15 +166,15 @@ list_tag_files() {
 #   1: No VM detected or skipped
 #######################################
 check_hw() {
-    dmesg | grep "Hypervisor detected" >/dev/null 2>&1
-    ret=$?
-    if [ ${ret} -eq 0 ]; then
+    if dmesg | grep "Hypervisor detected" >/dev/null 2>&1; then
+        # This host is a VM
         if [ "${1}" == "true" ]; then
             echo "  Running compression on a VM host"
-            ret=1
+            return 1
         fi
+        return 0
     fi
-    return ${ret}
+    return 1
 }
 
 #######################################
@@ -325,10 +311,14 @@ while getopts "vhxzca:f:t:" opt; do
 done
 shift "$((OPTIND -1))"
 
-if [ "${VERBOSE}" == "true" ]; then
-    display_set_vars
-    set -ux
+script_name=$(basename "${0}")
+log_file="/tmp/${script_name%%.*}_$(/bin/date +%Y%m%d_%H%M%S).log"
+if [ "${VERBOSE}" != "true" ]; then
+    # Redirect 'set -e' output to a log file if not verbose
+    exec 2> "${log_file}"
 fi
+set -ex
+echo "Logging ${script_name} output to ${log_file}"
 
 # Verify files have been specified and they exist on this host
 check_files_input "${FILES_TO_PROCESS}"
@@ -371,6 +361,9 @@ if [ -n "${ARCHIVE_DEST}" ]; then
     if [ ${ret} -ne 0 ]; then
         rc=1
     fi
+
+    # Finally archive this script's log file
+    scp_files "${log_file}" "${ARCHIVE_DEST}"
 fi
 
 exit ${rc}

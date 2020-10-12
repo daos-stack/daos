@@ -920,7 +920,8 @@ def compress_log_files(avocado_logs_dir):
     """
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
-    command = [get_remote_file_command(), "-z", "-x", "-f {}".format(logs_dir)]
+    command = [
+        get_remote_file_command(), "-z", "-x", "-v", "-f {}".format(logs_dir)]
     print(get_output(command, check=False))
 
 
