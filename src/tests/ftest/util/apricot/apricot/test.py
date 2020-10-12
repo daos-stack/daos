@@ -485,7 +485,7 @@ class TestWithServers(TestWithoutServers):
         filename = "{}_{}_{}.yaml".format(self.config_file_base, name, command)
         return os.path.join(self.tmp, filename)
 
-    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=5):
+    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=15):
         """Add a new daos agent manager object to the agent manager list.
 
         Args:
