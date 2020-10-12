@@ -34,6 +34,8 @@ if [ -n "$arts" ]; then
   mv $(echo $arts | tr '\n' ' ') "Functional/"
 fi
 
+echo SCHAN15 - $PWD
+
 if [ -e test.cov* ]; then
   mkdir -p "Functional/covs$STAGE_NAME"
   mv test.cov* "Functional/covs$STAGE_NAME"

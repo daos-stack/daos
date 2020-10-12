@@ -237,6 +237,24 @@ if ! $TEST_RPMS; then
     sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
 	    sudo chown root /usr/bin/daos_admin && \
 	    sudo chmod 4755 /usr/bin/daos_admin
+
+    echo SCHAN15 - cov setup for Jenkins user
+    mkdir -p /var/tmp/jenkins
+    rm -f /var/tmp/jenkins/test.cov_j_*
+    cp $DAOS_BASE/test.cov /var/tmp/jenkins/test.cov_j_\${HOSTNAME%%.*}
+    ls -al /var/tmp/jenkins
+    cp ~/.bashrc ~/.bashrc.bak
+    echo \"export COVFILE=/var/tmp/jenkins/test.cov_j_\${HOSTNAME%%.*}\" >> ~/.bashrc
+    cat ~/.bashrc
+
+    echo SCHAN15 - cov setup for root user
+    sudo mkdir -p /var/tmp/root
+    sudo rm -f /var/tmp/root/test.cov_r_*
+    sudo cp $DAOS_BASE/test.cov /var/tmp/root/test.cov_r_\${HOSTNAME%%.*} 
+    sudo ls -al /var/tmp/root
+    sudo cp ~/.bashrc ~/.bashrc.bak
+    sudo echo \"export COVFILE=/var/tmp/root/test.cov_r_\${HOSTNAME%%.*}\" >> ~/.bashrc
+    sudo cat ~/.bashrc
 fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
@@ -404,12 +422,12 @@ else
 fi
 # now run it!
 
-mv $DAOS_BASE/test.cov $DAOS_BASE/install/lib/daos/TESTING/ftest
+#mv $DAOS_BASE/test.cov $DAOS_BASE/install/lib/daos/TESTING/ftest
 
-echo SCHAN15 - checking file permission
-ls -al $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
-chmod 777 $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
-ls -al $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
+#echo SCHAN15 - checking file permission
+#ls -al $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
+#chmod 777 $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
+#ls -al $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov
 
 if ! ./launch.py -cris\${process_cores}a -ts ${TEST_NODES} ${NVME_ARG} \\
                  ${TEST_TAG_ARR[*]}; then
@@ -418,7 +436,7 @@ else
     rc=0
 fi
 
-mv $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov $DAOS_BASE/
+#mv $DAOS_BASE/install/lib/daos/TESTING/ftest/test.cov $DAOS_BASE/
 
 exit \$rc"; then
     rc=${PIPESTATUS[0]}
@@ -431,6 +449,23 @@ else
         exit 0
     fi
     rc=0
+fi
+
+if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
+    -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
+if ! $TEST_RPMS; then
+    echo SCHAN15 - cov cleanup for Jenkins user
+    mv /var/tmp/jenkins/test.cov_j_\${HOSTNAME%%.*} $DAOS_BASE
+    ls -al $DAOS_BASE
+    mv ~/.bashrc.bak ~/.bashrc
+
+    echo SCHAN15 - cov cleanup for root user
+    sudo mv /var/tmp/root/test.cov_r_\${HOSTNAME%%.*} $DAOS_BASE
+    sudo ls -al $DAOS_BASE
+    sudo mv ~/.bashrc.bak ~/.bashrc
+fi"; then
+    echo "Copy covfile failed"
+    exit 1
 fi
 
 exit "$rc"
