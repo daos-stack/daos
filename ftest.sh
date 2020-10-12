@@ -238,23 +238,15 @@ if ! $TEST_RPMS; then
 	    sudo chown root /usr/bin/daos_admin && \
 	    sudo chmod 4755 /usr/bin/daos_admin
 
-    echo SCHAN15 - cov setup for Jenkins user
-    mkdir -p /var/tmp/jenkins
-    rm -f /var/tmp/jenkins/test.cov_j_*
-    cp $DAOS_BASE/test.cov /var/tmp/jenkins/test.cov_j_\${HOSTNAME%%.*}
-    ls -al /var/tmp/jenkins
+    echo SCHAN15 - cov setup
+    mkdir -p /var/tmp/cov
+    rm -f /var/tmp/cov/test.cov*
+    cp $DAOS_BASE/test.cov /var/tmp/cov/test.cov_\${HOSTNAME%%.*}
+    chmod 777 /var/tmp/cov/test.cov_\${HOSTNAME%%.*}
+    ls -al /var/tmp/cov
     cp ~/.bashrc ~/.bashrc.bak
-    echo \"export COVFILE=/var/tmp/jenkins/test.cov_j_\${HOSTNAME%%.*}\" >> ~/.bashrc
+    echo \"export COVFILE=/var/tmp/cov/test.cov_\${HOSTNAME%%.*}\" >> ~/.bashrc
     cat ~/.bashrc
-
-    echo SCHAN15 - cov setup for root user
-    sudo mkdir -p /var/tmp/root
-    sudo rm -f /var/tmp/root/test.cov_r_*
-    sudo cp $DAOS_BASE/test.cov /var/tmp/root/test.cov_r_\${HOSTNAME%%.*} 
-    sudo ls -al /var/tmp/root
-    sudo cp ~/.bashrc ~/.bashrc.bak
-    sudo echo \"export COVFILE=/var/tmp/root/test.cov_r_\${HOSTNAME%%.*}\" >> ~/.bashrc
-    sudo cat ~/.bashrc
 fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
@@ -454,15 +446,11 @@ fi
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 if ! $TEST_RPMS; then
-    echo SCHAN15 - cov cleanup for Jenkins user
-    mv /var/tmp/jenkins/test.cov_j_\${HOSTNAME%%.*} $DAOS_BASE
+    echo SCHAN15 - cov cleanup
+    mv /var/tmp/cov/test.cov_\${HOSTNAME%%.*} $DAOS_BASE
     ls -al $DAOS_BASE
     mv ~/.bashrc.bak ~/.bashrc
-
-    echo SCHAN15 - cov cleanup for root user
-    sudo mv /var/tmp/root/test.cov_r_\${HOSTNAME%%.*} $DAOS_BASE
-    sudo ls -al $DAOS_BASE
-    sudo mv ~/.bashrc.bak ~/.bashrc
+    cat ~/.bashrc
 fi"; then
     echo "Copy covfile failed"
     exit 1
