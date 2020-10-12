@@ -982,7 +982,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to connect to pool "DF_UUIDF
-		        ": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
