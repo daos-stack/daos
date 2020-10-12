@@ -111,7 +111,6 @@ type (
 		Model           string `json:"model"`
 		Serial          string `json:"serial"`
 		Timestamp       uint64 `json:"timestamp"`
-		ErrorCount      uint64 `json:"err_count"`
 		TempWarnTime    uint32 `json:"warn_temp_time"`
 		TempCritTime    uint32 `json:"crit_temp_time"`
 		CtrlBusyTime    uint64 `json:"ctrl_busy_time"`
