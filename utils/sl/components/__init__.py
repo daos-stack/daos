@@ -190,6 +190,8 @@ def define_mercury(reqs):
 
 def define_common(reqs):
     """common system component definitions"""
+    reqs.define('lz4', headers=['lz4.h'], package='lz4-devel')
+
     reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
                 package='valgrind-devel')
 
