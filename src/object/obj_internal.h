@@ -143,9 +143,15 @@ struct obj_reasb_req {
 	struct dcs_layout		*orr_singv_los;
 	/* to record returned data size from each targets */
 	daos_size_t			*orr_data_sizes;
+	/* number of targets this IO req involves */
 	uint32_t			 orr_tgt_nr;
+	/* number of targets that with IOM handled */
+	uint32_t			 orr_iom_tgt_nr;
+	/* number of iom extends */
+	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
+	pthread_spinlock_t		 orr_spin;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
@@ -683,6 +689,30 @@ obj_dkey2hash(daos_key_t *dkey)
 
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
 			       dkey->iov_len, 5731);
+}
+
+static inline int
+recx_compare(const void *rank1, const void *rank2)
+{
+	const daos_recx_t *r1 = rank1;
+	const daos_recx_t *r2 = rank2;
+
+	D_ASSERT(r1 != NULL && r2 != NULL);
+	if (r1->rx_idx < r2->rx_idx)
+		return -1;
+	else if (r1->rx_idx == r2->rx_idx)
+		return 0;
+	else /** r1->rx_idx < r2->rx_idx */
+		return 1;
+}
+
+static inline void
+daos_iom_sort(daos_iom_t *map)
+{
+	if (map == NULL)
+		return;
+	qsort(map->iom_recxs, map->iom_nr_out,
+	      sizeof(*map->iom_recxs), recx_compare);
 }
 
 int  obj_utils_init(void);

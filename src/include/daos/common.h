@@ -47,6 +47,7 @@
 #include <gurt/common.h>
 #include <cart/api.h>
 #include <daos_types.h>
+#include <daos_obj.h>
 #include <daos_prop.h>
 #include <daos_security.h>
 #include <daos/profile.h>
@@ -711,6 +712,29 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define DAOS_RECX_PTR_OVERLAP(recx_1, recx_2)				\
 	(((recx_1)->rx_idx < (recx_2)->rx_idx + (recx_2)->rx_nr) &&	\
 	 ((recx_2)->rx_idx < (recx_1)->rx_idx + (recx_1)->rx_nr))
+
+#define DAOS_RECX_ADJACENT(recx_1, recx_2)				\
+	(((recx_1).rx_idx == (recx_2).rx_idx + (recx_2).rx_nr) ||	\
+	 ((recx_2).rx_idx == (recx_1).rx_idx + (recx_1).rx_nr))
+#define DAOS_RECX_PTR_ADJACENT(recx_1, recx_2)				\
+	(((recx_1)->rx_idx == (recx_2)->rx_idx + (recx_2)->rx_nr) ||	\
+	 ((recx_2)->rx_idx == (recx_1)->rx_idx + (recx_1)->rx_nr))
+
+#define DAOS_RECX_END(recx)	((recx).rx_idx + (recx).rx_nr)
+#define DAOS_RECX_PTR_END(recx)	((recx)->rx_idx + (recx)->rx_nr)
+
+/**
+ * Merge \a src recx to \a dst recx.
+ */
+static inline void
+daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
+{
+	uint64_t	end;
+
+	dst->rx_idx = min(src->rx_idx, dst->rx_idx);
+	end = max(DAOS_RECX_PTR_END(dst), DAOS_RECX_PTR_END(src));
+	dst->rx_nr = end - dst->rx_idx;
+}
 
 /* NVMe shared constants */
 #define DAOS_NVME_SHMID_NONE	-1

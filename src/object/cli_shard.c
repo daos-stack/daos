@@ -289,6 +289,107 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	return rc;
 }
 
+static int
+iom_recx_merge(daos_iom_t *dst, daos_recx_t *recx)
+{
+	daos_recx_t	*tmpr;
+	uint32_t	 i;
+
+	for (i = 0; i < dst->iom_nr_out; i++) {
+		tmpr = &dst->iom_recxs[i];
+		if (DAOS_RECX_PTR_OVERLAP(tmpr, recx) ||
+		    DAOS_RECX_PTR_ADJACENT(tmpr, recx)) {
+			daos_recx_merge(recx, tmpr);
+			return 0;
+		}
+	}
+
+	if (dst->iom_nr_out < dst->iom_nr) {
+		dst->iom_recxs[dst->iom_nr_out] = *recx;
+		dst->iom_nr_out++;
+		return 0;
+	}
+
+	return -1;
+}
+
+static void
+obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t tgt_idx,
+		 const daos_iom_t *src, daos_iom_t *dst)
+{
+	struct daos_oclass_attr	*oca = reasb_req->orr_oca;
+	uint64_t		 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	uint64_t		 cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	uint64_t		 end, rec_nr;
+	daos_recx_t		 hi, lo, recx, tmpr;
+	uint32_t		 i;
+	int			 rc;
+
+	D_ASSERT(tgt_idx < obj_ec_data_tgt_nr(oca));
+
+	D_SPIN_LOCK(&reasb_req->orr_spin);
+	/* merge iom_recx_hi */
+	hi = src->iom_recx_hi;
+	end = DAOS_RECX_END(hi);
+	hi.rx_idx = max(hi.rx_idx, rounddown(end - 1, cell_rec_nr));
+	hi.rx_nr = end - hi.rx_idx;
+	hi.rx_idx = obj_ec_idx_vos2daos(hi.rx_idx, stripe_rec_nr,
+					cell_rec_nr, tgt_idx);
+	if (dst->iom_recx_hi.rx_idx == 0 && dst->iom_recx_hi.rx_nr == 0)
+		dst->iom_recx_hi = hi;
+	else if (DAOS_RECX_OVERLAP(dst->iom_recx_hi, hi) ||
+		 DAOS_RECX_ADJACENT(dst->iom_recx_hi, hi))
+		daos_recx_merge(&hi, &dst->iom_recx_hi);
+	else if (hi.rx_idx > dst->iom_recx_hi.rx_idx)
+		dst->iom_recx_hi = hi;
+
+	/* merge iom_recx_lo */
+	lo = src->iom_recx_lo;
+	end = DAOS_RECX_END(lo);
+	lo.rx_nr = min(end, roundup(lo.rx_idx + 1, cell_rec_nr)) - lo.rx_idx;
+	lo.rx_idx = obj_ec_idx_vos2daos(lo.rx_idx, stripe_rec_nr,
+					cell_rec_nr, tgt_idx);
+	if (dst->iom_recx_lo.rx_idx == 0 && dst->iom_recx_lo.rx_nr == 0)
+		dst->iom_recx_lo = lo;
+	else if (DAOS_RECX_OVERLAP(dst->iom_recx_lo, lo) ||
+		 DAOS_RECX_ADJACENT(dst->iom_recx_lo, lo))
+		daos_recx_merge(&lo, &dst->iom_recx_lo);
+	else if (lo.rx_idx < dst->iom_recx_lo.rx_idx)
+		dst->iom_recx_lo = lo;
+
+	if (dst->iom_recxs == NULL) {
+		D_SPIN_UNLOCK(&reasb_req->orr_spin);
+		return;
+	}
+
+	/* merge iom_recxs */
+	reasb_req->orr_iom_tgt_nr++;
+	reasb_req->orr_iom_nr += src->iom_nr;
+	for (i = 0; i < src->iom_nr; i++) {
+		recx = src->iom_recxs[i];
+		D_ASSERT(recx.rx_nr > 0);
+		end = DAOS_RECX_END(recx);
+		rec_nr = 0;
+		while (rec_nr < recx.rx_nr) {
+			tmpr.rx_idx = recx.rx_idx + rec_nr;
+			tmpr.rx_nr = min(roundup(tmpr.rx_idx + 1, cell_rec_nr),
+					 end) - tmpr.rx_idx;
+			rec_nr += tmpr.rx_nr;
+			tmpr.rx_idx = obj_ec_idx_vos2daos(tmpr.rx_idx,
+					stripe_rec_nr, cell_rec_nr, tgt_idx);
+			rc = iom_recx_merge(dst, &tmpr);
+			if (rc < 0)
+				dst->iom_nr_out = reasb_req->orr_iom_nr;
+		}
+	}
+
+	D_ASSERT(reasb_req->orr_iom_tgt_nr <= reasb_req->orr_tgt_nr);
+	if (reasb_req->orr_iom_tgt_nr == reasb_req->orr_tgt_nr)
+		daos_iom_sort(dst);
+
+	D_SPIN_UNLOCK(&reasb_req->orr_spin);
+}
+
 static void
 daos_iom_copy(const daos_iom_t *src, daos_iom_t *dst)
 {
@@ -423,17 +524,29 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		if (rw_args->shard_args->auxi.flags & DRF_CHECK_EXISTENCE)
 			goto out;
 
+		is_ec_obj = (reasb_req != NULL) &&
+			    DAOS_OC_IS_EC(reasb_req->orr_oca);
+
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
+			daos_iom_t	*reply_maps;
+
 			/** Should have 1 map per iod */
 			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
 			for (i = 0; i < orw->orw_nr; i++) {
-				daos_iom_copy(&orwo->orw_maps.ca_arrays[i],
-					      &rw_args->maps[i]);
+				reply_maps = &orwo->orw_maps.ca_arrays[i];
+				if (is_ec_obj &&
+				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
+					obj_ec_iom_merge(reasb_req,
+							 orw->orw_tgt_idx,
+							 reply_maps,
+							 &rw_args->maps[i]);
+				} else {
+					daos_iom_copy(reply_maps,
+						      &rw_args->maps[i]);
+				}
 			}
 		}
 
-		is_ec_obj = (reasb_req != NULL) &&
-			    DAOS_OC_IS_EC(reasb_req->orr_oca);
 		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 
