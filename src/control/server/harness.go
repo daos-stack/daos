@@ -50,6 +50,7 @@ type IOServerHarness struct {
 	started          atm.Bool
 	rankReqTimeout   time.Duration
 	rankStartTimeout time.Duration
+	faultDomain      *system.FaultDomain
 }
 
 // NewIOServerHarness returns an initialized *IOServerHarness.
@@ -61,6 +62,12 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 		rankReqTimeout:   defaultRequestTimeout,
 		rankStartTimeout: defaultStartTimeout,
 	}
+}
+
+// WithFaultDomain adds a fault domain to the IOServerHarness.
+func (h *IOServerHarness) WithFaultDomain(fd *system.FaultDomain) *IOServerHarness {
+	h.faultDomain = fd
+	return h
 }
 
 // isStarted indicates whether the IOServerHarness is in a running state.

@@ -3142,9 +3142,9 @@ tgt_idx_change_retry(void **state)
 
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding target rank %u ...\n", rank);
-		daos_add_server(arg->pool.pool_uuid, arg->group,
-				arg->dmg_config, arg->pool.svc,
-				rank);
+		daos_reint_server(arg->pool.pool_uuid, arg->group,
+				  arg->dmg_config, arg->pool.svc,
+				  rank);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	ioreq_fini(&req);
@@ -3198,9 +3198,9 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 
 		/* add back the excluded targets */
-		daos_add_server(arg->pool.pool_uuid, arg->group,
-				arg->dmg_config, arg->pool.svc,
-				rank);
+		daos_reint_server(arg->pool.pool_uuid, arg->group,
+				  arg->dmg_config, arg->pool.svc,
+				  rank);
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
