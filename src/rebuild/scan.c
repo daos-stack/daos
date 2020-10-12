@@ -138,8 +138,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->shards, arg->count,
-				       /* Clear containers for add/reint */
-				       rpt->rt_rebuild_op == RB_OP_ADD);
+				       /* Clear containers for reint */
+				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -379,15 +379,21 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 						 rpt->rt_rebuild_ver,
 						 tgts, shards,
 						 rpt->rt_tgts_num, -1);
-	} else if (rpt->rt_rebuild_op == RB_OP_ADD) {
+	} else if (rpt->rt_rebuild_op == RB_OP_REINT) {
 		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
 					       rpt->rt_rebuild_ver,
 					       tgts, shards,
 					       rpt->rt_tgts_num, myrank);
+	} else if (rpt->rt_rebuild_op == RB_OP_EXTEND) {
+		rebuild_nr = pl_obj_find_addition(map, &md, NULL,
+						  rpt->rt_rebuild_ver,
+						  tgts, shards,
+						  rpt->rt_tgts_num, myrank);
 	} else {
 		D_ASSERT(rpt->rt_rebuild_op == RB_OP_FAIL ||
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
-			 rpt->rt_rebuild_op == RB_OP_ADD);
+			 rpt->rt_rebuild_op == RB_OP_REINT ||
+			 rpt->rt_rebuild_op == RB_OP_EXTEND);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
@@ -492,9 +498,11 @@ rebuild_scanner(void *data)
 	struct umem_attr		uma;
 	int				rc;
 
-	if (is_current_tgt_unavail(rpt) ||
-	   (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
-	    rpt->rt_rebuild_op == RB_OP_DRAIN)) {
+	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT |
+				      PO_COMP_ST_DOWN |
+				      PO_COMP_ST_NEW) ||
+	    (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
+	     rpt->rt_rebuild_op == RB_OP_DRAIN)) {
 		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n",
 			DP_UUID(rpt->rt_pool_uuid));
 		return 0;
@@ -546,6 +554,8 @@ out:
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_join(ult_send);
+
+	tls->rebuild_pool_status = rc;
 
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
@@ -605,8 +615,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
 	struct rebuild_scan_out		*ro;
+	struct rebuild_pool_tls		*tls;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
-	d_rank_list_t			*fail_list = NULL;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
@@ -661,6 +671,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
+	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
+	if (tls != NULL) {
+		D_WARN("the previous rebuild "DF_UUID"/%d is not cleanup yet\n",
+		       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
+		D_GOTO(out, rc = -DER_BUSY);
+	}
+
 	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))
 		D_GOTO(out, rc = -DER_INVAL);
 
@@ -691,29 +708,7 @@ out:
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	ro->rso_stable_epoch = crt_hlc_get();
-	if (rc) {
-		/* If it failed, tell the master the target can not
-		 * start the rebuild, so master will put the target
-		 * into DOWN state.
-		 */
-		fail_list = d_rank_list_alloc(1);
-		if (fail_list != NULL) {
-			if (rpt && rpt->rt_pool)
-				crt_group_rank(rpt->rt_pool->sp_group,
-					       &fail_list->rl_ranks[0]);
-			else
-				crt_group_rank(NULL, &fail_list->rl_ranks[0]);
-
-			ro->rso_ranks_list = fail_list;
-		} else {
-			D_ERROR("failed to alloc rank list.\n");
-		}
-		if (rpt)
-			rpt->rt_abort = 1;
-	}
-
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
-	d_rank_list_free(fail_list);
 }
 
 int
@@ -722,7 +717,6 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 {
 	struct rebuild_scan_out	*src = crt_reply_get(source);
 	struct rebuild_scan_out *dst = crt_reply_get(result);
-	int i;
 
 	if (dst->rso_status == 0)
 		dst->rso_status = src->rso_status;
@@ -730,25 +724,6 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	if (src->rso_status == 0 &&
 	    dst->rso_stable_epoch < src->rso_stable_epoch)
 		dst->rso_stable_epoch = src->rso_stable_epoch;
-
-	if (src->rso_ranks_list == NULL ||
-	    src->rso_ranks_list->rl_nr == 0)
-		return 0;
-
-	if (dst->rso_ranks_list == NULL) {
-		D_ALLOC_PTR(dst->rso_ranks_list);
-		if (dst->rso_ranks_list == NULL)
-			return -DER_NOMEM;
-	}
-
-	for (i = 0; i < src->rso_ranks_list->rl_nr; i++) {
-		int rc;
-
-		rc = d_rank_list_append(dst->rso_ranks_list,
-					src->rso_ranks_list->rl_ranks[i]);
-		if (rc)
-			return rc;
-	}
 
 	return 0;
 }

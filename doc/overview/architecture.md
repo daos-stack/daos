@@ -143,22 +143,22 @@ Applications, users, and administrators can interact with a DAOS system
 through two different client APIs. The management API offers the ability
 to administrate a DAOS system. It is intended to be integrated with
 different vendor-specific storage management or open-source
-orchestration frameworks. A CLI tool is built over the DAOS management
-API. On the other hand, the DAOS library (i.e., libdaos) implements the
-DAOS storage model and is primarily targeted at application and I/O
+orchestration frameworks. The `dmg` CLI tool is built over the DAOS management
+API. On the other hand, the DAOS library (`libdaos`) implements the
+DAOS storage model. It is primarily targeted at application and I/O
 middleware developers who want to store datasets in a DAOS system. User
-utilities are also built over the API to allow users to manage datasets
-from a CLI.
+utilities like the `daos` command are also built over the API to allow
+users to manage datasets from a CLI.
 
 Applications can access datasets stored in DAOS either directly through
-the native DAOS API or an I/O middleware libraries (e.g. POSIX
-emulation, MPI-IO, HDF5) or frameworks (e.g., Spark, TensorFlow) already
-integrated with the native DAOS storage model.
+the native DAOS API, through an I/O middleware library (e.g. POSIX
+emulation, MPI-IO, HDF5) or through frameworks like Spark or TensorFlow
+that have already been integrated with the native DAOS storage model.
 
 ### Agent
 
-The DAOS agent is a daemon residing on the client node that interacts
-with the DAOS library to authenticate the application process. It is a
+The DAOS agent is a daemon residing on the client nodes that interacts
+with the DAOS library to authenticate the application processes. It is a
 trusted entity that can sign the DAOS Client credentials using
-certificates. The agent can support different authentication frameworks
+certificates. The agent can support different authentication frameworks,
 and uses a Unix Domain Socket to communicate with the client library.

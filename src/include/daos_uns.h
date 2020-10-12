@@ -109,8 +109,8 @@ duns_create_path(daos_handle_t poh, const char *path,
  * is accessing a posix container, or it can be empty for example in the case of
  * an HDF5 file.
  *
- * \param[in]	path	Valid path in an existing namespace.
- * \param[out]	attr	Struct containing the xattrs on the path.
+ * \param[in]		path	Valid path in an existing namespace.
+ * \param[in,out]	attr	Struct containing the xattrs on the path.
  *
  * \return		0 on Success. errno code on failure.
  */

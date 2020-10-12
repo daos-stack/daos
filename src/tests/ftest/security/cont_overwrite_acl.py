@@ -41,6 +41,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
     def setUp(self):
         """Set up each test case."""
         super(OverwriteContainerACLTest, self).setUp()
+        self.acl_filename = "test_overwrite_acl_file.txt"
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
@@ -95,10 +96,9 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl_file
         """
-        acl_filename = "test_acl_file.txt"
         invalid_file_content = self.params.get(
             "invalid_acl_file_content", "/run/*")
-        path_to_file = os.path.join(self.tmp, acl_filename)
+        path_to_file = os.path.join(self.tmp, self.acl_filename)
 
         # Disable raising an exception if the daos command fails
         self.daos_cmd.exit_status_exception = False
@@ -132,9 +132,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl_file
         """
-        acl_filename = "test_acl_file.txt"
         valid_file_acl = self.params.get("valid_acl_file", "/run/*")
-        path_to_file = os.path.join(self.tmp, acl_filename)
+        path_to_file = os.path.join(self.tmp, self.acl_filename)
 
         # Disable raising an exception if the daos command fails
         self.daos_cmd.exit_status_exception = False
@@ -160,9 +159,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,security,container_acl,cont_overwrite_acl_noperms
         """
-        acl_filename = "test_acl_file.txt"
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
-        path_to_file = os.path.join(self.tmp, acl_filename)
+        path_to_file = os.path.join(self.tmp, self.acl_filename)
 
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

@@ -35,7 +35,6 @@
 
 #include "tests_common.h"
 
-
 #define MY_BASE 0x010000000
 #define MY_VER  0
 
@@ -50,7 +49,6 @@ enum {
 	CORPC_TEST,
 	RPC_SHUTDOWN
 } rpc_id_t;
-
 
 #define CRT_ISEQ_RPC_SET_VERSION	/* input fields */	\
 	((d_string_t)		(grp)		CRT_VAR)	\
@@ -71,7 +69,6 @@ enum {
 
 #define CRT_OSEQ_CORPC_TEST \
 	((uint64_t)		(field)			CRT_VAR)
-
 
 RPC_DECLARE(RPC_SET_VERSION);
 RPC_DECLARE(RPC_SHUTDOWN);
@@ -126,7 +123,6 @@ corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 {
 	struct CORPC_TEST_out	*output_src;
 	struct CORPC_TEST_out	*output_result;
-
 
 	output_src = crt_reply_get(src);
 	output_result = crt_reply_get(result);
@@ -260,7 +256,6 @@ set_group_version(crt_context_t ctx, crt_group_t *grp,
 
 	tc_sem_timedwait(&wait_info.sem, 10, __LINE__);
 }
-
 
 int main(int argc, char **argv)
 {
@@ -477,7 +472,6 @@ int main(int argc, char **argv)
 	}
 	set_group_version(crt_ctx[1], grp, p_list->rl_ranks[7], 0x3);
 	verify_corpc(crt_ctx[1], grp, -DER_GRPVER);
-
 
 	/* Send shutdown RPC to all nodes except for self */
 	DBG_PRINT("Senidng shutdown to all nodes\n");
