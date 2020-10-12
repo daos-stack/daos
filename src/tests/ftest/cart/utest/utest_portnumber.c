@@ -60,6 +60,15 @@
 #include <cart/api.h>
 #include "gurt/debug.h"
 
+#define CHILD1_INIT_ERR			10
+#define CHILD1_CONTEXT_DESTROY_ERR	11
+#define CHILD1_FINALIZE_ERR		12
+#define CHILD1_TIMEOUT_ERR		30
+#define CHILD2_INIT_ERR			20
+#define CHILD2_CONTEXT_DESTROY_ERR	21
+#define CHILD2_FINALIZE_ERR		22
+#define CHILD2_TIMEOUT_ERR		31
+
 /* global semaphores */
 sem_t *child1_sem;
 sem_t *child2_sem;
@@ -78,10 +87,19 @@ run_test_fork(void **state)
 	pid_t		pid1 = 0;
 	pid_t		pid2 = 0;
 	crt_context_t	crt_context = NULL;
+	struct timespec timeout;
 
-	/* lock the semaphore */
-	sem_trywait(child1_sem);
-	sem_trywait(child2_sem);
+	/* drain and lock the semaphore */
+	do {
+		rc = sem_trywait(child1_sem);
+	} while (rc == 0);
+	do {
+		rc = sem_trywait(child2_sem);
+	} while (rc == 0);
+
+	/* Set timeout to 60 seconds. */
+	clock_gettime(CLOCK_REALTIME, &timeout);
+	timeout.tv_sec += 60;
 
 	/* fork first child process */
 	pid1 = fork();
@@ -89,29 +107,40 @@ run_test_fork(void **state)
 		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
 		if (rc != 0) {
 			sem_post(child2_sem);
-			rc = 10;
-			goto child1_error;
+			rc = CHILD1_INIT_ERR;
+			goto child1_error1;
 		}
 		child_result = crt_context_create(&crt_context);
 
 		/* Signal second child to continue and wait */
 		sem_post(child2_sem);
-		sem_wait(child1_sem);
+		rc = sem_timedwait(child1_sem, &timeout);
+		if (rc != 0) {
+			sem_post(child2_sem);
+			rc = crt_context_destroy(crt_context, false);
+			rc = CHILD1_TIMEOUT_ERR;
+			goto child1_error2;
+		}
 
+		/* Expected results from crt_context_create */
 		if (child_result == 0) {
 			rc = crt_context_destroy(crt_context, false);
 			if (rc != 0) {
-				rc = 11;
-				goto child1_error;
+				rc = CHILD1_CONTEXT_DESTROY_ERR;
+				goto child1_error2;
 			}
 		}
+
+		/* Continue for either case of crt_context_create */
 		rc = crt_finalize();
 		if (rc != 0) {
-			rc = 12;
-			goto child1_error;
+			rc = CHILD1_FINALIZE_ERR;
+			goto child1_error1;
 		}
 		exit(child_result);
-child1_error:
+child1_error2:
+		crt_finalize();
+child1_error1:
 		exit(rc);
 	}
 
@@ -119,26 +148,34 @@ child1_error:
 	pid2 = fork();
 	if (pid2 == 0) {
 		/* wait for signal from child 1 */
-		sem_wait(child2_sem);
+		rc = sem_timedwait(child2_sem, &timeout);
+		if (rc != 0) {
+			rc = CHILD2_TIMEOUT_ERR;
+			goto child2_error;
+		}
 
 		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
 		if (rc != 0) {
-			rc = 20;
+			rc = CHILD2_INIT_ERR;
 			goto child2_error;
 		}
 		child_result = crt_context_create(&crt_context);
+
+		/* Context created, close it it */
 		if (child_result == 0) {
 			rc = crt_context_destroy(crt_context, false);
 			if (rc != 0) {
-				rc = 21;
+				rc = CHILD2_CONTEXT_DESTROY_ERR;
+				rc = crt_finalize();
 				goto child2_error;
 			}
 		}
+
 		/* signal child 1 to finish up */
 		sem_post(child1_sem);
 		rc = crt_finalize();
 		if (rc != 0) {
-			rc = 22;
+			rc = CHILD2_FINALIZE_ERR;
 			goto child2_error;
 		}
 		exit(child_result);
@@ -162,9 +199,10 @@ child2_error:
 	/* Test results.  first child should should succeed. */
 	assert_true(result1 == 0);
 	assert_true(result2 != 0);
-	assert_false(result2 == 20);
-	assert_false(result2 == 21);
-	assert_false(result2 == 22);
+	assert_false(result2 == CHILD2_INIT_ERR);
+	assert_false(result2 == CHILD2_CONTEXT_DESTROY_ERR);
+	assert_false(result2 == CHILD2_FINALIZE_ERR);
+	assert_false(result2 == CHILD2_TIMEOUT_ERR);
 }
 
 static void
