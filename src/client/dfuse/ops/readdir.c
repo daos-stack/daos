@@ -26,11 +26,13 @@
 
 #define READDIR_COUNT 128
 
+#define DFUSE_READDIR_EOD (1LL<<63)
+
 struct iterate_data {
-	struct dfuse_readdir_entry *dre;
-	off_t base_offset;
-	int index;
-	void *oh;
+	struct dfuse_readdir_entry	*dre;
+	off_t				base_offset;
+	int				index;
+	void				*oh;
 };
 
 static int
@@ -53,9 +55,9 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 static int
 fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 {
-	int rc;
-	uint32_t count = READDIR_COUNT - 1;
-	struct iterate_data idata = {};
+	struct iterate_data	idata = {};
+	uint32_t		count;
+	int			rc READDIR_COUNT - 1;
 
 	idata.dre = oh->doh_dre;
 	idata.base_offset = offset;
@@ -181,7 +183,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	int			added = 0;
 	int			rc = 0;
 
-	if (offset == -1) {
+	if (offset == DFUSE_READDIR_EOD) {
+		DFUSE_TRA_DEBUG(oh, "End of directory %lx", offset);
 		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
 		return;
 	}
@@ -294,7 +297,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			oh->doh_dre_index += 1;
 
 			if (dre->dre_offset == eof)
-				next_offset = -1;
+				next_offset = DFUSE_READDIR_EOD;
 			else
 				next_offset = dre->dre_offset + 1;
 
