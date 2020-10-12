@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define READDIR_COUNT 25
+#define READDIR_COUNT 128
 
 struct iterate_data {
 	struct dfuse_readdir_entry *dre;
@@ -64,8 +64,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	DFUSE_TRA_DEBUG(oh, "Fetching new entries at offset %ld", offset);
 
 	rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &count,
-			 (NAME_MAX + 1) * count,
-			 filler_cb, &idata);
+			 (NAME_MAX + 1) * count, filler_cb, &idata);
 
 	oh->doh_anchor_index = count;
 	oh->doh_dre[count].dre_offset = 0;
@@ -364,6 +363,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
+				oh->doh_dre_index -= 1;
 				break;
 			}
 			/* This entry has been added to the buffer so mark it as
