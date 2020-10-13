@@ -239,6 +239,7 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *bdev.ScanResponse, inErr er
 func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
 	if req.Health || req.Meta {
 		// filter results based on config file bdev_list contents
+		c.log.Debug("scanning in-use nvme devices")
 		resp, err := c.scanInstanceBdevs(ctx)
 
 		return newScanNvmeResp(req, resp, err)
@@ -262,11 +263,16 @@ func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResp
 			if !common.Includes(srv.scmConfig().DeviceList, ns.BlockDevice) {
 				continue
 			}
-			mp, err := srv.scmProvider.GetfsUsage(srv.scmConfig().MountPoint)
+
+			mp := srv.scmConfig().MountPoint
+			c.log.Debugf("updating scm fs on device %s mounted on %s",
+				ns.BlockDevice, mp)
+
+			mount, err := srv.scmProvider.GetfsUsage(mp)
 			if err != nil {
 				return nil, err
 			}
-			ns.Mount = mp
+			ns.Mount = mount
 		}
 	}
 
@@ -306,7 +312,8 @@ func (c *ControlService) scanScm(ctx context.Context) (*ctlpb.ScanScmResp, error
 	ssr, scanErr := c.ScmScan(scmReq)
 	if scanErr == nil && len(ssr.Namespaces) > 0 {
 		// update namespace info if storage is online
-		return newScanScmResp(c.scanInstanceScm(ctx, ssr))
+		c.log.Debug("scanning in-use scm devices")
+		ssr, scanErr = c.scanInstanceScm(ctx, ssr)
 	}
 
 	return newScanScmResp(ssr, scanErr)

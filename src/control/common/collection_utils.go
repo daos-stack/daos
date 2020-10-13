@@ -178,7 +178,7 @@ func StringSliceHasDuplicates(slice []string) bool {
 // nominator and denominator unsigned integers.
 func PercentageString(part, total uint64) string {
 	if part == 0 || total == 0 {
-		return "0 %"
+		return "0 %%"
 	}
 
 	return fmt.Sprintf("%v %%", int((float64(part)/float64(total))*float64(100)))
