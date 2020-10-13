@@ -734,7 +734,7 @@ out:
 
 int
 dmg_storage_query_device_health(const char *dmg_config_file, char *host,
-	char *stats, const uuid_t uuid)
+				char *stats, const uuid_t uuid)
 {
 	struct json_object	*dmg_out = NULL;
 	struct json_object	*storage_map = NULL;
@@ -747,7 +747,6 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	int			argcount = 0;
 	char			**args = NULL;
 	int			rc = 0;
-	
 	uuid_unparse_lower(uuid, uuid_str);
 	args = cmd_push_arg(args, &argcount, " --uuid=%s ", uuid_str);
 	if (args == NULL)
@@ -773,17 +772,14 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	json_object_object_foreach(storage_map, key, val) {
 		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
 			json_object_to_json_string(val));
-		
 		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
 			return -DER_INVAL;
 		}
-		
 		if (!json_object_object_get_ex(storage_info, "smd_info", &smd_info)) {
 			D_ERROR("unable to extract hosts from JSON\n");
 			return -DER_INVAL;
 		}
-		
 		json_object_object_foreach(smd_info, key1, val1) {
 			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
 				json_object_to_json_string(val1));

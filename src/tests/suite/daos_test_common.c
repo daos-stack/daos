@@ -1104,7 +1104,7 @@ int verify_server_log_mask(char *host, char *server_config_file,
 }
 
 int get_log_file(char *host, char *server_config_file,
-			char *key_name, char *log_file)
+		 char *key_name, char *log_file)
 {
 	char	command[256];
 	size_t	len = 0;

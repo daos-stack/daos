@@ -175,7 +175,7 @@ nvme_recov_2(void **state)
 				      server_config_file);
 
 			get_log_file(devices[i].host,
-				server_config_file, " log_file", log_file);
+				     server_config_file, " log_file", log_file);
 			rc = verify_server_log_mask(devices[i].host,
 						    server_config_file,
 						    "DEBUG");
@@ -337,7 +337,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get DAOS control log file
 	 */
 	get_log_file(devices[rank_pos].host,
-		server_config_file, "control_log_file", control_log_file);
+		     server_config_file, "control_log_file", control_log_file);
 	print_message("Control Log File = %s\n", control_log_file);
 	D_FREE(server_config_file);
 
@@ -346,7 +346,7 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	write_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank_pos].host, write_errors,
+					     devices[rank_pos].host, write_errors,
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Initial write_errors = %s\n", write_errors);
@@ -356,7 +356,7 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	read_errors = strdup("bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank_pos].host, read_errors,
+					     devices[rank_pos].host, read_errors,
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Initial read_errors = %s\n", read_errors);
@@ -404,7 +404,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Read and verify the data
 	 */
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
-			OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
+				OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
 	assert_memory_equal(ow_buf, fbuf, size);
 
 	/*
@@ -413,7 +413,7 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	check_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank_pos].host, check_errors,
+					     devices[rank_pos].host, check_errors,
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Final write_error = %s\n", check_errors);
@@ -425,7 +425,7 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	strcpy(check_errors, "bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
-		devices[rank_pos].host, check_errors,
+					     devices[rank_pos].host, check_errors,
 		devices[rank_pos].device_id);
 	assert_int_equal(rc, 0);
 	print_message("Final read_errors = %s\n", check_errors);
@@ -439,7 +439,7 @@ nvme_test_simulate_IO_error(void **state)
 		"detected blob I/O error! readErr:true"};
 	for (i = 0; control_err[i][0] != '\0'; i++) {
 		rc = verify_state_in_log(devices[rank_pos].host,
-			control_log_file, control_err[i]);
+					 control_log_file, control_err[i]);
 		if (rc != 0) {
 			print_message(
 				" %s not found in log %s\n", control_err[i],
