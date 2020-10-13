@@ -350,6 +350,12 @@ func TestServer_ConfigValidation(t *testing.T) {
 			},
 			FaultConfigBadControlPort,
 		},
+		"bad fault domain path": {
+			func(c *Configuration) *Configuration {
+				return c.WithFaultPath("not valid")
+			},
+			FaultConfigFaultDomainInvalid,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

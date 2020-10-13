@@ -134,11 +134,16 @@ rebuild_retry_for_stale_pool(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
-	/* Set no hdl fail_loc on all servers */
-	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+	if (arg->myrank == 0) {
+		d_rank_t rank;
+
+		/* make one shard to return STALE for rebuild fetch */
+		rank = get_rank_by_oid_shard(arg, oids[0], 1);
+		daos_mgmt_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_STALE_POOL | DAOS_FAIL_ONCE,
 				     0, NULL);
+	}
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
@@ -942,13 +947,14 @@ rebuild_multiple_tgts(void **state)
 	/* Add back the target if it is not being killed */
 	if (arg->myrank == 0) {
 		for (i = 0; i < 2; i++)
-			daos_add_server(arg->pool.pool_uuid, arg->group,
-					arg->dmg_config, arg->pool.svc,
-					exclude_ranks[i]);
+			daos_reint_server(arg->pool.pool_uuid, arg->group,
+					  arg->dmg_config, arg->pool.svc,
+					  exclude_ranks[i]);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+#if 0
 static int
 rebuild_io_cb(void *arg)
 {
@@ -961,7 +967,6 @@ rebuild_io_cb(void *arg)
 	return 0;
 }
 
-#if 0
 static int
 rebuild_io_post_cb(void *arg)
 {
@@ -1071,9 +1076,10 @@ rebuild_multiple_failures(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
+#if 0
+	/* Remove this inflight IO temporarily XXX */
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
-#if 0
 	/* Disable data validation because of DAOS-2915. */
 	arg->rebuild_post_cb = rebuild_io_post_cb;
 #else

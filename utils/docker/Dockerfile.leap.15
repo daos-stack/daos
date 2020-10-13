@@ -74,7 +74,7 @@ RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
 RUN zypper --non-interactive addrepo \
     https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo; \
     zypper --non-interactive --gpg-auto-import-keys refresh; \
-    zypper --non-interactive install -y ipmctl-devel go
+    zypper --non-interactive install -y ipmctl-devel go go-race
 
 # Add DAOS user
 ENV USER daos

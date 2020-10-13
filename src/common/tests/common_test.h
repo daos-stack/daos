@@ -26,6 +26,7 @@
 
 /** Test Suite Function Declarations */
 int daos_checksum_tests_run(void);
+int daos_compress_tests_run(void);
 int misc_tests_run(void);
 
 #endif

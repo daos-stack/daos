@@ -10,8 +10,8 @@
 %endif
 
 Name:          daos
-Version:       1.1.0
-Release:       34%{?relval}%{?dist}
+Version:       1.1.1
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -37,6 +37,10 @@ BuildRequires: libjson-c-devel
 BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
 BuildRequires: fuse3-devel >= 3.4.2
 %if (0%{?suse_version} >= 1500)
+# NB: OpenSUSE is stupid about this... If we just
+# specify go >= 1.X, it installs go=1.11 AND 1.X.
+BuildRequires: go1.14
+BuildRequires: go1.14-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
 %else
@@ -80,7 +84,6 @@ BuildRequires: libcurl4
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
-BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python3-devel
 BuildRequires: python3-distro
@@ -98,7 +101,9 @@ BuildRequires: libpsm_infinipath1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
 %if (0%{?suse_version} >= 1500)
-Requires: libpmem1, libpmemobj1
+Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
+%else
+Requires: libpmem >= 1.8, libpmemobj >= 1.8
 %endif
 Requires: protobuf-c
 Requires: openssl
@@ -393,10 +398,16 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Wed Sep 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-34
+* Wed Sep 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.1-2
 - Use %%autosetup
 - Only use systemd_requires if it exists
 - Obsoletes: cart now that it's included in daos
+
+* Mon Oct 12 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.1-1
+- Version bump up to 1.1.1
+
+* Sat Oct 03 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-34
+- Add go-race to BuildRequires on OpenSUSE Leap
 
 * Wed Sep 16 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.1.0-33
 - Update OFI to v1.11.0
