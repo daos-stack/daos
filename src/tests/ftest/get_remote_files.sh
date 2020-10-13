@@ -75,9 +75,12 @@ This script has 4 modes that can be executed independently if needed.
 #######################################
 # CONSTANT variables.
 #######################################
-if "${CART_LOGTEST}" && ! CART_LOGTEST_PATH="$(dirname "$(readlink -f "${0}")")/cart/cart_logtest.py"; then
-    echo "Failed to get path to cart_logtest.py ..."
-    exit 1
+if "${CART_LOGTEST}"; then
+    rel_path="/cart/cart_logtest.py"
+    if ! CART_LOGTEST_PATH="$(dirname "$(readlink -f "${0}")")${rel_path}"; then
+        echo "Failed to get path to cart_logtest.py ..."
+        exit 1
+    fi
 fi
 
 #######################################
