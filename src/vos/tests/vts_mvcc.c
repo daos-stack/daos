@@ -770,6 +770,134 @@ querymax_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 			DAOS_GET_RECX);
 }
 
+static int
+querymin_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	uint64_t	 dkey_val = 0;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+
+	set_oid(mvcc_arg->i, path, &oid);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, NULL,
+			NULL, DAOS_GET_DKEY | DAOS_GET_MIN);
+}
+
+static int
+querymin_a(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val = 0;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_oid(mvcc_arg->i, path, &oid);
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
+			NULL, DAOS_GET_AKEY | DAOS_GET_MIN);
+}
+
+static int
+querymin_r(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_oid(mvcc_arg->i, path, &oid);
+	set_dkey(mvcc_arg->i, path, &dkey);
+	set_akey(mvcc_arg->i, path, &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
+			&recx, DAOS_GET_RECX | DAOS_GET_MIN);
+}
+
+static int
+querymin_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_oid(mvcc_arg->i, path, &oid);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
+			NULL, DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN);
+}
+
+static int
+querymin_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	daos_recx_t	 recx = {0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+
+	set_oid(mvcc_arg->i, path, &oid);
+	set_dkey(mvcc_arg->i, path, &dkey);
+	set_akey(mvcc_arg->i, path, &akey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
+			&recx, DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MIN);
+}
+
+static int
+querymin_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_oid(mvcc_arg->i, path, &oid);
+	set_dkey(mvcc_arg->i, path, &dkey);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
+			&recx, DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MIN);
+}
+
+static int
+querymin_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
+	   daos_epoch_t epoch)
+{
+	struct mvcc_arg	*mvcc_arg = arg->custom;
+	daos_unit_oid_t	 oid;
+	uint64_t	 dkey_val;
+	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
+	uint64_t	 akey_val;
+	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
+	daos_recx_t	 recx = {0};
+
+	set_oid(mvcc_arg->i, path, &oid);
+
+	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
+			&recx, DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN |
+			DAOS_GET_RECX);
+}
+
 static struct op operations[] = {
 	/* {name,	type,	rlevel,	wlevel,	rtype,	wtype,	func} */
 
@@ -788,6 +916,13 @@ static struct op operations[] = {
 	{"querymaxdr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_dr},
 	{"querymaxar",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_ar},
 	{"querymaxdar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymax_dar},
+	{"querymind",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymin_d},
+	{"querymina",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_a},
+	{"queryminr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_r},
+	{"queryminda",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_da},
+	{"querymindr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_dr},
+	{"queryminar",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymin_ar},
+	{"querymindar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymin_dar},
 
 	/*
 	 * Readwrites
