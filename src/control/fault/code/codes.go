@@ -138,7 +138,7 @@ const (
 	ServerConfigFaultCallbackNotFound
 	ServerConfigFaultCallbackBadPerms
 	ServerConfigFaultCallbackFailed
-	ServerConfigBothFaultPathAndCallbackDefined
+	ServerConfigBothFaultPathAndCb
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

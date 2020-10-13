@@ -119,7 +119,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 				FaultPath: validFaultDomain,
 				FaultCb:   cbScriptPath,
 			},
-			expErr: FaultConfigBothFaultPathAndCallbackDefined,
+			expErr: FaultConfigBothFaultPathAndCb,
 		},
 		"default gets hostname": {
 			cfg:       &Configuration{},
@@ -209,7 +209,7 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 		},
 		"error within the script": {
 			input:  errorScriptPath,
-			expErr: FaultConfigFaultCallbackFailed,
+			expErr: FaultConfigFaultCallbackFailed(errors.New("exit status 2")),
 		},
 		"script returned invalid fault domain": {
 			input:  invalidScriptPath,

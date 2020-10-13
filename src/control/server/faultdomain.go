@@ -52,7 +52,7 @@ func getFaultDomain(cfg *Configuration) (*system.FaultDomain, error) {
 	}
 
 	if cfg.FaultPath != "" && cfg.FaultCb != "" {
-		return nil, FaultConfigBothFaultPathAndCallbackDefined
+		return nil, FaultConfigBothFaultPathAndCb
 	}
 
 	if cfg.FaultPath != "" {
@@ -89,7 +89,7 @@ func getFaultDomainFromCallback(callbackPath string) (*system.FaultDomain, error
 	if os.IsPermission(err) {
 		return nil, FaultConfigFaultCallbackBadPerms
 	} else if err != nil {
-		return nil, FaultConfigFaultCallbackFailed
+		return nil, FaultConfigFaultCallbackFailed(err)
 	}
 
 	return newFaultDomainFromConfig(string(output))
