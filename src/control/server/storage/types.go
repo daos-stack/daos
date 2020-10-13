@@ -294,12 +294,6 @@ func (sms ScmModules) Summary() string {
 		common.Pluralise("module", len(sms)))
 }
 
-func (sn *ScmNamespace) String() string {
-	// capacity given in IEC standard units.
-	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", sn.BlockDevice, sn.NumaNode,
-		humanize.Bytes(sn.Size))
-}
-
 // Capacity reports total storage capacity (bytes) of SCM namespace (pmem block device).
 func (sn ScmNamespace) Capacity() uint64 {
 	return sn.Size
@@ -319,22 +313,6 @@ func (sn ScmNamespace) Free() uint64 {
 		return 0
 	}
 	return sn.Mount.AvailBytes
-}
-
-func (sns ScmNamespaces) String() string {
-	var buf bytes.Buffer
-
-	if len(sns) == 0 {
-		return "\t\tnone\n"
-	}
-
-	sort.Slice(sns, func(i, j int) bool { return sns[i].BlockDevice < sns[j].BlockDevice })
-
-	for _, sn := range sns {
-		fmt.Fprintf(&buf, "\t\t%s\n", sn)
-	}
-
-	return buf.String()
 }
 
 // Capacity reports total storage capacity (bytes) across all namespaces.

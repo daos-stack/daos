@@ -434,6 +434,9 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		p.lastState = res.State
 		p.modules = res.Modules
 		p.namespaces = res.Namespaces
+		for _, ns := range res.Namespaces {
+			p.log.Debugf("ns: %+v", ns)
+		}
 		p.Unlock()
 
 		return res, nil

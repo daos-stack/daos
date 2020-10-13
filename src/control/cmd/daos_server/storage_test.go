@@ -23,6 +23,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -91,7 +92,7 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				PrepNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 				StartingState:    storage.ScmStateFreeCapacity,
 			},
-			expLogMsg: storage.MockScmNamespace().String(),
+			expLogMsg: fmt.Sprintf("%+v", storage.MockScmNamespace()),
 		},
 		"reset scm": {
 			reset: true,
