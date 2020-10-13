@@ -69,7 +69,8 @@ class IorIntercept(IorTestBase):
                 max_mib = int(IorMetrics.Max_MiB)
                 min_mib = int(IorMetrics.Min_MiB)
                 mean_mib = int(IorMetrics.Mean_MiB)
-                write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
+                write_x = self.params.get("write_x",
+                    "/run/ior/iorflags/ssf/*", 1)
                 read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
 
                 # Verifying write performance
