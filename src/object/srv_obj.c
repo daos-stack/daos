@@ -1789,6 +1789,82 @@ orf_to_dtx_epoch_flags(enum obj_rpc_flags orf_flags)
 	return flags;
 }
 
+
+void
+ds_obj_ec_rep_handler(crt_rpc_t *rpc)
+{
+	struct obj_ec_rep_in	*oer = crt_req_get(rpc);
+	struct obj_ec_rep_out	*oero = crt_reply_get(rpc);
+	daos_key_t		*dkey;
+	daos_iod_t		*iod;
+	struct daos_oclass_attr	*oca;
+	struct bio_desc		*biod;
+	daos_recx_t		 recx = { 0 };
+	daos_epoch_range_t	 epoch_range = { 0 };
+	struct obj_io_context	 ioc;
+	daos_handle_t		 ioh = DAOS_HDL_INVAL;
+	int			 rc;
+
+	D_ASSERT(oer != NULL);
+	D_ASSERT(oero != NULL);
+	D_ASSERT(daos_oclass_is_ec(oer->er_oid.id_pub, &oca));
+
+	rc = obj_ioc_begin(oer->er_map_ver, oer->er_pool_uuid, oer->er_coh_uuid,
+			   oer->er_cont_uuid, opc_get(rpc->cr_opc), &ioc);
+
+	if (rc)	{
+		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+	dkey = (daos_key_t *)&oer->er_dkey;
+	iod = (daos_iod_t *)&oer->er_iod;
+	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid,
+			      oer->er_epoch, 0, dkey, 1, iod, NULL,
+			      NULL, 0, &ioh, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	biod = vos_ioh2desc(ioh);
+	rc = bio_iod_prep(biod);
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL,
+			       ioh, NULL, NULL, 1, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+
+	rc = bio_iod_post(biod);
+	if (rc) {
+		D_ERROR(DF_UOID" bio_iod_post failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, NULL);
+	if (rc) {
+		D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
+			DP_UOID(oer->er_oid), DP_RC(rc));
+		goto out;
+	}
+	epoch_range.epr_lo = 0ULL;
+	epoch_range.epr_hi = oer->er_epoch;
+	recx.rx_idx = (oer->er_stripenum * oca->u.ec.e_len) |
+						PARITY_INDICATOR;
+	recx.rx_nr = oca->u.ec.e_len;
+	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid,
+				  &epoch_range, dkey, &iod->iod_name, &recx);
+out:
+	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_ioc_end(&ioc, rc);
+}
+
 void
 ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 {
@@ -1852,7 +1928,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			DP_UOID(oea->ea_oid), DP_RC(rc));
 		goto out;
 	}
-	rc = vos_update_end(ioh, ioc.ioc_map_ver, &oea->ea_dkey, rc, NULL);
+	rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
 			DP_UOID(oea->ea_oid), DP_RC(rc));

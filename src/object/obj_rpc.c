@@ -1246,6 +1246,7 @@ CRT_RPC_DEFINE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 CRT_RPC_DEFINE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 CRT_RPC_DEFINE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 CRT_RPC_DEFINE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
+CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
 
 /* Define for cont_rpcs[] array population below.
@@ -1306,8 +1307,12 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 		break;
 	case DAOS_OBJ_RPC_EC_AGGREGATE:
 		((struct obj_ec_agg_out *)reply)->ea_status = status;
+		break;
 	case DAOS_OBJ_RPC_CPD:
 		((struct obj_cpd_out *)reply)->oco_ret = status;
+		break;
+	case DAOS_OBJ_RPC_EC_REPLICATE:
+		((struct obj_ec_rep_out *)reply)->er_status = status;
 		break;
 	default:
 		D_ASSERT(0);
@@ -1344,6 +1349,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_ec_agg_out *)reply)->ea_status;
 	case DAOS_OBJ_RPC_CPD:
 		return ((struct obj_cpd_out *)reply)->oco_ret;
+	case DAOS_OBJ_RPC_EC_REPLICATE:
+		return ((struct obj_ec_rep_out *)reply)->er_status;
 	default:
 		D_ASSERT(0);
 	}
@@ -1387,6 +1394,8 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		((struct obj_ec_agg_out *)reply)->ea_map_ver = map_version;
 	case DAOS_OBJ_RPC_CPD:
 		((struct obj_cpd_out *)reply)->oco_map_version = map_version;
+	case DAOS_OBJ_RPC_EC_REPLICATE:
+		((struct obj_ec_rep_out *)reply)->er_map_ver = map_version;
 		break;
 	default:
 		D_ASSERT(0);

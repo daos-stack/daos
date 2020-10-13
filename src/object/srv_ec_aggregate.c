@@ -36,6 +36,8 @@
 #include "obj_ec.h"
 #include "obj_internal.h"
 
+#define EC_AGG_CREDITS_MAX 1024
+
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
  */
@@ -51,16 +53,6 @@ struct ec_agg_pool_info {
 	d_rank_list_t	*api_svc_list;		/* service list               */
 	struct ds_pool	*api_pool;		/* Used for IV fetch          */
 	ABT_eventual	 api_eventual;		/* eventual for sys offload   */
-};
-
-/* Parameters used to drive iterate all.
- */
-struct ec_agg_param {
-	d_sg_list_t		 ap_sgl;	 /* mem alloc-ed for I/O    */
-	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info          */
-	struct ec_agg_entry	*ap_agg_entry;	 /* entry used for each OID */
-	daos_prop_t		*ap_prop;        /* property for cont open  */
-	daos_handle_t		 ap_cont_handle; /* VOS container handle    */
 };
 
 /* Local parity extent for the stripe undergoing aggregation. Stores the
@@ -85,20 +77,20 @@ struct ec_agg_stripe {
 	bool		as_has_holes;   /* stripe includes holes             */
 };
 
-/* Aggregation state for an object. (may need to restructure if
- * list of these is built from committed DTX table)
+/*
+struct ec_agg_param *agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+
+*/
+
+/* Aggregation state for an object.
  */
 struct ec_agg_entry {
 	d_list_t		 ae_link;	 /* List (of entries) link    */
 	daos_unit_oid_t		 ae_oid;	 /* OID of iteration entry    */
 	struct daos_oclass_attr	*ae_oca;	 /* Object class of object    */
 	struct obj_ec_codec	*ae_codec;	 /* Encode/decode for oclass  */
-	struct ec_agg_pool_info *ae_pool_info;   /* Pool/container info       */
-	d_sg_list_t		*ae_sgl;	 /* Mem for entry processing  */
-	daos_handle_t		 ae_cont_hdl;    /* Container handle	      */
-	daos_handle_t		 ae_chdl;	 /* Vos container handle      */
+	d_sg_list_t		 ae_sgl;	 /* Mem for entry processing  */
 	daos_handle_t		 ae_thdl;	 /* Iterator handle           */
-	daos_epoch_range_t	 ae_epr;	 /* hi/lo extent threshold    */
 	daos_key_t		 ae_dkey;	 /* Current dkey              */
 	daos_key_t		 ae_akey;	 /* Current akey              */
 	daos_size_t		 ae_rsize;	 /* Record size of cur array  */
@@ -109,11 +101,22 @@ struct ec_agg_entry {
 	uint32_t		 ae_peer_idx;    /* Index of peer parity tgt  */
 };
 
+/* Parameters used to drive iterate all.
+ */
+struct ec_agg_param {
+	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info          */
+	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID */
+	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold  */
+	daos_prop_t		*ap_prop;        /* property for cont open  */
+	daos_handle_t		 ap_cont_handle; /* VOS container handle    */
+};
+
 /* Struct used to drive offloaded stripe update.
  */
 struct ec_agg_stripe_ud {
 	struct ec_agg_entry	*asu_agg_entry; /* Associated entry     */
 	uint8_t			*asu_bit_map;   /* Bitmap of cells      */
+	daos_recx_t		*asu_recxs;     /* For re-replicate     */
 	unsigned int		 asu_cell_cnt;  /* Count of cells       */
 	bool			 asu_recalc;    /* Should recalc parity */
 	ABT_eventual		 asu_eventual;  /* Eventual for offload */
@@ -257,7 +260,8 @@ agg_stripenum(struct ec_agg_entry *entry, daos_off_t ex_lo)
 	return ex_lo / obj_ec_stripe_rec_nr(entry->ae_oca);
 }
 
-/* Call back for the nested iterator used to find the parity for a stripe.
+/* Call back for the lowest nested iterator,
+ * used to find the parity for a stripe.
  */
 static int
 agg_recx_iter_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
@@ -332,38 +336,38 @@ agg_prep_sgl(struct ec_agg_entry *entry)
 	unsigned int	 p = entry->ae_oca->u.ec.e_p;
 	int		 rc = 0;
 
-	if (entry->ae_sgl->sg_nr == 0) {
-		D_ALLOC_ARRAY(entry->ae_sgl->sg_iovs, AGG_IOV_CNT);
-		if (entry->ae_sgl->sg_iovs == NULL) {
+	if (entry->ae_sgl.sg_nr == 0) {
+		D_ALLOC_ARRAY(entry->ae_sgl.sg_iovs, AGG_IOV_CNT);
+		if (entry->ae_sgl.sg_iovs == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
 		}
-		entry->ae_sgl->sg_nr = AGG_IOV_CNT;
+		entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	}
-	D_ASSERT(entry->ae_sgl->sg_nr == AGG_IOV_CNT);
+	D_ASSERT(entry->ae_sgl.sg_nr == AGG_IOV_CNT);
 	data_buf_len = len * k * entry->ae_rsize;
-	if (entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf_len < data_buf_len) {
-		rc = agg_alloc_buf(entry->ae_sgl, data_buf_len, AGG_IOV_DATA,
+	if (entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf_len < data_buf_len) {
+		rc = agg_alloc_buf(&entry->ae_sgl, data_buf_len, AGG_IOV_DATA,
 				   true);
 		if (rc)
 			goto out;
 	}
-	if (entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_buf_len < data_buf_len) {
-		rc = agg_alloc_buf(entry->ae_sgl, data_buf_len, AGG_IOV_ODATA,
+	if (entry->ae_sgl.sg_iovs[AGG_IOV_ODATA].iov_buf_len < data_buf_len) {
+		rc = agg_alloc_buf(&entry->ae_sgl, data_buf_len, AGG_IOV_ODATA,
 				   true);
 		if (rc)
 			goto out;
 	}
-	if (entry->ae_sgl->sg_iovs[AGG_IOV_DIFF].iov_buf_len <
+	if (entry->ae_sgl.sg_iovs[AGG_IOV_DIFF].iov_buf_len <
 						len * entry->ae_rsize) {
-		rc = agg_alloc_buf(entry->ae_sgl, len * entry->ae_rsize,
+		rc = agg_alloc_buf(&entry->ae_sgl, len * entry->ae_rsize,
 				   AGG_IOV_DIFF, true);
 		if (rc)
 			goto out;
 	}
 	par_buf_len = len * p * entry->ae_rsize;
-	if (entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf_len < par_buf_len) {
-		rc = agg_alloc_buf(entry->ae_sgl, par_buf_len, AGG_IOV_PARITY,
+	if (entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf_len < par_buf_len) {
+		rc = agg_alloc_buf(&entry->ae_sgl, par_buf_len, AGG_IOV_PARITY,
 				   false);
 		if (rc)
 			goto out;
@@ -392,11 +396,12 @@ agg_sgl_fini(d_sg_list_t *sgl)
 static int
 agg_fetch_data_stripe(struct ec_agg_entry *entry)
 {
-	daos_iod_t	iod = { 0 };
-	daos_recx_t	recx = { 0 };
-	unsigned int	len = entry->ae_oca->u.ec.e_len;
-	unsigned int	k = entry->ae_oca->u.ec.e_k;
-	int		rc = 0;
+	daos_iod_t		 iod = { 0 };
+	daos_recx_t		 recx = { 0 };
+	struct ec_agg_param	*agg_param;
+	unsigned int		 len = entry->ae_oca->u.ec.e_len;
+	unsigned int		 k = entry->ae_oca->u.ec.e_k;
+	int			 rc = 0;
 
 	rc = agg_prep_sgl(entry);
 	if (rc)
@@ -408,17 +413,18 @@ agg_fetch_data_stripe(struct ec_agg_entry *entry)
 	iod.iod_size = entry->ae_rsize;
 	iod.iod_nr = 1;
 	iod.iod_recxs = &recx;
-	entry->ae_sgl->sg_nr = 1;
-	entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_len =
+	entry->ae_sgl.sg_nr = 1;
+	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len =
 						len * k * entry->ae_rsize;
 
-	rc = vos_obj_fetch(entry->ae_chdl, entry->ae_oid,
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	rc = vos_obj_fetch(agg_param->ap_cont_handle, entry->ae_oid,
 			   entry->ae_cur_stripe.as_hi_epoch,
 			   VOS_OF_FETCH_RECX_LIST, &entry->ae_dkey, 1, &iod,
-			   entry->ae_sgl);
+			   &entry->ae_sgl);
 	if (rc)
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
-	entry->ae_sgl->sg_nr = AGG_IOV_CNT;
+	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 out:
 	return rc;
 }
@@ -442,11 +448,11 @@ agg_encode_full_stripe_ult(void *arg)
 	unsigned char		*buf;
 	int			 i, rc = 0;
 
-	buf = entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
+	buf = entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
 	for (i = 0; i < k; i++)
 		data[i] = &buf[i * cell_bytes];
 
-	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
+	buf = entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
 	for (i = p - 1; i >= 0; i--)
 		parity_bufs[i] = &buf[i * cell_bytes];
 
@@ -574,16 +580,17 @@ agg_get_carry_under(struct ec_agg_entry *entry)
 static int
 agg_update_vos(struct ec_agg_entry *entry)
 {
-	d_sg_list_t		sgl = { 0 };
-	daos_iod_t		iod = { 0 };
-	daos_epoch_range_t	epoch_range = { 0 };
+	d_sg_list_t		 sgl = { 0 };
+	daos_iod_t		 iod = { 0 };
+	daos_epoch_range_t	 epoch_range = { 0 };
+	daos_recx_t		 recx = { 0 };
 	d_iov_t			*iov;
-	daos_recx_t		recx = { 0 };
-	unsigned int		len = entry->ae_oca->u.ec.e_len;
-	unsigned int		k = entry->ae_oca->u.ec.e_k;
-	int			rc = 0;
+	struct ec_agg_param	*agg_param;
+	unsigned int		 len = entry->ae_oca->u.ec.e_len;
+	unsigned int		 k = entry->ae_oca->u.ec.e_k;
+	int			 rc = 0;
 
-	iov = &entry->ae_sgl->sg_iovs[AGG_IOV_PARITY];
+	iov = &entry->ae_sgl.sg_iovs[AGG_IOV_PARITY];
 	sgl.sg_iovs = iov;
 	sgl.sg_nr = 1;
 
@@ -593,7 +600,8 @@ agg_update_vos(struct ec_agg_entry *entry)
 		entry->ae_cur_stripe.as_suffix_ext;
 	epoch_range.epr_lo = 0ULL;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
-	rc = vos_obj_array_remove(entry->ae_chdl, entry->ae_oid,
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
 				  &epoch_range, &entry->ae_dkey,
 				  &entry->ae_akey, &recx);
 	iod.iod_nr = 1;
@@ -604,7 +612,7 @@ agg_update_vos(struct ec_agg_entry *entry)
 	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * len) |
 							PARITY_INDICATOR;
 	recx.rx_nr = len;
-	rc = vos_obj_update(entry->ae_chdl, entry->ae_oid,
+	rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
 			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
 			    &entry->ae_dkey, 1, &iod, NULL,
 			    &sgl);
@@ -637,13 +645,16 @@ agg_overlap(daos_recx_t *recx, unsigned int cell, unsigned int k,
 static int
 agg_get_obj_handle(struct ec_agg_entry *entry)
 {
-	struct daos_obj_layout *layout;
-	int			i, j, rc = 0;
-	bool			opened = false;
+	struct daos_obj_layout	*layout;
+	struct ec_agg_param	*agg_param;
+	int			 i, j, rc = 0;
+	bool			 opened = false;
 
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	if (daos_handle_is_inval(entry->ae_obj_hdl)) {
-		rc = dsc_obj_open(entry->ae_cont_hdl, entry->ae_oid.id_pub,
-				  DAOS_OO_RW, &entry->ae_obj_hdl);
+		rc = dsc_obj_open(agg_param->ap_pool_info.api_cont_hdl,
+				  entry->ae_oid.id_pub, DAOS_OO_RW,
+				  &entry->ae_obj_hdl);
 		if (!rc)
 			opened = true;
 	}
@@ -711,10 +722,10 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	iod.iod_size = entry->ae_rsize;
 	iod.iod_nr = cell_cnt;
 	iod.iod_recxs = recxs;
-	entry->ae_sgl->sg_nr = 1;
-	entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_len = cell_cnt * len *
+	entry->ae_sgl.sg_nr = 1;
+	entry->ae_sgl.sg_iovs[AGG_IOV_ODATA].iov_len = cell_cnt * len *
 								entry->ae_rsize;
-	(entry->ae_sgl->sg_iovs)++;
+	(entry->ae_sgl.sg_iovs)++;
 
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
@@ -724,12 +735,12 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	epoch = is_recalc ? &entry->ae_cur_stripe.as_hi_epoch :
 					 &entry->ae_par_extent.ape_epoch;
 	rc = dsc_obj_fetch(entry->ae_obj_hdl, *epoch, &entry->ae_dkey, 1, &iod,
-			   entry->ae_sgl, NULL, 0, NULL);
+			   &entry->ae_sgl, NULL, 0, NULL);
 	if (rc)
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
-	(entry->ae_sgl->sg_iovs)--;
-	entry->ae_sgl->sg_nr = AGG_IOV_CNT;
+	(entry->ae_sgl.sg_iovs)--;
+	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 out:
 	D_FREE(recxs);
 	return rc;
@@ -746,6 +757,7 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 	d_sg_list_t		 sgl = { 0 };
 	daos_recx_t		*recxs = NULL;
 	unsigned char		*buf = NULL;
+	struct ec_agg_param	*agg_param;
 	unsigned int		 len = entry->ae_oca->u.ec.e_len;
 	unsigned int		 k = entry->ae_oca->u.ec.e_k;
 	unsigned int		 i, j;
@@ -779,7 +791,7 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		goto out;
 	}
 	sgl.sg_nr =  is_recalc ? cell_cnt : cell_cnt + 1;
-	buf = (unsigned char *)entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
+	buf = (unsigned char *)entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
 	for (i = 0; i < cell_cnt; i++) {
 		d_iov_set(&sgl.sg_iovs[i], &buf[i * len], len);
 		/* zeroed to ensure correctness when cell is partially filled */
@@ -792,14 +804,15 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		 * reverse the order in the parity buf.
 		 */
 		d_iov_set(&sgl.sg_iovs[cell_cnt],
-			  entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf, len);
+			  entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf, len);
 
 	iod.iod_name = entry->ae_akey;
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_size = entry->ae_rsize;
 	iod.iod_nr = is_recalc ? cell_cnt : cell_cnt + 1;
 	iod.iod_recxs = recxs;
-	rc = vos_obj_fetch(entry->ae_chdl, entry->ae_oid,
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	rc = vos_obj_fetch(agg_param->ap_cont_handle, entry->ae_oid,
 			   entry->ae_cur_stripe.as_hi_epoch,
 			   VOS_OF_FETCH_RECX_LIST, &entry->ae_dkey, 1, &iod,
 			   &sgl);
@@ -841,7 +854,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	iod.iod_nr = 1;
 	iod.iod_recxs = &recx;
 
-	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
+	buf = entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
 	/* Need a loop here for p > 2. */
@@ -882,13 +895,13 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 	if (entry->ae_codec == NULL)
 		entry->ae_codec =
 		obj_ec_codec_get(daos_obj_id2class(entry->ae_oid.id_pub));
-	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
+	buf = entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
 	for (i = p - 1; i >= 0; i--)
 		parity_bufs[i] = &buf[i * cell_bytes];
 
-	obuf = entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_buf;
-	buf = entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
-	diff = entry->ae_sgl->sg_iovs[AGG_IOV_DIFF].iov_buf;
+	obuf = entry->ae_sgl.sg_iovs[AGG_IOV_ODATA].iov_buf;
+	buf = entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
+	diff = entry->ae_sgl.sg_iovs[AGG_IOV_DIFF].iov_buf;
 	for (i = 0, j = 0; i < cell_cnt; i++) {
 		old = &obuf[i * cell_bytes];
 		new = &buf[i * cell_bytes];
@@ -926,9 +939,9 @@ agg_recalc_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 
 	for (i = 0, r = 0; i < k; i++) {
 		unsigned char *rbuf =
-			entry->ae_sgl->sg_iovs[AGG_IOV_ODATA].iov_buf;
+			entry->ae_sgl.sg_iovs[AGG_IOV_ODATA].iov_buf;
 		unsigned char *lbuf =
-			entry->ae_sgl->sg_iovs[AGG_IOV_DATA].iov_buf;
+			entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_buf;
 
 		if (isset(bit_map, i))
 			data[i] = &rbuf[r++ * cell_bytes];
@@ -936,7 +949,7 @@ agg_recalc_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 			data[i] = &lbuf[l++ * cell_bytes];
 	}
 	D_ASSERT(r == cell_cnt);
-	buf = entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
+	buf = entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
 	D_ASSERT(p > 0);
 	for (i = p - 1; i >= 0; i--)
 		parity_bufs[i] = &buf[i * cell_bytes];
@@ -1110,8 +1123,7 @@ agg_peer_update_ult(void *arg)
 	unsigned char		*buf = NULL;
 	struct obj_ec_agg_in	*ec_agg_in = NULL;
 	struct obj_ec_agg_out	*ec_agg_out = NULL;
-	//struct pool_target	*target;
-	struct ds_pool		*pool = entry->ae_pool_info->api_pool;
+	struct ec_agg_param	*agg_param;
 	crt_opcode_t		 opcode;
 	crt_rpc_t		*rpc;
 	int			 rc = 0;
@@ -1127,10 +1139,15 @@ agg_peer_update_ult(void *arg)
 		goto out;
 	}
 	ec_agg_in = crt_req_get(rpc);
-	uuid_copy(ec_agg_in->ea_pool_uuid, entry->ae_pool_info->api_pool_uuid);
-	uuid_copy(ec_agg_in->ea_poh_uuid, entry->ae_pool_info->api_poh_uuid);
-	uuid_copy(ec_agg_in->ea_cont_uuid, entry->ae_pool_info->api_cont_uuid);
-	uuid_copy(ec_agg_in->ea_coh_uuid, entry->ae_pool_info->api_coh_uuid);
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	uuid_copy(ec_agg_in->ea_pool_uuid,
+		  agg_param->ap_pool_info.api_pool_uuid);
+	uuid_copy(ec_agg_in->ea_coh_uuid,
+		  agg_param->ap_pool_info.api_poh_uuid);
+	uuid_copy(ec_agg_in->ea_cont_uuid,
+		  agg_param->ap_pool_info.api_cont_uuid);
+	uuid_copy(ec_agg_in->ea_coh_uuid,
+		  agg_param->ap_pool_info.api_coh_uuid);
 	ec_agg_in->ea_oid = entry->ae_oid;
 	ec_agg_in->ea_oid.id_shard--;
 	ec_agg_in->ea_dkey = entry->ae_dkey;
@@ -1138,10 +1155,11 @@ agg_peer_update_ult(void *arg)
 	ec_agg_in->ea_rsize = entry->ae_rsize;
 	ec_agg_in->ea_epoch = entry->ae_cur_stripe.as_hi_epoch;
 	ec_agg_in->ea_stripenum = entry->ae_cur_stripe.as_stripenum;
-	ec_agg_in->ea_map_ver = pool->sp_map_version;
+	ec_agg_in->ea_map_ver =
+		agg_param->ap_pool_info.api_pool->sp_map_version;
 	ec_agg_in->ea_prior_len = entry->ae_cur_stripe.as_prefix_ext;
 	ec_agg_in->ea_after_len = entry->ae_cur_stripe.as_suffix_ext;
-	buf = (unsigned char *)entry->ae_sgl->sg_iovs[AGG_IOV_PARITY].iov_buf;
+	buf = (unsigned char *)entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
 	d_iov_set(&iov, &buf[entry->ae_oca->u.ec.e_len],
 		  entry->ae_oca->u.ec.e_len * entry->ae_rsize);
 	sgl.sg_iovs = &iov;
@@ -1208,27 +1226,197 @@ out:
 	return rc;
 }
 
-/*
 static void
 agg_process_holes_ult(void *arg)
 {
+	daos_iod_t		 iod = { 0 };
+	crt_endpoint_t		 tgt_ep = { 0 };
 	struct ec_agg_stripe_ud	*stripe_ud = (struct ec_agg_stripe_ud *)arg;
 	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
+	struct ec_agg_extent	*agg_extent, *ext_tmp;
+	struct ec_agg_param	*agg_param;
+	struct obj_ec_rep_in	*ec_rep_in = NULL;
+	struct obj_ec_rep_out	*ec_rep_out = NULL;
+	crt_rpc_t		*rpc;
+	crt_opcode_t		 opcode;
+	unsigned int		 len = entry->ae_oca->u.ec.e_len;
+	unsigned int		 k = entry->ae_oca->u.ec.e_k;
+	unsigned long		 ss = entry->ae_cur_stripe.as_stripenum *
+					k * len;
+	unsigned int		 last_ext_end = 0;
+	unsigned int		 ext_cnt = 0;
+	unsigned int		 ext_tot_len = 0;
+	int			 rc = 0;
 
-	// Process extent list to find what to re-replicate -- build recx array
-	//
-	// Pull data via dsc_obj_fetch
-	//
-	// Invoke peer re-replicate
-	//
-	// Update local vos with replicate
+	D_ALLOC_ARRAY(stripe_ud->asu_recxs,
+		      entry->ae_cur_stripe.as_extent_cnt + 1);
+	if (stripe_ud->asu_recxs == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	/* Process extent list to find what to re-replicate -- build recx array
+	 */
+	d_list_for_each_entry_safe(agg_extent, ext_tmp,
+				   &entry->ae_cur_stripe.as_dextents,
+				   ae_link) {
+		if (agg_extent->ae_recx.rx_idx - ss > last_ext_end) {
+			stripe_ud->asu_recxs[ext_cnt].rx_idx =
+				ss + last_ext_end;
+			stripe_ud->asu_recxs[ext_cnt].rx_nr =
+				agg_extent->ae_recx.rx_idx -
+				ss - last_ext_end;
+			ext_tot_len +=
+			stripe_ud->asu_recxs[ext_cnt++].rx_nr;
+		}
+		last_ext_end += agg_extent->ae_recx.rx_idx +
+				agg_extent->ae_recx.rx_nr - ss;
+	}
+
+	if (last_ext_end < k * len) {
+		stripe_ud->asu_recxs[ext_cnt].rx_idx =
+			ss + last_ext_end;
+		stripe_ud->asu_recxs[ext_cnt].rx_nr = ss + k * len -
+			(k * len - last_ext_end);
+		ext_tot_len += stripe_ud->asu_recxs[ext_cnt++].rx_nr;
+	}
+	stripe_ud->asu_cell_cnt = ext_cnt;
+	iod.iod_name = entry->ae_akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = entry->ae_rsize;
+	iod.iod_nr = ext_cnt;
+	iod.iod_recxs = stripe_ud->asu_recxs;
+	entry->ae_sgl.sg_nr = 1;
+	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_cnt * ext_tot_len *
+								entry->ae_rsize;
+	/* Pull data via dsc_obj_fetch */
+	rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
+			   &entry->ae_dkey, 1, &iod, &entry->ae_sgl, NULL, 0,
+			   NULL);
+	if (rc) {
+		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	/* Invoke peer re-replicate */
+	tgt_ep.ep_rank = entry->ae_peer_rank;
+	tgt_ep.ep_tag = entry->ae_peer_idx + 1;
+	opcode = DAOS_RPC_OPCODE(DAOS_OBJ_RPC_EC_REPLICATE, DAOS_OBJ_MODULE,
+				 DAOS_OBJ_VERSION);
+	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opcode,
+			    &rpc);
+	if (rc) {
+		D_ERROR("crt_req_create failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+	ec_rep_in = crt_req_get(rpc);
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	uuid_copy(ec_rep_in->er_pool_uuid,
+		  agg_param->ap_pool_info.api_pool_uuid);
+	uuid_copy(ec_rep_in->er_coh_uuid,
+		  agg_param->ap_pool_info.api_poh_uuid);
+	uuid_copy(ec_rep_in->er_cont_uuid,
+		  agg_param->ap_pool_info.api_cont_uuid);
+	uuid_copy(ec_rep_in->er_coh_uuid,
+		  agg_param->ap_pool_info.api_coh_uuid);
+	ec_rep_in->er_oid = entry->ae_oid;
+	ec_rep_in->er_oid.id_shard--;
+	ec_rep_in->er_dkey = entry->ae_dkey;
+	ec_rep_in->er_iod = iod;
+	ec_rep_in->er_stripenum = entry->ae_cur_stripe.as_stripenum;
+	ec_rep_in->er_epoch = entry->ae_cur_stripe.as_hi_epoch;
+	ec_rep_in->er_map_ver =
+		agg_param->ap_pool_info.api_pool->sp_map_version;
+	entry->ae_sgl.sg_nr_out = 1;
+	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &entry->ae_sgl,
+			     CRT_BULK_RW, &ec_rep_in->er_bulk);
+	if (rc) {
+		D_ERROR("crt_bulk_create returned: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+	rc = dss_rpc_send(rpc);
+	if (rc) {
+		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+	ec_rep_out = crt_reply_get(rpc);
+	rc = ec_rep_out->er_status;
+	if (rc)
+		D_ERROR("remote update rpc failed: "DF_RC"\n", DP_RC(rc));
+
+out:
+	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
+	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
-*/
 
 static int
 agg_process_holes(struct ec_agg_entry *entry)
 {
-	return 0;
+	struct ec_agg_stripe_ud	 stripe_ud = { 0 };
+	daos_iod_t		 iod = { 0 };
+	daos_recx_t		 recx = { 0 };
+	daos_epoch_range_t	 epoch_range = { 0 };
+	struct ec_agg_param	*agg_param;
+	int			 rc = 0;
+	int			*status;
+
+	stripe_ud.asu_agg_entry = entry;
+	rc = agg_get_obj_handle(entry);
+	if (rc) {
+		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+	rc = agg_prep_sgl(entry);
+	if (rc)
+		goto out;
+	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out;
+	}
+	rc = dss_ult_create(agg_process_holes_ult, &stripe_ud,
+			    DSS_ULT_EC, 0, 0, NULL);
+	if (rc)
+		goto ev_out;
+	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto ev_out;
+	}
+	if (*status != 0)
+		rc = *status;
+	/* Update local vos with replicate */
+	iod.iod_name = entry->ae_akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = entry->ae_rsize;
+	iod.iod_nr = stripe_ud.asu_cell_cnt;
+	iod.iod_recxs = stripe_ud.asu_recxs;
+	entry->ae_sgl.sg_nr = 1;
+	// write the reps to vos
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
+			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
+			    &entry->ae_dkey, 1, &iod, NULL,
+			    &entry->ae_sgl);
+	if (rc) {
+		D_ERROR("vos_update_begin failed: "DF_RC"\n", DP_RC(rc));
+		goto ev_out;
+	}
+	/* Delete parity */
+	epoch_range.epr_lo = 0ULL;
+	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+	recx.rx_idx = (entry->ae_cur_stripe.as_stripenum *
+		       entry->ae_oca->u.ec.e_len) | PARITY_INDICATOR;
+	recx.rx_nr = entry->ae_oca->u.ec.e_len;
+	rc = vos_obj_array_remove(agg_param->ap_cont_handle, entry->ae_oid,
+				  &epoch_range, &entry->ae_dkey,
+				  &entry->ae_akey, &recx);
+ev_out:
+	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
+	ABT_eventual_free(&stripe_ud.asu_eventual);
+
+out:
+	D_FREE(stripe_ud.asu_recxs);
+	return rc;
 }
 
 /* Process the prior stripe. Invoked when the iterator has moved to the first
@@ -1257,7 +1445,7 @@ agg_process_stripe(struct ec_agg_entry *entry)
 		entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx);
 
-	/* Query the partiy */
+	/* Query the parity */
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	if (rc != 0)
@@ -1441,6 +1629,13 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	default:
 		break;
 	}
+	
+	if (rc < 0) {
+		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+//	agg_entry->ea_agg_param->ap_credits++;
 
 	return rc;
 }
@@ -1473,17 +1668,12 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 /* Initializes the struct holding the iteration state (ec_agg_entry).
  */
 static void
-agg_reset_entry(daos_handle_t lcoh, daos_handle_t gcoh,
-		struct ec_agg_entry *agg_entry,
-		vos_iter_entry_t *entry, struct daos_oclass_attr *oca,
-		d_sg_list_t *sgl)
+agg_reset_entry(struct ec_agg_entry *agg_entry,
+		vos_iter_entry_t *entry, struct daos_oclass_attr *oca)
 {
 	agg_entry->ae_oid		= entry->ie_oid;
 	agg_entry->ae_oca		= oca;
 	agg_entry->ae_codec		= NULL;
-	agg_entry->ae_sgl		= sgl;
-	agg_entry->ae_chdl		= lcoh;
-	agg_entry->ae_cont_hdl		= gcoh;
 	agg_entry->ae_rsize		= 0UL;
 	agg_entry->ae_obj_hdl		= DAOS_HDL_INVAL;
 
@@ -1495,14 +1685,16 @@ agg_reset_entry(daos_handle_t lcoh, daos_handle_t gcoh,
 	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
 	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
+	agg_entry->ae_cur_stripe.as_offset	= 0U;
+	agg_entry->ae_cur_stripe.as_prefix_ext	= 0U;
+	agg_entry->ae_cur_stripe.as_suffix_ext	= 0U;
 }
 
 /* Configures and invokes nested iterator. Called from full-VOS object
  * iteration.
  */
 static int
-agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
-		    struct ec_agg_param *agg_param)
+agg_subtree_iterate(daos_handle_t ih, struct ec_agg_param *agg_param)
 {
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
@@ -1510,9 +1702,8 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 
 	iter_param.ip_hdl		= DAOS_HDL_INVAL;
 	iter_param.ip_ih		= ih;
-	iter_param.ip_oid		= *oid;
-	iter_param.ip_epr.epr_lo	= 0ULL;
-	iter_param.ip_epr.epr_hi	= DAOS_EPOCH_MAX;
+	iter_param.ip_oid		= agg_param->ap_agg_entry.ae_oid;
+	iter_param.ip_epr		= agg_param->ap_epr;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
@@ -1520,7 +1711,7 @@ agg_subtree_iterate(daos_handle_t ih, daos_unit_oid_t *oid,
 
 	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb,
-			 agg_param->ap_agg_entry, NULL);
+			 &agg_param->ap_agg_entry, NULL);
 	return rc;
 }
 
@@ -1541,31 +1732,16 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				  &entry->ie_oid,
 				  agg_param->ap_pool_info.api_pool_version);
 	if (rc == 1) {
-		if (agg_param->ap_agg_entry == NULL) {
-			D_ALLOC_PTR(agg_param->ap_agg_entry);
-			if (entry == NULL) {
-				rc = -DER_NOMEM;
-				goto out;
-			}
-			D_INIT_LIST_HEAD(&agg_param->ap_agg_entry->
-					 ae_cur_stripe.as_dextents);
-			agg_param->ap_agg_entry->ae_pool_info =
-					&agg_param->ap_pool_info;
-			agg_param->ap_agg_entry->ae_epr = param->ip_epr;
-		}
 		/* Some of these can be set at creation. They don't change. */
-		agg_reset_entry(agg_param->ap_cont_handle,
-			       agg_param->ap_pool_info.api_cont_hdl,
-			       agg_param->ap_agg_entry, entry, oca,
-			       &agg_param->ap_sgl);
-		rc = agg_subtree_iterate(ih, &entry->ie_oid, agg_param);
+		agg_param->ap_epr = param->ip_epr;
+		agg_reset_entry(&agg_param->ap_agg_entry, entry, oca);
+		rc = agg_subtree_iterate(ih, agg_param);
 		if (rc)
-			D_ERROR("Subtred iterate failed "DF_RC"\n", DP_RC(rc));
+			D_ERROR("Subtree iterate failed "DF_RC"\n", DP_RC(rc));
 	} else if (rc < 0) {
 		D_ERROR("ds_pool_check_leader failed "DF_RC"\n", DP_RC(rc));
 		rc = 0;
 	}
-out:
 	return rc;
 }
 
@@ -1670,6 +1846,7 @@ agg_iterate_all(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 		D_ERROR("dsc_cont_open failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+	D_INIT_LIST_HEAD(&agg_param.ap_agg_entry.ae_cur_stripe.as_dextents);
 
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
@@ -1681,8 +1858,7 @@ out:
 	daos_prop_entries_free(agg_param.ap_prop);
 	D_FREE(agg_param.ap_prop);
 	ABT_eventual_free(&agg_param.ap_pool_info.api_eventual);
-	D_FREE(agg_param.ap_agg_entry);
-	agg_sgl_fini(&agg_param.ap_sgl);
+	agg_sgl_fini(&agg_param.ap_agg_entry.ae_sgl);
 	dsc_cont_close(ph, agg_param.ap_pool_info.api_cont_hdl);
 	dsc_pool_close(ph);
 	return rc;

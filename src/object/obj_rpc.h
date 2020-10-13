@@ -115,7 +115,10 @@
 		ds_obj_ec_agg_handler, NULL),				\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
-		ds_obj_cpd_handler, NULL)
+		ds_obj_cpd_handler, NULL),				\
+	X(DAOS_OBJ_RPC_EC_REPLICATE,					\
+		0, &CQF_obj_ec_agg,					\
+		ds_obj_ec_rep_handler, NULL)
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 
@@ -344,6 +347,26 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((uint32_t)		(ea_map_ver)		CRT_VAR)
 
 CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
+
+#define DAOS_ISEQ_OBJ_EC_REP	/* input fields */			\
+	((uuid_t)		(er_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_cont_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_poh_uuid)		CRT_VAR)	\
+	((uuid_t)		(er_coh_uuid)		CRT_VAR)	\
+	((daos_unit_oid_t)	(er_oid)		CRT_VAR)	\
+	((daos_key_t)		(er_dkey)		CRT_VAR)	\
+	((daos_iod_t)		(er_iod)		CRT_VAR)	\
+	((uint64_t)		(er_epoch)		CRT_VAR)	\
+	((uint64_t)		(er_stripenum)		CRT_VAR)	\
+	((uint32_t)		(er_map_ver)		CRT_VAR)	\
+	((crt_bulk_t)		(er_bulk)		CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_EC_REP	/* output fields */		 \
+	((int32_t)		(er_status)		CRT_VAR) \
+	((uint32_t)		(er_map_ver)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
+
 void daos_dc_obj2id(void *ptr, daos_obj_id_t *id);
 
 enum daos_cpd_sub_opc {
