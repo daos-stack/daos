@@ -27,6 +27,7 @@
 #include <json-c/json.h>
 
 #include <daos/common.h>
+#include <daos/tests_lib.h>
 #include <daos.h>
 
 static void
@@ -34,9 +35,8 @@ cmd_free_args(char **args, int argcount)
 {
 	int i;
 
-	for (i = 0; i < argcount; i++) {
+	for (i = 0; i < argcount; i++)
 		D_FREE(args[i]);
-	}
 
 	if (argcount)
 		D_FREE(args);
@@ -231,9 +231,8 @@ out:
 			D_ERROR("dmg error: %s\n", err_str);
 			*json_out = json_object_get(tmp);
 
-			if (json_object_object_get_ex(obj, "status", &tmp)) {
+			if (json_object_object_get_ex(obj, "status", &tmp))
 				rc = json_object_get_int(tmp);
-			}
 		} else {
 			if (json_object_object_get_ex(obj, "response", &tmp))
 				*json_out = json_object_get(tmp);
@@ -307,6 +306,7 @@ rank_list_to_string(const d_rank_list_t *rank_list)
 	for (i = 0; i < rank_list->rl_nr; i++)
 		idx += sprintf(&ranks_str[idx], "%d,", rank_list->rl_ranks[i]);
 	ranks_str[width - 1] = '\0';
+	ranks_str[width - 2] = '\0';
 
 	return ranks_str;
 }
@@ -335,13 +335,12 @@ print_acl_entry(FILE *outstream, struct daos_prop_entry *acl_entry)
 		}
 	}
 
-	for (i = 0; i < nr_acl_str; i++) {
+	for (i = 0; i < nr_acl_str; i++)
 		fprintf(outstream, "%s\n", acl_str[i]);
-	}
 
-	for (i = 0; i < nr_acl_str; i++) {
+	for (i = 0; i < nr_acl_str; i++)
 		D_FREE(acl_str[i]);
-	}
+
 	D_FREE(acl_str);
 
 out:
@@ -576,5 +575,160 @@ out_json:
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
 
+	return rc;
+}
+
+static int
+parse_device_info(struct json_object *smd_dev, device_list *devices,
+		  char *host, int dev_length, int *disks)
+{
+	struct json_object	*tmp;
+	struct json_object	*dev = NULL;
+	int			i;
+
+	for (i = 0; i < dev_length; i++) {
+		dev = json_object_array_get_idx(smd_dev, i);
+		strcpy(devices[*disks].host, strtok(host, ":") + 1);
+		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
+			D_ERROR("unable to extract uuid from JSON\n");
+			return -DER_INVAL;
+		}
+		uuid_parse(json_object_get_string(tmp),
+			   devices[*disks].device_id);
+
+		if (!json_object_object_get_ex(dev, "state", &tmp)) {
+			D_ERROR("unable to extract state from JSON\n");
+			return -DER_INVAL;
+		}
+		strcpy(devices[*disks].state, json_object_to_json_string(tmp));
+
+		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
+			D_ERROR("unable to extract rank from JSON\n");
+			return -DER_INVAL;
+		}
+		devices[*disks].rank = atoi(json_object_to_json_string(tmp));
+		*disks = *disks + 1;
+	}
+
+	return 0;
+}
+
+int
+dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
+			device_list *devices)
+{
+	struct json_object	*dmg_out = NULL;
+	struct json_object	*storage_map = NULL;
+	struct json_object	*hosts = NULL;
+	struct json_object	*smd_info = NULL;
+	struct json_object	*smd_dev = NULL;
+	char		host[100];
+	int			dev_length = 0;
+	int			rc = 0;
+	int			*disk;
+
+	if (ndisks != NULL)
+		*ndisks = 0;
+
+	D_ALLOC_PTR(disk);
+	rc = daos_dmg_json_pipe("storage query list-devices", dmg_config_file,
+				NULL, 0, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
+				       &storage_map)) {
+		D_ERROR("unable to extract host_storage_map from JSON\n");
+		return -DER_INVAL;
+	}
+
+	json_object_object_foreach(storage_map, key, val) {
+		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
+			json_object_to_json_string(val));
+
+		if (!json_object_object_get_ex(val, "hosts", &hosts)) {
+			D_ERROR("unable to extract hosts from JSON\n");
+			return -DER_INVAL;
+		}
+
+		strcpy(host, json_object_to_json_string(hosts));
+
+		json_object_object_foreach(val, key1, val1) {
+			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
+				json_object_to_json_string(val1));
+
+			json_object_object_get_ex(val1, "smd_info", &smd_info);
+			if (smd_info != NULL) {
+				if (!json_object_object_get_ex(
+					smd_info, "devices", &smd_dev)) {
+					D_ERROR("unable to extract devices\n");
+					return -DER_INVAL;
+				}
+
+				if (smd_dev != NULL)
+					dev_length = json_object_array_length(
+						smd_dev);
+
+				if (ndisks != NULL)
+					*ndisks = *ndisks + dev_length;
+
+				if (devices != NULL) {
+					rc = parse_device_info(smd_dev, devices,
+							       host, dev_length,
+							       disk);
+					if (rc != 0)
+						goto out_json;
+				}
+			}
+		}
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	D_FREE(disk);
+	return rc;
+}
+
+int
+dmg_storage_set_nvme_fault(const char *dmg_config_file,
+			   char *host, const uuid_t uuid, int force)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, " --uuid=%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (force != 0) {
+		args = cmd_push_arg(args, &argcount, " --force ");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	args = cmd_push_arg(args, &argcount, " --host-list=%s ", host);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("storage set nvme-faulty ", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg command failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
 	return rc;
 }
