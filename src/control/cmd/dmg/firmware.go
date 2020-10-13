@@ -84,7 +84,7 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
 
@@ -113,8 +113,8 @@ func (cmd *firmwareQueryCmd) isNVMeRequested() bool {
 }
 
 type (
-	hostSCMQueryMapPrinter  func(control.HostSCMQueryMap, io.Writer, ...control.PrintConfigOption) error
-	hostNVMeQueryMapPrinter func(control.HostNVMeQueryMap, io.Writer, ...control.PrintConfigOption) error
+	hostSCMQueryMapPrinter  func(control.HostSCMQueryMap, io.Writer, ...pretty.PrintConfigOption) error
+	hostNVMeQueryMapPrinter func(control.HostNVMeQueryMap, io.Writer, ...pretty.PrintConfigOption) error
 )
 
 func (cmd *firmwareQueryCmd) getDisplayFunctions() (hostSCMQueryMapPrinter, hostNVMeQueryMapPrinter) {
@@ -174,7 +174,7 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
 
