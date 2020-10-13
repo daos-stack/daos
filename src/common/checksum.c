@@ -65,7 +65,7 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 		return -DER_INVAL;
 	}
 
-	D_ALLOC(result, sizeof(*result));
+	D_ALLOC_PTR(result);
 	if (result == NULL)
 		return -DER_NOMEM;
 

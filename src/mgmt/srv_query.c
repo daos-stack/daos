@@ -140,14 +140,14 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		return rc;
 	}
 
-	D_ALLOC(resp->devices, sizeof(*resp->devices) * dev_list_cnt);
+	D_ALLOC_ARRAY(resp->devices, dev_list_cnt);
 	if (resp->devices == NULL) {
 		D_ERROR("Failed to allocate devices for resp\n");
 		return -DER_NOMEM;
 	}
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
-		D_ALLOC(resp->devices[i], sizeof(*(resp->devices[i])));
+		D_ALLOC_PTR(resp->devices[i]);
 		if (resp->devices[i] == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -233,14 +233,14 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 		return rc;
 	}
 
-	D_ALLOC(resp->pools, sizeof(*resp->pools) * pool_list_cnt);
+	D_ALLOC_ARRAY(resp->pools, pool_list_cnt);
 	if (resp->pools == NULL) {
 		D_ERROR("Failed to allocate pools for resp\n");
 		return -DER_NOMEM;
 	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
-		D_ALLOC(resp->pools[i], sizeof(*(resp->pools[i])));
+		D_ALLOC_PTR(resp->pools[i]);
 		if (resp->pools[i] == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -301,7 +301,6 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 			}
 		}
 		D_FREE(resp->pools);
-		resp->pools = NULL;
 		resp->n_pools = 0;
 		goto out;
 	}

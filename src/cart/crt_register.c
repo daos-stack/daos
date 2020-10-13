@@ -590,7 +590,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 
 	rpc_req_input = crt_req_get(rpc_req);
 
-	D_ALLOC(tmp_array, sizeof(*tmp_array)*count);
+	D_ALLOC_ARRAY(tmp_array, count);
 	if (tmp_array == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	memcpy(tmp_array, ver, sizeof(tmp_array[0])*count);

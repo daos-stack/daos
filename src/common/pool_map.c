@@ -307,7 +307,7 @@ comp_sorter_init(struct pool_comp_sorter *sorter, int nr,
 	D_DEBUG(DB_TRACE, "Initialize sorter for %s, nr %d\n",
 		pool_comp_type2str(type), nr);
 
-	D_ALLOC(sorter->cs_comps, nr * sizeof(*sorter->cs_comps));
+	D_ALLOC_ARRAY(sorter->cs_comps, nr);
 	if (sorter->cs_comps == NULL)
 		return -DER_NOMEM;
 
@@ -970,8 +970,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 		goto failed;
 	}
 
-	D_ALLOC(map->po_domain_sorters,
-		map->po_domain_layers * sizeof(*map->po_domain_sorters));
+	D_ALLOC_ARRAY(map->po_domain_sorters, map->po_domain_layers);
 	if (map->po_domain_sorters == NULL) {
 		rc = -DER_NOMEM;
 		goto failed;
@@ -2048,7 +2047,7 @@ rescan:
 		return 0;
 
 	if (*tgt_pp == NULL) {
-		D_ALLOC(*tgt_pp, *tgt_cnt * sizeof(*targets));
+		D_ALLOC_ARRAY(*tgt_pp, *tgt_cnt);
 		if (*tgt_pp == NULL)
 			return -DER_NOMEM;
 		goto rescan;
@@ -2150,8 +2149,7 @@ pool_map_find_by_rank_status(struct pool_map *map,
 	for (i = 0; i < dom->do_target_nr; i++) {
 		if (dom->do_targets[i].ta_comp.co_status & status) {
 			if (*tgt_ppp == NULL) {
-				D_ALLOC(*tgt_ppp,
-					dom->do_target_nr * sizeof(**tgt_ppp));
+				D_ALLOC_ARRAY(*tgt_ppp,	dom->do_target_nr);
 				if (*tgt_ppp == NULL)
 					return -DER_NOMEM;
 			}
@@ -2366,8 +2364,7 @@ pool_target_id_list_append(struct pool_target_id_list *id_list,
 	if (pool_target_id_found(id_list, id))
 		return 0;
 
-	D_REALLOC(new_ids, id_list->pti_ids, (id_list->pti_number + 1) *
-			  sizeof(*id_list->pti_ids));
+	D_REALLOC_ARRAY(new_ids, id_list->pti_ids, id_list->pti_number + 1);
 	if (new_ids == NULL)
 		return -DER_NOMEM;
 
@@ -2399,8 +2396,7 @@ int
 pool_target_id_list_alloc(unsigned int num,
 			  struct pool_target_id_list *id_list)
 {
-	D_ALLOC(id_list->pti_ids,
-		num * sizeof(struct pool_target_id));
+	D_ALLOC_ARRAY(id_list->pti_ids,	num);
 	if (id_list->pti_ids == NULL)
 		return -DER_NOMEM;
 

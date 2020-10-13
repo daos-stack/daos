@@ -109,7 +109,7 @@ deflate_init(void **daos_dc_ctx, uint16_t level)
 
 	struct deflate_ctx *ctx;
 
-	D_ALLOC(ctx, sizeof(*ctx));
+	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		return -DER_NOMEM;
 

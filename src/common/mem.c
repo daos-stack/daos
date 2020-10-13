@@ -339,9 +339,7 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 		}
 
 		new_max = min((*cnt_max) << 1, TXD_CB_MAX);
-		D_REALLOC(txi, *pvec,
-			  new_max * sizeof(struct umem_tx_stage_item));
-
+		D_REALLOC_ARRAY(txi, *pvec, new_max);
 		if (txi == NULL)
 			return -DER_NOMEM;
 
