@@ -256,7 +256,7 @@ func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResp
 
 	// get utilisation for any mounted namespaces
 	for _, ns := range resp.Namespaces {
-		c.log.Debugf("updating scm fs on device %s", ns.BlockDevice)
+		c.log.Debugf("updating scm fs on device %+v", ns)
 		for _, srv := range instances {
 			cfg := srv.scmConfig()
 			c.log.Debugf("looking on instance %d (device list: %v)",
