@@ -181,7 +181,7 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
-	if err := pretty.PrintHostStorageSpaceMap(resp.HostStorage, &bld); err != nil {
+	if err := pretty.PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())

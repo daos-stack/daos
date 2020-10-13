@@ -100,7 +100,9 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (*ctlpb
 	}
 	c.log.Debugf("SCM state before prep: %s", scmState)
 
-	return newPrepareScmResp(c.ScmPrepare(scm.PrepareRequest{Reset: pbReq.Reset_}))
+	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: pbReq.Reset_})
+
+	return newPrepareScmResp(resp, err)
 }
 
 // StoragePrepare configures SSDs for user specific access with SPDK and

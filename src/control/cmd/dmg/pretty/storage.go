@@ -99,9 +99,9 @@ func PrintHostStorageMap(hsm control.HostStorageMap, out io.Writer, opts ...Prin
 	return nil
 }
 
-// PrintHostStorageSpaceMap generates a human-readable representation of the supplied
+// PrintHostStorageUsageMap generates a human-readable representation of the supplied
 // HostStorageMap struct and writes utilization info to the supplied io.Writer.
-func PrintHostStorageSpaceMap(hsm control.HostStorageMap, out io.Writer) error {
+func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 	if len(hsm) == 0 {
 		return nil
 	}
