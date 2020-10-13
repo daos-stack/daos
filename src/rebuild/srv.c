@@ -425,6 +425,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		  struct rebuild_tgt_query_info *status)
 {
 	struct ds_migrate_status	dms = { 0 };
+	struct rebuild_pool_tls		*tls;
 	struct rebuild_tgt_query_arg	arg;
 	int				rc;
 
@@ -435,6 +436,10 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 				     &dms);
 	if (rc)
 		D_GOTO(out, rc);
+
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	if (tls != NULL && tls->rebuild_pool_status)
+		status->status = tls->rebuild_pool_status;
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
@@ -452,6 +457,10 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		status->rebuilding = true;
 	else
 		status->rebuilding = false;
+
+	if (status->status == 0 && dms.dm_status)
+		status->status = dms.dm_status;
+
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" scanning %d/%d rebuilding=%s, "
