@@ -44,7 +44,7 @@ usage() {
 
 This script has 4 modes that can be executed independently if needed.
 
- 1. Display big files specified by threshold value i.e. -t 5mb. This option
+ 1. Display big files specified by threshold value i.e. -t 5M. This option
     will list files within provided local path with -f option and will prepend
     each file with a \"Y\" if file exceeds threshold value and with \"N\" if
     it does not.
@@ -75,8 +75,10 @@ This script has 4 modes that can be executed independently if needed.
 #######################################
 # CONSTANT variables.
 #######################################
-# shellcheck disable=SC2046,SC2086
-CART_LOGTEST_PATH="$(dirname $(readlink -f ${0}))/cart/cart_logtest.py"
+if "${CART_LOGTEST}" && ! CART_LOGTEST_PATH="$(dirname "$(readlink -f "${0}")")/cart/cart_logtest.py"; then
+    echo "Failed to get path to cart_logtest.py ..."
+    exit 1
+fi
 
 #######################################
 # Check if the files exist on this host.
@@ -89,9 +91,7 @@ CART_LOGTEST_PATH="$(dirname $(readlink -f ${0}))/cart/cart_logtest.py"
 check_files_input() {
     if [ -n "${1}" ]; then
         # shellcheck disable=SC2086
-        files=$(ls -d ${1} 2> /dev/null)
-        files_rc=$?
-        if [ -n "${files}" ] && [ "${files_rc}" -eq 0 ]; then
+        if ! ls -d ${1} 2> /dev/null; then
             echo "Files found that match ${1}."
         else
             echo "No files matched ${1}. Nothing to do."
@@ -100,36 +100,6 @@ check_files_input() {
     else
         echo "Please specify -f option."
         exit 1
-    fi
-}
-
-#######################################
-# Convert human readable size values to respective byte value.
-# Arguments:
-#   size: size value to convert to bytes. i.e. 5mb, 40gb, 6k, 10g
-# Returns:
-#   converted byte value.
-#######################################
-human_to_bytes() {
-    h_size=${1,,}
-
-    declare -A units=(
-        [b]=1
-        [kb]=$(python -c "print (2**10)")
-        [k]=$(python -c "print (2**10)")
-        [mb]=$(python -c "print (2**20)")
-        [m]=$(python -c "print (2**20)")
-        [gb]=$(python -c "print (2**30)")
-        [g]=$(python -c "print (2**30)")
-    )
-    if [[ "${h_size,,}" =~ ([0-9.]+)([kbmgt]+) ]]; then
-        val="${BASH_REMATCH[1]}"
-        unit="${BASH_REMATCH[2]}"
-        (( val = val*${units[${unit}]} ))
-        echo "${val}"
-    else
-        echo "Invalid value provided: ${1}"
-        return 1
     fi
 }
 
@@ -152,7 +122,7 @@ list_tag_files() {
     }'
 
     # Convert to bytes and run
-    bts=$(human_to_bytes "${2}")
+    bts=$(echo "${2}" | numfmt --from=iec)
     # shellcheck disable=SC2086
     du -ab -d 1 ${1} | awk -v th="${bts}" "${awk_cmd}"
 }
@@ -166,9 +136,9 @@ list_tag_files() {
 #   1: No VM detected or skipped
 #######################################
 check_hw() {
-    if dmesg | grep "Hypervisor detected" >/dev/null 2>&1; then
+    if dmesg | grep -q "Hypervisor detected"; then
         # This host is a VM
-        if [ "${1}" == "true" ]; then
+        if "${1:-false}"; then
             echo "  Running compression on a VM host"
             return 1
         fi
@@ -243,9 +213,7 @@ run_cartlogtest() {
         do
             if [ -f ${file} ]; then
                 logtest_log="${file%.*}.cart_logtest.${file##*.}"
-                ${CART_LOGTEST_PATH} ${file} > ${logtest_log} 2>&1
-                ret=$?
-                if [ ${ret} -ne 0 ]; then
+                if ! ${CART_LOGTEST_PATH} ${file} > ${logtest_log} 2>&1; then
                     echo "  Error: details in ${file}_cart_testlog"
                     rc=1
                 fi
@@ -311,14 +279,15 @@ while getopts "vhxzca:f:t:" opt; do
 done
 shift "$((OPTIND -1))"
 
-script_name=$(basename "${0}")
-log_file="/tmp/${script_name%%.*}_$(/bin/date +%Y%m%d_%H%M%S).log"
-if [ "${VERBOSE}" != "true" ]; then
+if ! "${VERBOSE}"; then
     # Redirect 'set -e' output to a log file if not verbose
+    script_name="${0##*/}"
+    log_file="/tmp/${script_name%%.*}_$(/bin/date +%Y%m%d_%H%M%S).log"
     exec 2> "${log_file}"
+    echo "Logging ${script_name} output to ${log_file}"
 fi
 set -ex
-echo "Logging ${script_name} output to ${log_file}"
+trap 'if [ -f "${log_file}" ]; then cat "${log_file}"; fi' ERR
 
 # Verify files have been specified and they exist on this host
 check_files_input "${FILES_TO_PROCESS}"
@@ -330,7 +299,7 @@ if [ -n "${THRESHOLD}" ]; then
 fi
 
 # Run cart_logtest.py on FILES_TO_PROCESS
-if [ "${CART_LOGTEST}" == "true" ]; then
+if "${CART_LOGTEST:-false}"; then
     echo "Running ${CART_LOGTEST_PATH} ..."
     run_cartlogtest "${FILES_TO_PROCESS}"
     ret=$?
@@ -340,14 +309,12 @@ if [ "${CART_LOGTEST}" == "true" ]; then
 fi
 
 # Compress files in FILES_TO_PROCESS if not running on VM host.
-if [ "${COMPRESS}" == "true" ]; then
+if "${COMPRESS:-false}"; then
     echo "Compressing files larger than 1M ..."
     if check_hw "${EXCLUDE_ZIP}"; then
         echo "VM system detected, skipping compression ..."
     else
-        compress_files "${FILES_TO_PROCESS}"
-        ret=$?
-        if [ ${ret} -ne 0 ]; then
+        if ! compress_files "${FILES_TO_PROCESS}"; then
             rc=1
         fi
     fi
@@ -356,14 +323,14 @@ fi
 # Scp files specified in FILES_TO_PROCESS to ARCHIVE_DEST
 if [ -n "${ARCHIVE_DEST}" ]; then
     echo "Archiving logs to ${ARCHIVE_DEST} ..."
-    scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"
-    ret=$?
-    if [ ${ret} -ne 0 ]; then
+    if ! scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"; then
         rc=1
     fi
 
-    # Finally archive this script's log file
-    scp_files "${log_file}" "${ARCHIVE_DEST}"
+    if ! "${VERBOSE}"; then
+        # Finally archive this script's log file
+        scp_files "${log_file}" "${ARCHIVE_DEST}"
+    fi
 fi
 
 exit ${rc}

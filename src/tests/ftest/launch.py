@@ -1150,7 +1150,7 @@ def create_results_xml(hosts, testname, output, destination):
         "time": "0.0",
     }
     testcase_attrs = {
-        "name": "ALL",
+        "name": "framework_results",
         "time": "0.0",
     }
     error_atttrs = {
@@ -1502,8 +1502,8 @@ def main():
         "-th", "--logs_threshold",
         action="store",
         help="collect log sizes and report log sizes that go past provided"
-             "threshold. e.g. '-th 5mb'"
-             "Valid threshold units are: b, k, kb, m, mb, g, gb")
+             "threshold. e.g. '-th 5M'"
+             "Valid threshold units are: B, K, M, G, T")
     parser.add_argument(
         "-s", "--sparse",
         action="store_true",

@@ -63,7 +63,7 @@ if [ -n "${3}" ]; then
 fi
 
 # Log size threshold
-LOGS_THRESHOLD="1gb"
+LOGS_THRESHOLD="1G"
 
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
