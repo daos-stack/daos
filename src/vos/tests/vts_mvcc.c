@@ -625,12 +625,15 @@ listr_f(struct io_test_args *arg, struct tx_helper *txh, char *path,
 }
 
 static int
-tx_query(daos_handle_t coh, struct tx_helper *txh, daos_unit_oid_t oid,
-	 daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-	 daos_recx_t *recx, uint64_t flags)
+tx_query(daos_handle_t coh, struct tx_helper *txh, daos_epoch_t epoch,
+	 daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+	 uint64_t flags, uint64_t i, char *path)
 {
 	struct dtx_handle	*dth;
 	int			 rc;
+	daos_unit_oid_t		 oid;
+
+	set_oid(i, path, &oid);
 
 	dth = start_tx(coh, oid, epoch, txh);
 
@@ -647,14 +650,11 @@ querymax_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val = 0;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
-
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, NULL,
-			NULL, DAOS_GET_DKEY | DAOS_GET_MAX);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL,
+			NULL, DAOS_GET_DKEY | DAOS_GET_MAX, mvcc_arg->i, path);
 }
 
 static int
@@ -662,17 +662,15 @@ querymax_a(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val = 0;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			NULL, DAOS_GET_AKEY | DAOS_GET_MAX);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_AKEY | DAOS_GET_MAX, mvcc_arg->i, path);
 }
 
 static int
@@ -680,19 +678,17 @@ querymax_r(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 	daos_recx_t	 recx = {0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
 
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			&recx, DAOS_GET_RECX | DAOS_GET_MAX);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_RECX | DAOS_GET_MAX, mvcc_arg->i, path);
 }
 
 static int
@@ -700,16 +696,14 @@ querymax_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
-
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			NULL, DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX,
+			mvcc_arg->i, path);
 }
 
 static int
@@ -717,19 +711,18 @@ querymax_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	daos_recx_t	 recx = {0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
 
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			&recx, DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
+			mvcc_arg->i, path);
 }
 
 static int
@@ -737,18 +730,17 @@ querymax_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 	daos_recx_t	 recx = {0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			&recx, DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX,
+			mvcc_arg->i, path);
 }
 
 static int
@@ -756,18 +748,15 @@ querymax_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 	daos_recx_t	 recx = {0};
 
-	set_oid(mvcc_arg->i, path, &oid);
-
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			&recx, DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX |
-			DAOS_GET_RECX);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MAX |
+			DAOS_GET_RECX, mvcc_arg->i, path);
 }
 
 static int
@@ -775,14 +764,11 @@ querymin_d(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val = 0;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
-
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, NULL,
-			NULL, DAOS_GET_DKEY | DAOS_GET_MIN);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, NULL, NULL,
+			DAOS_GET_DKEY | DAOS_GET_MIN, mvcc_arg->i, path);
 }
 
 static int
@@ -790,17 +776,15 @@ querymin_a(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val = 0;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			NULL, DAOS_GET_AKEY | DAOS_GET_MIN);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_AKEY | DAOS_GET_MIN, mvcc_arg->i, path);
 }
 
 static int
@@ -808,19 +792,17 @@ querymin_r(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 	daos_recx_t	 recx = {0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
 
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			&recx, DAOS_GET_RECX | DAOS_GET_MIN);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_RECX | DAOS_GET_MIN, mvcc_arg->i, path);
 }
 
 static int
@@ -828,16 +810,14 @@ querymin_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
-
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			NULL, DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, NULL,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN,
+			mvcc_arg->i, path);
 }
 
 static int
@@ -845,19 +825,18 @@ querymin_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	daos_recx_t	 recx = {0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
 
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			&recx, DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MIN);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MIN,
+			mvcc_arg->i, path);
 }
 
 static int
@@ -865,18 +844,17 @@ querymin_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 	daos_recx_t	 recx = {0};
 
-	set_oid(mvcc_arg->i, path, &oid);
 	set_dkey(mvcc_arg->i, path, &dkey);
 
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			&recx, DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MIN);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MIN,
+			mvcc_arg->i, path);
 }
 
 static int
@@ -884,18 +862,15 @@ querymin_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	   daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
-	daos_unit_oid_t	 oid;
 	uint64_t	 dkey_val;
 	daos_key_t	 dkey = {&dkey_val, sizeof(dkey_val), 0};
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 	daos_recx_t	 recx = {0};
 
-	set_oid(mvcc_arg->i, path, &oid);
-
-	return tx_query(arg->ctx.tc_co_hdl, txh, oid, epoch, &dkey, &akey,
-			&recx, DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN |
-			DAOS_GET_RECX);
+	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
+			DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_MIN |
+			DAOS_GET_RECX, mvcc_arg->i, path);
 }
 
 static struct op operations[] = {
