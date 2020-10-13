@@ -837,7 +837,7 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 			goto out_svc;
 	}
 
-	D_ALLOC(resp->psrs, sizeof(*resp->psrs) * ranks->rl_nr);
+	D_ALLOC_ARRAY(resp->psrs, ranks->rl_nr);
 	if (resp->psrs == NULL) {
 		rc = -DER_NOMEM;
 		goto out_ranks;
@@ -846,7 +846,7 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 	for (i = 0; i < ranks->rl_nr; i++) {
 		d_rank_t rank = ranks->rl_ranks[i];
 
-		D_ALLOC(resp->psrs[i], sizeof(*(resp->psrs[i])));
+		D_ALLOC_PTR(resp->psrs[i]);
 		if (resp->psrs[i] == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -864,13 +864,11 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp, bool all_ranks)
 	if (rc != 0) {
 		for (; i >= 0; i--) {
 			if (resp->psrs[i] != NULL) {
-				if (resp->psrs[i]->uri != NULL)
-					D_FREE(resp->psrs[i]->uri);
+				D_FREE(resp->psrs[i]->uri);
 				D_FREE(resp->psrs[i]);
 			}
 		}
 		D_FREE(resp->psrs);
-		resp->psrs = NULL; /* paranoid */
 		goto out_ranks;
 	}
 	resp->n_psrs = ranks->rl_nr;
