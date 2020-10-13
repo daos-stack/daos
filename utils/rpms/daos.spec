@@ -10,8 +10,8 @@
 %endif
 
 Name:          daos
-Version:       1.1.0
-Release:       35%{?relval}%{?dist}
+Version:       1.1.1
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -393,8 +393,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r daos_agent
 %{_libdir}/*.a
 
 %changelog
-* Thu Oct 08 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-35
+
+* Tue Oct 13 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.1-2
 - Create unprivileged user for daos_agent
+
+* Mon Oct 12 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.1-1
+- Version bump up to 1.1.1
 
 * Sat Oct 03 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-34
 - Add go-race to BuildRequires on OpenSUSE Leap
