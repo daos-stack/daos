@@ -26,7 +26,7 @@
 
 #define READDIR_COUNT 128
 
-#define DFUSE_READDIR_EOD (1LL<<63)
+#define DFUSE_READDIR_EOD (1LL << 63)
 
 struct iterate_data {
 	struct dfuse_readdir_entry	*dre;
