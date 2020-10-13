@@ -106,8 +106,8 @@ struct dfuse_obj_hdl {
 	struct dfuse_readdir_entry	*doh_dre;
 	/** Index into doh_dre array */
 	int				doh_dre_index;
-	/** Index of next dfs entry */
-	int				doh_anchor_index;
+	/** Next value from anchor */
+	uint64_t			doh_anchor_index;
 };
 
 struct dfuse_inode_ops {

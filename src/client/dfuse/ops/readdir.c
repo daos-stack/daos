@@ -56,8 +56,8 @@ static int
 fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 {
 	struct iterate_data	idata = {};
-	uint32_t		count;
-	int			rc = READDIR_COUNT - 1;
+	uint32_t		count = READDIR_COUNT - 1;
+	int			rc;
 
 	idata.dre = oh->doh_dre;
 	idata.base_offset = offset;
@@ -68,7 +68,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, off_t *eof)
 	rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &count,
 			 (NAME_MAX + 1) * count, filler_cb, &idata);
 
-	oh->doh_anchor_index = count;
+	oh->doh_anchor_index += count;
 	oh->doh_dre[count].dre_offset = 0;
 	oh->doh_dre_index = 0;
 
@@ -144,12 +144,12 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 		/* Update the existing object with the new name/parent */
 
-		DFUSE_TRA_INFO(inode,
+		DFUSE_TRA_DEBUG(inode,
 			       "Maybe updating parent inode %lu dfs_root %lu",
 			entry->ino, ie->ie_dfs->dfs_root);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
-			DFUSE_TRA_INFO(inode, "Not updating parent");
+			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else {
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
 					       ie->ie_name);
@@ -224,10 +224,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 * many entries. This is the telldir/seekdir use case.
 		 */
 
-		DFUSE_TRA_DEBUG(oh, "Seeking from offset %ld to %ld (index %d)",
-				oh->doh_dre[oh->doh_dre_index].dre_offset,
-				offset,
-				oh->doh_dre_index);
+		DFUSE_TRA_INFO(oh, "Seeking from offset %ld to %ld (index %d)",
+			       oh->doh_dre[oh->doh_dre_index].dre_offset,
+			       offset,
+			       oh->doh_dre_index);
 
 		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
 		memset(oh->doh_dre, 0, sizeof(*oh->doh_dre) * READDIR_COUNT);
@@ -261,8 +261,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 	}
 
 	do {
-		int i;
-		off_t eof = 0;
+		struct dfuse_dfs	*dfs;
+		int			i;
+		off_t			eof = 0;
 
 		if (offset == 0)
 			offset++;
@@ -274,6 +275,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 				D_GOTO(err, 0);
 		}
 
+		dfs = oh->doh_ie->ie_dfs;
+
 		DFUSE_TRA_DEBUG(oh, "processing entries %ld %ld", offset, eof);
 
 		/* Populate dir */
@@ -281,11 +284,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			struct dfuse_readdir_entry	*dre = &oh->doh_dre[i];
 			struct stat			stbuf = {0};
 			dfs_obj_t			*obj;
-			struct dfuse_dfs		*dfs;
 			off_t				next_offset;
 			size_t				written;
-
-			dfs = oh->doh_ie->ie_dfs;
 
 			if (dre->dre_offset == 0) {
 				DFUSE_TRA_DEBUG(oh, "Reached end of array");
