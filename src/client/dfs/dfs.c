@@ -2370,8 +2370,7 @@ out:
 		ret = daos_tx_close(th,  NULL);
 		if (ret) {
 			D_ERROR("daos_tx_close() failed (%d)\n", ret);
-			if (rc == 0)
-				rc = daos_der2errno(ret);
+			rc = daos_der2errno(ret);
 		}
 	}
 	D_FREE(obj);

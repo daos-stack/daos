@@ -1630,11 +1630,12 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 
 out:
 	if (rc < 0) {
-		for (i = 0; i < tgt_cnt; i++)
-			D_FREE(dtrgs[i].dtrg_req_idx);
-
-		for (i = 0; i < act_tgt_cnt; i++)
-			D_FREE(dcdes[i].dcde_reqs);
+		if (dtrgs != NULL)
+			for (i = 0; i < tgt_cnt; i++)
+				D_FREE(dtrgs[i].dtrg_req_idx);
+		if (dcdes != NULL)
+			for (i = 0; i < act_tgt_cnt; i++)
+				D_FREE(dcdes[i].dcde_reqs);
 
 		D_FREE(dcdes);
 		D_FREE(shard_tgts);

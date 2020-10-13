@@ -1482,8 +1482,12 @@ ds_rebuild_regenerate_task(struct ds_pool *pool)
 void
 rebuild_hang(void)
 {
+	int	rc;
+
 	D_DEBUG(DB_REBUILD, "Hang current rebuild process.\n");
-	dss_parameters_set(DMG_KEY_REBUILD_THROTTLING, 0);
+	rc = dss_parameters_set(DMG_KEY_REBUILD_THROTTLING, 0);
+	if (rc)
+		D_ERROR("Set parameter failed: rc %d\n", rc);
 }
 
 static int
@@ -1603,7 +1607,9 @@ rebuild_tgt_status_check_ult(void *arg)
 		int				rc;
 
 		memset(&status, 0, sizeof(status));
-		ABT_mutex_create(&status.lock);
+		rc = ABT_mutex_create(&status.lock);
+		if (rc != ABT_SUCCESS)
+			return;
 		rc = rebuild_tgt_query(rpt, &status);
 		ABT_mutex_free(&status.lock);
 		if (rc || status.status != 0) {

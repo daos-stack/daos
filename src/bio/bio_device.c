@@ -330,7 +330,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	rc = smd_pool_list(&pool_list, &pool_cnt);
 	if (rc) {
 		D_ERROR("Failed to list pools in SMD. "DF_RC"\n", DP_RC(rc));
-		goto out;
+		goto pool_list_out;
 	}
 
 	D_INIT_LIST_HEAD(&blob_list);
@@ -372,6 +372,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 
 out:
 	free_blob_list(xs_ctxt, &blob_list, new_dev);
+pool_list_out:
 	free_pool_list(&pool_list);
 	if (new_dev)
 		new_dev->bb_replacing = false;

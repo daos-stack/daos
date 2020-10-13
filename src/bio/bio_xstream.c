@@ -828,7 +828,9 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		return;
 	}
 
-	spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev, d_bdev);
+	if (bbs != NULL)
+		spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev,
+				     d_bdev);
 }
 
 void
@@ -1681,8 +1683,9 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 			continue;
 
 		scan_period = 0;
-		spdk_thread_send_msg(owner_thread(bbs), teardown_bio_bdev,
-				     d_bdev);
+		if (bbs != NULL)
+			spdk_thread_send_msg(owner_thread(bbs),
+					     teardown_bio_bdev, d_bdev);
 	}
 
 	if (scan_period == 0)

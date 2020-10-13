@@ -1238,7 +1238,8 @@ static void
 init_test_pool_info(daos_pool_info_t *pool_info)
 {
 	/* Set up pool info to be returned */
-	uuid_parse(TEST_UUID, pool_info->pi_uuid);
+	if (uuid_parse(TEST_UUID, pool_info->pi_uuid))
+		return;
 
 	pool_info->pi_bits = DPI_ALL;
 
@@ -1346,7 +1347,8 @@ test_drpc_pool_query_success(void **state)
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
 	/* Make sure inputs to the mgmt svc were sane */
-	uuid_parse(TEST_UUID, exp_uuid);
+	if (uuid_parse(TEST_UUID, exp_uuid))
+		return;
 	assert_int_equal(uuid_compare(exp_uuid, ds_mgmt_pool_query_uuid), 0);
 	assert_non_null(ds_mgmt_pool_query_info_ptr);
 	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits, DPI_ALL);
@@ -2220,9 +2222,11 @@ test_drpc_cont_set_owner_success(void **state)
 	uuid_t			cont_uuid;
 
 	pool_uuid_str = "11111111-1111-1111-1111-111111111111";
-	uuid_parse(pool_uuid_str, pool_uuid);
+	if (uuid_parse(pool_uuid_str, pool_uuid))
+		return;
 	cont_uuid_str = "22222222-2222-2222-2222-222222222222";
-	uuid_parse(cont_uuid_str, cont_uuid);
+	if (uuid_parse(cont_uuid_str, cont_uuid))
+		return;
 
 	req.pooluuid = pool_uuid_str;
 	req.contuuid = cont_uuid_str;

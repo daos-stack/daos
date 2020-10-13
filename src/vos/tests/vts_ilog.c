@@ -324,9 +324,10 @@ entries_set(struct entries *entries, enum entries_op op, ...)
 		if (epoch == ENTRIES_END)
 			break;
 
-		if (entries->entry_count == entries->alloc_count)
+		if (entries->entry_count == entries->alloc_count) {
 			va_end(ap);
 			return -DER_NOMEM;
+		}
 
 		desc = &entries->entries[entries->entry_count];
 		desc->epoch = epoch;
