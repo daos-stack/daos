@@ -784,8 +784,8 @@ static struct op operations[] = {
 	{"querymaxd",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymax_d},
 	{"querymaxa",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_a},
 	{"querymaxr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_r},
-	{"querymaxda",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymax_da},
-	{"querymaxdr",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymax_dr},
+	{"querymaxda",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_da},
+	{"querymaxdr",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_dr},
 	{"querymaxar",	T_R,	L_A,	L_NIL,	R_NE,	W_NIL,	querymax_ar},
 	{"querymaxdar",	T_R,	L_D,	L_NIL,	R_NE,	W_NIL,	querymax_dar},
 
