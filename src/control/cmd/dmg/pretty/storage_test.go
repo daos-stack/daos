@@ -620,7 +620,7 @@ host1
 -----
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
-/dev/pmem1    1         1 B      
+pmem1         1         1 B      
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 

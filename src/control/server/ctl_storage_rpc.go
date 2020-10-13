@@ -25,11 +25,12 @@ package server
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -251,6 +252,20 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 	return newScanNvmeResp(req, resp, err)
 }
 
+func pmemNameInList(paths []string, name string) bool {
+	if strings.TrimSpace(name) == "" {
+		return false
+	}
+
+	for _, path := range paths {
+		if filepath.Base(path) == name {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResponse) (*scm.ScanResponse, error) {
 	instances := c.harness.Instances()
 
@@ -265,7 +280,7 @@ func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResp
 			if !srv.isReady() {
 				continue
 			}
-			if !common.Includes(cfg.DeviceList, ns.BlockDevice) {
+			if !pmemNameInList(cfg.DeviceList, ns.BlockDevice) {
 				continue
 			}
 

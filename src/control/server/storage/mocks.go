@@ -171,8 +171,8 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 
 	return &ScmNamespace{
 		UUID:        common.MockUUID(varIdx...),
-		BlockDevice: fmt.Sprintf("/dev/pmem%d", idx),
-		Name:        fmt.Sprintf("pmem%d", idx),
+		BlockDevice: fmt.Sprintf("pmem%d", idx),
+		Name:        fmt.Sprintf("namespace%d.0", idx),
 		NumaNode:    uint32(idx),
 		Size:        uint64(idx),
 	}
