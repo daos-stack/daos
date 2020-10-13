@@ -145,8 +145,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_DEBUG(inode,
-			       "Maybe updating parent inode %lu dfs_root %lu",
-			entry->ino, ie->ie_dfs->dfs_root);
+				"Maybe updating parent inode %lu dfs_root %lu",
+				entry->ino, ie->ie_dfs->dfs_root);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
