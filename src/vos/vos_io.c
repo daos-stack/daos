@@ -993,6 +993,30 @@ no_shadow:
 	*shadow_ep = DAOS_EPOCH_MAX;
 }
 
+static bool
+stop_on_empty(struct vos_io_context *ioc, uint64_t cond, int *rc)
+{
+	if (*rc != -DER_NONEXIST)
+		return false;
+
+	if (ioc->ic_check_existence)
+		return true;
+
+	if (ioc->ic_ts_set == NULL)
+		return false;
+
+	if (ioc->ic_read_ts_only) {
+		*rc = 0;
+		return true;
+	}
+
+	if (ioc->ic_ts_set->ts_flags & cond)
+		return true;
+
+	return false;
+}
+
+
 static int
 akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 {
@@ -1018,10 +1042,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
 
 	if (rc != 0) {
+		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, &rc))
+			goto out;
 		if (rc == -DER_NONEXIST) {
-			if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
-			    ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH))
-				goto out;
 			D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
 				DP_KEY(&iod->iod_name));
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
@@ -1036,10 +1059,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			    &ioc->ic_akey_info);
 
 	if (rc != 0) {
+		if (stop_on_empty(ioc, VOS_OF_COND_AKEY_FETCH, &rc))
+			goto out;
 		if (rc == -DER_NONEXIST) {
-			if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
-			    ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH))
-				goto out;
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
 				(int)iod->iod_name.iov_len,
@@ -1054,7 +1076,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	}
 
 	if (ioc->ic_read_ts_only || ioc->ic_check_existence)
-		D_GOTO(out, rc = 0);
+		goto out; /* skip value fetch */
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
@@ -1143,10 +1165,9 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
 			      &toh, ioc->ic_ts_set);
 
+	if (stop_on_empty(ioc, VOS_COND_FETCH_MASK, &rc))
+		goto out;
 	if (rc == -DER_NONEXIST) {
-		if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
-		    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK))
-			goto out;
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
 		D_DEBUG(DB_IO, "Nonexistent dkey\n");
@@ -1163,10 +1184,9 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			    &ioc->ic_dkey_info);
 
 	if (rc != 0) {
+		if (stop_on_empty(ioc, VOS_COND_FETCH_MASK, &rc))
+			goto out;
 		if (rc == -DER_NONEXIST) {
-			if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
-			    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK))
-				goto out;
 			for (i = 0; i < ioc->ic_iod_nr; i++)
 				iod_empty_sgl(ioc, i);
 			D_DEBUG(DB_IO, "Nonexistent dkey\n");
@@ -1233,21 +1253,20 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != -DER_NONEXIST && rc != 0)
 		goto out;
 
+	if (stop_on_empty(ioc, VOS_COND_FETCH_MASK, &rc)) {
+		if (rc == 0)
+			goto set_ioc;
+		goto out;
+	}
 	if (rc == -DER_NONEXIST) {
-		if (ioc->ic_ts_set && (ioc->ic_read_ts_only ||
-		    ioc->ic_ts_set->ts_flags & VOS_COND_FETCH_MASK))
-			goto out;
 		rc = 0;
 		for (i = 0; i < iod_nr; i++)
 			iod_empty_sgl(ioc, i);
 	} else {
 		if (dkey == NULL || dkey->iov_len == 0) {
 			if (ioc->ic_read_ts_only)
-				/* Set read TS on object. */
-				rc = 0;
-			else
-				rc = -DER_INVAL;
-			D_GOTO(out, rc);
+				goto set_ioc;
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 
 		rc = dkey_fetch(ioc, dkey);
@@ -1255,8 +1274,8 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			goto out;
 	}
 
+set_ioc:
 	*ioh = vos_ioc2ioh(ioc);
-
 out:
 	vos_dth_set(NULL);
 
@@ -1372,9 +1391,8 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
 
-	if (ci_is_valid(csum)) {
+	if (csum != NULL)
 		ent.ei_csum = *csum;
-	}
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
