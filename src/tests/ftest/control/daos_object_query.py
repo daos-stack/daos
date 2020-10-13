@@ -53,7 +53,7 @@ class DaosObjectQuery(TestWithServers):
         """
         JIRA ID: DAOS-4694
         Test Description: Test daos object query.
-        :avocado: tags=all,container,tiny,full_regression,daos_object_query
+        :avocado: tags=all,container,hw,small,full_regression,daos_object_query
         """
         daos_cmd = DaosCommand(self.bin)
         errors = []
