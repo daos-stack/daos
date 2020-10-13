@@ -693,7 +693,7 @@ querymax_r(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymax_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -708,7 +708,7 @@ querymax_da(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymax_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -727,7 +727,7 @@ querymax_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymax_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	    daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
@@ -745,7 +745,7 @@ querymax_ar(struct io_test_args *arg, struct tx_helper *txh, char *path,
 
 static int
 querymax_dar(struct io_test_args *arg, struct tx_helper *txh, char *path,
-	   daos_epoch_t epoch)
+	     daos_epoch_t epoch)
 {
 	struct mvcc_arg	*mvcc_arg = arg->custom;
 	uint64_t	 dkey_val;
