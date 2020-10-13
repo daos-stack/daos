@@ -1154,7 +1154,7 @@ pipeline {
                             coverityPost condition: 'unsuccessful'
                         }
                     }
-                }
+                } // stage('Coverity on CentOS 7')
                 stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
@@ -1172,7 +1172,7 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                }
+                } // stage('Functional on CentOS 7')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
@@ -1208,7 +1208,7 @@ pipeline {
                             functionalTestPost()
                         }
                     } // post
-                } // stage('Functional on Ubuntu 20.04') {
+                } // stage('Functional on Ubuntu 20.04')
                 stage('Functional_Hardware_Small') {
                     when {
                         beforeAgent true
