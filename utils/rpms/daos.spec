@@ -310,24 +310,24 @@ mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 output="daos-tests-ior.files"
 ftest_path=%{?_prefix}/lib/daos/TESTING
-files=(%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/ior_utils.py \
-  %{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/nvme_utils.py)
+files=(%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/ior_utils.py \
+  %{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/nvme_utils.py)
 exclude="--exclude-dir=soak"
 %create_file_list  ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
 output="daos-tests-fio.files"
 exclude="${exclude} --exclude=ior_utils.py --exclude=ior_test_base.py"
-files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/fio_utils.py
+files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/fio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
 output="daos-tests-mpiio.files"
 exclude="${exclude} --exclude=fio_utils.py"
-files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/mpio_utils.py
+files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/mpio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
 output="daos-tests-macsio.files"
 exclude="${exclude} --exclude=mpiio_utils.py"
-files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/macsio_utils.py
+files=%{?buildroot}%{?_prefix}/lib/daos/TESTING/ftest/util/macsio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
 touch daos-tests-soak.files
