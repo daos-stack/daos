@@ -349,6 +349,15 @@ do
 done
 cat daos-tests.files
 
+%if (0%{?rhel} >= 7)
+for name in tests tests-ior tests-fio tests-mpiio tests-macsio tests-soak
+do
+  file="daos-${name}.files"
+  cat ${file} | sed -ne 's/\(.*\)\.py/\1.pyc\n\1.pyo/p' >> ${file}
+  sort ${file}
+done
+%endif
+
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
 getent passwd daos_server >/dev/null || useradd -M daos_server
