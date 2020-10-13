@@ -319,7 +319,7 @@ files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/fio_utils.py
 
 output="daos-tests-mpiio.files"
 exclude="${exclude} --exclude=fio_utils.py"
-files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/mpiio_utils.py
+files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/mpio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
 output="daos-tests-macsio.files"
