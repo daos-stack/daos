@@ -516,7 +516,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_HG;
+		D_GOTO(out, rc);
 
 	D_ASSERT(data != NULL);
 	rpc_priv = container_of(data, struct crt_rpc_priv, crp_pub.cr_input);
@@ -595,7 +595,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 		D_GOTO(out, rc);
 	}
 out:
-	return rc;
+	return crt_der_2_hgret(rc);
 }
 
 /* NB: caller should pass in &rpc_pub->cr_output as the \param data */
@@ -611,7 +611,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_HG;
+		D_GOTO(out, rc);
 
 	D_ASSERT(data != NULL);
 	rpc_priv = container_of(data, struct crt_rpc_priv, crp_pub.cr_output);
@@ -657,5 +657,5 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 
 	rc = crt_proc_output(rpc_priv, proc);
 out:
-	return rc;
+	return crt_der_2_hgret(rc);
 }

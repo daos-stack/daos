@@ -142,16 +142,37 @@ crt_hgret_2_der(int hg_ret)
 		return 0;
 	case HG_TIMEOUT:
 		return -DER_TIMEDOUT;
-	case HG_INVALID_PARAM:
+	case HG_INVALID_ARG:
 		return -DER_INVAL;
-	case HG_SIZE_ERROR:
+	case HG_MSGSIZE:
 		return -DER_OVERFLOW;
-	case HG_NOMEM_ERROR:
+	case HG_NOMEM:
 		return -DER_NOMEM;
 	case HG_CANCELED:
 		return -DER_CANCELED;
 	default:
 		return -DER_HG;
+	};
+}
+
+static inline int
+crt_der_2_hgret(int der)
+{
+	switch (der) {
+	case 0:
+		return HG_SUCCESS;
+	case -DER_TIMEDOUT:
+		return HG_TIMEOUT;
+	case -DER_INVAL:
+		return HG_INVALID_ARG;
+	case -DER_OVERFLOW:
+		return HG_MSGSIZE;
+	case -DER_NOMEM:
+		return HG_NOMEM;
+	case -DER_CANCELED:
+		return HG_CANCELED;
+	default:
+		return HG_OTHER_ERROR;
 	};
 }
 
