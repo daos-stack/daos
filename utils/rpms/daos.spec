@@ -3,29 +3,30 @@
 %define agent_svc_name daos_agent.service
 
 %define create_file_list() ( \
-  touch ${1} \
-  for file in ${2} \
+  touch %1; \
+  for file in %2; \
   do \
-    echo "${file}" >> ${1} \
-    file_name_w_ext=${file##*/} \
-    file_name=${name_w_ext%.*} \
-    utils=$(grep -l -R -E "(from|import) ${file_name}" ${3}/ftest/util/* ${4}) \
-    for util_file in ${utils} \
+    echo ${file#"%3"} >> %1; \
+    file_name_w_ext=${file##*/}; \
+    file_name=${file_name_w_ext%.*}; \
+    utils=$(grep -l -R -E "(from|import) ${file_name}" %5 %3/%4/ftest/util/*); \
+    for util_file in ${utils}; \
     do \
-      echo "${util_file}" >> ${1} \
-      util_name_file_w_ext=${util_file##*/} \
-      util_name=${util_name_w_ext%.*} \
-      ftests=$(grep -l -R -E "(from|import) (${util_name}|${file_name})" \
-        ${3}/ftest/* --exclude-dir=soak --exclude-dir=util ${4}) \
-      for ftest_file in ${ftests} \
+      echo ${util_file#"%3"} >> %1; \
+      util_name_file_w_ext=${util_file##*/}; \
+      util_name=${util_name_file_w_ext%.*}; \
+      regex="(from|import) (${util_name}|${file_name})"; \
+      search="%5 --exclude-dir=util %3/%4/ftest/*"; \
+      ftests=$(grep -l -R -E "${regex}" ${search}); \
+      for ftest_file in ${ftests}; \
       do \
-        echo "${ftest_file}" >> ${1} \
-        echo "${ftest_file%.*}.yaml" >> ${1} \
-      done \
-    done \
-  done \
-  echo "Files in ${1}:" \
-  cat ${1} \
+        install_file=${ftest_file#"%3"}; \
+        echo "${install_file}" >> %1; \
+        echo "${install_file%.*}.yaml" >> %1; \
+      done; \
+    done; \
+  done; \
+  cat %1 \
 )
 
 %if (0%{?suse_version} >= 1500)
@@ -304,27 +305,37 @@ install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
-ftest_path=%{_prefix}/lib/daos/TESTING
-files=(%{?buildroot}/src/tests/ftest/util/ior_utils.py \
-  %{?buildroot}/src/tests/ftest/util/nvme_utils.py)
-%create_file_list daos-tests-ior.files ${files} ${ftest_path}
-exclude="--exclude=ior_utils.py --exclude=ior_test_base.py"
+output="daos-tests-ior.files"
+ftest_path=%{?_prefix}/lib/daos/TESTING
+files=(%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/ior_utils.py \
+  %{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/nvme_utils.py)
+exclude="--exclude-dir=soak"
+%create_file_list  ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
-files=%{?buildroot}/src/tests/ftest/util/fio_utils.py
-%create_file_list daos-tests-fio.files ${files} ${ftest_path} ${exclude}
+output="daos-tests-fio.files"
+exclude="${exclude} --exclude=ior_utils.py --exclude=ior_test_base.py"
+files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/fio_utils.py
+%create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
-files=%{?buildroot}/src/tests/ftest/util/mpiio_utils.py
-%create_file_list daos-tests-mpiio.files ${files} ${ftest_path} ${exclude}
+output="daos-tests-mpiio.files"
+exclude="${exclude} --exclude=fio_utils.py"
+files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/mpiio_utils.py
+%create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
-files=%{?buildroot}/src/tests/ftest/util/macsio_utils.py
-%create_file_list daos-tests-macsio.files ${files} ${ftest_path} ${exclude}
+output="daos-tests-macsio.files"
+exclude="${exclude} --exclude=mpiio_utils.py"
+files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/macsio_utils.py
+%create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
 find ${ftest_path}/ftest | sort > daos-tests.files
 for name in ior fio mpiio macsio
 do
-  grep -Fvxf daos-tests-${name}.files daos-tests.files > daos-tests.files
+  grep -Fvxf daos-tests-${name}.files daos-tests.files > daos-tests.files_new
+  mv daos-tests.files{_new,}
 done
-grep -v ${ftest_path}/ftest/soak daos-tests.files > daos-tests.files
+grep -v ${ftest_path}/ftest/soak daos-tests.files > daos-tests.files_new
+mv daos-tests.files{_new,}
+cat daos-tests.files
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
