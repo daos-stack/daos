@@ -119,9 +119,146 @@ nvme_recov_1(void **state)
 	print_message("Done\n");
 }
 
+/* Verify device states after NVMe set to faulty*/
+static void
+nvme_test_verify_device_stats(void **state)
+{
+	test_arg_t	*arg = *state;
+	device_list	*devices = NULL;
+	int		ndisks;
+	int		rc, i;
+	char		*server_config_file;
+	char		*log_file;
+	int		rank_pos = 0;
+
+	if (!is_nvme_enabled(arg)) {
+		print_message("NVMe isn't enabled.\n");
+		skip();
+	}
+
+	/**
+	*Get the Total number of NVMe devices from all the servers.
+	*/
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Total Disks = %d\n", ndisks);
+
+	/**
+	*Get the Device info of all NVMe devices.
+	*/
+	D_ALLOC_ARRAY(devices, ndisks);
+	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	assert_int_equal(rc, 0);
+	for (i = 0; i < ndisks; i++)
+		print_message("Rank=%d UUID=%s state=%s host=%s\n",
+			      devices[i].rank, DP_UUID(devices[i].device_id),
+			devices[i].state, devices[i].host);
+
+	if (ndisks <= 1) {
+		print_message("Need Minimum 2 disks for test\n");
+		skip();
+	}
+
+	/*
+	 * Get the rank 0 position from array devices.
+	 */
+	for (i = 0; i < ndisks; i++) {
+		if (devices[i].rank == 0)
+			rank_pos = i;
+	}
+
+	/*
+	 * Get the server config file from running process on server.
+	 * Verify log_mask in server.yaml file, It should be 'DEBUG' to verify
+	 * different state of NVMe drives. Skip the test if log_mask is not
+	 * set to DEBUG.
+	 */
+	D_ALLOC(server_config_file, 512);
+	D_ALLOC(log_file, 1024);
+	rc = get_server_config(devices[rank_pos].host,
+			       server_config_file);
+	assert_int_equal(rc, 0);
+	print_message("server_config_file = %s\n", server_config_file);
+
+	get_server_log_file(devices[rank_pos].host,
+			    server_config_file, log_file);
+	rc = verify_server_log_mask(devices[rank_pos].host,
+				    server_config_file, "DEBUG");
+	if (rc) {
+		print_message("Log Mask != DEBUG in %s.\n",
+			      server_config_file);
+		skip();
+	}
+
+	print_message("LOG FILE = %s\n", log_file);
+
+	/**
+	*Set single device for rank0 to faulty.
+	*/
+	print_message("NVMe with UUID=%s on host=%s\" set to Faulty\n",
+		      DP_UUID(devices[rank_pos].device_id),
+		devices[rank_pos].host);
+	rc = dmg_storage_set_nvme_fault(dmg_config_file,
+					devices[rank_pos].host,
+		devices[rank_pos].device_id, 1);
+	assert_int_equal(rc, 0);
+	sleep(60);
+
+	/**
+	* Verify Rank0 device state change from NORMAL to FAULTY.
+	* Verify "FAULTY -> TEARDOWN" and "TEARDOWN -> OUT" device states found
+	* in server log.
+	*/
+	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	assert_int_equal(rc, 0);
+	/*
+	 * Get the rank 0 position from array devices.
+	 */
+	for (i = 0; i < ndisks; i++) {
+		if (devices[i].rank == 0)
+			rank_pos = i;
+	}
+	assert_string_equal(devices[rank_pos].state, "\"FAULTY\"");
+
+	rc = verify_state_in_log(devices[rank_pos].host, log_file,
+				 "NORMAL -> FAULTY");
+	if (rc != 0) {
+		print_message("NORMAL -> FAULTY not found in log %s\n",
+			      log_file);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = verify_state_in_log(devices[rank_pos].host, log_file,
+				 "FAULTY -> TEARDOWN");
+	if (rc != 0) {
+		print_message("FAULTY -> TEARDOWN not found in %s\n",
+			      log_file);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = verify_state_in_log(devices[rank_pos].host, log_file,
+				 "TEARDOWN -> OUT");
+	if (rc != 0) {
+		print_message("TEARDOWN -> OUT not found in log %s\n",
+			      log_file);
+		assert_int_equal(rc, 0);
+	}
+
+	/*
+	 * FIXME: Add FAULTY disks back to the system, when feature available.
+	 */
+
+	/* Tear down */
+	D_FREE(server_config_file);
+	D_FREE(log_file);
+	D_FREE(devices);
+}
+
 static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 1: Online faulty reaction",
 	 nvme_recov_1, NULL, test_case_teardown},
+	{"NVMe Recovery 2: Verify device states after NVMe set to Faulty",
+	 nvme_test_verify_device_stats, NULL, test_case_teardown},
 };
 
 static int

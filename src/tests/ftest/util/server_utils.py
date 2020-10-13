@@ -159,7 +159,6 @@ class DaosServerCommand(YamlCommand):
             value = self.yaml.using_dcpm
         return value
 
-
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
@@ -555,7 +554,9 @@ class DaosServerManager(SubprocessManager):
         # Format storage and wait for server to change ownership
         self.log.info(
             "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        self.dmg.storage_format()
+        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
+        # be further investigated.
+        self.dmg.storage_format(timeout=40)
 
         # Wait for all the doas_io_servers to start
         self.detect_io_server_start()
