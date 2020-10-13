@@ -27,10 +27,13 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // ScmState represents the probed state of SCM modules on the system.
@@ -56,13 +59,15 @@ type (
 	//
 	// This is a simplified representation of the raw struct used in the ipmctl package.
 	ScmModule struct {
-		ChannelID       uint32
-		ChannelPosition uint32
-		ControllerID    uint32
-		SocketID        uint32
-		PhysicalID      uint32
-		Capacity        uint64
-		UID             string
+		ChannelID        uint32
+		ChannelPosition  uint32
+		ControllerID     uint32
+		SocketID         uint32
+		PhysicalID       uint32
+		Capacity         uint64
+		UID              string
+		PartNumber       string
+		FirmwareRevision string
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
@@ -80,11 +85,13 @@ type (
 	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
 	ScmNamespaces []*ScmNamespace
 
+	// ScmMountPoint represents location SCM filesystem is mounted.
 	ScmMountPoint struct {
 		Info string
 		Path string
 	}
 
+	// ScmMountPoints is a type alias for []ScmMountPoint that implements fmt.Stringer.
 	ScmMountPoints []*ScmMountPoint
 
 	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
@@ -104,7 +111,6 @@ type (
 		Model           string `json:"model"`
 		Serial          string `json:"serial"`
 		Timestamp       uint64 `json:"timestamp"`
-		ErrorCount      uint64 `json:"err_count"`
 		TempWarnTime    uint32 `json:"warn_temp_time"`
 		TempCritTime    uint32 `json:"crit_temp_time"`
 		CtrlBusyTime    uint64 `json:"ctrl_busy_time"`
@@ -132,6 +138,18 @@ type (
 		Size uint64
 	}
 
+	// SmdDevice contains DAOS storage device information, including
+	// health details if requested.
+	SmdDevice struct {
+		UUID      string      `json:"uuid"`
+		TargetIDs []int32     `hash:"set" json:"tgt_ids"`
+		State     string      `json:"state"`
+		Rank      system.Rank `json:"rank"`
+		// TODO: included only for compatibility with storage_query smd
+		//       commands and should be removed when possible
+		Health *NvmeControllerHealth `json:"health"`
+	}
+
 	// NvmeController represents a NVMe device controller which includes health
 	// and namespace information and mirrors C.struct_ns_t.
 	NvmeController struct {
@@ -141,8 +159,9 @@ type (
 		PciAddr     string
 		FwRev       string
 		SocketID    int32
-		HealthStats *NvmeControllerHealth `hash:"ignore"`
+		HealthStats *NvmeControllerHealth
 		Namespaces  []*NvmeNamespace
+		SmdDevices  []*SmdDevice
 	}
 
 	// NvmeControllers is a type alias for []*NvmeController which implements fmt.Stringer.
@@ -160,6 +179,64 @@ const (
 	ScmUpdateStatusFailed
 )
 
+// TempK returns controller temperature in degrees Kelvin.
+func (nch *NvmeControllerHealth) TempK() uint32 {
+	return uint32(nch.Temperature)
+}
+
+// TempC returns controller temperature in degrees Celsius.
+func (nch *NvmeControllerHealth) TempC() float32 {
+	return float32(nch.Temperature) - 273.15
+}
+
+// TempF returns controller temperature in degrees Fahrenheit.
+func (nch *NvmeControllerHealth) TempF() float32 {
+	return nch.TempC()*(9/5) + 32
+}
+
+// genAltKey verifies non-null model and serial identifiers exist and return the
+// concatenated identifier (new key) and error if either is empty.
+func genAltKey(model, serial string) (string, error) {
+	var empty string
+	m := strings.TrimSpace(model)
+	s := strings.TrimSpace(serial)
+
+	if m == "" {
+		empty = "model"
+	} else if s == "" {
+		empty = "serial"
+	}
+	if empty != "" {
+		return "", errors.Errorf("missing %s identifier", empty)
+	}
+
+	return m + s, nil
+}
+
+// GenAltKey generates an alternative key identifier for an NVMe Controller
+// from its returned health statistics.
+func (nch *NvmeControllerHealth) GenAltKey() (string, error) {
+	return genAltKey(nch.Model, nch.Serial)
+}
+
+// GenAltKey generates an alternative key identifier for an NVMe Controller.
+func (nc *NvmeController) GenAltKey() (string, error) {
+	return genAltKey(nc.Model, nc.Serial)
+}
+
+// UpdateSmd adds or updates SMD device entry for an NVMe Controller.
+func (ctrlr *NvmeController) UpdateSmd(smdDev *SmdDevice) {
+	for idx := range ctrlr.SmdDevices {
+		if smdDev.UUID == ctrlr.SmdDevices[idx].UUID {
+			ctrlr.SmdDevices[idx] = smdDev
+
+			return
+		}
+	}
+
+	ctrlr.SmdDevices = append(ctrlr.SmdDevices, smdDev)
+}
+
 // String translates the update status to a string
 func (s ScmFirmwareUpdateStatus) String() string {
 	switch s {
@@ -171,18 +248,6 @@ func (s ScmFirmwareUpdateStatus) String() string {
 		return "Failed"
 	}
 	return "Unknown"
-}
-
-func (ndh *NvmeControllerHealth) TempK() uint32 {
-	return uint32(ndh.Temperature)
-}
-
-func (ndh *NvmeControllerHealth) TempC() float32 {
-	return float32(ndh.Temperature) - 273.15
-}
-
-func (ndh *NvmeControllerHealth) TempF() float32 {
-	return ndh.TempC()*(9/5) + 32
 }
 
 func (sm *ScmModule) String() string {
@@ -262,6 +327,7 @@ func (sns ScmNamespaces) Summary() string {
 		common.Pluralise("namespace", len(sns)))
 }
 
+// Capacity returns the cumulative total bytes of all namespace sizes.
 func (nc *NvmeController) Capacity() (tb uint64) {
 	for _, n := range nc.Namespaces {
 		tb += n.Size
@@ -269,6 +335,7 @@ func (nc *NvmeController) Capacity() (tb uint64) {
 	return
 }
 
+// Capacity returns the cumulative total bytes of all controller capacities.
 func (ncs NvmeControllers) Capacity() (tb uint64) {
 	for _, c := range ncs {
 		tb += (*NvmeController)(c).Capacity()

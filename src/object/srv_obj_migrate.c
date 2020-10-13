@@ -203,7 +203,7 @@ int
 obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 		d_iov_t *val_iov)
 {
-	struct tree_cache_root	*cont_root;
+	struct tree_cache_root	*cont_root = NULL;
 	d_iov_t			key_iov;
 	d_iov_t			tmp_iov;
 	int			rc;
@@ -539,7 +539,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 {
 	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	d_iov_t			 iov[DSS_ENUM_UNPACK_MAX_IODS];
-	struct dcs_iod_csums	*iod_csums;
+	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 iod_cnt = 0;
 	int			 start;
 	char		 iov_buf[DSS_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
@@ -572,7 +572,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	if (fetch) {
 		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 				   mrone->mo_iod_num, mrone->mo_iods, sgls,
-				   NULL);
+				   NULL, DIOF_TO_LEADER, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch %d\n", rc);
 			return rc;
@@ -599,7 +599,6 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				D_DEBUG(DB_TRACE, "i %d iod_size = 0\n", i);
 				continue;
 			}
-
 
 			iod_csums = mrone->mo_iods_csums == NULL ? NULL
 					: &mrone->mo_iods_csums[start];
@@ -689,6 +688,7 @@ migrate_update_parity(struct migrate_one *mrone, struct ds_cont_child *ds_cont,
 
 			D_ASSERT(shard >= obj_ec_data_tgt_nr(oca));
 			shard -= obj_ec_data_tgt_nr(oca);
+			D_ASSERT(shard < obj_ec_parity_tgt_nr(oca));
 			rc = obj_ec_encode_buf(mrone->mo_oid.id_pub,
 					       oca, iod->iod_size, buffer,
 					       p_bufs);
@@ -759,7 +759,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_iod_num, mrone->mo_epoch);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -832,6 +833,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		D_ASSERT(mrone->mo_iods[i].iod_type == DAOS_IOD_SINGLE);
 
 		size = daos_iods_len(&mrone->mo_iods[i], 1);
+		D_ASSERT(size != -1);
 		D_ALLOC(data, size);
 		if (data == NULL)
 			D_GOTO(out, rc =-DER_NOMEM);
@@ -848,7 +850,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		mrone->mo_iod_num, mrone->mo_epoch);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -868,17 +871,12 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		}
 
 		if (obj_shard_is_ec_parity(mrone->mo_oid, NULL)) {
-			d_iov_t e_iov = { 0 };
-
 			rc = obj_ec_singv_encode_buf(mrone->mo_oid.id_pub,
+						     mrone->mo_oid.id_shard,
 						     iod, oca, &sgls[i],
-						     &e_iov);
+						     &sgls[i].sg_iovs[0]);
 			if (rc)
-				return rc;
-			D_ASSERT(e_iov.iov_len <= sgls[i].sg_iovs[0].iov_len);
-			memcpy(sgls[i].sg_iovs[i].iov_buf, e_iov.iov_buf,
-			       e_iov.iov_len);
-			daos_iov_free(&e_iov);
+				D_GOTO(out, rc);
 		} else {
 			rc = obj_ec_singv_split(mrone->mo_oid.id_pub,
 						mrone->mo_oid.id_shard,
@@ -904,7 +902,7 @@ out:
 
 		/* since iod_recxs is being used by single value update somehow,
 		 * let's reset it after update.
-		 */ 
+		 */
 		if (mrone->mo_iods[i].iod_type == DAOS_IOD_SINGLE)
 			mrone->mo_iods[i].iod_recxs = NULL;
 	}
@@ -967,7 +965,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		mrone_recx_vos2_daos(mrone, oca, mrone->mo_oid.id_shard);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
-			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL);
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
+			   DIOF_TO_LEADER, NULL);
 	if (rc)
 		D_ERROR("migrate dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&mrone->mo_dkey), rc);
@@ -1504,7 +1503,6 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		if (!inline_copy)
 			break;
 	}
-
 	for (i = 0; i < iod_eph_total; i++) {
 		/* Pack punched epoch here */
 		mrone->mo_akey_punch_ephs[i] = akey_ephs[i];
@@ -1516,21 +1514,24 @@ migrate_one_insert(struct enum_unpack_arg *arg,
 		if (iods[i].iod_nr == 0)
 			continue;
 
-		if (iods[i].iod_size == 0)
+		if (iods[i].iod_size == 0) {
 			rc = punch_iod_pack(mrone, &iods[i], rec_ephs[i]);
-		else
+		} else {
 			rc = rw_iod_pack(mrone, &iods[i],
 					 inline_copy ? &sgls[i] : NULL);
+			mrone->mo_iods_csums[mrone->mo_iod_num - 1] =
+				iods_csums[i];
+		}
 
 		if (rc != 0)
 			return rc;
 
-		mrone->mo_iods_csums[i] = iods_csums[i];
 		/**
 		 * mrone owns the allocated memory now and will free it in
 		 * migrate_one_destroy
 		 */
 		iods_csums[i].ic_data = NULL;
+		iods_csums[i].ic_nr = 0;
 	}
 
 	mrone->mo_version = version;
@@ -1724,9 +1725,6 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
-	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-	daos_anchor_set_flags(&dkey_anchor, DIOF_TO_LEADER |
-					    DIOF_WITH_SPEC_EPOCH);
 	unpack_arg.arg = arg;
 	unpack_arg.epr = *epr;
 	D_INIT_LIST_HEAD(&unpack_arg.merge_list);
@@ -1748,12 +1746,15 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 		csum.iov_len = 0;
 
 		num = KDS_NUM;
+		daos_anchor_set_flags(&dkey_anchor,
+				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH);
+retry:
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, &size,
 				     &num, kds, &sgl, &anchor,
 				     &dkey_anchor, &akey_anchor, &csum);
 
 		if (rc == -DER_KEY2BIG) {
-			D_DEBUG(DB_TRACE, "migrate obj "DF_UOID" got "
+			D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" got "
 				"-DER_KEY2BIG, key_len "DF_U64"\n",
 				DP_UOID(arg->oid), kds[0].kd_key_len);
 			buf_len = roundup(kds[0].kd_key_len * 2, 8);
@@ -1767,9 +1768,8 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 			continue;
 		} else if (rc == -DER_TRUNC &&
 			   csum.iov_len > csum.iov_buf_len) {
-			D_DEBUG(DB_TRACE, "migrate obj csum buf "
-					  "not large enough. Increase and try "
-					  "again");
+			D_DEBUG(DB_REBUILD, "migrate obj csum buf "
+				"not large enough. Increase and try again");
 			if (csum.iov_buf != stack_csum_buf)
 				D_FREE(csum.iov_buf);
 
@@ -1781,13 +1781,28 @@ migrate_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 				break;
 			}
 			continue;
+		} else if (rc == -DER_NOTAPPLICABLE &&
+			   daos_anchor_get_flags(&dkey_anchor) &
+						 DIOF_TO_LEADER) {
+			daos_anchor_set_flags(&dkey_anchor,
+					      DIOF_WITH_SPEC_EPOCH);
+			D_DEBUG(DB_REBUILD, "No leader avaible retry"
+				DF_UOID"\n", DP_UOID(arg->oid));
+			D_GOTO(retry, rc);
 		} else if (rc) {
 			/* container might have been destroyed. Or there is
 			 * no spare target left for this object see
 			 * obj_grp_valid_shard_get()
 			 */
-			rc = (rc == -DER_NONEXIST) ? 0 : rc;
-			break;
+			if (rc == -DER_DATA_LOSS) {
+				D_DEBUG(DB_REBUILD, "Can not rebuild "
+					DF_UOID"\n", DP_UOID(arg->oid));
+				break;
+			}
+
+			D_DEBUG(DB_REBUILD, "retry"DF_UOID"\n",
+				DP_UOID(arg->oid));
+			D_GOTO(retry, rc);
 		}
 
 		if (num == 0)
@@ -2553,7 +2568,8 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
 	if (rc != 1 || (target->ta_comp.co_status != PO_COMP_ST_UPIN
-			&& target->ta_comp.co_status != PO_COMP_ST_UP)) {
+			&& target->ta_comp.co_status != PO_COMP_ST_UP
+			&& target->ta_comp.co_status != PO_COMP_ST_NEW)) {
 		/* Remote target has failed, no need retry, but not
 		 * report failure as well and next rebuild will handle
 		 * it anyway.

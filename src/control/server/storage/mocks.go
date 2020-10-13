@@ -48,6 +48,7 @@ func getRandIdx(n ...int32) int32 {
 	return rand.Int31()
 }
 
+// MockNvmeControllerHealth returns struct with examples values.
 func MockNvmeControllerHealth(varIdx ...int32) *NvmeControllerHealth {
 	idx := common.GetIndex(varIdx...)
 	tWarn := false
@@ -55,7 +56,6 @@ func MockNvmeControllerHealth(varIdx ...int32) *NvmeControllerHealth {
 		tWarn = true
 	}
 	return &NvmeControllerHealth{
-		ErrorCount:      uint64(idx),
 		TempWarnTime:    uint32(idx),
 		TempCritTime:    uint32(idx),
 		CtrlBusyTime:    uint64(idx),
@@ -77,6 +77,7 @@ func MockNvmeControllerHealth(varIdx ...int32) *NvmeControllerHealth {
 	}
 }
 
+// MockNvmeNamespace returns struct with examples values.
 func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	idx := common.GetIndex(varIdx...)
 	return &NvmeNamespace{
@@ -85,6 +86,18 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	}
 }
 
+// MockSmdDevice returns struct with examples values.
+func MockSmdDevice(varIdx ...int32) *SmdDevice {
+	idx := common.GetIndex(varIdx...)
+	startTgt := (idx * 4) + 1
+	return &SmdDevice{
+		UUID:      common.MockUUID(idx),
+		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
+		State:     "NORMAL",
+	}
+}
+
+// MockNvmeController returns struct with examples values.
 func MockNvmeController(varIdx ...int32) *NvmeController {
 	idx := common.GetIndex(varIdx...)
 
@@ -96,9 +109,12 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 		SocketID:    idx,
 		HealthStats: MockNvmeControllerHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
+		SmdDevices:  []*SmdDevice{MockSmdDevice(idx)},
 	}
 }
 
+// MockNvmeControllers returns slice of example NvmeController structs with
+// examples values.
 func MockNvmeControllers(length int) NvmeControllers {
 	result := NvmeControllers{}
 	for i := 0; i < length; i++ {
@@ -108,20 +124,25 @@ func MockNvmeControllers(length int) NvmeControllers {
 	return result
 }
 
+// MockScmModule returns struct with examples values.
 func MockScmModule(varIdx ...int32) *ScmModule {
 	idx := uint32(common.GetIndex(varIdx...))
 
 	return &ScmModule{
-		ChannelID:       idx,
-		ChannelPosition: idx,
-		ControllerID:    idx,
-		SocketID:        idx,
-		PhysicalID:      idx,
-		Capacity:        uint64(idx),
-		UID:             fmt.Sprintf("Device%d", idx),
+		ChannelID:        idx,
+		ChannelPosition:  idx,
+		ControllerID:     idx,
+		SocketID:         idx,
+		PhysicalID:       idx,
+		Capacity:         uint64(idx),
+		UID:              fmt.Sprintf("Device%d", idx),
+		PartNumber:       fmt.Sprintf("PartNumber%d", idx),
+		FirmwareRevision: fmt.Sprintf("FWRev%d", idx),
 	}
 }
 
+// MockScmModules returns slice of example ScmModule structs with examples
+// values.
 func MockScmModules(length int) ScmModules {
 	result := ScmModules{}
 	for i := 0; i < length; i++ {
@@ -131,6 +152,7 @@ func MockScmModules(length int) ScmModules {
 	return result
 }
 
+// MockScmNamespace returns struct with examples values.
 func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 	idx := common.GetIndex(varIdx...)
 

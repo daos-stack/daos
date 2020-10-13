@@ -62,10 +62,10 @@ class OSAOnlineReintegration(TestWithServers):
         self.record_length = self.params.get("length", '/run/record/*')
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get(
+            "ior_test_sequence", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get(
+            "obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -76,27 +76,28 @@ class OSAOnlineReintegration(TestWithServers):
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
-        """Get the pool leader
-           Returns : int (pool_leader)
+        """Get the pool leader.
+
+        Returns:
+            int: pool leader number
+
         """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][3])
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["leader"])
 
     @fail_on(CommandFailure)
     def get_pool_version(self):
-        """Get the pool version
-           Returns : int (pool_version_value)
-        """
-        out = []
-        kwargs = {"pool": self.pool.uuid}
-        out = self.dmg_command.get_output("pool_query", **kwargs)
-        return int(out[0][4])
+        """Get the pool version.
 
-    def daos_racer_thread(self, results):
-        """Start the daos_racer thread.
+        Returns:
+            int: pool version number
+
         """
+        data = self.dmg_command.pool_query(self.pool.uuid)
+        return int(data["version"])
+
+    def daos_racer_thread(self):
+        """Start the daos_racer thread."""
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
                                            self.dmg_command)
         self.daos_racer.get_params(self)
@@ -178,9 +179,7 @@ class OSAOnlineReintegration(TestWithServers):
         rank = random.randint(1, exclude_servers)
 
         # Start the daos_racer thread
-        kwargs = {"results": self.ds_racer_queue}
-        daos_racer_thread = threading.Thread(target=self.daos_racer_thread,
-                                             kwargs=kwargs)
+        daos_racer_thread = threading.Thread(target=self.daos_racer_thread)
         daos_racer_thread.start()
         time.sleep(30)
         
@@ -276,7 +275,7 @@ class OSAOnlineReintegration(TestWithServers):
         """Test ID: DAOS-5075
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,hw,large,osa,online_reintegration
+        :avocado: tags=all,pr,hw,large,osa,online_reintegration,DAOS_5610
         """
         # Perform reintegration testing with 1 pool.
         for pool_num in range(1, 2):

@@ -791,7 +791,7 @@ ts_exclude_server(d_rank_t rank)
 }
 
 static int
-ts_add_server(d_rank_t rank)
+ts_reint_server(d_rank_t rank)
 {
 	struct d_tgt_list	targets;
 	int			tgt = -1;
@@ -801,8 +801,8 @@ ts_add_server(d_rank_t rank)
 	targets.tl_nr = 1;
 	targets.tl_ranks = &rank;
 	targets.tl_tgts = &tgt;
-	rc = daos_pool_add_tgt(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
-			       &targets, NULL);
+	rc = daos_pool_reint_tgt(ts_ctx.tsc_pool_uuid, NULL, &ts_ctx.tsc_svc,
+				 &targets, NULL);
 	return rc;
 }
 
@@ -855,7 +855,7 @@ ts_rebuild_perf(double *duration)
 
 	ts_rebuild_wait(duration);
 
-	rc = ts_add_server(RANK_ZERO);
+	rc = ts_reint_server(RANK_ZERO);
 
 	daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
@@ -1421,20 +1421,23 @@ main(int argc, char **argv)
 		ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
 	}
 
-	tmp_oid = dts_oid_gen(ts_class, 0, 0);
-	oca = daos_oclass_attr_find(tmp_oid);
-	D_ASSERT(oca != NULL);
-	if (DAOS_OC_IS_EC(oca))
-		ec_vsize = oca->u.ec.e_len * oca->u.ec.e_k;
-	if (ec_vsize != 0 && vsize % ec_vsize != 0 && ts_ctx.tsc_mpi_rank == 0)
-		fprintf(stdout, "for EC obj perf test, vsize (-s) %d should be "
-			"multiple of %d (full-stripe size) to get better "
-			"performance.\n", vsize, ec_vsize);
+	if (ts_class != DAOS_OC_RAW) {
+		tmp_oid = dts_oid_gen(ts_class, 0, 0);
+		oca = daos_oclass_attr_find(tmp_oid);
+		D_ASSERT(oca != NULL);
+		if (DAOS_OC_IS_EC(oca))
+			ec_vsize = oca->u.ec.e_len * oca->u.ec.e_k;
+		if (ec_vsize != 0 && vsize % ec_vsize != 0 &&
+		    ts_ctx.tsc_mpi_rank == 0)
+			fprintf(stdout, "for EC obj perf test, vsize (-s) %d "
+				"should be multiple of %d (full-stripe size) "
+				"to get better performance.\n",
+				vsize, ec_vsize);
+	}
 
 	ts_ctx.tsc_cred_vsize	= vsize;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
-
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,

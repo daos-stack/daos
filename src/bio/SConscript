@@ -9,6 +9,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
+    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
 
     SConscript('smd/SConscript')

@@ -324,6 +324,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 super(
                     DaosCommandBase.ContainerSubCommand.UpdateAclSubCommand,
                     self).__init__("update-acl")
+                self.acl_file = FormattedParameter("--acl-file={}")
                 self.entry = FormattedParameter("--entry={}")
 
         class DeleteAclSubCommand(CommonContainerSubCommand):

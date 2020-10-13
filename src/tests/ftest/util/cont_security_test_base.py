@@ -197,7 +197,7 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_update_acl(
-            self.pool_uuid, self.container_uuid, entry, self.pool_svc)
+            self.pool_uuid, self.pool_svc, self.container_uuid, entry=entry)
         return result
 
     def test_container_destroy(self, pool_uuid, pool_svc, container_uuid):
@@ -246,12 +246,13 @@ class ContSecurityTestBase(TestWithServers):
             attr (str): container attribute.
 
         Return:
-            result (str): daos_tool.container_get_attr result.
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
         """
         self.daos_tool.exit_status_exception = False
-        result = self.daos_tool.container_get_attr(
+        self.daos_tool.container_get_attr(
             pool_uuid, container_uuid, attr, pool_svc)
-        return result
+        return self.daos_tool.result
 
     def list_container_attribute(
             self, pool_uuid, pool_svc, container_uuid):

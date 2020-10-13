@@ -50,8 +50,11 @@ type firmwareQueryCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	DeviceType string `short:"t" long:"type" choice:"nvme" choice:"scm" choice:"all" default:"all" description:"Type of storage devices to query"`
-	Verbose    bool   `short:"v" long:"verbose" description:"Display verbose output"`
+	DeviceType  string `short:"t" long:"type" choice:"nvme" choice:"scm" choice:"all" default:"all" description:"Type of storage devices to query"`
+	Devices     string `short:"d" long:"devices" description:"Comma-separated list of device identifiers to query"`
+	ModelID     string `short:"m" long:"model" description:"Model ID to filter results by"`
+	FirmwareRev string `short:"f" long:"fwrev" description:"Firmware revision to filter results by"`
+	Verbose     bool   `short:"v" long:"verbose" description:"Display verbose output"`
 }
 
 // Execute runs the firmware query command.
@@ -59,8 +62,14 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 	ctx := context.Background()
 
 	req := &control.FirmwareQueryReq{
-		SCM:  cmd.isSCMRequested(),
-		NVMe: cmd.isNVMeRequested(),
+		SCM:         cmd.isSCMRequested(),
+		NVMe:        cmd.isNVMeRequested(),
+		ModelID:     cmd.ModelID,
+		FirmwareRev: cmd.FirmwareRev,
+	}
+
+	if cmd.Devices != "" {
+		req.Devices = strings.Split(cmd.Devices, ",")
 	}
 
 	req.SetHostList(cmd.hostlist)
@@ -75,7 +84,7 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
 
@@ -104,8 +113,8 @@ func (cmd *firmwareQueryCmd) isNVMeRequested() bool {
 }
 
 type (
-	hostSCMQueryMapPrinter  func(control.HostSCMQueryMap, io.Writer, ...control.PrintConfigOption) error
-	hostNVMeQueryMapPrinter func(control.HostNVMeQueryMap, io.Writer, ...control.PrintConfigOption) error
+	hostSCMQueryMapPrinter  func(control.HostSCMQueryMap, io.Writer, ...pretty.PrintConfigOption) error
+	hostNVMeQueryMapPrinter func(control.HostNVMeQueryMap, io.Writer, ...pretty.PrintConfigOption) error
 )
 
 func (cmd *firmwareQueryCmd) getDisplayFunctions() (hostSCMQueryMapPrinter, hostNVMeQueryMapPrinter) {
@@ -125,9 +134,12 @@ type firmwareUpdateCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	DeviceType string `short:"t" long:"type" choice:"nvme" choice:"scm" required:"1" description:"Type of storage devices to update"`
-	FilePath   string `short:"p" long:"path" required:"1" description:"Path to the firmware file accessible from all nodes"`
-	Verbose    bool   `short:"v" long:"verbose" description:"Display verbose output"`
+	DeviceType  string `short:"t" long:"type" choice:"nvme" choice:"scm" required:"1" description:"Type of storage devices to update"`
+	FilePath    string `short:"p" long:"path" required:"1" description:"Path to the firmware file accessible from all nodes"`
+	Devices     string `short:"d" long:"devices" description:"Comma-separated list of device identifiers to update"`
+	ModelID     string `short:"m" long:"model" description:"Limit update to a model ID"`
+	FirmwareRev string `short:"f" long:"fwrev" description:"Limit update to a current firmware revision"`
+	Verbose     bool   `short:"v" long:"verbose" description:"Display verbose output"`
 }
 
 // Execute runs the firmware update command.
@@ -136,11 +148,18 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 
 	req := &control.FirmwareUpdateReq{
 		FirmwarePath: cmd.FilePath,
+		ModelID:      cmd.ModelID,
+		FirmwareRev:  cmd.FirmwareRev,
 	}
+
 	if cmd.isSCMUpdate() {
 		req.Type = control.DeviceTypeSCM
 	} else {
 		req.Type = control.DeviceTypeNVMe
+	}
+
+	if cmd.Devices != "" {
+		req.Devices = strings.Split(cmd.Devices, ",")
 	}
 
 	req.SetHostList(cmd.hostlist)
@@ -155,7 +174,7 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
 		return err
 	}
 

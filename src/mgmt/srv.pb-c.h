@@ -84,10 +84,14 @@ struct  _Mgmt__JoinReq
    * Server management address.
    */
   char *addr;
+  /*
+   * Fault domain for this instance's server
+   */
+  char *srvfaultdomain;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__JoinResp
@@ -105,10 +109,14 @@ struct  _Mgmt__JoinResp
    * Server state in the system map.
    */
   Mgmt__JoinResp__State state;
+  /*
+   * Fault domain for the instance
+   */
+  char *faultdomain;
 };
 #define MGMT__JOIN_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
-    , 0, 0, MGMT__JOIN_RESP__STATE__IN }
+    , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__LeaderQueryReq

@@ -44,6 +44,17 @@ def get_build_tags(benv):
         return ""
     return "-tags firmware"
 
+def is_release_build(benv):
+    "Check whether this build is for release."
+    return benv.get("BUILD_TYPE") == "release"
+
+def get_build_flags(benv):
+    flags = ""
+    if not is_release_build(benv):
+        # enable race detector for non-release builds
+        flags += "-race"
+    return flags
+
 #pylint: disable=too-many-arguments
 def install_go_bin(denv, gosrc, libs, name, install_name):
     """
@@ -81,8 +92,8 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
     denv.Command(build_bin, src + gurt_lib,
-                 'cd %s; %s build -mod vendor -v %s %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), get_build_tags(denv),
+                 'cd %s; %s build -mod vendor -v %s %s %s -o %s %s' %
+                 (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv), get_build_tags(denv),
                   build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
@@ -180,6 +191,7 @@ def scons():
     SConscript('lib/spdk/SConscript', exports='denv')
 
     senv = denv.Clone()
+    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "

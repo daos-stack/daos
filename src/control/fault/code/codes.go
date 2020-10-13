@@ -82,6 +82,8 @@ const (
 	ScmFormatMissingParam
 	ScmFormatConflictingParam
 	ScmDiscoveryFailed
+	ScmDuplicatesInDeviceList
+	ScmNoDevicesMatchFilter
 
 	// Bdev fault codes
 	BdevUnknown Code = iota + 300
@@ -89,6 +91,8 @@ const (
 	BdevFormatFailure
 	BdevBadPCIAddress
 	BdevPCIAddressNotFound
+	BdevDuplicatesInDeviceList
+	BdevNoDevicesMatchFilter
 
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
@@ -130,6 +134,7 @@ const (
 	ServerInstancesNotStopped
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
+	ServerConfigFaultDomainInvalid
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

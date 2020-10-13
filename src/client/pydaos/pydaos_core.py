@@ -199,12 +199,12 @@ class _Obj(object):
         self._dc = DaosClient()
         self.oid = oid
         # Set self.oh to Null here so it's defined in __dell__ if there's
-        # a problem with the obj_open() call.
+        # a problem with the kv_open() call.
         self.oh = None
         # keep container around until all objects are gone
         self.cont = cont
         # Open to the object
-        (ret, oh) = pydaos_shim.obj_open(DAOS_MAGIC, coh, self.oid.hi,
+        (ret, oh) = pydaos_shim.kv_open(DAOS_MAGIC, coh, self.oid.hi,
                                          self.oid.lo, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to open object", ret)
@@ -213,7 +213,7 @@ class _Obj(object):
     def __del__(self):
         if self.oh is None:
             return
-        ret = pydaos_shim.obj_close(DAOS_MAGIC, self.oh)
+        ret = pydaos_shim.kv_close(DAOS_MAGIC, self.oh)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close object", ret)
 
