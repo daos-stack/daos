@@ -12,8 +12,8 @@
 %endif
 
 Name:          daos
-Version:       1.1.0
-Release:       35%{?relval}%{?dist}
+Version:       1.1.1
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -21,7 +21,7 @@ URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
 BuildRequires: scons >= 2.4
-BuildRequires: libfabric-devel
+BuildRequires: libfabric-devel >= 1.11.0
 BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
@@ -133,7 +133,7 @@ Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= 1.8.0
+Requires: libfabric >= 1.11.0
 %systemd_requires
 
 %description server
@@ -143,7 +143,7 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
-Requires: libfabric >= 1.8.0
+Requires: libfabric >= 1.11.0
 Requires: fuse3 >= 3.4.2
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
@@ -397,8 +397,11 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Thu Oct 08 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.0-35
+* Tue Oct 13 2020 Maureen Jean <maureen.jean@intel.com> - 1.1.1-2
 - add fault_status to daos-tests files list
+
+* Mon Oct 12 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.1-1
+- Version bump up to 1.1.1
 
 * Sat Oct 03 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-34
 - Add go-race to BuildRequires on OpenSUSE Leap

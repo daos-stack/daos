@@ -229,7 +229,7 @@ int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
-
+int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
 /**
  * oid_iv.c
  */
@@ -243,12 +243,12 @@ int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
 int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			      uint64_t flags, uint64_t sec_capas);
-int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid);
+int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid,
+				  int sync_mode);
 int cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
 		       daos_prop_t *cont_prop);
 int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop);
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
-
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

@@ -1060,6 +1060,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	int			rc;
 	struct ownership	owner;
 	struct daos_acl		*acl;
+	bool			cont_hdl_opened = false;
 	uint64_t		sec_capas = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" flags="
@@ -1147,8 +1148,10 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D_GOTO(out, rc);
 	}
+	cont_hdl_opened = true;
 
-	/* TODO: Rollback cont_iv_capability_update() on errors from now on. */
+	if (DAOS_FAIL_CHECK(DAOS_CONT_OPEN_FAIL))
+		D_GOTO(out, rc = -DER_IO);
 
 	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
 	uuid_copy(chdl.ch_cont, cont->c_uuid);
@@ -1181,52 +1184,39 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	out->coo_prop = prop;
 
 out:
+	if (rc != 0 && cont_hdl_opened)
+		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
+					      in->coi_op.ci_hdl,
+					      CRT_IV_SYNC_EAGER);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coi_op.ci_uuid), rpc,
 		rc);
 	return rc;
 }
 
-/* TODO: Use bulk bcast to support large recs[]. */
 static int
-cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
-		 struct cont_tgt_close_rec recs[], int nrecs)
+cont_close_recs(crt_context_t ctx, struct cont_svc *svc,
+		struct cont_tgt_close_rec recs[], int nrecs)
 {
-	struct cont_tgt_close_in       *in;
-	struct cont_tgt_close_out      *out;
-	crt_rpc_t		       *rpc;
-	int				rc;
+	int	i;
+	int	rc = 0;
 
-	D_DEBUG(DF_DSMS, DF_CONT": bcasting: recs[0].hdl="DF_UUID
+	D_DEBUG(DF_DSMS, DF_CONT": closing: recs[0].hdl="DF_UUID
 		" recs[0].hce="DF_U64" nrecs=%d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
 		recs[0].tcr_hce, nrecs);
 
-	rc = ds_cont_bcast_create(ctx, svc, CONT_TGT_CLOSE, &rpc);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	in->tci_recs.ca_arrays = recs;
-	in->tci_recs.ca_count = nrecs;
-	uuid_copy(in->tci_pool_uuid, svc->cs_pool_uuid);
-
-	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_CLOSE_FAIL_CORPC))
-		rc = -DER_TIMEDOUT;
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->tco_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to close %d targets\n",
-			DP_CONT(svc->cs_pool_uuid, NULL), rc);
-		rc = -DER_IO;
+	/* update container capa to IV */
+	for (i = 0; i < nrecs; i++) {
+		rc = cont_iv_capability_invalidate(
+				svc->cs_pool->sp_iv_ns,
+				recs[i].tcr_hdl, CRT_IV_SYNC_EAGER);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
-out_rpc:
-	crt_req_decref(rpc);
+	if (DAOS_FAIL_CHECK(DAOS_CONT_CLOSE_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": bcasted: hdls[0]="DF_UUID" nhdls=%d: %d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
@@ -1283,7 +1273,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		" recs[0].hce="DF_U64"\n", DP_CONT(svc->cs_pool_uuid, NULL),
 		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
 
-	rc = cont_close_bcast(ctx, svc, recs, nrecs);
+	rc = cont_close_recs(ctx, svc, recs, nrecs);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1358,7 +1348,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		DP_CONT(cont->c_svc->cs_pool_uuid, in->cci_op.ci_uuid),
 		DP_UUID(rec.tcr_hdl), rec.tcr_hce);
 
-	rc = cont_close_bcast(rpc->cr_ctx, cont->c_svc, &rec, 1 /* nrecs */);
+	rc = cont_close_recs(rpc->cr_ctx, cont->c_svc, &rec, 1 /* nrecs */);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
