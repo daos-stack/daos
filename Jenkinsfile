@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@schan_fn_cov") _
 
 boolean doc_only_change() {
     if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
@@ -309,7 +309,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *\n' : '' +
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -494,92 +495,6 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET',
-                                              value: 'weekly-testing' }
-                            expression { ! skip_stage('build-leap15-rpm') }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
-                            label 'docker_runner'
-                            args '--privileged=true'
-                            additionalBuildArgs '$BUILDARGS'
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
-                        }
-                    }
-                    steps {
-                        buildRpm unstable: true
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                        }
-                    }
-                }
-                stage('Build on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('build-centos7-gcc') }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-gcc-centos7",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-gcc
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
                 stage('Build on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
@@ -628,352 +543,6 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 debug') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('build-centos7-gcc-debug') }
-                            expression { ! quickbuild() }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build()
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-gcc-centos7-debug",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-debug-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-debug-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-gcc-debug
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 release') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('build-centos7-gcc-release') }
-                            expression { ! quickbuild() }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build()
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-gcc-centos7-release",
-                                         tools: [ gcc4(pattern: 'centos7-gcc-release-build.log'),
-                                                  cppCheck(pattern: 'centos7-gcc-release-build.log') ],
-                                         filters: [excludeFile('.*\\/_build\\.external\\/.*'),
-                                                   excludeFile('_build\\.external\\/.*')]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-gcc-release
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 with Clang') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            branch target_branch
-                            expression { ! quickbuild() }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build()
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-centos7-clang",
-                                         tools: [ clang(pattern: 'centos7-clang-build.log'),
-                                                  cppCheck(pattern: 'centos7-clang-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-clang
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            branch target_branch
-                            expression { ! quickbuild() }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu20.04 " +
-                                                '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build()
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-ubuntu20",
-                                         tools: [ gcc4(pattern: 'ubuntu20.04-gcc-build.log'),
-                                                  cppCheck(pattern: 'ubuntu20.04-gcc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-ubuntu20.04-gcc
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-ubuntu20.04-gcc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Ubuntu 20.04 with Clang') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { ! quickbuild() }
-                            expression { ! skip_stage('build-ubuntu-clang') }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-ubuntu20.04 " +
-                                                '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build()
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-ubuntu20-clang",
-                                         tools: [ clang(pattern: 'ubuntu20.04-clang-build.log'),
-                                                  cppCheck(pattern: 'ubuntu20.04-clang-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-ubuntu20.04-clang
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-ubuntu20.04-clang',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Leap 15') {
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
-                                '$BUILDARGS_QB_CHECK' +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_LEAP15 + '"' +
-                                ' --build-arg REPOS="' + pr_repos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt'
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-gcc-leap15",
-                                         tools: [ gcc4(pattern: 'leap15-gcc-build.log'),
-                                                  cppCheck(pattern: 'leap15-gcc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-leap15-gcc
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Leap 15 with Clang') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            branch target_branch
-                            expression { ! quickbuild() }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
-                                                 '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build()
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-leap15-clang",
-                                         tools: [ clang(pattern: 'leap15-clang-build.log'),
-                                                  cppCheck(pattern: 'leap15-clang-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-leap15-clang
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-leap15-clang',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { ! quickbuild() }
-                            expression { ! skip_stage('build-leap15-icc') }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.leap.15'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-leap15 " +
-                                                '$BUILDARGS'
-                            args '-v /opt/intel:/opt/intel'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build()
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         id: "analysis-leap15-intelc",
-                                         tools: [ intel(pattern: 'leap15-icc-build.log'),
-                                                  cppCheck(pattern: 'leap15-icc-build.log') ],
-                                         filters: [ excludeFile('.*\\/_build\\.external\\/.*'),
-                                                    excludeFile('_build\\.external\\/.*') ]
-                        }
-                        success {
-                            sh "rm -rf _build.external${arch}"
-                        }
-                        unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-leap15-intelc
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
             }
         }
         stage('Unit Tests') {
@@ -990,30 +559,6 @@ pipeline {
                 }
             }
             parallel {
-                stage('Unit Test') {
-                    when {
-                      beforeAgent true
-                      allOf {
-                          expression { ! skip_stage('unit-test')}
-                          expression { ! skip_stage('run_test') }
-                      }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        unitTest timeout_time: 60,
-                                 inst_repos: pr_repos(),
-                                 inst_rpms: unit_packages()
-                    }
-                    post {
-                      always {
-                            unitTestPost artifacts: ['unit_test_logs/*',
-                                                     'unit_vm_test/**'],
-                                         valgrind_stash: 'centos7-gcc-unit-valg'
-                        }
-                    }
-                }
                 stage('Unit Test Bullseye') {
                     when {
                       beforeAgent true
@@ -1040,33 +585,6 @@ pipeline {
                         }
                     }
                 } // stage('Unit test Bullseye')
-                stage('Unit Test with memcheck') {
-                    when {
-                      beforeAgent true
-                      expression { ! skip_stage('unit-test-memcheck') }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        unitTest timeout_time: 60,
-                                 ignore_failure: true,
-                                 inst_repos: pr_repos(),
-                                 inst_rpms: unit_packages()
-                    }
-                    post {
-                        always {
-                            // This is only set while dealing with issues
-                            // caused by code coverage instrumentation affecting
-                            // test results, and while code coverage is being
-                            // added.
-                            unitTestPost ignore_failure: true,
-                                         artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_memcheck_vm_test/**'],
-                                         valgrind_stash: 'centos7-gcc-unit-memcheck'
-                        }
-                    }
-                } // stage('Unit Test with memcheck')
             }
         }
         stage('Test') {
@@ -1112,20 +630,18 @@ pipeline {
                         }
                     }
                 }
-                stage('Functional on CentOS 7') {
+                stage('Functional on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { ! skip_stage('func-test') }
-                            expression { ! skip_stage('func-test-vm') }
-                            expression { ! skip_stage('func-test-el7')}
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
                         label 'ci_vm9'
                     }
                     steps {
-                        functionalTest inst_repos: daos_repos(),
+                        fnCovTest inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
                     post {
@@ -1134,35 +650,11 @@ pipeline {
                         }
                     }
                 }
-                stage('Functional on Leap 15') {
+                stage('Functional_Hardware_Small Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { ! skip_stage('func-test') }
-                            expression { ! skip_stage('func-test-vm') }
-                            expression { ! skip_stage('func-test-leap15') }
-                        }
-                    }
-                    agent {
-                        label 'ci_vm9'
-                    }
-                    steps {
-                        functionalTest inst_repos: daos_repos(),
-                                       inst_rpms: functional_packages()
-                    }
-                    post {
-                        always {
-                            functionalTestPost()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional_Hardware_Small') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-small') }
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
@@ -1170,7 +662,7 @@ pipeline {
                         label 'ci_nvme3'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
@@ -1179,14 +671,12 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Small')
-                stage('Functional_Hardware_Medium') {
+                } // stage('Functional_Hardware_Small Bullseye')
+                stage('Functional_Hardware_Medium Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-medium') }
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
@@ -1194,7 +684,7 @@ pipeline {
                         label 'ci_nvme5'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                    }
@@ -1203,14 +693,12 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Medium')
-                stage('Functional_Hardware_Large') {
+                } // stage('Functional_Hardware_Medium Bullseye')
+                stage('Functional_Hardware_Large Bullseye') {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-large') }
+                            expression { ! skip_stage('bullseye', true) }
                         }
                     }
                     agent {
@@ -1218,7 +706,7 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
-                        functionalTest target: hw_distro_target(),
+                        fnCovTest target: hw_distro_target(),
                                        inst_repos: daos_repos(),
                                        inst_rpms: functional_packages()
                     }
@@ -1227,7 +715,7 @@ pipeline {
                             functionalTestPost()
                         }
                     }
-                } // stage('Functional_Hardware_Large')
+                } // stage('Functional_Hardware_Large Bullseye')
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -1302,7 +790,11 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish(
-                                   coverage_stashes: ['centos7-covc-unit-cov'],
+                                   coverage_stashes: [ 'centos7-covc-unit-cov',
+                                                     'centos7-covc-cov',
+                                                     'centos7-covc-hw-small-cov',
+                                                     'centos7-covc-hw-large-cov',
+                                                     'centos7-covc-hw-medium-cov'],
                                    coverage_healthy: [methodCoverage: 0,
                                                       conditionalCoverage: 0,
                                                       statementCoverage: 0],
