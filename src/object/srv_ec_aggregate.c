@@ -77,10 +77,6 @@ struct ec_agg_stripe {
 	bool		as_has_holes;   /* stripe includes holes             */
 };
 
-/*
-struct ec_agg_param *agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-
-*/
 
 /* Aggregation state for an object.
  */
@@ -462,7 +458,7 @@ agg_encode_full_stripe_ult(void *arg)
 	ec_encode_data(cell_bytes, k, p, entry->ae_codec->ec_gftbls, data,
 		       parity_bufs);
 
-        ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
+	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
 /* Encodes a full stripe. Called when replicas form a full stripe.
@@ -632,7 +628,7 @@ agg_overlap(daos_recx_t *recx, unsigned int cell, unsigned int k,
 	if (cell_start <= recx->rx_idx && recx->rx_idx < cell_start + len)
 		return true;
 	if (recx->rx_idx <= cell_start &&
-				 cell_start < recx->rx_idx + recx->rx_nr)
+		 cell_start < recx->rx_idx + recx->rx_nr)
 		return true;
 	return false;
 }
@@ -1065,7 +1061,8 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 					      ae_link) {
 				D_ASSERT(!agg_extent->ae_hole);
 				if (agg_overlap(&agg_extent->ae_recx, i, k, len,
-					entry->ae_cur_stripe.as_stripenum)) {
+						entry->
+						ae_cur_stripe.as_stripenum)) {
 					setbit(bit_map, i);
 					cell_cnt++;
 				}
@@ -1110,7 +1107,7 @@ out:
 
 /* Sends the generated parity and the stripe number to the peer
  * parity target. Handler writes the parity and deletes the replicas
- * for the stripe.  Has to be extented to support p > 2.
+ * for the stripe.  Has to be extended to support p > 2.
  */
 static void
 agg_peer_update_ult(void *arg)
@@ -1391,7 +1388,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	iod.iod_nr = stripe_ud.asu_cell_cnt;
 	iod.iod_recxs = stripe_ud.asu_recxs;
 	entry->ae_sgl.sg_nr = 1;
-	// write the reps to vos
+	/* write the reps to vos */
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
 			    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
@@ -1629,13 +1626,11 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	default:
 		break;
 	}
-	
+
 	if (rc < 0) {
 		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
-
-//	agg_entry->ea_agg_param->ap_credits++;
 
 	return rc;
 }
@@ -1647,7 +1642,7 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		    vos_iter_type_t type, vos_iter_param_t *param,
 		    void *cb_arg, unsigned int *acts)
 {
-	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *) cb_arg;
+	struct ec_agg_entry	*agg_entry = (struct ec_agg_entry *)cb_arg;
 	int			 rc = 0;
 
 	switch (type) {
@@ -1722,7 +1717,7 @@ agg_iter_obj_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		    vos_iter_type_t type, vos_iter_param_t *param,
 		    void *cb_arg, unsigned int *acts)
 {
-	struct ec_agg_param	*agg_param = (struct ec_agg_param *) cb_arg;
+	struct ec_agg_param	*agg_param = (struct ec_agg_param *)cb_arg;
 	struct daos_oclass_attr *oca;
 	int			 rc = 0;
 
