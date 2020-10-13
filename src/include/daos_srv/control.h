@@ -42,7 +42,6 @@ struct nvme_health_stats {
 	char		 model[HEALTH_STAT_STR_LEN];
 	char		 serial[HEALTH_STAT_STR_LEN];
 	uint64_t	 timestamp;
-	uint64_t	 err_count; /* error log page */
 	/* Device health details */
 	uint32_t	 warn_temp_time;
 	uint32_t	 crit_temp_time;

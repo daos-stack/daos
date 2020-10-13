@@ -1560,26 +1560,6 @@ cont_close_all(void *vin)
 	return DER_SUCCESS;
 }
 
-/* Called via dss_collective() to close the containers belong to this thread. */
-static int
-cont_close_one(void *vin)
-{
-	struct cont_tgt_close_in	*in = vin;
-	struct cont_tgt_close_rec	*recs = in->tci_recs.ca_arrays;
-	int				i;
-	int				rc = 0;
-
-	for (i = 0; i < in->tci_recs.ca_count; i++) {
-		int rc_tmp;
-
-		rc_tmp = cont_close_hdl(recs[i].tcr_hdl);
-		if (rc_tmp != 0 && rc == 0)
-			rc = rc_tmp;
-	}
-
-	return rc;
-}
-
 int
 ds_cont_tgt_force_close(uuid_t cont_uuid)
 {
@@ -1614,55 +1594,6 @@ ds_cont_tgt_close(uuid_t hdl_uuid)
 
 	uuid_copy(arg.uuid, hdl_uuid);
 	return dss_thread_collective(cont_close_one_hdl, &arg, 0, DSS_ULT_IO);
-}
-
-void
-ds_cont_tgt_close_handler(crt_rpc_t *rpc)
-{
-	struct cont_tgt_close_in       *in = crt_req_get(rpc);
-	struct cont_tgt_close_out      *out = crt_reply_get(rpc);
-	struct cont_tgt_close_rec      *recs = in->tci_recs.ca_arrays;
-	struct ds_pool			*pool;
-	int				i;
-	int				rc;
-
-	if (in->tci_recs.ca_count == 0)
-		D_GOTO(out, rc = 0);
-
-	if (in->tci_recs.ca_arrays == NULL)
-		D_GOTO(out, rc = -DER_INVAL);
-
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: recs[0].hdl="DF_UUID
-		"recs[0].hce="DF_U64" nres="DF_U64"\n", DP_CONT(NULL, NULL),
-		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
-		in->tci_recs.ca_count);
-
-	pool = ds_pool_lookup(in->tci_pool_uuid);
-	if (pool) {
-		for (i = 0; i < in->tci_recs.ca_count; i++)
-			cont_iv_capability_invalidate(pool->sp_iv_ns,
-						      recs[i].tcr_hdl);
-		ds_pool_put(pool);
-	}
-
-	rc = dss_thread_collective(cont_close_one, in, 0, DSS_ULT_IO);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-
-out:
-	out->tco_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
-		DP_CONT(NULL, NULL), rpc, out->tco_rc, DP_RC(rc));
-	crt_reply_send(rpc);
-}
-
-int
-ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
-{
-	struct cont_tgt_close_out    *out_source = crt_reply_get(source);
-	struct cont_tgt_close_out    *out_result = crt_reply_get(result);
-
-	out_result->tco_rc += out_source->tco_rc;
-	return 0;
 }
 
 struct xstream_cont_query {
@@ -1900,7 +1831,7 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 	struct cont_snap_args	*args;
 	int			 rc;
 
-	D_ALLOC(args, sizeof(*args));
+	D_ALLOC_PTR(args);
 	if (args == NULL)
 		return -DER_NOMEM;
 	uuid_copy(args->pool_uuid, pool_uuid);
