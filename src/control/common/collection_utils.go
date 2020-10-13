@@ -181,5 +181,6 @@ func PercentageString(part, total uint64) string {
 		return "0 %%"
 	}
 
-	return fmt.Sprintf("%v %%", int((float64(part)/float64(total))*float64(100)))
+	return fmt.Sprintf("%v %%%%",
+		int((float64(part)/float64(total))*float64(100)))
 }

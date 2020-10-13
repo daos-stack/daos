@@ -256,23 +256,27 @@ func (c *ControlService) scanInstanceScm(ctx context.Context, resp *scm.ScanResp
 
 	// get utilisation for any mounted namespaces
 	for _, ns := range resp.Namespaces {
+		c.log.Debugf("updating scm fs on device %s", ns.BlockDevice)
 		for _, srv := range instances {
+			cfg := srv.scmConfig()
+			c.log.Debugf("looking on instance %d (device list: %v)",
+				srv.Index(), cfg.DeviceList)
+
 			if !srv.isReady() {
 				continue
 			}
-			if !common.Includes(srv.scmConfig().DeviceList, ns.BlockDevice) {
+			if !common.Includes(cfg.DeviceList, ns.BlockDevice) {
 				continue
 			}
 
-			mp := srv.scmConfig().MountPoint
-			c.log.Debugf("updating scm fs on device %s mounted on %s",
-				ns.BlockDevice, mp)
-
-			mount, err := srv.scmProvider.GetfsUsage(mp)
+			mount, err := srv.scmProvider.GetfsUsage(cfg.MountPoint)
 			if err != nil {
 				return nil, err
 			}
 			ns.Mount = mount
+
+			c.log.Debugf("updating scm fs on device %s mounted on %s: %+v",
+				ns.BlockDevice, cfg.MountPoint, ns.Mount)
 		}
 	}
 

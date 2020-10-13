@@ -361,7 +361,7 @@ Errors:
 
 Hosts     SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
 -----     --------- -------- -------- ---------- --------- --------- 
-host[1-2] 0 B       0 B      0 %      0 B        0 B       0 %       
+host[1-2] 0 B       0 B      0 %%     0 B        0 B       0 %%      
 `,
 		},
 		"no storage": {
@@ -378,7 +378,7 @@ host[1-2] 0 B       0 B      0 %      0 B        0 B       0 %
 			expPrintStr: `
 Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
 ----- --------- -------- -------- ---------- --------- --------- 
-host1 0 B       0 B      0 %      0 B        0 B       0 %       
+host1 0 B       0 B      0 %%     0 B        0 B       0 %%      
 `,
 		},
 		"single host with space usage": {
@@ -395,7 +395,7 @@ host1 0 B       0 B      0 %      0 B        0 B       0 %
 			expPrintStr: `
 Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
 ----- --------- -------- -------- ---------- --------- --------- 
-host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %      
+host1 3.0 TB    750 GB   75 %%    36 TB      27 TB     25 %%     
 `,
 		},
 	} {
