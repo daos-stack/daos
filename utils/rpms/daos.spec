@@ -10,8 +10,8 @@
 %endif
 
 Name:          daos
-Version:       1.1.0
-Release:       35%{?relval}%{?dist}
+Version:       1.1.1
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -391,8 +391,11 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 %{_libdir}/*.a
 
 %changelog
-* Fri Oct 09 2020 Phillip Henderson <phillip.henderson@intel.com> 1.1.0-35
+* Tue Oct 13 2020 Amanda Justiniano <amanda.justiniano-pagn@intel.com> 1.1.1-2
 - Add lbzip2 requirement to the daos-tests package
+
+* Mon Oct 12 2020 Johann Lombardi <johann.lombardi@intel.com> 1.1.1-1
+- Version bump up to 1.1.1
 
 * Sat Oct 03 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-34
 - Add go-race to BuildRequires on OpenSUSE Leap
