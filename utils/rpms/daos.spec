@@ -9,23 +9,26 @@
     echo ${file#"%3"} >> %1; \
     file_name_w_ext=${file##*/}; \
     file_name=${file_name_w_ext%.*}; \
-    utils=$(grep -l -R -E "(from|import) ${file_name}" %5 %3/%4/ftest/util/*); \
+    utils=$(grep -l -R -E "(from|import) ${file_name}" %5 %3%4/ftest/util/*); \
     for util_file in ${utils}; \
     do \
       echo ${util_file#"%3"} >> %1; \
       util_name_file_w_ext=${util_file##*/}; \
       util_name=${util_name_file_w_ext%.*}; \
       regex="(from|import) (${util_name}|${file_name})"; \
-      search="%5 --exclude-dir=util %3/%4/ftest/*"; \
+      search="%5 --exclude-dir=util %3%4/ftest/*"; \
       ftests=$(grep -l -R -E "${regex}" ${search}); \
       for ftest_file in ${ftests}; \
       do \
-        install_file=${ftest_file#"%3"}; \
-        echo "${install_file}" >> %1; \
-        echo "${install_file%.*}.yaml" >> %1; \
+        for other_file in $(find ${ftest_file%%.*}.* | sort); \
+        do \
+          echo "${other_file#%3}" >> %1; \
+        done; \
       done; \
     done; \
   done; \
+  cat %1 | sort | uniq > %{1}_unique; \
+  mv %{1}_unique %1; \
   cat %1 \
 )
 
@@ -46,7 +49,7 @@ URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
 BuildRequires: scons >= 2.4
-BuildRequires: libfabric-devel
+BuildRequires: libfabric-devel >= 1.11
 BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
@@ -327,14 +330,23 @@ exclude="${exclude} --exclude=mpiio_utils.py"
 files=%{?buildroot}/%{?_prefix}/lib/daos/TESTING/ftest/util/macsio_utils.py
 %create_file_list ${output} ${files} %{?buildroot} ${ftest_path} ${exclude}
 
-find ${ftest_path}/ftest | sort > daos-tests.files
-for name in ior fio mpiio macsio
+touch daos-tests-soak.files
+for file in $(find %{?buildroot}${ftest_path}/ftest/soak -type f | sort)
+do
+  echo ${file#%{?buildroot}} >> daos-tests-soak.files
+done
+cat daos-tests-soak.files
+
+touch daos-tests.files
+for file in $(find %{?buildroot}${ftest_path}/ftest -type f | sort)
+do
+  echo ${file#%{?buildroot}} >> daos-tests.files
+done
+for name in ior fio mpiio macsio soak
 do
   grep -Fvxf daos-tests-${name}.files daos-tests.files > daos-tests.files_new
   mv daos-tests.files{_new,}
 done
-grep -v ${ftest_path}/ftest/soak daos-tests.files > daos-tests.files_new
-mv daos-tests.files{_new,}
 cat daos-tests.files
 
 %pre server
@@ -504,8 +516,7 @@ getent passwd daos_server >/dev/null || useradd -M daos_server
 
 %files tests-macsio -f daos-tests-macsio.files
 
-%files tests-soak
-%{_prefix}/lib/daos/TESTING/soak
+%files tests-soak -f daos-tests-soak.files
 
 %files devel
 %{_includedir}/*
