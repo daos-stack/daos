@@ -786,7 +786,6 @@ querymax_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
@@ -900,7 +899,6 @@ querymin_dr(struct io_test_args *arg, struct tx_helper *txh, char *path,
 	uint64_t	 akey_val;
 	daos_key_t	 akey = {&akey_val, sizeof(akey_val), 0};
 
-	set_dkey(mvcc_arg->i, path, &dkey);
 	set_akey(mvcc_arg->i, path, &akey);
 
 	return tx_query(arg->ctx.tc_co_hdl, txh, epoch, &dkey, &akey, &recx,
