@@ -60,6 +60,8 @@
 #define atomic_fetch_add __sync_fetch_and_add
 #define atomic_fetch_sub_relaxed __sync_fetch_and_sub
 #define atomic_fetch_add_relaxed __sync_fetch_and_add
+#define atomic_fetch_or_relaxed __sync_fetch_and_or
+#define atomic_fetch_and_relaxed __sync_fetch_and_and
 #define atomic_compare_exchange __sync_bool_compare_and_swap
 #define atomic_store_release(ptr, value) \
 	do {                             \

@@ -272,6 +272,8 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 void
 crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
+	int	retry_rc;
+
 	D_ASSERT(rpc_priv != NULL);
 
 	if (rc == -DER_CANCELED)
@@ -282,6 +284,21 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	else
 		rpc_priv->crp_state = RPC_STATE_COMPLETED;
+
+	if(rpc_priv->crp_reply_hdr.cch_rc != 0 &&
+			rpc_priv->crp_pub.cr_ep.ep_tag != 0 &&
+			crt_req_set_retry(rpc_priv) == 0) {
+		retry_rc = crt_req_retry(rpc_priv);
+		if (retry_rc == 0) {
+			D_GOTO(out, rc);
+		}
+
+	}
+	/* Just reset BAD TARGET marker
+ * 	 * to make sure context field 'cc_bt_retry' is 0
+ * 	 	 */
+	crt_req_reset_retry(rpc_priv);
+
 
 	if (rpc_priv->crp_complete_cb != NULL) {
 		struct crt_cb_info	cbinfo;
@@ -295,8 +312,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		if (cbinfo.cci_rc != 0)
 			RPC_ERROR(rpc_priv, "RPC failed; rc: %d\n",
 				  cbinfo.cci_rc);
-
-		RPC_TRACE(DB_TRACE, rpc_priv,
+RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag,
@@ -304,7 +320,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 
 		rpc_priv->crp_complete_cb(&cbinfo);
 	}
-
+out:
 	RPC_DECREF(rpc_priv);
 }
 
