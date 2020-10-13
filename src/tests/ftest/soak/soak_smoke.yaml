@@ -8,10 +8,9 @@ hosts:
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
-    client_reservation: daos-test
+    client_reservation:
 orterun:
     allow_run_as_root: True
-
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
 timeout: 30M
