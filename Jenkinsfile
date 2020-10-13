@@ -381,6 +381,27 @@ boolean skip_bullseye_report() {
            skip_stage('bullseye', true)
 }
 
+String quick_build_deps(String distro) {
+    String rpmspec_args = ""
+    if (distro == "leap15") {
+        rpmspec_args = "--define dist\\ .suse.lp152 " +
+                       "--undefine rhel " +
+                       "--define suse_version\\ 1502"
+    } else if (distro == "centos7") {
+        rpmspec_args = "--undefine suse_version " +
+                       "--define rhel\\ 7"
+    } else {
+        error("Unknown distro: ${distro} in quick_build_deps()")
+    }
+    return sh(label:'Get Quickbuild dependencies',
+              script: "rpmspec -q " +
+                      "--srpm " +
+                      rpmspec_args + ' ' +
+                      "--requires utils/rpms/daos.spec " +
+                      "2>/dev/null",
+              returnStdout: true)
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -393,20 +414,6 @@ pipeline {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
-        QUICKBUILD_DEPS_EL7 = sh label:'Get Quickbuild dependencies',
-                                 script: "rpmspec -q --define dist\\ .el7 " +
-                                         "--undefine suse_version " +
-                                         "--define rhel\\ 7 --srpm " +
-                                         "--requires utils/rpms/daos.spec " +
-                                         "2>/dev/null",
-                                 returnStdout: true
-        QUICKBUILD_DEPS_LEAP15 = sh label:'Get Quickbuild dependencies',
-                                    script: "rpmspec -q --define dist\\ .suse.lp151 " +
-                                            "--undefine rhel " +
-                                            "--define suse_version\\ 1501 --srpm " +
-                                            "--requires utils/rpms/daos.spec " +
-                                            "2>/dev/null",
-                                    returnStdout: true
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
     }
 
@@ -633,7 +640,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                                quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -677,7 +684,7 @@ pipeline {
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                quick_build_deps('centos7') + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -720,7 +727,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                                quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -762,7 +769,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                                quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -804,7 +811,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                  env.QUICKBUILD_DEPS_EL7 + '"'
+                                                quick_build_deps('centos7') + '"'
                         }
                     }
                     steps {
@@ -919,7 +926,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                  env.QUICKBUILD_DEPS_LEAP15 + '"' +
+                                                quick_build_deps('leap15') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -1131,7 +1138,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(qb: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                                quick_build_deps('centos7') + '"' +
                                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
@@ -1314,7 +1321,7 @@ pipeline {
                                 '$BUILDARGS_QB_TRUE' +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                  env.QUICKBUILD_DEPS_EL7 + '"' +
+                                quick_build_deps('centos7') + '"' +
                                 ' --build-arg REPOS="' + pr_repos() + '"'
                         }
                     }
