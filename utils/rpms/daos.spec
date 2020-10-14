@@ -323,7 +323,7 @@ mkdir -p %{?buildroot}/%{conf_dir}/certs/clients
 mv %{?buildroot}/%{_prefix}/etc/bash_completion.d %{?buildroot}/%{_sysconfdir}
 
 output="daos-tests-base.files"
-echo "%{_prefix}/lib/daos/TESTING/ftest/cart/util/cart_logtest.py" > ${output}
+echo "%{_prefix}/lib/daos/TESTING/ftest/cart/cart_logtest.py" > ${output}
 
 output="daos-tests-ior.files"
 ftest_path=%{?_prefix}/lib/daos/TESTING
