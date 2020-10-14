@@ -47,7 +47,7 @@ except ImportError:
 
 class OSAOnlineReintegration(TestWithServers):
     # pylint: disable=too-many-ancestors
-    """Online Server Addition online re-intergration test class.
+    """Online Server Addition online re-integration test class.
 
     Test Class Description:
         This test runs the daos_server Online reintegration test cases.
