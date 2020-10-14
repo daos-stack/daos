@@ -203,7 +203,7 @@ run_cartlogtest() {
         # shellcheck disable=SC2045,SC2086
         for file in $(ls -d ${1})
         do
-            if [ -f ${file} ] && [[ ! ${file} =~ "cart_logtest" ]]; then
+            if [ -f ${file} ] && [[ ! ${file} == *"cart_logtest"* ]]; then
                 logtest_log="${file%.*}.cart_logtest.${file##*.}"
                 if ! ${CART_LOGTEST_PATH} ${file} > ${logtest_log} 2>&1; then
                     echo "  Error: details in ${file}_cart_testlog"
@@ -216,6 +216,29 @@ run_cartlogtest() {
         rc=1
     fi
     return ${rc}
+}
+
+#######################################
+# Clean up after an error.
+# Arguments:
+#   $1: script log file
+#######################################
+cleanup() {
+    if [ -f "${1}" ]; then
+        cat "${1}"
+        if [ "${SCP_CNT}" -eq 1 ]; then
+            echo "Archiving scripts log file ${1} after failture ..."
+            if ! scp_files "${1}" "${ARCHIVE_DEST}"; then
+                echo "Cleanup ERR: archiving ${1} to ${ARCHIVE_DEST}"
+            fi
+        fi
+    fi
+    if [ "${SCP_CNT}" -eq 0 ] && [ -n "${ARCHIVE_DEST}" ]; then
+        echo "Archiving after failure to ${ARCHIVE_DEST} ..."
+        if ! scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"; then
+            echo "Cleanup ERR: archiving ${FILES_TO_PROCESS} to ${ARCHIVE_DEST}"
+        fi
+    fi
 }
 
 ####### MAIN #######
@@ -232,6 +255,7 @@ VERBOSE="false"
 CART_LOGTEST="false"
 EXCLUDE_ZIP="false"
 THRESHOLD=""
+SCP_CNT=0
 rc=0
 
 # Step through arguments
@@ -279,7 +303,7 @@ if ! "${VERBOSE}"; then
     echo "Logging ${script_name} output to ${log_file}"
 fi
 set -ex
-trap 'if [ -f "${log_file}" ]; then cat "${log_file}"; fi' ERR
+trap 'cleanup "${log_file}"' ERR
 
 # Verify files have been specified and they exist on this host
 if ! check_files_input "{$FILES_TO_PROCESS}"; then
@@ -325,10 +349,14 @@ if [ -n "${ARCHIVE_DEST}" ]; then
     if ! scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"; then
         rc=1
     fi
+    SCP_CNT=1
 
     if ! "${VERBOSE}"; then
         # Finally archive this script's log file
-        scp_files "${log_file}" "${ARCHIVE_DEST}"
+        if ! scp_files "${log_file}" "${ARCHIVE_DEST}"; then
+            rc=1
+        fi
+        SCP_CNT=2
     fi
 fi
 
