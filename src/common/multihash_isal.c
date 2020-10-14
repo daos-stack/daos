@@ -214,7 +214,7 @@ sha1_init(void **daos_mhash_ctx)
 	struct sha1_ctx		*ctx;
 	int			 rc;
 
-	D_ALLOC(ctx, sizeof(*ctx));
+	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
@@ -281,7 +281,7 @@ sha256_init(void **daos_mhash_ctx)
 	struct sha256_ctx	*ctx;
 	int			 rc;
 
-	D_ALLOC(ctx, sizeof(*ctx));
+	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
@@ -348,7 +348,7 @@ sha512_init(void **daos_mhash_ctx)
 {
 	struct sha512_ctx	*ctx;
 
-	D_ALLOC(ctx, sizeof(*ctx));
+	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
