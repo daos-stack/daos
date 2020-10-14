@@ -286,15 +286,13 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 	else
 		rpc_priv->crp_state = RPC_STATE_COMPLETED;
 
-
 	rply_rc = rpc_priv->crp_reply_hdr.cch_rc;
-	if(rply_rc != 0 && rpc_priv->crp_pub.cr_ep.ep_tag != 0 &&
+	if (rply_rc != 0 && rpc_priv->crp_pub.cr_ep.ep_tag != 0 &&
 			crt_req_set_retry(rpc_priv) == 0) {
 		retry_rc = crt_req_retry(rpc_priv);
 		if (retry_rc == 0) {
 			D_GOTO(out, rply_rc);
 		}
-
 	}
         crt_req_reset_retry(rpc_priv);
 

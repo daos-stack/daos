@@ -58,8 +58,8 @@ void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
 int crt_req_retry(struct crt_rpc_priv *rpc_priv);
 
 #define CRT_RPC_RETRY 1
-int crt_req_set_retry(struct crt_rpc_priv* rpc_priv);
-int crt_req_reset_retry(struct crt_rpc_priv* rpc_priv);
+int crt_req_set_retry(struct crt_rpc_priv *rpc_priv);
+int crt_req_reset_retry(struct crt_rpc_priv *rpc_priv);
 /** crt_hlct.c */
 uint64_t crt_hlct_get(void);
 void crt_hlct_sync(uint64_t msg);

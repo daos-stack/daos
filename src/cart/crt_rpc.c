@@ -30,14 +30,16 @@
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 
 int
-crt_req_set_retry(struct crt_rpc_priv* rpc_priv) {
-        return (atomic_fetch_or_relaxed(&rpc_priv->crp_rpc_retry, CRT_RPC_RETRY) & ~CRT_RPC_RETRY);
+crt_req_set_retry(struct crt_rpc_priv *rpc_priv) {
+	return atomic_fetch_or_relaxed(&rpc_priv->crp_rpc_retry, 
+		CRT_RPC_RETRY) & ~CRT_RPC_RETRY;
 }
 
 int
-crt_req_reset_retry(struct crt_rpc_priv* rpc_priv)
+crt_req_reset_retry(struct crt_rpc_priv *rpc_priv)
 {
-        return (atomic_fetch_and_relaxed(&rpc_priv->crp_rpc_retry, ~CRT_RPC_RETRY));
+	return atomic_fetch_and_relaxed(&rpc_priv->crp_rpc_retry, 
+		~CRT_RPC_RETRY);
 }
 
 void
@@ -1535,11 +1537,8 @@ crt_req_dst_tag_get(crt_rpc_t *rpc, uint32_t *tag)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-
 	*tag = rpc_priv->crp_req_hdr.cch_dst_tag;
-
 out:
 	return rc;
 }
@@ -1548,7 +1547,7 @@ static int
 ctx_traverse_cb(d_list_t *link, void *arg)
 {
 	struct crt_context	*ctx;
-	struct crt_rpc_priv	*rpc_priv = (struct crt_rpc_priv*)arg;
+	struct crt_rpc_priv	*rpc_priv = (struct crt_rpc_priv *)arg;
 	int			rc = 0;
 	d_list_t		*rlink;
 	crt_endpoint_t	        *tgt_ep = &rpc_priv->crp_pub.cr_ep;
@@ -1579,8 +1578,8 @@ ctx_traverse_cb(d_list_t *link, void *arg)
 
 	D_RWLOCK_WRLOCK(&my_grp_priv->gp_rwlock);
 	rlink = d_hash_rec_find(&my_grp_priv->gp_lookup_cache[ctx->cc_idx],
-				(void *)&rank, sizeof rank);
-	if(rlink == NULL) {
+				(void *)&rank, sizeof (rank));
+	if (rlink == NULL) {
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 	li = crt_li_link2ptr(rlink);
@@ -1593,24 +1592,23 @@ ctx_traverse_cb(d_list_t *link, void *arg)
 			li->li_tag_addr[tag] = NULL;
 		}
 	}
-        d_hash_rec_decref(&my_grp_priv->gp_lookup_cache[ctx->cc_idx], rlink);
-
-        /* invalidate all none 0 tags in gp_uri_lookup_cache */
+	d_hash_rec_decref(&my_grp_priv->gp_lookup_cache[ctx->cc_idx], rlink);
+	
+	/* invalidate all none 0 tags in gp_uri_lookup_cache */
 	rlink = d_hash_rec_find(&my_grp_priv->gp_uri_lookup_cache,
 				(void *)&rank, sizeof(rank));
 	if(rlink == NULL) {
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
-
 	ui = container_of(rlink, struct crt_uri_item, ui_link);
-	for(tag = 1; tag < CRT_SRV_CONTEXT_NUM; tag++) {
-		if(atomic_load_consume(&ui->ui_uri[tag]) != NULL) {
+	for( tag = 1; tag < CRT_SRV_CONTEXT_NUM; tag++) {
+		if( atomic_load_consume(&ui->ui_uri[tag]) != NULL) {
 			D_FREE(ui->ui_uri[tag]);
 			atomic_store_release(&ui->ui_uri[tag], NULL);
 		}
 	}
 	d_hash_rec_decref(&my_grp_priv->gp_uri_lookup_cache, rlink);
-	D_RWLOCK_UNLOCK(&my_grp_priv->gp_rwlock);
+	D_RWLOCK_UNLOCK( &my_grp_priv->gp_rwlock);
 out:
 	return rc;
 }
@@ -1628,7 +1626,7 @@ crt_req_retry(struct crt_rpc_priv *rpc_priv)
 					   ctx_traverse_cb, rpc_priv);
 	}
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-	if(rc != 0) {
+	if (rc != 0) {
 		D_GOTO(out, rc);
 	}
 	rpc_priv->crp_state = RPC_STATE_INITED;
